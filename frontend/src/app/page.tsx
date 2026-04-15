@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const WEBRTC_URL =
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
 
@@ -124,7 +122,7 @@ function AddCameraModal({
     setError(null);
 
     try {
-      const res = await fetch(`${API_URL}/api/cameras`, {
+      const res = await fetch(`/api/cameras`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -242,7 +240,7 @@ export default function CamerasPage() {
 
   const fetchCameras = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/cameras`);
+      const res = await fetch(`/api/cameras`);
       if (res.ok) {
         const data = await res.json();
         setCameras(data);

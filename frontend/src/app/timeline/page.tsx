@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// API calls use relative paths, proxied by Next.js rewrites in dev
 
 interface Recording {
   id: string;
@@ -57,7 +57,7 @@ export default function TimelinePage() {
 
   const fetchCameras = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/cameras`);
+      const res = await fetch(`/api/cameras`);
       if (!res.ok) return;
       const data: Camera[] = await res.json();
       const map: Record<string, Camera> = {};
@@ -74,7 +74,7 @@ export default function TimelinePage() {
     try {
       const params = new URLSearchParams({ limit: "100" });
       if (selectedCamera) params.set("camera_id", selectedCamera);
-      const res = await fetch(`${API_URL}/api/recordings?${params}`);
+      const res = await fetch(`/api/recordings?${params}`);
       if (!res.ok) return;
       const data: Recording[] = await res.json();
 
@@ -100,7 +100,6 @@ export default function TimelinePage() {
   }, [fetchCameras]);
 
   useEffect(() => {
-    setLoading(true);
     fetchRecordings();
     const interval = setInterval(fetchRecordings, 15000);
     return () => clearInterval(interval);
@@ -252,7 +251,7 @@ export default function TimelinePage() {
                                 controls
                                 autoPlay
                                 className="w-full aspect-video"
-                                src={`${API_URL}/api/recordings/${rec.id}/stream`}
+                                src={`/api/recordings/${rec.id}/stream`}
                               >
                                 Your browser does not support video playback.
                               </video>
