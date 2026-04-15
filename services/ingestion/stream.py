@@ -53,7 +53,8 @@ class StreamWorker:
         if cap is None:
             return
 
-        await self._update_camera_status("live")
+        status = "recording" if self.recording_enabled else "live"
+        await self._update_camera_status(status)
 
         # Read stream properties
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
