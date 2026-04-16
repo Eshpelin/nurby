@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 
 interface Person {
@@ -48,6 +48,13 @@ interface FaceSuggestion {
   status: string;
 }
 
+interface ClusterSample {
+  id: string;
+  camera_id: string;
+  thumbnail_path: string | null;
+  captured_at: string | null;
+}
+
 function timeAgo(iso: string | null): string {
   if (!iso) return "unknown";
   const diff = Date.now() - new Date(iso).getTime();
@@ -90,20 +97,16 @@ export default function PeoplePage() {
   const [activities, setActivities] = useState<PersonActivity[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
 
-  // Add/edit form state
+  // Edit form state
   const [formName, setFormName] = useState("");
   const [formRelationship, setFormRelationship] = useState("");
   const [formConsent, setFormConsent] = useState(false);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Face upload
-  const [uploadingFace, setUploadingFace] = useState<string | null>(null);
-  const [faceMessage, setFaceMessage] = useState<Record<string, string>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // Suggestions state
   const [suggestions, setSuggestions] = useState<FaceSuggestion[]>([]);
+  const [clusterSamples, setClusterSamples] = useState<Record<string, ClusterSample[]>>({});
   const [nameInputs, setNameInputs] = useState<Record<string, string>>({});
   const [relationshipInputs, setRelationshipInputs] = useState<
     Record<string, string>
@@ -133,11 +136,23 @@ export default function PeoplePage() {
   const fetchSuggestions = useCallback(async () => {
     try {
       const res = await authFetch("/api/persons/suggestions?min_sightings=2");
-      if (res.ok) setSuggestions(await res.json());
+      if (res.ok) {
+        const data: FaceSuggestion[] = await res.json();
+        setSuggestions(data);
+        // Fetch samples for each cluster
+        const samplesMap: Record<string, ClusterSample[]> = {};
+        await Promise.all(data.map(async (s) => {
+          try {
+            const sRes = await authFetch(`/api/persons/suggestions/${s.id}/samples`);
+            if (sRes.ok) samplesMap[s.id] = await sRes.json();
+          } catch { /* silent */ }
+        }));
+        setClusterSamples(samplesMap);
+      }
     } catch {
       /* silent */
     }
-  }, []);
+  }, [authFetch]);
 
   const fetchActivity = useCallback(async (personId: string) => {
     setLoadingActivity(true);
@@ -173,15 +188,6 @@ export default function PeoplePage() {
     }
   };
 
-  const openAdd = () => {
-    setEditPerson(null);
-    setFormName("");
-    setFormRelationship("");
-    setFormConsent(false);
-    setFormError("");
-    setShowModal(true);
-  };
-
   const openEdit = (p: Person) => {
     setEditPerson(p);
     setFormName(p.display_name);
@@ -192,7 +198,7 @@ export default function PeoplePage() {
   };
 
   const handleSubmit = async () => {
-    if (!formName.trim()) {
+    if (!editPerson || !formName.trim()) {
       setFormError("Name is required");
       return;
     }
@@ -200,26 +206,15 @@ export default function PeoplePage() {
     setFormError("");
 
     try {
-      const body = {
-        display_name: formName.trim(),
-        relationship: formRelationship.trim() || null,
-        consent_given: formConsent,
-      };
-
-      let res: Response;
-      if (editPerson) {
-        res = await authFetch(`/api/persons/${editPerson.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-      } else {
-        res = await authFetch("/api/persons", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-      }
+      const res = await authFetch(`/api/persons/${editPerson.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          display_name: formName.trim(),
+          relationship: formRelationship.trim() || null,
+          consent_given: formConsent,
+        }),
+      });
 
       if (!res.ok) {
         setFormError("Failed to save");
@@ -243,29 +238,6 @@ export default function PeoplePage() {
       fetchSummaries();
     } catch {
       /* silent */
-    }
-  };
-
-  const handleFaceUpload = async (personId: string, file: File) => {
-    setUploadingFace(personId);
-    setFaceMessage({});
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await authFetch(`/api/persons/${personId}/face`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-      setFaceMessage({ [personId]: data.message || data.status });
-      fetchPersons();
-    } catch {
-      setFaceMessage({ [personId]: "Upload failed" });
-    } finally {
-      setUploadingFace(null);
     }
   };
 
@@ -340,25 +312,56 @@ export default function PeoplePage() {
                 key={s.id}
                 className="rounded-lg border border-accent/30 bg-card p-4 space-y-3"
               >
-                <div className="flex items-start gap-3">
-                  <img
-                    src={`/api/persons/suggestions/${s.id}/thumbnail`}
-                    alt="Unknown face"
-                    className="w-16 h-16 rounded-full object-cover border-2 border-accent/30"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium">Unknown person</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      Seen {s.sighting_count} time
-                      {s.sighting_count !== 1 ? "s" : ""}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <div className="text-sm font-medium">Unknown person</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Seen {s.sighting_count} time
+                        {s.sighting_count !== 1 ? "s" : ""}
+                        {" · "}First {timeAgo(s.first_seen_at)} / Last{" "}
+                        {timeAgo(s.last_seen_at)}
+                      </div>
                     </div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">
-                      First {timeAgo(s.first_seen_at)} / Last{" "}
-                      {timeAgo(s.last_seen_at)}
-                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {(clusterSamples[s.id] && clusterSamples[s.id].length > 0
+                      ? clusterSamples[s.id]
+                      : [{ id: "main", camera_id: "", thumbnail_path: s.sample_thumbnail_path, captured_at: null }]
+                    ).slice(0, 8).map((sample) => (
+                      <div key={sample.id} className="aspect-square rounded-md overflow-hidden border border-border bg-muted">
+                        {sample.thumbnail_path ? (
+                          <img
+                            src={sample.id === "main"
+                              ? `/api/persons/suggestions/${s.id}/thumbnail`
+                              : `/api/persons/suggestions/${s.id}/samples/${sample.id}/thumbnail`}
+                            alt="Sighting"
+                            className="w-full h-full object-cover"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-muted" />
+                        )}
+                      </div>
+                    ))}
+                    {/* Fill remaining slots up to sighting count as placeholder boxes */}
+                    {(() => {
+                      const sampleCount = clusterSamples[s.id]?.length || (s.sample_thumbnail_path ? 1 : 0);
+                      const remaining = Math.min(s.sighting_count, 8) - Math.min(sampleCount, 8);
+                      if (remaining <= 0) return null;
+                      return Array.from({ length: remaining }).map((_, i) => (
+                        <div key={`empty-${i}`} className="aspect-square rounded-md border border-border bg-muted/50 flex items-center justify-center">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40">
+                            <circle cx="12" cy="8" r="4" /><path d="M5 20c0-4 3.5-7 7-7s7 3 7 7" />
+                          </svg>
+                        </div>
+                      ));
+                    })()}
+                    {s.sighting_count > 8 && (
+                      <div className="aspect-square rounded-md border border-border bg-muted/30 flex items-center justify-center">
+                        <span className="text-[10px] text-muted-foreground font-mono">+{s.sighting_count - 8}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -417,19 +420,11 @@ export default function PeoplePage() {
 
       {/* People activity feed */}
       <div>
-        <div className="flex items-baseline justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">People</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Activity updates across all cameras
-            </p>
-          </div>
-          <button
-            onClick={openAdd}
-            className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90"
-          >
-            + Add person
-          </button>
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight">People</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Activity updates across all cameras
+          </p>
         </div>
 
         {loading ? (
@@ -441,16 +436,9 @@ export default function PeoplePage() {
             <div className="w-16 h-16 rounded-full border border-border flex items-center justify-center mb-4 text-muted-foreground text-2xl">
               ?
             </div>
-            <p className="text-muted-foreground text-sm mb-4">
-              No people identified yet. When cameras detect faces, suggestions
-              will appear here automatically.
+            <p className="text-muted-foreground text-sm">
+              No people identified yet. When cameras detect faces, they will appear here for you to name.
             </p>
-            <button
-              onClick={openAdd}
-              className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90"
-            >
-              + Add first person
-            </button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -505,27 +493,21 @@ export default function PeoplePage() {
                       {summary && summary.sightings_1h > 0 && (
                         <div className="flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                          <span className="text-xs font-mono text-green-400">
-                            {summary.sightings_1h}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            /1h
+                          <span className="text-xs text-green-400">
+                            {summary.sightings_1h} past hour
                           </span>
                         </div>
                       )}
                       {summary && summary.sightings_24h > 0 && (
                         <div className="flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                          <span className="text-xs font-mono text-blue-400">
-                            {summary.sightings_24h}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            /24h
+                          <span className="text-xs text-blue-400">
+                            {summary.sightings_24h} today
                           </span>
                         </div>
                       )}
                       {summary && summary.total_sightings > 0 && (
-                        <div className="text-xs font-mono text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           {summary.total_sightings} total
                         </div>
                       )}
@@ -559,33 +541,6 @@ export default function PeoplePage() {
                         >
                           Edit
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const input = document.createElement("input");
-                            input.type = "file";
-                            input.accept = "image/*";
-                            input.onchange = (ev) => {
-                              const file = (ev.target as HTMLInputElement)
-                                .files?.[0];
-                              if (file) handleFaceUpload(p.id, file);
-                            };
-                            input.click();
-                          }}
-                          disabled={uploadingFace === p.id}
-                          className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors disabled:opacity-50"
-                        >
-                          {uploadingFace === p.id
-                            ? "Uploading."
-                            : p.photo_path
-                              ? "Update photo"
-                              : "Upload photo"}
-                        </button>
-                        {faceMessage[p.id] && (
-                          <span className="text-xs text-muted-foreground">
-                            {faceMessage[p.id]}
-                          </span>
-                        )}
                         <div className="flex-1" />
                         <span
                           className={`w-2 h-2 rounded-full ${p.consent_given ? "bg-green-500" : "bg-yellow-500"}`}
@@ -702,9 +657,7 @@ export default function PeoplePage() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md shadow-xl">
-            <h2 className="text-lg font-semibold mb-4">
-              {editPerson ? "Edit person" : "Add person"}
-            </h2>
+            <h2 className="text-lg font-semibold mb-4">Edit person</h2>
 
             <div className="space-y-3">
               <div>
@@ -763,15 +716,13 @@ export default function PeoplePage() {
                 disabled={submitting}
                 className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
               >
-                {submitting ? "Saving." : editPerson ? "Save" : "Add"}
+                {submitting ? "Saving." : "Save"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Hidden file input ref */}
-      <input ref={fileInputRef} type="file" className="hidden" />
     </div>
   );
 }

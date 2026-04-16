@@ -261,6 +261,13 @@ async def person_activity_summary(_current_user: User = Depends(get_current_user
             "first_seen_at": None,
         }
 
+    # Collect raw sighting timestamps per person, then group into sessions.
+    # Two sightings less than SESSION_GAP apart count as one visit.
+    SESSION_GAP = timedelta(minutes=10)
+
+    # person_id -> list of (obs_time, camera_id)
+    raw_sightings: dict[str, list[tuple[datetime, str]]] = {pid: [] for pid in person_map}
+
     for obs in observations:
         pd = obs.person_detections
         if not pd or not pd.get("faces"):
@@ -269,23 +276,35 @@ async def person_activity_summary(_current_user: User = Depends(get_current_user
             pid = face.get("person_id")
             if not pid or pid not in person_map:
                 continue
-            entry = person_map[pid]
-            entry["total_sightings"] += 1
+            if obs.started_at:
+                raw_sightings[pid].append((obs.started_at, str(obs.camera_id)))
 
-            obs_time = obs.started_at
-            if obs_time and obs_time >= cutoff_1h:
-                entry["sightings_1h"] += 1
-            if obs_time and obs_time >= cutoff_24h:
-                entry["sightings_24h"] += 1
+    for pid, sightings in raw_sightings.items():
+        if not sightings:
+            continue
+        entry = person_map[pid]
 
-            # Track last/first seen
-            iso = obs_time.isoformat() if obs_time else None
-            if iso:
-                if entry["last_seen_at"] is None or iso > entry["last_seen_at"]:
-                    entry["last_seen_at"] = iso
-                    entry["last_seen_camera"] = cameras.get(str(obs.camera_id))
-                if entry["first_seen_at"] is None or iso < entry["first_seen_at"]:
-                    entry["first_seen_at"] = iso
+        # Sort chronologically for session grouping
+        sightings.sort(key=lambda x: x[0])
+
+        # Group into sessions
+        sessions: list[tuple[datetime, str]] = []  # (session_start, camera_id)
+        prev_time = None
+        for obs_time, cam_id in sightings:
+            if prev_time is None or (obs_time - prev_time) > SESSION_GAP:
+                sessions.append((obs_time, cam_id))
+            prev_time = obs_time
+
+        entry["total_sightings"] = len(sessions)
+        entry["sightings_1h"] = sum(1 for t, _ in sessions if t >= cutoff_1h)
+        entry["sightings_24h"] = sum(1 for t, _ in sessions if t >= cutoff_24h)
+
+        # Last seen = latest sighting, first seen = earliest
+        last_time, last_cam = sightings[-1]
+        first_time, _ = sightings[0]
+        entry["last_seen_at"] = last_time.isoformat()
+        entry["last_seen_camera"] = cameras.get(last_cam)
+        entry["first_seen_at"] = first_time.isoformat()
 
     # Sort by most recently seen first
     summaries = sorted(
