@@ -41,6 +41,7 @@ class CameraCreate(BaseModel):
     retention_mode: str = "none"  # none, time, size
     retention_days: int = Field(default=30, ge=1, le=3650)
     retention_gb: float = Field(default=50.0, ge=1.0, le=10000.0)
+    motion_zones: list[dict] | None = None
 
 
 class CameraUpdate(BaseModel):
@@ -78,6 +79,7 @@ class CameraUpdate(BaseModel):
     retention_mode: str | None = None
     retention_days: int | None = Field(default=None, ge=1, le=3650)
     retention_gb: float | None = Field(default=None, ge=1.0, le=10000.0)
+    motion_zones: list[dict] | None = None
 
 
 class CameraResponse(BaseModel):
@@ -115,6 +117,7 @@ class CameraResponse(BaseModel):
     retention_mode: str
     retention_days: int
     retention_gb: float
+    motion_zones: list[dict] | None
     status: str
     width: int | None
     height: int | None
@@ -196,6 +199,21 @@ class ObservationResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ── Notification schemas ──
+
+class NotificationResponse(BaseModel):
+    id: uuid.UUID
+    message: str
+    severity: str
+    rule_id: uuid.UUID | None
+    camera_id: uuid.UUID | None
+    observation_id: uuid.UUID | None
+    read: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # ── Rule schemas ──
 
 class RuleCreate(BaseModel):
@@ -229,6 +247,9 @@ class EventResponse(BaseModel):
     fired_at: datetime
     payload: dict | None
     acknowledged_at: datetime | None
+    action_status: str
+    action_error: str | None
+    action_type: str | None
 
     model_config = {"from_attributes": True}
 
@@ -294,6 +315,23 @@ class SystemStatus(BaseModel):
     cameras_online: int
     cameras_recording: int
     uptime_seconds: float
+
+
+class CameraStorageStats(BaseModel):
+    camera_id: uuid.UUID
+    camera_name: str
+    recording_count: int
+    recording_bytes: int
+    observation_count: int
+    retention_mode: str
+    retention_days: int
+    retention_gb: float
+
+
+class StorageResponse(BaseModel):
+    cameras: list[CameraStorageStats]
+    total_recording_bytes: int
+    total_observations: int
 
 
 # -- User schemas --

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -39,6 +39,7 @@ interface Camera {
   detection_models: {model: string; confidence: number; enabled: boolean; label_filter: string[]}[] | null;
   detection_merge: string;
   detection_consensus_min: number;
+  motion_zones: MotionZone[] | null;
   status: string;
   width: number | null;
   height: number | null;
@@ -159,6 +160,390 @@ function Toggle({
 const inputClass =
   "w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent";
 
+interface PTZPreset {
+  token: string;
+  name: string;
+}
+
+interface MotionZone {
+  name: string;
+  points: number[][];
+  type: "include" | "exclude";
+}
+
+function HoldButton({
+  onHold,
+  onRelease,
+  children,
+  className,
+}: {
+  onHold: () => void;
+  onRelease: () => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={onHold}
+      onMouseUp={onRelease}
+      onMouseLeave={onRelease}
+      onTouchStart={onHold}
+      onTouchEnd={onRelease}
+      className={className}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PTZControlPanel({ cameraId }: { cameraId: string }) {
+  const [presets, setPresets] = useState<PTZPreset[]>([]);
+  const [speed, setSpeed] = useState(0.5);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchPresets = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/cameras/${cameraId}/ptz/presets`);
+      if (res.ok) setPresets(await res.json());
+    } catch {
+      /* silent */
+    }
+  }, [cameraId]);
+
+  useEffect(() => {
+    fetchPresets();
+  }, [fetchPresets]);
+
+  const sendMove = useCallback(
+    async (pan: number, tilt: number, zoom: number) => {
+      try {
+        await fetch(`/api/cameras/${cameraId}/ptz/move`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pan, tilt, zoom, speed }),
+        });
+      } catch {
+        /* silent */
+      }
+    },
+    [cameraId, speed]
+  );
+
+  const sendStop = useCallback(async () => {
+    try {
+      await fetch(`/api/cameras/${cameraId}/ptz/stop`, { method: "POST" });
+    } catch {
+      /* silent */
+    }
+  }, [cameraId]);
+
+  const startHold = useCallback(
+    (pan: number, tilt: number, zoom: number) => {
+      sendMove(pan, tilt, zoom);
+      intervalRef.current = setInterval(() => sendMove(pan, tilt, zoom), 200);
+    },
+    [sendMove]
+  );
+
+  const stopHold = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    sendStop();
+  }, [sendStop]);
+
+  const goToPreset = useCallback(
+    async (token: string) => {
+      try {
+        await fetch(`/api/cameras/${cameraId}/ptz/goto`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ preset_token: token }),
+        });
+      } catch {
+        /* silent */
+      }
+    },
+    [cameraId]
+  );
+
+  const btnClass =
+    "w-10 h-10 flex items-center justify-center rounded-md border border-border bg-card hover:bg-muted transition-colors text-sm font-medium";
+
+  return (
+    <div className="space-y-4">
+      {/* Directional pad */}
+      <div className="flex flex-col items-center gap-1">
+        <HoldButton onHold={() => startHold(0, 1, 0)} onRelease={stopHold} className={btnClass}>
+          ↑
+        </HoldButton>
+        <div className="flex gap-1">
+          <HoldButton onHold={() => startHold(-1, 0, 0)} onRelease={stopHold} className={btnClass}>
+            ←
+          </HoldButton>
+          <button
+            type="button"
+            onClick={() => sendStop()}
+            className={`${btnClass} text-muted-foreground`}
+          >
+            ●
+          </button>
+          <HoldButton onHold={() => startHold(1, 0, 0)} onRelease={stopHold} className={btnClass}>
+            →
+          </HoldButton>
+        </div>
+        <HoldButton onHold={() => startHold(0, -1, 0)} onRelease={stopHold} className={btnClass}>
+          ↓
+        </HoldButton>
+      </div>
+
+      {/* Zoom */}
+      <div className="flex items-center gap-2 justify-center">
+        <HoldButton onHold={() => startHold(0, 0, -1)} onRelease={stopHold} className={btnClass}>
+          −
+        </HoldButton>
+        <span className="text-xs text-muted-foreground">Zoom</span>
+        <HoldButton onHold={() => startHold(0, 0, 1)} onRelease={stopHold} className={btnClass}>
+          +
+        </HoldButton>
+      </div>
+
+      {/* Speed */}
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-muted-foreground">Speed</span>
+        <input
+          type="range"
+          min={0.1}
+          max={1}
+          step={0.1}
+          value={speed}
+          onChange={(e) => setSpeed(Number(e.target.value))}
+          className="flex-1 accent-accent"
+        />
+        <span className="font-mono text-xs text-muted-foreground w-8 text-right">
+          {(speed * 100).toFixed(0)}%
+        </span>
+      </div>
+
+      {/* Presets */}
+      {presets.length > 0 && (
+        <div>
+          <div className="text-xs text-muted-foreground mb-2">Presets</div>
+          <div className="flex flex-wrap gap-1">
+            {presets.map((p) => (
+              <button
+                key={p.token}
+                type="button"
+                onClick={() => goToPreset(p.token)}
+                className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
+              >
+                {p.name || p.token}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ZoneEditorCanvas({
+  zones,
+  onChange,
+  width,
+  height,
+}: {
+  zones: MotionZone[];
+  onChange: (zones: MotionZone[]) => void;
+  width: number;
+  height: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [currentPoints, setCurrentPoints] = useState<number[][]>([]);
+  const [zoneType, setZoneType] = useState<"include" | "exclude">("include");
+
+  const canvasWidth = 480;
+  const canvasHeight = Math.round((canvasWidth * height) / width) || 270;
+  const scaleX = canvasWidth / width;
+  const scaleY = canvasHeight / height;
+
+  const drawZones = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    // Draw existing zones
+    zones.forEach((zone) => {
+      if (zone.points.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(zone.points[0][0] * scaleX, zone.points[0][1] * scaleY);
+      zone.points.forEach((p, i) => {
+        if (i > 0) ctx.lineTo(p[0] * scaleX, p[1] * scaleY);
+      });
+      ctx.closePath();
+      ctx.fillStyle = zone.type === "include" ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)";
+      ctx.fill();
+      ctx.strokeStyle = zone.type === "include" ? "#22c55e" : "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Label
+      const cx = zone.points.reduce((s, p) => s + p[0] * scaleX, 0) / zone.points.length;
+      const cy = zone.points.reduce((s, p) => s + p[1] * scaleY, 0) / zone.points.length;
+      ctx.fillStyle = "#fff";
+      ctx.font = "11px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(zone.name, cx, cy);
+    });
+
+    // Draw current drawing
+    if (currentPoints.length > 0) {
+      ctx.beginPath();
+      ctx.moveTo(currentPoints[0][0], currentPoints[0][1]);
+      currentPoints.forEach((p, i) => {
+        if (i > 0) ctx.lineTo(p[0], p[1]);
+      });
+      ctx.strokeStyle = zoneType === "include" ? "#22c55e" : "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw points
+      currentPoints.forEach((p) => {
+        ctx.beginPath();
+        ctx.arc(p[0], p[1], 4, 0, Math.PI * 2);
+        ctx.fillStyle = zoneType === "include" ? "#22c55e" : "#ef4444";
+        ctx.fill();
+      });
+    }
+  }, [zones, currentPoints, scaleX, scaleY, canvasWidth, canvasHeight, zoneType]);
+
+  useEffect(() => {
+    drawZones();
+  }, [drawZones]);
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (!drawing) {
+      setDrawing(true);
+      setCurrentPoints([[x, y]]);
+    } else {
+      setCurrentPoints((prev) => [...prev, [x, y]]);
+    }
+  };
+
+  const finishZone = () => {
+    if (currentPoints.length < 3) return;
+
+    const scaledPoints = currentPoints.map((p) => [
+      Math.round(p[0] / scaleX),
+      Math.round(p[1] / scaleY),
+    ]);
+
+    const newZone: MotionZone = {
+      name: `Zone ${zones.length + 1}`,
+      points: scaledPoints,
+      type: zoneType,
+    };
+
+    onChange([...zones, newZone]);
+    setDrawing(false);
+    setCurrentPoints([]);
+  };
+
+  const removeZone = (index: number) => {
+    onChange(zones.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2 mb-2">
+        <button
+          type="button"
+          onClick={() => setZoneType("include")}
+          className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
+            zoneType === "include"
+              ? "border-green-500 bg-green-500/10 text-green-400"
+              : "border-border text-muted-foreground"
+          }`}
+        >
+          Include Zone
+        </button>
+        <button
+          type="button"
+          onClick={() => setZoneType("exclude")}
+          className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
+            zoneType === "exclude"
+              ? "border-red-500 bg-red-500/10 text-red-400"
+              : "border-border text-muted-foreground"
+          }`}
+        >
+          Exclude Zone
+        </button>
+        {drawing && (
+          <button
+            type="button"
+            onClick={finishZone}
+            disabled={currentPoints.length < 3}
+            className="px-2.5 py-1.5 text-xs rounded-md border border-accent bg-accent/10 text-accent-foreground disabled:opacity-50"
+          >
+            Finish Zone ({currentPoints.length} points)
+          </button>
+        )}
+      </div>
+
+      <canvas
+        ref={canvasRef}
+        width={canvasWidth}
+        height={canvasHeight}
+        onClick={handleCanvasClick}
+        className="border border-border rounded-md cursor-crosshair bg-black/20"
+      />
+
+      <p className="text-[11px] text-muted-foreground">
+        Click to add points. Click Finish Zone when done (minimum 3 points).
+      </p>
+
+      {zones.length > 0 && (
+        <div className="space-y-1">
+          {zones.map((zone, i) => (
+            <div key={i} className="flex items-center justify-between text-xs px-2 py-1.5 rounded border border-border">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    zone.type === "include" ? "bg-green-500" : "bg-red-500"
+                  }`}
+                />
+                <span>{zone.name}</span>
+                <span className="text-muted-foreground">
+                  ({zone.type}, {zone.points.length} points)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeZone(i)}
+                className="text-muted-foreground hover:text-red-400 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CameraConfigPage() {
   const params = useParams();
   const router = useRouter();
@@ -206,6 +591,7 @@ export default function CameraConfigPage() {
   const [retentionMode, setRetentionMode] = useState("none");
   const [retentionDays, setRetentionDays] = useState(30);
   const [retentionGb, setRetentionGb] = useState(50);
+  const [motionZones, setMotionZones] = useState<MotionZone[]>([]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -258,6 +644,7 @@ export default function CameraConfigPage() {
       setRetentionMode(cam.retention_mode ?? "none");
       setRetentionDays(cam.retention_days ?? 30);
       setRetentionGb(cam.retention_gb ?? 50);
+      setMotionZones(cam.motion_zones ?? []);
     } catch {
       setError("Failed to load camera");
     } finally {
@@ -306,6 +693,7 @@ export default function CameraConfigPage() {
         retention_mode: retentionMode,
         retention_days: retentionDays,
         retention_gb: retentionGb,
+        motion_zones: motionZones.length > 0 ? motionZones : null,
       };
 
       if (username.trim()) payload.username = username.trim();
@@ -1242,6 +1630,29 @@ export default function CameraConfigPage() {
               </p>
             </div>
           )}
+        </Section>
+
+        {/* ── PTZ Control ── */}
+        {streamType === "rtsp" && (
+          <Section
+            title="PTZ Control"
+            description="Pan, tilt, and zoom controls for ONVIF-compatible cameras"
+          >
+            <PTZControlPanel cameraId={cameraId} />
+          </Section>
+        )}
+
+        {/* ── Motion Zones ── */}
+        <Section
+          title="Motion Zones"
+          description="Define include and exclude zones for motion detection"
+        >
+          <ZoneEditorCanvas
+            zones={motionZones}
+            onChange={setMotionZones}
+            width={camera.width || 1920}
+            height={camera.height || 1080}
+          />
         </Section>
 
         {/* ── Danger Zone ── */}

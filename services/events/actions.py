@@ -19,6 +19,9 @@ import uuid
 
 import httpx
 
+from shared.database import async_session
+from shared.models import Event, Notification
+
 logger = logging.getLogger("nurby.events.actions")
 
 # Template variable pattern. Matches {{variable_name}}
@@ -128,6 +131,25 @@ def _apply_auth(headers: dict, auth_config: dict | None):
         headers["Authorization"] = f"Basic {credentials}"
 
 
+async def _update_event_status(
+    event_id: uuid.UUID,
+    action_type: str,
+    status: str,
+    error: str | None = None,
+):
+    """Update the Event record with action outcome."""
+    try:
+        async with async_session() as db:
+            event = await db.get(Event, event_id)
+            if event:
+                event.action_type = action_type
+                event.action_status = status
+                event.action_error = error
+                await db.commit()
+    except Exception:
+        logger.exception("Failed to update event %s status", event_id)
+
+
 async def execute_action(
     action: dict,
     observation_data: dict,
@@ -147,6 +169,7 @@ async def execute_action(
         await _execute_notify(action, observation_data, rule, event_id)
     else:
         logger.warning("Unknown action type '%s' in rule '%s'", action_type, rule.name)
+        await _update_event_status(event_id, action_type or "unknown", "failed", f"Unknown action type '{action_type}'")
 
 
 async def _execute_webhook(
@@ -159,6 +182,7 @@ async def _execute_webhook(
     url = action.get("url")
     if not url:
         logger.error("Webhook action missing 'url' in rule '%s'", rule.name)
+        await _update_event_status(event_id, "webhook", "failed", "Missing 'url' in webhook action")
         return
 
     context = _build_template_context(observation_data, rule, event_id)
@@ -185,10 +209,13 @@ async def _execute_webhook(
                 "Webhook fired for rule '%s' -> %s (status %d)",
                 rule.name, url, resp.status_code,
             )
+            await _update_event_status(event_id, "webhook", "success")
         except httpx.TimeoutException:
             logger.error("Webhook timeout for rule '%s' -> %s", rule.name, url)
+            await _update_event_status(event_id, "webhook", "failed", f"Timeout connecting to {url}")
         except httpx.RequestError as exc:
             logger.error("Webhook failed for rule '%s' -> %s. %s", rule.name, url, exc)
+            await _update_event_status(event_id, "webhook", "failed", str(exc))
 
 
 async def _execute_api_call(
@@ -211,6 +238,7 @@ async def _execute_api_call(
     url = action.get("url")
     if not url:
         logger.error("API call action missing 'url' in rule '%s'", rule.name)
+        await _update_event_status(event_id, "api_call", "failed", "Missing 'url' in api_call action")
         return
 
     method = action.get("method", "POST").upper()
@@ -253,10 +281,13 @@ async def _execute_api_call(
                 "API call fired for rule '%s' -> %s %s (status %d)",
                 rule.name, method, url, resp.status_code,
             )
+            await _update_event_status(event_id, "api_call", "success")
         except httpx.TimeoutException:
             logger.error("API call timeout for rule '%s' -> %s %s", rule.name, method, url)
+            await _update_event_status(event_id, "api_call", "failed", f"Timeout on {method} {url}")
         except httpx.RequestError as exc:
             logger.error("API call failed for rule '%s' -> %s %s. %s", rule.name, method, url, exc)
+            await _update_event_status(event_id, "api_call", "failed", str(exc))
 
 
 async def _execute_broadcast(
@@ -288,8 +319,13 @@ async def _execute_broadcast(
     if isinstance(message, dict) and extra:
         message.update(extra)
 
-    await broadcast(message)
-    logger.info("Broadcast event for rule '%s' to WebSocket clients", rule.name)
+    try:
+        await broadcast(message)
+        logger.info("Broadcast event for rule '%s' to WebSocket clients", rule.name)
+        await _update_event_status(event_id, "broadcast", "success")
+    except Exception as exc:
+        logger.error("Broadcast failed for rule '%s'. %s", rule.name, exc)
+        await _update_event_status(event_id, "broadcast", "failed", str(exc))
 
 
 async def _execute_notify(
@@ -298,7 +334,7 @@ async def _execute_notify(
     rule,
     event_id: uuid.UUID,
 ):
-    """Store notification for UI display. Also broadcasts via WebSocket."""
+    """Store notification in DB and broadcast via WebSocket."""
     from services.api.ws import broadcast
 
     template = action.get("message", "Rule '{rule_name}' triggered")
@@ -306,8 +342,27 @@ async def _execute_notify(
         "{camera_id}", observation_data.get("camera_id", "unknown")
     )
 
+    # Persist notification to database
+    try:
+        async with async_session() as db:
+            notif = Notification(
+                message=message_text,
+                severity=action.get("severity", "info"),
+                rule_id=rule.id,
+                camera_id=uuid.UUID(observation_data["camera_id"]) if observation_data.get("camera_id") else None,
+                observation_id=uuid.UUID(observation_data["observation_id"]) if observation_data.get("observation_id") else None,
+            )
+            db.add(notif)
+            await db.commit()
+            await db.refresh(notif)
+            notif_id = str(notif.id)
+    except Exception:
+        logger.exception("Failed to persist notification for rule '%s'", rule.name)
+        notif_id = str(uuid.uuid4())
+
     notification = {
         "type": "notification",
+        "id": notif_id,
         "event_id": str(event_id),
         "rule_id": str(rule.id),
         "rule_name": rule.name,
@@ -317,5 +372,10 @@ async def _execute_notify(
         "timestamp": observation_data.get("timestamp"),
     }
 
-    await broadcast(notification)
-    logger.info("Notification for rule '%s'. %s", rule.name, message_text)
+    try:
+        await broadcast(notification)
+        logger.info("Notification for rule '%s'. %s", rule.name, message_text)
+        await _update_event_status(event_id, "notify", "success")
+    except Exception as exc:
+        logger.error("Notification failed for rule '%s'. %s", rule.name, exc)
+        await _update_event_status(event_id, "notify", "failed", str(exc))

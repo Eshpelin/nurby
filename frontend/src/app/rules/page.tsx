@@ -13,6 +13,18 @@ interface Rule {
   created_at: string;
 }
 
+interface EventEntry {
+  id: string;
+  rule_id: string | null;
+  observation_id: string | null;
+  fired_at: string;
+  payload: Record<string, unknown> | null;
+  acknowledged_at: string | null;
+  action_status: string;
+  action_error: string | null;
+  action_type: string | null;
+}
+
 interface Camera {
   id: string;
   name: string;
@@ -118,6 +130,9 @@ export default function RulesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editRule, setEditRule] = useState<Rule | null>(null);
   const [selectedRule, setSelectedRule] = useState<Rule | null>(null);
+  const [ruleEvents, setRuleEvents] = useState<EventEntry[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -170,10 +185,33 @@ export default function RulesPage() {
     }
   }, []);
 
+  const fetchRuleEvents = useCallback(async (ruleId: string) => {
+    setEventsLoading(true);
+    try {
+      const res = await fetch(`/api/events/history?rule_id=${ruleId}&limit=20`);
+      if (res.ok) setRuleEvents(await res.json());
+    } catch {
+      /* silent */
+    } finally {
+      setEventsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchRules();
     fetchCameras();
   }, [fetchRules, fetchCameras]);
+
+  // Fetch events when a rule is selected, auto-refresh every 30s
+  useEffect(() => {
+    if (!selectedRule) {
+      setRuleEvents([]);
+      return;
+    }
+    fetchRuleEvents(selectedRule.id);
+    const interval = setInterval(() => fetchRuleEvents(selectedRule.id), 30000);
+    return () => clearInterval(interval);
+  }, [selectedRule, fetchRuleEvents]);
 
   const resetForm = () => {
     setFormName("");
@@ -646,6 +684,74 @@ export default function RulesPage() {
                 </p>
               )}
             </div>
+
+            {/* Execution Log */}
+            {selectedRule && (
+              <div className="mt-4 rounded-lg border border-border bg-card p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Execution Log
+                  </span>
+                </div>
+                {eventsLoading && ruleEvents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Loading events.</p>
+                ) : ruleEvents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No events fired yet for this rule.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {ruleEvents.map((ev) => (
+                      <div
+                        key={ev.id}
+                        onClick={() => setExpandedEventId(expandedEventId === ev.id ? null : ev.id)}
+                        className="rounded-md border border-border bg-background p-3 cursor-pointer hover:border-muted-foreground/30 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                ev.action_status === "success"
+                                  ? "bg-green-500"
+                                  : ev.action_status === "failed"
+                                  ? "bg-red-500"
+                                  : "bg-yellow-500"
+                              }`}
+                            />
+                            {ev.action_type && (
+                              <span className="px-1.5 py-0.5 text-[10px] rounded bg-muted text-muted-foreground font-mono">
+                                {ev.action_type}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(ev.fired_at).toLocaleString()}
+                          </span>
+                        </div>
+                        {ev.action_status === "failed" && ev.action_error && (
+                          <div className="mt-1.5 text-[11px] text-red-400 truncate">
+                            {ev.action_error}
+                          </div>
+                        )}
+                        {expandedEventId === ev.id && (
+                          <div className="mt-3 pt-3 border-t border-border">
+                            <div className="text-[10px] text-muted-foreground mb-1">Payload</div>
+                            <pre className="text-[10px] font-mono bg-muted/50 rounded p-2 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
+                              {ev.payload ? JSON.stringify(ev.payload, null, 2) : "No payload"}
+                            </pre>
+                            {ev.action_error && (
+                              <div className="mt-2">
+                                <div className="text-[10px] text-muted-foreground mb-1">Error</div>
+                                <div className="text-[11px] text-red-400 break-words">{ev.action_error}</div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </aside>
         </div>
       )}

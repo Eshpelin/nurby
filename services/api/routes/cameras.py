@@ -3,13 +3,20 @@ import glob
 import platform
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.discovery.onvif import discover_onvif_cameras
+from services.discovery.onvif import (
+    discover_onvif_cameras,
+    ptz_continuous_move,
+    ptz_get_presets,
+    ptz_goto_preset,
+    ptz_stop,
+)
 from shared.database import get_db
 from shared.models import Camera, CameraStatusLog
 from shared.schemas import CameraCreate, CameraResponse, CameraStatusLogResponse, CameraUpdate
@@ -225,6 +232,138 @@ async def create_camera(body: CameraCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(camera)
     return camera
+
+
+# ---------------------------------------------------------------------------
+# PTZ control endpoints (must be registered before /{camera_id} catch-all)
+# ---------------------------------------------------------------------------
+
+
+class PTZMoveRequest(BaseModel):
+    pan: float = 0.0
+    tilt: float = 0.0
+    zoom: float = 0.0
+
+
+class PTZGotoRequest(BaseModel):
+    preset_token: str
+
+
+class PTZPresetResponse(BaseModel):
+    token: str
+    name: str
+
+
+def _extract_ip_port(stream_url: str) -> tuple[str, int]:
+    """Pull the host and port from a camera stream URL."""
+    parsed = urlparse(stream_url)
+    ip = parsed.hostname or ""
+    port = parsed.port or 80
+    return ip, port
+
+
+async def _get_camera_for_ptz(
+    camera_id: uuid.UUID, db: AsyncSession
+) -> Camera:
+    """Load a camera by ID and verify it supports PTZ (RTSP only)."""
+    camera = await db.get(Camera, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    if camera.stream_type != "rtsp":
+        raise HTTPException(status_code=400, detail="PTZ is only supported for RTSP cameras")
+    return camera
+
+
+@router.post("/{camera_id}/ptz/move")
+async def ptz_move(
+    camera_id: uuid.UUID,
+    body: PTZMoveRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Start continuous PTZ movement on a camera."""
+    camera = await _get_camera_for_ptz(camera_id, db)
+    ip, port = _extract_ip_port(camera.stream_url)
+    profile_token = "Profile_1"
+
+    ok = await ptz_continuous_move(
+        ip=ip,
+        port=port,
+        username=camera.username,
+        password=camera.password,
+        profile_token=profile_token,
+        pan_speed=body.pan,
+        tilt_speed=body.tilt,
+        zoom_speed=body.zoom,
+    )
+    if not ok:
+        raise HTTPException(status_code=502, detail="Camera did not accept the PTZ move command")
+    return {"status": "moving"}
+
+
+@router.post("/{camera_id}/ptz/stop")
+async def ptz_stop_movement(
+    camera_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Stop all PTZ movement on a camera."""
+    camera = await _get_camera_for_ptz(camera_id, db)
+    ip, port = _extract_ip_port(camera.stream_url)
+    profile_token = "Profile_1"
+
+    ok = await ptz_stop(
+        ip=ip,
+        port=port,
+        username=camera.username,
+        password=camera.password,
+        profile_token=profile_token,
+    )
+    if not ok:
+        raise HTTPException(status_code=502, detail="Camera did not accept the PTZ stop command")
+    return {"status": "stopped"}
+
+
+@router.get("/{camera_id}/ptz/presets", response_model=list[PTZPresetResponse])
+async def ptz_list_presets(
+    camera_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """List saved PTZ presets for a camera."""
+    camera = await _get_camera_for_ptz(camera_id, db)
+    ip, port = _extract_ip_port(camera.stream_url)
+    profile_token = "Profile_1"
+
+    presets = await ptz_get_presets(
+        ip=ip,
+        port=port,
+        username=camera.username,
+        password=camera.password,
+        profile_token=profile_token,
+    )
+    return presets
+
+
+@router.post("/{camera_id}/ptz/goto")
+async def ptz_goto(
+    camera_id: uuid.UUID,
+    body: PTZGotoRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Move the camera to a saved preset position."""
+    camera = await _get_camera_for_ptz(camera_id, db)
+    ip, port = _extract_ip_port(camera.stream_url)
+    profile_token = "Profile_1"
+
+    ok = await ptz_goto_preset(
+        ip=ip,
+        port=port,
+        username=camera.username,
+        password=camera.password,
+        profile_token=profile_token,
+        preset_token=body.preset_token,
+    )
+    if not ok:
+        raise HTTPException(status_code=502, detail="Camera did not accept the PTZ goto command")
+    return {"status": "moving_to_preset"}
 
 
 @router.get("/{camera_id}", response_model=CameraResponse)

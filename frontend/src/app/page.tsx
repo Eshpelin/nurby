@@ -58,6 +58,7 @@ interface Detection {
   label: string;
   confidence: number;
   bbox: number[];
+  plate_text?: string | null;
 }
 
 interface StatusLog {
@@ -166,17 +167,49 @@ function extractStreamName(streamUrl: string): string {
 }
 
 function summarizeDetections(obs: Observation): string {
-  if (!obs.object_detections || obs.object_detections.count === 0) {
-    return "Motion detected, no objects identified";
+  const parts: string[] = [];
+
+  // Person names first
+  if (obs.person_detections?.faces) {
+    const named = obs.person_detections.faces.filter((f) => f.person_name);
+    const unnamed = obs.person_detections.faces.filter((f) => !f.person_name);
+    for (const f of named) {
+      parts.push(f.person_name!);
+    }
+    if (unnamed.length > 0) {
+      parts.push(unnamed.length === 1 ? "unknown person" : `${unnamed.length} unknown people`);
+    }
   }
-  const counts: Record<string, number> = {};
-  for (const d of obs.object_detections.objects) {
-    counts[d.label] = (counts[d.label] || 0) + 1;
+
+  // License plates
+  if (obs.object_detections?.objects) {
+    for (const d of obs.object_detections.objects) {
+      if (d.label === "license_plate" && d.plate_text) {
+        parts.push(`plate ${d.plate_text}`);
+      }
+    }
   }
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, count]) => (count === 1 ? label : `${count} ${label}s`))
-    .join(", ");
+
+  // Object counts (skip person since we handled faces above, skip license_plate since handled)
+  if (obs.object_detections?.objects && obs.object_detections.objects.length > 0) {
+    const counts: Record<string, number> = {};
+    for (const d of obs.object_detections.objects) {
+      if (d.label === "person" || d.label === "license_plate") continue;
+      counts[d.label] = (counts[d.label] || 0) + 1;
+    }
+    const objectParts = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, count]) => (count === 1 ? label : `${count} ${label}s`));
+    parts.push(...objectParts);
+  }
+
+  if (parts.length === 0) {
+    return obs.vlm_description
+      ? obs.vlm_description.split(/\.\s/)[0].slice(0, 60)
+      : "Motion detected";
+  }
+
+  return parts.join(", ") + " detected";
 }
 
 function observationToEvents(obs: Observation): ActivityEvent[] {
@@ -1340,10 +1373,21 @@ function DashboardContent() {
                                     {obs.vlm_provider && <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">via {obs.vlm_provider}</p>}
                                   </div>
                                 )}
+                                {obs.person_detections?.faces && obs.person_detections.faces.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {obs.person_detections.faces.map((f, i) => (
+                                      <span key={`f${i}`} className={`px-1.5 py-0.5 text-[10px] rounded-full border ${f.person_name ? "bg-green-900/30 text-green-300 border-green-800/40" : "bg-yellow-900/30 text-yellow-300 border-yellow-800/40"}`}>
+                                        {f.person_name || "Unknown person"}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                                 {obs.object_detections && obs.object_detections.count > 0 && (
                                   <div className="flex flex-wrap gap-1">
                                     {obs.object_detections.objects.map((d, i) => (
-                                      <span key={i} className="px-1.5 py-0.5 text-[10px] rounded-full bg-muted border border-border">{d.label} <span className="text-muted-foreground">{(d.confidence * 100).toFixed(0)}%</span></span>
+                                      <span key={i} className={`px-1.5 py-0.5 text-[10px] rounded-full border ${d.label === "license_plate" ? "bg-accent/20 text-accent border-accent/40" : "bg-muted border-border"}`}>
+                                        {d.label === "license_plate" && d.plate_text ? `plate ${d.plate_text}` : d.label} <span className="text-muted-foreground">{(d.confidence * 100).toFixed(0)}%</span>
+                                      </span>
                                     ))}
                                   </div>
                                 )}

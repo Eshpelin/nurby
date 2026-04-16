@@ -5,12 +5,16 @@ No heavy ONVIF library dependencies.
 """
 
 import asyncio
+import hashlib
 import logging
+import os
 import re
 import socket
 import uuid
 import xml.etree.ElementTree as ET
+from base64 import b64encode
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
@@ -364,3 +368,218 @@ async def discover_onvif_cameras(timeout: float = 5.0) -> list[dict[str, Any]]:
             results.append(item)
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# WS-Security UsernameToken header generation
+# ---------------------------------------------------------------------------
+
+def _ws_security_header(username: str, password: str) -> str:
+    """Build a WS-Security UsernameToken SOAP header block.
+
+    Uses the Password Digest method per the ONVIF specification.
+    digest = Base64(SHA1(nonce + created + password))
+    """
+    nonce_bytes = os.urandom(16)
+    nonce_b64 = b64encode(nonce_bytes).decode()
+    created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    digest_input = nonce_bytes + created.encode("utf-8") + password.encode("utf-8")
+    digest = b64encode(hashlib.sha1(digest_input).digest()).decode()
+
+    return f"""<s:Header>
+    <Security xmlns="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
+      <UsernameToken>
+        <Username>{username}</Username>
+        <Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest">{digest}</Password>
+        <Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">{nonce_b64}</Nonce>
+        <Created xmlns="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">{created}</Created>
+      </UsernameToken>
+    </Security>
+  </s:Header>"""
+
+
+def _ptz_service_url(ip: str, port: int) -> str:
+    """Build the ONVIF PTZ service URL for a given camera."""
+    return f"http://{ip}:{port}/onvif/ptz_service"
+
+
+# ---------------------------------------------------------------------------
+# PTZ SOAP envelope templates
+# ---------------------------------------------------------------------------
+
+_PTZ_CONTINUOUS_MOVE_ENVELOPE = """<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope
+  xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:ptz="http://www.onvif.org/ver20/ptz/wsdl"
+  xmlns:tt="http://www.onvif.org/ver10/schema">
+  {header}
+  <s:Body>
+    <ptz:ContinuousMove>
+      <ptz:ProfileToken>{profile_token}</ptz:ProfileToken>
+      <ptz:Velocity>
+        <tt:PanTilt x="{pan_speed}" y="{tilt_speed}"/>
+        <tt:Zoom x="{zoom_speed}"/>
+      </ptz:Velocity>
+    </ptz:ContinuousMove>
+  </s:Body>
+</s:Envelope>"""
+
+_PTZ_STOP_ENVELOPE = """<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope
+  xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:ptz="http://www.onvif.org/ver20/ptz/wsdl">
+  {header}
+  <s:Body>
+    <ptz:Stop>
+      <ptz:ProfileToken>{profile_token}</ptz:ProfileToken>
+      <ptz:PanTilt>true</ptz:PanTilt>
+      <ptz:Zoom>true</ptz:Zoom>
+    </ptz:Stop>
+  </s:Body>
+</s:Envelope>"""
+
+_PTZ_GET_PRESETS_ENVELOPE = """<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope
+  xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:ptz="http://www.onvif.org/ver20/ptz/wsdl">
+  {header}
+  <s:Body>
+    <ptz:GetPresets>
+      <ptz:ProfileToken>{profile_token}</ptz:ProfileToken>
+    </ptz:GetPresets>
+  </s:Body>
+</s:Envelope>"""
+
+_PTZ_GOTO_PRESET_ENVELOPE = """<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope
+  xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:ptz="http://www.onvif.org/ver20/ptz/wsdl">
+  {header}
+  <s:Body>
+    <ptz:GotoPreset>
+      <ptz:ProfileToken>{profile_token}</ptz:ProfileToken>
+      <ptz:PresetToken>{preset_token}</ptz:PresetToken>
+    </ptz:GotoPreset>
+  </s:Body>
+</s:Envelope>"""
+
+
+# ---------------------------------------------------------------------------
+# PTZ internal helpers
+# ---------------------------------------------------------------------------
+
+async def _ptz_command(
+    ip: str,
+    port: int,
+    username: str | None,
+    password: str | None,
+    envelope_template: str,
+    **fmt_kwargs: object,
+) -> ET.Element | None:
+    """Send a PTZ SOAP command and return the parsed XML root (or None on failure).
+
+    Handles WS-Security header injection and shared httpx client lifecycle.
+    """
+    header = _ws_security_header(username, password) if username and password else "<s:Header/>"
+    envelope = envelope_template.format(header=header, **fmt_kwargs)
+    url = _ptz_service_url(ip, port)
+    async with httpx.AsyncClient(verify=False) as client:
+        return await _soap_request(client, url, envelope, timeout=5.0)
+
+
+# ---------------------------------------------------------------------------
+# PTZ public methods
+# ---------------------------------------------------------------------------
+
+async def ptz_continuous_move(
+    ip: str,
+    port: int,
+    username: str | None,
+    password: str | None,
+    profile_token: str,
+    pan_speed: float,
+    tilt_speed: float,
+    zoom_speed: float,
+) -> bool:
+    """Send a ContinuousMove SOAP request to start PTZ movement.
+
+    Returns True if the camera accepted the command.
+    """
+    root = await _ptz_command(
+        ip, port, username, password,
+        _PTZ_CONTINUOUS_MOVE_ENVELOPE,
+        profile_token=profile_token,
+        pan_speed=pan_speed,
+        tilt_speed=tilt_speed,
+        zoom_speed=zoom_speed,
+    )
+    return root is not None and not _is_auth_fault(root)
+
+
+async def ptz_stop(
+    ip: str,
+    port: int,
+    username: str | None,
+    password: str | None,
+    profile_token: str,
+) -> bool:
+    """Send a Stop SOAP request to halt all PTZ movement.
+
+    Returns True if the camera accepted the command.
+    """
+    root = await _ptz_command(
+        ip, port, username, password,
+        _PTZ_STOP_ENVELOPE,
+        profile_token=profile_token,
+    )
+    return root is not None and not _is_auth_fault(root)
+
+
+async def ptz_get_presets(
+    ip: str,
+    port: int,
+    username: str | None,
+    password: str | None,
+    profile_token: str,
+) -> list[dict[str, str]]:
+    """Fetch saved PTZ presets from the camera.
+
+    Returns a list of dicts with "token" and "name" keys.
+    """
+    root = await _ptz_command(
+        ip, port, username, password,
+        _PTZ_GET_PRESETS_ENVELOPE,
+        profile_token=profile_token,
+    )
+    if root is None or _is_auth_fault(root):
+        return []
+
+    presets: list[dict[str, str]] = []
+    for elem in _find_all_recursive(root, "Preset"):
+        token = elem.get("token", "")
+        name_elem = _find_recursive(elem, "Name")
+        name = _extract_text(name_elem) or token
+        if token:
+            presets.append({"token": token, "name": name})
+    return presets
+
+
+async def ptz_goto_preset(
+    ip: str,
+    port: int,
+    username: str | None,
+    password: str | None,
+    profile_token: str,
+    preset_token: str,
+) -> bool:
+    """Move the camera to a saved preset position.
+
+    Returns True if the camera accepted the command.
+    """
+    root = await _ptz_command(
+        ip, port, username, password,
+        _PTZ_GOTO_PRESET_ENVELOPE,
+        profile_token=profile_token,
+        preset_token=preset_token,
+    )
+    return root is not None and not _is_auth_fault(root)

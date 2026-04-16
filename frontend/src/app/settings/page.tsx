@@ -12,6 +12,39 @@ interface Provider {
   created_at: string;
 }
 
+interface InviteKey {
+  id: string;
+  key: string;
+  role: string;
+  camera_ids: string[] | null;
+  max_uses: number;
+  use_count: number;
+  expires_at: string | null;
+  created_at: string;
+}
+
+interface Camera {
+  id: string;
+  name: string;
+}
+
+interface CameraStorage {
+  camera_id: string;
+  camera_name: string;
+  recording_count: number;
+  recording_bytes: number;
+  observation_count: number;
+  retention_mode: string;
+  retention_days: number;
+  retention_gb: number;
+}
+
+interface StorageStats {
+  cameras: CameraStorage[];
+  total_recording_bytes: number;
+  total_observations: number;
+}
+
 const PROVIDER_KINDS = [
   { value: "openai", label: "OpenAI-compatible" },
   { value: "anthropic", label: "Anthropic" },
@@ -37,6 +70,34 @@ const ALL_PROVIDERS = [
   { name: "vLLM", kind: "openai", url: "http://localhost:8000", model: "local-model", description: "High-throughput local serving", needsKey: false },
 ];
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
+function retentionLabel(cam: CameraStorage): string {
+  if (cam.retention_mode === "time") return "Keep " + cam.retention_days + " days";
+  if (cam.retention_mode === "size") return "Max " + cam.retention_gb + " GB";
+  return "No limit";
+}
+
+function usagePercent(cam: CameraStorage): number | null {
+  if (cam.retention_mode === "size" && cam.retention_gb > 0) {
+    const limitBytes = cam.retention_gb * 1024 * 1024 * 1024;
+    return (cam.recording_bytes / limitBytes) * 100;
+  }
+  return null;
+}
+
+function barColor(percent: number | null): string {
+  if (percent === null) return "bg-blue-500";
+  if (percent >= 80) return "bg-red-500";
+  if (percent >= 50) return "bg-yellow-500";
+  return "bg-green-500";
+}
+
 export default function SettingsPage() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +105,19 @@ export default function SettingsPage() {
   const [editProvider, setEditProvider] = useState<Provider | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; message: string; latency_ms?: number; models?: string[] }>>({});
+
+  // Invite key state
+  const [inviteKeys, setInviteKeys] = useState<InviteKey[]>([]);
+  const [cameras, setCameras] = useState<Camera[]>([]);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteRole, setInviteRole] = useState("viewer");
+  const [inviteCameraIds, setInviteCameraIds] = useState<string[]>([]);
+  const [inviteMaxUses, setInviteMaxUses] = useState(1);
+  const [inviteCreating, setInviteCreating] = useState(false);
+
+  // Storage state
+  const [storage, setStorage] = useState<StorageStats | null>(null);
+  const [storageLoading, setStorageLoading] = useState(true);
 
   // Form
   const [formName, setFormName] = useState("");
@@ -66,9 +140,44 @@ export default function SettingsPage() {
     }
   }, []);
 
+  const fetchInviteKeys = useCallback(async () => {
+    try {
+      const res = await fetch("/api/invites");
+      if (res.ok) setInviteKeys(await res.json());
+    } catch {
+      /* silent */
+    }
+  }, []);
+
+  const fetchCameras = useCallback(async () => {
+    try {
+      const res = await fetch("/api/cameras");
+      if (res.ok) {
+        const list = await res.json();
+        setCameras(list.map((c: Camera) => ({ id: c.id, name: c.name })));
+      }
+    } catch {
+      /* silent */
+    }
+  }, []);
+
+  const fetchStorage = useCallback(async () => {
+    try {
+      const res = await fetch("/api/storage");
+      if (res.ok) setStorage(await res.json());
+    } catch {
+      /* silent */
+    } finally {
+      setStorageLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchProviders();
-  }, [fetchProviders]);
+    fetchInviteKeys();
+    fetchCameras();
+    fetchStorage();
+  }, [fetchProviders, fetchInviteKeys, fetchCameras, fetchStorage]);
 
   const resetForm = () => {
     setFormName("");
@@ -219,7 +328,48 @@ export default function SettingsPage() {
     }
   };
 
+  const handleCreateInvite = async () => {
+    setInviteCreating(true);
+    try {
+      const body: Record<string, unknown> = {
+        role: inviteRole,
+        max_uses: inviteMaxUses,
+      };
+      if (inviteCameraIds.length > 0) {
+        body.camera_ids = inviteCameraIds;
+      }
+      const res = await fetch("/api/invites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setShowInviteModal(false);
+        setInviteRole("viewer");
+        setInviteCameraIds([]);
+        setInviteMaxUses(1);
+        fetchInviteKeys();
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setInviteCreating(false);
+    }
+  };
+
+  const handleDeleteInvite = async (id: string) => {
+    try {
+      await fetch(`/api/invites/${id}`, { method: "DELETE" });
+      fetchInviteKeys();
+    } catch {
+      /* silent */
+    }
+  };
+
   const activeProvider = providers.find((p) => p.active);
+  const maxRecordingBytes = storage
+    ? storage.cameras.reduce((max, c) => Math.max(max, c.recording_bytes), 1)
+    : 1;
 
   return (
     <div className="px-6 py-6 max-w-4xl">
@@ -393,7 +543,130 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
-      {/* Add/Edit Modal */}
+      {/* Invite Keys section */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-sm font-medium">Invite Keys</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Generate invite keys to allow new users to register
+            </p>
+          </div>
+          <button
+            onClick={() => setShowInviteModal(true)}
+            className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
+          >
+            + Create invite
+          </button>
+        </div>
+        {inviteKeys.length > 0 ? (
+          <div className="space-y-2">
+            {inviteKeys.map((ik) => (
+              <div
+                key={ik.id}
+                className="rounded-lg border border-border bg-card p-3 flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <code className="text-xs font-mono bg-muted px-2 py-1 rounded select-all">
+                    {ik.key}
+                  </code>
+                  <span className="text-xs text-muted-foreground">
+                    {ik.role} / {ik.use_count}/{ik.max_uses} uses
+                  </span>
+                  {ik.expires_at && (
+                    <span className="text-xs text-muted-foreground">
+                      expires {new Date(ik.expires_at).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleDeleteInvite(ik.id)}
+                  className="px-2 py-1 text-xs rounded border border-red-800 text-red-400 hover:bg-red-900/30 transition-colors"
+                >
+                  Revoke
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-muted-foreground py-4 text-center border border-dashed border-border rounded-lg">
+            No invite keys created yet
+          </div>
+        )}
+      </div>
+
+      {/* Storage */}
+      <div className="mt-10 mb-6">
+        <h2 className="text-lg font-semibold tracking-tight mb-4">Storage</h2>
+
+        {storageLoading ? (
+          <div className="text-sm text-muted-foreground py-6 text-center">Loading storage stats.</div>
+        ) : storage ? (
+          <div className="space-y-4">
+            {/* Totals */}
+            <div className="rounded-lg border border-border bg-card p-4 flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold">{formatBytes(storage.total_recording_bytes)}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Total recording storage</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold">{storage.total_observations.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Total observations</div>
+              </div>
+            </div>
+
+            {/* Per-camera bars */}
+            {storage.cameras.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-4 text-center">No cameras configured yet.</div>
+            ) : (
+              <div className="space-y-2">
+                {storage.cameras.map((cam) => {
+                  const pct = usagePercent(cam);
+                  const barWidth = cam.recording_bytes > 0 ? Math.max((cam.recording_bytes / maxRecordingBytes) * 100, 2) : 0;
+
+                  return (
+                    <div key={cam.camera_id} className="rounded-lg border border-border bg-card p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{cam.camera_name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatBytes(cam.recording_bytes)}
+                          </span>
+                        </div>
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                          {retentionLabel(cam)}
+                        </span>
+                      </div>
+
+                      {/* Bar */}
+                      <div className="w-full h-2 rounded-full bg-muted overflow-hidden mb-2">
+                        <div
+                          className={`h-full rounded-full transition-all ${barColor(pct)}`}
+                          style={{ width: `${barWidth}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>{cam.recording_count} recording{cam.recording_count !== 1 ? "s" : ""}</span>
+                        <span>{cam.observation_count} observation{cam.observation_count !== 1 ? "s" : ""}</span>
+                        {pct !== null && (
+                          <span className={pct >= 80 ? "text-red-400" : pct >= 50 ? "text-yellow-400" : "text-green-400"}>
+                            {pct.toFixed(0)}% of limit
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-sm text-muted-foreground py-4 text-center">Could not load storage stats.</div>
+        )}
+      </div>
+
+      {/* Add/Edit Provider Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
@@ -534,6 +807,95 @@ export default function SettingsPage() {
                 className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
               >
                 {submitting ? "Saving." : editProvider ? "Save" : "Add provider"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Key Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowInviteModal(false)}
+          />
+          <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md shadow-xl">
+            <h2 className="text-lg font-semibold mb-4">Create Invite Key</h2>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">
+                  Role
+                </label>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
+                >
+                  <option value="viewer">Viewer</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">
+                  Max Uses
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={inviteMaxUses}
+                  onChange={(e) => setInviteMaxUses(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              {cameras.length > 0 && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">
+                    Camera Access (optional)
+                  </label>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {cameras.map((cam) => (
+                      <label key={cam.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={inviteCameraIds.includes(cam.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setInviteCameraIds([...inviteCameraIds, cam.id]);
+                            } else {
+                              setInviteCameraIds(inviteCameraIds.filter((id) => id !== cam.id));
+                            }
+                          }}
+                          className="accent-accent"
+                        />
+                        {cam.name}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Leave empty to grant access to all cameras
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateInvite}
+                disabled={inviteCreating}
+                className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
+              >
+                {inviteCreating ? "Creating." : "Create"}
               </button>
             </div>
           </div>

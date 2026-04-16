@@ -18,6 +18,7 @@ from shared.database import async_session
 from shared.models import Camera, Observation, Provider
 from services.perception.detector import ObjectDetector
 from services.perception.faces import FaceRecognizer
+from services.perception.plates import detect_plates
 from services.perception.vlm import VLMClient, get_active_provider
 from services.search.embeddings import generate_embedding, get_embedding_provider
 from services.events.engine import RuleEngine
@@ -155,6 +156,9 @@ class PerceptionPipeline:
             camera_id, motion_score,
         )
 
+        # Step 0. Apply motion zone masking before detection
+        frame = self._apply_motion_zones(frame, cam)
+
         # Step 1. Run object detection (if enabled for this camera)
         detections = []
         if cam is None or cam.detect_objects:
@@ -174,6 +178,19 @@ class PerceptionPipeline:
 
             detection_summary = self._detector.summarize(detections)
             logger.info("Detections for camera %s. %s", camera_id, detection_summary)
+
+        # Step 1b. Run license plate detection on vehicle crops
+        if detections:
+            has_vehicle = any(d["label"] in ("car", "truck", "bus", "motorcycle", "van") for d in detections)
+            if has_vehicle:
+                try:
+                    detections = detect_plates(frame, detections)
+                    plates = [d for d in detections if d["label"] == "license_plate"]
+                    if plates:
+                        plate_texts = [d.get("plate_text", "?") for d in plates]
+                        logger.info("Plates for camera %s. %s", camera_id, ", ".join(plate_texts))
+                except Exception:
+                    logger.exception("Plate detection failed for camera %s", camera_id)
 
         # Signal recording trigger if camera uses on_object or clip mode
         if cam and cam.recording_mode in ("on_object", "clip") and detections:
@@ -305,6 +322,40 @@ class PerceptionPipeline:
         except Exception:
             logger.exception("Rule evaluation failed for camera %s", camera_id)
 
+    @staticmethod
+    def _apply_motion_zones(frame: np.ndarray, cam: Camera | None) -> np.ndarray:
+        """Mask the frame according to configured motion zones.
+
+        Include zones white-list specific regions. Everything outside is blacked out.
+        Exclude zones black out specific regions. The rest remains visible.
+        """
+        if cam is None or not cam.motion_zones:
+            return frame
+
+        zones = cam.motion_zones
+        if not isinstance(zones, list) or len(zones) == 0:
+            return frame
+
+        h, w = frame.shape[:2]
+        include_zones = [z for z in zones if z.get("type") == "include" and z.get("points")]
+        exclude_zones = [z for z in zones if z.get("type") == "exclude" and z.get("points")]
+
+        if include_zones:
+            # Build a mask that is black everywhere, white inside include polygons
+            mask = np.zeros((h, w), dtype=np.uint8)
+            for zone in include_zones:
+                pts = np.array(zone["points"], dtype=np.int32)
+                cv2.fillPoly(mask, [pts], 255)
+            frame = cv2.bitwise_and(frame, frame, mask=mask)
+
+        if exclude_zones:
+            # Black out exclude polygon regions
+            for zone in exclude_zones:
+                pts = np.array(zone["points"], dtype=np.int32)
+                cv2.fillPoly(frame, [pts], (0, 0, 0))
+
+        return frame
+
     async def _set_record_trigger(self, camera_id: str):
         """Set Redis key to trigger recording in stream worker."""
         try:
@@ -327,11 +378,15 @@ class PerceptionPipeline:
             annotated = frame.copy()
             for det in detections:
                 x1, y1, x2, y2 = det["bbox"]
-                label = f"{det['label']} {det['confidence']:.0%}"
-                cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                is_plate = det["label"] == "license_plate"
+                color = (0, 200, 255) if is_plate else (0, 255, 0)
+                label = det.get("plate_text", "") if is_plate else f"{det['label']} {det['confidence']:.0%}"
+                if is_plate and det.get("plate_text"):
+                    label = f"PLATE {det['plate_text']}"
+                cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
                 cv2.putText(
                     annotated, label, (x1, y1 - 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1,
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1,
                 )
 
             os.makedirs(THUMBNAIL_DIR, exist_ok=True)
@@ -362,6 +417,7 @@ class PerceptionPipeline:
                         "label": d["label"],
                         "confidence": d["confidence"],
                         "bbox": d["bbox"],
+                        **({"plate_text": d["plate_text"]} if d.get("plate_text") else {}),
                     }
                     for d in detections
                 ],

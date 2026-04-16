@@ -12,6 +12,40 @@ from shared.schemas import RecordingResponse
 
 router = APIRouter()
 
+_RELATIVE_PREFIXES = ["./recordings/", "recordings/", "./"]
+
+
+def _resolve_recording_path(recording: Recording) -> str:
+    """Turn a stored (possibly relative) file_path into an absolute disk path."""
+    from shared.config import settings
+
+    file_path = recording.file_path
+    if os.path.isabs(file_path):
+        return file_path
+
+    rel = file_path
+    for prefix in _RELATIVE_PREFIXES:
+        if rel.startswith(prefix):
+            rel = rel[len(prefix):]
+            break
+    return os.path.join(os.path.abspath(settings.recordings_path), rel)
+
+
+async def _get_recording_or_404(
+    recording_id: uuid.UUID, db: AsyncSession
+) -> Recording:
+    recording = await db.get(Recording, recording_id)
+    if not recording:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    return recording
+
+
+def _get_disk_path_or_404(recording: Recording) -> str:
+    path = _resolve_recording_path(recording)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Recording file not found on disk")
+    return path
+
 
 @router.get("", response_model=list[RecordingResponse])
 async def list_recordings(
@@ -29,47 +63,34 @@ async def list_recordings(
 
 @router.get("/{recording_id}", response_model=RecordingResponse)
 async def get_recording(recording_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    recording = await db.get(Recording, recording_id)
-    if not recording:
-        raise HTTPException(status_code=404, detail="Recording not found")
-    return recording
+    return await _get_recording_or_404(recording_id, db)
 
 
 @router.get("/{recording_id}/stream")
 async def stream_recording(recording_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    from shared.config import settings
-
-    recording = await db.get(Recording, recording_id)
-    if not recording:
-        raise HTTPException(status_code=404, detail="Recording not found")
-
-    # Resolve file path. Stored paths may be relative to recordings_path
-    file_path = recording.file_path
-    if not os.path.isabs(file_path):
-        # Strip leading ./ or recordings/ prefix to get relative portion
-        rel = file_path
-        for prefix in ["./recordings/", "recordings/", "./"]:
-            if rel.startswith(prefix):
-                rel = rel[len(prefix):]
-                break
-        file_path = os.path.join(os.path.abspath(settings.recordings_path), rel)
-
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Recording file not found on disk")
-    return FileResponse(
-        file_path,
-        media_type="video/mp4",
-        filename=os.path.basename(file_path),
-    )
+    recording = await _get_recording_or_404(recording_id, db)
+    path = _get_disk_path_or_404(recording)
+    return FileResponse(path, media_type="video/mp4", filename=os.path.basename(path))
 
 
 @router.get("/{recording_id}/camera", response_model=dict)
 async def get_recording_camera(recording_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    recording = await db.get(Recording, recording_id)
-    if not recording:
-        raise HTTPException(status_code=404, detail="Recording not found")
+    recording = await _get_recording_or_404(recording_id, db)
     camera = await db.get(Camera, recording.camera_id)
     return {"camera_name": camera.name if camera else "Unknown", "camera_id": str(recording.camera_id)}
+
+
+@router.get("/{recording_id}/download")
+async def download_recording(recording_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    recording = await _get_recording_or_404(recording_id, db)
+    path = _get_disk_path_or_404(recording)
+    filename = os.path.basename(path)
+    return FileResponse(
+        path,
+        media_type="application/octet-stream",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/{recording_id}", status_code=204)

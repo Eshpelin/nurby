@@ -3,7 +3,7 @@ import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from services.api.routes import auth, cameras, events, invites, observations, persons, providers, recordings, rules, search, system, users
+from services.api.routes import auth, cameras, events, invites, notifications, observations, persons, providers, recordings, rules, search, system, users
 from services.api.ws import router as ws_router
 
 START_TIME = time.time()
@@ -32,6 +32,7 @@ app.include_router(observations.router, prefix="/api/observations", tags=["obser
 app.include_router(persons.router, prefix="/api/persons", tags=["persons"])
 app.include_router(rules.router, prefix="/api/rules", tags=["rules"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(providers.router, prefix="/api/providers", tags=["providers"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
 app.include_router(ws_router, tags=["websocket"])

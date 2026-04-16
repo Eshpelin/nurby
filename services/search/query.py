@@ -109,16 +109,18 @@ async def search_observations(
         if query_embedding is not None:
             use_vector = True
 
+    observations: list = []
+
     if use_vector and query_embedding is not None:
         # Vector similarity search. Order by cosine distance (ascending).
         # Only consider observations that have an embedding.
-        filters.append(Observation.description_embedding.isnot(None))
+        vector_filters = list(filters) + [Observation.description_embedding.isnot(None)]
 
         cosine_distance = Observation.description_embedding.cosine_distance(query_embedding)
 
         stmt = (
             select(Observation, cosine_distance.label("distance"))
-            .where(and_(*filters) if filters else True)
+            .where(and_(*vector_filters) if vector_filters else True)
             .order_by(cosine_distance.asc())
             .limit(limit)
             .offset(offset)
@@ -127,8 +129,9 @@ async def search_observations(
         result = await db.execute(stmt)
         rows = result.all()
         observations = [row[0] for row in rows]
-    else:
-        # ILIKE fallback when no embedding is available
+
+    # Fall back to ILIKE if vector returned nothing or was not available
+    if not observations:
         if query:
             text_filter = or_(
                 Observation.vlm_description.ilike(f"%{query}%"),

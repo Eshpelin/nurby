@@ -52,6 +52,8 @@ class Camera(Base):
     retention_mode: Mapped[str] = mapped_column(String(16), default="none")  # none, time, size
     retention_days: Mapped[int] = mapped_column(Integer, default=30)  # days to keep recordings
     retention_gb: Mapped[float] = mapped_column(Float, default=50.0)  # max GB per camera
+    # Motion zones: [{"name": "Zone 1", "points": [[x,y], ...], "type": "include"|"exclude"}]
+    motion_zones: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="offline")
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -166,6 +168,19 @@ class DigestEntry(Base):
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), default="info")
+    rule_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    camera_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    observation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Rule(Base):
     __tablename__ = "rules"
 
@@ -190,6 +205,9 @@ class Event(Base):
     fired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    action_status: Mapped[str] = mapped_column(String(16), default="pending")
+    action_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    action_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class Provider(Base):

@@ -36,7 +36,7 @@ node_modules/
 out/
 
 # Storage
-recordings/
+/recordings/
 thumbnails/
 clips/
 
