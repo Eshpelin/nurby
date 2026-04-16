@@ -1,7 +1,41 @@
 "use client";
 
-import { AuthProvider } from "@/lib/auth";
+import { usePathname } from "next/navigation";
+import { AuthProvider, useAuth } from "@/lib/auth";
+import { Navbar } from "@/components/navbar";
+
+const PUBLIC_PATHS = ["/login", "/setup"];
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const { loading } = useAuth();
+
+  const isPublic = PUBLIC_PATHS.includes(pathname);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (isPublic) {
+    return <>{children}</>;
+  }
+
+  return (
+    <>
+      <Navbar />
+      <main className="flex-1">{children}</main>
+    </>
+  );
+}
 
 export function AuthShell({ children }: { children: React.ReactNode }) {
-  return <AuthProvider>{children}</AuthProvider>;
+  return (
+    <AuthProvider>
+      <AuthGate>{children}</AuthGate>
+    </AuthProvider>
+  );
 }

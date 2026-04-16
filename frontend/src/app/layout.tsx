@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Navbar } from "@/components/navbar";
 import { AuthShell } from "@/components/auth-shell";
 import { ThemeProvider, themeInitScript } from "@/lib/theme";
 
@@ -37,8 +36,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>
           <AuthShell>
-            <Navbar />
-            <main className="flex-1">{children}</main>
+            {children}
           </AuthShell>
         </ThemeProvider>
       </body>
