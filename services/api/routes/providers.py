@@ -34,6 +34,25 @@ async def get_provider(provider_id: uuid.UUID, db: AsyncSession = Depends(get_db
     return provider
 
 
+@router.patch("/{provider_id}", response_model=ProviderResponse)
+async def update_provider(
+    provider_id: uuid.UUID,
+    body: ProviderCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    provider = await db.get(Provider, provider_id)
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+
+    updates = body.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(provider, field, value)
+
+    await db.commit()
+    await db.refresh(provider)
+    return provider
+
+
 @router.delete("/{provider_id}", status_code=204)
 async def delete_provider(provider_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     provider = await db.get(Provider, provider_id)

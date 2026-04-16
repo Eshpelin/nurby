@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 const NAV_ITEMS = [
   { label: "Cameras", href: "/" },
@@ -9,10 +10,40 @@ const NAV_ITEMS = [
   { label: "People", href: "/people" },
   { label: "Rules", href: "/rules" },
   { label: "Search", href: "/search" },
+  { label: "Settings", href: "/settings" },
 ];
+
+interface ProviderInfo {
+  name: string;
+  kind: string;
+  active: boolean;
+}
 
 export function Navbar() {
   const pathname = usePathname();
+  const [provider, setProvider] = useState<ProviderInfo | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  const fetchProvider = useCallback(async () => {
+    try {
+      const res = await fetch("/api/providers");
+      if (res.ok) {
+        const list: ProviderInfo[] = await res.json();
+        const active = list.find((p) => p.active) || null;
+        setProvider(active);
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProvider();
+    const interval = setInterval(fetchProvider, 30000);
+    return () => clearInterval(interval);
+  }, [fetchProvider]);
 
   return (
     <div className="border-b border-border bg-background sticky top-0 z-50">
@@ -59,10 +90,23 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent pulse-dot" />
-            <span className="font-mono">no provider configured</span>
-          </div>
+          <Link
+            href="/settings"
+            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {loaded && (
+              <>
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    provider ? "bg-green-500 pulse-dot" : "bg-yellow-500"
+                  }`}
+                />
+                <span className="font-mono">
+                  {provider ? `${provider.kind} / ${provider.name}` : "no provider configured"}
+                </span>
+              </>
+            )}
+          </Link>
           <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
             N
           </div>
