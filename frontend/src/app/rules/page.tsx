@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 
 interface Rule {
@@ -122,6 +122,79 @@ function describeActions(actions: Record<string, unknown> | Record<string, unkno
       return String(a.type);
     })
     .join(", ");
+}
+
+function formatCooldown(seconds: number): string {
+  if (seconds <= 0) return "";
+  if (seconds < 60) return `${seconds} seconds`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes === 1) return "1 minute";
+  return `${minutes} minutes`;
+}
+
+function resolveCameraNames(camIds: string[], cameras: Camera[]): string {
+  if (camIds.length === 0) return "any camera";
+  const names = camIds.map((cid) => {
+    const cam = cameras.find((c) => c.id === cid);
+    return cam ? cam.name : cid.slice(0, 8);
+  });
+  return names.join(", ");
+}
+
+const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri"];
+const WEEKEND = ["sat", "sun"];
+
+function describeSchedule(days: string[] | undefined, timeAfter: string | undefined, timeBefore: string | undefined): string {
+  const scheduleParts: string[] = [];
+  if (days && days.length > 0 && days.length < 7) {
+    const isWeekdays = WEEKDAYS.every((d) => days.includes(d)) && days.length === 5;
+    const isWeekend = WEEKEND.every((d) => days.includes(d)) && days.length === 2;
+    if (isWeekdays) scheduleParts.push("on weekdays");
+    else if (isWeekend) scheduleParts.push("on weekends");
+    else scheduleParts.push(`on ${days.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")}`);
+  }
+  if (timeAfter || timeBefore) {
+    scheduleParts.push(`between ${timeAfter || "00:00"} and ${timeBefore || "23:59"}`);
+  }
+  return scheduleParts.join(" ");
+}
+
+function composeSummary(
+  trigger: string,
+  cameraLabel: string,
+  schedule: string,
+  actionLabel: string,
+  cooldownSeconds: number,
+): string {
+  const parts = [trigger, `on ${cameraLabel}`];
+  if (schedule) parts.push(schedule);
+  parts.push(actionLabel);
+  let sentence = parts.join(", ") + ".";
+  if (cooldownSeconds > 0) {
+    sentence += ` Cooldown. ${formatCooldown(cooldownSeconds)}.`;
+  }
+  return sentence;
+}
+
+function buildRuleSummary(rule: Rule, cameras: Camera[]): string {
+  const cond = rule.conditions || {};
+  const camIds = (cond.camera_ids as string[]) || (cond.camera_id ? [cond.camera_id as string] : []);
+  return composeSummary(
+    describeTrigger(rule.trigger_pattern),
+    resolveCameraNames(camIds, cameras),
+    describeSchedule(cond.days as string[] | undefined, cond.time_after as string | undefined, cond.time_before as string | undefined),
+    describeActions(rule.actions),
+    rule.cooldown_seconds,
+  );
+}
+
+function SummaryCard({ text, className }: { text: string; className?: string }) {
+  return (
+    <div className={`bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-zinc-200 flex gap-3 items-start ${className || "p-4"}`}>
+      <span className="text-base leading-none mt-0.5">💡</span>
+      <span>{text}</span>
+    </div>
+  );
 }
 
 export default function RulesPage() {
@@ -333,6 +406,35 @@ export default function RulesPage() {
     setFormError("");
     setShowModal(true);
   };
+
+  const formSummary = useMemo(() => {
+    const triggerPattern: Record<string, unknown> = { type: formTriggerType };
+    if (formTriggerType === "object_detected" && formTriggerLabel) triggerPattern.label = formTriggerLabel;
+    if (formTriggerType === "face_recognized" && formTriggerPersonId) triggerPattern.person_id = formTriggerPersonId;
+    if (formTriggerType === "motion") triggerPattern.min_score = 0.08;
+
+    const action: Record<string, unknown> = { type: formActionType };
+    if (formActionType === "webhook" || formActionType === "api_call") {
+      action.url = formActionUrl || "...";
+      if (formActionType === "api_call") action.method = formActionMethod;
+    }
+    if (formActionType === "notify") {
+      action.message = formActionMessage || "Rule triggered";
+      action.severity = formActionSeverity;
+    }
+
+    const schedule = formScheduleMode === "custom"
+      ? describeSchedule(formCondDays.length > 0 ? formCondDays : undefined, formCondTimeAfter || undefined, formCondTimeBefore || undefined)
+      : "";
+
+    return composeSummary(
+      describeTrigger(triggerPattern),
+      resolveCameraNames(formCondCameras, cameras),
+      schedule,
+      describeActions(action),
+      parseInt(formCooldown) || 0,
+    );
+  }, [formTriggerType, formTriggerLabel, formTriggerPersonId, formActionType, formActionUrl, formActionMethod, formActionMessage, formActionSeverity, formScheduleMode, formCondDays, formCondTimeAfter, formCondTimeBefore, formCondCameras, cameras, formCooldown]);
 
   const buildPayload = () => {
     const trigger_pattern: Record<string, unknown> = { type: formTriggerType };
@@ -593,14 +695,9 @@ export default function RulesPage() {
                     </button>
                   </div>
                 </div>
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Actions. {describeActions(r.actions)}
+                <div className="mt-2 text-xs italic text-muted-foreground/80 leading-relaxed">
+                  {buildRuleSummary(r, cameras)}
                 </div>
-                {r.cooldown_seconds > 0 && (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Cooldown. {r.cooldown_seconds}s
-                  </div>
-                )}
               </div>
             ))}
           </section>
@@ -616,6 +713,7 @@ export default function RulesPage() {
               </div>
               {selectedRule ? (
                 <div className="space-y-3 text-sm">
+                  <SummaryCard text={buildRuleSummary(selectedRule, cameras)} />
                   <div>
                     <span className="text-muted-foreground text-xs">Name</span>
                     <div className="font-medium">{selectedRule.name}</div>
@@ -1379,6 +1477,8 @@ export default function RulesPage() {
                   Prevents repeated alerts for the same event
                 </span>
               </div>
+
+              <SummaryCard text={formSummary} className="p-3" />
 
               {formError && (
                 <div className="text-xs text-red-400">{formError}</div>
