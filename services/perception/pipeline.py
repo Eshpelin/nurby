@@ -19,6 +19,7 @@ from shared.models import Observation, Provider
 from services.perception.detector import ObjectDetector
 from services.perception.faces import FaceRecognizer
 from services.perception.vlm import VLMClient, get_active_provider
+from services.events.engine import RuleEngine
 from sqlalchemy import select
 
 logger = logging.getLogger("nurby.perception.pipeline")
@@ -36,6 +37,7 @@ class PerceptionPipeline:
         self._detector = ObjectDetector()
         self._face = FaceRecognizer()
         self._vlm = VLMClient()
+        self._rule_engine = RuleEngine()
 
     async def _get_redis(self):
         if self._redis is None:
@@ -155,7 +157,7 @@ class PerceptionPipeline:
                 "count": len(faces),
             }
 
-        await self._store_observation(
+        observation_id = await self._store_observation(
             camera_id=uuid.UUID(camera_id),
             timestamp=timestamp,
             detections=detections,
@@ -165,6 +167,28 @@ class PerceptionPipeline:
             confidence=confidence,
             thumbnail_path=thumbnail_path,
         )
+
+        # Step 6. Evaluate rules against this observation
+        rule_data = {
+            "observation_id": str(observation_id) if observation_id else None,
+            "camera_id": camera_id,
+            "timestamp": timestamp.isoformat(),
+            "motion_score": motion_score,
+            "object_detections": {
+                "objects": [
+                    {"label": d["label"], "confidence": d["confidence"], "bbox": d["bbox"]}
+                    for d in detections
+                ],
+                "count": len(detections),
+            },
+            "person_detections": person_detections,
+            "vlm_description": vlm_description,
+            "confidence": confidence,
+        }
+        try:
+            await self._rule_engine.evaluate(rule_data)
+        except Exception:
+            logger.exception("Rule evaluation failed for camera %s", camera_id)
 
     async def _save_thumbnail(
         self,
@@ -204,10 +228,9 @@ class PerceptionPipeline:
         vlm_provider: str | None = None,
         confidence: float | None = None,
         thumbnail_path: str | None = None,
-    ):
-        """Store observation in Postgres."""
+    ) -> uuid.UUID | None:
+        """Store observation in Postgres. Returns observation ID."""
         try:
-            # Build structured detection data
             object_detections = {
                 "objects": [
                     {
@@ -233,6 +256,9 @@ class PerceptionPipeline:
                 )
                 db.add(obs)
                 await db.commit()
-                logger.info("Stored observation for camera %s with %d detections", camera_id, len(detections))
+                await db.refresh(obs)
+                logger.info("Stored observation %s for camera %s with %d detections", obs.id, camera_id, len(detections))
+                return obs.id
         except Exception:
             logger.exception("Failed to store observation")
+            return None
