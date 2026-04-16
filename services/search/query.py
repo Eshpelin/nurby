@@ -6,6 +6,7 @@ over observation descriptions and VLM-generated content.
 """
 
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -101,6 +102,32 @@ async def search_observations(
             cast(Observation.person_detections, String).ilike(f"%{person_name}%")
         )
 
+    # ── Extract keywords for targeted label/name matching ──
+    query_lower = (query or "").lower().strip()
+    query_words = set(re.findall(r"\w+", query_lower)) if query_lower else set()
+
+    # Common synonyms and related terms for better keyword coverage
+    SYNONYMS: dict[str, list[str]] = {
+        "car": ["car", "vehicle", "automobile"],
+        "vehicle": ["car", "truck", "bus", "motorcycle", "van", "vehicle"],
+        "truck": ["truck", "vehicle"],
+        "person": ["person", "people", "someone", "human", "man", "woman"],
+        "people": ["person", "people"],
+        "dog": ["dog", "puppy", "canine"],
+        "cat": ["cat", "kitten", "feline"],
+        "bike": ["bicycle", "bike", "cycling"],
+        "bicycle": ["bicycle", "bike"],
+        "package": ["package", "parcel", "delivery", "box"],
+        "delivery": ["delivery", "package", "courier"],
+        "mail": ["mail", "letter", "mailbox", "postal"],
+    }
+
+    # Expand query words with synonyms
+    expanded_words = set(query_words)
+    for word in query_words:
+        if word in SYNONYMS:
+            expanded_words.update(SYNONYMS[word])
+
     use_vector = False
     query_embedding = None
 
@@ -111,35 +138,103 @@ async def search_observations(
 
     observations: list = []
 
+    # ── Strategy 1. Vector similarity (with relevance threshold) ──
     if use_vector and query_embedding is not None:
-        # Vector similarity search. Order by cosine distance (ascending).
-        # Only consider observations that have an embedding.
         vector_filters = list(filters) + [Observation.description_embedding.isnot(None)]
 
         cosine_distance = Observation.description_embedding.cosine_distance(query_embedding)
 
+        # Fetch more than needed so we can filter by threshold
         stmt = (
             select(Observation, cosine_distance.label("distance"))
             .where(and_(*vector_filters) if vector_filters else True)
             .order_by(cosine_distance.asc())
-            .limit(limit)
+            .limit(limit * 2)
             .offset(offset)
         )
 
         result = await db.execute(stmt)
         rows = result.all()
-        observations = [row[0] for row in rows]
 
-    # Fall back to ILIKE if vector returned nothing or was not available
-    if not observations:
-        if query:
-            text_filter = or_(
-                Observation.vlm_description.ilike(f"%{query}%"),
-                cast(Observation.object_detections, String).ilike(f"%{query}%"),
-                cast(Observation.person_detections, String).ilike(f"%{query}%"),
+        # Filter out poor matches (cosine distance > 0.85 means very low similarity)
+        MAX_DISTANCE = 0.85
+        observations = [row[0] for row in rows if row[1] <= MAX_DISTANCE][:limit]
+
+    # ── Strategy 2. Direct label + name matching (always runs alongside) ──
+    label_results: list = []
+    if query_lower and expanded_words:
+        label_conditions = []
+        for word in expanded_words:
+            # Object labels are stored as "label": "cat" in JSON, match exact label
+            label_conditions.append(
+                cast(Observation.object_detections, String).ilike(f"%\"{word}\"%")
             )
-            filters.append(text_filter)
+            # Person names can be partial
+            label_conditions.append(
+                cast(Observation.person_detections, String).ilike(f"%{word}%")
+            )
+            # VLM descriptions use word boundary matching (space/punctuation bounded)
+            # Match "cat" but not "scattered" by requiring word boundary context
+            label_conditions.append(
+                Observation.vlm_description.op("~*")(f"\\m{re.escape(word)}\\M")
+            )
 
+        label_filters = list(filters) + [or_(*label_conditions)]
+
+        stmt = (
+            select(Observation)
+            .where(and_(*label_filters))
+            .order_by(Observation.started_at.desc())
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        label_results = result.scalars().all()
+
+    # ── Merge and deduplicate results ──
+    # Label/keyword matches are higher confidence than hash-based vectors,
+    # so they go first. Vector results fill in after.
+    if observations or label_results:
+        seen_ids = set()
+        merged = []
+
+        # Label matches first (direct keyword hits, most relevant)
+        for obs in label_results:
+            if obs.id not in seen_ids:
+                seen_ids.add(obs.id)
+                merged.append(obs)
+
+        # Then vector results (ranked by embedding similarity)
+        for obs in observations:
+            if obs.id not in seen_ids:
+                seen_ids.add(obs.id)
+                merged.append(obs)
+
+        observations = merged[:limit]
+
+    # ── Strategy 3. Broad regex fallback (only if nothing found yet) ──
+    if not observations and query:
+        # Use PostgreSQL regex with word boundaries for description
+        # Use ILIKE for JSON fields since labels are quoted strings
+        text_filter = or_(
+            Observation.vlm_description.op("~*")(f"\\m{re.escape(query_lower)}\\M"),
+            cast(Observation.object_detections, String).ilike(f"%\"{query_lower}\"%"),
+            cast(Observation.person_detections, String).ilike(f"%{query}%"),
+        )
+        fallback_filters = list(filters) + [text_filter]
+
+        stmt = (
+            select(Observation)
+            .where(and_(*fallback_filters) if fallback_filters else True)
+            .order_by(Observation.started_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+
+        result = await db.execute(stmt)
+        observations = result.scalars().all()
+
+    # No query at all, just return recent with applied filters
+    if not observations and not query:
         stmt = (
             select(Observation)
             .where(and_(*filters) if filters else True)
@@ -147,7 +242,6 @@ async def search_observations(
             .limit(limit)
             .offset(offset)
         )
-
         result = await db.execute(stmt)
         observations = result.scalars().all()
 

@@ -904,6 +904,7 @@ function DashboardContent() {
   const [showSearchFilters, setShowSearchFilters] = useState(false);
   const [aiAnswer, setAiAnswer] = useState<string | null>(null);
   const [askingAi, setAskingAi] = useState(false);
+  const [hasAiProvider, setHasAiProvider] = useState<boolean | null>(null);
 
   // Live events
   const [liveEvents, setLiveEvents] = useState<{ type: string; rule_name?: string; camera_id?: string; timestamp?: string; message?: string }[]>([]);
@@ -1046,6 +1047,11 @@ function DashboardContent() {
     }, 5000);
     return () => clearInterval(i);
   }, []);
+  useEffect(() => {
+    authFetch("/api/providers").then(r => r.ok ? r.json() : []).then((providers: { active: boolean }[]) => {
+      setHasAiProvider(providers.some(p => p.active));
+    }).catch(() => setHasAiProvider(false));
+  }, [authFetch]);
   useEffect(() => { fetchCameras(); fetchPersons(); }, [fetchCameras, fetchPersons]);
   useEffect(() => { const i = setInterval(fetchCameras, 10000); return () => clearInterval(i); }, [fetchCameras]);
   useEffect(() => { fetchTimeline(); const i = setInterval(fetchTimeline, 15000); return () => clearInterval(i); }, [fetchTimeline]);
@@ -1186,11 +1192,6 @@ function DashboardContent() {
                 <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
               </svg>
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                {searchQuery.trim() && (
-                  <button onClick={handleAskAi} disabled={askingAi} className="px-2 py-0.5 text-[10px] rounded bg-accent text-black font-medium hover:opacity-90 disabled:opacity-50">
-                    {askingAi ? "..." : "Ask AI"}
-                  </button>
-                )}
                 {searchActive && <button onClick={clearSearch} className="px-1.5 py-0.5 text-[10px] rounded border border-border text-muted-foreground hover:bg-muted">Clear</button>}
                 <button onClick={() => setShowSearchFilters(!showSearchFilters)}
                   className={`px-1.5 py-0.5 text-[10px] rounded border transition-colors ${showSearchFilters || activeFilterCount > 0 ? "border-accent text-accent" : "border-border text-muted-foreground hover:bg-muted"}`}>
@@ -1221,11 +1222,62 @@ function DashboardContent() {
               </div>
             )}
 
+            {searchActive && !aiAnswer && askingAi && (
+              <div className="mt-2 rounded-lg border border-accent/40 bg-accent/5 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full animate-spin flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-accent">Analyzing {searchResults.length} observation{searchResults.length !== 1 ? "s" : ""}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">AI is reading through camera data to answer your question.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {searchActive && !aiAnswer && !askingAi && (
+              <div className="mt-2 rounded-lg border border-border bg-card p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={hasAiProvider ? "text-accent" : "text-muted-foreground"}>
+                      <path d="M12 2a4 4 0 0 1 4 4v1a2 2 0 0 1 2 2v1a4 4 0 0 1-2 3.46V16a6 6 0 0 1-12 0v-2.54A4 4 0 0 1 2 10V9a2 2 0 0 1 2-2V6a4 4 0 0 1 4-4" />
+                      <circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" />
+                    </svg>
+                    <div>
+                      <p className="text-xs font-medium">
+                        {hasAiProvider ? "Want a smarter answer?" : "AI answers unavailable"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {hasAiProvider
+                          ? `Found ${searchResults.length} result${searchResults.length !== 1 ? "s" : ""}. AI can analyze these and give you a direct answer.`
+                          : "Connect an AI provider in Settings to enable natural language answers."}
+                      </p>
+                    </div>
+                  </div>
+                  {hasAiProvider ? (
+                    <button
+                      onClick={handleAskAi}
+                      className="px-3 py-1.5 text-xs rounded-md bg-accent text-black font-medium hover:opacity-90 flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m5 12 5 5L20 7" /></svg>
+                      Ask AI
+                    </button>
+                  ) : (
+                    <a href="/settings" className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-accent/50 transition-colors whitespace-nowrap">
+                      Go to Settings
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
             {aiAnswer && (
               <div className="mt-2 rounded-lg border border-accent/40 bg-accent/5 p-3">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent pulse-dot" />
-                  <span className="text-[10px] font-medium text-accent uppercase tracking-wider">AI Answer</span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent pulse-dot" />
+                    <span className="text-[10px] font-medium text-accent uppercase tracking-wider">AI Answer</span>
+                  </div>
+                  <button onClick={() => setAiAnswer(null)} className="text-[10px] text-muted-foreground hover:text-foreground">Dismiss</button>
                 </div>
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{aiAnswer}</p>
               </div>
