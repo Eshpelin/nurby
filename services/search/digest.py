@@ -19,27 +19,50 @@ from services.search.query import _call_text_llm
 logger = logging.getLogger("nurby.search.digest")
 
 
+PERIOD_DELTAS = {
+    "1h": timedelta(hours=1),
+    "6h": timedelta(hours=6),
+    "12h": timedelta(hours=12),
+    "24h": timedelta(days=1),
+    "48h": timedelta(days=2),
+    "7d": timedelta(days=7),
+    "hourly": timedelta(hours=1),
+    "daily": timedelta(days=1),
+}
+
+DEFAULT_DIGEST_PROMPT = (
+    "You are Nurby, an AI camera monitoring assistant. "
+    "Summarize the following camera observations into a brief digest. "
+    "Be concise (2-4 sentences). Mention key activity, people, and patterns."
+)
+
+
 async def generate_digest(
     db: AsyncSession,
     period: str = "daily",
     camera_id: uuid.UUID | None = None,
     target_time: datetime | None = None,
     provider=None,
+    custom_prompt: str | None = None,
 ) -> dict:
     """Generate a summary digest for the given period.
 
-    period: "hourly" or "daily"
+    period: "hourly", "daily", "1h", "6h", "12h", "24h", "48h", "7d"
     camera_id: optional filter to single camera
     target_time: end of period (defaults to now)
     provider: VLM provider for natural language summary
+    custom_prompt: override system prompt for digest generation
     """
     now = target_time or datetime.now(timezone.utc)
 
-    if period == "hourly":
-        start = now - timedelta(hours=1)
+    delta = PERIOD_DELTAS.get(period, timedelta(days=1))
+    start = now - delta
+
+    if delta <= timedelta(hours=1):
         period_label = f"{start.strftime('%H:%M')} to {now.strftime('%H:%M')}"
+    elif delta <= timedelta(days=1):
+        period_label = f"{start.strftime('%b %d %H:%M')} to {now.strftime('%H:%M')}"
     else:
-        start = now - timedelta(days=1)
         period_label = f"{start.strftime('%b %d')} to {now.strftime('%b %d')}"
 
     # Fetch observations in period
@@ -133,11 +156,7 @@ async def generate_digest(
             context = "\n".join([
                 f"- {d}" for d in vlm_descriptions[:20]
             ])
-            system_prompt = (
-                "You are Nurby, an AI camera monitoring assistant. "
-                "Summarize the following camera observations into a brief digest. "
-                "Be concise (2-4 sentences). Mention key activity, people, and patterns."
-            )
+            system_prompt = custom_prompt or DEFAULT_DIGEST_PROMPT
             user_prompt = (
                 f"Period. {period_label}\n"
                 f"Total observations. {len(observations)}\n"

@@ -25,6 +25,10 @@ class CameraCreate(BaseModel):
     detect_objects: bool = True
     detect_faces: bool = True
     object_confidence: float = Field(default=0.35, ge=0.05, le=1.0)
+    digest_enabled: bool = True
+    digest_period: str = "24h"
+    digest_provider_id: uuid.UUID | None = None
+    digest_prompt: str | None = None
     retention_mode: str = "none"  # none, time, size
     retention_days: int = Field(default=30, ge=1, le=3650)
     retention_gb: float = Field(default=50.0, ge=1.0, le=10000.0)
@@ -49,6 +53,10 @@ class CameraUpdate(BaseModel):
     detect_objects: bool | None = None
     detect_faces: bool | None = None
     object_confidence: float | None = Field(default=None, ge=0.05, le=1.0)
+    digest_enabled: bool | None = None
+    digest_period: str | None = None
+    digest_provider_id: uuid.UUID | None = None
+    digest_prompt: str | None = None
     retention_mode: str | None = None
     retention_days: int | None = Field(default=None, ge=1, le=3650)
     retention_gb: float | None = Field(default=None, ge=1.0, le=10000.0)
@@ -73,6 +81,10 @@ class CameraResponse(BaseModel):
     detect_objects: bool
     detect_faces: bool
     object_confidence: float
+    digest_enabled: bool
+    digest_period: str
+    digest_provider_id: uuid.UUID | None
+    digest_prompt: str | None
     retention_mode: str
     retention_days: int
     retention_gb: float
@@ -82,6 +94,19 @@ class CameraResponse(BaseModel):
     fps: float | None
     created_at: datetime
     updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── Camera status log schemas ──
+
+class CameraStatusLogResponse(BaseModel):
+    id: uuid.UUID
+    camera_id: uuid.UUID
+    status: str
+    previous_status: str | None
+    reason: str | None
+    timestamp: datetime
 
     model_config = {"from_attributes": True}
 

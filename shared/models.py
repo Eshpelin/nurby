@@ -32,6 +32,11 @@ class Camera(Base):
     detect_objects: Mapped[bool] = mapped_column(Boolean, default=True)
     detect_faces: Mapped[bool] = mapped_column(Boolean, default=True)
     object_confidence: Mapped[float] = mapped_column(Float, default=0.35)  # YOLO confidence threshold
+    # Per-camera digest config
+    digest_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    digest_period: Mapped[str] = mapped_column(String(16), default="24h")  # 1h, 6h, 12h, 24h, 48h, 7d
+    digest_provider_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True)
+    digest_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Retention policy
     retention_mode: Mapped[str] = mapped_column(String(16), default="none")  # none, time, size
     retention_days: Mapped[int] = mapped_column(Integer, default=30)  # days to keep recordings
@@ -44,6 +49,17 @@ class Camera(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class CameraStatusLog(Base):
+    __tablename__ = "camera_status_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    camera_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)  # offline, live, recording, error
+    previous_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)  # e.g. "stream disconnected", "reconnected"
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Recording(Base):

@@ -1,12 +1,12 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.database import get_db
-from shared.models import Camera
-from shared.schemas import CameraCreate, CameraResponse, CameraUpdate
+from shared.models import Camera, CameraStatusLog
+from shared.schemas import CameraCreate, CameraResponse, CameraStatusLogResponse, CameraUpdate
 
 router = APIRouter()
 
@@ -58,3 +58,17 @@ async def delete_camera(camera_id: uuid.UUID, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=404, detail="Camera not found")
     await db.delete(camera)
     await db.commit()
+
+
+@router.get("/status-logs", response_model=list[CameraStatusLogResponse])
+async def list_status_logs(
+    camera_id: uuid.UUID | None = Query(default=None),
+    limit: int = Query(default=100, le=500),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch camera online/offline status change history."""
+    query = select(CameraStatusLog).order_by(CameraStatusLog.timestamp.desc()).limit(limit)
+    if camera_id:
+        query = query.where(CameraStatusLog.camera_id == camera_id)
+    result = await db.execute(query)
+    return result.scalars().all()

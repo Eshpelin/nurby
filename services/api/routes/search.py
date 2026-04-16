@@ -67,10 +67,29 @@ async def ask_question(
 
 @router.get("/digest")
 async def get_digest(
-    period: str = Query(default="daily", pattern="^(hourly|daily)$"),
+    period: str = Query(default="daily", pattern="^(hourly|daily|1h|6h|12h|24h|48h|7d)$"),
     camera_id: uuid.UUID | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     """Generate an activity digest for the given period."""
-    provider = await get_embedding_provider()
-    return await generate_digest(db, period=period, camera_id=camera_id, provider=provider)
+    from shared.models import Camera, Provider
+    from sqlalchemy import select
+
+    custom_prompt = None
+    provider = None
+
+    # Use per-camera digest config if camera specified
+    if camera_id:
+        cam = await db.get(Camera, camera_id)
+        if cam:
+            custom_prompt = cam.digest_prompt
+            if cam.digest_provider_id:
+                provider = await db.get(Provider, cam.digest_provider_id)
+
+    if not provider:
+        provider = await get_embedding_provider()
+
+    return await generate_digest(
+        db, period=period, camera_id=camera_id,
+        provider=provider, custom_prompt=custom_prompt,
+    )

@@ -23,6 +23,10 @@ interface Camera {
   detect_objects: boolean;
   detect_faces: boolean;
   object_confidence: number;
+  digest_enabled: boolean;
+  digest_period: string;
+  digest_provider_id: string | null;
+  digest_prompt: string | null;
   retention_mode: string;
   retention_days: number;
   retention_gb: number;
@@ -177,6 +181,10 @@ export default function CameraConfigPage() {
   const [detectObjects, setDetectObjects] = useState(true);
   const [detectFaces, setDetectFaces] = useState(true);
   const [objectConfidence, setObjectConfidence] = useState(0.35);
+  const [digestEnabled, setDigestEnabled] = useState(true);
+  const [digestPeriod, setDigestPeriod] = useState("24h");
+  const [digestProviderId, setDigestProviderId] = useState<string | null>(null);
+  const [digestPrompt, setDigestPrompt] = useState("");
   const [retentionMode, setRetentionMode] = useState("none");
   const [retentionDays, setRetentionDays] = useState(30);
   const [retentionGb, setRetentionGb] = useState(50);
@@ -216,6 +224,10 @@ export default function CameraConfigPage() {
       setDetectObjects(cam.detect_objects ?? true);
       setDetectFaces(cam.detect_faces ?? true);
       setObjectConfidence(cam.object_confidence ?? 0.35);
+      setDigestEnabled(cam.digest_enabled ?? true);
+      setDigestPeriod(cam.digest_period ?? "24h");
+      setDigestProviderId(cam.digest_provider_id ?? null);
+      setDigestPrompt(cam.digest_prompt || "");
       setRetentionMode(cam.retention_mode ?? "none");
       setRetentionDays(cam.retention_days ?? 30);
       setRetentionGb(cam.retention_gb ?? 50);
@@ -251,6 +263,10 @@ export default function CameraConfigPage() {
         detect_objects: detectObjects,
         detect_faces: detectFaces,
         object_confidence: objectConfidence,
+        digest_enabled: digestEnabled,
+        digest_period: digestPeriod,
+        digest_provider_id: digestProviderId,
+        digest_prompt: digestPrompt.trim() || null,
         retention_mode: retentionMode,
         retention_days: retentionDays,
         retention_gb: retentionGb,
@@ -620,6 +636,85 @@ export default function CameraConfigPage() {
               label={detectFaces ? "Enabled" : "Disabled"}
             />
           </FieldRow>
+        </Section>
+
+        {/* ── Activity Digest ── */}
+        <Section
+          title="Activity Digest"
+          description="Configure the automatic activity summary shown on the cameras page"
+        >
+          <FieldRow label="Digest">
+            <Toggle
+              checked={digestEnabled}
+              onChange={setDigestEnabled}
+              label={digestEnabled ? "Enabled" : "Disabled"}
+            />
+          </FieldRow>
+
+          {digestEnabled && (
+            <>
+              <FieldRow label="Time Period" hint="How far back to look for activity">
+                <div className="flex gap-1.5 flex-wrap">
+                  {(["1h", "6h", "12h", "24h", "48h", "7d"] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setDigestPeriod(p)}
+                      className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
+                        digestPeriod === p
+                          ? "border-accent bg-accent/10 text-accent-foreground"
+                          : "border-border hover:border-muted-foreground text-muted-foreground"
+                      }`}
+                    >
+                      {p === "1h" ? "1 hour"
+                        : p === "6h" ? "6 hours"
+                        : p === "12h" ? "12 hours"
+                        : p === "24h" ? "24 hours"
+                        : p === "48h" ? "2 days"
+                        : "7 days"}
+                    </button>
+                  ))}
+                </div>
+              </FieldRow>
+
+              <FieldRow label="Digest Model" hint="Which model generates the summary">
+                <select
+                  value={digestProviderId || ""}
+                  onChange={(e) => setDigestProviderId(e.target.value || null)}
+                  className={inputClass}
+                >
+                  <option value="">
+                    System Default{activeProvider ? ` (${activeProvider.name})` : ""}
+                  </option>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.default_model ? ` · ${p.default_model}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </FieldRow>
+
+              <FieldRow label="Digest Prompt" hint="Custom instructions for generating the summary">
+                <textarea
+                  value={digestPrompt}
+                  onChange={(e) => setDigestPrompt(e.target.value)}
+                  placeholder="You are Nurby, an AI camera monitoring assistant. Summarize the following camera observations into a brief digest. Be concise (2-4 sentences). Mention key activity, people, and patterns."
+                  rows={3}
+                  className={`${inputClass} resize-y`}
+                />
+                {digestPrompt.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setDigestPrompt("")}
+                    className="text-[11px] text-muted-foreground hover:text-danger mt-1 transition-colors"
+                  >
+                    Reset to default
+                  </button>
+                )}
+              </FieldRow>
+            </>
+          )}
         </Section>
 
         {/* ── Retention ── */}

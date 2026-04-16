@@ -18,7 +18,7 @@ import numpy as np
 
 from shared.config import settings
 from shared.database import async_session
-from shared.models import Camera, Recording
+from shared.models import Camera, CameraStatusLog, Recording
 
 logger = logging.getLogger("nurby.ingestion.stream")
 
@@ -74,6 +74,7 @@ class StreamWorker:
         self._running = True
         self._prev_gray = None
         self._last_motion_publish = 0.0
+        self._last_status: str | None = None
         self._redis = None
 
     def stop(self):
@@ -104,10 +105,11 @@ class StreamWorker:
 
         cap = await loop.run_in_executor(None, self._open_capture)
         if cap is None:
+            await self._update_camera_status("offline", "failed to open stream")
             return
 
         status = "recording" if self.recording_enabled else "live"
-        await self._update_camera_status(status)
+        await self._update_camera_status(status, "stream connected")
 
         # Read stream properties
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -183,7 +185,7 @@ class StreamWorker:
             if self._redis:
                 await self._redis.aclose()
                 self._redis = None
-            await self._update_camera_status("offline")
+            await self._update_camera_status("offline", "stream disconnected")
 
     def _resolve_capture_url(self) -> str | int:
         """Build final capture source based on stream type and auth."""
@@ -227,7 +229,7 @@ class StreamWorker:
         """Poll HTTP snapshot endpoint at regular intervals."""
         import httpx
 
-        await self._update_camera_status("live")
+        await self._update_camera_status("live", "snapshot polling started")
 
         headers = {}
         auth = None
@@ -277,7 +279,7 @@ class StreamWorker:
             if self._redis:
                 await self._redis.aclose()
                 self._redis = None
-            await self._update_camera_status("offline")
+            await self._update_camera_status("offline", "snapshot polling stopped")
 
     def _detect_motion(self, frame: np.ndarray) -> float:
         """Simple frame-differencing motion detector. Returns a score 0..1."""
@@ -323,13 +325,32 @@ class StreamWorker:
         filename = f"{self.camera_id}_{start.strftime('%H%M%S')}.mp4"
         return os.path.join(settings.recordings_path, str(self.camera_id), date_dir, filename)
 
-    async def _update_camera_status(self, status: str):
+    async def _update_camera_status(self, status: str, reason: str | None = None):
+        previous = self._last_status
+        self._last_status = status
+
         try:
             async with async_session() as db:
                 camera = await db.get(Camera, self.camera_id)
                 if camera:
                     camera.status = status
                     await db.commit()
+
+                # Log transition if status actually changed
+                if previous != status:
+                    log = CameraStatusLog(
+                        camera_id=self.camera_id,
+                        status=status,
+                        previous_status=previous,
+                        reason=reason,
+                    )
+                    db.add(log)
+                    await db.commit()
+                    logger.info(
+                        "Camera %s status. %s -> %s%s",
+                        self.camera_id, previous or "unknown", status,
+                        f" ({reason})" if reason else "",
+                    )
         except Exception:
             logger.exception("Failed to update camera status")
 

@@ -18,8 +18,18 @@ interface Camera {
   height: number | null;
   fps: number | null;
   recording_enabled: boolean;
+  digest_enabled: boolean;
+  digest_period: string;
   created_at: string;
   updated_at: string;
+}
+
+interface Digest {
+  period: string;
+  period_label: string;
+  total_observations: number;
+  summary: string;
+  highlights: string[];
 }
 
 const STREAM_TYPES: { value: StreamType; label: string; hint: string; placeholder: string }[] = [
@@ -59,60 +69,114 @@ function StatusBadge({ status }: { status: Camera["status"] }) {
   );
 }
 
-function CameraCard({ camera }: { camera: Camera }) {
+function CameraCard({ camera, digest, digestLoading, onRefreshDigest }: {
+  camera: Camera;
+  digest: Digest | null;
+  digestLoading: boolean;
+  onRefreshDigest: () => void;
+}) {
   const streamName = extractStreamName(camera.stream_url);
   const iframeSrc = `${WEBRTC_URL}/${streamName}/`;
 
   return (
-    <div
-      onClick={() => (window.location.href = `/cameras/${camera.id}`)}
-      className="rounded-lg border border-border bg-card overflow-hidden group cursor-pointer hover:border-muted-foreground/30 transition-colors">
-      <div className="relative aspect-video bg-black">
-        {camera.status !== "offline" ? (
-          <iframe
-            src={iframeSrc}
-            className="absolute inset-0 w-full h-full border-0"
-            allow="autoplay; encrypted-media"
-            sandbox="allow-scripts allow-same-origin"
-          />
-        ) : (
-          <div className="camera-feed absolute inset-0 flex items-center justify-center">
-            <div className="scanline absolute inset-0" />
-            <span className="text-xs text-muted-foreground font-mono z-10">
-              OFFLINE
-            </span>
+    <div className="rounded-lg border border-border bg-card overflow-hidden group">
+      <div
+        onClick={() => (window.location.href = `/cameras/${camera.id}`)}
+        className="cursor-pointer hover:bg-card-elevated/30 transition-colors"
+      >
+        <div className="relative aspect-video bg-black">
+          {camera.status !== "offline" ? (
+            <iframe
+              src={iframeSrc}
+              className="absolute inset-0 w-full h-full border-0"
+              allow="autoplay; encrypted-media"
+              sandbox="allow-scripts allow-same-origin"
+            />
+          ) : (
+            <div className="camera-feed absolute inset-0 flex items-center justify-center">
+              <div className="scanline absolute inset-0" />
+              <span className="text-xs text-muted-foreground font-mono z-10">
+                OFFLINE
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="px-3 py-2.5 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-sm font-medium truncate">{camera.name}</div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-wide px-1 py-0.5 rounded bg-muted/50">
+                {camera.stream_type?.replace("_", " ") || "rtsp"}
+              </span>
+              {camera.location_label && (
+                <span className="text-xs text-muted-foreground truncate">
+                  {camera.location_label}
+                </span>
+              )}
+            </div>
+          </div>
+          <StatusBadge status={camera.status} />
+        </div>
+
+        {(camera.width || camera.fps) && (
+          <div className="px-3 pb-2 flex gap-3">
+            {camera.width && camera.height && (
+              <span className="font-mono text-[11px] text-muted-foreground">
+                {camera.width}x{camera.height}
+              </span>
+            )}
+            {camera.fps && (
+              <span className="font-mono text-[11px] text-muted-foreground">
+                {camera.fps}fps
+              </span>
+            )}
           </div>
         )}
       </div>
 
-      <div className="px-3 py-2.5 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-sm font-medium truncate">{camera.name}</div>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-wide px-1 py-0.5 rounded bg-muted/50">
-              {camera.stream_type?.replace("_", " ") || "rtsp"}
+      {/* Activity digest */}
+      {(camera.digest_enabled ?? true) && (
+        <div className="border-t border-border px-3 py-2.5">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+              Activity Digest
             </span>
-            {camera.location_label && (
-              <span className="text-xs text-muted-foreground truncate">
-                {camera.location_label}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {camera.digest_period ?? "24h"}
               </span>
-            )}
+              <button
+                onClick={(e) => { e.stopPropagation(); onRefreshDigest(); }}
+                disabled={digestLoading}
+                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                {digestLoading ? "..." : "↻"}
+              </button>
+            </div>
           </div>
-        </div>
-        <StatusBadge status={camera.status} />
-      </div>
-
-      {(camera.width || camera.fps) && (
-        <div className="px-3 pb-2.5 flex gap-3">
-          {camera.width && camera.height && (
-            <span className="font-mono text-[11px] text-muted-foreground">
-              {camera.width}x{camera.height}
-            </span>
-          )}
-          {camera.fps && (
-            <span className="font-mono text-[11px] text-muted-foreground">
-              {camera.fps}fps
-            </span>
+          {digest ? (
+            <div>
+              <p className="text-xs leading-relaxed text-foreground/80">
+                {digest.summary}
+              </p>
+              {digest.highlights.length > 0 && (
+                <div className="mt-1.5 space-y-0.5">
+                  {digest.highlights.slice(0, 2).map((h, i) => (
+                    <div key={i} className="text-[11px] text-muted-foreground">
+                      {h}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="text-[10px] text-muted-foreground font-mono mt-1">
+                {digest.total_observations} observations · {digest.period_label}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              {digestLoading ? "Generating digest..." : "No digest yet"}
+            </p>
           )}
         </div>
       )}
@@ -410,6 +474,8 @@ export default function CamerasPage() {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [digests, setDigests] = useState<Record<string, Digest>>({});
+  const [digestLoading, setDigestLoading] = useState<Record<string, boolean>>({});
 
   const fetchCameras = useCallback(async () => {
     try {
@@ -425,16 +491,44 @@ export default function CamerasPage() {
     }
   }, []);
 
+  const fetchDigest = useCallback(async (cam: Camera) => {
+    if (!(cam.digest_enabled ?? true)) return;
+    const period = cam.digest_period ?? "24h";
+    setDigestLoading((prev) => ({ ...prev, [cam.id]: true }));
+    try {
+      const res = await fetch(`/api/search/digest?period=${period}&camera_id=${cam.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDigests((prev) => ({ ...prev, [cam.id]: data }));
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setDigestLoading((prev) => ({ ...prev, [cam.id]: false }));
+    }
+  }, []);
+
   // Fetch on mount
   useEffect(() => {
     fetchCameras();
   }, [fetchCameras]);
 
-  // Auto-refresh every 10 seconds
+  // Auto-refresh cameras every 10 seconds
   useEffect(() => {
     const interval = setInterval(fetchCameras, 10_000);
     return () => clearInterval(interval);
   }, [fetchCameras]);
+
+  // Auto-fetch digests when cameras load
+  useEffect(() => {
+    if (cameras.length > 0) {
+      cameras.forEach((cam) => {
+        if (!digests[cam.id] && !digestLoading[cam.id]) {
+          fetchDigest(cam);
+        }
+      });
+    }
+  }, [cameras]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleAddSuccess() {
     setModalOpen(false);
@@ -473,7 +567,13 @@ export default function CamerasPage() {
       {/* Camera grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {cameras.map((camera) => (
-          <CameraCard key={camera.id} camera={camera} />
+          <CameraCard
+            key={camera.id}
+            camera={camera}
+            digest={digests[camera.id] || null}
+            digestLoading={digestLoading[camera.id] || false}
+            onRefreshDigest={() => fetchDigest(camera)}
+          />
         ))}
 
         {/* Dashed add-camera tile (always visible when empty, or as the last tile) */}

@@ -33,6 +33,15 @@ interface Detection {
   bbox: number[];
 }
 
+interface StatusLog {
+  id: string;
+  camera_id: string;
+  status: string;
+  previous_status: string | null;
+  reason: string | null;
+  timestamp: string;
+}
+
 interface Camera {
   id: string;
   name: string;
@@ -42,10 +51,10 @@ interface Camera {
 // Unified timeline entry
 interface TimelineEntry {
   id: string;
-  type: "recording" | "observation";
+  type: "recording" | "observation" | "status";
   camera_id: string;
   timestamp: string;
-  data: Recording | Observation;
+  data: Recording | Observation | StatusLog;
 }
 
 function formatDuration(seconds: number | null): string {
@@ -94,12 +103,33 @@ function summarizeDetections(obs: Observation): string {
   return parts.join(", ");
 }
 
+function statusLabel(status: string): string {
+  const map: Record<string, string> = {
+    live: "Online",
+    recording: "Recording",
+    offline: "Offline",
+    error: "Error",
+  };
+  return map[status] || status;
+}
+
+function statusColor(status: string): string {
+  const map: Record<string, string> = {
+    live: "bg-green-500",
+    recording: "bg-danger",
+    offline: "bg-gray-500",
+    error: "bg-warning",
+  };
+  return map[status] || "bg-gray-500";
+}
+
 type TimeRange = "today" | "7d" | "30d";
-type EventFilter = "all" | "recordings" | "observations";
+type EventFilter = "all" | "recordings" | "observations" | "status";
 
 export default function TimelinePage() {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [observations, setObservations] = useState<Observation[]>([]);
+  const [statusLogs, setStatusLogs] = useState<StatusLog[]>([]);
   const [cameras, setCameras] = useState<Record<string, Camera>>({});
   const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
   const [activeEntry, setActiveEntry] = useState<string | null>(null);
@@ -174,9 +204,13 @@ export default function TimelinePage() {
       const params = new URLSearchParams({ limit: "100" });
       if (selectedCamera) params.set("camera_id", selectedCamera);
 
-      const [recRes, obsRes] = await Promise.all([
+      const statusParams = new URLSearchParams({ limit: "100" });
+      if (selectedCamera) statusParams.set("camera_id", selectedCamera);
+
+      const [recRes, obsRes, statusRes] = await Promise.all([
         fetch(`/api/recordings?${params}`),
         fetch(`/api/observations?${params}`),
+        fetch(`/api/cameras/status-logs?${statusParams}`),
       ]);
 
       const now = Date.now();
@@ -197,6 +231,12 @@ export default function TimelinePage() {
         const data: Observation[] = await obsRes.json();
         setObservations(
           data.filter((o) => new Date(o.started_at).getTime() >= cutoff)
+        );
+      }
+      if (statusRes.ok) {
+        const data: StatusLog[] = await statusRes.json();
+        setStatusLogs(
+          data.filter((s) => new Date(s.timestamp).getTime() >= cutoff)
         );
       }
     } catch {
@@ -233,7 +273,7 @@ export default function TimelinePage() {
   // Build unified timeline entries
   let entries: TimelineEntry[] = [];
 
-  if (eventFilter !== "observations") {
+  if (eventFilter === "all" || eventFilter === "recordings") {
     entries.push(
       ...recordings.map((r) => ({
         id: `rec-${r.id}`,
@@ -245,7 +285,7 @@ export default function TimelinePage() {
     );
   }
 
-  if (eventFilter !== "recordings") {
+  if (eventFilter === "all" || eventFilter === "observations") {
     entries.push(
       ...observations.map((o) => ({
         id: `obs-${o.id}`,
@@ -253,6 +293,18 @@ export default function TimelinePage() {
         camera_id: o.camera_id,
         timestamp: o.started_at,
         data: o,
+      }))
+    );
+  }
+
+  if (eventFilter === "all" || eventFilter === "status") {
+    entries.push(
+      ...statusLogs.map((s) => ({
+        id: `status-${s.id}`,
+        type: "status" as const,
+        camera_id: s.camera_id,
+        timestamp: s.timestamp,
+        data: s,
       }))
     );
   }
@@ -366,6 +418,7 @@ export default function TimelinePage() {
                   ["all", "All events"],
                   ["recordings", "Recordings"],
                   ["observations", "AI observations"],
+                  ["status", "Status changes"],
                 ] as [EventFilter, string][]
               ).map(([value, label]) => (
                 <button
@@ -505,6 +558,38 @@ export default function TimelinePage() {
                     {dateEntries.map((entry) => {
                       const cam = cameras[entry.camera_id];
                       const isActive = activeEntry === entry.id;
+
+                      if (entry.type === "status") {
+                        const log = entry.data as StatusLog;
+                        const isOnline = log.status === "live" || log.status === "recording";
+                        return (
+                          <div
+                            key={entry.id}
+                            className="px-4 py-2.5 rounded-lg border border-border/50 flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-2 h-2 rounded-full ${statusColor(log.status)}`} />
+                              <div>
+                                <div className="text-sm">
+                                  <span className="font-medium">{cam?.name || "Unknown Camera"}</span>
+                                  <span className="mx-1.5 text-muted-foreground">went</span>
+                                  <span className={isOnline ? "text-green-400" : "text-muted-foreground"}>
+                                    {statusLabel(log.status).toLowerCase()}
+                                  </span>
+                                </div>
+                                {log.reason && (
+                                  <div className="text-xs text-muted-foreground mt-0.5">
+                                    {log.reason}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {formatTime(log.timestamp)}
+                            </span>
+                          </div>
+                        );
+                      }
 
                       if (entry.type === "recording") {
                         const rec = entry.data as Recording;
