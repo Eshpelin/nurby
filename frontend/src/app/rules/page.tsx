@@ -13,6 +13,12 @@ interface Rule {
   created_at: string;
 }
 
+interface Camera {
+  id: string;
+  name: string;
+  status: string;
+}
+
 const TRIGGER_TYPES = [
   { value: "object_detected", label: "Object detected" },
   { value: "face_detected", label: "Face detected" },
@@ -68,6 +74,7 @@ function describeActions(actions: Record<string, unknown> | Record<string, unkno
 
 export default function RulesPage() {
   const [rules, setRules] = useState<Rule[]>([]);
+  const [cameras, setCameras] = useState<Camera[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editRule, setEditRule] = useState<Rule | null>(null);
@@ -80,7 +87,7 @@ export default function RulesPage() {
   const [formTriggerLabel, setFormTriggerLabel] = useState("");
   const [formTriggerPersonId, setFormTriggerPersonId] = useState("");
   const [formTriggerMinScore, setFormTriggerMinScore] = useState("0.05");
-  const [formCondCamera, setFormCondCamera] = useState("");
+  const [formCondCameras, setFormCondCameras] = useState<string[]>([]);
   const [formCondTimeAfter, setFormCondTimeAfter] = useState("");
   const [formCondTimeBefore, setFormCondTimeBefore] = useState("");
   const [formCondMinConf, setFormCondMinConf] = useState("");
@@ -103,9 +110,19 @@ export default function RulesPage() {
     }
   }, []);
 
+  const fetchCameras = useCallback(async () => {
+    try {
+      const res = await fetch("/api/cameras");
+      if (res.ok) setCameras(await res.json());
+    } catch {
+      /* silent */
+    }
+  }, []);
+
   useEffect(() => {
     fetchRules();
-  }, [fetchRules]);
+    fetchCameras();
+  }, [fetchRules, fetchCameras]);
 
   const resetForm = () => {
     setFormName("");
@@ -114,7 +131,7 @@ export default function RulesPage() {
     setFormTriggerLabel("");
     setFormTriggerPersonId("");
     setFormTriggerMinScore("0.05");
-    setFormCondCamera("");
+    setFormCondCameras([]);
     setFormCondTimeAfter("");
     setFormCondTimeBefore("");
     setFormCondMinConf("");
@@ -144,7 +161,9 @@ export default function RulesPage() {
     setFormTriggerMinScore(String(tp.min_score ?? "0.05"));
 
     const cond = r.conditions || {};
-    setFormCondCamera((cond.camera_id as string) || "");
+    const camIds = cond.camera_ids as string[] | undefined;
+    const camId = cond.camera_id as string | undefined;
+    setFormCondCameras(camIds || (camId ? [camId] : []));
     setFormCondTimeAfter((cond.time_after as string) || "");
     setFormCondTimeBefore((cond.time_before as string) || "");
     setFormCondMinConf(cond.min_confidence ? String(cond.min_confidence) : "");
@@ -172,7 +191,7 @@ export default function RulesPage() {
     }
 
     const conditions: Record<string, unknown> = {};
-    if (formCondCamera) conditions.camera_id = formCondCamera;
+    if (formCondCameras.length > 0) conditions.camera_ids = formCondCameras;
     if (formCondTimeAfter) conditions.time_after = formCondTimeAfter;
     if (formCondTimeBefore) conditions.time_before = formCondTimeBefore;
     if (formCondMinConf) conditions.min_confidence = parseFloat(formCondMinConf);
@@ -402,8 +421,26 @@ export default function RulesPage() {
                   {selectedRule.conditions && Object.keys(selectedRule.conditions).length > 0 && (
                     <div>
                       <span className="text-muted-foreground text-xs">Conditions</span>
-                      <div className="font-mono text-xs mt-1 bg-muted rounded p-2">
-                        {JSON.stringify(selectedRule.conditions, null, 2)}
+                      <div className="text-xs mt-1 space-y-1">
+                        {(() => {
+                          const cond = selectedRule.conditions!;
+                          const camIds = (cond.camera_ids as string[]) || (cond.camera_id ? [cond.camera_id as string] : []);
+                          const parts: string[] = [];
+                          if (camIds.length > 0) {
+                            const names = camIds.map((cid) => {
+                              const cam = cameras.find((c) => c.id === cid);
+                              return cam ? cam.name : cid.slice(0, 8);
+                            });
+                            parts.push(`Cameras. ${names.join(", ")}`);
+                          }
+                          if (cond.time_after || cond.time_before) {
+                            parts.push(`Time. ${cond.time_after || "00:00"} to ${cond.time_before || "23:59"}`);
+                          }
+                          if (cond.min_confidence) {
+                            parts.push(`Min confidence. ${cond.min_confidence}`);
+                          }
+                          return parts.map((p, i) => <div key={i}>{p}</div>);
+                        })()}
                       </div>
                     </div>
                   )}
@@ -535,14 +572,42 @@ export default function RulesPage() {
                   Conditions (optional)
                 </legend>
                 <div>
-                  <label className="text-xs text-muted-foreground">Camera ID filter</label>
-                  <input
-                    type="text"
-                    value={formCondCamera}
-                    onChange={(e) => setFormCondCamera(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
-                    placeholder="Leave blank for all cameras"
-                  />
+                  <label className="text-xs text-muted-foreground block mb-1">Cameras</label>
+                  {cameras.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No cameras added yet</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto rounded-md border border-border bg-background p-2">
+                      <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={formCondCameras.length === 0}
+                          onChange={() => setFormCondCameras([])}
+                          className="accent-green-500"
+                        />
+                        <span className="text-muted-foreground">All cameras</span>
+                      </label>
+                      {cameras.map((cam) => (
+                        <label key={cam.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                          <input
+                            type="checkbox"
+                            checked={formCondCameras.includes(cam.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormCondCameras([...formCondCameras, cam.id]);
+                              } else {
+                                setFormCondCameras(formCondCameras.filter((c) => c !== cam.id));
+                              }
+                            }}
+                            className="accent-green-500"
+                          />
+                          <span>{cam.name}</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            cam.status === "recording" ? "bg-green-500" : cam.status === "online" ? "bg-accent" : "bg-muted-foreground/40"
+                          }`} />
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>

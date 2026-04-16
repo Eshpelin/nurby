@@ -147,9 +147,12 @@ class RuleEngine:
     @staticmethod
     def _check_conditions(conditions: dict, data: dict) -> bool:
         """Check if additional conditions are met."""
-        # Camera filter
+        # Camera filter (supports single camera_id or camera_ids array)
+        cam_ids = conditions.get("camera_ids")
         cam = conditions.get("camera_id")
-        if cam and data.get("camera_id") != cam:
+        if cam_ids and data.get("camera_id") not in cam_ids:
+            return False
+        if cam and not cam_ids and data.get("camera_id") != cam:
             return False
 
         # Time window
