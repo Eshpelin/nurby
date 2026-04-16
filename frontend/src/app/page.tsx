@@ -1402,7 +1402,7 @@ function DashboardContent() {
                             <div key={entry.id} className="px-3 py-2 rounded-lg border border-border/50 flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <div className={`w-1.5 h-1.5 rounded-full ${statusColor(log.status)}`} />
-                                <span className="text-xs"><span className="font-medium">{cam?.name || "Unknown"}</span><span className="mx-1 text-muted-foreground">went</span><span className={isOnline ? "text-green-400" : "text-muted-foreground"}>{statusLabel(log.status).toLowerCase()}</span></span>
+                                <span className="text-xs"><span className="font-medium">{cam?.name || "Unknown"}</span><span className="mx-1 text-muted-foreground">{log.status === "recording" ? "started" : log.status === "offline" ? "went" : "is"}</span><span className={isOnline ? "text-green-400" : "text-muted-foreground"}>{log.status === "recording" ? "recording" : statusLabel(log.status).toLowerCase()}</span></span>
                               </div>
                               <span className="text-[10px] text-muted-foreground font-mono">{formatTime(log.timestamp)}</span>
                             </div>
