@@ -16,11 +16,10 @@ router = APIRouter()
 _RELATIVE_PREFIXES = ["./recordings/", "recordings/", "./"]
 
 
-def _resolve_recording_path(recording: Recording) -> str:
-    """Turn a stored (possibly relative) file_path into an absolute disk path."""
+def _resolve_recording_path_raw(file_path: str) -> str:
+    """Turn a stored (possibly relative) file path string into an absolute disk path."""
     from shared.config import settings
 
-    file_path = recording.file_path
     if os.path.isabs(file_path):
         return file_path
 
@@ -30,6 +29,11 @@ def _resolve_recording_path(recording: Recording) -> str:
             rel = rel[len(prefix):]
             break
     return os.path.join(os.path.abspath(settings.recordings_path), rel)
+
+
+def _resolve_recording_path(recording: Recording) -> str:
+    """Turn a stored (possibly relative) file_path into an absolute disk path."""
+    return _resolve_recording_path_raw(recording.file_path)
 
 
 async def _get_recording_or_404(
@@ -99,5 +103,18 @@ async def delete_recording(recording_id: uuid.UUID, _current_user: User = Depend
     recording = await db.get(Recording, recording_id)
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")
+
+    rec_path = _resolve_recording_path(recording)
+    try:
+        os.remove(rec_path)
+    except OSError:
+        pass
+
+    if recording.thumbnail_path:
+        try:
+            os.remove(_resolve_recording_path_raw(recording.thumbnail_path))
+        except OSError:
+            pass
+
     await db.delete(recording)
     await db.commit()
