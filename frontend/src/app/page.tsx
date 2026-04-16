@@ -5,10 +5,13 @@ import { useState, useEffect, useCallback } from "react";
 const WEBRTC_URL =
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
 
+type StreamType = "rtsp" | "http_mjpeg" | "http_snapshot" | "hls" | "usb" | "file";
+
 interface Camera {
   id: string;
   name: string;
   stream_url: string;
+  stream_type: StreamType;
   location_label: string | null;
   status: "offline" | "live" | "recording";
   width: number | null;
@@ -18,6 +21,15 @@ interface Camera {
   created_at: string;
   updated_at: string;
 }
+
+const STREAM_TYPES: { value: StreamType; label: string; hint: string; placeholder: string }[] = [
+  { value: "rtsp", label: "RTSP", hint: "IP cameras, NVRs, most security cameras", placeholder: "rtsp://192.168.1.100:554/stream1" },
+  { value: "http_mjpeg", label: "HTTP MJPEG", hint: "Motion JPEG over HTTP. Webcams, ESP32-CAM", placeholder: "http://192.168.1.100:8080/video" },
+  { value: "http_snapshot", label: "HTTP Snapshot", hint: "Periodic JPEG pull. Low-bandwidth cameras", placeholder: "http://192.168.1.100/snapshot.jpg" },
+  { value: "hls", label: "HLS", hint: "HTTP Live Streaming. Cloud cameras, Wyze, Ring", placeholder: "http://192.168.1.100/live/stream.m3u8" },
+  { value: "usb", label: "USB / Local", hint: "Locally attached USB or CSI cameras", placeholder: "0" },
+  { value: "file", label: "File / Test", hint: "Local video file for testing", placeholder: "/path/to/video.mp4" },
+];
 
 function extractStreamName(streamUrl: string): string {
   // Extract the last path segment from an RTSP URL
@@ -52,7 +64,9 @@ function CameraCard({ camera }: { camera: Camera }) {
   const iframeSrc = `${WEBRTC_URL}/${streamName}/`;
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden group">
+    <div
+      onClick={() => (window.location.href = `/cameras/${camera.id}`)}
+      className="rounded-lg border border-border bg-card overflow-hidden group cursor-pointer hover:border-muted-foreground/30 transition-colors">
       <div className="relative aspect-video bg-black">
         {camera.status !== "offline" ? (
           <iframe
@@ -74,11 +88,16 @@ function CameraCard({ camera }: { camera: Camera }) {
       <div className="px-3 py-2.5 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-medium truncate">{camera.name}</div>
-          {camera.location_label && (
-            <div className="text-xs text-muted-foreground truncate mt-0.5">
-              {camera.location_label}
-            </div>
-          )}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-wide px-1 py-0.5 rounded bg-muted/50">
+              {camera.stream_type?.replace("_", " ") || "rtsp"}
+            </span>
+            {camera.location_label && (
+              <span className="text-xs text-muted-foreground truncate">
+                {camera.location_label}
+              </span>
+            )}
+          </div>
         </div>
         <StatusBadge status={camera.status} />
       </div>
@@ -109,10 +128,20 @@ function AddCameraModal({
   onSuccess: () => void;
 }) {
   const [name, setName] = useState("");
+  const [streamType, setStreamType] = useState<StreamType>("rtsp");
   const [streamUrl, setStreamUrl] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
+  const [showAuth, setShowAuth] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [authToken, setAuthToken] = useState("");
+  const [snapshotInterval, setSnapshotInterval] = useState(2);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedType = STREAM_TYPES.find((t) => t.value === streamType)!;
+  const supportsAuth = ["rtsp", "http_mjpeg", "http_snapshot", "hls"].includes(streamType);
+  const supportsSnapshotInterval = streamType === "http_snapshot";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -122,14 +151,28 @@ function AddCameraModal({
     setError(null);
 
     try {
+      const payload: Record<string, unknown> = {
+        name: name.trim(),
+        stream_url: streamUrl.trim(),
+        stream_type: streamType,
+        location_label: locationLabel.trim() || null,
+      };
+
+      if (supportsAuth && username.trim()) {
+        payload.username = username.trim();
+        if (password) payload.password = password;
+      }
+      if (supportsAuth && authToken.trim()) {
+        payload.auth_token = authToken.trim();
+      }
+      if (supportsSnapshotInterval) {
+        payload.snapshot_interval = snapshotInterval;
+      }
+
       const res = await fetch(`/api/cameras`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          stream_url: streamUrl.trim(),
-          location_label: locationLabel.trim() || null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -145,6 +188,8 @@ function AddCameraModal({
     }
   }
 
+  const inputClass = "w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
@@ -154,7 +199,7 @@ function AddCameraModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md mx-4 rounded-lg border border-border bg-card-elevated p-6 shadow-xl">
+      <div className="relative w-full max-w-lg mx-4 rounded-lg border border-border bg-card-elevated p-6 shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold">Add Camera</h2>
           <button
@@ -166,6 +211,7 @@ function AddCameraModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Camera name */}
           <div>
             <label className="block text-sm text-muted-foreground mb-1.5">
               Name
@@ -176,24 +222,86 @@ function AddCameraModal({
               onChange={(e) => setName(e.target.value)}
               placeholder="Front Door"
               required
-              className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              className={inputClass}
             />
           </div>
 
+          {/* Stream type selector */}
           <div>
             <label className="block text-sm text-muted-foreground mb-1.5">
-              Stream URL
+              Feed Type
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {STREAM_TYPES.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => {
+                    setStreamType(t.value);
+                    setStreamUrl("");
+                  }}
+                  className={`px-2 py-2 text-xs rounded-md border transition-colors text-center ${
+                    streamType === t.value
+                      ? "border-accent bg-accent/10 text-accent-foreground"
+                      : "border-border hover:border-muted-foreground text-muted-foreground"
+                  }`}
+                >
+                  <div className="font-medium">{t.label}</div>
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5">
+              {selectedType.hint}
+            </p>
+          </div>
+
+          {/* Stream URL / source */}
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1.5">
+              {streamType === "usb" ? "Device Index or Path" : streamType === "file" ? "File Path" : "Stream URL"}
             </label>
             <input
               type="text"
               value={streamUrl}
               onChange={(e) => setStreamUrl(e.target.value)}
-              placeholder="rtsp://192.168.1.100:554/stream"
+              placeholder={selectedType.placeholder}
               required
-              className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent font-mono text-xs"
+              className={`${inputClass} font-mono text-xs`}
             />
+            {streamType === "usb" && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Use 0 for first USB camera, 1 for second, or /dev/video0 on Linux
+              </p>
+            )}
           </div>
 
+          {/* Snapshot interval */}
+          {supportsSnapshotInterval && (
+            <div>
+              <label className="block text-sm text-muted-foreground mb-1.5">
+                Poll Interval
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={0.5}
+                  max={30}
+                  step={0.5}
+                  value={snapshotInterval}
+                  onChange={(e) => setSnapshotInterval(Number(e.target.value))}
+                  className="flex-1 accent-accent"
+                />
+                <span className="font-mono text-xs text-muted-foreground w-12 text-right">
+                  {snapshotInterval}s
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                How often to fetch a new frame. Lower = more bandwidth
+              </p>
+            </div>
+          )}
+
+          {/* Location */}
           <div>
             <label className="block text-sm text-muted-foreground mb-1.5">
               Location Label
@@ -203,9 +311,74 @@ function AddCameraModal({
               value={locationLabel}
               onChange={(e) => setLocationLabel(e.target.value)}
               placeholder="Optional"
-              className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              className={inputClass}
             />
           </div>
+
+          {/* Auth section */}
+          {supportsAuth && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAuth(!showAuth)}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className={`text-xs transition-transform ${showAuth ? "rotate-90" : ""}`}>▶</span>
+                Authentication
+                <span className="text-[11px] text-muted-foreground">(optional)</span>
+              </button>
+
+              {showAuth && (
+                <div className="mt-3 space-y-3 pl-4 border-l border-border-subtle">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-muted-foreground mb-1">
+                        Username
+                      </label>
+                      <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="admin"
+                        className={`${inputClass} text-xs`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-muted-foreground mb-1">
+                        Password
+                      </label>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className={`${inputClass} text-xs`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span className="flex-1 h-px bg-border" />
+                    or
+                    <span className="flex-1 h-px bg-border" />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1">
+                      Bearer Token / API Key
+                    </label>
+                    <input
+                      type="password"
+                      value={authToken}
+                      onChange={(e) => setAuthToken(e.target.value)}
+                      placeholder="Token for API-based cameras"
+                      className={`${inputClass} text-xs font-mono`}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {error && (
             <p className="text-sm text-danger">{error}</p>

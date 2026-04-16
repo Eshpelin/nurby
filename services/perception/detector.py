@@ -45,18 +45,20 @@ class ObjectDetector:
                 )
         return self._model
 
-    async def detect(self, frame: np.ndarray) -> list[dict]:
+    async def detect(self, frame: np.ndarray, confidence: float | None = None) -> list[dict]:
         """Run object detection on a frame. Returns list of detections."""
+        conf = confidence if confidence is not None else self._confidence
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._detect_sync, frame)
+        return await loop.run_in_executor(None, self._detect_sync, frame, conf)
 
-    def _detect_sync(self, frame: np.ndarray) -> list[dict]:
+    def _detect_sync(self, frame: np.ndarray, confidence: float | None = None) -> list[dict]:
         """Synchronous detection (runs in thread pool)."""
         model = self._load_model()
         if model is None:
             return []
 
-        results = model(frame, conf=self._confidence, verbose=False)
+        conf = confidence if confidence is not None else self._confidence
+        results = model(frame, conf=conf, verbose=False)
         detections = []
 
         for result in results:

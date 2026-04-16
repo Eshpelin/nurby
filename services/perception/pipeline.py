@@ -15,7 +15,7 @@ import redis.asyncio as aioredis
 
 from shared.config import settings
 from shared.database import async_session
-from shared.models import Observation, Provider
+from shared.models import Camera, Observation, Provider
 from services.perception.detector import ObjectDetector
 from services.perception.faces import FaceRecognizer
 from services.perception.vlm import VLMClient, get_active_provider
@@ -38,6 +38,9 @@ class PerceptionPipeline:
         self._face = FaceRecognizer()
         self._vlm = VLMClient()
         self._rule_engine = RuleEngine()
+        self._camera_cache: dict[str, Camera] = {}
+        self._camera_cache_time: float = 0
+        self._vlm_last_call: dict[str, float] = {}  # camera_id -> last VLM call timestamp
 
     async def _get_redis(self):
         if self._redis is None:
@@ -85,6 +88,45 @@ class PerceptionPipeline:
                 logger.exception("Error reading from Redis stream")
                 await asyncio.sleep(2)
 
+    async def _get_camera_config(self, camera_id: str) -> Camera | None:
+        """Fetch camera config with caching (30s TTL)."""
+        import time as _time
+        now = _time.monotonic()
+        if now - self._camera_cache_time > 30:
+            try:
+                async with async_session() as db:
+                    result = await db.execute(select(Camera))
+                    cameras = result.scalars().all()
+                    self._camera_cache = {str(c.id): c for c in cameras}
+                    for c in cameras:
+                        db.expunge(c)
+                self._camera_cache_time = now
+            except Exception:
+                logger.exception("Failed to load camera configs")
+        return self._camera_cache.get(camera_id)
+
+    async def _get_provider_for_camera(self, cam: Camera | None) -> Provider | None:
+        """Get VLM provider. Per-camera override if set, else system default."""
+        if cam and cam.vlm_provider_id:
+            try:
+                async with async_session() as db:
+                    provider = await db.get(Provider, cam.vlm_provider_id)
+                    if provider:
+                        db.expunge(provider)
+                        return provider
+            except Exception:
+                logger.exception("Failed to fetch camera-specific provider")
+        return await get_active_provider()
+
+    def _should_call_vlm(self, camera_id: str, cam: Camera | None) -> bool:
+        """Check if enough time passed since last VLM call for this camera."""
+        import time as _time
+        interval = cam.vlm_interval if cam else 0
+        if interval <= 0:
+            return True
+        last = self._vlm_last_call.get(camera_id, 0)
+        return (_time.monotonic() - last) >= interval
+
     async def _process_keyframe(self, data: dict):
         """Process a single motion keyframe through detection and VLM."""
         camera_id = data.get(b"camera_id", b"").decode()
@@ -104,42 +146,57 @@ class PerceptionPipeline:
 
         timestamp = datetime.fromisoformat(timestamp_str) if timestamp_str else datetime.now(timezone.utc)
 
+        # Load per-camera config
+        cam = await self._get_camera_config(camera_id)
+
         logger.info(
             "Processing keyframe from camera %s (motion=%.3f)",
             camera_id, motion_score,
         )
 
-        # Step 1. Run object detection
-        detections = await self._detector.detect(frame)
-        detection_summary = self._detector.summarize(detections)
-        logger.info("Detections for camera %s. %s", camera_id, detection_summary)
+        # Step 1. Run object detection (if enabled for this camera)
+        detections = []
+        if cam is None or cam.detect_objects:
+            confidence_threshold = cam.object_confidence if cam else 0.35
+            detections = await self._detector.detect(frame, confidence=confidence_threshold)
+            detection_summary = self._detector.summarize(detections)
+            logger.info("Detections for camera %s. %s", camera_id, detection_summary)
 
-        # Step 2. Run face detection and matching
-        faces = await self._face.detect_and_embed(frame)
-        if faces:
-            faces = await self._face.match_faces(faces)
-            matched = [f for f in faces if f.get("person_id")]
-            logger.info(
-                "Faces for camera %s. %d detected, %d matched",
-                camera_id, len(faces), len(matched),
-            )
+        # Step 2. Run face detection and matching (if enabled for this camera)
+        faces = []
+        if cam is None or cam.detect_faces:
+            faces = await self._face.detect_and_embed(frame)
+            if faces:
+                faces = await self._face.match_faces(faces)
+                matched = [f for f in faces if f.get("person_id")]
+                logger.info(
+                    "Faces for camera %s. %d detected, %d matched",
+                    camera_id, len(faces), len(matched),
+                )
 
         # Step 3. Save thumbnail
         thumbnail_path = await self._save_thumbnail(camera_id, timestamp, frame, detections)
 
-        # Step 4. Call VLM for scene description (if provider configured)
+        # Step 4. Call VLM for scene description (respecting per-camera interval and provider)
         vlm_description = None
         vlm_provider_name = None
         confidence = None
 
-        provider = await get_active_provider()
-        if provider:
-            vlm_description = await self._vlm.describe(
-                frame, detections, provider
-            )
-            vlm_provider_name = provider.name
-            confidence = 0.8  # placeholder until VLM returns confidence
-            logger.info("VLM description for camera %s. %s", camera_id, vlm_description)
+        if self._should_call_vlm(camera_id, cam):
+            import time as _time
+            provider = await self._get_provider_for_camera(cam)
+            if provider:
+                custom_prompt = cam.vlm_prompt if cam else None
+                max_tokens = cam.vlm_max_tokens if cam else 200
+                vlm_description = await self._vlm.describe(
+                    frame, detections, provider,
+                    system_prompt=custom_prompt,
+                    max_tokens=max_tokens,
+                )
+                vlm_provider_name = provider.name
+                confidence = 0.8  # placeholder until VLM returns confidence
+                self._vlm_last_call[camera_id] = _time.monotonic()
+                logger.info("VLM description for camera %s. %s", camera_id, vlm_description)
 
         # Step 5. Store observation in database
         person_detections = None

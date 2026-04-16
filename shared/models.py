@@ -15,10 +15,27 @@ class Camera(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     stream_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    stream_type: Mapped[str] = mapped_column(String(32), default="rtsp")  # rtsp, http_mjpeg, http_snapshot, hls, usb, file
     snapshot_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     location_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    auth_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    snapshot_interval: Mapped[float] = mapped_column(Float, default=2.0)  # seconds between snapshot pulls
     motion_sensitivity: Mapped[float] = mapped_column(Float, default=0.5)
     recording_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Per-camera perception config
+    vlm_provider_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True)
+    vlm_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)  # custom system prompt override
+    vlm_interval: Mapped[int] = mapped_column(Integer, default=0)  # seconds between VLM calls, 0 = every keyframe
+    vlm_max_tokens: Mapped[int] = mapped_column(Integer, default=200)
+    detect_objects: Mapped[bool] = mapped_column(Boolean, default=True)
+    detect_faces: Mapped[bool] = mapped_column(Boolean, default=True)
+    object_confidence: Mapped[float] = mapped_column(Float, default=0.35)  # YOLO confidence threshold
+    # Retention policy
+    retention_mode: Mapped[str] = mapped_column(String(16), default="none")  # none, time, size
+    retention_days: Mapped[int] = mapped_column(Integer, default=30)  # days to keep recordings
+    retention_gb: Mapped[float] = mapped_column(Float, default=50.0)  # max GB per camera
     status: Mapped[str] = mapped_column(String(32), default="offline")
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)

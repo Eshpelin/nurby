@@ -59,9 +59,17 @@ class VLMClient:
         frame: np.ndarray,
         detections: list[dict],
         provider: Provider,
+        system_prompt: str | None = None,
+        max_tokens: int = 200,
     ) -> str | None:
-        """Send frame to VLM and get a scene description."""
+        """Send frame to VLM and get a scene description.
+
+        system_prompt: per-camera prompt override. Falls back to default SYSTEM_PROMPT.
+        max_tokens: per-camera token limit.
+        """
         try:
+            prompt = system_prompt or SYSTEM_PROMPT
+
             # Encode frame as base64 JPEG
             _, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             b64_image = base64.b64encode(jpeg_buf.tobytes()).decode("utf-8")
@@ -75,13 +83,13 @@ class VLMClient:
             user_prompt = f"Describe this security camera frame.{detection_context}"
 
             if provider.kind == "openai":
-                return await self._call_openai(b64_image, user_prompt, provider)
+                return await self._call_openai(b64_image, user_prompt, provider, prompt, max_tokens)
             elif provider.kind == "anthropic":
-                return await self._call_anthropic(b64_image, user_prompt, provider)
+                return await self._call_anthropic(b64_image, user_prompt, provider, prompt, max_tokens)
             elif provider.kind == "google":
-                return await self._call_google(b64_image, user_prompt, provider)
+                return await self._call_google(b64_image, user_prompt, provider, prompt, max_tokens)
             elif provider.kind == "ollama":
-                return await self._call_ollama(b64_image, user_prompt, provider)
+                return await self._call_ollama(b64_image, user_prompt, provider, prompt, max_tokens)
             else:
                 logger.warning("Unknown provider kind: %s", provider.kind)
                 return None
@@ -90,7 +98,7 @@ class VLMClient:
             logger.exception("VLM call failed for provider %s", provider.name)
             return None
 
-    async def _call_openai(self, b64_image: str, prompt: str, provider: Provider) -> str | None:
+    async def _call_openai(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int = 200) -> str | None:
         http = await self._get_http()
         model = provider.default_model or "gpt-4o-mini"
 
@@ -99,9 +107,9 @@ class VLMClient:
             headers={"Authorization": f"Bearer {provider.api_key}"},
             json={
                 "model": model,
-                "max_tokens": 200,
+                "max_tokens": max_tokens,
                 "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {
                         "role": "user",
                         "content": [
@@ -122,7 +130,7 @@ class VLMClient:
         data = response.json()
         return data["choices"][0]["message"]["content"]
 
-    async def _call_anthropic(self, b64_image: str, prompt: str, provider: Provider) -> str | None:
+    async def _call_anthropic(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int = 200) -> str | None:
         http = await self._get_http()
         model = provider.default_model or "claude-sonnet-4-20250514"
 
@@ -135,8 +143,8 @@ class VLMClient:
             },
             json={
                 "model": model,
-                "max_tokens": 200,
-                "system": SYSTEM_PROMPT,
+                "max_tokens": max_tokens,
+                "system": system_prompt,
                 "messages": [
                     {
                         "role": "user",
@@ -159,7 +167,7 @@ class VLMClient:
         data = response.json()
         return data["content"][0]["text"]
 
-    async def _call_google(self, b64_image: str, prompt: str, provider: Provider) -> str | None:
+    async def _call_google(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int = 200) -> str | None:
         """Call Google Gemini native API (generativelanguage.googleapis.com)."""
         http = await self._get_http()
         model = provider.default_model or "gemini-2.0-flash"
@@ -168,7 +176,7 @@ class VLMClient:
             f"{provider.base_url}/v1beta/models/{model}:generateContent",
             headers={"x-goog-api-key": provider.api_key},
             json={
-                "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+                "systemInstruction": {"parts": [{"text": system_prompt}]},
                 "contents": [
                     {
                         "parts": [
@@ -182,14 +190,14 @@ class VLMClient:
                         ],
                     },
                 ],
-                "generationConfig": {"maxOutputTokens": 200},
+                "generationConfig": {"maxOutputTokens": max_tokens},
             },
         )
         response.raise_for_status()
         data = response.json()
         return data["candidates"][0]["content"]["parts"][0]["text"]
 
-    async def _call_ollama(self, b64_image: str, prompt: str, provider: Provider) -> str | None:
+    async def _call_ollama(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int = 200) -> str | None:
         http = await self._get_http()
         model = provider.default_model or "moondream"
 
@@ -197,7 +205,7 @@ class VLMClient:
             f"{provider.base_url}/api/generate",
             json={
                 "model": model,
-                "prompt": f"{SYSTEM_PROMPT}\n\n{prompt}",
+                "prompt": f"{system_prompt}\n\n{prompt}",
                 "images": [b64_image],
                 "stream": False,
             },

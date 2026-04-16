@@ -41,7 +41,16 @@ class CameraManager:
         for cam_id, cam in cameras.items():
             if cam_id not in self._workers:
                 logger.info("Starting stream worker for camera %s (%s)", cam.name, cam_id)
-                worker = StreamWorker(cam_id, cam.stream_url, cam.recording_enabled)
+                worker = StreamWorker(
+                    camera_id=cam_id,
+                    stream_url=cam.stream_url,
+                    recording_enabled=cam.recording_enabled,
+                    stream_type=getattr(cam, "stream_type", "rtsp"),
+                    username=getattr(cam, "username", None),
+                    password=getattr(cam, "password", None),
+                    auth_token=getattr(cam, "auth_token", None),
+                    snapshot_interval=getattr(cam, "snapshot_interval", 2.0),
+                )
                 self._workers[cam_id] = worker
                 self._tasks[cam_id] = asyncio.create_task(worker.run())
 
