@@ -18,6 +18,10 @@ class CameraCreate(BaseModel):
     snapshot_interval: float = Field(default=2.0, ge=0.5, le=60.0)
     motion_sensitivity: float = Field(default=0.5, ge=0.0, le=1.0)
     recording_enabled: bool = True
+    recording_mode: str = "always"
+    recording_trigger_objects: list[str] | None = None
+    recording_clip_pre: int = Field(default=5, ge=1, le=30)
+    recording_clip_post: int = Field(default=10, ge=1, le=60)
     vlm_provider_id: uuid.UUID | None = None
     vlm_prompt: str | None = None
     vlm_interval: int = Field(default=0, ge=0, le=3600)
@@ -51,6 +55,10 @@ class CameraUpdate(BaseModel):
     snapshot_interval: float | None = Field(default=None, ge=0.5, le=60.0)
     motion_sensitivity: float | None = Field(default=None, ge=0.0, le=1.0)
     recording_enabled: bool | None = None
+    recording_mode: str | None = None
+    recording_trigger_objects: list[str] | None = None
+    recording_clip_pre: int | None = Field(default=None, ge=1, le=30)
+    recording_clip_post: int | None = Field(default=None, ge=1, le=60)
     vlm_provider_id: uuid.UUID | None = None
     vlm_prompt: str | None = None
     vlm_interval: int | None = Field(default=None, ge=0, le=3600)
@@ -84,6 +92,10 @@ class CameraResponse(BaseModel):
     snapshot_interval: float
     motion_sensitivity: float
     recording_enabled: bool
+    recording_mode: str
+    recording_trigger_objects: list[str] | None
+    recording_clip_pre: int
+    recording_clip_post: int
     vlm_provider_id: uuid.UUID | None
     vlm_prompt: str | None
     vlm_interval: int

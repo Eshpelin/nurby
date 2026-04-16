@@ -16,6 +16,10 @@ interface Camera {
   snapshot_interval: number;
   motion_sensitivity: number;
   recording_enabled: boolean;
+  recording_mode: string;
+  recording_trigger_objects: string[] | null;
+  recording_clip_pre: number;
+  recording_clip_post: number;
   vlm_provider_id: string | null;
   vlm_prompt: string | null;
   vlm_interval: number;
@@ -179,6 +183,10 @@ export default function CameraConfigPage() {
   const [snapshotInterval, setSnapshotInterval] = useState(2);
   const [motionSensitivity, setMotionSensitivity] = useState(0.5);
   const [recordingEnabled, setRecordingEnabled] = useState(true);
+  const [recordingMode, setRecordingMode] = useState("always");
+  const [recordingTriggerObjects, setRecordingTriggerObjects] = useState<string[]>([]);
+  const [recordingClipPre, setRecordingClipPre] = useState(5);
+  const [recordingClipPost, setRecordingClipPost] = useState(10);
   const [vlmProviderId, setVlmProviderId] = useState<string | null>(null);
   const [vlmPrompt, setVlmPrompt] = useState("");
   const [vlmInterval, setVlmInterval] = useState(0);
@@ -227,6 +235,10 @@ export default function CameraConfigPage() {
       setSnapshotInterval(cam.snapshot_interval ?? 2);
       setMotionSensitivity(cam.motion_sensitivity ?? 0.5);
       setRecordingEnabled(cam.recording_enabled ?? true);
+      setRecordingMode(cam.recording_mode ?? "always");
+      setRecordingTriggerObjects(cam.recording_trigger_objects ?? []);
+      setRecordingClipPre(cam.recording_clip_pre ?? 5);
+      setRecordingClipPost(cam.recording_clip_post ?? 10);
       setVlmProviderId(cam.vlm_provider_id ?? null);
       setVlmPrompt(cam.vlm_prompt || "");
       setVlmInterval(cam.vlm_interval ?? 0);
@@ -271,6 +283,10 @@ export default function CameraConfigPage() {
         snapshot_interval: snapshotInterval,
         motion_sensitivity: motionSensitivity,
         recording_enabled: recordingEnabled,
+        recording_mode: recordingMode,
+        recording_trigger_objects: recordingTriggerObjects.length > 0 ? recordingTriggerObjects : null,
+        recording_clip_pre: recordingClipPre,
+        recording_clip_post: recordingClipPost,
         vlm_provider_id: vlmProviderId,
         vlm_prompt: vlmPrompt.trim() || null,
         vlm_interval: vlmInterval,
@@ -460,13 +476,149 @@ export default function CameraConfigPage() {
             </FieldRow>
           )}
 
-          <FieldRow label="Recording">
-            <Toggle
-              checked={recordingEnabled}
-              onChange={setRecordingEnabled}
-              label={recordingEnabled ? "Recording to disk" : "Not recording"}
-            />
+          <FieldRow label="Recording Mode" hint="When to save video to disk">
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {([
+                { value: "off", label: "Off" },
+                { value: "always", label: "Always" },
+                { value: "on_motion", label: "On Motion" },
+                { value: "on_object", label: "On Detection" },
+                { value: "clip", label: "Clips" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    setRecordingMode(opt.value);
+                    setRecordingEnabled(opt.value !== "off");
+                  }}
+                  className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
+                    recordingMode === opt.value
+                      ? "border-accent bg-accent/10 text-accent-foreground"
+                      : "border-border hover:border-muted-foreground text-muted-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {recordingMode === "off"
+                ? "No video saved to disk. Live view and AI analysis still work."
+                : recordingMode === "always"
+                  ? "Record continuously in 5-minute segments. Uses the most storage."
+                  : recordingMode === "on_motion"
+                    ? "Start recording when motion is detected. Stop after motion ends."
+                    : recordingMode === "on_object"
+                      ? "Record only when specific objects are detected by the AI pipeline."
+                      : "Save short clips around AI observations with pre and post buffers."}
+            </p>
           </FieldRow>
+
+          {recordingMode === "on_object" && (
+            <FieldRow label="Record When Detected" hint="Which objects trigger recording. Type a label and press Enter.">
+              <div>
+                {recordingTriggerObjects.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {recordingTriggerObjects.map((label) => (
+                      <span
+                        key={label}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-md border border-accent bg-accent/10 text-accent-foreground"
+                      >
+                        {label}
+                        <button
+                          type="button"
+                          onClick={() => setRecordingTriggerObjects(recordingTriggerObjects.filter((l) => l !== label))}
+                          className="text-accent-foreground/60 hover:text-accent-foreground ml-0.5"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <input
+                  type="text"
+                  placeholder="Type object label and press Enter"
+                  className={`${inputClass} text-xs`}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const val = (e.target as HTMLInputElement).value.trim().toLowerCase();
+                      if (val && !recordingTriggerObjects.includes(val)) {
+                        setRecordingTriggerObjects([...recordingTriggerObjects, val]);
+                        (e.target as HTMLInputElement).value = "";
+                      }
+                    }
+                  }}
+                />
+                <details className="mt-2">
+                  <summary className="text-[11px] text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+                    Common labels
+                  </summary>
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {[
+                      "person", "car", "truck", "bus", "motorcycle", "bicycle",
+                      "cat", "dog", "bird", "horse", "sheep", "cow",
+                      "backpack", "suitcase", "umbrella",
+                    ].filter((l) => !recordingTriggerObjects.includes(l)).map((label) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => setRecordingTriggerObjects([...recordingTriggerObjects, label])}
+                        className="px-1.5 py-0.5 text-[10px] rounded border border-border text-muted-foreground hover:border-accent hover:text-accent-foreground transition-colors"
+                      >
+                        + {label}
+                      </button>
+                    ))}
+                  </div>
+                </details>
+                {recordingTriggerObjects.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                    No objects selected. Recording triggers on any detection.
+                  </p>
+                )}
+              </div>
+            </FieldRow>
+          )}
+
+          {recordingMode === "clip" && (
+            <>
+              <FieldRow label="Pre-buffer" hint="Seconds of footage to keep before the trigger event">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={1}
+                    max={30}
+                    step={1}
+                    value={recordingClipPre}
+                    onChange={(e) => setRecordingClipPre(Number(e.target.value))}
+                    className="flex-1 accent-accent"
+                  />
+                  <span className="font-mono text-xs text-muted-foreground w-12 text-right">
+                    {recordingClipPre}s
+                  </span>
+                </div>
+              </FieldRow>
+
+              <FieldRow label="Post-buffer" hint="Seconds to keep recording after the trigger event">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={1}
+                    max={60}
+                    step={1}
+                    value={recordingClipPost}
+                    onChange={(e) => setRecordingClipPost(Number(e.target.value))}
+                    className="flex-1 accent-accent"
+                  />
+                  <span className="font-mono text-xs text-muted-foreground w-12 text-right">
+                    {recordingClipPost}s
+                  </span>
+                </div>
+              </FieldRow>
+            </>
+          )}
 
           <FieldRow label="Motion Sensitivity" hint="Higher = more sensitive">
             <div className="flex items-center gap-3">

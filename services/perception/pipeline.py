@@ -174,6 +174,17 @@ class PerceptionPipeline:
             detection_summary = self._detector.summarize(detections)
             logger.info("Detections for camera %s. %s", camera_id, detection_summary)
 
+        # Signal recording trigger if camera uses on_object or clip mode
+        if cam and cam.recording_mode in ("on_object", "clip") and detections:
+            trigger_labels = cam.recording_trigger_objects or []
+            if trigger_labels:
+                detected_labels = {d["label"] for d in detections}
+                if detected_labels & set(trigger_labels):
+                    await self._set_record_trigger(camera_id)
+            else:
+                # No specific labels configured means any detection triggers recording
+                await self._set_record_trigger(camera_id)
+
         # Step 2. Run face detection and matching (if enabled for this camera)
         faces = []
         if cam is None or cam.detect_faces:
@@ -275,6 +286,16 @@ class PerceptionPipeline:
             await self._rule_engine.evaluate(rule_data)
         except Exception:
             logger.exception("Rule evaluation failed for camera %s", camera_id)
+
+    async def _set_record_trigger(self, camera_id: str):
+        """Set Redis key to trigger recording in stream worker."""
+        try:
+            r = await self._get_redis()
+            key = f"nurby:record_trigger:{camera_id}"
+            await r.setex(key, 30, "1")  # 30 second TTL
+            logger.debug("Set record trigger for camera %s", camera_id)
+        except Exception:
+            logger.exception("Failed to set record trigger")
 
     async def _save_thumbnail(
         self,

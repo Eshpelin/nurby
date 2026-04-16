@@ -10,7 +10,7 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse, urlunparse
 
 import cv2
@@ -27,6 +27,8 @@ MOTION_FRAME_INTERVAL = 5  # Check motion every N frames
 RECONNECT_DELAY = 5  # Seconds between reconnection attempts
 MOTION_THRESHOLD = 0.01  # Minimum motion score to trigger event
 MOTION_COOLDOWN = 3.0  # Seconds between motion keyframe publishes
+MOTION_RECORD_COOLDOWN = 10.0  # Seconds to keep recording after last motion
+OBJECT_RECORD_COOLDOWN = 15.0  # Seconds to keep recording after object trigger
 REDIS_STREAM_KEY = "nurby:motion"  # Redis stream for motion keyframes
 REDIS_STREAM_MAXLEN = 1000  # Max entries in stream
 
@@ -57,6 +59,10 @@ class StreamWorker:
         camera_id: uuid.UUID,
         stream_url: str,
         recording_enabled: bool,
+        recording_mode: str = "always",
+        recording_trigger_objects: list[str] | None = None,
+        recording_clip_pre: int = 5,
+        recording_clip_post: int = 10,
         stream_type: str = "rtsp",
         username: str | None = None,
         password: str | None = None,
@@ -71,11 +77,20 @@ class StreamWorker:
         self.auth_token = auth_token
         self.snapshot_interval = snapshot_interval
         self.recording_enabled = recording_enabled
+        self.recording_mode = recording_mode
+        self.recording_trigger_objects = recording_trigger_objects or []
+        self.recording_clip_pre = recording_clip_pre
+        self.recording_clip_post = recording_clip_post
         self._running = True
         self._prev_gray = None
         self._last_motion_publish = 0.0
         self._last_status: str | None = None
         self._redis = None
+        # Smart recording state
+        self._frame_buffer: list[tuple[np.ndarray, datetime]] = []  # ring buffer for clip pre-buffer
+        self._clip_recording = False  # currently recording a clip
+        self._clip_end_time: datetime | None = None  # when to stop current clip
+        self._motion_end_time: float = 0  # when motion/object recording should stop (monotonic)
 
     def stop(self):
         self._running = False
@@ -108,7 +123,12 @@ class StreamWorker:
             await self._update_camera_status("offline", "failed to open stream")
             return
 
-        status = "recording" if self.recording_enabled else "live"
+        if self.recording_mode == "off":
+            status = "live"
+        elif self.recording_mode == "always":
+            status = "recording"
+        else:
+            status = "live"  # on_motion, on_object, clip start as live
         await self._update_camera_status(status, "stream connected")
 
         # Read stream properties
@@ -130,6 +150,7 @@ class StreamWorker:
                     break
 
                 frame_count += 1
+                motion_score = None
 
                 # Motion detection on interval
                 if frame_count % MOTION_FRAME_INTERVAL == 0:
@@ -146,8 +167,43 @@ class StreamWorker:
                             self._last_motion_publish = now
                             await self._publish_keyframe(frame, motion_score)
 
-                # Recording
-                if self.recording_enabled:
+                # Check for recording triggers from perception pipeline
+                if self.recording_mode in ("on_object", "clip") and frame_count % MOTION_FRAME_INTERVAL == 0:
+                    await self._check_and_update_trigger()
+
+                # Recording (based on recording mode)
+                should_record = self._should_record(motion_score)
+
+                # Maintain pre-buffer for clip mode
+                if self.recording_mode == "clip":
+                    max_buffer = int(self.recording_clip_pre * fps)
+                    self._frame_buffer.append((frame.copy(), datetime.now(timezone.utc)))
+                    if len(self._frame_buffer) > max_buffer:
+                        self._frame_buffer = self._frame_buffer[-max_buffer:]
+
+                # Handle clip mode flush of pre-buffer
+                if self.recording_mode == "clip" and self._clip_recording and writer is None and self._frame_buffer:
+                    segment_start = self._frame_buffer[0][1]
+                    segment_path = self._segment_path(segment_start)
+                    os.makedirs(os.path.dirname(segment_path), exist_ok=True)
+                    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                    writer = cv2.VideoWriter(segment_path, fourcc, fps, (width, height))
+                    for buf_frame, _ in self._frame_buffer:
+                        writer.write(buf_frame)
+                    self._frame_buffer.clear()
+
+                # Handle clip end
+                if self.recording_mode == "clip" and self._clip_recording:
+                    if self._clip_end_time and datetime.now(timezone.utc) >= self._clip_end_time:
+                        self._clip_recording = False
+                        self._clip_end_time = None
+                        if writer is not None:
+                            await loop.run_in_executor(None, writer.release)
+                            await self._save_recording(segment_path, segment_start, datetime.now(timezone.utc))
+                            writer = None
+                        should_record = False
+
+                if should_record:
                     now = datetime.now(timezone.utc)
 
                     # Start new segment if needed
@@ -170,6 +226,11 @@ class StreamWorker:
                         )
 
                     writer.write(frame)
+                elif self.recording_mode in ("on_motion", "on_object") and writer is not None:
+                    # Stop recording when trigger condition ends
+                    await loop.run_in_executor(None, writer.release)
+                    await self._save_recording(segment_path, segment_start, datetime.now(timezone.utc))
+                    writer = None
 
                 # Yield control to event loop
                 await asyncio.sleep(0)
@@ -182,6 +243,7 @@ class StreamWorker:
                         segment_path, segment_start, datetime.now(timezone.utc)
                     )
             cap.release()
+            self._frame_buffer.clear()
             if self._redis:
                 await self._redis.aclose()
                 self._redis = None
@@ -296,6 +358,53 @@ class StreamWorker:
         thresh = cv2.threshold(delta, 25, 255, cv2.THRESH_BINARY)[1]
         score = float(np.sum(thresh) / (thresh.size * 255))
         return score
+
+    def _should_record(self, motion_score: float | None) -> bool:
+        """Determine if the current frame should be recorded based on recording mode."""
+        if self.recording_mode == "off":
+            return False
+
+        if self.recording_mode == "always":
+            return True
+
+        if self.recording_mode == "on_motion":
+            if motion_score is not None and motion_score > MOTION_THRESHOLD:
+                self._motion_end_time = time.monotonic() + MOTION_RECORD_COOLDOWN
+            return time.monotonic() < self._motion_end_time
+
+        if self.recording_mode in ("on_object",):
+            # Trigger state is updated asynchronously via _check_and_update_trigger
+            return time.monotonic() < self._motion_end_time
+
+        if self.recording_mode == "clip":
+            return self._clip_recording
+
+        return False
+
+    async def _check_record_trigger(self) -> bool:
+        """Check if perception pipeline set a recording trigger for this camera."""
+        try:
+            r = await self._get_redis()
+            key = f"nurby:record_trigger:{self.camera_id}"
+            return await r.exists(key) > 0
+        except Exception:
+            return False
+
+    async def _check_and_update_trigger(self):
+        """Check Redis for recording trigger and update internal state accordingly."""
+        if self.recording_mode not in ("on_object", "clip"):
+            return
+
+        triggered = await self._check_record_trigger()
+        if not triggered:
+            return
+
+        if self.recording_mode == "on_object":
+            self._motion_end_time = time.monotonic() + OBJECT_RECORD_COOLDOWN
+
+        elif self.recording_mode == "clip" and not self._clip_recording:
+            self._clip_recording = True
+            self._clip_end_time = datetime.now(timezone.utc) + timedelta(seconds=self.recording_clip_post)
 
     async def _publish_keyframe(self, frame: np.ndarray, motion_score: float):
         """Encode frame as JPEG and publish to Redis stream for perception."""
