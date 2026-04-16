@@ -42,13 +42,19 @@ interface Recording {
   thumbnail_path: string | null;
 }
 
+interface FaceDetection {
+  person_name: string | null;
+  person_id: string | null;
+  match_distance?: number | null;
+}
+
 interface Observation {
   id: string;
   camera_id: string;
   started_at: string;
   ended_at: string | null;
   object_detections: { objects: Detection[]; count: number } | null;
-  person_detections: { faces: { person_name: string | null; person_id: string | null }[]; count: number } | null;
+  person_detections: { faces: FaceDetection[]; count: number } | null;
   vlm_description: string | null;
   vlm_provider: string | null;
   confidence: number | null;
@@ -76,8 +82,8 @@ interface SearchResult {
   camera_id: string;
   camera_name: string;
   started_at: string;
-  object_detections: { objects: { label: string; confidence: number }[]; count: number } | null;
-  person_detections: { faces: { person_name: string | null; person_id: string | null }[]; count: number } | null;
+  object_detections: { objects: { label: string; confidence: number; plate_text?: string | null }[]; count: number } | null;
+  person_detections: { faces: FaceDetection[]; count: number } | null;
   vlm_description: string | null;
   confidence: number | null;
   thumbnail_path: string | null;
@@ -1361,34 +1367,58 @@ function DashboardContent() {
 
                         if (entry.type === "search_result") {
                           const r = entry.data as SearchResult;
+                          const srFaces = r.person_detections?.faces || [];
+                          const srNamed = srFaces.filter((f) => f.person_name);
+                          const srUnknown = srFaces.filter((f) => !f.person_name);
+                          const srObjects = r.object_detections?.objects?.filter((d) => d.label !== "person" && d.label !== "license_plate") || [];
+                          const srPlates = r.object_detections?.objects?.filter((d) => d.label === "license_plate" && d.plate_text) || [];
                           return (
                             <div key={entry.id}>
                               <button onClick={() => setActiveEntry(isActive ? null : entry.id)}
-                                className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${isActive ? "border-accent bg-card" : "border-border hover:border-accent/50 hover:bg-card/50"}`}>
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex items-start gap-2 flex-1 min-w-0">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-accent mt-1.5 flex-shrink-0" />
-                                    <div className="min-w-0">
-                                      <div className="text-xs font-medium">{r.camera_name || cam?.name || "Unknown"}<span className="ml-1.5 text-accent font-normal">Search</span></div>
-                                      {r.vlm_description && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{r.vlm_description}</p>}
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                        {r.object_detections?.objects?.slice(0, 3).map((obj, i) => (
-                                          <span key={i} className="px-1 py-0.5 text-[9px] rounded bg-blue-900/30 text-blue-300 border border-blue-800/40">{obj.label}</span>
-                                        ))}
-                                        {r.person_detections?.faces?.slice(0, 2).map((f, i) => (
-                                          <span key={`f${i}`} className={`px-1 py-0.5 text-[9px] rounded border ${f.person_name ? "bg-green-900/30 text-green-300 border-green-800/40" : "bg-yellow-900/30 text-yellow-300 border-yellow-800/40"}`}>
-                                            {f.person_name || "Unknown"}
-                                          </span>
-                                        ))}
+                                className={`w-full text-left rounded-lg border transition-colors overflow-hidden ${isActive ? "border-accent bg-card" : "border-border hover:border-accent/50 hover:bg-card/50"}`}>
+                                <div className="flex gap-3">
+                                  {r.thumbnail_path && (
+                                    <div className="w-20 h-16 flex-shrink-0 bg-black/50 overflow-hidden">
+                                      <img src={`/api/observations/${r.id}/thumbnail`} alt="" className="w-full h-full object-cover" />
+                                    </div>
+                                  )}
+                                  <div className={`flex-1 min-w-0 py-2 ${r.thumbnail_path ? "pr-3" : "px-3"}`}>
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0 flex-1">
+                                        {srFaces.length > 0 ? (
+                                          <div className="flex flex-wrap items-center gap-1">
+                                            {srNamed.map((f, i) => <span key={`n${i}`} className="text-xs font-medium text-green-400">{f.person_name}</span>)}
+                                            {srNamed.length > 0 && srUnknown.length > 0 && <span className="text-[10px] text-muted-foreground">+</span>}
+                                            {srUnknown.length > 0 && <span className="text-xs text-yellow-400">{srUnknown.length === 1 ? "unknown person" : `${srUnknown.length} unknown`}</span>}
+                                          </div>
+                                        ) : (
+                                          <p className="text-xs font-medium line-clamp-1">
+                                            {r.vlm_description ? r.vlm_description.split(/\.\s/)[0].slice(0, 80) : "Motion detected"}
+                                          </p>
+                                        )}
+                                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                                          {srObjects.slice(0, 4).map((obj, i) => (
+                                            <span key={i} className="px-1 py-0.5 text-[9px] rounded bg-blue-900/30 text-blue-300 border border-blue-800/40">{obj.label}</span>
+                                          ))}
+                                          {srPlates.map((d, i) => (
+                                            <span key={`p${i}`} className="px-1 py-0.5 text-[9px] rounded bg-accent/20 text-accent border border-accent/40">{d.plate_text}</span>
+                                          ))}
+                                          <span className="px-1 py-0.5 text-[9px] rounded bg-muted/50 text-muted-foreground">{r.camera_name || cam?.name || "Unknown"}</span>
+                                        </div>
                                       </div>
+                                      <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0 pt-0.5">{formatTime(r.started_at)}</span>
                                     </div>
                                   </div>
-                                  <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0">{formatTime(r.started_at)}</span>
                                 </div>
                               </button>
-                              {isActive && r.thumbnail_path && (
-                                <div className="mt-1.5 rounded-lg overflow-hidden border border-border">
-                                  <img src={`/api/observations/${r.id}/thumbnail`} alt="" className="w-full" />
+                              {isActive && (
+                                <div className="mt-1.5 rounded-lg border border-border bg-card p-3 space-y-2">
+                                  {r.thumbnail_path && (
+                                    <div className="rounded-lg overflow-hidden border border-border">
+                                      <img src={`/api/observations/${r.id}/thumbnail`} alt="" className="w-full" />
+                                    </div>
+                                  )}
+                                  {r.vlm_description && <p className="text-xs leading-relaxed">{r.vlm_description}</p>}
                                 </div>
                               )}
                             </div>
@@ -1419,13 +1449,16 @@ function DashboardContent() {
                                   <div className="flex items-center gap-2">
                                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                                     <div>
-                                      <div className="text-xs font-medium">{cam?.name || "Unknown"}<span className="ml-1.5 text-muted-foreground font-normal">Recording</span></div>
-                                      <div className="font-mono text-[10px] text-muted-foreground mt-0.5">{formatTime(rec.started_at)}{rec.ended_at && ` \u2192 ${formatTime(rec.ended_at)}`}</div>
+                                      <div className="text-xs font-medium">
+                                        Recording
+                                        <span className="ml-1.5 font-normal text-muted-foreground">{formatDuration(rec.duration_seconds)}</span>
+                                        {rec.file_size_bytes && <span className="ml-1 font-normal text-muted-foreground">{formatSize(rec.file_size_bytes)}</span>}
+                                      </div>
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        <span className="px-1 py-0.5 text-[9px] rounded bg-muted/50 text-muted-foreground">{cam?.name || "Unknown"}</span>
+                                        <span className="font-mono text-[10px] text-muted-foreground">{formatTime(rec.started_at)}{rec.ended_at && ` \u2192 ${formatTime(rec.ended_at)}`}</span>
+                                      </div>
                                     </div>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
-                                    <span>{formatDuration(rec.duration_seconds)}</span>
-                                    <span>{formatSize(rec.file_size_bytes)}</span>
                                   </div>
                                 </div>
                               </button>
@@ -1440,40 +1473,81 @@ function DashboardContent() {
 
                         // Observation
                         const obs = entry.data as Observation;
+                        const hasThumb = !!obs.thumbnail_path;
+                        const hasFaces = obs.person_detections?.faces && obs.person_detections.faces.length > 0;
+                        const namedFaces = obs.person_detections?.faces?.filter((f) => f.person_name) || [];
+                        const unknownFaces = obs.person_detections?.faces?.filter((f) => !f.person_name) || [];
+                        const objects = obs.object_detections?.objects?.filter((d) => d.label !== "person" && d.label !== "license_plate") || [];
+                        const plates = obs.object_detections?.objects?.filter((d) => d.label === "license_plate" && d.plate_text) || [];
+
                         return (
                           <div key={entry.id}>
                             <button onClick={() => setActiveEntry(isActive ? null : entry.id)}
-                              className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${isActive ? "border-accent bg-card" : "border-border hover:border-accent/50 hover:bg-card/50"}`}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                  <div>
-                                    <div className="text-xs font-medium">{cam?.name || "Unknown"}<span className="ml-1.5 text-green-400 font-normal">AI</span></div>
-                                    <div className="text-[11px] text-muted-foreground mt-0.5">{summarizeDetections(obs)}</div>
+                              className={`w-full text-left rounded-lg border transition-colors overflow-hidden ${isActive ? "border-accent bg-card" : "border-border hover:border-accent/50 hover:bg-card/50"}`}>
+                              <div className="flex gap-3">
+                                {/* Inline thumbnail */}
+                                {hasThumb && (
+                                  <div className="w-20 h-16 flex-shrink-0 bg-black/50 overflow-hidden">
+                                    <img src={`/api/observations/${obs.id}/thumbnail`} alt="" className="w-full h-full object-cover" />
+                                  </div>
+                                )}
+                                <div className={`flex-1 min-w-0 py-2 ${hasThumb ? "pr-3" : "px-3"}`}>
+                                  {/* Primary line. detection summary */}
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      {/* Person names as headline */}
+                                      {hasFaces ? (
+                                        <div className="flex flex-wrap items-center gap-1">
+                                          {namedFaces.map((f, i) => (
+                                            <span key={`n${i}`} className="text-xs font-medium text-green-400">{f.person_name}</span>
+                                          ))}
+                                          {namedFaces.length > 0 && unknownFaces.length > 0 && <span className="text-[10px] text-muted-foreground">+</span>}
+                                          {unknownFaces.length > 0 && (
+                                            <span className="text-xs text-yellow-400">{unknownFaces.length === 1 ? "unknown person" : `${unknownFaces.length} unknown`}</span>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs font-medium line-clamp-1">
+                                          {obs.vlm_description
+                                            ? obs.vlm_description.split(/\.\s/)[0].slice(0, 80)
+                                            : summarizeDetections(obs)}
+                                        </p>
+                                      )}
+
+                                      {/* Detection tags */}
+                                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                                        {objects.slice(0, 4).map((d, i) => (
+                                          <span key={i} className="px-1 py-0.5 text-[9px] rounded bg-blue-900/30 text-blue-300 border border-blue-800/40">{d.label}</span>
+                                        ))}
+                                        {objects.length > 4 && <span className="text-[9px] text-muted-foreground">+{objects.length - 4}</span>}
+                                        {plates.map((d, i) => (
+                                          <span key={`p${i}`} className="px-1 py-0.5 text-[9px] rounded bg-accent/20 text-accent border border-accent/40">{d.plate_text}</span>
+                                        ))}
+                                        {/* Camera name as subtle tag */}
+                                        <span className="px-1 py-0.5 text-[9px] rounded bg-muted/50 text-muted-foreground">{cam?.name || "Unknown"}</span>
+                                      </div>
+                                    </div>
+                                    <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0 pt-0.5">{formatTime(obs.started_at)}</span>
                                   </div>
                                 </div>
-                                <span className="text-[10px] text-muted-foreground font-mono">{formatTime(obs.started_at)}</span>
                               </div>
                             </button>
                             {isActive && (
                               <div className="mt-1.5 rounded-lg border border-border bg-card p-3 space-y-2">
-                                {obs.thumbnail_path && (
+                                {/* Full thumbnail if not shown inline, or larger version */}
+                                {hasThumb && (
                                   <div className="rounded-lg overflow-hidden border border-border">
                                     <img src={`/api/observations/${obs.id}/thumbnail`} alt="" className="w-full" />
                                   </div>
                                 )}
                                 {obs.vlm_description && (
-                                  <div>
-                                    <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-0.5">AI Description</div>
-                                    <p className="text-xs">{obs.vlm_description}</p>
-                                    {obs.vlm_provider && <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">via {obs.vlm_provider}</p>}
-                                  </div>
+                                  <p className="text-xs leading-relaxed">{obs.vlm_description}</p>
                                 )}
-                                {obs.person_detections?.faces && obs.person_detections.faces.length > 0 && (
+                                {hasFaces && (
                                   <div className="flex flex-wrap gap-1">
-                                    {obs.person_detections.faces.map((f, i) => (
+                                    {obs.person_detections!.faces!.map((f, i) => (
                                       <span key={`f${i}`} className={`px-1.5 py-0.5 text-[10px] rounded-full border ${f.person_name ? "bg-green-900/30 text-green-300 border-green-800/40" : "bg-yellow-900/30 text-yellow-300 border-yellow-800/40"}`}>
-                                        {f.person_name || "Unknown person"}
+                                        {f.person_name || "Unknown person"}{f.match_distance != null && <span className="ml-1 text-muted-foreground">{((1 - f.match_distance) * 100).toFixed(0)}%</span>}
                                       </span>
                                     ))}
                                   </div>
@@ -1487,6 +1561,10 @@ function DashboardContent() {
                                     ))}
                                   </div>
                                 )}
+                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                  <span>{cam?.name || "Unknown"}</span>
+                                  {obs.vlm_provider && <span className="font-mono">via {obs.vlm_provider}</span>}
+                                </div>
                               </div>
                             )}
                           </div>
