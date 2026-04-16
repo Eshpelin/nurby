@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth";
 
 interface Person {
   id: string;
@@ -77,6 +78,7 @@ function formatDate(iso: string): string {
 }
 
 export default function PeoplePage() {
+  const { authFetch } = useAuth();
   const [persons, setPersons] = useState<Person[]>([]);
   const [summaries, setSummaries] = useState<PersonSummary[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -110,7 +112,7 @@ export default function PeoplePage() {
 
   const fetchPersons = useCallback(async () => {
     try {
-      const res = await fetch("/api/persons");
+      const res = await authFetch("/api/persons");
       if (res.ok) setPersons(await res.json());
     } catch {
       /* silent */
@@ -121,7 +123,7 @@ export default function PeoplePage() {
 
   const fetchSummaries = useCallback(async () => {
     try {
-      const res = await fetch("/api/persons/activity/summary");
+      const res = await authFetch("/api/persons/activity/summary");
       if (res.ok) setSummaries(await res.json());
     } catch {
       /* silent */
@@ -130,7 +132,7 @@ export default function PeoplePage() {
 
   const fetchSuggestions = useCallback(async () => {
     try {
-      const res = await fetch("/api/persons/suggestions?min_sightings=2");
+      const res = await authFetch("/api/persons/suggestions?min_sightings=2");
       if (res.ok) setSuggestions(await res.json());
     } catch {
       /* silent */
@@ -212,7 +214,7 @@ export default function PeoplePage() {
           body: JSON.stringify(body),
         });
       } else {
-        res = await fetch("/api/persons", {
+        res = await authFetch("/api/persons", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),

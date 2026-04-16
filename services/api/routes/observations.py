@@ -6,8 +6,9 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Observation
+from shared.models import Observation, User
 from shared.schemas import ObservationResponse
 
 router = APIRouter()
@@ -18,7 +19,7 @@ async def list_observations(
     camera_id: uuid.UUID | None = Query(default=None),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     query = (
         select(Observation).order_by(Observation.started_at.desc()).limit(limit).offset(offset)
@@ -30,7 +31,7 @@ async def list_observations(
 
 
 @router.get("/{observation_id}", response_model=ObservationResponse)
-async def get_observation(observation_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_observation(observation_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     observation = await db.get(Observation, observation_id)
     if not observation:
         raise HTTPException(status_code=404, detail="Observation not found")
@@ -39,7 +40,7 @@ async def get_observation(observation_id: uuid.UUID, db: AsyncSession = Depends(
 
 @router.get("/{observation_id}/thumbnail")
 async def get_observation_thumbnail(
-    observation_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    observation_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     observation = await db.get(Observation, observation_id)
     if not observation:

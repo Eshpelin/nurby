@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth";
 
 interface Provider {
   id: string;
@@ -99,6 +100,7 @@ function barColor(percent: number | null): string {
 }
 
 export default function SettingsPage() {
+  const { authFetch } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -131,7 +133,7 @@ export default function SettingsPage() {
 
   const fetchProviders = useCallback(async () => {
     try {
-      const res = await fetch("/api/providers");
+      const res = await authFetch("/api/providers");
       if (res.ok) setProviders(await res.json());
     } catch {
       /* silent */
@@ -142,7 +144,7 @@ export default function SettingsPage() {
 
   const fetchInviteKeys = useCallback(async () => {
     try {
-      const res = await fetch("/api/invites");
+      const res = await authFetch("/api/invites");
       if (res.ok) setInviteKeys(await res.json());
     } catch {
       /* silent */
@@ -151,7 +153,7 @@ export default function SettingsPage() {
 
   const fetchCameras = useCallback(async () => {
     try {
-      const res = await fetch("/api/cameras");
+      const res = await authFetch("/api/cameras");
       if (res.ok) {
         const list = await res.json();
         setCameras(list.map((c: Camera) => ({ id: c.id, name: c.name })));
@@ -163,7 +165,7 @@ export default function SettingsPage() {
 
   const fetchStorage = useCallback(async () => {
     try {
-      const res = await fetch("/api/storage");
+      const res = await authFetch("/api/storage");
       if (res.ok) setStorage(await res.json());
     } catch {
       /* silent */
@@ -270,7 +272,7 @@ export default function SettingsPage() {
           body: JSON.stringify(body),
         });
       } else {
-        res = await fetch("/api/providers", {
+        res = await authFetch("/api/providers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -338,7 +340,7 @@ export default function SettingsPage() {
       if (inviteCameraIds.length > 0) {
         body.camera_ids = inviteCameraIds;
       }
-      const res = await fetch("/api/invites", {
+      const res = await authFetch("/api/invites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

@@ -339,7 +339,7 @@ class StorageResponse(BaseModel):
 class UserCreate(BaseModel):
     email: str
     display_name: str | None = None
-    password: str
+    password: str = Field(min_length=8, max_length=72)
     invite_key: str
 
 
@@ -375,7 +375,7 @@ class TokenResponse(BaseModel):
 class AdminSetup(BaseModel):
     email: str
     display_name: str | None = None
-    password: str
+    password: str = Field(min_length=8, max_length=72)
 
 
 # -- Invite key schemas --

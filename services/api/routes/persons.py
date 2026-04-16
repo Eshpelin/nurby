@@ -11,8 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.config import settings
+from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Camera, FaceCluster, FaceClusterSample, FaceEmbedding, Observation, Person
+from shared.models import Camera, FaceCluster, FaceClusterSample, FaceEmbedding, Observation, Person, User
 from shared.schemas import PersonCreate, PersonResponse, PersonUpdate
 
 router = APIRouter()
@@ -21,7 +22,7 @@ PHOTOS_DIR = os.path.join(settings.thumbnails_path, "persons")
 
 
 @router.get("", response_model=list[PersonResponse])
-async def list_persons(db: AsyncSession = Depends(get_db)):
+async def list_persons(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Person).order_by(Person.created_at))
     return result.scalars().all()
 
@@ -37,7 +38,7 @@ class NameClusterBody(PydanticBaseModel):
 @router.get("/suggestions", response_model=list)
 async def list_suggestions(
     min_sightings: int = Query(default=2, ge=1, description="Minimum sightings to show as suggestion"),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """List auto-discovered face clusters pending user naming."""
     result = await db.execute(
@@ -64,7 +65,7 @@ async def list_suggestions(
 @router.get("/suggestions/{cluster_id}/samples")
 async def get_cluster_samples(
     cluster_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Get sample face thumbnails for a cluster."""
     result = await db.execute(
@@ -88,7 +89,7 @@ async def get_cluster_samples(
 @router.get("/suggestions/{cluster_id}/thumbnail")
 async def get_cluster_thumbnail(
     cluster_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Get the representative face thumbnail for a cluster."""
     cluster = await db.get(FaceCluster, cluster_id)
@@ -103,7 +104,7 @@ async def get_cluster_thumbnail(
 async def get_sample_thumbnail(
     cluster_id: uuid.UUID,
     sample_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Get thumbnail for a specific sample."""
     sample = await db.get(FaceClusterSample, sample_id)
@@ -118,7 +119,7 @@ async def get_sample_thumbnail(
 async def name_cluster(
     cluster_id: uuid.UUID,
     body: NameClusterBody,
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Name a face cluster. Creates Person and links all cluster embeddings."""
     cluster = await db.get(FaceCluster, cluster_id)
@@ -169,7 +170,7 @@ async def name_cluster(
 @router.post("/suggestions/{cluster_id}/ignore")
 async def ignore_cluster(
     cluster_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Dismiss a face cluster suggestion."""
     cluster = await db.get(FaceCluster, cluster_id)
@@ -210,7 +211,7 @@ class PersonSummary(PydanticBaseModel):
 
 
 @router.get("/activity/summary", response_model=list[PersonSummary])
-async def person_activity_summary(db: AsyncSession = Depends(get_db)):
+async def person_activity_summary(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Get activity summary for all named persons.
 
     Returns sighting counts (total, 1h, 24h), last seen time and camera.
@@ -300,7 +301,7 @@ async def person_activity_feed(
     person_id: uuid.UUID,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Get activity feed for a specific person.
 
@@ -367,7 +368,7 @@ async def person_activity_feed(
 
 
 @router.post("", response_model=PersonResponse, status_code=201)
-async def create_person(body: PersonCreate, db: AsyncSession = Depends(get_db)):
+async def create_person(body: PersonCreate, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     person = Person(**body.model_dump())
     db.add(person)
     await db.commit()
@@ -376,7 +377,7 @@ async def create_person(body: PersonCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{person_id}", response_model=PersonResponse)
-async def get_person(person_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_person(person_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -385,7 +386,7 @@ async def get_person(person_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 @router.patch("/{person_id}", response_model=PersonResponse)
 async def update_person(
-    person_id: uuid.UUID, body: PersonUpdate, db: AsyncSession = Depends(get_db)
+    person_id: uuid.UUID, body: PersonUpdate, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     person = await db.get(Person, person_id)
     if not person:
@@ -400,7 +401,7 @@ async def update_person(
 
 
 @router.delete("/{person_id}", status_code=204)
-async def delete_person(person_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def delete_person(person_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -412,7 +413,7 @@ async def delete_person(person_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 async def upload_face(
     person_id: uuid.UUID,
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Upload a face photo. Generates embedding and stores for matching."""
     person = await db.get(Person, person_id)
@@ -467,7 +468,7 @@ async def upload_face(
 
 
 @router.get("/{person_id}/photo")
-async def get_person_photo(person_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_person_photo(person_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")

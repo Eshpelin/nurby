@@ -4,15 +4,16 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Camera, Observation, Recording
+from shared.models import Camera, Observation, Recording, User
 from shared.schemas import CameraStorageStats, StorageResponse, SystemStatus
 
 router = APIRouter()
 
 
 @router.get("/status", response_model=SystemStatus)
-async def get_system_status(db: AsyncSession = Depends(get_db)):
+async def get_system_status(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     from services.api.main import START_TIME
 
     total = await db.scalar(select(func.count()).select_from(Camera))
@@ -33,7 +34,7 @@ async def get_system_status(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/storage", response_model=StorageResponse)
-async def get_storage_stats(db: AsyncSession = Depends(get_db)):
+async def get_storage_stats(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     cameras_result = await db.execute(select(Camera))
     cameras = cameras_result.scalars().all()
 

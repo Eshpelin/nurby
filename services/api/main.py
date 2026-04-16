@@ -1,17 +1,29 @@
+import asyncio
 import time
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from services.api.routes import auth, cameras, events, invites, notifications, observations, persons, providers, recordings, rules, search, system, users
+from services.api.routes import auth, cameras, digests, events, invites, notifications, observations, persons, providers, recordings, rules, search, system, users
+from services.digest.scheduler import run_digest_loop
 from services.api.ws import router as ws_router
 
 START_TIME = time.time()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(run_digest_loop())
+    yield
+    task.cancel()
+
 
 app = FastAPI(
     title="Nurby API",
     version="0.1.0",
     description="AI camera monitoring platform",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -35,4 +47,5 @@ app.include_router(events.router, prefix="/api/events", tags=["events"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(providers.router, prefix="/api/providers", tags=["providers"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
+app.include_router(digests.router, prefix="/api/digests", tags=["digests"])
 app.include_router(ws_router, tags=["websocket"])

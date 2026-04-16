@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/lib/auth";
 
 interface Recording {
   id: string;
@@ -45,6 +46,7 @@ function formatDateTime(iso: string): string {
 const PAGE_SIZE = 24;
 
 export default function RecordingsPage() {
+  const { authFetch } = useAuth();
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,7 @@ export default function RecordingsPage() {
 
   const fetchCameras = useCallback(async () => {
     try {
-      const res = await fetch("/api/cameras");
+      const res = await authFetch("/api/cameras");
       if (res.ok) setCameras(await res.json());
     } catch {
       /* silent */

@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Event, Observation
+from shared.models import Event, Observation, User
 from shared.schemas import EventResponse
 
 router = APIRouter()
@@ -17,7 +18,7 @@ async def list_events(
     rule_id: uuid.UUID | None = Query(default=None),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     query = select(Event).order_by(Event.fired_at.desc()).limit(limit).offset(offset)
     if rule_id:
@@ -33,7 +34,7 @@ async def event_history(
     status: str | None = Query(default=None),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """List events with optional filters for rule, camera, and action status."""
     query = select(Event).order_by(Event.fired_at.desc()).limit(limit).offset(offset)
@@ -51,7 +52,7 @@ async def event_history(
 
 
 @router.get("/{event_id}", response_model=EventResponse)
-async def get_event(event_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_event(event_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -59,7 +60,7 @@ async def get_event(event_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{event_id}/acknowledge", response_model=EventResponse)
-async def acknowledge_event(event_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def acknowledge_event(event_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")

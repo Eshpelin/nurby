@@ -7,8 +7,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Provider
+from shared.models import Provider, User
 from shared.schemas import ProviderCreate, ProviderResponse
 
 
@@ -22,13 +23,13 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[ProviderResponse])
-async def list_providers(db: AsyncSession = Depends(get_db)):
+async def list_providers(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Provider).order_by(Provider.created_at))
     return result.scalars().all()
 
 
 @router.post("", response_model=ProviderResponse, status_code=201)
-async def create_provider(body: ProviderCreate, db: AsyncSession = Depends(get_db)):
+async def create_provider(body: ProviderCreate, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     provider = Provider(**body.model_dump())
     db.add(provider)
     await db.commit()
@@ -37,7 +38,7 @@ async def create_provider(body: ProviderCreate, db: AsyncSession = Depends(get_d
 
 
 @router.get("/{provider_id}", response_model=ProviderResponse)
-async def get_provider(provider_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_provider(provider_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     provider = await db.get(Provider, provider_id)
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
@@ -48,7 +49,7 @@ async def get_provider(provider_id: uuid.UUID, db: AsyncSession = Depends(get_db
 async def update_provider(
     provider_id: uuid.UUID,
     body: ProviderCreate,
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     provider = await db.get(Provider, provider_id)
     if not provider:
@@ -64,7 +65,7 @@ async def update_provider(
 
 
 @router.post("/{provider_id}/test", response_model=ProviderTestResult)
-async def test_provider(provider_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def test_provider(provider_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Test connectivity to a VLM provider by hitting its API."""
     provider = await db.get(Provider, provider_id)
     if not provider:
@@ -191,7 +192,7 @@ async def test_provider(provider_id: uuid.UUID, db: AsyncSession = Depends(get_d
 
 
 @router.delete("/{provider_id}", status_code=204)
-async def delete_provider(provider_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def delete_provider(provider_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     provider = await db.get(Provider, provider_id)
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")

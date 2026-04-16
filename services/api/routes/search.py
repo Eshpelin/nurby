@@ -6,8 +6,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Camera, DigestEntry, Provider
+from shared.models import Camera, DigestEntry, Provider, User
 from shared.schemas import DigestEntryResponse
 from services.search.query import search_observations, answer_question
 from services.search.digest import generate_digest
@@ -47,7 +48,7 @@ async def search(
     time_to: datetime | None = Query(default=None),
     limit: int = Query(default=30, le=100),
     offset: int = Query(default=0, ge=0),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Search observations with structured filters and text matching."""
     results = await search_observations(
@@ -67,7 +68,7 @@ async def search(
 @router.post("/ask", response_model=QuestionResponse)
 async def ask_question(
     body: QuestionRequest,
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Answer a natural language question grounded in observation history."""
     result = await answer_question(db, body.question)
@@ -78,7 +79,7 @@ async def ask_question(
 async def get_digest(
     period: str = Query(default="daily", pattern="^(hourly|daily|1h|6h|12h|24h|48h|7d)$"),
     camera_id: uuid.UUID | None = Query(default=None),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Generate an activity digest for the given period (on demand)."""
     custom_prompt = None
@@ -106,7 +107,7 @@ async def list_digests(
     camera_id: uuid.UUID | None = Query(default=None),
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0, ge=0),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """List stored digests with optional camera_id filter, newest first."""
     stmt = select(DigestEntry).order_by(DigestEntry.generated_at.desc())
@@ -122,7 +123,7 @@ async def list_digests(
 @router.get("/digests/latest", response_model=DigestEntryResponse | None)
 async def get_latest_digest(
     camera_id: uuid.UUID | None = Query(default=None),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Get the most recent stored digest, optionally filtered by camera."""
     stmt = select(DigestEntry).order_by(DigestEntry.generated_at.desc()).limit(1)
@@ -138,6 +139,7 @@ async def get_latest_digest(
 @router.post("/backfill", response_model=BackfillResponse)
 async def run_backfill(
     batch_size: int = Query(default=50, ge=1, le=500),
+    _current_user: User = Depends(require_admin),
 ):
     """Backfill description embeddings for observations that have VLM descriptions
     but no embedding yet. Intended for admin use."""

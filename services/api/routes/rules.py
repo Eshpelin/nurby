@@ -4,21 +4,22 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Rule
+from shared.models import Rule, User
 from shared.schemas import RuleCreate, RuleResponse
 
 router = APIRouter()
 
 
 @router.get("", response_model=list[RuleResponse])
-async def list_rules(db: AsyncSession = Depends(get_db)):
+async def list_rules(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Rule).order_by(Rule.created_at))
     return result.scalars().all()
 
 
 @router.post("", response_model=RuleResponse, status_code=201)
-async def create_rule(body: RuleCreate, db: AsyncSession = Depends(get_db)):
+async def create_rule(body: RuleCreate, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     rule = Rule(**body.model_dump())
     db.add(rule)
     await db.commit()
@@ -27,7 +28,7 @@ async def create_rule(body: RuleCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{rule_id}", response_model=RuleResponse)
-async def get_rule(rule_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_rule(rule_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     rule = await db.get(Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -35,7 +36,7 @@ async def get_rule(rule_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{rule_id}", response_model=RuleResponse)
-async def update_rule(rule_id: uuid.UUID, body: RuleCreate, db: AsyncSession = Depends(get_db)):
+async def update_rule(rule_id: uuid.UUID, body: RuleCreate, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     rule = await db.get(Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -50,7 +51,7 @@ async def update_rule(rule_id: uuid.UUID, body: RuleCreate, db: AsyncSession = D
 
 
 @router.delete("/{rule_id}", status_code=204)
-async def delete_rule(rule_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def delete_rule(rule_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     rule = await db.get(Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")

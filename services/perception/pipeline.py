@@ -290,11 +290,11 @@ class PerceptionPipeline:
         )
 
         # Step 6. Generate description embedding asynchronously
-        if observation_id and vlm_description:
+        if observation_id and (vlm_description or detections):
             asyncio.ensure_future(
                 self._generate_and_store_embedding(
                     observation_id=observation_id,
-                    vlm_description=vlm_description,
+                    vlm_description=vlm_description or "",
                     detections=detections,
                     person_detections=person_detections,
                 )

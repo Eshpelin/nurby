@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth";
 
 interface Rule {
   id: string;
@@ -124,6 +125,7 @@ function describeActions(actions: Record<string, unknown> | Record<string, unkno
 }
 
 export default function RulesPage() {
+  const { authFetch } = useAuth();
   const [rules, setRules] = useState<Rule[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,7 +169,7 @@ export default function RulesPage() {
 
   const fetchRules = useCallback(async () => {
     try {
-      const res = await fetch("/api/rules");
+      const res = await authFetch("/api/rules");
       if (res.ok) setRules(await res.json());
     } catch {
       /* silent */
@@ -178,7 +180,7 @@ export default function RulesPage() {
 
   const fetchCameras = useCallback(async () => {
     try {
-      const res = await fetch("/api/cameras");
+      const res = await authFetch("/api/cameras");
       if (res.ok) setCameras(await res.json());
     } catch {
       /* silent */
@@ -451,7 +453,7 @@ export default function RulesPage() {
           body: JSON.stringify(body),
         });
       } else {
-        res = await fetch("/api/rules", {
+        res = await authFetch("/api/rules", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),

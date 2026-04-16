@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 
 const WEBRTC_URL =
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
@@ -441,6 +442,7 @@ interface DiscoveredOnvifDevice {
 type ModalTab = "manual" | "scan";
 
 function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: DiscoveredOnvifDevice, username?: string, password?: string) => void }) {
+  const { authFetch } = useAuth();
   const [devices, setDevices] = useState<DiscoveredOnvifDevice[]>([]);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -454,7 +456,7 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
     setDevices([]);
     setHasScanned(false);
     try {
-      const res = await fetch("/api/cameras/discover?timeout=5");
+      const res = await authFetch("/api/cameras/discover?timeout=5");
       if (!res.ok) throw new Error("Network scan failed");
       const data: DiscoveredOnvifDevice[] = await res.json();
       setDevices(data);
@@ -586,6 +588,7 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
 }
 
 function AddCameraModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { authFetch } = useAuth();
   const [activeTab, setActiveTab] = useState<ModalTab>("manual");
   const [name, setName] = useState("");
   const [streamType, setStreamType] = useState<StreamType>("rtsp");
@@ -615,7 +618,7 @@ function AddCameraModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
     setDevices([]);
     setSelectedDeviceIndex(null);
     try {
-      const res = await fetch("/api/cameras/devices");
+      const res = await authFetch("/api/cameras/devices");
       if (!res.ok) throw new Error("Failed to scan for devices");
       const data: DiscoveredDevice[] = await res.json();
       setDevices(data);
@@ -830,6 +833,7 @@ function AddCameraModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
 // ── Main unified page ──
 
 function DashboardContent() {
+  const { authFetch } = useAuth();
   const searchParams = useSearchParams();
   const initialCamera = searchParams.get("camera");
 
@@ -907,7 +911,7 @@ function DashboardContent() {
   // Fetch cameras
   const fetchCameras = useCallback(async () => {
     try {
-      const res = await fetch("/api/cameras");
+      const res = await authFetch("/api/cameras");
       if (res.ok) setCameras(await res.json());
     } catch { /* silent */ }
     finally { setCamerasLoading(false); }
@@ -926,7 +930,7 @@ function DashboardContent() {
 
   const fetchPersons = useCallback(async () => {
     try {
-      const res = await fetch("/api/persons");
+      const res = await authFetch("/api/persons");
       if (res.ok) setPersons(await res.json());
     } catch { /* silent */ }
   }, []);
@@ -989,7 +993,7 @@ function DashboardContent() {
     if (!searchQuery.trim()) return;
     setAskingAi(true);
     try {
-      const res = await fetch("/api/search/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: searchQuery.trim() }) });
+      const res = await authFetch("/api/search/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: searchQuery.trim() }) });
       if (res.ok) {
         const data = await res.json();
         setAiAnswer(data.answer);
@@ -1411,6 +1415,7 @@ function DashboardContent() {
 }
 
 export default function HomePage() {
+  const { authFetch } = useAuth();
   return (
     <Suspense>
       <DashboardContent />

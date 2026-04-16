@@ -76,7 +76,7 @@ function getInitials(name: string | null | undefined): string {
 
 export function Navbar() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, logout, authFetch} = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
   const [provider, setProvider] = useState<ProviderInfo | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -86,7 +86,7 @@ export function Navbar() {
 
   const fetchProvider = useCallback(async () => {
     try {
-      const res = await fetch("/api/providers");
+      const res = await authFetch("/api/providers");
       if (res.ok) {
         const list: ProviderInfo[] = await res.json();
         const active = list.find((p) => p.active) || null;
@@ -101,7 +101,7 @@ export function Navbar() {
 
   const fetchUnreadCount = useCallback(async () => {
     try {
-      const res = await fetch("/api/notifications/count");
+      const res = await authFetch("/api/notifications/count");
       if (res.ok) {
         const data = await res.json();
         setUnreadCount((prev) => (prev === data.unread ? prev : data.unread));
@@ -113,7 +113,7 @@ export function Navbar() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch("/api/notifications?limit=20");
+      const res = await authFetch("/api/notifications?limit=20");
       if (res.ok) {
         const list: NotificationItem[] = await res.json();
         setNotifications(list);
@@ -140,7 +140,7 @@ export function Navbar() {
 
   const handleMarkAllRead = useCallback(async () => {
     try {
-      await fetch("/api/notifications/read-all", { method: "POST" });
+      await authFetch("/api/notifications/read-all", { method: "POST" });
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch {

@@ -17,8 +17,9 @@ from services.discovery.onvif import (
     ptz_goto_preset,
     ptz_stop,
 )
+from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Camera, CameraStatusLog
+from shared.models import Camera, CameraStatusLog, User
 from shared.schemas import CameraCreate, CameraResponse, CameraStatusLogResponse, CameraUpdate
 
 router = APIRouter()
@@ -89,7 +90,7 @@ async def _probe_with_timeout(index: int, path: str, timeout: float = 2.0) -> Di
 
 
 @router.get("/devices", response_model=list[DiscoveredDevice])
-async def discover_devices():
+async def discover_devices(_current_user: User = Depends(get_current_user)):
     """Scan for available USB and local video capture devices.
 
     Probes indices 0 through 9. On Linux, also scans /dev/video* paths.
@@ -143,7 +144,7 @@ class DiscoveredOnvifDevice(BaseModel):
 @router.get("/discover", response_model=list[DiscoveredOnvifDevice])
 async def discover_onvif(
     timeout: int = Query(default=5, ge=1, le=15),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Scan the local network for ONVIF-compatible IP cameras.
 
@@ -209,7 +210,7 @@ async def discover_onvif(
 async def list_status_logs(
     camera_id: uuid.UUID | None = Query(default=None),
     limit: int = Query(default=100, le=500),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Fetch camera online/offline status change history."""
     query = select(CameraStatusLog).order_by(CameraStatusLog.timestamp.desc()).limit(limit)
@@ -220,13 +221,13 @@ async def list_status_logs(
 
 
 @router.get("", response_model=list[CameraResponse])
-async def list_cameras(db: AsyncSession = Depends(get_db)):
+async def list_cameras(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Camera).order_by(Camera.created_at))
     return result.scalars().all()
 
 
 @router.post("", response_model=CameraResponse, status_code=201)
-async def create_camera(body: CameraCreate, db: AsyncSession = Depends(get_db)):
+async def create_camera(body: CameraCreate, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     camera = Camera(**body.model_dump())
     db.add(camera)
     await db.commit()
@@ -278,7 +279,7 @@ async def _get_camera_for_ptz(
 async def ptz_move(
     camera_id: uuid.UUID,
     body: PTZMoveRequest,
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Start continuous PTZ movement on a camera."""
     camera = await _get_camera_for_ptz(camera_id, db)
@@ -303,7 +304,7 @@ async def ptz_move(
 @router.post("/{camera_id}/ptz/stop")
 async def ptz_stop_movement(
     camera_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Stop all PTZ movement on a camera."""
     camera = await _get_camera_for_ptz(camera_id, db)
@@ -325,7 +326,7 @@ async def ptz_stop_movement(
 @router.get("/{camera_id}/ptz/presets", response_model=list[PTZPresetResponse])
 async def ptz_list_presets(
     camera_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """List saved PTZ presets for a camera."""
     camera = await _get_camera_for_ptz(camera_id, db)
@@ -346,7 +347,7 @@ async def ptz_list_presets(
 async def ptz_goto(
     camera_id: uuid.UUID,
     body: PTZGotoRequest,
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Move the camera to a saved preset position."""
     camera = await _get_camera_for_ptz(camera_id, db)
@@ -367,7 +368,7 @@ async def ptz_goto(
 
 
 @router.get("/{camera_id}", response_model=CameraResponse)
-async def get_camera(camera_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_camera(camera_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -376,7 +377,7 @@ async def get_camera(camera_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 @router.patch("/{camera_id}", response_model=CameraResponse)
 async def update_camera(
-    camera_id: uuid.UUID, body: CameraUpdate, db: AsyncSession = Depends(get_db)
+    camera_id: uuid.UUID, body: CameraUpdate, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     camera = await db.get(Camera, camera_id)
     if not camera:
@@ -392,7 +393,7 @@ async def update_camera(
 
 
 @router.delete("/{camera_id}", status_code=204)
-async def delete_camera(camera_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def delete_camera(camera_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")

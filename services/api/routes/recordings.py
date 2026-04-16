@@ -6,8 +6,9 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Camera, Recording
+from shared.models import Camera, Recording, User
 from shared.schemas import RecordingResponse
 
 router = APIRouter()
@@ -52,7 +53,7 @@ async def list_recordings(
     camera_id: uuid.UUID | None = Query(default=None),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     query = select(Recording).order_by(Recording.started_at.desc()).limit(limit).offset(offset)
     if camera_id:
@@ -62,26 +63,26 @@ async def list_recordings(
 
 
 @router.get("/{recording_id}", response_model=RecordingResponse)
-async def get_recording(recording_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_recording(recording_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await _get_recording_or_404(recording_id, db)
 
 
 @router.get("/{recording_id}/stream")
-async def stream_recording(recording_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def stream_recording(recording_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     recording = await _get_recording_or_404(recording_id, db)
     path = _get_disk_path_or_404(recording)
     return FileResponse(path, media_type="video/mp4", filename=os.path.basename(path))
 
 
 @router.get("/{recording_id}/camera", response_model=dict)
-async def get_recording_camera(recording_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_recording_camera(recording_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     recording = await _get_recording_or_404(recording_id, db)
     camera = await db.get(Camera, recording.camera_id)
     return {"camera_name": camera.name if camera else "Unknown", "camera_id": str(recording.camera_id)}
 
 
 @router.get("/{recording_id}/download")
-async def download_recording(recording_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def download_recording(recording_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     recording = await _get_recording_or_404(recording_id, db)
     path = _get_disk_path_or_404(recording)
     filename = os.path.basename(path)
@@ -94,7 +95,7 @@ async def download_recording(recording_id: uuid.UUID, db: AsyncSession = Depends
 
 
 @router.delete("/{recording_id}", status_code=204)
-async def delete_recording(recording_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def delete_recording(recording_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     recording = await db.get(Recording, recording_id)
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")
