@@ -265,6 +265,13 @@ export default function SettingsPage() {
     checkOllama();
   }, [fetchProviders, fetchInviteKeys, fetchCameras, fetchStorage, fetchSmtp, checkOllama]);
 
+  // Poll for Ollama installation every 5s while not installed
+  useEffect(() => {
+    if (ollamaStatus?.installed) return;
+    const interval = setInterval(checkOllama, 5000);
+    return () => clearInterval(interval);
+  }, [ollamaStatus?.installed, checkOllama]);
+
   const resetForm = () => {
     setFormName("");
     setFormKind("openai");
@@ -570,15 +577,21 @@ export default function SettingsPage() {
                   {!ollamaStatus.installed ? (
                     <div className="rounded-md border border-border bg-card p-3">
                       <p className="text-xs text-muted-foreground mb-2">
-                        Ollama needs to be installed first. It takes about a minute.
+                        Ollama needs to be installed first. It takes about a minute. This page will detect it automatically once installed.
                       </p>
-                      <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-accent text-black font-medium hover:bg-accent/90 transition-colors">
-                        Download Ollama
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M7 17L17 7" /><path d="M7 7h10v10" />
-                        </svg>
-                      </a>
+                      <div className="flex items-center gap-3">
+                        <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-accent text-black font-medium hover:bg-accent/90 transition-colors">
+                          Download Ollama
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M7 17L17 7" /><path d="M7 7h10v10" />
+                          </svg>
+                        </a>
+                        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <span className="w-2 h-2 border border-muted-foreground/40 border-t-muted-foreground rounded-full animate-spin" />
+                          Waiting for installation.
+                        </span>
+                      </div>
                     </div>
                   ) : (
                     <>
