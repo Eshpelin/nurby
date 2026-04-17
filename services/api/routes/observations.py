@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_admin
+from shared.config import settings
 from shared.database import get_db
 from shared.models import Observation, User
 from shared.schemas import ObservationResponse
@@ -48,6 +49,9 @@ async def get_observation_thumbnail(
     if not observation.thumbnail_path:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     path = os.path.abspath(observation.thumbnail_path)
+    allowed_dir = os.path.abspath(settings.thumbnails_path)
+    if not path.startswith(allowed_dir + os.sep) and not path.startswith(allowed_dir):
+        raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Thumbnail file not found on disk")
     return FileResponse(path, media_type="image/jpeg")

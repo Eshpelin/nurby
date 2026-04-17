@@ -106,7 +106,7 @@ async def _is_ollama_running() -> bool:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{OLLAMA_URL}/api/tags")
             return resp.status_code == 200
-    except Exception:
+    except (httpx.ConnectError, httpx.TimeoutException, OSError):
         return False
 
 
@@ -117,7 +117,7 @@ async def _get_installed_models() -> list[str]:
             resp = await client.get(f"{OLLAMA_URL}/api/tags")
             if resp.status_code == 200:
                 return [m["name"] for m in resp.json().get("models", [])]
-    except Exception:
+    except (httpx.ConnectError, httpx.TimeoutException, OSError):
         pass
     return []
 
@@ -180,7 +180,7 @@ async def deploy_model(
                     break
             else:
                 return DeployStatus(stage="error", message="Ollama started but API not responding after 10 seconds")
-        except Exception as exc:
+        except (OSError, FileNotFoundError) as exc:
             return DeployStatus(stage="error", message=f"Failed to start Ollama. {str(exc)}")
 
     # Step 3. Check if model already pulled
@@ -201,7 +201,7 @@ async def deploy_model(
                 return DeployStatus(stage="error", message=f"Failed to pull {model_name}. {error_msg}")
         except asyncio.TimeoutError:
             return DeployStatus(stage="error", message=f"Model pull timed out after 10 minutes. Try running 'ollama pull {model_name}' manually.")
-        except Exception as exc:
+        except (OSError, FileNotFoundError) as exc:
             return DeployStatus(stage="error", message=f"Pull failed. {str(exc)}")
 
     # Step 4. Check if provider already exists

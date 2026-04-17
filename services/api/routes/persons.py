@@ -95,9 +95,13 @@ async def get_cluster_thumbnail(
     cluster = await db.get(FaceCluster, cluster_id)
     if not cluster or not cluster.sample_thumbnail_path:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    if not os.path.exists(cluster.sample_thumbnail_path):
+    path = os.path.abspath(cluster.sample_thumbnail_path)
+    allowed_dir = os.path.abspath(settings.thumbnails_path)
+    if not path.startswith(allowed_dir + os.sep) and not path.startswith(allowed_dir):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Thumbnail file not found")
-    return FileResponse(cluster.sample_thumbnail_path, media_type="image/jpeg")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @router.get("/suggestions/{cluster_id}/samples/{sample_id}/thumbnail")
@@ -110,9 +114,13 @@ async def get_sample_thumbnail(
     sample = await db.get(FaceClusterSample, sample_id)
     if not sample or not sample.thumbnail_path or sample.cluster_id != cluster_id:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    if not os.path.exists(sample.thumbnail_path):
+    path = os.path.abspath(sample.thumbnail_path)
+    allowed_dir = os.path.abspath(settings.thumbnails_path)
+    if not path.startswith(allowed_dir + os.sep) and not path.startswith(allowed_dir):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Thumbnail file not found")
-    return FileResponse(sample.thumbnail_path, media_type="image/jpeg")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @router.post("/suggestions/{cluster_id}/name")
@@ -491,6 +499,12 @@ async def get_person_photo(person_id: uuid.UUID, _current_user: User = Depends(g
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
-    if not person.photo_path or not os.path.exists(person.photo_path):
+    if not person.photo_path:
         raise HTTPException(status_code=404, detail="No photo uploaded")
-    return FileResponse(person.photo_path, media_type="image/jpeg")
+    path = os.path.abspath(person.photo_path)
+    allowed_dir = os.path.abspath(settings.thumbnails_path)
+    if not path.startswith(allowed_dir + os.sep) and not path.startswith(allowed_dir):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Photo file not found")
+    return FileResponse(path, media_type="image/jpeg")

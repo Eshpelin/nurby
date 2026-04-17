@@ -1,4 +1,11 @@
+import logging
+import secrets
+
 from pydantic_settings import BaseSettings
+
+_logger = logging.getLogger("nurby.config")
+
+_DEFAULT_JWT_SECRET = "change-me-in-production-use-a-real-secret"
 
 
 class Settings(BaseSettings):
@@ -7,8 +14,9 @@ class Settings(BaseSettings):
     mediamtx_api_url: str = "http://localhost:9997"
     recordings_path: str = "./recordings"
     thumbnails_path: str = "./thumbnails"
-    jwt_secret: str = "change-me-in-production-use-a-real-secret"
+    jwt_secret: str = _DEFAULT_JWT_SECRET
     jwt_expiry_hours: int = 24
+    cors_origins: str = ""  # comma-separated additional origins
 
     # SMTP settings for email notifications
     smtp_host: str = ""
@@ -22,3 +30,17 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Warn loudly if JWT secret is the insecure default
+if settings.jwt_secret == _DEFAULT_JWT_SECRET:
+    _generated = secrets.token_urlsafe(32)
+    _logger.warning(
+        "JWT_SECRET is the insecure default. Generating a random secret for this session. "
+        "Set JWT_SECRET in your .env file for persistent tokens. Generated secret (add to .env). JWT_SECRET=%s",
+        _generated,
+    )
+    settings.jwt_secret = _generated
+
+# Warn if SMTP is partially configured
+if settings.smtp_host and not settings.smtp_user:
+    _logger.warning("SMTP_HOST is set but SMTP_USER is empty. Email sending may fail.")

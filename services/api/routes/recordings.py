@@ -46,7 +46,11 @@ async def _get_recording_or_404(
 
 
 def _get_disk_path_or_404(recording: Recording) -> str:
+    from shared.config import settings as _settings
     path = _resolve_recording_path(recording)
+    allowed_dir = os.path.abspath(_settings.recordings_path)
+    if not path.startswith(allowed_dir + os.sep) and not path.startswith(allowed_dir):
+        raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Recording file not found on disk")
     return path

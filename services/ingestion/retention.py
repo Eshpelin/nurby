@@ -37,17 +37,17 @@ def _resolve_path(file_path: str | None) -> str | None:
     return os.path.join(os.path.abspath(settings.recordings_path), rel)
 
 
-def _remove_file(path: str | None) -> int:
-    """Remove a file from disk and return its size in bytes (0 on failure)."""
+def _remove_file(path: str | None) -> tuple[int, bool]:
+    """Remove a file from disk. Returns (size_freed, success)."""
     if not path or not os.path.exists(path):
-        return 0
+        return 0, True  # nothing to delete is fine
     try:
         size = os.path.getsize(path)
         os.remove(path)
-        return size
+        return size, True
     except OSError:
         logger.warning("Could not delete file %s", path)
-        return 0
+        return 0, False
 
 
 class RetentionManager:
@@ -105,7 +105,11 @@ class RetentionManager:
 
             for rec in old_recordings:
                 abs_path = _resolve_path(rec.file_path)
-                freed_bytes += _remove_file(abs_path)
+                size, ok = _remove_file(abs_path)
+                if not ok:
+                    logger.warning("Skipping DB delete for recording %s, file still on disk", rec.id)
+                    continue
+                freed_bytes += size
                 _remove_file(_resolve_path(rec.thumbnail_path))
 
                 logger.info(
@@ -165,7 +169,10 @@ class RetentionManager:
 
                 rec_size = rec.file_size_bytes or 0
                 abs_path = _resolve_path(rec.file_path)
-                _remove_file(abs_path)
+                size, ok = _remove_file(abs_path)
+                if not ok:
+                    logger.warning("Skipping DB delete for recording %s, file still on disk", rec.id)
+                    continue
                 _remove_file(_resolve_path(rec.thumbnail_path))
 
                 logger.info(
@@ -174,7 +181,7 @@ class RetentionManager:
                 )
 
                 await db.delete(rec)
-                freed_bytes += rec_size
+                freed_bytes += size or rec_size
                 deleted_count += 1
 
             await db.commit()

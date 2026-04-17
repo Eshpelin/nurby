@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -64,7 +64,7 @@ async def acknowledge_event(event_id: uuid.UUID, _current_user: User = Depends(r
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    event.acknowledged_at = datetime.now()
+    event.acknowledged_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(event)
     return event

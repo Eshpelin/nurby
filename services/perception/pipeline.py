@@ -42,6 +42,7 @@ class PerceptionPipeline:
         self._rule_engine = RuleEngine()
         self._camera_cache: dict[str, Camera] = {}
         self._camera_cache_time: float = 0
+        self._camera_cache_lock = asyncio.Lock()
         self._vlm_last_call: dict[str, float] = {}  # camera_id -> last VLM call timestamp
 
     async def _get_redis(self):
@@ -95,16 +96,19 @@ class PerceptionPipeline:
         import time as _time
         now = _time.monotonic()
         if now - self._camera_cache_time > 30:
-            try:
-                async with async_session() as db:
-                    result = await db.execute(select(Camera))
-                    cameras = result.scalars().all()
-                    self._camera_cache = {str(c.id): c for c in cameras}
-                    for c in cameras:
-                        db.expunge(c)
-                self._camera_cache_time = now
-            except Exception:
-                logger.exception("Failed to load camera configs")
+            async with self._camera_cache_lock:
+                # Double-check after acquiring lock
+                if now - self._camera_cache_time > 30:
+                    try:
+                        async with async_session() as db:
+                            result = await db.execute(select(Camera))
+                            cameras = result.scalars().all()
+                            self._camera_cache = {str(c.id): c for c in cameras}
+                            for c in cameras:
+                                db.expunge(c)
+                        self._camera_cache_time = _time.monotonic()
+                    except Exception:
+                        logger.exception("Failed to load camera configs")
         return self._camera_cache.get(camera_id)
 
     async def _get_provider_for_camera(self, cam: Camera | None) -> Provider | None:
