@@ -1712,92 +1712,61 @@ function DashboardContent() {
                         const plates = obs.object_detections?.objects?.filter((d) => d.label === "license_plate" && d.plate_text) || [];
 
                         return (
-                          <div key={entry.id}>
-                            <button onClick={() => setActiveEntry(isActive ? null : entry.id)}
-                              className={`w-full text-left rounded-lg border transition-colors overflow-hidden ${isActive ? "border-accent bg-card" : "border-border hover:border-accent/50 hover:bg-card/50"}`}>
-                              <div className="flex gap-3">
-                                {/* Inline thumbnail */}
-                                {hasThumb && (
-                                  <div className="w-20 h-16 flex-shrink-0 bg-black/50 overflow-hidden">
-                                    <img src={`/api/observations/${obs.id}/thumbnail`} alt="" className="w-full h-full object-cover" />
-                                  </div>
-                                )}
-                                <div className={`flex-1 min-w-0 py-2 ${hasThumb ? "pr-3" : "px-3"}`}>
-                                  {/* Primary line. detection summary */}
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="min-w-0 flex-1">
-                                      {/* Person names as headline */}
-                                      {hasFaces ? (
-                                        <div className="flex flex-wrap items-center gap-1">
-                                          {namedFaces.map((f, i) => (
-                                            <span key={`n${i}`} className="text-xs font-medium text-green-400">{f.person_name}</span>
-                                          ))}
-                                          {namedFaces.length > 0 && unknownFaces.length > 0 && <span className="text-[10px] text-muted-foreground">+</span>}
-                                          {unknownFaces.length > 0 && (
-                                            <span className="text-xs text-yellow-400">{unknownFaces.length === 1 ? "Unknown person" : `${unknownFaces.length} unknown`}</span>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <p className="text-xs font-medium line-clamp-1">
-                                          {obs.vlm_description
-                                            ? obs.vlm_description.split(/\.\s/)[0].slice(0, 80)
-                                            : summarizeDetections(obs)}
-                                        </p>
-                                      )}
-
-                                      {/* Detection tags */}
-                                      <div className="flex flex-wrap items-center gap-1 mt-1">
-                                        {objects.slice(0, 4).map((d, i) => (
-                                          <span key={i} className="px-1 py-0.5 text-[9px] rounded bg-blue-900/30 text-blue-300 border border-blue-800/40">{d.label}</span>
+                          <div key={entry.id} className="rounded-lg border border-border hover:border-accent/50 hover:bg-card/50 overflow-hidden transition-colors">
+                            <div className="flex gap-3">
+                              {/* Inline thumbnail */}
+                              {hasThumb && (
+                                <div className="w-24 h-20 flex-shrink-0 bg-black/50 overflow-hidden">
+                                  <img src={`/api/observations/${obs.id}/thumbnail`} alt="" className="w-full h-full object-cover" />
+                                </div>
+                              )}
+                              <div className={`flex-1 min-w-0 py-2 ${hasThumb ? "pr-3" : "px-3"}`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    {/* Person names as headline */}
+                                    {hasFaces && (
+                                      <div className="flex flex-wrap items-center gap-1 mb-1">
+                                        {namedFaces.map((f, i) => (
+                                          <span key={`n${i}`} className="text-xs font-medium text-green-400">
+                                            {f.person_name}
+                                            {f.match_distance != null && <span className="ml-1 text-[10px] text-muted-foreground">{((1 - f.match_distance) * 100).toFixed(0)}%</span>}
+                                          </span>
                                         ))}
-                                        {objects.length > 4 && <span className="text-[9px] text-muted-foreground">+{objects.length - 4}</span>}
-                                        {plates.map((d, i) => (
-                                          <span key={`p${i}`} className="px-1 py-0.5 text-[9px] rounded bg-accent/20 text-accent border border-accent/40">{d.plate_text}</span>
-                                        ))}
-                                        {/* Camera name as subtle tag */}
-                                        <span className="px-1 py-0.5 text-[9px] rounded bg-muted/50 text-muted-foreground">{cam?.name || "Unknown"}</span>
+                                        {namedFaces.length > 0 && unknownFaces.length > 0 && <span className="text-[10px] text-muted-foreground">+</span>}
+                                        {unknownFaces.length > 0 && (
+                                          <span className="text-xs text-yellow-400">{unknownFaces.length === 1 ? "Unknown person" : `${unknownFaces.length} unknown`}</span>
+                                        )}
                                       </div>
+                                    )}
+
+                                    {/* VLM description (full, 2-line clamp) */}
+                                    {obs.vlm_description ? (
+                                      <p className="text-xs leading-relaxed line-clamp-2">{obs.vlm_description}</p>
+                                    ) : !hasFaces && (
+                                      <p className="text-xs font-medium line-clamp-1">{summarizeDetections(obs)}</p>
+                                    )}
+
+                                    {/* Detection tags with confidence */}
+                                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                                      {objects.slice(0, 6).map((d, i) => (
+                                        <span key={i} className="px-1 py-0.5 text-[9px] rounded bg-blue-900/30 text-blue-300 border border-blue-800/40">
+                                          {d.label} <span className="text-blue-400/70">{(d.confidence * 100).toFixed(0)}%</span>
+                                        </span>
+                                      ))}
+                                      {objects.length > 6 && <span className="text-[9px] text-muted-foreground">+{objects.length - 6}</span>}
+                                      {plates.map((d, i) => (
+                                        <span key={`p${i}`} className="px-1 py-0.5 text-[9px] rounded bg-accent/20 text-accent border border-accent/40">{d.plate_text}</span>
+                                      ))}
+                                      <span className="px-1 py-0.5 text-[9px] rounded bg-muted/50 text-muted-foreground">{cam?.name || "Unknown"}</span>
+                                      {obs.vlm_provider && (
+                                        <span className="px-1 py-0.5 text-[9px] rounded bg-muted/30 text-muted-foreground font-mono">via {obs.vlm_provider}</span>
+                                      )}
                                     </div>
-                                    <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0 pt-0.5">{formatTime(obs.started_at)}</span>
                                   </div>
+                                  <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0 pt-0.5">{formatTime(obs.started_at)}</span>
                                 </div>
                               </div>
-                            </button>
-                            {isActive && (
-                              <div className="mt-1.5 rounded-lg border border-border bg-card p-3 space-y-2">
-                                {/* Full thumbnail if not shown inline, or larger version */}
-                                {hasThumb && (
-                                  <div className="rounded-lg overflow-hidden border border-border">
-                                    <img src={`/api/observations/${obs.id}/thumbnail`} alt="" className="w-full" />
-                                  </div>
-                                )}
-                                {obs.vlm_description && (
-                                  <p className="text-xs leading-relaxed">{obs.vlm_description}</p>
-                                )}
-                                {hasFaces && (
-                                  <div className="flex flex-wrap gap-1">
-                                    {obs.person_detections!.faces!.map((f, i) => (
-                                      <span key={`f${i}`} className={`px-1.5 py-0.5 text-[10px] rounded-full border ${f.person_name ? "bg-green-900/30 text-green-300 border-green-800/40" : "bg-yellow-900/30 text-yellow-300 border-yellow-800/40"}`}>
-                                        {f.person_name || "Unknown person"}{f.match_distance != null && <span className="ml-1 text-muted-foreground">{((1 - f.match_distance) * 100).toFixed(0)}%</span>}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                {obs.object_detections && obs.object_detections.count > 0 && (
-                                  <div className="flex flex-wrap gap-1">
-                                    {obs.object_detections.objects.map((d, i) => (
-                                      <span key={i} className={`px-1.5 py-0.5 text-[10px] rounded-full border ${d.label === "license_plate" ? "bg-accent/20 text-accent border-accent/40" : "bg-muted border-border"}`}>
-                                        {d.label === "license_plate" && d.plate_text ? `plate ${d.plate_text}` : d.label} <span className="text-muted-foreground">{(d.confidence * 100).toFixed(0)}%</span>
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                  <span>{cam?.name || "Unknown"}</span>
-                                  {obs.vlm_provider && <span className="font-mono">via {obs.vlm_provider}</span>}
-                                </div>
-                              </div>
-                            )}
+                            </div>
                           </div>
                         );
                       })}
