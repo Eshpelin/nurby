@@ -133,22 +133,23 @@ export default function PeoplePage() {
     }
   }, []);
 
-  const fetchSuggestions = useCallback(async () => {
+  const fetchSuggestions = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await authFetch("/api/persons/suggestions?min_sightings=2");
-      if (res.ok) {
-        const data: FaceSuggestion[] = await res.json();
-        setSuggestions(data);
-        // Fetch samples for each cluster
-        const samplesMap: Record<string, ClusterSample[]> = {};
-        await Promise.all(data.map(async (s) => {
-          try {
-            const sRes = await authFetch(`/api/persons/suggestions/${s.id}/samples`);
-            if (sRes.ok) samplesMap[s.id] = await sRes.json();
-          } catch { /* silent */ }
-        }));
-        setClusterSamples(samplesMap);
-      }
+      if (!res.ok || signal?.aborted) return;
+      const data: FaceSuggestion[] = await res.json();
+      if (signal?.aborted) return;
+      setSuggestions(data);
+      // Fetch samples for each cluster
+      const samplesMap: Record<string, ClusterSample[]> = {};
+      await Promise.all(data.map(async (s) => {
+        if (signal?.aborted) return;
+        try {
+          const sRes = await authFetch(`/api/persons/suggestions/${s.id}/samples`);
+          if (sRes.ok && !signal?.aborted) samplesMap[s.id] = await sRes.json();
+        } catch { /* silent */ }
+      }));
+      if (!signal?.aborted) setClusterSamples(samplesMap);
     } catch {
       /* silent */
     }
@@ -169,13 +170,17 @@ export default function PeoplePage() {
   }, [authFetch]);
 
   useEffect(() => {
+    const controller = new AbortController();
     fetchPersons();
     fetchSummaries();
-    fetchSuggestions();
+    fetchSuggestions(controller.signal);
     const interval = setInterval(() => {
       fetchSummaries();
     }, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [fetchPersons, fetchSummaries, fetchSuggestions]);
 
   const toggleExpand = (personId: string) => {

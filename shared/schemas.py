@@ -7,14 +7,14 @@ from pydantic import BaseModel, Field
 # ── Camera schemas ──
 
 class CameraCreate(BaseModel):
-    name: str
-    stream_url: str
-    stream_type: str = "rtsp"  # rtsp, http_mjpeg, http_snapshot, hls, usb, file
-    snapshot_url: str | None = None
-    location_label: str | None = None
-    username: str | None = None
-    password: str | None = None
-    auth_token: str | None = None
+    name: str = Field(min_length=1, max_length=255)
+    stream_url: str = Field(min_length=1, max_length=1024)
+    stream_type: str = Field(default="rtsp", max_length=32)  # rtsp, http_mjpeg, http_snapshot, hls, usb, file
+    snapshot_url: str | None = Field(default=None, max_length=1024)
+    location_label: str | None = Field(default=None, max_length=255)
+    username: str | None = Field(default=None, max_length=255)
+    password: str | None = Field(default=None, max_length=255)
+    auth_token: str | None = Field(default=None, max_length=512)
     snapshot_interval: float = Field(default=2.0, ge=0.5, le=60.0)
     motion_sensitivity: float = Field(default=0.5, ge=0.0, le=1.0)
     recording_enabled: bool = True
@@ -23,37 +23,37 @@ class CameraCreate(BaseModel):
     recording_clip_pre: int = Field(default=5, ge=1, le=30)
     recording_clip_post: int = Field(default=10, ge=1, le=60)
     vlm_provider_id: uuid.UUID | None = None
-    vlm_prompt: str | None = None
+    vlm_prompt: str | None = Field(default=None, max_length=4096)
     vlm_interval: int = Field(default=0, ge=0, le=3600)
     vlm_max_tokens: int = Field(default=200, ge=50, le=2000)
     detect_objects: bool = True
     detect_faces: bool = True
-    scene_mode: str = "indoor"  # indoor, outdoor
+    scene_mode: str = Field(default="indoor", max_length=16)  # indoor, outdoor
     object_confidence: float = Field(default=0.35, ge=0.05, le=1.0)
-    vlm_trigger: str = "always"  # always, on_object
+    vlm_trigger: str = Field(default="always", max_length=16)  # always, on_object
     vlm_trigger_objects: list[str] | None = None
     detection_models: list[dict] | None = None
-    detection_merge: str = "any"
+    detection_merge: str = Field(default="any", max_length=16)
     detection_consensus_min: int = Field(default=2, ge=1, le=10)
     digest_enabled: bool = True
     digest_period: str = "24h"
     digest_provider_id: uuid.UUID | None = None
-    digest_prompt: str | None = None
-    retention_mode: str = "none"  # none, time, size
+    digest_prompt: str | None = Field(default=None, max_length=4096)
+    retention_mode: str = Field(default="none", max_length=16)  # none, time, size
     retention_days: int = Field(default=30, ge=1, le=3650)
     retention_gb: float = Field(default=50.0, ge=1.0, le=10000.0)
     motion_zones: list[dict] | None = None
 
 
 class CameraUpdate(BaseModel):
-    name: str | None = None
-    stream_url: str | None = None
-    stream_type: str | None = None
-    snapshot_url: str | None = None
-    location_label: str | None = None
-    username: str | None = None
-    password: str | None = None
-    auth_token: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    stream_url: str | None = Field(default=None, min_length=1, max_length=1024)
+    stream_type: str | None = Field(default=None, max_length=32)
+    snapshot_url: str | None = Field(default=None, max_length=1024)
+    location_label: str | None = Field(default=None, max_length=255)
+    username: str | None = Field(default=None, max_length=255)
+    password: str | None = Field(default=None, max_length=255)
+    auth_token: str | None = Field(default=None, max_length=512)
     snapshot_interval: float | None = Field(default=None, ge=0.5, le=60.0)
     motion_sensitivity: float | None = Field(default=None, ge=0.0, le=1.0)
     recording_enabled: bool | None = None
@@ -62,23 +62,23 @@ class CameraUpdate(BaseModel):
     recording_clip_pre: int | None = Field(default=None, ge=1, le=30)
     recording_clip_post: int | None = Field(default=None, ge=1, le=60)
     vlm_provider_id: uuid.UUID | None = None
-    vlm_prompt: str | None = None
+    vlm_prompt: str | None = Field(default=None, max_length=4096)
     vlm_interval: int | None = Field(default=None, ge=0, le=3600)
     vlm_max_tokens: int | None = Field(default=None, ge=50, le=2000)
     detect_objects: bool | None = None
     detect_faces: bool | None = None
-    scene_mode: str | None = None
+    scene_mode: str | None = Field(default=None, max_length=16)
     object_confidence: float | None = Field(default=None, ge=0.05, le=1.0)
-    vlm_trigger: str | None = None
+    vlm_trigger: str | None = Field(default=None, max_length=16)
     vlm_trigger_objects: list[str] | None = None
     detection_models: list[dict] | None = None
-    detection_merge: str | None = None
+    detection_merge: str | None = Field(default=None, max_length=16)
     detection_consensus_min: int | None = Field(default=None, ge=1, le=10)
     digest_enabled: bool | None = None
     digest_period: str | None = None
     digest_provider_id: uuid.UUID | None = None
-    digest_prompt: str | None = None
-    retention_mode: str | None = None
+    digest_prompt: str | None = Field(default=None, max_length=4096)
+    retention_mode: str | None = Field(default=None, max_length=16)
     retention_days: int | None = Field(default=None, ge=1, le=3650)
     retention_gb: float | None = Field(default=None, ge=1.0, le=10000.0)
     motion_zones: list[dict] | None = None
@@ -162,14 +162,14 @@ class RecordingResponse(BaseModel):
 # ── Person schemas ──
 
 class PersonCreate(BaseModel):
-    display_name: str
-    relationship: str | None = None
+    display_name: str = Field(min_length=1, max_length=255)
+    relationship: str | None = Field(default=None, max_length=64)
     consent_given: bool = False
 
 
 class PersonUpdate(BaseModel):
-    display_name: str | None = None
-    relationship: str | None = None
+    display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    relationship: str | None = Field(default=None, max_length=64)
     consent_given: bool | None = None
 
 
@@ -220,7 +220,7 @@ class NotificationResponse(BaseModel):
 # ── Rule schemas ──
 
 class RuleCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=255)
     enabled: bool = True
     trigger_pattern: dict
     conditions: dict | None = None
@@ -260,11 +260,11 @@ class EventResponse(BaseModel):
 # ── Provider schemas ──
 
 class ProviderCreate(BaseModel):
-    name: str
-    kind: str
-    base_url: str
-    api_key: str | None = None
-    default_model: str | None = None
+    name: str = Field(min_length=1, max_length=255)
+    kind: str = Field(min_length=1, max_length=32)
+    base_url: str = Field(min_length=1, max_length=1024)
+    api_key: str | None = Field(default=None, max_length=512)
+    default_model: str | None = Field(default=None, max_length=255)
     active: bool = True
 
 
@@ -306,8 +306,8 @@ class FaceClusterSampleResponse(BaseModel):
 
 
 class NameClusterRequest(BaseModel):
-    display_name: str
-    relationship: str | None = None
+    display_name: str = Field(min_length=1, max_length=255)
+    relationship: str | None = Field(default=None, max_length=64)
 
 
 # ── System schemas ──
@@ -340,15 +340,15 @@ class StorageResponse(BaseModel):
 # -- User schemas --
 
 class UserCreate(BaseModel):
-    email: str
-    display_name: str | None = None
+    email: str = Field(min_length=3, max_length=255)
+    display_name: str | None = Field(default=None, max_length=255)
     password: str = Field(min_length=8, max_length=72)
-    invite_key: str
+    invite_key: str = Field(min_length=1, max_length=64)
 
 
 class UserLogin(BaseModel):
-    email: str
-    password: str
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=72)
 
 
 class UserResponse(BaseModel):
@@ -364,8 +364,8 @@ class UserResponse(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    display_name: str | None = None
-    role: str | None = None
+    display_name: str | None = Field(default=None, max_length=255)
+    role: str | None = Field(default=None, max_length=50)
     is_active: bool | None = None
 
 
@@ -376,8 +376,8 @@ class TokenResponse(BaseModel):
 
 
 class AdminSetup(BaseModel):
-    email: str
-    display_name: str | None = None
+    email: str = Field(min_length=3, max_length=255)
+    display_name: str | None = Field(default=None, max_length=255)
     password: str = Field(min_length=8, max_length=72)
 
 
