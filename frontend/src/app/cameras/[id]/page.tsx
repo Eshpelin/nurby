@@ -72,6 +72,144 @@ const STREAM_TYPES: Record<string, string> = {
 const DEFAULT_VLM_PROMPT =
   "You are a security camera AI assistant. Describe what you see in this camera frame in 1-2 concise sentences. Focus on people, vehicles, animals, and any unusual activity. Be specific about locations, actions, and counts. If nothing notable is happening, say so briefly.";
 
+interface DetectionModelOption {
+  value: string;
+  label: string;
+  hint: string;
+  family: "yolov8" | "yolo11" | "yolo-world" | "rtdetr" | "oiv7";
+}
+
+const DETECTION_MODEL_CATALOG: DetectionModelOption[] = [
+  { value: "yolov8n.pt", label: "YOLOv8 Nano",   hint: "Fastest. 80 COCO classes. ~6ms on CPU.",       family: "yolov8" },
+  { value: "yolov8s.pt", label: "YOLOv8 Small",  hint: "Balanced speed and accuracy. 80 COCO classes.", family: "yolov8" },
+  { value: "yolov8m.pt", label: "YOLOv8 Medium", hint: "Better accuracy, slower. 80 COCO classes.",     family: "yolov8" },
+  { value: "yolov8l.pt", label: "YOLOv8 Large",  hint: "High accuracy. GPU recommended.",               family: "yolov8" },
+  { value: "yolov8x.pt", label: "YOLOv8 XLarge", hint: "Top YOLOv8 accuracy. GPU strongly advised.",    family: "yolov8" },
+  { value: "yolo11n.pt", label: "YOLO11 Nano",   hint: "Newer gen. Slightly better than v8n.",          family: "yolo11" },
+  { value: "yolo11s.pt", label: "YOLO11 Small",  hint: "Newer gen. Drop-in upgrade for v8s.",           family: "yolo11" },
+  { value: "yolo11m.pt", label: "YOLO11 Medium", hint: "Newer gen medium. Good accuracy tradeoff.",     family: "yolo11" },
+  { value: "yolo11l.pt", label: "YOLO11 Large",  hint: "Newer gen large. GPU recommended.",             family: "yolo11" },
+  { value: "yolo11x.pt", label: "YOLO11 XLarge", hint: "Top-tier detection, GPU needed for realtime.",  family: "yolo11" },
+  { value: "yolov8n-oiv7.pt", label: "YOLOv8n Open Images", hint: "600+ classes (furniture, tools, food, animals).", family: "oiv7" },
+  { value: "yolov8s-oiv7.pt", label: "YOLOv8s Open Images", hint: "600+ classes, better accuracy.",     family: "oiv7" },
+  { value: "yolov8s-world.pt", label: "YOLO-World Small", hint: "Open-vocabulary. Detect arbitrary class names.", family: "yolo-world" },
+  { value: "yolov8m-world.pt", label: "YOLO-World Medium", hint: "Open-vocabulary, better recall.",    family: "yolo-world" },
+  { value: "yolov8l-worldv2.pt", label: "YOLO-World v2 Large", hint: "Top open-vocab accuracy.",        family: "yolo-world" },
+  { value: "rtdetr-l.pt", label: "RT-DETR Large",  hint: "Transformer-based. Strong accuracy.",          family: "rtdetr" },
+  { value: "rtdetr-x.pt", label: "RT-DETR XLarge", hint: "Top RT-DETR. GPU required for realtime.",      family: "rtdetr" },
+];
+
+function DetectionModelSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const match = DETECTION_MODEL_CATALOG.find((m) => m.value === value);
+  const isCustom = !match && value.length > 0;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  if (customMode || isCustom) {
+    return (
+      <div className="flex-1 flex items-center gap-1">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="custom-model.pt"
+          className="flex-1 px-2 py-1 text-xs font-mono rounded border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+          autoFocus
+        />
+        <button
+          type="button"
+          onClick={() => { setCustomMode(false); onChange("yolov8n.pt"); }}
+          className="text-[10px] text-muted-foreground hover:text-foreground px-1.5"
+          title="Pick from catalog instead"
+        >Catalog</button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} className="flex-1 relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 px-2 py-1 rounded border border-border bg-card text-xs hover:border-muted-foreground/40 focus:outline-none focus:border-accent transition-colors"
+      >
+        <span className="min-w-0 text-left">
+          <span className="block truncate font-medium">{match?.label || "Pick a model"}</span>
+          <span className="block truncate text-[10px] text-muted-foreground font-mono">{match?.value || value}</span>
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-muted-foreground flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>
+          <path d="m6 9 6 6 6-6"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-[28rem] max-w-[80vw] right-0 rounded-md border border-border bg-card shadow-lg max-h-80 overflow-y-auto py-1">
+          {(["yolov8", "yolo11", "yolo-world", "oiv7", "rtdetr"] as const).map((fam) => {
+            const group = DETECTION_MODEL_CATALOG.filter((m) => m.family === fam);
+            if (group.length === 0) return null;
+            const famLabel = {
+              "yolov8": "YOLOv8 (COCO 80 classes)",
+              "yolo11": "YOLO11 (COCO 80 classes, newer)",
+              "yolo-world": "YOLO-World (open vocabulary)",
+              "oiv7": "Open Images V7 (600+ classes)",
+              "rtdetr": "RT-DETR (transformer detector)",
+            }[fam];
+            return (
+              <div key={fam} className="py-1">
+                <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{famLabel}</div>
+                {group.map((m) => {
+                  const selected = m.value === value;
+                  return (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => { onChange(m.value); setOpen(false); }}
+                      className={`w-full text-left px-3 py-1.5 flex items-start justify-between gap-2 hover:bg-muted/60 ${selected ? "bg-muted/40" : ""}`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-xs font-medium truncate">{m.label}</span>
+                        <span className="block text-[10px] text-muted-foreground truncate">{m.hint}</span>
+                        <span className="block text-[10px] text-muted-foreground/70 font-mono">{m.value}</span>
+                      </span>
+                      {selected && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-accent flex-shrink-0 mt-0.5">
+                          <path d="M20 6 9 17l-5-5"/>
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+          <div className="border-t border-border mt-1 pt-1">
+            <button
+              type="button"
+              onClick={() => { setOpen(false); setCustomMode(true); onChange(""); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            >Enter custom model filename.</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatusDot({ status }: { status: string }) {
   const color =
     status === "recording"
@@ -1414,16 +1552,13 @@ export default function CameraConfigPage() {
                           setDetectionModels(updated);
                         }}
                       />
-                      <input
-                        type="text"
+                      <DetectionModelSelect
                         value={m.model}
-                        onChange={(e) => {
+                        onChange={(v) => {
                           const updated = [...detectionModels];
-                          updated[i] = { ...m, model: e.target.value };
+                          updated[i] = { ...m, model: v };
                           setDetectionModels(updated);
                         }}
-                        placeholder="yolov8n.pt"
-                        className="flex-1 px-2 py-1 text-xs font-mono rounded border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                       />
                       <div className="flex items-center gap-1.5 min-w-[140px]">
                         <input
@@ -1459,9 +1594,11 @@ export default function CameraConfigPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      const used = new Set(detectionModels.map((x) => x.model));
+                      const next = DETECTION_MODEL_CATALOG.find((m) => !used.has(m.value))?.value || "yolov8n.pt";
                       setDetectionModels([
                         ...detectionModels,
-                        { model: "yolov8n.pt", confidence: 0.35, enabled: true, label_filter: [] },
+                        { model: next, confidence: 0.35, enabled: true, label_filter: [] },
                       ]);
                     }}
                     className="w-full py-2 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border rounded-md hover:border-accent transition-colors"
