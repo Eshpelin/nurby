@@ -3,11 +3,12 @@
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { useWebcamPublisher, listVideoDevices } from "@/lib/webcam-publisher";
 
 const WEBRTC_URL =
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
 
-type StreamType = "rtsp" | "http_mjpeg" | "http_snapshot" | "hls" | "usb" | "file";
+type StreamType = "rtsp" | "http_mjpeg" | "http_snapshot" | "hls" | "usb" | "file" | "webcam";
 
 interface Camera {
   id: string;
@@ -114,6 +115,7 @@ interface ActivityEvent {
 }
 
 const STREAM_TYPES: { value: StreamType; label: string; hint: string; placeholder: string }[] = [
+  { value: "webcam", label: "This Device", hint: "Use your laptop or phone webcam as a test camera", placeholder: "" },
   { value: "rtsp", label: "RTSP", hint: "IP cameras, NVRs, most security cameras", placeholder: "rtsp://192.168.1.100:554/stream1" },
   { value: "http_mjpeg", label: "HTTP MJPEG", hint: "Motion JPEG over HTTP. Webcams, ESP32-CAM", placeholder: "http://192.168.1.100:8080/video" },
   { value: "http_snapshot", label: "HTTP Snapshot", hint: "Periodic JPEG pull. Low-bandwidth cameras", placeholder: "http://192.168.1.100/snapshot.jpg" },
@@ -773,10 +775,18 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
 
 function AddCameraModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const { authFetch } = useAuth();
+  const { startPublish, attachCameraId, stopPublish } = useWebcamPublisher();
   const [activeTab, setActiveTab] = useState<ModalTab>("manual");
   const [name, setName] = useState("");
   const [streamType, setStreamType] = useState<StreamType>("rtsp");
   const [streamUrl, setStreamUrl] = useState("");
+
+  // Webcam state
+  const [webcamDevices, setWebcamDevices] = useState<MediaDeviceInfo[]>([]);
+  const [webcamDeviceId, setWebcamDeviceId] = useState<string>("");
+  const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
+  const [webcamError, setWebcamError] = useState<string | null>(null);
+  const webcamPreviewRef = useRef<HTMLVideoElement | null>(null);
   const [locationLabel, setLocationLabel] = useState("");
   const [showAuth, setShowAuth] = useState(false);
   const [username, setUsername] = useState("");
@@ -841,8 +851,107 @@ function AddCameraModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
     }
   }
 
+  // Load devices when webcam mode enters
+  useEffect(() => {
+    if (streamType !== "webcam") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listVideoDevices();
+        if (cancelled) return;
+        setWebcamDevices(list);
+        if (list.length && !webcamDeviceId) setWebcamDeviceId(list[0].deviceId);
+      } catch (err) {
+        setWebcamError(err instanceof Error ? err.message : "Unable to list cameras");
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streamType]);
+
+  // Start preview when device selection changes (in webcam mode)
+  useEffect(() => {
+    if (streamType !== "webcam" || !webcamDeviceId) return;
+    let active = true;
+    let newStream: MediaStream | null = null;
+    setWebcamError(null);
+    (async () => {
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: webcamDeviceId } },
+          audio: false,
+        });
+        if (!active) { newStream.getTracks().forEach((t) => t.stop()); return; }
+        setWebcamStream((prev) => {
+          prev?.getTracks().forEach((t) => t.stop());
+          return newStream;
+        });
+      } catch (err) {
+        setWebcamError(err instanceof Error ? err.message : "Camera access denied");
+      }
+    })();
+    return () => {
+      active = false;
+      // Don't stop the current stream here; replacement handled above
+    };
+  }, [streamType, webcamDeviceId]);
+
+  // Attach stream to preview <video>
+  useEffect(() => {
+    if (webcamPreviewRef.current && webcamStream) {
+      webcamPreviewRef.current.srcObject = webcamStream;
+    }
+  }, [webcamStream]);
+
+  // Cleanup preview on close or type switch away
+  useEffect(() => {
+    return () => {
+      webcamStream?.getTracks().forEach((t) => t.stop());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleWebcamSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !webcamStream) return;
+    setSubmitting(true);
+    setError(null);
+    // Generate a URL-safe stream path
+    const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "webcam";
+    const streamPath = `${slug}-${Math.random().toString(36).slice(2, 8)}`;
+    try {
+      await startPublish({ streamPath, cameraName: name.trim(), stream: webcamStream });
+      // Hand ownership of the stream to the publisher so modal cleanup won't stop it
+      setWebcamStream(null);
+      const payload: Record<string, unknown> = {
+        name: name.trim(),
+        stream_url: `rtsp://localhost:8554/${streamPath}`,
+        stream_type: "webcam",
+        location_label: locationLabel.trim() || null,
+      };
+      const res = await authFetch(`/api/cameras`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        stopPublish(streamPath);
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail || `Request failed with status ${res.status}`);
+      }
+      const created = await res.json().catch(() => null);
+      if (created?.id) attachCameraId(streamPath, created.id);
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start webcam");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleManualSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (streamType === "webcam") return handleWebcamSubmit(e);
     if (!name.trim() || !streamUrl.trim()) return;
     const payload: Record<string, unknown> = {
       name: name.trim(),
@@ -925,6 +1034,29 @@ function AddCameraModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
               <p className="text-[11px] text-muted-foreground mt-1.5">{selectedType.hint}</p>
             </div>
 
+            {streamType === "webcam" ? (
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1.5">Camera Device</label>
+                {webcamDevices.length > 0 ? (
+                  <select value={webcamDeviceId} onChange={(e) => setWebcamDeviceId(e.target.value)} className={inputClass}>
+                    {webcamDevices.map((d, i) => (
+                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">Requesting camera access...</p>
+                )}
+                {webcamError && <p className="text-[11px] text-danger mt-1">{webcamError}</p>}
+                <div className="mt-3 rounded-md overflow-hidden border border-border bg-black aspect-video">
+                  {webcamStream ? (
+                    <video ref={webcamPreviewRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[11px] text-muted-foreground">No preview</div>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1.5">Stream stays live while this tab is open. Closing the tab stops it.</p>
+              </div>
+            ) : (
             <div>
               <label className="block text-sm text-muted-foreground mb-1.5">
                 {streamType === "usb" ? "Device Index or Path" : streamType === "file" ? "File Path" : "Stream URL"}
@@ -964,6 +1096,7 @@ function AddCameraModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
                 </div>
               )}
             </div>
+            )}
 
             {supportsSnapshotInterval && (
               <div>
@@ -1003,8 +1136,8 @@ function AddCameraModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
 
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">Cancel</button>
-              <button type="submit" disabled={submitting || !name.trim() || !streamUrl.trim()} className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
-                {submitting ? "Adding..." : "Add Camera"}
+              <button type="submit" disabled={submitting || !name.trim() || (streamType === "webcam" ? !webcamStream : !streamUrl.trim())} className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
+                {submitting ? "Adding..." : streamType === "webcam" ? "Start Streaming" : "Add Camera"}
               </button>
             </div>
           </form>
