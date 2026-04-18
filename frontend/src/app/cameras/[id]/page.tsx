@@ -171,8 +171,19 @@ interface PTZPreset {
 interface MotionZone {
   name: string;
   points: number[][];
-  type: "include" | "exclude";
+  type: "include" | "exclude" | "loiter" | "tripwire";
+  // Seconds before a loiter zone fires. Ignored for other types.
+  loiter_threshold_seconds?: number;
+  // Direction filter for tripwires. "any" | "in" | "out".
+  direction?: string;
 }
+
+const ZONE_COLORS: Record<string, { fill: string; stroke: string; dot: string; ui: string }> = {
+  include:  { fill: "rgba(34,197,94,0.2)",  stroke: "#22c55e", dot: "bg-green-500",  ui: "border-green-500 bg-green-500/10 text-green-400" },
+  exclude:  { fill: "rgba(239,68,68,0.2)",  stroke: "#ef4444", dot: "bg-red-500",    ui: "border-red-500 bg-red-500/10 text-red-400" },
+  loiter:   { fill: "rgba(245,158,11,0.2)", stroke: "#f59e0b", dot: "bg-amber-500",  ui: "border-amber-500 bg-amber-500/10 text-amber-400" },
+  tripwire: { fill: "rgba(99,102,241,0.2)", stroke: "#6366f1", dot: "bg-indigo-500", ui: "border-indigo-500 bg-indigo-500/10 text-indigo-400" },
+};
 
 function HoldButton({
   onHold,
@@ -367,7 +378,7 @@ function ZoneEditorCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drawing, setDrawing] = useState(false);
   const [currentPoints, setCurrentPoints] = useState<number[][]>([]);
-  const [zoneType, setZoneType] = useState<"include" | "exclude">("include");
+  const [zoneType, setZoneType] = useState<"include" | "exclude" | "loiter" | "tripwire">("include");
 
   const canvasWidth = 480;
   const canvasHeight = Math.round((canvasWidth * height) / width) || 270;
@@ -385,17 +396,51 @@ function ZoneEditorCanvas({
     // Draw existing zones
     zones.forEach((zone) => {
       if (zone.points.length < 2) return;
+      const colors = ZONE_COLORS[zone.type] || ZONE_COLORS.include;
       ctx.beginPath();
       ctx.moveTo(zone.points[0][0] * scaleX, zone.points[0][1] * scaleY);
       zone.points.forEach((p, i) => {
         if (i > 0) ctx.lineTo(p[0] * scaleX, p[1] * scaleY);
       });
-      ctx.closePath();
-      ctx.fillStyle = zone.type === "include" ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)";
-      ctx.fill();
-      ctx.strokeStyle = zone.type === "include" ? "#22c55e" : "#ef4444";
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      if (zone.type === "tripwire") {
+        // Leave open. draw as a thick line with an arrow indicator for direction.
+        ctx.strokeStyle = colors.stroke;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        // Arrow for direction ("in" default forward, "out" backward, "any" double-head).
+        const a = [zone.points[0][0] * scaleX, zone.points[0][1] * scaleY];
+        const b = [zone.points[1][0] * scaleX, zone.points[1][1] * scaleY];
+        const mx = (a[0] + b[0]) / 2;
+        const my = (a[1] + b[1]) / 2;
+        const nx = -(b[1] - a[1]);
+        const ny = (b[0] - a[0]);
+        const nlen = Math.sqrt(nx * nx + ny * ny) || 1;
+        const nxu = (nx / nlen) * 10;
+        const nyu = (ny / nlen) * 10;
+        const dir = zone.direction || "any";
+        ctx.fillStyle = colors.stroke;
+        ctx.beginPath();
+        if (dir === "in" || dir === "any") {
+          ctx.moveTo(mx, my);
+          ctx.lineTo(mx + nxu - (b[0] - a[0]) * 0.03, my + nyu - (b[1] - a[1]) * 0.03);
+          ctx.lineTo(mx + nxu + (b[0] - a[0]) * 0.03, my + nyu + (b[1] - a[1]) * 0.03);
+          ctx.closePath();
+        }
+        if (dir === "out" || dir === "any") {
+          ctx.moveTo(mx, my);
+          ctx.lineTo(mx - nxu - (b[0] - a[0]) * 0.03, my - nyu - (b[1] - a[1]) * 0.03);
+          ctx.lineTo(mx - nxu + (b[0] - a[0]) * 0.03, my - nyu + (b[1] - a[1]) * 0.03);
+          ctx.closePath();
+        }
+        ctx.fill();
+      } else {
+        ctx.closePath();
+        ctx.fillStyle = colors.fill;
+        ctx.fill();
+        ctx.strokeStyle = colors.stroke;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
 
       // Label
       const cx = zone.points.reduce((s, p) => s + p[0] * scaleX, 0) / zone.points.length;
@@ -408,12 +453,13 @@ function ZoneEditorCanvas({
 
     // Draw current drawing
     if (currentPoints.length > 0) {
+      const colors = ZONE_COLORS[zoneType] || ZONE_COLORS.include;
       ctx.beginPath();
       ctx.moveTo(currentPoints[0][0], currentPoints[0][1]);
       currentPoints.forEach((p, i) => {
         if (i > 0) ctx.lineTo(p[0], p[1]);
       });
-      ctx.strokeStyle = zoneType === "include" ? "#22c55e" : "#ef4444";
+      ctx.strokeStyle = colors.stroke;
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
       ctx.stroke();
@@ -423,7 +469,7 @@ function ZoneEditorCanvas({
       currentPoints.forEach((p) => {
         ctx.beginPath();
         ctx.arc(p[0], p[1], 4, 0, Math.PI * 2);
-        ctx.fillStyle = zoneType === "include" ? "#22c55e" : "#ef4444";
+        ctx.fillStyle = colors.stroke;
         ctx.fill();
       });
     }
@@ -433,6 +479,23 @@ function ZoneEditorCanvas({
     drawZones();
   }, [drawZones]);
 
+  const commitZone = useCallback((points: number[][]) => {
+    const scaledPoints = points.map((p) => [
+      Math.round(p[0] / scaleX),
+      Math.round(p[1] / scaleY),
+    ]);
+    const newZone: MotionZone = {
+      name: `${zoneType === "tripwire" ? "Tripwire" : zoneType === "loiter" ? "Loiter" : "Zone"} ${zones.length + 1}`,
+      points: scaledPoints,
+      type: zoneType,
+    };
+    if (zoneType === "loiter") newZone.loiter_threshold_seconds = 30;
+    if (zoneType === "tripwire") newZone.direction = "any";
+    onChange([...zones, newZone]);
+    setDrawing(false);
+    setCurrentPoints([]);
+  }, [onChange, scaleX, scaleY, zoneType, zones]);
+
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current!.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -441,67 +504,67 @@ function ZoneEditorCanvas({
     if (!drawing) {
       setDrawing(true);
       setCurrentPoints([[x, y]]);
-    } else {
-      setCurrentPoints((prev) => [...prev, [x, y]]);
+      return;
     }
+    const next = [...currentPoints, [x, y]];
+    // Tripwire auto-finishes after 2 points.
+    if (zoneType === "tripwire" && next.length === 2) {
+      commitZone(next);
+      return;
+    }
+    setCurrentPoints(next);
   };
 
   const finishZone = () => {
-    if (currentPoints.length < 3) return;
-
-    const scaledPoints = currentPoints.map((p) => [
-      Math.round(p[0] / scaleX),
-      Math.round(p[1] / scaleY),
-    ]);
-
-    const newZone: MotionZone = {
-      name: `Zone ${zones.length + 1}`,
-      points: scaledPoints,
-      type: zoneType,
-    };
-
-    onChange([...zones, newZone]);
-    setDrawing(false);
-    setCurrentPoints([]);
+    if (zoneType === "tripwire") {
+      if (currentPoints.length !== 2) return;
+    } else if (currentPoints.length < 3) {
+      return;
+    }
+    commitZone(currentPoints);
   };
 
   const removeZone = (index: number) => {
     onChange(zones.filter((_, i) => i !== index));
   };
 
+  const updateZone = (index: number, patch: Partial<MotionZone>) => {
+    onChange(zones.map((z, i) => (i === index ? { ...z, ...patch } : z)));
+  };
+
+  const zoneTypeButtons: { value: MotionZone["type"]; label: string }[] = [
+    { value: "include", label: "Include" },
+    { value: "exclude", label: "Exclude" },
+    { value: "loiter", label: "Loiter" },
+    { value: "tripwire", label: "Tripwire" },
+  ];
+
+  const needMin = zoneType === "tripwire" ? 2 : 3;
+  const canFinish = currentPoints.length >= needMin;
+
   return (
     <div className="space-y-3">
-      <div className="flex gap-2 mb-2">
-        <button
-          type="button"
-          onClick={() => setZoneType("include")}
-          className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
-            zoneType === "include"
-              ? "border-green-500 bg-green-500/10 text-green-400"
-              : "border-border text-muted-foreground"
-          }`}
-        >
-          Include Zone
-        </button>
-        <button
-          type="button"
-          onClick={() => setZoneType("exclude")}
-          className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
-            zoneType === "exclude"
-              ? "border-red-500 bg-red-500/10 text-red-400"
-              : "border-border text-muted-foreground"
-          }`}
-        >
-          Exclude Zone
-        </button>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {zoneTypeButtons.map((b) => (
+          <button
+            key={b.value}
+            type="button"
+            onClick={() => { setZoneType(b.value); setCurrentPoints([]); setDrawing(false); }}
+            className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
+              zoneType === b.value ? ZONE_COLORS[b.value].ui : "border-border text-muted-foreground"
+            }`}
+          >
+            {b.label}
+          </button>
+        ))}
         {drawing && (
           <button
             type="button"
             onClick={finishZone}
-            disabled={currentPoints.length < 3}
+            disabled={!canFinish}
             className="px-2.5 py-1.5 text-xs rounded-md border border-accent bg-accent/10 text-accent-foreground disabled:opacity-50"
           >
-            Finish Zone ({currentPoints.length} points)
+            Finish ({currentPoints.length}/{needMin === 2 ? "2" : `≥${needMin}`})
           </button>
         )}
       </div>
@@ -515,31 +578,64 @@ function ZoneEditorCanvas({
       />
 
       <p className="text-[11px] text-muted-foreground">
-        Click to add points. Click Finish Zone when done (minimum 3 points).
+        {zoneType === "tripwire"
+          ? "Click two points to drop a tripwire line. Auto-finishes on the second click."
+          : `Click to add points. Finish when done (minimum ${needMin} points).`}
       </p>
 
       {zones.length > 0 && (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {zones.map((zone, i) => (
-            <div key={i} className="flex items-center justify-between text-xs px-2 py-1.5 rounded border border-border">
+            <div key={i} className="text-xs px-2 py-1.5 rounded border border-border space-y-1.5">
               <div className="flex items-center gap-2">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    zone.type === "include" ? "bg-green-500" : "bg-red-500"
-                  }`}
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ZONE_COLORS[zone.type]?.dot || "bg-muted"}`} />
+                <input
+                  type="text"
+                  value={zone.name}
+                  onChange={(e) => updateZone(i, { name: e.target.value })}
+                  className="bg-transparent border-0 outline-none flex-1 min-w-0 font-medium focus:ring-1 focus:ring-accent rounded px-1"
                 />
-                <span>{zone.name}</span>
                 <span className="text-muted-foreground">
-                  ({zone.type}, {zone.points.length} points)
+                  {zone.type} · {zone.points.length} pts
                 </span>
+                <button
+                  type="button"
+                  onClick={() => removeZone(i)}
+                  className="text-muted-foreground hover:text-red-400 transition-colors px-1"
+                  aria-label="Remove zone"
+                >×</button>
               </div>
-              <button
-                type="button"
-                onClick={() => removeZone(i)}
-                className="text-muted-foreground hover:text-red-400 transition-colors"
-              >
-                ×
-              </button>
+              {zone.type === "loiter" && (
+                <div className="flex items-center gap-2 pl-4">
+                  <label className="text-muted-foreground">Fires after</label>
+                  <input
+                    type="number" min="1" max="3600"
+                    value={zone.loiter_threshold_seconds ?? 30}
+                    onChange={(e) => updateZone(i, { loiter_threshold_seconds: parseInt(e.target.value) || 30 })}
+                    className="w-16 px-1.5 py-0.5 rounded bg-background border border-border text-xs"
+                  />
+                  <span className="text-muted-foreground">seconds inside the zone.</span>
+                </div>
+              )}
+              {zone.type === "tripwire" && (
+                <div className="flex items-center gap-2 pl-4">
+                  <label className="text-muted-foreground">Direction</label>
+                  <div className="flex gap-1">
+                    {["any", "in", "out"].map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => updateZone(i, { direction: d })}
+                        className={`px-2 py-0.5 text-[11px] rounded border capitalize ${
+                          (zone.direction || "any") === d
+                            ? "border-indigo-500 bg-indigo-500/10 text-indigo-400"
+                            : "border-border text-muted-foreground hover:bg-muted"
+                        }`}
+                      >{d}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1670,8 +1766,8 @@ export default function CameraConfigPage() {
 
         {/* ── Motion Zones ── */}
         <Section
-          title="Motion Zones"
-          description="Define include and exclude zones for motion detection"
+          title="Zones and Tripwires"
+          description="Include and exclude masks for motion, loiter zones, and tripwires for line-crossing rules."
         >
           <ZoneEditorCanvas
             zones={motionZones}
