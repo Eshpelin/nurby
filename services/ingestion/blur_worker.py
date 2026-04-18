@@ -23,10 +23,39 @@ from typing import Optional
 import numpy as np
 from sqlalchemy import select
 
+from shared.app_settings import get_setting
 from shared.database import async_session
 from shared.models import FaceEmbedding, Person, Recording
 
 logger = logging.getLogger("nurby.ingestion.blur")
+
+# Classes from NudeNet that warrant a forced blur. "COVERED" variants are
+# deliberately excluded. blurring clothing is too aggressive for a home
+# camera feed. FACE_* is also excluded. that's the job of privacy_blur.
+UNSAFE_NUDITY_CLASSES = {
+    "FEMALE_BREAST_EXPOSED",
+    "FEMALE_GENITALIA_EXPOSED",
+    "MALE_GENITALIA_EXPOSED",
+    "BUTTOCKS_EXPOSED",
+    "ANUS_EXPOSED",
+}
+
+# Cache the detector. loading ONNX once is fine, doing it per recording is not.
+_nude_detector = None
+
+
+def _get_nude_detector():
+    global _nude_detector
+    if _nude_detector is None:
+        try:
+            from nudenet import NudeDetector
+            _nude_detector = NudeDetector()
+            logger.info("NudeDetector loaded for nudity blur pass")
+        except Exception:
+            logger.exception("Failed to load NudeDetector. nudity blur disabled")
+            _nude_detector = False  # sentinel so we do not retry per frame
+    return _nude_detector or None
+
 
 # How densely to probe the clip. 1 means every frame, 5 means every 5th.
 FRAME_STRIDE = 3
@@ -88,17 +117,28 @@ def _expand_bbox(x1: int, y1: int, x2: int, y2: int, w: int, h: int) -> tuple[in
     return nx1, ny1, nx2, ny2
 
 
-def _process_sync(src_path: str, dst_path: str, protected_embs: list[np.ndarray]) -> tuple[bool, str | None, bool]:
+def _process_sync(
+    src_path: str,
+    dst_path: str,
+    protected_embs: list[np.ndarray],
+    nudity_blur_enabled: bool,
+    nudity_min_score: float,
+) -> tuple[bool, str | None, bool]:
     """Run the blur pass synchronously. Returns (ok, error, any_matches).
 
-    Kept sync so it can be dispatched to a thread. OpenCV and
-    face_recognition both release the GIL for their heavy work.
+    Kept sync so it can be dispatched to a thread. OpenCV, face_recognition
+    and NudeDetector all release the GIL for their heavy work.
     """
     import cv2
-    try:
-        import face_recognition
-    except ImportError:
-        return False, "face_recognition not installed", False
+    face_lib = None
+    if protected_embs:
+        try:
+            import face_recognition  # noqa. F401
+            face_lib = face_recognition
+        except ImportError:
+            return False, "face_recognition not installed", False
+
+    nude_detector = _get_nude_detector() if nudity_blur_enabled else None
 
     cap = cv2.VideoCapture(src_path)
     if not cap.isOpened():
@@ -122,18 +162,47 @@ def _process_sync(src_path: str, dst_path: str, protected_embs: list[np.ndarray]
             break
         if frame_idx % FRAME_STRIDE == 0:
             rgb = frame[:, :, ::-1]
-            locs = face_recognition.face_locations(rgb, model="hog")
-            if locs:
-                encs = face_recognition.face_encodings(rgb, locs)
-                for (top, right, bottom, left), enc in zip(locs, encs):
-                    # Check against every protected embedding.
-                    for p_emb in protected_embs:
-                        dist = float(np.linalg.norm(np.array(enc) - p_emb))
-                        if dist < MATCH_THRESHOLD:
-                            x1, y1, x2, y2 = _expand_bbox(left, top, right, bottom, w, h)
-                            matches_per_frame.setdefault(frame_idx, []).append((x1, y1, x2, y2))
-                            any_matches = True
-                            break
+
+            # Protected face pass.
+            if face_lib is not None:
+                locs = face_lib.face_locations(rgb, model="hog")
+                if locs:
+                    encs = face_lib.face_encodings(rgb, locs)
+                    for (top, right, bottom, left), enc in zip(locs, encs):
+                        for p_emb in protected_embs:
+                            dist = float(np.linalg.norm(np.array(enc) - p_emb))
+                            if dist < MATCH_THRESHOLD:
+                                x1, y1, x2, y2 = _expand_bbox(left, top, right, bottom, w, h)
+                                matches_per_frame.setdefault(frame_idx, []).append((x1, y1, x2, y2))
+                                any_matches = True
+                                break
+
+            # Nudity pass. NudeNet returns class/score/box[x,y,w,h].
+            if nude_detector is not None:
+                try:
+                    results = nude_detector.detect(frame)
+                    for det in results or []:
+                        cls = det.get("class") or ""
+                        score = float(det.get("score") or 0.0)
+                        box = det.get("box") or []
+                        if cls not in UNSAFE_NUDITY_CLASSES:
+                            continue
+                        if score < nudity_min_score:
+                            continue
+                        if len(box) != 4:
+                            continue
+                        bx, by, bw, bh = box
+                        x1 = max(0, int(bx))
+                        y1 = max(0, int(by))
+                        x2 = min(w, int(bx + bw))
+                        y2 = min(h, int(by + bh))
+                        if x2 <= x1 or y2 <= y1:
+                            continue
+                        matches_per_frame.setdefault(frame_idx, []).append((x1, y1, x2, y2))
+                        any_matches = True
+                except Exception:
+                    logger.exception("NudeDetector frame %d failed", frame_idx)
+
         frame_idx += 1
 
     cap.release()
@@ -183,9 +252,12 @@ def _process_sync(src_path: str, dst_path: str, protected_embs: list[np.ndarray]
 
 async def process_recording(recording_id: uuid.UUID):
     """Entry point. Decide whether to blur and dispatch the work."""
-    # Short-circuit if no one is protected. saves loading the video at all.
     protected = await _load_protected_embeddings()
-    if not protected:
+    nudity_blur_enabled = bool(await get_setting("nudity_blur", True))
+    nudity_min_score = float(await get_setting("nudity_blur_min_score", 0.5))
+
+    # Short-circuit only if nothing at all to check.
+    if not protected and not nudity_blur_enabled:
         await _update_status(recording_id, "skipped")
         return
 
@@ -210,6 +282,7 @@ async def process_recording(recording_id: uuid.UUID):
         loop = asyncio.get_event_loop()
         ok, err, any_matches = await loop.run_in_executor(
             None, _process_sync, src_path, tmp_path, embs,
+            nudity_blur_enabled, nudity_min_score,
         )
 
         if not ok:

@@ -134,3 +134,29 @@ async def test_smtp(body: SmtpTestRequest, _current_user: User = Depends(require
         return {"ok": True, "message": f"Test email sent to {body.to}"}
     except Exception as exc:
         return {"ok": False, "message": str(exc)}
+
+
+# ── Runtime app settings ──
+
+class AppSettingsBody(BaseModel):
+    nudity_blur: bool | None = None
+    nudity_blur_min_score: float | None = None
+
+
+@router.get("/settings")
+async def get_settings(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Current runtime flags merged with defaults."""
+    from shared.app_settings import get_all_settings
+    return await get_all_settings(db)
+
+
+@router.patch("/settings")
+async def patch_settings(body: AppSettingsBody, _current_user: User = Depends(require_admin)):
+    """Update a subset of runtime flags."""
+    from shared.app_settings import set_setting, get_all_settings
+    from shared.database import async_session
+    updates = body.model_dump(exclude_unset=True)
+    for k, v in updates.items():
+        await set_setting(k, v)
+    async with async_session() as db:
+        return await get_all_settings(db)

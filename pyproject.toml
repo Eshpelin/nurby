@@ -23,6 +23,7 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     "python-jose[cryptography]>=3.3.0",
     "aiosmtplib>=3.0.0",
+    "nudenet>=3.4.0",
 ]
 
 [project.optional-dependencies]

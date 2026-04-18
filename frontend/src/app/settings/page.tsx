@@ -141,6 +141,12 @@ export default function SettingsPage() {
   const [showBlurModal, setShowBlurModal] = useState(false);
   const [blurSavingId, setBlurSavingId] = useState<string | null>(null);
 
+  // Nudity blur (global flag)
+  const [nudityBlur, setNudityBlur] = useState<boolean>(true);
+  const [nudityMinScore, setNudityMinScore] = useState<number>(0.5);
+  const [nudityLoading, setNudityLoading] = useState<boolean>(true);
+  const [nuditySaving, setNuditySaving] = useState<boolean>(false);
+
   // Ollama auto-deploy state
   const [ollamaStatus, setOllamaStatus] = useState<{
     installed: boolean; running: boolean; models: string[];
@@ -281,6 +287,37 @@ export default function SettingsPage() {
     finally { setBlurSavingId(null); }
   }, [authFetch]);
 
+  const fetchAppSettings = useCallback(async () => {
+    setNudityLoading(true);
+    try {
+      const res = await authFetch("/api/system/settings");
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.nudity_blur === "boolean") setNudityBlur(data.nudity_blur);
+        if (typeof data.nudity_blur_min_score === "number") setNudityMinScore(data.nudity_blur_min_score);
+      }
+    } catch { /* silent */ }
+    finally { setNudityLoading(false); }
+  }, [authFetch]);
+
+  const saveNudityBlur = useCallback(async (next: boolean, score?: number) => {
+    setNuditySaving(true);
+    try {
+      const body: Record<string, unknown> = { nudity_blur: next };
+      if (typeof score === "number") body.nudity_blur_min_score = score;
+      const res = await authFetch("/api/system/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setNudityBlur(next);
+        if (typeof score === "number") setNudityMinScore(score);
+      }
+    } catch { /* silent */ }
+    finally { setNuditySaving(false); }
+  }, [authFetch]);
+
   useEffect(() => {
     fetchProviders();
     fetchInviteKeys();
@@ -288,8 +325,9 @@ export default function SettingsPage() {
     fetchStorage();
     fetchSmtp();
     fetchBlurPersons();
+    fetchAppSettings();
     checkOllama();
-  }, [fetchProviders, fetchInviteKeys, fetchCameras, fetchStorage, fetchSmtp, fetchBlurPersons, checkOllama]);
+  }, [fetchProviders, fetchInviteKeys, fetchCameras, fetchStorage, fetchSmtp, fetchBlurPersons, fetchAppSettings, checkOllama]);
 
   // Poll for Ollama installation every 5s while not installed
   useEffect(() => {
@@ -844,6 +882,34 @@ export default function SettingsPage() {
             </div>
           );
         })()}
+
+        {/* Nudity Blur card */}
+        <div className="rounded-lg border border-border bg-card px-4 py-3.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${nudityBlur ? "bg-amber-500" : "bg-muted-foreground/40"}`} />
+            <div>
+              <div className="text-sm font-medium flex items-center gap-2">
+                Nudity Blur
+                <span className="text-[10px] font-normal uppercase tracking-wider text-amber-500/80 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.5">safety</span>
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {nudityLoading
+                  ? "Loading."
+                  : nudityBlur
+                    ? `Automatically blur exposed body parts in every recording. Min score ${nudityMinScore.toFixed(2)}.`
+                    : "Disabled. Recordings will not be scanned for nudity."}
+              </div>
+            </div>
+          </div>
+          <button
+            disabled={nudityLoading || nuditySaving}
+            onClick={() => saveNudityBlur(!nudityBlur)}
+            aria-label={nudityBlur ? "Disable nudity blur" : "Enable nudity blur"}
+            className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${nudityBlur ? "bg-amber-500" : "bg-muted"} ${nuditySaving ? "opacity-50" : ""}`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${nudityBlur ? "left-[1.375rem]" : "left-0.5"}`} />
+          </button>
+        </div>
       </div>
 
       {/* ─── Modals ─── */}
