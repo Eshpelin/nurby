@@ -3,30 +3,52 @@ name = "nurby"
 version = "0.1.0"
 description = "AI camera monitoring platform"
 requires-python = ">=3.11"
+
+# Truly common deps. Anything imported by `shared.{models,config,database,schemas}`
+# (which both services touch) plus runtime libs every service needs (DB driver,
+# Redis, NumPy, OpenCV).
 dependencies = [
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.30.0",
     "sqlalchemy[asyncio]>=2.0.0",
     "asyncpg>=0.30.0",
-    "alembic>=1.14.0",
-    "redis>=5.0.0",
+    "pgvector>=0.3.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
-    "python-multipart>=0.0.9",
-    "httpx>=0.27.0",
-    "opencv-python-headless>=4.9.0",
-    "av>=12.0.0",
+    "redis>=5.0.0",
     "numpy>=1.26.0",
-    "pgvector>=0.3.0",
-    "ultralytics>=8.2.0",
-    "face_recognition>=1.3.0",
-    "passlib[bcrypt]>=1.7.4",
-    "python-jose[cryptography]>=3.3.0",
-    "aiosmtplib>=3.0.0",
-    "nudenet>=3.4.0",
+    "opencv-python-headless>=4.9.0",
 ]
 
 [project.optional-dependencies]
+# `uv sync --extra api`
+# Web framework, auth (jose+bcrypt), email (aiosmtplib), HTTP client for VLM
+# providers, multipart for file uploads, alembic for migrations, and
+# face_recognition for the /persons face-photo embedding endpoint.
+api = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "alembic>=1.14.0",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-jose[cryptography]>=3.3.0",
+    "aiosmtplib>=3.0.0",
+    "face_recognition>=1.3.0",
+]
+
+# `uv sync --extra ingestion`
+# Ingestion only uses shared.{config,database,models} plus opencv/numpy/redis
+# which are already in the base set, so this group is intentionally empty.
+ingestion = []
+
+# `uv sync --extra perception`
+# Heavy ML stack used by services/perception/* (YOLO, plate OCR, PyAV).
+# Not installed in either deployed container today; keep available for future.
+perception = [
+    "ultralytics>=8.2.0",
+    "easyocr>=1.7.0",
+    "av>=12.0.0",
+]
+
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
