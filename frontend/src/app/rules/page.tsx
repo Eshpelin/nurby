@@ -168,6 +168,9 @@ const DEFAULT_PAYLOAD_TEMPLATE = `{
   "detections": "{{object_detections}}"
 }`;
 
+// Populated by the component so describeTrigger can resolve person_id to name.
+const personLookup = new Map<string, string>();
+
 function describeTrigger(pattern: Record<string, unknown>): string {
   const t = pattern.type as string;
   if (t === "object_detected") {
@@ -177,7 +180,9 @@ function describeTrigger(pattern: Record<string, unknown>): string {
   if (t === "face_detected") return "When any face detected";
   if (t === "face_recognized") {
     const pid = pattern.person_id as string | undefined;
-    return pid ? `When person ${pid.slice(0, 8)} recognized` : "When any known face recognized";
+    if (!pid) return "When any known face recognized";
+    const person = personLookup.get(pid);
+    return person ? `When ${person} recognized` : `When person ${pid.slice(0, 8)} recognized`;
   }
   if (t === "face_unknown") return "When unknown face detected";
   if (t === "motion") {
@@ -301,6 +306,7 @@ export default function RulesPage() {
   const { authFetch } = useAuth();
   const [rules, setRules] = useState<Rule[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [persons, setPersons] = useState<{ id: string; display_name: string; relationship: string | null; photo_path: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editRule, setEditRule] = useState<Rule | null>(null);
@@ -367,6 +373,20 @@ export default function RulesPage() {
     }
   }, []);
 
+  const fetchPersons = useCallback(async () => {
+    try {
+      const res = await authFetch("/api/persons");
+      if (res.ok) {
+        const list = await res.json();
+        setPersons(list);
+        personLookup.clear();
+        for (const p of list) personLookup.set(p.id, p.display_name);
+      }
+    } catch {
+      /* silent */
+    }
+  }, []);
+
   const fetchRuleEvents = useCallback(async (ruleId: string) => {
     setEventsLoading(true);
     try {
@@ -382,7 +402,8 @@ export default function RulesPage() {
   useEffect(() => {
     fetchRules();
     fetchCameras();
-  }, [fetchRules, fetchCameras]);
+    fetchPersons();
+  }, [fetchRules, fetchCameras, fetchPersons]);
 
   // Fetch events when a rule is selected, auto-refresh every 30s
   useEffect(() => {
@@ -1094,13 +1115,59 @@ export default function RulesPage() {
                 )}
 
                 {formTriggerType === "face_recognized" && (
-                  <input
-                    type="text"
-                    value={formTriggerPersonId}
-                    onChange={(e) => setFormTriggerPersonId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
-                    placeholder="Person ID (leave blank for any recognized face)"
-                  />
+                  <div className="space-y-2">
+                    <label className="text-xs text-muted-foreground block">Person</label>
+                    {persons.length === 0 ? (
+                      <p className="text-xs text-muted-foreground px-2 py-3 rounded-md border border-dashed border-border">
+                        No people yet. Add someone on the People page first.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+                        <button
+                          type="button"
+                          onClick={() => setFormTriggerPersonId("")}
+                          className={`flex items-center gap-2 rounded-md border p-2 text-left transition-colors ${
+                            formTriggerPersonId === ""
+                              ? "border-sky-500 bg-sky-500/10 ring-2 ring-sky-500/40"
+                              : "border-border bg-background hover:bg-muted/60"
+                          }`}
+                        >
+                          <span className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground flex-shrink-0">*</span>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium truncate">Anyone known</div>
+                            <div className="text-[10px] text-muted-foreground truncate">Any recognized face</div>
+                          </div>
+                        </button>
+                        {persons.map((p) => {
+                          const selected = formTriggerPersonId === p.id;
+                          const initial = (p.display_name || "?").slice(0, 1).toUpperCase();
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => setFormTriggerPersonId(p.id)}
+                              className={`flex items-center gap-2 rounded-md border p-2 text-left transition-colors ${
+                                selected
+                                  ? "border-sky-500 bg-sky-500/10 ring-2 ring-sky-500/40"
+                                  : "border-border bg-background hover:bg-muted/60"
+                              }`}
+                            >
+                              {p.photo_path ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={`/api/files/${p.photo_path}`} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                              ) : (
+                                <span className="w-8 h-8 rounded-full bg-sky-500/20 text-sky-300 flex items-center justify-center text-xs font-medium flex-shrink-0">{initial}</span>
+                              )}
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium truncate">{p.display_name}</div>
+                                {p.relationship && <div className="text-[10px] text-muted-foreground truncate">{p.relationship}</div>}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {formTriggerType === "motion" && (
