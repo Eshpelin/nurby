@@ -154,6 +154,8 @@ class RecordingResponse(BaseModel):
     duration_seconds: float | None
     file_size_bytes: int | None
     thumbnail_path: str | None
+    blur_status: str = "pending"
+    blur_error: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -164,12 +166,14 @@ class PersonCreate(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
     relationship: str | None = Field(default=None, max_length=64)
     consent_given: bool = False
+    privacy_blur: bool = False
 
 
 class PersonUpdate(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=255)
     relationship: str | None = Field(default=None, max_length=64)
     consent_given: bool | None = None
+    privacy_blur: bool | None = None
 
 
 class PersonResponse(BaseModel):
@@ -177,6 +181,7 @@ class PersonResponse(BaseModel):
     display_name: str
     relationship: str | None
     consent_given: bool
+    privacy_blur: bool
     photo_path: str | None
     created_at: datetime
 

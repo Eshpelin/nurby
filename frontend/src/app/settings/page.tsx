@@ -135,6 +135,12 @@ export default function SettingsPage() {
   const [smtpTesting, setSmtpTesting] = useState(false);
   const [smtpTestResult, setSmtpTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
+  // Privacy blur state (per-person toggle)
+  const [blurPersons, setBlurPersons] = useState<{ id: string; display_name: string; relationship: string | null; privacy_blur: boolean; photo_path: string | null }[]>([]);
+  const [blurLoading, setBlurLoading] = useState(true);
+  const [showBlurModal, setShowBlurModal] = useState(false);
+  const [blurSavingId, setBlurSavingId] = useState<string | null>(null);
+
   // Ollama auto-deploy state
   const [ollamaStatus, setOllamaStatus] = useState<{
     installed: boolean; running: boolean; models: string[];
@@ -251,14 +257,39 @@ export default function SettingsPage() {
     }
   };
 
+  const fetchBlurPersons = useCallback(async () => {
+    setBlurLoading(true);
+    try {
+      const res = await authFetch("/api/persons");
+      if (res.ok) setBlurPersons(await res.json());
+    } catch { /* silent */ }
+    finally { setBlurLoading(false); }
+  }, [authFetch]);
+
+  const togglePersonBlur = useCallback(async (personId: string, next: boolean) => {
+    setBlurSavingId(personId);
+    try {
+      const res = await authFetch(`/api/persons/${personId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ privacy_blur: next }),
+      });
+      if (res.ok) {
+        setBlurPersons((prev) => prev.map((p) => p.id === personId ? { ...p, privacy_blur: next } : p));
+      }
+    } catch { /* silent */ }
+    finally { setBlurSavingId(null); }
+  }, [authFetch]);
+
   useEffect(() => {
     fetchProviders();
     fetchInviteKeys();
     fetchCameras();
     fetchStorage();
     fetchSmtp();
+    fetchBlurPersons();
     checkOllama();
-  }, [fetchProviders, fetchInviteKeys, fetchCameras, fetchStorage, fetchSmtp, checkOllama]);
+  }, [fetchProviders, fetchInviteKeys, fetchCameras, fetchStorage, fetchSmtp, fetchBlurPersons, checkOllama]);
 
   // Poll for Ollama installation every 5s while not installed
   useEffect(() => {
@@ -786,9 +817,100 @@ export default function SettingsPage() {
             Manage
           </button>
         </div>
+
+        {/* Privacy Blur card */}
+        {(() => {
+          const enabledCount = blurPersons.filter((p) => p.privacy_blur).length;
+          return (
+            <div className="rounded-lg border border-border bg-card px-4 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${enabledCount > 0 ? "bg-amber-500" : "bg-muted-foreground/40"}`} />
+                <div>
+                  <div className="text-sm font-medium flex items-center gap-2">
+                    Privacy Blur
+                    <span className="text-[10px] font-normal uppercase tracking-wider text-amber-500/80 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.5">safety</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {enabledCount > 0
+                      ? `Blurring ${enabledCount} protected ${enabledCount === 1 ? "person" : "people"} on all recordings.`
+                      : "Hide specific faces and bodies from saved footage."}
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setShowBlurModal(true)}
+                className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors">
+                Manage
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       {/* ─── Modals ─── */}
+
+      {/* Privacy Blur Modal */}
+      {showBlurModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowBlurModal(false)} />
+          <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between mb-1">
+              <h2 className="text-lg font-semibold">Privacy Blur</h2>
+              <button onClick={() => setShowBlurModal(false)} className="text-muted-foreground hover:text-foreground text-lg leading-none">×</button>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+              Toggle a person on to blur their face and upper body in every recording that includes them. Runs after each clip finishes. Detection uses the same face model as alerts, so the person needs at least one reference photo on file.
+            </p>
+
+            {blurLoading ? (
+              <div className="text-xs text-muted-foreground py-6 text-center">Loading people.</div>
+            ) : blurPersons.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border p-6 text-center">
+                <div className="text-sm font-medium mb-1">No people yet</div>
+                <div className="text-xs text-muted-foreground">Add someone on the People page and upload a reference photo, then come back here to protect them.</div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {blurPersons.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2">
+                    <div className="w-9 h-9 rounded-full overflow-hidden bg-muted flex-shrink-0">
+                      {p.photo_path ? (
+                        <img src={`/api/persons/${p.id}/photo`} alt={p.display_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs font-semibold text-muted-foreground">
+                          {p.display_name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{p.display_name}</div>
+                      <div className="text-[11px] text-muted-foreground truncate">{p.relationship || "no relationship set"}</div>
+                    </div>
+                    <button
+                      onClick={() => togglePersonBlur(p.id, !p.privacy_blur)}
+                      disabled={blurSavingId === p.id}
+                      className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${p.privacy_blur ? "bg-amber-500" : "bg-muted"} ${blurSavingId === p.id ? "opacity-50" : ""}`}
+                      title={p.privacy_blur ? "Blur enabled" : "Blur disabled"}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${p.privacy_blur ? "left-[1.375rem]" : "left-0.5"}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-5 pt-4 border-t border-border text-[11px] text-muted-foreground leading-relaxed">
+              <strong className="text-foreground">How it works.</strong> After a recording finishes, Nurby scans sampled frames for protected faces. Any match triggers a heavy Gaussian blur over the head and upper torso for the full window around that frame. The original unblurred clip is replaced, not kept alongside.
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button onClick={() => setShowBlurModal(false)}
+                className="px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90">
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit Provider Modal */}
       {showProviderModal && (

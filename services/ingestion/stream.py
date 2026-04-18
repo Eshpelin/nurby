@@ -500,6 +500,15 @@ class StreamWorker:
                 )
                 db.add(recording)
                 await db.commit()
+                await db.refresh(recording)
                 logger.info("Saved recording segment %s (%.1fs)", file_path, duration)
+
+                # Kick off privacy-blur pass. Checks whether any protected
+                # person is configured before opening the file.
+                try:
+                    from services.ingestion.blur_worker import schedule as schedule_blur
+                    schedule_blur(recording.id)
+                except Exception:
+                    logger.exception("Failed to schedule blur for %s", recording.id)
         except Exception:
             logger.exception("Failed to save recording metadata")
