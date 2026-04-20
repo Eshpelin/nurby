@@ -132,9 +132,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (token) {
         headers.set("Authorization", `Bearer ${token}`);
       }
-      return fetch(url, { ...init, headers });
+      const res = await fetch(url, { ...init, headers });
+      // Stale or invalid token. clear auth and bounce to login.
+      if (res.status === 401 && token) {
+        setToken(null);
+        setUser(null);
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        if (!PUBLIC_PATHS.includes(pathname)) {
+          router.replace("/login");
+        }
+      }
+      return res;
     },
-    [token]
+    [token, pathname, router]
   );
 
   const value = useMemo(
