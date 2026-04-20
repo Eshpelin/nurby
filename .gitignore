@@ -46,3 +46,8 @@ clips/
 # ML models
 *.pt
 *.onnx
+
+# Dev runtime
+dev/logs/
+dev/sample-cctv.mp4
+
