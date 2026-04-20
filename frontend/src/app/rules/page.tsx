@@ -46,6 +46,7 @@ interface Camera {
   stream_url?: string;
   width?: number;
   height?: number;
+  detection_models?: { model: string; enabled?: boolean }[] | null;
 }
 
 interface TriggerType {
@@ -541,6 +542,57 @@ function GeometryEditor({
   );
 }
 
+function ModelClassPicker({
+  value,
+  onChange,
+  activeModels,
+  classes,
+  loading,
+  anyLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  activeModels: string[];
+  classes: string[];
+  loading: boolean;
+  anyLabel: string;
+}) {
+  const needsModel = activeModels.length === 0;
+  const options = [
+    { value: "", label: anyLabel },
+    ...classes.map((l) => ({ value: l, label: l })),
+  ];
+
+  return (
+    <div className="space-y-2">
+      {activeModels.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          <span className="text-[10px] text-muted-foreground self-center">Labels sourced from.</span>
+          {activeModels.map((m) => (
+            <span key={m} className="px-1.5 py-0.5 text-[10px] font-mono rounded border border-border bg-muted/30 text-muted-foreground">
+              {m}
+            </span>
+          ))}
+        </div>
+      )}
+      {needsModel ? (
+        <div className="rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 p-2.5 text-[11px] text-amber-300">
+          No detection model configured on the selected camera(s). Add one on the{" "}
+          <a href="/cameras" className="underline hover:text-amber-200">camera settings</a> page first. Labels come from whichever model you pick.
+        </div>
+      ) : loading ? (
+        <p className="text-[11px] text-muted-foreground">Loading labels from model.</p>
+      ) : classes.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground">
+          Model loaded no classes. First-run download may still be running. Refresh in a moment.
+        </p>
+      ) : (
+        <StyledSelect value={value} options={options} onChange={onChange} />
+      )}
+    </div>
+  );
+}
+
 export default function RulesPage() {
   const { authFetch } = useAuth();
   const [rules, setRules] = useState<Rule[]>([]);
@@ -594,6 +646,40 @@ export default function RulesPage() {
   const [formCooldown, setFormCooldown] = useState("300");
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Dynamic class vocabulary from configured detection models.
+  const [modelClasses, setModelClasses] = useState<string[]>([]);
+  const [modelClassesLoading, setModelClassesLoading] = useState(false);
+  const activeModels = useMemo(() => {
+    const scoped = formCondCameras.length > 0
+      ? cameras.filter((c) => formCondCameras.includes(c.id))
+      : cameras;
+    const set = new Set<string>();
+    for (const c of scoped) {
+      for (const m of c.detection_models || []) {
+        if (m?.model && m.enabled !== false) set.add(m.model);
+      }
+    }
+    return Array.from(set).sort();
+  }, [cameras, formCondCameras]);
+
+  useEffect(() => {
+    if (activeModels.length === 0) {
+      setModelClasses([]);
+      return;
+    }
+    let cancelled = false;
+    setModelClassesLoading(true);
+    const params = activeModels.map((m) => `model=${encodeURIComponent(m)}`).join("&");
+    authFetch(`/api/detection-models/classes?${params}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.classes) setModelClasses(data.classes);
+      })
+      .catch(() => { /* silent */ })
+      .finally(() => { if (!cancelled) setModelClassesLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeModels, authFetch]);
 
   const fetchRules = useCallback(async () => {
     try {
@@ -1366,10 +1452,13 @@ export default function RulesPage() {
                 </div>
 
                 {formTriggerType === "object_detected" && (
-                  <StyledSelect
+                  <ModelClassPicker
                     value={formTriggerLabel}
-                    options={[{ value: "", label: "Any object" }, ...OBJECT_LABELS.map((l) => ({ value: l, label: l }))]}
                     onChange={setFormTriggerLabel}
+                    activeModels={activeModels}
+                    classes={modelClasses}
+                    loading={modelClassesLoading}
+                    anyLabel="Any object"
                   />
                 )}
 
@@ -1546,10 +1635,13 @@ export default function RulesPage() {
 
                     <div>
                       <label className="text-xs text-muted-foreground block mb-1">Which objects count (optional)</label>
-                      <StyledSelect
+                      <ModelClassPicker
                         value={formTriggerObjectClass}
-                        options={[{ value: "", label: "Any tracked object" }, ...OBJECT_LABELS.map((l) => ({ value: l, label: l }))]}
                         onChange={setFormTriggerObjectClass}
+                        activeModels={activeModels}
+                        classes={modelClasses}
+                        loading={modelClassesLoading}
+                        anyLabel="Any tracked object"
                       />
                     </div>
 
