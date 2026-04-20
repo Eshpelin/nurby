@@ -157,6 +157,7 @@ export default function SettingsPage() {
   const [ollamaDeploying, setOllamaDeploying] = useState(false);
   const [ollamaSelectedModel, setOllamaSelectedModel] = useState("");
   const [ollamaDeployResult, setOllamaDeployResult] = useState<{ stage: string; message: string } | null>(null);
+  const [ollamaError, setOllamaError] = useState<string | null>(null);
 
   // Provider form
   const [formName, setFormName] = useState("");
@@ -228,6 +229,7 @@ export default function SettingsPage() {
 
   const checkOllama = useCallback(async () => {
     setOllamaChecking(true);
+    setOllamaError(null);
     try {
       const res = await authFetch("/api/ollama/status");
       if (res.ok) {
@@ -236,8 +238,16 @@ export default function SettingsPage() {
         if (data.recommended_model && !ollamaSelectedModel) {
           setOllamaSelectedModel(data.recommended_model);
         }
+      } else if (res.status === 401 || res.status === 403) {
+        setOllamaError("Admin access required to deploy local AI.");
+      } else {
+        let detail = "";
+        try { detail = (await res.json())?.detail || ""; } catch { /* ignore */ }
+        setOllamaError(`Status check failed (${res.status}). ${detail}`.trim());
       }
-    } catch { /* silent */ }
+    } catch (exc) {
+      setOllamaError(`Could not reach API. ${exc instanceof Error ? exc.message : "Network error"}`);
+    }
     finally { setOllamaChecking(false); }
   }, [authFetch, ollamaSelectedModel]);
 
@@ -737,9 +747,14 @@ export default function SettingsPage() {
                     )}
                   </div>
                 ) : (
-                  <button onClick={checkOllama} className="text-xs text-accent hover:text-accent/80 transition-colors">
-                    Check system compatibility
-                  </button>
+                  <div className="space-y-2">
+                    <button onClick={checkOllama} className="text-xs text-accent hover:text-accent/80 transition-colors">
+                      Check system compatibility
+                    </button>
+                    {ollamaError && (
+                      <p className="text-[11px] text-red-400">{ollamaError}</p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
