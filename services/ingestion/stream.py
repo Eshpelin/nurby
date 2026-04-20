@@ -284,8 +284,17 @@ class StreamWorker:
         source = self._resolve_capture_url()
         logger.info("Opening %s source for camera %s", self.stream_type, self.camera_id)
 
-        if self.stream_type == STREAM_TYPE_HLS:
-            # Use FFmpeg backend for HLS
+        # Force FFmpeg backend for all network streams. The default OpenCV
+        # backend on macOS/Windows wheels often lacks RTSP support, which
+        # manifests as a 30s timeout on a perfectly healthy stream.
+        if self.stream_type in (STREAM_TYPE_RTSP, STREAM_TYPE_HLS, STREAM_TYPE_HTTP_MJPEG):
+            # RTSP over TCP is more reliable than default UDP across NAT.
+            # stimeout is socket read timeout in microseconds. Without it,
+            # OpenCV's FFmpeg wrapper can hang indefinitely on silent peers.
+            if self.stream_type == STREAM_TYPE_RTSP:
+                os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+                    "rtsp_transport;tcp|stimeout;5000000|max_delay;500000"
+                )
             cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
         else:
             cap = cv2.VideoCapture(source)
