@@ -476,6 +476,29 @@ class PerceptionPipeline:
                 await db.commit()
                 await db.refresh(obs)
                 logger.info("Stored observation %s for camera %s with %d detections", obs.id, camera_id, len(detections))
+
+                # Invalidate starred recaps when any identified face appears.
+                if person_detections and person_detections.get("faces"):
+                    person_ids = [
+                        str(f.get("person_id"))
+                        for f in person_detections["faces"]
+                        if f.get("person_id")
+                    ]
+                    if person_ids:
+                        try:
+                            from services.recap import invalidate_person_recaps
+                            from services.api.ws import broadcast as _ws_broadcast
+
+                            await invalidate_person_recaps(db, person_ids)
+                            await _ws_broadcast({
+                                "type": "person_seen",
+                                "person_ids": person_ids,
+                                "camera_id": str(camera_id),
+                                "observation_id": str(obs.id),
+                            })
+                        except Exception:
+                            logger.exception("Failed to invalidate starred recaps")
+
                 return obs.id
         except Exception:
             logger.exception("Failed to store observation")
