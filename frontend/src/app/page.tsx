@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useWebcamPublisher, listVideoDevices } from "@/lib/webcam-publisher";
+import { StarredStatusRow } from "@/components/StarredStatusRow";
 
 const WEBRTC_URL =
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
@@ -1822,6 +1823,8 @@ function DashboardContent() {
 
   return (
     <div className="px-4 py-4 h-[calc(100vh-3.5rem)] flex flex-col">
+
+      <StarredStatusRow />
 
       <div className="flex gap-4 flex-1 min-h-0">
         {/* LEFT. Camera feeds */}
