@@ -10,6 +10,7 @@ import logging
 import os
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse, urlunparse
 
@@ -38,6 +39,7 @@ STREAM_TYPE_HTTP_MJPEG = "http_mjpeg"
 STREAM_TYPE_HTTP_SNAPSHOT = "http_snapshot"
 STREAM_TYPE_HLS = "hls"
 STREAM_TYPE_USB = "usb"
+STREAM_TYPE_WEBCAM = "webcam"  # browser publishes via WHIP, we pull RTSP
 STREAM_TYPE_FILE = "file"
 
 
@@ -93,9 +95,17 @@ class StreamWorker:
         self._clip_recording = False  # currently recording a clip
         self._clip_end_time: datetime | None = None  # when to stop current clip
         self._motion_end_time: float = 0  # when motion/object recording should stop (monotonic)
+        # Per-worker executor. Prevents zombie OpenCV threads from one
+        # camera starving every other camera. If a prior _open_capture
+        # attempt is still stuck in the C layer, the next attempt serially
+        # waits here instead of racing and exhausting a shared pool.
+        self._executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix=f"stream-{camera_id}"
+        )
 
     def stop(self):
         self._running = False
+        self._executor.shutdown(wait=False, cancel_futures=True)
 
     async def _get_redis(self):
         if self._redis is None:
@@ -122,7 +132,7 @@ class StreamWorker:
 
         try:
             cap = await asyncio.wait_for(
-                loop.run_in_executor(None, self._open_capture),
+                loop.run_in_executor(self._executor, self._open_capture),
                 timeout=30.0,  # prevent OpenCV from hanging indefinitely on bad URLs
             )
         except asyncio.TimeoutError:
@@ -155,7 +165,19 @@ class StreamWorker:
 
         try:
             while self._running:
-                ret, frame = await loop.run_in_executor(None, cap.read)
+                # Bound cap.read so a silently-dead RTSP stream cannot hang
+                # the worker forever. 10 s is generous for any live camera.
+                try:
+                    ret, frame = await asyncio.wait_for(
+                        loop.run_in_executor(self._executor, cap.read),
+                        timeout=10.0,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "Frame read stalled for camera %s. forcing reconnect",
+                        self.camera_id,
+                    )
+                    break
                 if not ret:
                     logger.warning("Lost connection to camera %s", self.camera_id)
                     break
@@ -275,6 +297,15 @@ class StreamWorker:
             except ValueError:
                 return self.stream_url
 
+        if self.stream_type == STREAM_TYPE_WEBCAM:
+            # Browser publishes via WHIP to MediaMTX at the slug embedded in
+            # stream_url. Rewrite the host portion so the pull URL is
+            # reachable from wherever ingestion runs (host -> localhost,
+            # container -> mediamtx).
+            slug = self.stream_url.rsplit("/", 1)[-1] if self.stream_url else ""
+            base = settings.mediamtx_rtsp_url.rstrip("/")
+            return f"{base}/{slug}" if slug else self.stream_url
+
         if self.stream_type == STREAM_TYPE_FILE:
             return self.stream_url
 
@@ -295,13 +326,19 @@ class StreamWorker:
         # Force FFmpeg backend for all network streams. The default OpenCV
         # backend on macOS/Windows wheels often lacks RTSP support, which
         # manifests as a 30s timeout on a perfectly healthy stream.
-        if self.stream_type in (STREAM_TYPE_RTSP, STREAM_TYPE_HLS, STREAM_TYPE_HTTP_MJPEG):
+        if self.stream_type in (STREAM_TYPE_RTSP, STREAM_TYPE_HLS, STREAM_TYPE_HTTP_MJPEG, STREAM_TYPE_WEBCAM):
             # RTSP over TCP is more reliable than default UDP across NAT.
             # stimeout is socket read timeout in microseconds. Without it,
             # OpenCV's FFmpeg wrapper can hang indefinitely on silent peers.
-            if self.stream_type == STREAM_TYPE_RTSP:
+            if self.stream_type in (STREAM_TYPE_RTSP, STREAM_TYPE_WEBCAM):
+                # stimeout is legacy socket read timeout. timeout is the
+                # newer combined connect+read timeout. Setting both covers
+                # whichever version OpenCV's bundled ffmpeg understands.
                 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-                    "rtsp_transport;tcp|stimeout;5000000|max_delay;500000"
+                    "rtsp_transport;tcp"
+                    "|stimeout;5000000"
+                    "|timeout;5000000"
+                    "|max_delay;500000"
                 )
             cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
         else:

@@ -130,14 +130,25 @@ class CameraManager:
             cameras = {c.id: c for c in result.scalars().all()}
 
         # Keep webcam bridges aligned with DB state before starting workers
-        # so stream workers can pull the bridged RTSP copy.
-        try:
-            await bridge_manager.sync(list(cameras.values()))
-        except Exception:
-            logger.exception("webcam bridge sync failed")
+        # so stream workers can pull the bridged RTSP copy. Skipped in
+        # containers. host-side bridge daemon owns the camera devices there.
+        if not settings.disable_webcam_bridge:
+            try:
+                await bridge_manager.sync(list(cameras.values()))
+            except Exception:
+                logger.exception("webcam bridge sync failed")
 
         # Start workers for new cameras, restart changed ones
         for cam_id, cam in cameras.items():
+            # Browser-published webcams do not need an ingestion worker.
+            # The dashboard tab owns getUserMedia and POSTs JPEGs to the
+            # API, which publishes onto the motion stream directly.
+            if getattr(cam, "stream_type", "rtsp") == "webcam":
+                if cam_id in self._workers:
+                    logger.info("Stopping ingestion worker for browser webcam %s", cam_id)
+                    self._stop_worker(cam_id)
+                continue
+
             if cam_id not in self._workers:
                 logger.info("Starting stream worker for camera %s (%s)", cam.name, cam_id)
                 self._create_worker(cam_id, cam)

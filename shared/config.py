@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     mediamtx_api_url: str = "http://localhost:9997"
     mediamtx_rtsp_url: str = "rtsp://localhost:8554"  # target for webcam bridge publishes
+    # Webcam bridge. spawns ffmpeg against local camera devices. Runs on the
+    # host that physically owns the camera. Must be disabled inside the
+    # ingestion container because Docker Desktop cannot forward AVFoundation
+    # or v4l2 devices from the host into a Linux container.
+    disable_webcam_bridge: bool = False
     recordings_path: str = "./recordings"
     thumbnails_path: str = "./thumbnails"
     jwt_secret: str = _DEFAULT_JWT_SECRET

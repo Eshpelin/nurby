@@ -35,10 +35,16 @@ services:
     image: bluenviron/mediamtx:latest
     restart: unless-stopped
     ports:
-      - "8554:8554"   # RTSP
-      - "8889:8889"   # WebRTC
-      - "8888:8888"   # HLS
-      - "9997:9997"   # API
+      - "8554:8554"       # RTSP
+      - "8889:8889"       # WebRTC HTTP (WHIP/WHEP)
+      - "8189:8189/udp"   # WebRTC ICE media
+      - "8888:8888"       # HLS
+      - "9997:9997"       # API
+    environment:
+      # Advertise 127.0.0.1 as an extra ICE host candidate so the host
+      # browser can reach WebRTC media without needing the docker bridge
+      # IP to be routable.
+      MTX_WEBRTCADDITIONALHOSTS: "127.0.0.1"
     volumes:
       - ./config/mediamtx.yml:/mediamtx.yml
 
@@ -73,8 +79,13 @@ services:
       DATABASE_URL: postgresql+asyncpg://nurby:${POSTGRES_PASSWORD:-nurby_dev}@postgres:5432/nurby
       REDIS_URL: redis://redis:6379/0
       MEDIAMTX_API_URL: http://mediamtx:9997
+      MEDIAMTX_RTSP_URL: rtsp://mediamtx:8554
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
+      # USB and built-in cameras must be bridged on the host. Docker Desktop
+      # cannot pass AVFoundation or v4l2 devices into a Linux container. Run
+      # `python -m services.ingestion.host_bridge_main` on the host instead.
+      DISABLE_WEBCAM_BRIDGE: "1"
     volumes:
       - recordings:/data/recordings
       - thumbnails:/data/thumbnails

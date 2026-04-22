@@ -38,7 +38,17 @@ def _build_input_args(device: str) -> list[str] | None:
         # Accept "/dev/videoN" leftover and coerce to index N.
         if idx.startswith("/dev/video"):
             idx = idx.replace("/dev/video", "")
-        return ["-f", "avfoundation", "-framerate", "30", "-i", idx]
+        # Pin a supported mode. Many Apple cameras only advertise 15 or 30 fps
+        # at specific sizes. Without -video_size ffmpeg sometimes picks an
+        # unsupported default and dies with "Input/output error". Drop audio
+        # (-an has to come after -i, applied in the main cmd).
+        return [
+            "-f", "avfoundation",
+            "-framerate", "30",
+            "-video_size", "1280x720",
+            "-pixel_format", "nv12",
+            "-i", idx,
+        ]
     if system == "Linux":
         # v4l2. Accept "/dev/videoN" or bare "N".
         dev = device.strip()
