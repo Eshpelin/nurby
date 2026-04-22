@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.config import settings
 from shared.models import Camera, Observation, Person
 from services.events.actions import _call_vlm, _get_provider_by_kind
 
@@ -25,8 +26,29 @@ DEFAULT_SYSTEM = (
 )
 
 SIGHTING_LIMIT = 12
-RECAP_TTL = timedelta(minutes=5)
 PROVIDER_FALLBACK_ORDER = ("openai", "anthropic", "google", "ollama")
+
+
+def _recap_ttl() -> timedelta:
+    return timedelta(seconds=max(10, settings.recap_ttl_seconds))
+
+
+async def invalidate_person_recaps(
+    db: AsyncSession, person_ids: list[str]
+) -> list[str]:
+    """Mark cached recaps stale for these persons. Returns ids actually touched."""
+    if not person_ids:
+        return []
+    result = await db.execute(
+        select(Person).where(Person.is_starred == True).where(Person.id.in_(person_ids))  # noqa: E712
+    )
+    touched: list[str] = []
+    for p in result.scalars().all():
+        p.recap_stale = True
+        touched.append(str(p.id))
+    if touched:
+        await db.commit()
+    return touched
 
 
 def _format_ago(when: datetime, now: datetime) -> str:
@@ -96,8 +118,19 @@ def _build_user_prompt(person: Person, sightings: list[dict]) -> str:
     return "\n".join(lines)
 
 
-async def _pick_provider():
-    for kind in PROVIDER_FALLBACK_ORDER:
+async def _pick_provider(person: Person):
+    """Resolve. person override > config default > fallback order."""
+    tried: list[str] = []
+    if person.recap_provider:
+        tried.append(person.recap_provider)
+    if settings.recap_default_provider:
+        tried.append(settings.recap_default_provider)
+    tried.extend(PROVIDER_FALLBACK_ORDER)
+    seen: set[str] = set()
+    for kind in tried:
+        if kind in seen:
+            continue
+        seen.add(kind)
         provider = await _get_provider_by_kind(kind)
         if provider:
             return kind, provider
@@ -110,25 +143,29 @@ async def generate_recap(
     """Return {status, last_seen_at, last_camera_id, last_thumbnail_path,
     sightings_24h, generated_at, cached}. Caches on the Person row."""
     now = datetime.now(timezone.utc)
+    cam_result = await db.execute(select(Camera))
+    cameras = {str(c.id): c.name for c in cam_result.scalars().all()}
+
     if (
         not force
+        and not person.recap_stale
         and person.recap_cached_status
         and person.recap_cached_at
-        and (now - person.recap_cached_at) < RECAP_TTL
+        and (now - person.recap_cached_at) < _recap_ttl()
     ):
         last = await _latest_sighting_meta(db, str(person.id))
         return {
             "status": person.recap_cached_status,
             "last_seen_at": last["at"],
             "last_camera_id": last["camera_id"],
+            "last_camera_name": cameras.get(str(last["camera_id"])) if last["camera_id"] else None,
             "last_thumbnail_path": last["thumbnail_path"],
+            "last_observation_id": last["observation_id"],
             "sightings_24h": last["count_24h"],
             "generated_at": person.recap_cached_at,
             "cached": True,
+            "stale": False,
         }
-
-    cam_result = await db.execute(select(Camera))
-    cameras = {str(c.id): c.name for c in cam_result.scalars().all()}
 
     sightings, latest = await _collect_sightings(db, str(person.id), cameras)
     count_24h = len(sightings)
@@ -137,16 +174,20 @@ async def generate_recap(
 
     person.recap_cached_status = status
     person.recap_cached_at = now
+    person.recap_stale = False
     await db.commit()
 
     return {
         "status": status,
         "last_seen_at": latest.started_at if latest else None,
         "last_camera_id": latest.camera_id if latest else None,
+        "last_camera_name": cameras.get(str(latest.camera_id)) if latest else None,
         "last_thumbnail_path": latest.thumbnail_path if latest else None,
+        "last_observation_id": latest.id if latest else None,
         "sightings_24h": count_24h,
         "generated_at": now,
         "cached": False,
+        "stale": False,
     }
 
 
@@ -172,6 +213,7 @@ async def _latest_sighting_meta(db: AsyncSession, person_id: str) -> dict:
         "at": latest.started_at if latest else None,
         "camera_id": latest.camera_id if latest else None,
         "thumbnail_path": latest.thumbnail_path if latest else None,
+        "observation_id": latest.id if latest else None,
         "count_24h": count,
     }
 
@@ -185,20 +227,21 @@ def _fallback_status(person: Person, sightings: list[dict]) -> str:
 
 
 async def _run_vlm_status(person: Person, sightings: list[dict]) -> str:
-    kind, provider = await _pick_provider()
+    kind, provider = await _pick_provider(person)
     if not provider:
         return _fallback_status(person, sightings)
+    model = person.recap_model or provider.default_model or ""
     prompt = _build_user_prompt(person, sightings)
     try:
         raw = await _call_vlm(
             kind,
             provider,
-            provider.default_model or "",
+            model,
             DEFAULT_SYSTEM,
             prompt,
             None,
             None,
-            20.0,
+            settings.recap_timeout_seconds,
         )
     except Exception:
         logger.exception("Recap VLM call failed for %s", person.id)

@@ -590,9 +590,15 @@ async def starred_status(
     on the Person row for a short TTL so the dashboard can poll cheaply.
     """
     result = await db.execute(
-        select(Person).where(Person.is_starred == True).order_by(Person.display_name)
+        select(Person).where(Person.is_starred == True).order_by(Person.display_name)  # noqa: E712
     )
-    persons = result.scalars().all()
+    persons = list(result.scalars().all())
+
+    # Auto-seed. if no one is starred yet, promote the top 3 most-seen persons
+    # so the dashboard never looks empty. The user can unstar them later.
+    if not persons:
+        persons = await _auto_star_top_persons(db, limit=3)
+
     out: list[dict] = []
     for p in persons:
         recap = await generate_recap(db, p, force=force)
@@ -603,12 +609,59 @@ async def starred_status(
             "status": recap["status"],
             "last_seen_at": recap["last_seen_at"],
             "last_camera_id": recap["last_camera_id"],
+            "last_camera_name": recap["last_camera_name"],
             "last_thumbnail_path": recap["last_thumbnail_path"],
+            "last_observation_id": recap.get("last_observation_id"),
             "sightings_24h": recap["sightings_24h"],
             "generated_at": recap["generated_at"],
             "cached": recap["cached"],
+            "stale": recap["stale"],
         })
     return out
+
+
+async def _auto_star_top_persons(db: AsyncSession, limit: int = 3) -> list[Person]:
+    """Pick the most frequently detected persons over the last 7 days and mark
+    them as starred. Returns the newly-starred persons. No-op if there are no
+    persons at all in the DB."""
+    from datetime import timezone as _tz, timedelta as _td
+
+    pres = await db.execute(select(Person))
+    all_persons = list(pres.scalars().all())
+    if not all_persons:
+        return []
+
+    cutoff = datetime.now(_tz.utc) - _td(days=7)
+    ores = await db.execute(
+        select(Observation)
+        .where(Observation.person_detections.isnot(None))
+        .where(Observation.started_at >= cutoff)
+    )
+    counts: dict[str, int] = {}
+    for obs in ores.scalars().all():
+        pd = obs.person_detections or {}
+        for face in pd.get("faces", []) or []:
+            pid = face.get("person_id")
+            if pid:
+                counts[str(pid)] = counts.get(str(pid), 0) + 1
+
+    # Rank. persons with sightings first (by count desc), then the rest by
+    # created_at so new installs still get cards instead of an empty row.
+    by_id = {str(p.id): p for p in all_persons}
+    ranked_seen = sorted(
+        (by_id[pid] for pid in counts if pid in by_id),
+        key=lambda p: counts.get(str(p.id), 0),
+        reverse=True,
+    )
+    ranked_ids = {str(p.id) for p in ranked_seen}
+    remainder = [p for p in all_persons if str(p.id) not in ranked_ids]
+    ordered = (ranked_seen + remainder)[:limit]
+
+    for p in ordered:
+        p.is_starred = True
+    if ordered:
+        await db.commit()
+    return ordered
 
 
 # ── Person CRUD endpoints ──
