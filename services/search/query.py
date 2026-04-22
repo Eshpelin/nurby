@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, and_, or_, func, cast, String, Float, literal_column
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models import Observation, Camera, Person
+from shared.models import Observation, Camera, FaceCluster, Person
 from services.search.embeddings import generate_embedding, get_embedding_provider, EMBEDDING_DIM
 
 logger = logging.getLogger("nurby.search.query")
@@ -252,6 +252,44 @@ async def search_observations(
     return [_build_observation_dict(obs, camera_map) for obs in observations]
 
 
+PEOPLE_INTENT_WORDS = {
+    "who", "whom", "anyone", "someone", "somebody", "people",
+    "person", "visitor", "visitors", "guest", "guests",
+    "came", "come", "arrived", "visited", "seen", "spotted",
+    "intruder", "intruders", "stranger", "strangers",
+}
+
+
+def _is_people_intent(question: str) -> bool:
+    words = set(re.findall(r"\w+", (question or "").lower()))
+    return bool(words & PEOPLE_INTENT_WORDS)
+
+
+async def _recent_people_observations(db: AsyncSession, hours: int = 24, limit: int = 30) -> list:
+    """Fetch recent observations that involved a person or a face.
+
+    Used as a fallback when the question asks 'who came' etc. but
+    keyword/vector search misses because VLM captions rarely say
+    'person arrived'.
+    """
+    from datetime import timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    stmt = (
+        select(Observation)
+        .where(Observation.started_at >= cutoff)
+        .where(
+            or_(
+                cast(Observation.object_detections, String).ilike("%\"person\"%"),
+                cast(Observation.person_detections, String).ilike("%cluster_id%"),
+            )
+        )
+        .order_by(Observation.started_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def answer_question(
     db: AsyncSession,
     question: str,
@@ -266,11 +304,47 @@ async def answer_question(
     # Search for relevant observations
     results = await search_observations(db, query=question, limit=20)
 
+    # People-intent fallback. Questions like "who came" rarely match VLM
+    # captions or object labels through vector/keyword search because the
+    # caption says things like "A man is raising his arm". Pull any recent
+    # observation that involved a person or a clustered face.
+    if _is_people_intent(question):
+        recent = await _recent_people_observations(db, hours=24, limit=30)
+        if recent:
+            camera_ids_set = {obs.camera_id for obs in recent}
+            camera_map = await _resolve_camera_names(db, camera_ids_set)
+            recent_dicts = [_build_observation_dict(o, camera_map) for o in recent]
+            seen = {r["id"] for r in results}
+            for r in recent_dicts:
+                if r["id"] not in seen:
+                    results.append(r)
+
     if not results:
         return {
             "answer": "No matching observations found. Try a different query or check that cameras are recording.",
             "sources": [],
         }
+
+    # Resolve cluster_id -> named-person name so answers use real names
+    # for historic observations captured before a cluster was named.
+    cluster_ids_seen: set[str] = set()
+    for obs in results:
+        for f in (obs.get("person_detections") or {}).get("faces", []) or []:
+            cid = f.get("cluster_id")
+            if cid:
+                cluster_ids_seen.add(str(cid))
+    cluster_name_map: dict[str, str] = {}
+    if cluster_ids_seen:
+        try:
+            rows = await db.execute(
+                select(FaceCluster.id, Person.display_name)
+                .join(Person, FaceCluster.person_id == Person.id)
+                .where(FaceCluster.id.in_([uuid.UUID(c) for c in cluster_ids_seen]))
+            )
+            for cid, name in rows.all():
+                cluster_name_map[str(cid)] = name
+        except Exception:
+            logger.exception("Failed to resolve cluster -> person names for answer")
 
     if not provider:
         from services.search.embeddings import get_embedding_provider
@@ -297,9 +371,28 @@ async def answer_question(
                 parts.append(f"  Objects: {', '.join(labels)}")
         if obs.get("person_detections"):
             faces = obs["person_detections"].get("faces", [])
-            named = [f["person_name"] for f in faces if f.get("person_name")]
-            if named:
-                parts.append(f"  People: {', '.join(named)}")
+            resolved: list[str] = []
+            unknown_ct = 0
+            for f in faces:
+                name = f.get("person_name")
+                if not name:
+                    cid = f.get("cluster_id")
+                    if cid:
+                        name = cluster_name_map.get(str(cid))
+                if name:
+                    resolved.append(name)
+                else:
+                    unknown_ct += 1
+            who_parts = []
+            if resolved:
+                who_parts.append(", ".join(sorted(set(resolved))))
+            if unknown_ct:
+                who_parts.append(
+                    "1 unknown person" if unknown_ct == 1
+                    else f"{unknown_ct} unknown people"
+                )
+            if who_parts:
+                parts.append(f"  People. {' and '.join(who_parts)}")
         context_parts.append("\n".join(parts))
 
     context = "\n\n".join(context_parts)
