@@ -153,7 +153,67 @@ const ACTION_TYPES = [
   { value: "broadcast", label: "WebSocket broadcast" },
   { value: "notify", label: "Notification" },
   { value: "email", label: "Email" },
+  { value: "vlm_call", label: "VLM Call" },
 ];
+
+const VLM_PROVIDERS = [
+  { value: "openai", label: "OpenAI" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "gemini", label: "Gemini" },
+  { value: "ollama", label: "Ollama" },
+];
+
+const VLM_SCHEMA_PRESETS: Record<string, string> = {
+  threat: JSON.stringify(
+    {
+      type: "object",
+      properties: {
+        level: { type: "string", enum: ["low", "medium", "high"] },
+        reason: { type: "string" },
+      },
+      required: ["level", "reason"],
+    },
+    null,
+    2,
+  ),
+  notify: JSON.stringify(
+    {
+      type: "object",
+      properties: {
+        notify: { type: "boolean" },
+        reason: { type: "string" },
+      },
+      required: ["notify", "reason"],
+    },
+    null,
+    2,
+  ),
+  intent: JSON.stringify(
+    {
+      type: "object",
+      properties: {
+        intent: { type: "string", enum: ["delivery", "visitor", "intruder", "unknown"] },
+        confidence: { type: "number" },
+      },
+      required: ["intent", "confidence"],
+    },
+    null,
+    2,
+  ),
+  entities: JSON.stringify(
+    {
+      type: "object",
+      properties: {
+        people: { type: "integer" },
+        vehicles: { type: "integer" },
+        animals: { type: "integer" },
+      },
+      required: ["people", "vehicles", "animals"],
+    },
+    null,
+    2,
+  ),
+};
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
@@ -643,6 +703,21 @@ export default function RulesPage() {
   const [formActionEmailTo, setFormActionEmailTo] = useState("");
   const [formActionEmailSubject, setFormActionEmailSubject] = useState("");
   const [formActionEmailBody, setFormActionEmailBody] = useState("");
+
+  // VLM call action fields
+  const [formVlmProvider, setFormVlmProvider] = useState("openai");
+  const [formVlmModel, setFormVlmModel] = useState("gpt-4o-mini");
+  const [formVlmSystem, setFormVlmSystem] = useState("{{defaults.system}}");
+  const [formVlmPrompt, setFormVlmPrompt] = useState(
+    "Describe the scene. Focus on people, vehicles, and unusual activity.",
+  );
+  const [formVlmAttachImage, setFormVlmAttachImage] = useState(true);
+  const [formVlmUseSchema, setFormVlmUseSchema] = useState(false);
+  const [formVlmSchemaText, setFormVlmSchemaText] = useState(VLM_SCHEMA_PRESETS.threat);
+  const [formVlmOutput, setFormVlmOutput] = useState("result");
+  const [formVlmMaxRetries, setFormVlmMaxRetries] = useState("1");
+  const [formVlmOnError, setFormVlmOnError] = useState("continue");
+  const [formVlmTimeoutMs, setFormVlmTimeoutMs] = useState("20000");
   const [formCooldown, setFormCooldown] = useState("300");
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -1033,6 +1108,24 @@ export default function RulesPage() {
       action.to = formActionEmailTo;
       action.subject = formActionEmailSubject || "Nurby alert. {{rule_name}}";
       action.body = formActionEmailBody || "Rule {{rule_name}} fired at {{timestamp}}";
+    }
+    if (formActionType === "vlm_call") {
+      action.provider = formVlmProvider;
+      action.model = formVlmModel;
+      action.system = formVlmSystem;
+      action.prompt = formVlmPrompt;
+      action.attach_image = formVlmAttachImage;
+      action.output = formVlmOutput || "result";
+      action.max_retries = parseInt(formVlmMaxRetries) || 1;
+      action.on_error = formVlmOnError;
+      action.timeout_ms = parseInt(formVlmTimeoutMs) || 20000;
+      if (formVlmUseSchema && formVlmSchemaText.trim()) {
+        try {
+          action.response_schema = JSON.parse(formVlmSchemaText);
+        } catch {
+          // caught in validation
+        }
+      }
     }
 
     return {
@@ -2230,6 +2323,179 @@ export default function RulesPage() {
                     </div>
                     <div className="text-[10px] text-muted-foreground bg-muted/50 rounded px-2 py-1.5">
                       SMTP must be configured in Settings for email delivery to work.
+                    </div>
+                  </div>
+                )}
+
+                {/* VLM Call fields */}
+                {formActionType === "vlm_call" && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-muted-foreground block mb-1">Provider</label>
+                        <StyledSelect
+                          value={formVlmProvider}
+                          options={VLM_PROVIDERS}
+                          onChange={setFormVlmProvider}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground block mb-1">Model</label>
+                        <input
+                          type="text"
+                          value={formVlmModel}
+                          onChange={(e) => setFormVlmModel(e.target.value)}
+                          className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+                          placeholder="gpt-4o-mini"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">System prompt</label>
+                      <textarea
+                        value={formVlmSystem}
+                        onChange={(e) => setFormVlmSystem(e.target.value)}
+                        rows={2}
+                        className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono resize-y"
+                        placeholder="{{defaults.system}}"
+                      />
+                      <label className="flex items-center gap-2 cursor-pointer mt-1">
+                        <input
+                          type="checkbox"
+                          checked={formVlmSystem.startsWith("{{defaults.system}}")}
+                          onChange={(e) => {
+                            if (e.target.checked && !formVlmSystem.startsWith("{{defaults.system}}")) {
+                              setFormVlmSystem(`{{defaults.system}}\n\n${formVlmSystem}`);
+                            } else if (!e.target.checked) {
+                              setFormVlmSystem(
+                                formVlmSystem.replace(/^\{\{defaults\.system\}\}\n*/, ""),
+                              );
+                            }
+                          }}
+                          className="accent-green-500"
+                        />
+                        <span className="text-[11px] text-muted-foreground">Extend global default</span>
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">User prompt</label>
+                      <textarea
+                        value={formVlmPrompt}
+                        onChange={(e) => setFormVlmPrompt(e.target.value)}
+                        rows={3}
+                        className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm resize-y"
+                      />
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {["description", "faces", "objects", "camera_name", "timestamp"].map((k) => (
+                          <button
+                            key={k}
+                            type="button"
+                            onClick={() => setFormVlmPrompt((p) => p + ` {{${k}}}`)}
+                            className="px-1.5 py-0.5 text-[10px] rounded border border-border hover:bg-muted text-muted-foreground font-mono"
+                          >{`{{${k}}}`}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formVlmAttachImage}
+                        onChange={(e) => setFormVlmAttachImage(e.target.checked)}
+                        className="accent-green-500"
+                      />
+                      <span className="text-xs">Attach snapshot image</span>
+                    </label>
+
+                    <div>
+                      <label className="flex items-center gap-2 cursor-pointer mb-1">
+                        <input
+                          type="checkbox"
+                          checked={formVlmUseSchema}
+                          onChange={(e) => setFormVlmUseSchema(e.target.checked)}
+                          className="accent-green-500"
+                        />
+                        <span className="text-xs">Structured JSON output</span>
+                      </label>
+                      {formVlmUseSchema && (
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap gap-1">
+                            {[
+                              { key: "threat", label: "Threat level" },
+                              { key: "notify", label: "Notify yes/no" },
+                              { key: "intent", label: "Intent classifier" },
+                              { key: "entities", label: "Entity counts" },
+                            ].map((p) => (
+                              <button
+                                key={p.key}
+                                type="button"
+                                onClick={() => setFormVlmSchemaText(VLM_SCHEMA_PRESETS[p.key])}
+                                className="px-2 py-1 text-[11px] rounded border border-border hover:bg-muted text-muted-foreground"
+                              >
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
+                          <textarea
+                            value={formVlmSchemaText}
+                            onChange={(e) => setFormVlmSchemaText(e.target.value)}
+                            rows={8}
+                            className="w-full px-3 py-2 rounded-md bg-background border border-border text-xs font-mono resize-y"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-xs text-muted-foreground block mb-1">Output variable</label>
+                        <input
+                          type="text"
+                          value={formVlmOutput}
+                          onChange={(e) => setFormVlmOutput(e.target.value.replace(/[^\w]/g, ""))}
+                          className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono"
+                          placeholder="result"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground block mb-1">Max retries</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={3}
+                          value={formVlmMaxRetries}
+                          onChange={(e) => setFormVlmMaxRetries(e.target.value)}
+                          className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground block mb-1">Timeout (ms)</label>
+                        <input
+                          type="number"
+                          min={1000}
+                          step={1000}
+                          value={formVlmTimeoutMs}
+                          onChange={(e) => setFormVlmTimeoutMs(e.target.value)}
+                          className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">On error</label>
+                      <StyledSelect
+                        value={formVlmOnError}
+                        options={[
+                          { value: "continue", label: "Continue chain" },
+                          { value: "stop", label: "Stop chain" },
+                          { value: "fallback", label: "Use fallback value" },
+                        ]}
+                        onChange={setFormVlmOnError}
+                      />
+                    </div>
+                    <div className="text-[10px] text-muted-foreground bg-muted/50 rounded px-2 py-1.5">
+                      Reference the result in later actions with {"{{"}vars.{formVlmOutput || "result"}.field{"}}"}.
                     </div>
                   </div>
                 )}
