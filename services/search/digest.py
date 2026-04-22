@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models import Observation, Camera
+from shared.models import Observation, Camera, FaceCluster, FaceClusterSample
 from services.search.query import _call_text_llm
 
 logger = logging.getLogger("nurby.search.digest")
@@ -140,22 +140,13 @@ async def generate_digest(
     top_people = sorted(person_counts.items(), key=lambda x: x[1], reverse=True)[:5]
     busiest_camera = max(camera_activity.items(), key=lambda x: x[1]) if camera_activity else None
 
-    # Build highlights
-    highlights = []
     vlm_descriptions = [
         obs.vlm_description for obs in observations if obs.vlm_description
     ]
-
-    if top_objects:
-        obj_parts = [f"{count}x {label}" for label, count in top_objects]
-        highlights.append(f"Most detected objects. {', '.join(obj_parts)}")
-
-    if top_people:
-        ppl_parts = [f"{name} ({count}x)" for name, count in top_people]
-        highlights.append(f"People seen. {', '.join(ppl_parts)}")
-
-    if busiest_camera:
-        highlights.append(f"Busiest camera. {busiest_camera[0]} ({busiest_camera[1]} observations)")
+    # Highlights are built later from narrative roll-ups (safety flags,
+    # named visits, unknown appearance hints). Raw stat pills like
+    # "Most detected objects. 1x person" are intentionally dropped.
+    highlights: list[str] = []
 
     stats = {
         "total_observations": len(observations),
@@ -268,6 +259,57 @@ async def generate_digest(
             roll_up_lines.append(f"Unknown person seen around {first}.")
         else:
             roll_up_lines.append(f"Unknown person activity from {first} to {last}.")
+
+    # Look up unknown cluster appearance descriptions active in this window
+    # so highlight pills read like "Unknown person in red jacket, 7:16 pm"
+    # instead of raw statistics. Clusters are linked via face_cluster_samples
+    # captured inside [start, now].
+    unknown_highlights: list[str] = []
+    try:
+        sample_rows = await db.execute(
+            select(FaceCluster)
+            .join(FaceClusterSample, FaceClusterSample.cluster_id == FaceCluster.id)
+            .where(FaceClusterSample.captured_at >= start)
+            .where(FaceClusterSample.captured_at <= now)
+            .where(FaceCluster.status == "pending")
+            .distinct()
+        )
+        seen_clusters = sample_rows.scalars().all()
+        for cluster in seen_clusters:
+            last = cluster.last_seen_at
+            when = _format_timestamp(last) if last else ""
+            label = (
+                f"Unknown {cluster.auto_label_number}"
+                if cluster.auto_label_number
+                else "Unknown person"
+            )
+            appearance = (cluster.appearance_description or "").strip()
+            if appearance:
+                unknown_highlights.append(
+                    f"{label} ({appearance}) around {when}" if when
+                    else f"{label} ({appearance})"
+                )
+            else:
+                unknown_highlights.append(
+                    f"{label} around {when}" if when else label
+                )
+    except Exception:
+        logger.exception("Failed to load cluster appearance for digest")
+
+    # Compose highlight pills. Safety first, then named people visits,
+    # then unknown appearance hints. Cap at 4 for the UI.
+    for hit in safety_hits[:2]:
+        highlights.append(hit)
+    for name, moments in named_sessions.items():
+        first = _format_timestamp(min(moments))
+        last = _format_timestamp(max(moments))
+        highlights.append(
+            f"{name} seen around {first}" if first == last
+            else f"{name} here from {first} to {last}"
+        )
+    for line in unknown_highlights:
+        highlights.append(line)
+    highlights = highlights[:4]
 
     # Generate natural language summary with the active text/VLM provider.
     summary_text = None

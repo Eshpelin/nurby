@@ -2483,8 +2483,7 @@ function DashboardContent() {
                       ))}
                     </div>
                   )}
-                  <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
-                    <span>{digest.total_observations} observation{digest.total_observations > 1 ? "s" : ""} analyzed</span>
+                  <div className="mt-2 flex items-center justify-end text-[10px] text-muted-foreground">
                     <span className="font-mono">{digest.period_label}</span>
                   </div>
 
