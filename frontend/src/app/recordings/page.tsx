@@ -116,6 +116,29 @@ export default function RecordingsPage() {
     fetchRecordings();
   }, [fetchRecordings]);
 
+  useEffect(() => {
+    if (!expandedId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setExpandedId(null);
+        setConfirmDeleteId(null);
+        setDeleteError(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [expandedId]);
+
+  const expandedRec = useMemo(
+    () => recordings.find((r) => r.id === expandedId) || null,
+    [recordings, expandedId],
+  );
+
   const handleDelete = useCallback(async (id: string) => {
     setDeletingId(id);
     setDeleteError(null);
@@ -237,129 +260,43 @@ export default function RecordingsPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {recordings.map((rec) => {
-              const isExpanded = expandedId === rec.id;
-              return (
-                <div
-                  key={rec.id}
-                  className={`rounded-lg border bg-card overflow-hidden transition-all ${isExpanded ? "border-accent col-span-1 sm:col-span-2 lg:col-span-2 xl:col-span-2" : "border-border hover:border-accent/50"}`}
-                >
-                  <div
-                    className="cursor-pointer"
-                    onClick={() =>
-                      setExpandedId(isExpanded ? null : rec.id)
-                    }
-                  >
-                    {rec.thumbnail_path ? (
-                      <img
-                        src={`/api/recordings/${rec.id}/thumbnail`}
-                        alt="Recording thumbnail"
-                        className="w-full h-36 object-cover bg-muted"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display =
-                            "none";
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-36 bg-muted flex items-center justify-center">
-                        <svg
-                          width="32"
-                          height="32"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          className="text-muted-foreground"
-                        >
-                          <polygon points="5,3 19,12 5,21" />
-                        </svg>
-                      </div>
-                    )}
-
-                    <div className="p-3 space-y-1.5">
-                      <div className="text-sm font-medium truncate">
-                        {cameraNames[rec.camera_id] || "Unknown camera"}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatDateTime(rec.started_at)}
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span>{formatDuration(rec.duration_seconds)}</span>
-                        <span>{formatFileSize(rec.file_size_bytes)}</span>
-                      </div>
-                    </div>
+            {recordings.map((rec) => (
+              <button
+                key={rec.id}
+                type="button"
+                onClick={() => setExpandedId(rec.id)}
+                className="group text-left rounded-lg border border-border bg-card overflow-hidden hover:border-accent/60 hover:bg-card/80 transition-all focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                {rec.thumbnail_path ? (
+                  <img
+                    src={`/api/recordings/${rec.id}/thumbnail`}
+                    alt="Recording thumbnail"
+                    className="w-full h-36 object-cover bg-muted"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-36 bg-muted flex items-center justify-center">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground">
+                      <polygon points="5,3 19,12 5,21" />
+                    </svg>
                   </div>
-
-                  {isExpanded && (
-                    <div className="border-t border-border p-4 space-y-3">
-                      <video
-                        controls
-                        className="w-full max-h-[420px] rounded bg-black"
-                        src={`/api/recordings/${rec.id}/stream`}
-                      />
-                      {confirmDeleteId === rec.id ? (
-                        <div className="flex flex-wrap items-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2">
-                          <span className="text-xs text-red-300 flex-1 min-w-[180px]">Delete this recording and its file?</span>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDelete(rec.id); }}
-                            disabled={deletingId === rec.id}
-                            className="px-3 py-1.5 text-sm rounded-md bg-red-600 text-white font-medium hover:bg-red-500 transition-colors disabled:opacity-50"
-                          >
-                            {deletingId === rec.id ? "Deleting." : "Yes, delete"}
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); setDeleteError(null); }}
-                            disabled={deletingId === rec.id}
-                            className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <a
-                              href={`/api/recordings/${rec.id}/download`}
-                              download
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 transition-opacity"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                              </svg>
-                              Download
-                            </a>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setExpandedId(null); }}
-                              className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                            >
-                              Close
-                            </button>
-                          </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(rec.id); setDeleteError(null); }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
-                              <path d="M10 11v6" />
-                              <path d="M14 11v6" />
-                              <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                            </svg>
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                      {deleteError && confirmDeleteId === rec.id && (
-                        <p className="text-xs text-red-400">{deleteError}</p>
-                      )}
-                    </div>
-                  )}
+                )}
+                <div className="p-3 space-y-1.5">
+                  <div className="text-sm font-medium truncate">
+                    {cameraNames[rec.camera_id] || "Unknown camera"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatDateTime(rec.started_at)}
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{formatDuration(rec.duration_seconds)}</span>
+                    <span>{formatFileSize(rec.file_size_bytes)}</span>
+                  </div>
                 </div>
-              );
-            })}
+              </button>
+            ))}
           </div>
 
           <div className="flex items-center justify-between mt-6">
@@ -382,6 +319,118 @@ export default function RecordingsPage() {
             </button>
           </div>
         </>
+      )}
+
+      {expandedRec && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => {
+            setExpandedId(null);
+            setConfirmDeleteId(null);
+            setDeleteError(null);
+          }}
+        >
+          <div
+            className="w-full max-w-3xl rounded-lg border border-border bg-card shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 px-4 py-3 border-b border-border">
+              <div className="min-w-0">
+                <div className="text-sm font-medium truncate">
+                  {cameraNames[expandedRec.camera_id] || "Unknown camera"}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {formatDateTime(expandedRec.started_at)}
+                  <span className="mx-2">&middot;</span>
+                  {formatDuration(expandedRec.duration_seconds)}
+                  <span className="mx-2">&middot;</span>
+                  {formatFileSize(expandedRec.file_size_bytes)}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setExpandedId(null);
+                  setConfirmDeleteId(null);
+                  setDeleteError(null);
+                }}
+                aria-label="Close"
+                className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <video
+                key={expandedRec.id}
+                controls
+                autoPlay
+                className="w-full max-h-[60vh] rounded bg-black"
+                src={`/api/recordings/${expandedRec.id}/stream`}
+              />
+              {confirmDeleteId === expandedRec.id ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2">
+                  <span className="text-xs text-red-300 flex-1 min-w-[180px]">
+                    Delete this recording and its file?
+                  </span>
+                  <button
+                    onClick={() => handleDelete(expandedRec.id)}
+                    disabled={deletingId === expandedRec.id}
+                    className="px-3 py-1.5 text-sm rounded-md bg-red-600 text-white font-medium hover:bg-red-500 transition-colors disabled:opacity-50"
+                  >
+                    {deletingId === expandedRec.id ? "Deleting." : "Yes, delete"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setConfirmDeleteId(null);
+                      setDeleteError(null);
+                    }}
+                    disabled={deletingId === expandedRec.id}
+                    className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <a
+                    href={`/api/recordings/${expandedRec.id}/download`}
+                    download
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 transition-opacity"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Download
+                  </a>
+                  <button
+                    onClick={() => {
+                      setConfirmDeleteId(expandedRec.id);
+                      setDeleteError(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
+                      <path d="M10 11v6" />
+                      <path d="M14 11v6" />
+                      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                    </svg>
+                    Delete
+                  </button>
+                </div>
+              )}
+              {deleteError && confirmDeleteId === expandedRec.id && (
+                <p className="text-xs text-red-400">{deleteError}</p>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
