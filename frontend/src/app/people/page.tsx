@@ -416,30 +416,16 @@ export default function PeoplePage() {
                       if (e.key === "Enter") handleNameSuggestion(s.id);
                     }}
                   />
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={relationshipInputs[s.id] || ""}
-                      onChange={(e) =>
-                        setRelationshipInputs((prev) => ({
-                          ...prev,
-                          [s.id]: e.target.value,
-                        }))
-                      }
-                      placeholder="Relationship (optional)"
-                      className="flex-1 px-3 py-1.5 text-xs rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                    />
-                    <button
-                      onClick={() => handleNameSuggestion(s.id)}
-                      disabled={
-                        !nameInputs[s.id]?.trim() ||
-                        namingSubmitting === s.id
-                      }
-                      className="px-3 py-1.5 text-xs rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-                    >
-                      {namingSubmitting === s.id ? "Saving" : "Name"}
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handleNameSuggestion(s.id)}
+                    disabled={
+                      !nameInputs[s.id]?.trim() ||
+                      namingSubmitting === s.id
+                    }
+                    className="w-full px-3 py-1.5 text-xs rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  >
+                    {namingSubmitting === s.id ? "Saving" : "Name"}
+                  </button>
                   <button
                     onClick={() => handleIgnoreSuggestion(s.id)}
                     className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
