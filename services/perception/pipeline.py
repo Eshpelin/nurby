@@ -462,6 +462,89 @@ class PerceptionPipeline:
             }
 
             async with async_session() as db:
+                # Debounce. if the previous observation on this camera was
+                # recent and carries the same label set + same named faces,
+                # extend it (bump ended_at) instead of minting a new row.
+                # Keeps the timeline readable when someone just moves around.
+                from datetime import timedelta
+
+                DEBOUNCE_WINDOW = timedelta(minutes=2)
+
+                def _scene_signature(labels: list[str], face_names: list[str]) -> tuple:
+                    """Collapse noisy label sets into a stable scene signature.
+
+                    YOLO flickers between transient labels (chair, tie, cell
+                    phone, etc.) even when the scene is the same person
+                    walking around. Bucket labels into high-level categories
+                    so minor flaps don't spawn a new observation row."""
+                    lset = set(labels)
+                    categories = set()
+                    if "person" in lset:
+                        categories.add("person")
+                    if lset & {"car", "truck", "bus", "motorcycle", "bicycle"}:
+                        categories.add("vehicle")
+                    if lset & {"cat", "dog", "bird"}:
+                        categories.add("animal")
+                    if lset & {"backpack", "handbag", "suitcase", "umbrella"}:
+                        categories.add("package")
+                    if lset & {"knife", "gun"}:
+                        categories.add("weapon")
+                    # Everything else ignored for signature purposes.
+                    return (
+                        tuple(sorted(categories)),
+                        tuple(sorted(face_names)),
+                    )
+
+                new_labels = sorted({d["label"] for d in detections})
+                new_names = sorted({
+                    f.get("person_name")
+                    for f in ((person_detections or {}).get("faces") or [])
+                    if f.get("person_name")
+                })
+                new_sig = _scene_signature(new_labels, new_names)
+
+                recent_q = (
+                    select(Observation)
+                    .where(Observation.camera_id == camera_id)
+                    .order_by(Observation.started_at.desc())
+                    .limit(1)
+                )
+                recent = (await db.execute(recent_q)).scalar_one_or_none()
+                if recent is not None:
+                    recent_anchor = recent.ended_at or recent.started_at
+                    if timestamp - recent_anchor <= DEBOUNCE_WINDOW:
+                        recent_labels = sorted({
+                            o.get("label")
+                            for o in ((recent.object_detections or {}).get("objects") or [])
+                        })
+                        recent_names = sorted({
+                            f.get("person_name")
+                            for f in ((recent.person_detections or {}).get("faces") or [])
+                            if f.get("person_name")
+                        })
+                        recent_sig = _scene_signature(recent_labels, recent_names)
+                        same_scene = recent_sig == new_sig and len(new_sig[0]) > 0
+                        if same_scene:
+                            recent.ended_at = timestamp
+                            # Keep the freshest VLM caption if we just got one.
+                            if vlm_description:
+                                recent.vlm_description = vlm_description
+                                recent.vlm_provider = vlm_provider
+                            # Do NOT overwrite thumbnail_path here. The VLM
+                            # queue pairs the caption with the exact frame
+                            # it analyzed and updates thumbnail_path when
+                            # that caption lands. Overwriting with every
+                            # incoming frame would show a newer image than
+                            # the caption on display.
+                            if confidence is not None:
+                                recent.confidence = confidence
+                            await db.commit()
+                            logger.info(
+                                "Extended observation %s on camera %s (same scene, %s)",
+                                recent.id, camera_id, ",".join(new_labels) or "no-labels",
+                            )
+                            return recent.id
+
                 obs = Observation(
                     camera_id=camera_id,
                     started_at=timestamp,
