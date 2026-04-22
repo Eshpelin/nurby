@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models import Observation, Camera, FaceCluster, FaceClusterSample
+from shared.models import Observation, Camera, FaceCluster, FaceClusterSample, Person
 from services.search.query import _call_text_llm
 
 logger = logging.getLogger("nurby.search.digest")
@@ -116,6 +116,38 @@ async def generate_digest(
     cam_result = await db.execute(select(Camera).where(Camera.id.in_(camera_ids)))
     camera_map = {c.id: c.name for c in cam_result.scalars().all()}
 
+    # Resolve cluster_id -> named-person display_name so historic
+    # observations captured before the user named the cluster still
+    # show up under the person's real name in the digest.
+    cluster_name_map: dict[str, str] = {}
+    cluster_ids_seen: set[str] = set()
+    for obs in observations:
+        for f in (obs.person_detections or {}).get("faces", []):
+            cid = f.get("cluster_id")
+            if cid:
+                cluster_ids_seen.add(str(cid))
+    if cluster_ids_seen:
+        try:
+            rows = await db.execute(
+                select(FaceCluster.id, Person.display_name)
+                .join(Person, FaceCluster.person_id == Person.id)
+                .where(FaceCluster.id.in_([uuid.UUID(c) for c in cluster_ids_seen]))
+            )
+            for cid, name in rows.all():
+                cluster_name_map[str(cid)] = name
+        except Exception:
+            logger.exception("Failed to resolve cluster -> person names")
+
+    def _resolve_face_name(face: dict) -> str | None:
+        """Prefer live match, then the cluster's named owner if any."""
+        name = face.get("person_name")
+        if name:
+            return name
+        cid = face.get("cluster_id")
+        if cid:
+            return cluster_name_map.get(str(cid))
+        return None
+
     # Object counts
     object_counts: dict[str, int] = {}
     person_counts: dict[str, int] = {}
@@ -132,7 +164,7 @@ async def generate_digest(
 
         if obs.person_detections:
             for face in obs.person_detections.get("faces", []):
-                name = face.get("person_name") or "Unknown person"
+                name = _resolve_face_name(face) or "Unknown person"
                 person_counts[name] = person_counts.get(name, 0) + 1
 
     # Top objects and people
@@ -180,15 +212,12 @@ async def generate_digest(
         labels = [l for l in labels if l]
         label_set = set(labels)
 
-        named_here = sorted({
-            f.get("person_name")
+        resolved_names = [
+            _resolve_face_name(f)
             for f in (obs.person_detections or {}).get("faces", [])
-            if f.get("person_name")
-        })
-        unknown_here = sum(
-            1 for f in (obs.person_detections or {}).get("faces", [])
-            if not f.get("person_name")
-        )
+        ]
+        named_here = sorted({n for n in resolved_names if n})
+        unknown_here = sum(1 for n in resolved_names if not n)
 
         for name in named_here:
             named_sessions.setdefault(name, []).append(obs.started_at)
@@ -272,6 +301,7 @@ async def generate_digest(
             .where(FaceClusterSample.captured_at >= start)
             .where(FaceClusterSample.captured_at <= now)
             .where(FaceCluster.status == "pending")
+            .where(FaceCluster.person_id.is_(None))
             .distinct()
         )
         seen_clusters = sample_rows.scalars().all()
