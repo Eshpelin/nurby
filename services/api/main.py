@@ -1,5 +1,7 @@
 import asyncio
+import logging
 import time
+from pathlib import Path
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -12,11 +14,35 @@ from services.api.routes import auth, cameras, detection_models, digests, events
 from services.digest.scheduler import run_digest_loop
 from services.api.ws import router as ws_router
 
+logger = logging.getLogger(__name__)
+
 START_TIME = time.time()
+
+
+def _run_migrations() -> None:
+    """Apply any pending alembic migrations on startup."""
+    try:
+        from alembic import command
+        from alembic.config import Config
+
+        repo_root = Path(__file__).resolve().parents[2]
+        ini_path = repo_root / "alembic.ini"
+        if not ini_path.exists():
+            logger.warning("alembic.ini not found at %s, skipping auto-migrate", ini_path)
+            return
+        cfg = Config(str(ini_path))
+        cfg.set_main_option("script_location", str(repo_root / "alembic"))
+        logger.info("Running alembic upgrade head")
+        command.upgrade(cfg, "head")
+        logger.info("Migrations up to date")
+    except Exception as exc:
+        logger.exception("Auto-migration failed: %s", exc)
+        raise
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await asyncio.to_thread(_run_migrations)
     task = asyncio.create_task(run_digest_loop())
     yield
     task.cancel()
