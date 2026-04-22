@@ -85,10 +85,16 @@ class RuleEngine:
                 payload=observation_data,
             )
 
-            # Execute actions
+            # Execute actions. Thread a shared `vars` dict so later actions
+            # can reference outputs written by earlier ones.
+            observation_data.setdefault("vars", {})
             for action in self._wrap_actions(rule.actions):
                 try:
                     await execute_action(action, observation_data, rule, event_id)
+                except RuntimeError as exc:
+                    # on_error=stop from a vlm_call aborts the chain.
+                    logger.info("Rule '%s' chain stopped. %s", rule.name, exc)
+                    break
                 except Exception:
                     logger.exception("Action failed for rule '%s'", rule.name)
 
