@@ -14,7 +14,8 @@ from shared.config import settings
 from shared.auth import get_current_user, require_admin
 from shared.database import get_db
 from shared.models import Camera, FaceCluster, FaceClusterSample, FaceEmbedding, Observation, Person, User
-from shared.schemas import PersonCreate, PersonResponse, PersonUpdate
+from shared.schemas import PersonCreate, PersonRecapResponse, PersonResponse, PersonUpdate
+from services.recap import generate_recap
 
 router = APIRouter()
 
@@ -572,6 +573,42 @@ async def cluster_activity_feed(
         ))
 
     return activities
+
+
+# ── Starred persons recap ──
+
+
+@router.get("/starred/status", response_model=list[PersonRecapResponse])
+async def starred_status(
+    force: bool = Query(default=False, description="Bypass recap cache"),
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the current recap for every starred person.
+
+    Uses each person's recap_prompt to bias the VLM summary. Caches results
+    on the Person row for a short TTL so the dashboard can poll cheaply.
+    """
+    result = await db.execute(
+        select(Person).where(Person.is_starred == True).order_by(Person.display_name)
+    )
+    persons = result.scalars().all()
+    out: list[dict] = []
+    for p in persons:
+        recap = await generate_recap(db, p, force=force)
+        out.append({
+            "person_id": p.id,
+            "display_name": p.display_name,
+            "photo_path": p.photo_path,
+            "status": recap["status"],
+            "last_seen_at": recap["last_seen_at"],
+            "last_camera_id": recap["last_camera_id"],
+            "last_thumbnail_path": recap["last_thumbnail_path"],
+            "sightings_24h": recap["sightings_24h"],
+            "generated_at": recap["generated_at"],
+            "cached": recap["cached"],
+        })
+    return out
 
 
 # ── Person CRUD endpoints ──
