@@ -98,7 +98,7 @@ function barColor(percent: number | null): string {
 }
 
 export default function SettingsPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, token } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [showProviderModal, setShowProviderModal] = useState(false);
@@ -955,7 +955,7 @@ export default function SettingsPage() {
                   <div key={p.id} className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2">
                     <div className="w-9 h-9 rounded-full overflow-hidden bg-muted flex-shrink-0">
                       {p.photo_path ? (
-                        <img src={`/api/persons/${p.id}/photo`} alt={p.display_name} className="w-full h-full object-cover" />
+                        <img src={`/api/persons/${p.id}/photo${token ? `?token=${token}` : ""}`} alt={p.display_name} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-xs font-semibold text-muted-foreground">
                           {p.display_name.charAt(0).toUpperCase()}

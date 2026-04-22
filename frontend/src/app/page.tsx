@@ -1084,7 +1084,7 @@ function PersonActivityModal({ personId, personName, onClose, mode = "person" }:
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-full overflow-hidden border border-border bg-muted flex-shrink-0">
-              <img src={`/api/persons/${personId}/photo`} alt={personName} className="w-full h-full object-cover"
+              <img src={`/api/persons/${personId}/photo${token ? `?token=${token}` : ""}`} alt={personName} className="w-full h-full object-cover"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
             </div>
             <div className="min-w-0">
@@ -2507,7 +2507,7 @@ function DashboardContent() {
                                 className="flex-shrink-0 w-20 text-center group">
                                 <div className="w-16 h-16 mx-auto rounded-full overflow-hidden border-2 border-border group-hover:border-accent transition-colors bg-muted">
                                   {p.photo_path ? (
-                                    <img src={`/api/persons/${p.person_id}/photo`} alt={p.display_name} className="w-full h-full object-cover" />
+                                    <img src={`/api/persons/${p.person_id}/photo${token ? `?token=${token}` : ""}`} alt={p.display_name} className="w-full h-full object-cover" />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center text-sm font-semibold text-muted-foreground">
                                       {p.display_name.charAt(0).toUpperCase()}
@@ -2523,7 +2523,7 @@ function DashboardContent() {
                                 className="flex-shrink-0 w-20 text-center group" title={c.appearance_description || ""}>
                                 <div className="w-16 h-16 mx-auto rounded-full overflow-hidden border-2 border-dashed border-amber-500/50 group-hover:border-amber-400 transition-colors bg-muted">
                                   {c.sample_thumbnail_path ? (
-                                    <img src={`/api/persons/suggestions/${c.cluster_id}/thumbnail`} alt={c.auto_label} className="w-full h-full object-cover" />
+                                    <img src={`/api/persons/suggestions/${c.cluster_id}/thumbnail${token ? `?token=${token}` : ""}`} alt={c.auto_label} className="w-full h-full object-cover" />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center text-xs font-semibold text-amber-400/80">?</div>
                                   )}

@@ -480,7 +480,7 @@ export default function PeoplePage() {
                     {/* Avatar */}
                     {p.photo_path ? (
                       <img
-                        src={`/api/persons/${p.id}/photo`}
+                        src={`/api/persons/${p.id}/photo${token ? `?token=${token}` : ""}`}
                         alt={p.display_name}
                         className="w-11 h-11 rounded-full object-cover border border-border flex-shrink-0"
                       />

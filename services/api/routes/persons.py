@@ -774,7 +774,14 @@ async def upload_face(
 
 
 @router.get("/{person_id}/photo")
-async def get_person_photo(person_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_person_photo(
+    person_id: uuid.UUID,
+    token: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Photo auth accepts `?token=` query param so <img> tags work."""
+    if not token or not decode_access_token(token):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")

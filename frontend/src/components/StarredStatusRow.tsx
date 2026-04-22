@@ -31,11 +31,12 @@ function timeAgo(iso: string | null): string {
 }
 
 function Avatar({ it, size = "md" }: { it: StarredStatus; size?: "sm" | "md" }) {
+  const { token } = useAuth();
   const dim = size === "sm" ? "h-7 w-7 text-[10px]" : "h-8 w-8 text-xs";
   if (it.photo_path) {
     return (
       <img
-        src={`/api/persons/${it.person_id}/photo`}
+        src={`/api/persons/${it.person_id}/photo${token ? `?token=${token}` : ""}`}
         alt={it.display_name}
         className={`${dim} rounded-full object-cover ring-1 ring-border`}
       />
