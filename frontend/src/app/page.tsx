@@ -1868,7 +1868,28 @@ function DashboardContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [digestPeriod]);
 
-  // Search
+  // Ask the AI to synthesize an answer. Called automatically after every
+  // text search so the user does not have to click a separate button.
+  const askAiForQuery = useCallback(async (q: string) => {
+    if (!q.trim()) return;
+    setAskingAi(true);
+    try {
+      const res = await authFetch("/api/search/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q.trim() }) });
+      if (res.ok) {
+        const data = await res.json();
+        const answer = data.answer || data.note || "AI could not produce an answer for this question.";
+        setAiAnswer(answer);
+        if (data.sources?.length > 0) setSearchResults((prev) => prev.length === 0 ? data.sources : prev);
+      } else {
+        setAiAnswer(`AI request failed (${res.status}). Check the server logs.`);
+      }
+    } catch (err) {
+      setAiAnswer(`AI request failed. ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+    finally { setAskingAi(false); }
+  }, [authFetch]);
+
+  // Search. Runs observation search AND auto-asks the AI in parallel.
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim() && !filterPerson && !filterObject) {
       setSearchActive(false); setSearchResults([]); setAiAnswer(null); return;
@@ -1879,33 +1900,24 @@ function DashboardContent() {
     if (selectedCamera) params.set("camera_id", selectedCamera);
     if (filterPerson) params.set("person", filterPerson);
     if (filterObject) params.set("object", filterObject);
-    try {
-      const res = await authFetch(`/api/search?${params}`);
-      if (res.ok) setSearchResults((await res.json()).results);
-    } catch { /* silent */ }
-    finally { setIsSearching(false); }
-  }, [searchQuery, selectedCamera, filterPerson, filterObject]);
 
-  const handleAskAi = async () => {
-    if (!searchQuery.trim()) return;
-    setAskingAi(true);
-    try {
-      const res = await authFetch("/api/search/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: searchQuery.trim() }) });
-      if (res.ok) {
-        const data = await res.json();
-        // Surface server-side notes (e.g. "No VLM provider configured")
-        // so the user sees feedback instead of a silent no-op.
-        const answer = data.answer || data.note || "AI could not produce an answer for this question.";
-        setAiAnswer(answer);
-        if (data.sources?.length > 0 && searchResults.length === 0) { setSearchResults(data.sources); setSearchActive(true); }
-      } else {
-        setAiAnswer(`AI request failed (${res.status}). Check the server logs.`);
-      }
-    } catch (err) {
-      setAiAnswer(`AI request failed. ${err instanceof Error ? err.message : "Unknown error"}`);
-    }
-    finally { setAskingAi(false); }
-  };
+    const searchTask = (async () => {
+      try {
+        const res = await authFetch(`/api/search?${params}`);
+        if (res.ok) setSearchResults((await res.json()).results);
+      } catch { /* silent */ }
+      finally { setIsSearching(false); }
+    })();
+
+    // Kick off AI answer in parallel. No button needed.
+    const askTask = searchQuery.trim() ? askAiForQuery(searchQuery) : Promise.resolve();
+
+    await Promise.all([searchTask, askTask]);
+  }, [searchQuery, selectedCamera, filterPerson, filterObject, authFetch, askAiForQuery]);
+
+  // Legacy handler kept for any remaining callsite. Delegates to the auto
+  // path so behavior stays consistent.
+  const handleAskAi = () => { askAiForQuery(searchQuery); };
 
   const clearSearch = () => { setSearchQuery(""); setSearchActive(false); setSearchResults([]); setAiAnswer(null); };
 
@@ -2392,39 +2404,25 @@ function DashboardContent() {
               </div>
             )}
 
-            {searchActive && !aiAnswer && !askingAi && (
+            {/* AI answer fires automatically when a search runs. Only
+                show the "no provider configured" hint when that's the
+                case so the user knows why no answer appeared. */}
+            {searchActive && !aiAnswer && !askingAi && !hasAiProvider && (
               <div className="mt-2 rounded-lg border border-border bg-card p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={hasAiProvider ? "text-accent" : "text-muted-foreground"}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground">
                       <path d="M12 2a4 4 0 0 1 4 4v1a2 2 0 0 1 2 2v1a4 4 0 0 1-2 3.46V16a6 6 0 0 1-12 0v-2.54A4 4 0 0 1 2 10V9a2 2 0 0 1 2-2V6a4 4 0 0 1 4-4" />
                       <circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" />
                     </svg>
                     <div>
-                      <p className="text-xs font-medium">
-                        {hasAiProvider ? "Want a smarter answer?" : "AI answers unavailable"}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {hasAiProvider
-                          ? `Found ${searchResults.length} result${searchResults.length !== 1 ? "s" : ""}. AI can analyze these and give you a direct answer.`
-                          : "Connect an AI provider in Settings to enable natural language answers."}
-                      </p>
+                      <p className="text-xs font-medium">AI answers unavailable</p>
+                      <p className="text-[10px] text-muted-foreground">Connect an AI provider in Settings to enable natural language answers.</p>
                     </div>
                   </div>
-                  {hasAiProvider ? (
-                    <button
-                      type="button"
-                      onClick={handleAskAi}
-                      className="px-3 py-1.5 text-xs rounded-md bg-accent text-black font-medium hover:opacity-90 flex items-center gap-1.5 whitespace-nowrap"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m5 12 5 5L20 7" /></svg>
-                      Ask AI
-                    </button>
-                  ) : (
-                    <a href="/settings" className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-accent/50 transition-colors whitespace-nowrap">
-                      Go to Settings
-                    </a>
-                  )}
+                  <a href="/settings" className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-accent/50 transition-colors whitespace-nowrap">
+                    Go to Settings
+                  </a>
                 </div>
               </div>
             )}

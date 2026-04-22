@@ -10,6 +10,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 
+import httpx
 from sqlalchemy import select, and_, or_, func, cast, String, Float, literal_column
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -407,9 +408,13 @@ async def answer_question(
 
     system_prompt = (
         "You are Nurby, an AI camera monitoring assistant. Answer the user's "
-        "question based ONLY on the observation data provided below. Be concise "
-        "and specific. Reference timestamps and camera names. If the data does not "
-        "contain enough information to answer, say so."
+        "question using the observation data below. Each observation has a "
+        "timestamp, a camera, a scene description, and optionally a 'People.' "
+        "line listing the recognized person by name. When asked who was seen, "
+        "list every person name that appears on any 'People.' line and when. "
+        "Treat entries without a name as 'unknown person'. Be concise. Use the "
+        "real name when one is given. If the data truly contains no people, "
+        "only then say so."
     )
 
     user_prompt = (
