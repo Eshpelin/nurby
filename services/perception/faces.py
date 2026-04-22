@@ -1,13 +1,15 @@
 """
 Face detection and recognition module.
 
-Uses face_recognition library (dlib-based) for detection and 128-dim
-embedding generation. Matches detected faces against known embeddings
-stored in pgvector.
+Uses InsightFace (buffalo_l ArcFace) via ONNX runtime for detection and
+512-dim embedding generation. No manual install step. The model pack
+downloads on first use and is cached locally. Matches detected faces
+against known embeddings stored in pgvector.
 """
 
 import asyncio
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -19,29 +21,46 @@ from sqlalchemy import select
 
 logger = logging.getLogger("nurby.perception.faces")
 
-# Cosine similarity threshold for face matching
-MATCH_THRESHOLD = 0.6
+# L2 distance thresholds for InsightFace normalized 512-dim embeddings.
+# Rule of thumb. distance under ~1.1 is the same person (cosine > 0.4).
+MATCH_THRESHOLD = 1.1
 
-# Max distance to consider same person cluster
-CLUSTER_THRESHOLD = 0.5
+# Tighter cluster threshold so unknown-person clusters stay coherent.
+CLUSTER_THRESHOLD = 1.0
 
 
 class FaceRecognizer:
+    """Lazy-loaded InsightFace detector + ArcFace embedder."""
+
     def __init__(self):
-        self._lib = None
+        self._app = None
 
     def _load(self):
-        if self._lib is None:
-            try:
-                import face_recognition
-                self._lib = face_recognition
-                logger.info("face_recognition library loaded")
-            except ImportError:
-                logger.warning(
-                    "face_recognition not installed. Face recognition disabled. "
-                    "Install with: pip install face_recognition"
-                )
-        return self._lib
+        if self._app is not None:
+            return self._app
+        try:
+            from insightface.app import FaceAnalysis
+        except ImportError:
+            logger.warning(
+                "insightface not installed. Face recognition disabled. "
+                "Install with. pip install insightface onnxruntime"
+            )
+            return None
+        try:
+            # buffalo_l. full ArcFace pipeline (detection + recognition).
+            # Model pack auto-downloads to ~/.insightface on first use.
+            app = FaceAnalysis(
+                name="buffalo_l",
+                providers=["CPUExecutionProvider"],
+                allowed_modules=["detection", "recognition"],
+            )
+            app.prepare(ctx_id=0, det_size=(640, 640))
+            self._app = app
+            logger.info("InsightFace 'buffalo_l' loaded (CPU, 640x640 detection)")
+        except Exception:
+            logger.exception("Failed to load InsightFace model")
+            return None
+        return self._app
 
     async def detect_and_embed(self, frame: np.ndarray) -> list[dict]:
         """Detect faces in frame, return list of {bbox, embedding}."""
@@ -49,29 +68,29 @@ class FaceRecognizer:
         return await loop.run_in_executor(None, self._detect_sync, frame)
 
     def _detect_sync(self, frame: np.ndarray) -> list[dict]:
-        lib = self._load()
-        if lib is None:
+        app = self._load()
+        if app is None:
             return []
-
-        # Convert BGR (OpenCV) to RGB (face_recognition)
-        rgb = frame[:, :, ::-1]
-
-        # Detect face locations
-        locations = lib.face_locations(rgb, model="hog")
-        if not locations:
+        try:
+            # InsightFace expects BGR ndarray, which is what OpenCV gives.
+            results = app.get(frame)
+        except Exception:
+            logger.exception("InsightFace inference failed")
             return []
-
-        # Generate 128-dim embeddings
-        encodings = lib.face_encodings(rgb, locations)
 
         faces = []
-        for (top, right, bottom, left), encoding in zip(locations, encodings):
+        for face in results:
+            box = getattr(face, "bbox", None)
+            emb = getattr(face, "normed_embedding", None)
+            if box is None or emb is None:
+                continue
+            x1, y1, x2, y2 = [int(round(v)) for v in box.tolist()]
             faces.append({
-                "bbox": [left, top, right, bottom],
-                "embedding": encoding.tolist(),
+                "bbox": [x1, y1, x2, y2],
+                "embedding": emb.tolist(),
+                "detect_score": float(getattr(face, "det_score", 0.0) or 0.0),
             })
-
-        logger.debug("Detected %d face(s)", len(faces))
+        logger.debug("InsightFace detected %d face(s)", len(faces))
         return faces
 
     async def match_faces(self, faces: list[dict]) -> list[dict]:
