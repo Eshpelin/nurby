@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useWebcamPublisher, listVideoDevices } from "@/lib/webcam-publisher";
 import { StarredStatusRow } from "@/components/StarredStatusRow";
+import { RecordingModal } from "@/components/RecordingModal";
 
 const WEBRTC_URL =
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
@@ -1525,6 +1526,7 @@ function DashboardContent() {
   const [statusLogs, setStatusLogs] = useState<StatusLog[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
   const [activeEntry, setActiveEntry] = useState<string | null>(null);
+  const [modalRecording, setModalRecording] = useState<Recording | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [eventFilters, setEventFilters] = useState<Set<EventFilter>>(new Set(["recordings", "observations", "status"]));
   const [timelineLoading, setTimelineLoading] = useState(true);
@@ -2482,15 +2484,10 @@ function DashboardContent() {
                           const rec = matchedRec;
                           return (
                             <div key={entry.id}>
-                              <button onClick={() => setActiveEntry(isActive ? null : entry.id)}
-                                className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${isActive ? "border-accent bg-card" : "border-border/50 hover:border-accent/50 hover:bg-card/50"}`}>
+                              <button onClick={() => setModalRecording(rec)}
+                                className="w-full text-left px-3 py-2 rounded-lg border border-border/50 hover:border-accent/50 hover:bg-card/50 transition-colors">
                                 {row}
                               </button>
-                              {isActive && (
-                                <div className="mt-1.5 rounded-lg overflow-hidden border border-border bg-black">
-                                  <video controls autoPlay className="w-full aspect-video" src={`/api/recordings/${rec.id}/stream`} />
-                                </div>
-                              )}
                             </div>
                           );
                         }
@@ -2499,8 +2496,8 @@ function DashboardContent() {
                           const rec = entry.data as Recording;
                           return (
                             <div key={entry.id}>
-                              <button onClick={() => setActiveEntry(isActive ? null : entry.id)}
-                                className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${isActive ? "border-accent bg-card" : "border-border hover:border-accent/50 hover:bg-card/50"}`}>
+                              <button onClick={() => setModalRecording(rec)}
+                                className="w-full text-left px-3 py-2.5 rounded-lg border border-border hover:border-accent/50 hover:bg-card/50 transition-colors">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2">
                                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
@@ -2518,11 +2515,6 @@ function DashboardContent() {
                                   </div>
                                 </div>
                               </button>
-                              {isActive && (
-                                <div className="mt-1.5 rounded-lg overflow-hidden border border-border bg-black">
-                                  <video controls autoPlay className="w-full aspect-video" src={`/api/recordings/${rec.id}/stream`} />
-                                </div>
-                              )}
                             </div>
                           );
                         }
@@ -2626,6 +2618,11 @@ function DashboardContent() {
           />
         );
       })()}
+      <RecordingModal
+        recording={modalRecording}
+        cameraName={modalRecording ? cameras.find((c) => c.id === modalRecording.camera_id)?.name : null}
+        onClose={() => setModalRecording(null)}
+      />
     </div>
   );
 }
