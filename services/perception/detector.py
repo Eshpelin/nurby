@@ -18,10 +18,20 @@ logger = logging.getLogger("nurby.perception.detector")
 # Default classes for home security when no label_filter is set.
 # Models with a custom label_filter bypass this entirely.
 DEFAULT_CLASSES = {
+    # people + vehicles
     "person", "bicycle", "car", "motorcycle", "bus", "truck",
+    # animals
     "cat", "dog", "bird",
-    "backpack", "umbrella", "handbag", "suitcase",
-    "cell phone", "laptop",
+    # carryables
+    "backpack", "umbrella", "handbag", "suitcase", "tie",
+    # electronics / common household items worth noticing
+    "cell phone", "laptop", "tv", "remote", "keyboard", "mouse",
+    "book", "clock", "vase", "scissors",
+    # kitchen / sharp or fragile objects
+    "knife", "fork", "spoon", "bottle", "wine glass", "cup", "bowl",
+    # misc indoor
+    "chair", "couch", "bed", "dining table", "potted plant",
+    "teddy bear",
 }
 
 # Full COCO class set for reference (YOLOv8 supports all 80)
