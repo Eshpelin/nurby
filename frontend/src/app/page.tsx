@@ -1186,6 +1186,12 @@ function AddCameraModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
           prev?.getTracks().forEach((t) => t.stop());
           return newStream;
         });
+        // Auto-fill Name from the selected device label if the user hasn't typed one
+        const dev = webcamDevices.find((d) => d.deviceId === webcamDeviceId);
+        if (dev?.label && !name.trim()) {
+          const clean = dev.label.replace(/\s*\([0-9a-f:]+\)\s*$/i, "").trim();
+          if (clean) setName(clean);
+        }
       } catch (err) {
         setWebcamError(err instanceof Error ? err.message : "Camera access denied");
       }
@@ -1434,11 +1440,22 @@ function AddCameraModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
 
             {error && <p className="text-sm text-danger">{error}</p>}
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">Cancel</button>
-              <button type="submit" disabled={submitting || !name.trim() || (streamType === "webcam" ? !webcamStream : !streamUrl.trim())} className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
-                {submitting ? "Adding..." : streamType === "webcam" ? "Start Streaming" : "Add Camera"}
-              </button>
+            <div className="flex flex-col items-end gap-1.5 pt-2">
+              {(!name.trim() || (streamType === "webcam" ? !webcamStream : !streamUrl.trim())) && !submitting && (
+                <p className="text-xs text-muted-foreground">
+                  {!name.trim()
+                    ? "Enter a Name above to continue."
+                    : streamType === "webcam"
+                      ? "Waiting for camera preview."
+                      : "Stream URL required."}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">Cancel</button>
+                <button type="submit" disabled={submitting || !name.trim() || (streamType === "webcam" ? !webcamStream : !streamUrl.trim())} className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
+                  {submitting ? "Adding..." : streamType === "webcam" ? "Start Streaming" : "Add Camera"}
+                </button>
+              </div>
             </div>
           </form>
         )}
