@@ -15,17 +15,63 @@ Key design decisions.
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
+import cv2
 import numpy as np
 
+from shared.config import settings
 from shared.database import async_session
 from shared.models import Observation, Provider
 from services.perception.vlm import VLMClient
 from services.search.embeddings import generate_embedding, get_embedding_provider
+
+THUMBNAIL_DIR = os.path.join(settings.thumbnails_path, "observations")
+
+
+def _write_vlm_thumbnail(
+    camera_id: str,
+    observation_id: uuid.UUID,
+    frame: np.ndarray,
+    detections: list[dict],
+) -> str | None:
+    """Save the exact frame the VLM analyzed as a thumbnail.
+
+    Drawn with detection boxes so the image matches what the caption
+    describes. Overwrites any earlier thumbnail for this observation
+    so the UI always shows the frame that produced the caption.
+    """
+    try:
+        annotated = frame.copy()
+        for det in detections:
+            try:
+                x1, y1, x2, y2 = det["bbox"]
+            except (KeyError, ValueError):
+                continue
+            is_plate = det.get("label") == "license_plate"
+            color = (0, 200, 255) if is_plate else (0, 255, 0)
+            label = (
+                f"PLATE {det.get('plate_text', '?')}"
+                if is_plate and det.get("plate_text")
+                else f"{det.get('label', '?')} {det.get('confidence', 0):.0%}"
+            )
+            cv2.rectangle(annotated, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+            cv2.putText(
+                annotated, label, (int(x1), int(y1) - 8),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1,
+            )
+        os.makedirs(THUMBNAIL_DIR, exist_ok=True)
+        filename = f"{camera_id}_obs_{observation_id}_vlm.jpg"
+        path = os.path.join(THUMBNAIL_DIR, filename)
+        cv2.imwrite(path, annotated, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        return path
+    except Exception:
+        logger.exception("Failed to save VLM thumbnail for observation %s", observation_id)
+        return None
 
 logger = logging.getLogger("nurby.perception.vlm_queue")
 
@@ -193,10 +239,16 @@ class VLMQueue:
                 stats.record_latency(duration)
 
                 if description:
-                    # Patch observation with VLM description and regenerate embedding
+                    # Save the exact frame the VLM looked at so the
+                    # thumbnail stays in sync with the caption.
+                    thumb_path = _write_vlm_thumbnail(
+                        job.camera_id, job.observation_id, job.frame, job.detections,
+                    )
+                    # Patch observation with VLM description, thumbnail,
+                    # and regenerate embedding.
                     await self._patch_observation(
                         job.observation_id, description, job.provider.name,
-                        job.detections,
+                        job.detections, thumbnail_path=thumb_path,
                     )
                     logger.info(
                         "VLM for camera %s completed in %.1fs. %s",
@@ -222,7 +274,7 @@ class VLMQueue:
 
     async def _patch_observation(
         self, observation_id: uuid.UUID, description: str, provider_name: str,
-        detections: list[dict],
+        detections: list[dict], thumbnail_path: str | None = None,
     ):
         """Update observation record with VLM description and regenerate embedding."""
         try:
@@ -232,6 +284,8 @@ class VLMQueue:
                     obs.vlm_description = description
                     obs.vlm_provider = provider_name
                     obs.confidence = 0.8
+                    if thumbnail_path:
+                        obs.thumbnail_path = thumbnail_path
                     await db.commit()
         except Exception:
             logger.exception("Failed to patch observation %s with VLM description", observation_id)
