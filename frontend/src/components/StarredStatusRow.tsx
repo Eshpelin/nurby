@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 
 interface StarredStatus {
@@ -10,10 +10,13 @@ interface StarredStatus {
   status: string;
   last_seen_at: string | null;
   last_camera_id: string | null;
+  last_camera_name: string | null;
   last_thumbnail_path: string | null;
+  last_observation_id: string | null;
   sightings_24h: number;
   generated_at: string;
   cached: boolean;
+  stale: boolean;
 }
 
 function timeAgo(iso: string | null): string {
@@ -32,6 +35,7 @@ export function StarredStatusRow() {
   const [items, setItems] = useState<StarredStatus[]>([]);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const fetchStatus = useCallback(async (force = false) => {
     try {
@@ -48,8 +52,40 @@ export function StarredStatusRow() {
     return () => clearInterval(t);
   }, [fetchStatus]);
 
-  const refreshOne = useCallback(async (id: string) => {
-    setRefreshingId(id);
+  // WS listener. Invalidate + refetch when a starred person is spotted.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE || window.location.origin;
+    const url = apiBase.replace(/^http/, "ws") + "/ws";
+    let closed = false;
+    try {
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === "recap_stale" || msg.type === "person_seen") {
+            fetchStatus();
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+      ws.onerror = () => { /* silent */ };
+    } catch {
+      /* silent */
+    }
+    return () => {
+      closed = true;
+      try { wsRef.current?.close(); } catch { /* ignore */ }
+      void closed;
+      void proto;
+    };
+  }, [fetchStatus]);
+
+  const refreshOne = useCallback(async (_id: string) => {
+    setRefreshingId(_id);
     try {
       const res = await authFetch(`/api/persons/starred/status?force=true`);
       if (res.ok) setItems(await res.json());
@@ -89,66 +125,87 @@ export function StarredStatusRow() {
         {items.map((it) => (
           <div
             key={it.person_id}
-            className="flex-shrink-0 w-[260px] rounded-md border border-border bg-background/60 p-2.5 hover:border-amber-500/30 transition-colors"
+            className="flex-shrink-0 w-[280px] rounded-md border border-border bg-background/60 overflow-hidden hover:border-amber-500/30 transition-colors"
           >
-            <div className="flex items-start gap-2.5">
-              {it.photo_path ? (
+            {it.last_observation_id ? (
+              <div className="relative aspect-video bg-muted/20">
                 <img
-                  src={`/api/persons/${it.person_id}/photo`}
-                  alt={it.display_name}
-                  className="w-9 h-9 rounded-full object-cover border border-border flex-shrink-0"
+                  src={`/api/observations/${it.last_observation_id}/thumbnail`}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                 />
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-medium flex-shrink-0">
-                  {it.display_name.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium truncate">
-                    {it.display_name}
-                  </span>
-                  {it.cached && (
-                    <span className="text-[9px] text-muted-foreground/60 font-mono">
-                      cached
-                    </span>
-                  )}
-                </div>
-                <div className="text-[10px] text-muted-foreground">
-                  {timeAgo(it.last_seen_at)}
-                  {it.sightings_24h > 0 && (
-                    <>
-                      <span className="mx-1">&middot;</span>
-                      {it.sightings_24h} today
-                    </>
-                  )}
-                </div>
+                {it.last_camera_name && (
+                  <div className="absolute top-1.5 left-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-mono text-white/90">
+                    {it.last_camera_name}
+                  </div>
+                )}
+                {it.stale && (
+                  <div className="absolute top-1.5 right-1.5 rounded bg-amber-500/80 px-1.5 py-0.5 text-[9px] font-mono text-black">
+                    stale
+                  </div>
+                )}
               </div>
-              <button
-                onClick={() => refreshOne(it.person_id)}
-                disabled={refreshingId === it.person_id}
-                aria-label="Refresh recap"
-                title="Refresh recap"
-                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-40"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className={refreshingId === it.person_id ? "animate-spin" : ""}
+            ) : null}
+            <div className="p-2.5">
+              <div className="flex items-start gap-2.5">
+                {it.photo_path ? (
+                  <img
+                    src={`/api/persons/${it.person_id}/photo`}
+                    alt={it.display_name}
+                    className="w-9 h-9 rounded-full object-cover border border-border flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-medium flex-shrink-0">
+                    {it.display_name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium truncate">
+                    {it.display_name}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {timeAgo(it.last_seen_at)}
+                    {it.last_camera_name && !it.last_observation_id && (
+                      <>
+                        <span className="mx-1">&middot;</span>
+                        {it.last_camera_name}
+                      </>
+                    )}
+                    {it.sightings_24h > 0 && (
+                      <>
+                        <span className="mx-1">&middot;</span>
+                        {it.sightings_24h} today
+                      </>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => refreshOne(it.person_id)}
+                  disabled={refreshingId === it.person_id}
+                  aria-label="Refresh recap"
+                  title="Refresh recap"
+                  className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-40"
                 >
-                  <polyline points="23 4 23 10 17 10" />
-                  <polyline points="1 20 1 14 7 14" />
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                </svg>
-              </button>
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className={refreshingId === it.person_id ? "animate-spin" : ""}
+                  >
+                    <polyline points="23 4 23 10 17 10" />
+                    <polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  </svg>
+                </button>
+              </div>
+              <p className="mt-2 text-xs leading-snug text-foreground/90 line-clamp-3">
+                {it.status}
+              </p>
             </div>
-            <p className="mt-2 text-xs leading-snug text-foreground/90 line-clamp-3">
-              {it.status}
-            </p>
           </div>
         ))}
       </div>
