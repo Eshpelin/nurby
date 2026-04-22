@@ -325,10 +325,17 @@ function observationToEvents(obs: Observation): ActivityEvent[] {
     const parts = sorted.map(([label, count]) => count === 1 ? label : `${count} ${label}s`);
 
     if (events.length === 0 && parts.length > 0) {
+      // Prefer the VLM caption when available. Detections become a subtitle.
+      let summary = parts.join(", ") + " detected";
+      if (obs.vlm_description) {
+        let desc = obs.vlm_description.split(/\.\s/)[0];
+        if (desc.length > 80) desc = desc.slice(0, 77) + ".";
+        summary = desc;
+      }
       events.push({
         id: `${obs.id}-objects`,
         timestamp: obs.started_at,
-        summary: parts.join(", ") + " detected",
+        summary,
         icon: "object",
       });
     }
@@ -336,7 +343,7 @@ function observationToEvents(obs: Observation): ActivityEvent[] {
 
   if (events.length === 0 && obs.vlm_description) {
     let desc = obs.vlm_description.split(/\.\s/)[0];
-    if (desc.length > 60) desc = desc.slice(0, 57) + "...";
+    if (desc.length > 80) desc = desc.slice(0, 77) + ".";
     events.push({
       id: `${obs.id}-scene`,
       timestamp: obs.started_at,
@@ -450,8 +457,30 @@ function DetectionOverlay({ cameraId, visible, frameWidth, frameHeight }: {
 
   if (!visible || detections.length === 0) return null;
 
+  // Overlay sits inside the feed container which is always 16:9. The video
+  // itself is rendered `object-contain`, so it occupies a centered rect
+  // with the camera's native aspect ratio. Compute that inner rect so bbox
+  // percentages align with real pixels instead of stretching across the
+  // letterbox bands.
+  const frameAspect = frameWidth / frameHeight;
+  const containerAspect = 16 / 9;
+  let innerLeft = 0;
+  let innerTop = 0;
+  let innerW = 100;
+  let innerH = 100;
+  if (frameAspect > containerAspect) {
+    innerH = (containerAspect / frameAspect) * 100;
+    innerTop = (100 - innerH) / 2;
+  } else if (frameAspect < containerAspect) {
+    innerW = (frameAspect / containerAspect) * 100;
+    innerLeft = (100 - innerW) / 2;
+  }
+
   return (
-    <div className={`absolute inset-0 z-[5] pointer-events-none transition-opacity duration-500 ${faded ? "opacity-0" : "opacity-100"}`}>
+    <div
+      className={`absolute z-[5] pointer-events-none transition-opacity duration-500 ${faded ? "opacity-0" : "opacity-100"}`}
+      style={{ left: `${innerLeft}%`, top: `${innerTop}%`, width: `${innerW}%`, height: `${innerH}%` }}
+    >
       {detections.map((det, i) => {
         const [x1, y1, x2, y2] = det.bbox;
         const left = (x1 / frameWidth) * 100;
@@ -588,6 +617,24 @@ function CameraSidebarCard({
   const ptzCapable = camera.stream_type === "rtsp";
   const streamName = extractStreamName(camera.stream_url);
   const iframeSrc = `${WEBRTC_URL}/${streamName}/`;
+
+  // Webcam publisher state for this tile. If this tab owns the capture
+  // we render the local MediaStream directly in a <video> element.
+  const { publishers, resumeIntent } = useWebcamPublisher();
+  const isWebcam = camera.stream_type === "webcam";
+  const myPublisher = publishers.find((p) => p.cameraId === camera.id);
+  const localStream = myPublisher?.status === "live" ? myPublisher.stream : null;
+  const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = webcamVideoRef.current;
+    if (!el) return;
+    if (localStream && el.srcObject !== localStream) {
+      el.srcObject = localStream;
+      el.play().catch(() => undefined);
+    } else if (!localStream && el.srcObject) {
+      el.srcObject = null;
+    }
+  }, [localStream]);
   const latestEvent = activityEvents[0];
   const frameW = camera.width || DEFAULT_FRAME_WIDTH;
   const frameH = camera.height || DEFAULT_FRAME_HEIGHT;
@@ -608,7 +655,9 @@ function CameraSidebarCard({
       >
         {/* Tiny preview */}
         <div className="relative w-16 h-10 bg-black rounded overflow-hidden flex-shrink-0">
-          {camera.status !== "offline" ? (
+          {isWebcam && localStream ? (
+            <video ref={webcamVideoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" />
+          ) : camera.status !== "offline" ? (
             <iframe src={iframeSrc} className="absolute inset-0 w-full h-full border-0 pointer-events-none scale-[1.5] origin-center" allow="autoplay; encrypted-media" sandbox="allow-scripts allow-same-origin" />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center"><span className="text-[8px] text-muted-foreground font-mono">OFF</span></div>
@@ -645,7 +694,15 @@ function CameraSidebarCard({
     >
       {/* Feed preview */}
       <div className="relative aspect-video bg-black">
-        {camera.status !== "offline" ? (
+        {isWebcam && localStream ? (
+          <video
+            ref={webcamVideoRef}
+            autoPlay
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-contain"
+          />
+        ) : camera.status !== "offline" ? (
           <iframe
             src={iframeSrc}
             className="absolute inset-0 w-full h-full border-0 pointer-events-none"
@@ -653,8 +710,22 @@ function CameraSidebarCard({
             sandbox="allow-scripts allow-same-origin"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
             <span className="text-[10px] text-muted-foreground font-mono">OFFLINE</span>
+            {isWebcam && myPublisher?.status === "needs-permission" && (
+              <button
+                onClick={(e) => { e.stopPropagation(); resumeIntent(camera.id); }}
+                className="text-[11px] px-2.5 py-1 rounded-md bg-amber-500 text-black font-medium hover:bg-amber-400"
+              >
+                Enable camera
+              </button>
+            )}
+            {isWebcam && myPublisher?.status === "connecting" && (
+              <span className="text-[10px] text-amber-400">connecting.</span>
+            )}
+            {isWebcam && myPublisher?.status === "held-by-other-tab" && (
+              <span className="text-[10px] text-muted-foreground">streaming in another tab</span>
+            )}
           </div>
         )}
 
@@ -929,7 +1000,7 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
 }
 
 function PersonActivityModal({ personId, personName, onClose, mode = "person" }: { personId: string; personName: string; onClose: () => void; mode?: "person" | "cluster" }) {
-  const { authFetch } = useAuth();
+  const { authFetch, token } = useAuth();
   const [items, setItems] = useState<PersonActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [cameraMap, setCameraMap] = useState<Record<string, string>>({});
@@ -1051,7 +1122,7 @@ function PersonActivityModal({ personId, personName, onClose, mode = "person" }:
                       {s.items.slice().reverse().map((it) => (
                         <div key={it.observation_id} className="flex gap-3 p-2.5">
                           {it.thumbnail_path ? (
-                            <img src={`/api/observations/${it.observation_id}/thumbnail`} alt=""
+                            <img src={`/api/observations/${it.observation_id}/thumbnail${token ? `?token=${token}` : ""}`} alt=""
                               className="w-20 h-14 flex-shrink-0 rounded object-cover bg-black" />
                           ) : (
                             <div className="w-20 h-14 flex-shrink-0 rounded bg-muted" />
@@ -1088,7 +1159,7 @@ function PersonActivityModal({ personId, personName, onClose, mode = "person" }:
 
 function AddCameraModal({ onClose, onSuccess, initialStreamType }: { onClose: () => void; onSuccess: () => void; initialStreamType?: StreamType }) {
   const { authFetch } = useAuth();
-  const { startPublish, attachCameraId, stopPublish } = useWebcamPublisher();
+  const { startPublish, stopPublish } = useWebcamPublisher();
   const [activeTab, setActiveTab] = useState<ModalTab>("manual");
   const [name, setName] = useState("");
   const [streamType, setStreamType] = useState<StreamType>(initialStreamType || "rtsp");
@@ -1243,16 +1314,11 @@ function AddCameraModal({ onClose, onSuccess, initialStreamType }: { onClose: ()
     if (!name.trim() || !webcamStream) return;
     setSubmitting(true);
     setError(null);
-    // Generate a URL-safe stream path
-    const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "webcam";
-    const streamPath = `${slug}-${Math.random().toString(36).slice(2, 8)}`;
     try {
-      await startPublish({ streamPath, cameraName: name.trim(), stream: webcamStream });
-      // Hand ownership of the stream to the publisher so modal cleanup won't stop it
-      setWebcamStream(null);
+      // Create camera row first so we get its id to key the publisher against.
       const payload: Record<string, unknown> = {
         name: name.trim(),
-        stream_url: `rtsp://localhost:8554/${streamPath}`,
+        stream_url: "",
         stream_type: "webcam",
         location_label: locationLabel.trim() || null,
       };
@@ -1262,12 +1328,24 @@ function AddCameraModal({ onClose, onSuccess, initialStreamType }: { onClose: ()
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        stopPublish(streamPath);
         const body = await res.json().catch(() => null);
         throw new Error(body?.detail || `Request failed with status ${res.status}`);
       }
       const created = await res.json().catch(() => null);
-      if (created?.id) attachCameraId(streamPath, created.id);
+      if (!created?.id) throw new Error("Camera created without id");
+      try {
+        await startPublish({
+          cameraId: created.id,
+          cameraName: name.trim(),
+          deviceId: webcamDeviceId,
+          stream: webcamStream,
+        });
+        // Hand ownership of the stream to the publisher so modal cleanup won't stop it
+        setWebcamStream(null);
+      } catch (err) {
+        stopPublish(created.id);
+        throw err;
+      }
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start webcam");
@@ -1522,7 +1600,7 @@ const SEARCH_HINTS = [
 ];
 
 function DashboardContent() {
-  const { authFetch } = useAuth();
+  const { authFetch, token } = useAuth();
   const searchParams = useSearchParams();
   const initialCamera = searchParams.get("camera");
   const [searchHint, setSearchHint] = useState(() => SEARCH_HINTS[Math.floor(Math.random() * SEARCH_HINTS.length)]);
@@ -2337,44 +2415,33 @@ function DashboardContent() {
           {/* AI Digest panel. always visible (except in search) */}
           {!searchActive && (
             <div className="rounded-xl border border-accent/30 bg-gradient-to-br from-accent/10 to-card/50 p-4 mb-3 flex-shrink-0 shadow-sm">
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-7 h-7 rounded-full bg-accent/20 border border-accent/40 flex items-center justify-center text-accent flex-shrink-0">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2L9.1 8.6 2 9.3l5.5 4.9L5.8 22 12 18l6.2 4-1.7-7.8L22 9.3l-7.1-.7L12 2z"/>
-                    </svg>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-semibold">AI Digest</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {selectedCamera && cameraMap[selectedCamera] ? cameraMap[selectedCamera].name : "All Cameras"}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {digestPeriod === "hourly" ? "Summary of the last hour" : "Summary of the last 24 hours"}
-                    </div>
-                  </div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-7 h-7 rounded-full bg-accent/20 border border-accent/40 flex items-center justify-center text-accent flex-shrink-0">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2L9.1 8.6 2 9.3l5.5 4.9L5.8 22 12 18l6.2 4-1.7-7.8L22 9.3l-7.1-.7L12 2z"/>
+                  </svg>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <div className="flex rounded-md border border-border overflow-hidden">
-                    <button onClick={() => setDigestPeriod("hourly")}
-                      className={`px-2 py-1 text-[10px] transition-colors ${digestPeriod === "hourly" ? "bg-accent text-black font-medium" : "text-muted-foreground hover:bg-muted"}`}>
-                      1h
-                    </button>
-                    <button onClick={() => setDigestPeriod("daily")}
-                      className={`px-2 py-1 text-[10px] border-l border-border transition-colors ${digestPeriod === "daily" ? "bg-accent text-black font-medium" : "text-muted-foreground hover:bg-muted"}`}>
-                      24h
-                    </button>
-                  </div>
-                  <button onClick={fetchDigest} disabled={digestLoading}
-                    title="Regenerate digest"
-                    className="p-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={digestLoading ? "animate-spin" : ""}>
-                      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
-                    </svg>
+                <span className="text-sm font-semibold flex-shrink-0">AI Digest</span>
+                <div className="flex rounded-md border border-border overflow-hidden flex-shrink-0">
+                  <button onClick={() => setDigestPeriod("hourly")}
+                    className={`px-2 py-1 text-[10px] transition-colors ${digestPeriod === "hourly" ? "bg-accent text-black font-medium" : "text-muted-foreground hover:bg-muted"}`}>
+                    1h
+                  </button>
+                  <button onClick={() => setDigestPeriod("daily")}
+                    className={`px-2 py-1 text-[10px] border-l border-border transition-colors ${digestPeriod === "daily" ? "bg-accent text-black font-medium" : "text-muted-foreground hover:bg-muted"}`}>
+                    24h
                   </button>
                 </div>
+                <button onClick={fetchDigest} disabled={digestLoading}
+                  title="Regenerate digest"
+                  className="p-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 flex-shrink-0">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={digestLoading ? "animate-spin" : ""}>
+                    <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
+                  </svg>
+                </button>
+                <span className="text-[10px] text-muted-foreground truncate ml-auto">
+                  {selectedCamera && cameraMap[selectedCamera] ? cameraMap[selectedCamera].name : "All Cameras"}
+                </span>
               </div>
 
               {digestLoading && !digest ? (
@@ -2624,7 +2691,7 @@ function DashboardContent() {
                             return (
                               <li key={i} className="flex items-center gap-2 text-xs">
                                 {h.thumbnailObsId ? (
-                                  <img src={`/api/observations/${h.thumbnailObsId}/thumbnail`} alt="" className="w-8 h-6 rounded object-cover bg-muted flex-shrink-0" />
+                                  <img src={`/api/observations/${h.thumbnailObsId}/thumbnail${token ? `?token=${token}` : ""}`} alt="" className="w-8 h-6 rounded object-cover bg-muted flex-shrink-0" />
                                 ) : (
                                   <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${h.tone === "rule" ? "bg-blue-400" : h.tone === "plate" ? "bg-accent" : h.tone === "person" ? "bg-green-400" : h.tone === "unknown" ? "bg-yellow-400" : "bg-muted-foreground"}`} />
                                 )}
@@ -2683,7 +2750,7 @@ function DashboardContent() {
                                 <div className="flex gap-3">
                                   {r.thumbnail_path && (
                                     <div className="w-20 h-16 flex-shrink-0 bg-black/50 overflow-hidden">
-                                      <img src={`/api/observations/${r.id}/thumbnail`} alt="" className="w-full h-full object-cover" />
+                                      <img src={`/api/observations/${r.id}/thumbnail${token ? `?token=${token}` : ""}`} alt="" className="w-full h-full object-cover" />
                                     </div>
                                   )}
                                   <div className={`flex-1 min-w-0 py-2 ${r.thumbnail_path ? "pr-3" : "px-3"}`}>
@@ -2719,7 +2786,7 @@ function DashboardContent() {
                                 <div className="mt-1.5 rounded-lg border border-border bg-card p-3 space-y-2">
                                   {r.thumbnail_path && (
                                     <div className="rounded-lg overflow-hidden border border-border">
-                                      <img src={`/api/observations/${r.id}/thumbnail`} alt="" className="w-full" />
+                                      <img src={`/api/observations/${r.id}/thumbnail${token ? `?token=${token}` : ""}`} alt="" className="w-full" />
                                     </div>
                                   )}
                                   {r.vlm_description && <p className="text-xs leading-relaxed">{r.vlm_description}</p>}
@@ -2812,7 +2879,7 @@ function DashboardContent() {
                               {/* Inline thumbnail */}
                               {hasThumb && (
                                 <div className="w-24 h-20 flex-shrink-0 bg-black/50 overflow-hidden">
-                                  <img src={`/api/observations/${obs.id}/thumbnail`} alt="" className="w-full h-full object-cover" />
+                                  <img src={`/api/observations/${obs.id}/thumbnail${token ? `?token=${token}` : ""}`} alt="" className="w-full h-full object-cover" />
                                 </div>
                               )}
                               <div className={`flex-1 min-w-0 py-2 ${hasThumb ? "pr-3" : "px-3"}`}>
