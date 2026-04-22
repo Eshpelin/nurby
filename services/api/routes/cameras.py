@@ -1,13 +1,15 @@
 import asyncio
 import glob
+import logging
 import platform
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +26,8 @@ from shared.config import settings
 from shared.database import get_db
 from shared.models import Camera, CameraStatusLog, User
 from shared.schemas import CameraCreate, CameraReorderItem, CameraResponse, CameraStatusLogResponse, CameraUpdate
+
+logger = logging.getLogger("nurby.api.cameras")
 
 # Redis key prefix for signaling stream restart to manager
 RESTART_KEY_PREFIX = "nurby:stream_restart:"
@@ -571,6 +575,170 @@ async def update_camera(
             pass  # best-effort signal
 
     return _camera_to_response(camera)
+
+
+# --- Browser webcam frame upload -----------------------------------------
+#
+# For stream_type == "webcam", the browser (same machine, same browser
+# session as the dashboard) captures the local camera via getUserMedia and
+# POSTs a JPEG here on a short interval. No MediaMTX, no RTSP, no ingestion
+# worker. This route is the sole entry point.
+#
+# Latest frame is cached in Redis under a small per-camera key so the
+# dashboard can read it back as a preview. Every frame is also pushed onto
+# the same nurby:motion Redis stream the ingestion service uses, so the
+# perception pipeline (VLM, YOLO, rules) treats webcam frames identically
+# to any other source.
+
+WEBCAM_FRAME_KEY_PREFIX = "nurby:webcam_frame:"
+WEBCAM_FRAME_TTL = 15  # seconds. tile goes "offline" if publisher stops
+
+# Rate-limit motion stream emission per camera. Frames keep arriving at 1 Hz
+# for the live preview, but we only hand one off to perception every N
+# seconds so observations / VLM calls stay meaningful. Cadence comes from
+# Camera.snapshot_interval so users can tune it per camera. If the camera
+# still has the model default (2s), we bump to 10s for webcams.
+WEBCAM_MOTION_COOLDOWN_KEY = "nurby:webcam_motion_cooldown:"
+WEBCAM_MOTION_COOLDOWN_DEFAULT_S = 10
+
+
+def _webcam_motion_cooldown(camera: Camera) -> int:
+    """Seconds between motion-stream emissions for a webcam."""
+    interval = float(getattr(camera, "snapshot_interval", 0) or 0)
+    # Treat the generic 2.0 model default as "unset" for webcams.
+    if interval <= 2.0:
+        return WEBCAM_MOTION_COOLDOWN_DEFAULT_S
+    return max(int(round(interval)), 2)
+
+MOTION_STREAM_KEY = "nurby:motion"
+MOTION_STREAM_MAXLEN = 1000
+
+
+@router.post("/{camera_id}/frame", status_code=204)
+async def upload_webcam_frame(
+    camera_id: uuid.UUID,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Accept a single JPEG frame from the browser webcam publisher.
+
+    Body is the raw JPEG bytes. Content-Type should be image/jpeg.
+    """
+    camera = await db.get(Camera, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    if camera.stream_type != "webcam":
+        raise HTTPException(status_code=400, detail="Camera is not a webcam")
+
+    body = await request.body()
+    if not body or len(body) < 64:
+        raise HTTPException(status_code=400, detail="Empty or tiny frame")
+    if len(body) > 4 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Frame too large")
+
+    # Decode once to confirm it's a valid JPEG and read dimensions. We
+    # don't need the pixel array beyond that. Cheap sanity check.
+    arr = np.frombuffer(body, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        raise HTTPException(status_code=400, detail="Could not decode frame")
+    height, width = img.shape[:2]
+
+    # Update camera dimensions once if they changed.
+    if camera.width != width or camera.height != height:
+        camera.width = width
+        camera.height = height
+
+    # Flip status to live/recording if we weren't already.
+    desired_status = (
+        "recording"
+        if (camera.recording_enabled and getattr(camera, "recording_mode", "always") == "always")
+        else "live"
+    )
+    if camera.status != desired_status:
+        previous = camera.status
+        camera.status = desired_status
+        db.add(
+            CameraStatusLog(
+                camera_id=camera_id,
+                status=desired_status,
+                previous_status=previous,
+                reason="webcam frame received",
+            )
+        )
+    await db.commit()
+
+    # Stash to Redis. latest frame cache + motion stream entry.
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.redis_url)
+        try:
+            await r.set(
+                f"{WEBCAM_FRAME_KEY_PREFIX}{camera_id}",
+                body,
+                ex=WEBCAM_FRAME_TTL,
+            )
+            cooldown_key = f"{WEBCAM_MOTION_COOLDOWN_KEY}{camera_id}"
+            # SET NX with TTL acts as a per-camera rate gate. If the key
+            # already exists we skip this frame for perception but keep
+            # the cached preview fresh.
+            gate_ok = await r.set(
+                cooldown_key, "1", nx=True, ex=_webcam_motion_cooldown(camera)
+            )
+            if gate_ok:
+                await r.xadd(
+                    MOTION_STREAM_KEY,
+                    {
+                        "camera_id": str(camera_id),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "motion_score": "1.0",
+                        "frame": body,
+                    },
+                    maxlen=MOTION_STREAM_MAXLEN,
+                    approximate=True,
+                )
+        finally:
+            await r.aclose()
+    except Exception:
+        logger.exception("failed to publish webcam frame for %s", camera_id)
+
+    return None
+
+
+@router.get("/{camera_id}/frame")
+async def latest_webcam_frame(
+    camera_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the last JPEG frame uploaded for this webcam.
+
+    Used as a fallback preview. The dashboard usually renders the live
+    MediaStream directly in the browser tab that owns the camera, but
+    other tabs/devices can poll this endpoint.
+    """
+    from fastapi.responses import Response
+
+    camera = await db.get(Camera, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    if camera.stream_type != "webcam":
+        raise HTTPException(status_code=400, detail="Camera is not a webcam")
+
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.redis_url)
+        try:
+            data = await r.get(f"{WEBCAM_FRAME_KEY_PREFIX}{camera_id}")
+        finally:
+            await r.aclose()
+    except Exception:
+        data = None
+
+    if not data:
+        raise HTTPException(status_code=404, detail="No recent frame")
+    return Response(content=data, media_type="image/jpeg")
 
 
 @router.delete("/{camera_id}", status_code=204)
