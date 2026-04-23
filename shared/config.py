@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     # ingestion container because Docker Desktop cannot forward AVFoundation
     # or v4l2 devices from the host into a Linux container.
     disable_webcam_bridge: bool = False
+
+    # Audio subsystem. Master feature flag. When false, no audio capture
+    # task spawns, no STT runs, audio API routes 404. Schema migrations
+    # still apply (cheap). Default off while audio ships behind flag.
+    audio_enabled: bool = False
+
     recordings_path: str = "./recordings"
     thumbnails_path: str = "./thumbnails"
     jwt_secret: str = _DEFAULT_JWT_SECRET
