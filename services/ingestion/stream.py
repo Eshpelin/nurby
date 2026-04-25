@@ -283,40 +283,41 @@ class StreamWorker:
             await self._update_camera_status("offline", "stream disconnected")
 
     def _resolve_capture_url(self) -> str | int:
-        """Build final capture source based on stream type and auth."""
+        """Build final capture source based on stream type and auth.
+
+        Mux-eligible types (rtsp, hls, usb-with-device, webcam) all
+        resolve to a MediaMTX slug. Ingestion never talks to the camera
+        directly for these. See :mod:`services.ingestion.mediamtx_mux`.
+
+        Types without audio tracks (http_mjpeg, http_snapshot, file, and
+        legacy direct-device USB) fall through to the upstream URL.
+        """
+        from services.ingestion.mediamtx_mux import mux_rtsp_url
+
+        muxed = mux_rtsp_url(
+            self.camera_id,
+            self.stream_type,
+            stream_url=self.stream_url,
+            webcam_device=self.webcam_device,
+        )
+        if muxed is not None:
+            return muxed
+
         if self.stream_type == STREAM_TYPE_USB:
-            # If a webcam_device is set, the USB feed is bridged through
-            # MediaMTX via webcam_bridge. Pull the RTSP copy so cv2 and
-            # the frontend WebRTC viewer don't fight for the device.
-            if self.webcam_device:
-                from services.ingestion.webcam_bridge import bridge_rtsp_url
-                return bridge_rtsp_url(self.camera_id)
-            # Fall back to direct device access for legacy setups.
+            # Legacy direct-device access. No bridge, no mux.
             try:
                 return int(self.stream_url)
             except ValueError:
                 return self.stream_url
 
-        if self.stream_type == STREAM_TYPE_WEBCAM:
-            # Browser publishes via WHIP to MediaMTX at the slug embedded in
-            # stream_url. Rewrite the host portion so the pull URL is
-            # reachable from wherever ingestion runs (host -> localhost,
-            # container -> mediamtx).
-            slug = self.stream_url.rsplit("/", 1)[-1] if self.stream_url else ""
-            base = settings.mediamtx_rtsp_url.rstrip("/")
-            return f"{base}/{slug}" if slug else self.stream_url
-
         if self.stream_type == STREAM_TYPE_FILE:
             return self.stream_url
 
-        # For RTSP, HTTP MJPEG, HLS. Inject credentials into URL if provided
+        # HTTP MJPEG, HTTP snapshot, and any future non-muxable pullers.
         url = build_auth_url(self.stream_url, self.username, self.password)
-
-        # For HTTP streams with bearer token, append as query param
         if self.auth_token and self.stream_type in (STREAM_TYPE_HTTP_MJPEG, STREAM_TYPE_HLS):
             separator = "&" if "?" in url else "?"
             url = f"{url}{separator}token={self.auth_token}"
-
         return url
 
     def _open_capture(self) -> cv2.VideoCapture | None:
