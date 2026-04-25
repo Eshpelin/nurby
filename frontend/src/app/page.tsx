@@ -6,6 +6,8 @@ import { useAuth } from "@/lib/auth";
 import { useWebcamPublisher, listVideoDevices } from "@/lib/webcam-publisher";
 import { StarredStatusRow } from "@/components/StarredStatusRow";
 import { LiveCaptionOverlay } from "@/components/LiveCaptionOverlay";
+import { AudioActiveDot } from "@/components/AudioActiveDot";
+import { TranscriptCard } from "@/components/TranscriptCard";
 import { RecordingModal } from "@/components/RecordingModal";
 
 const WEBRTC_URL =
@@ -145,12 +147,23 @@ interface Digest {
   highlights: string[];
 }
 
+interface Transcript {
+  id: string;
+  camera_id: string;
+  audio_capture_id: string | null;
+  started_at: string;
+  ended_at: string;
+  text: string;
+  language: string | null;
+  provider: string;
+}
+
 interface TimelineEntry {
   id: string;
-  type: "recording" | "observation" | "status" | "search_result" | "notification";
+  type: "recording" | "observation" | "status" | "search_result" | "notification" | "transcript";
   camera_id: string;
   timestamp: string;
-  data: Recording | Observation | StatusLog | SearchResult | Notification;
+  data: Recording | Observation | StatusLog | SearchResult | Notification | Transcript;
 }
 
 interface ActivityEvent {
@@ -182,7 +195,7 @@ const STREAM_TYPES: { value: StreamType; label: string; hint: string; placeholde
 ];
 
 type TimeRange = "today" | "7d" | "30d";
-type EventFilter = "recordings" | "observations" | "status";
+type EventFilter = "recordings" | "observations" | "status" | "transcripts";
 
 // ── Helpers ──
 
@@ -763,6 +776,13 @@ function CameraSidebarCard({
         {/* Live caption overlay. only when transcription enabled */}
         {camera.status !== "offline" && camera.audio_transcribe_enabled && (
           <LiveCaptionOverlay cameraId={camera.id} position="bottom" />
+        )}
+
+        {/* Audio active dot. pulses on VAD speech detection */}
+        {camera.status !== "offline" && camera.audio_capture_enabled && (
+          <div className="absolute top-1.5 left-1.5 z-10">
+            <AudioActiveDot cameraId={camera.id} />
+          </div>
         )}
 
         {/* Overlay toggle (eye icon) */}
@@ -1667,11 +1687,12 @@ function DashboardContent() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [observations, setObservations] = useState<Observation[]>([]);
   const [statusLogs, setStatusLogs] = useState<StatusLog[]>([]);
+  const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
   const [activeEntry, setActiveEntry] = useState<string | null>(null);
   const [modalRecording, setModalRecording] = useState<Recording | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
-  const [eventFilters, setEventFilters] = useState<Set<EventFilter>>(new Set(["recordings", "observations", "status"]));
+  const [eventFilters, setEventFilters] = useState<Set<EventFilter>>(new Set(["recordings", "observations", "status", "transcripts"]));
   const [timelineLoading, setTimelineLoading] = useState(true);
 
   // Filter modal state
@@ -1718,6 +1739,9 @@ function DashboardContent() {
           const data = JSON.parse(evt.data);
           if (data.type === "event" || data.type === "notification") {
             setLiveEvents((prev) => [data, ...prev].slice(0, 20));
+            fetchTimeline();
+          }
+          if (data.type === "transcript_created") {
             fetchTimeline();
           }
         } catch { /* ignore */ }
@@ -1831,11 +1855,12 @@ function DashboardContent() {
       const statusParams = new URLSearchParams({ limit: "100" });
       if (selectedCamera) statusParams.set("camera_id", selectedCamera);
 
-      const [recRes, obsRes, statusRes, notifRes] = await Promise.all([
+      const [recRes, obsRes, statusRes, notifRes, tlRes] = await Promise.all([
         authFetch(`/api/recordings?${params}`),
         authFetch(`/api/observations?${params}`),
         authFetch(`/api/cameras/status-logs?${statusParams}`),
         authFetch(`/api/notifications?limit=100`),
+        authFetch(`/api/timeline?${params}`),
       ]);
 
       const now = Date.now();
@@ -1848,6 +1873,24 @@ function DashboardContent() {
       if (notifRes.ok) {
         const all: Notification[] = await notifRes.json();
         setNotifications(all.filter((n) => new Date(n.created_at).getTime() >= cutoff && (!selectedCamera || n.camera_id === selectedCamera)));
+      }
+      if (tlRes.ok) {
+        const tl = await tlRes.json();
+        const items: Array<Record<string, unknown>> = tl.items || [];
+        const tx: Transcript[] = items
+          .filter((it) => it.kind === "transcript")
+          .map((it) => ({
+            id: it.id as string,
+            camera_id: it.camera_id as string,
+            audio_capture_id: (it.audio_capture_id as string | null) ?? null,
+            started_at: it.started_at as string,
+            ended_at: it.ended_at as string,
+            text: it.text as string,
+            language: (it.language as string | null) ?? null,
+            provider: it.provider as string,
+          }))
+          .filter((t) => new Date(t.started_at).getTime() >= cutoff);
+        setTranscripts(tx);
       }
     } catch { /* silent */ }
     finally { setTimelineLoading(false); }
@@ -1931,7 +1974,7 @@ function DashboardContent() {
 
   const clearAllFilters = () => {
     setTimeRange("7d");
-    setEventFilters(new Set(["recordings", "observations", "status"]));
+    setEventFilters(new Set(["recordings", "observations", "status", "transcripts"]));
     setFilterPerson("");
     setFilterObject("");
     setSelectedCamera(null);
@@ -1981,6 +2024,7 @@ function DashboardContent() {
     if (eventFilters.has("recordings")) entries.push(...recordings.map((r) => ({ id: `rec-${r.id}`, type: "recording" as const, camera_id: r.camera_id, timestamp: r.started_at, data: r })));
     if (eventFilters.has("observations")) entries.push(...observations.map((o) => ({ id: `obs-${o.id}`, type: "observation" as const, camera_id: o.camera_id, timestamp: o.started_at, data: o })));
     if (eventFilters.has("status")) entries.push(...statusLogs.map((s) => ({ id: `status-${s.id}`, type: "status" as const, camera_id: s.camera_id, timestamp: s.timestamp, data: s })));
+    if (eventFilters.has("transcripts")) entries.push(...transcripts.map((t) => ({ id: `tx-${t.id}`, type: "transcript" as const, camera_id: t.camera_id, timestamp: t.started_at, data: t })));
     // Always include notifications. they are explicit rule fires and deserve
     // priority in the digest even when the "status" filter is off.
     entries.push(...notifications.map((n) => ({
@@ -2315,7 +2359,7 @@ function DashboardContent() {
                 <div>
                   <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">Event Types</span>
                   <div className="flex flex-col gap-1">
-                    {([["recordings", "Recordings"], ["observations", "AI Observations"], ["status", "Status Changes"]] as [EventFilter, string][]).map(([value, label]) => (
+                    {([["recordings", "Recordings"], ["observations", "AI Observations"], ["transcripts", "Transcripts"], ["status", "Status Changes"]] as [EventFilter, string][]).map(([value, label]) => (
                       <label key={value} className="flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
                         <input type="checkbox" checked={eventFilters.has(value)} onChange={() => toggleEventFilter(value)}
                           className="w-3.5 h-3.5 rounded border-border accent-accent" />
@@ -2870,6 +2914,24 @@ function DashboardContent() {
                                 {row}
                               </button>
                             </div>
+                          );
+                        }
+
+                        if (entry.type === "transcript") {
+                          const tx = entry.data as Transcript;
+                          return (
+                            <TranscriptCard
+                              key={entry.id}
+                              id={tx.id}
+                              cameraId={tx.camera_id}
+                              cameraName={cam?.name}
+                              startedAt={tx.started_at}
+                              endedAt={tx.ended_at}
+                              text={tx.text}
+                              audioCaptureId={tx.audio_capture_id}
+                              language={tx.language}
+                              provider={tx.provider}
+                            />
                           );
                         }
 
