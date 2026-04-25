@@ -58,6 +58,16 @@ class Camera(Base):
     status: Mapped[str] = mapped_column(String(32), default="offline")
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     webcam_device: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Audio transcription config (Phase 1)
+    audio_capture_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    audio_transcribe_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    audio_store_raw: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    transcript_store: Mapped[str] = mapped_column(String(16), default="full", nullable=False)  # full, redacted, summary_only
+    audio_language: Mapped[str] = mapped_column(String(8), default="en", nullable=False)
+    audio_retention_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    transcript_retention_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    stt_provider_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True, index=True)
+    stt_budget_minutes_per_hour: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fps: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -291,6 +301,65 @@ class AppSetting(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[dict] = mapped_column(JSON, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AudioCapture(Base):
+    __tablename__ = "audio_captures"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    camera_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    codec: Mapped[str] = mapped_column(String(16), default="opus", nullable=False)
+    sample_rate: Mapped[int] = mapped_column(Integer, default=16000, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Transcript(Base):
+    __tablename__ = "transcripts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    camera_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    audio_capture_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("audio_captures.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    original_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    text_edited: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    language: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    no_speech_prob: Mapped[float | None] = mapped_column(Float, nullable=True)
+    words: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
+    filtered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    speaker_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("persons.id", ondelete="SET NULL"), nullable=True
+    )
+    speaker_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    speaker_source: Mapped[str | None] = mapped_column(String(16), nullable=True)  # video, voice, fused, ambiguous
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AudioAuditLog(Base):
+    __tablename__ = "audio_audit_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    camera_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    field: Mapped[str] = mapped_column(String(64), nullable=False)
+    old_value: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    new_value: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class AudioDetection(Base):

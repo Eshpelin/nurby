@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     # task spawns, no STT runs, audio API routes 404. Schema migrations
     # still apply (cheap). Default off while audio ships behind flag.
     audio_enabled: bool = False
+    # Override the STT provider kind. Defaults to faster_whisper. Set to
+    # "mock" in tests for fixture-driven runs.
+    audio_stt_provider: str = "faster_whisper"
+    # faster-whisper model name. tiny.en | base.en | small.en | medium.en
+    # | large-v3. Default chosen per the resolved decisions in the plan.
+    audio_stt_model: str = "small.en"
+    # Filesystem root for opt-in raw audio storage.
+    audio_storage_path: str = "./audio_clips"
 
     recordings_path: str = "./recordings"
     thumbnails_path: str = "./thumbnails"
