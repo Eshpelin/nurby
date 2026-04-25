@@ -260,13 +260,15 @@ async def create_camera(body: CameraCreate, _current_user: User = Depends(requir
     db.add(camera)
     await db.commit()
     await db.refresh(camera)
-    # Auto-register webcam bridge if this is a USB/webcam camera.
-    if camera.stream_type == "usb" and camera.webcam_device is not None:
-        try:
-            from services.ingestion.webcam_bridge import bridge_manager
-            await bridge_manager.ensure(camera)
-        except Exception:
-            pass  # Bridge is best-effort on create, ingest retries later.
+    # Register a MediaMTX path so ingestion pulls from the mux instead of
+    # the camera directly. Handles USB push bridges, RTSP/HLS pull-source
+    # registration, and no-ops for non-mux types. Best-effort. the camera
+    # manager's periodic sync will retry on failure.
+    try:
+        from services.ingestion.mediamtx_mux import mux_manager
+        await mux_manager.ensure(camera)
+    except Exception:
+        pass
     return _camera_to_response(camera)
 
 
@@ -798,7 +800,7 @@ async def delete_camera(camera_id: uuid.UUID, _current_user: User = Depends(requ
     await db.delete(camera)
     await db.commit()
     try:
-        from services.ingestion.webcam_bridge import bridge_manager
-        await bridge_manager.stop(camera_id)
+        from services.ingestion.mediamtx_mux import mux_manager
+        await mux_manager.remove(camera_id)
     except Exception:
         pass
