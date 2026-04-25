@@ -16,8 +16,8 @@ from shared.config import settings
 from shared.database import async_session
 from shared.models import Camera
 from services.ingestion.audio_worker import AudioWorker, set_main_loop as set_audio_main_loop
+from services.ingestion.mediamtx_mux import mux_manager, mux_rtsp_url
 from services.ingestion.stream import StreamWorker
-from services.ingestion.webcam_bridge import bridge_manager
 
 logger = logging.getLogger("nurby.ingestion.manager")
 
@@ -88,11 +88,21 @@ class CameraManager:
         self._tasks[cam_id] = asyncio.create_task(worker.run())
         self._config_hashes[cam_id] = _stream_config_hash(cam)
 
-        # Audio listener. Only RTSP/HLS streams are likely to carry audio.
-        if cam.stream_type in ("rtsp", "hls") and cam.stream_url:
+        # Audio listener. RTSP/HLS + webcam + USB-bridged all pull through
+        # MediaMTX so the camera only sees one upstream session.
+        audio_url = mux_rtsp_url(
+            cam.id, cam.stream_type,
+            stream_url=cam.stream_url,
+            webcam_device=getattr(cam, "webcam_device", None),
+        )
+        if audio_url is None and cam.stream_type in ("rtsp", "hls") and cam.stream_url:
+            # Safety fallback for the window between camera create and
+            # mux path registration. Prefer direct URL once, retry via
+            # mux on next restart.
             from services.ingestion.stream import build_auth_url
-            authed = build_auth_url(cam.stream_url, cam.username, cam.password)
-            aw = AudioWorker(cam_id, authed)
+            audio_url = build_auth_url(cam.stream_url, cam.username, cam.password)
+        if audio_url:
+            aw = AudioWorker(cam_id, audio_url)
             self._audio_workers[cam_id] = aw
             self._audio_tasks[cam_id] = asyncio.create_task(aw.run())
 
@@ -129,14 +139,14 @@ class CameraManager:
             result = await db.execute(select(Camera))
             cameras = {c.id: c for c in result.scalars().all()}
 
-        # Keep webcam bridges aligned with DB state before starting workers
-        # so stream workers can pull the bridged RTSP copy. Skipped in
-        # containers. host-side bridge daemon owns the camera devices there.
-        if not settings.disable_webcam_bridge:
-            try:
-                await bridge_manager.sync(list(cameras.values()))
-            except Exception:
-                logger.exception("webcam bridge sync failed")
+        # Keep MediaMTX paths aligned with DB state before starting workers
+        # so stream workers can pull the muxed RTSP copy. Handles USB push
+        # bridges, RTSP/HLS pull-source registration, and stale path
+        # cleanup in one pass.
+        try:
+            await mux_manager.sync(list(cameras.values()))
+        except Exception:
+            logger.exception("MediaMTX mux sync failed")
 
         # Start workers for new cameras, restart changed ones
         for cam_id, cam in cameras.items():
