@@ -18,6 +18,8 @@ from shared.models import Camera
 from services.ingestion.audio_worker import AudioWorker, set_main_loop as set_audio_main_loop
 from services.ingestion.mediamtx_mux import mux_manager, mux_rtsp_url
 from services.ingestion.stream import StreamWorker
+from services.perception.audio.router import AudioPipelineManager
+from services.perception.audio.write_path import write_transcript
 
 logger = logging.getLogger("nurby.ingestion.manager")
 
@@ -47,6 +49,9 @@ class CameraManager:
         self._audio_tasks: dict[uuid.UUID, asyncio.Task] = {}
         self._config_hashes: dict[uuid.UUID, str] = {}
         self._redis = None
+        # Phase 1 audio transcription pipeline. Owned alongside the
+        # video stream workers so toggle-off teardown is cheap.
+        self._stt_pipeline = AudioPipelineManager(write_callback=write_transcript)
         # Audio worker threads use run_coroutine_threadsafe. register the loop.
         try:
             set_audio_main_loop(asyncio.get_event_loop())
@@ -147,6 +152,22 @@ class CameraManager:
             await mux_manager.sync(list(cameras.values()))
         except Exception:
             logger.exception("MediaMTX mux sync failed")
+
+        # Reconcile STT routers. Sources its URL from the mux so audio
+        # capture and the existing detection workers share a single
+        # upstream session per camera.
+        def _resolve_audio_url(cam: Camera) -> str | None:
+            return mux_rtsp_url(
+                cam.id,
+                cam.stream_type,
+                stream_url=cam.stream_url,
+                webcam_device=getattr(cam, "webcam_device", None),
+            )
+
+        try:
+            await self._stt_pipeline.sync(list(cameras.values()), _resolve_audio_url)
+        except Exception:
+            logger.exception("STT pipeline sync failed")
 
         # Start workers for new cameras, restart changed ones
         for cam_id, cam in cameras.items():
