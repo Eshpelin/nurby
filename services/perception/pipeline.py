@@ -137,6 +137,28 @@ class PerceptionPipeline:
                 logger.exception("Failed to fetch camera-specific provider")
         return await get_active_provider()
 
+    async def _get_refiner_provider(
+        self, cam: Camera | None, primary: Provider
+    ) -> Provider | None:
+        """Resolve the refiner provider for this camera. Returns None
+        when not configured, or when the user accidentally set the
+        refiner to the same row as the primary (which would just
+        re-run the same model). The UI prevents this but we double-
+        check on the worker side too."""
+        if cam is None or not getattr(cam, "vlm_refiner_provider_id", None):
+            return None
+        if cam.vlm_refiner_provider_id == primary.id:
+            return None
+        try:
+            async with async_session() as db:
+                p = await db.get(Provider, cam.vlm_refiner_provider_id)
+                if p:
+                    db.expunge(p)
+                    return p
+        except Exception:
+            logger.exception("refiner provider lookup failed")
+        return None
+
     def _should_call_vlm(self, camera_id: str, cam: Camera | None) -> bool:
         """Check if enough time passed since last VLM call for this camera."""
         import time as _time
@@ -400,6 +422,17 @@ class PerceptionPipeline:
                     faces=faces,
                     detections=detections,
                 )
+                refiner_provider = await self._get_refiner_provider(cam, provider)
+                refiner_triggers = (
+                    cam.vlm_refiner_trigger_objects
+                    if cam and isinstance(cam.vlm_refiner_trigger_objects, list)
+                    else None
+                )
+                refiner_keywords = (
+                    cam.vlm_refiner_keywords
+                    if cam and isinstance(cam.vlm_refiner_keywords, list)
+                    else None
+                )
                 await self._vlm_queue.enqueue(VLMJob(
                     camera_id=camera_id,
                     observation_id=observation_id,
@@ -412,6 +445,11 @@ class PerceptionPipeline:
                     timestamp=timestamp,
                     heard_text=heard_text,
                     extra_context=extra_context,
+                    refiner_provider=refiner_provider,
+                    refiner_trigger_objects=refiner_triggers,
+                    refiner_keywords=refiner_keywords,
+                    refiner_max_tokens=getattr(cam, "vlm_refiner_max_tokens", None) if cam else None,
+                    refiner_max_input_tokens=getattr(cam, "vlm_refiner_max_input_tokens", None) if cam else None,
                 ))
 
         # Step 6. Generate description embedding for detections (VLM embedding added later by queue)

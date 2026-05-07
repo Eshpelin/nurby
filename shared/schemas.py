@@ -292,6 +292,9 @@ class ObservationResponse(BaseModel):
     confidence: float | None
     thumbnail_path: str | None
     clip_path: str | None
+    primary_vlm_description: str | None = None
+    refined_by_provider_name: str | None = None
+    refined_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

@@ -19,7 +19,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 import cv2
 import numpy as np
@@ -94,10 +94,22 @@ class VLMJob:
     provider: Provider
     system_prompt: str | None
     max_tokens: int | None
-    max_input_tokens: int | None = None
     timestamp: datetime
+    max_input_tokens: int | None = None
     heard_text: str | None = None
     extra_context: str | None = None
+    # Cascade refiner config. When refiner_provider is set, the worker
+    # evaluates the trigger lists against the primary's output after
+    # the first call returns and, on a hit, fires a second call to the
+    # refiner provider with the primary's text spliced into
+    # extra_context. The refined text replaces the observation's
+    # vlm_description; the primary text is preserved on the row for
+    # the UI's before/after popover.
+    refiner_provider: Provider | None = None
+    refiner_trigger_objects: list[str] | None = None
+    refiner_keywords: list[str] | None = None
+    refiner_max_tokens: int | None = None
+    refiner_max_input_tokens: int | None = None
     enqueued_at: float = field(default_factory=time.monotonic)
 
 
@@ -269,6 +281,16 @@ class VLMQueue:
                         "VLM for camera %s completed in %.1fs. %s",
                         camera_id, duration, description[:80],
                     )
+                    # Evaluate cascade triggers. Fires the refiner as a
+                    # background task so the primary worker is free to
+                    # take the next job. The refiner runs against the
+                    # same frame + detections and replaces the row's
+                    # vlm_description on success.
+                    if self._should_refine(job, description):
+                        asyncio.create_task(
+                            self._run_refiner(job, description),
+                            name=f"vlm-refiner-{camera_id[:8]}",
+                        )
                 else:
                     logger.warning("VLM returned empty for camera %s (%.1fs)", camera_id, duration)
 
@@ -286,6 +308,167 @@ class VLMQueue:
                 stats.status = "processing" if not q.empty() else "idle"
 
             await self._broadcast_status(camera_id)
+
+    @staticmethod
+    def _should_refine(job: "VLMJob", primary_text: str) -> bool:
+        """Decide whether the cascade refiner should fire for this job.
+
+        Two cumulative gates.
+        - YOLO labels in ``refiner_trigger_objects`` intersect the
+          frame's detections.
+        - keywords in ``refiner_keywords`` appear (case-insensitive)
+          in the primary's text output.
+
+        Either gate alone is enough. When both lists are empty we treat
+        the refiner as 'always on'. The provider must be set; otherwise
+        we never escalate.
+        """
+        if job.refiner_provider is None:
+            return False
+        labels = {str(x).lower() for x in (job.refiner_trigger_objects or [])}
+        keywords = [str(k).strip().lower() for k in (job.refiner_keywords or []) if k]
+        if not labels and not keywords:
+            return True
+        if labels:
+            seen = {str(d.get("label", "")).lower() for d in (job.detections or [])}
+            if seen & labels:
+                return True
+        if keywords and primary_text:
+            text_lc = primary_text.lower()
+            if any(k in text_lc for k in keywords):
+                return True
+        return False
+
+    async def _run_refiner(self, job: "VLMJob", primary_text: str) -> None:
+        """Call the refiner provider with the primary's output threaded
+        into ``extra_context``. On success patch the observation row
+        with the refined text and broadcast vlm_refined.
+        """
+        camera_id = job.camera_id
+        provider = job.refiner_provider
+        if provider is None:
+            return
+        # Stitch primary text into extra_context so the refiner can
+        # treat it as a starting point. The base context (faces,
+        # plates, location) carries through unchanged.
+        primary_block = (
+            f"Primary VLM said: \"{primary_text.strip()}\"."
+            " Refine, correct, or expand it. Stay faithful to the"
+            " visible scene and the identity / plate / location facts"
+            " above. Return one cohesive description."
+        )
+        merged_context = (
+            f"{job.extra_context.strip()} {primary_block}"
+            if job.extra_context
+            else primary_block
+        )
+
+        # Surface the refining state on the tile.
+        stats = self._stats.get(camera_id)
+        if stats is not None:
+            prev_status = stats.status
+            stats.status = "refining"
+            await self._broadcast_status(camera_id)
+
+        start = time.monotonic()
+        try:
+            refined = await self._vlm.describe(
+                job.frame,
+                job.detections,
+                provider,
+                system_prompt=job.system_prompt,
+                max_tokens=job.refiner_max_tokens or job.max_tokens,
+                heard_text=job.heard_text,
+                extra_context=merged_context,
+                max_input_tokens=job.refiner_max_input_tokens,
+                camera_id=camera_id,
+            )
+            duration = time.monotonic() - start
+            if not refined:
+                logger.info(
+                    "refiner returned empty camera=%s after %.1fs",
+                    camera_id, duration,
+                )
+                return
+            await self._patch_refiner_output(
+                observation_id=job.observation_id,
+                primary_text=primary_text,
+                refined_text=refined,
+                refiner_provider_name=provider.name,
+                detections=job.detections,
+            )
+            logger.info(
+                "refiner for camera %s completed in %.1fs. %s",
+                camera_id, duration, refined[:80],
+            )
+            if self._broadcast_fn:
+                try:
+                    await self._broadcast_fn(
+                        {
+                            "type": "vlm_refined",
+                            "camera_id": camera_id,
+                            "observation_id": str(job.observation_id),
+                            "primary_text": primary_text,
+                            "refined_text": refined,
+                            "refiner_provider_name": provider.name,
+                            "duration_s": round(duration, 2),
+                        }
+                    )
+                except Exception:
+                    logger.debug("vlm_refined WS failed", exc_info=True)
+        except Exception:
+            logger.exception(
+                "refiner call failed camera=%s observation=%s",
+                camera_id, job.observation_id,
+            )
+        finally:
+            if stats is not None:
+                # Don't clobber a more interesting state set by another
+                # job that ran while we were waiting on the refiner.
+                if stats.status == "refining":
+                    stats.status = prev_status if prev_status != "idle" else "idle"
+                    await self._broadcast_status(camera_id)
+
+    async def _patch_refiner_output(
+        self,
+        observation_id: uuid.UUID,
+        primary_text: str,
+        refined_text: str,
+        refiner_provider_name: str,
+        detections: list[dict],
+    ) -> None:
+        """Move primary's text into ``primary_vlm_description`` and put
+        the refined text on the live ``vlm_description`` column.
+        Regenerate the embedding because the description changed.
+        """
+        try:
+            async with async_session() as db:
+                obs = await db.get(Observation, observation_id)
+                if obs is None:
+                    return
+                obs.primary_vlm_description = primary_text
+                obs.vlm_description = refined_text
+                obs.refined_by_provider_name = refiner_provider_name
+                obs.refined_at = datetime.now(timezone.utc)
+                await db.commit()
+        except Exception:
+            logger.exception("refiner observation patch failed obs=%s", observation_id)
+            return
+        try:
+            parts = [refined_text]
+            if detections:
+                labels = [d["label"] for d in detections]
+                parts.append("Objects detected. " + ", ".join(labels))
+            embed_text = ". ".join(parts)
+            embed_provider = await get_embedding_provider()
+            embedding = await generate_embedding(embed_text, embed_provider)
+            async with async_session() as db:
+                obs = await db.get(Observation, observation_id)
+                if obs is not None and embedding is not None:
+                    obs.description_embedding = embedding
+                    await db.commit()
+        except Exception:
+            logger.debug("refiner embedding regen failed", exc_info=True)
 
     async def _patch_observation(
         self, observation_id: uuid.UUID, description: str, provider_name: str,
