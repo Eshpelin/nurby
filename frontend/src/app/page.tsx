@@ -11,6 +11,12 @@ import { VLMStatusBadge } from "@/components/VLMStatusBadge";
 import { SummarizeNowButton } from "@/components/SummarizeNowButton";
 import { CameraStatsHover } from "@/components/CameraStatsHover";
 import { RefinedBadge } from "@/components/RefinedBadge";
+import { ObservationGroupCard } from "@/components/ObservationGroupCard";
+import {
+  coalesceObservations,
+  isObservationGroup,
+  type ObservationGroup as CoalesceGroup,
+} from "@/lib/observation-grouping";
 import { SystemHealthFooter } from "@/components/SystemHealthFooter";
 import { LLMErrorToasts } from "@/components/LLMErrorToasts";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -126,7 +132,7 @@ interface Observation {
 interface Detection {
   label: string;
   confidence: number;
-  bbox: number[];
+  bbox?: number[];
   plate_text?: string | null;
 }
 
@@ -216,10 +222,28 @@ interface Conversation {
 
 interface TimelineEntry {
   id: string;
-  type: "recording" | "observation" | "status" | "search_result" | "notification" | "transcript" | "summary" | "conversation";
+  type:
+    | "recording"
+    | "observation"
+    | "observation_group"
+    | "status"
+    | "search_result"
+    | "notification"
+    | "transcript"
+    | "summary"
+    | "conversation";
   camera_id: string;
   timestamp: string;
-  data: Recording | Observation | StatusLog | SearchResult | Notification | Transcript | Summary | Conversation;
+  data:
+    | Recording
+    | Observation
+    | CoalesceGroup
+    | StatusLog
+    | SearchResult
+    | Notification
+    | Transcript
+    | Summary
+    | Conversation;
 }
 
 interface ActivityEvent {
@@ -1771,6 +1795,18 @@ function DashboardContent() {
   const [modalRecording, setModalRecording] = useState<Recording | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [eventFilters, setEventFilters] = useState<Set<EventFilter>>(new Set(["recordings", "observations", "status", "conversations", "summaries"]));
+  // Observation coalescing window in seconds. 0 disables grouping.
+  // Persisted in localStorage so the user's choice survives reload.
+  const [groupWindowSeconds, setGroupWindowSeconds] = useState<number>(() => {
+    if (typeof window === "undefined") return 600;
+    const raw = window.localStorage.getItem("nurby-group-window-s");
+    const parsed = raw != null ? parseInt(raw, 10) : NaN;
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 600;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("nurby-group-window-s", String(groupWindowSeconds));
+  }, [groupWindowSeconds]);
   const [timelineLoading, setTimelineLoading] = useState(true);
 
   // Filter modal state
@@ -2150,7 +2186,36 @@ function DashboardContent() {
     entries = searchResults.map((r) => ({ id: `search-${r.id}`, type: "search_result" as const, camera_id: r.camera_id, timestamp: r.started_at, data: r }));
   } else {
     if (eventFilters.has("recordings")) entries.push(...recordings.map((r) => ({ id: `rec-${r.id}`, type: "recording" as const, camera_id: r.camera_id, timestamp: r.started_at, data: r })));
-    if (eventFilters.has("observations")) entries.push(...observations.map((o) => ({ id: `obs-${o.id}`, type: "observation" as const, camera_id: o.camera_id, timestamp: o.started_at, data: o })));
+    if (eventFilters.has("observations")) {
+      // The grouper works on a structurally compatible Observation
+      // shape from the helper module. The page-level Observation
+      // interface is stricter on optional fields like person_id and
+      // bbox; the runtime data matches both. Cast through unknown to
+      // avoid having to keep the two shapes in lockstep.
+      const coalesced = coalesceObservations(
+        observations as unknown as Parameters<typeof coalesceObservations>[0],
+        groupWindowSeconds * 1000
+      );
+      for (const e of coalesced) {
+        if (isObservationGroup(e)) {
+          entries.push({
+            id: e.id,
+            type: "observation_group" as const,
+            camera_id: e.camera_id,
+            timestamp: e.latest.started_at,
+            data: e,
+          });
+        } else {
+          entries.push({
+            id: `obs-${e.id}`,
+            type: "observation" as const,
+            camera_id: e.camera_id,
+            timestamp: e.started_at,
+            data: e as unknown as Observation,
+          });
+        }
+      }
+    }
     if (eventFilters.has("status")) entries.push(...statusLogs.map((s) => ({ id: `status-${s.id}`, type: "status" as const, camera_id: s.camera_id, timestamp: s.timestamp, data: s })));
     if (eventFilters.has("conversations")) entries.push(...conversations.map((c) => ({ id: `conv-${c.id}`, type: "conversation" as const, camera_id: c.camera_id, timestamp: c.ended_at_provisional, data: c })));
     if (eventFilters.has("transcripts")) entries.push(...transcripts.map((t) => ({ id: `tx-${t.id}`, type: "transcript" as const, camera_id: t.camera_id, timestamp: t.started_at, data: t })));
@@ -2495,6 +2560,37 @@ function DashboardContent() {
                           className="w-3.5 h-3.5 rounded border-border accent-accent" />
                         <span className={eventFilters.has(value) ? "text-foreground" : "text-muted-foreground"}>{label}</span>
                       </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Observation grouping */}
+                <div>
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">Group repeats</span>
+                  <p className="text-[10px] text-muted-foreground/80 mb-2 leading-relaxed">
+                    Collapse repeated observations of the same person or
+                    object on a camera into one rolling card.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([
+                      { v: 0, l: "Off" },
+                      { v: 300, l: "5 min" },
+                      { v: 600, l: "10 min" },
+                      { v: 1800, l: "30 min" },
+                      { v: 3600, l: "1 hour" },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => setGroupWindowSeconds(opt.v)}
+                        className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
+                          groupWindowSeconds === opt.v
+                            ? "border-accent bg-accent/10 text-accent-foreground"
+                            : "border-border hover:border-muted-foreground text-muted-foreground"
+                        }`}
+                      >
+                        {opt.l}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -3186,6 +3282,43 @@ function DashboardContent() {
                                 </div>
                               </button>
                             </div>
+                          );
+                        }
+
+                        if (entry.type === "observation_group") {
+                          const g = entry.data as CoalesceGroup;
+                          const idLookup = new Map<string, Observation>(
+                            g.observations.map((o) => [o.id, o as unknown as Observation])
+                          );
+                          return (
+                            <ObservationGroupCard
+                              key={entry.id}
+                              group={g}
+                              cameraName={cam?.name}
+                              renderObservation={(obsId) => {
+                                const o = idLookup.get(obsId);
+                                if (!o) return null;
+                                return (
+                                  <div className="rounded border border-border/60 bg-card/40 p-2 text-xs">
+                                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
+                                      <span className="font-mono">
+                                        {new Date(o.started_at).toLocaleTimeString()}
+                                      </span>
+                                      {o.refined_by_provider_name && (
+                                        <span className="text-sky-300">
+                                          ✨ refined
+                                        </span>
+                                      )}
+                                    </div>
+                                    {o.vlm_description ? (
+                                      <p className="leading-relaxed">{o.vlm_description}</p>
+                                    ) : (
+                                      <p className="text-muted-foreground">{summarizeDetections(o)}</p>
+                                    )}
+                                  </div>
+                                );
+                              }}
+                            />
                           );
                         }
 
