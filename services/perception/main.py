@@ -10,6 +10,7 @@ import asyncio
 import logging
 
 from services.perception.conversation_finalizer import ConversationFinalizer
+from services.perception.incident_tracker import IncidentFinalizer
 from services.perception.live_detector import LiveDetector
 from services.perception.pipeline import PerceptionPipeline
 from services.perception.summarizer import CameraSummarizer
@@ -32,11 +33,13 @@ async def main():
         logger.exception("ws import failed, summaries will not broadcast")
         summarizer = CameraSummarizer()
     finalizer = ConversationFinalizer()
+    incident_finalizer = IncidentFinalizer()
     await asyncio.gather(
         pipeline.run(),
         live.run(),
         summarizer.run(),
         finalizer.run(),
+        incident_finalizer.run(),
     )
 
 

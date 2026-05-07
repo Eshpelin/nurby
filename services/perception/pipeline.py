@@ -709,6 +709,22 @@ class PerceptionPipeline:
                     thumbnail_path=thumbnail_path,
                 )
                 db.add(obs)
+                await db.flush()
+                # Link the observation to an open incident on this
+                # camera matching its signature, or open a new one.
+                # Done in the same session so observation.incident_id
+                # and the incident row's occurrence_count + last_seen
+                # advance atomically.
+                try:
+                    from services.perception.incident_tracker import assign_incident
+
+                    cam_for_inc = await db.get(Camera, camera_id)
+                    if cam_for_inc is not None:
+                        inc_id = await assign_incident(db, cam_for_inc, obs)
+                        if inc_id is not None:
+                            obs.incident_id = inc_id
+                except Exception:
+                    logger.exception("incident assignment failed obs=%s", obs.id)
                 await db.commit()
                 await db.refresh(obs)
                 logger.info("Stored observation %s for camera %s with %d detections", obs.id, camera_id, len(detections))

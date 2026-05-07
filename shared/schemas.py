@@ -301,6 +301,7 @@ class ObservationResponse(BaseModel):
     primary_vlm_description: str | None = None
     refined_by_provider_name: str | None = None
     refined_at: datetime | None = None
+    incident_id: uuid.UUID | None = None
 
     model_config = {"from_attributes": True}
 
