@@ -183,6 +183,7 @@ interface Conversation {
   transcript_count: number;
   finalized: boolean;
   summary_text: string | null;
+  cleaned_text: string | null;
   summary_provider_name: string | null;
 }
 
@@ -2987,6 +2988,7 @@ function DashboardContent() {
                               finalized={c.finalized}
                               transcriptCount={c.transcript_count}
                               summaryText={c.summary_text}
+                              cleanedText={c.cleaned_text}
                               summaryProviderName={c.summary_provider_name}
                             />
                           );

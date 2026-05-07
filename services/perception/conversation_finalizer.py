@@ -31,10 +31,21 @@ logger = logging.getLogger("nurby.perception.conversation")
 
 CONVERSATION_SYSTEM_PROMPT = (
     "You are a security camera analyst. You receive a transcript of a"
-    " short conversation captured by one camera. Write a single concise"
-    " sentence summarizing what was said and the apparent purpose of"
-    " the exchange. If the speech is too garbled or trivial to"
-    " summarize meaningfully, return the literal string SKIP."
+    " short conversation captured by one camera. The transcript was"
+    " produced by automatic speech recognition so it may contain"
+    " filler words, missing punctuation, broken capitalization, and"
+    " disfluencies.\n\n"
+    "Return strict JSON with exactly two string fields.\n"
+    '  "summary": one concise sentence describing what was said and'
+    " the apparent purpose of the exchange.\n"
+    '  "cleaned": the same conversation with fillers removed (um, uh,'
+    " like, you know), punctuation normalized, capitalization fixed,"
+    " and obvious ASR errors corrected when context makes them clear."
+    " Preserve speaker turns on separate lines when speakers differ."
+    " Do NOT invent words that were not said. Do NOT translate.\n\n"
+    "If the speech is too garbled or trivial to summarize meaningfully,"
+    ' return {"summary": "SKIP", "cleaned": ""}.'
+    " Output JSON only. No prose, no markdown fences."
 )
 
 
@@ -136,20 +147,19 @@ class ConversationFinalizer:
             await db.commit()
 
         summary_text: str | None = None
+        cleaned_text: str | None = None
         if cam.conversation_summary_enabled and len(tx_rows) >= int(
             cam.conversation_min_messages_for_summary or 2
         ):
             provider = await self._resolve_provider(cam)
             if provider is not None:
-                summary_text = await self._call_summary(provider, tx_rows)
-                if summary_text:
-                    summary_text = summary_text.strip()
-                if summary_text and summary_text.upper().startswith("SKIP"):
-                    summary_text = None
+                raw = await self._call_summary(provider, tx_rows)
+                summary_text, cleaned_text = self._parse_summary_response(raw)
                 if summary_text:
                     await self._patch_summary(
                         conv_id=conv_id,
                         summary_text=summary_text,
+                        cleaned_text=cleaned_text,
                         provider_name=provider.name,
                     )
 
@@ -162,6 +172,7 @@ class ConversationFinalizer:
                     "ended_at": ended_at.isoformat(),
                     "transcript_count": len(tx_rows),
                     "summary_text": summary_text,
+                    "cleaned_text": cleaned_text,
                 }
             )
         except Exception:
@@ -221,10 +232,59 @@ class ConversationFinalizer:
             max_tokens=200,
         )
 
+    @staticmethod
+    def _parse_summary_response(raw: str | None) -> tuple[str | None, str | None]:
+        """Tolerant JSON parse. Strips markdown fences and stray prose,
+        falls back to using the whole response as the summary when the
+        model ignores the JSON instruction.
+
+        Returns (summary, cleaned). Either may be None on SKIP / parse
+        failure.
+        """
+        import json
+        import re
+
+        if not raw:
+            return None, None
+        text = raw.strip()
+        # Strip ```json fences if a model wrapped output anyway.
+        if text.startswith("```"):
+            text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+            text = text.rstrip("`").rstrip()
+            if text.endswith("```"):
+                text = text[:-3].rstrip()
+        # Try strict JSON first.
+        summary: str | None = None
+        cleaned: str | None = None
+        try:
+            obj = json.loads(text)
+            if isinstance(obj, dict):
+                summary = (obj.get("summary") or "").strip() or None
+                cleaned = (obj.get("cleaned") or "").strip() or None
+        except json.JSONDecodeError:
+            # Carve a JSON object out of the response if there is one.
+            m = re.search(r"\{[\s\S]*\}", text)
+            if m:
+                try:
+                    obj = json.loads(m.group(0))
+                    if isinstance(obj, dict):
+                        summary = (obj.get("summary") or "").strip() or None
+                        cleaned = (obj.get("cleaned") or "").strip() or None
+                except json.JSONDecodeError:
+                    pass
+        if summary is None and cleaned is None:
+            # Model ignored the schema. Use the whole response as the
+            # summary so the user still sees something useful.
+            summary = text or None
+        if summary and summary.upper().startswith("SKIP"):
+            return None, None
+        return summary, cleaned
+
     async def _patch_summary(
         self,
         conv_id: uuid.UUID,
         summary_text: str,
+        cleaned_text: str | None,
         provider_name: str,
     ) -> None:
         try:
@@ -238,6 +298,7 @@ class ConversationFinalizer:
                 if row is None:
                     return
                 row.summary_text = summary_text
+                row.cleaned_text = cleaned_text
                 row.summary_provider_name = provider_name
                 row.embedding = embedding
                 await db.commit()

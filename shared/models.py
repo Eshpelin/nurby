@@ -454,6 +454,7 @@ class Conversation(Base):
     finalized: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     summary_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_provider_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cleaned_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     speakers_seen: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

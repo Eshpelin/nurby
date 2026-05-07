@@ -25,6 +25,7 @@ interface ConversationCardProps {
   finalized: boolean;
   transcriptCount: number;
   summaryText?: string | null;
+  cleanedText?: string | null;
   summaryProviderName?: string | null;
   // When the dashboard already has the full transcript list (e.g. from
   // /api/conversations/{id}), pass it in. Otherwise the card lazy-loads
@@ -71,6 +72,7 @@ export function ConversationCard(props: ConversationCardProps) {
     finalized,
     transcriptCount,
     summaryText,
+    cleanedText,
     summaryProviderName,
     transcripts: transcriptsProp,
   } = props;
@@ -81,6 +83,9 @@ export function ConversationCard(props: ConversationCardProps) {
     transcriptsProp || []
   );
   const [loadingTx, setLoadingTx] = useState(false);
+  const [view, setView] = useState<"cleaned" | "raw">(
+    cleanedText ? "cleaned" : "raw"
+  );
 
   useEffect(() => {
     if (transcriptsProp) setTranscripts(transcriptsProp);
@@ -191,16 +196,54 @@ export function ConversationCard(props: ConversationCardProps) {
       </button>
 
       {expanded && (
-        <div className="border-t border-border/50 bg-black/30 px-3 py-2.5 space-y-1.5">
-          {loadingTx && transcripts.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Loading transcript.</p>
-          ) : transcripts.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No transcript rows.</p>
-          ) : (
-            transcripts.map((t) => (
-              <TranscriptLine key={t.id} t={t} token={token} />
-            ))
+        <div className="border-t border-border/50 bg-black/30">
+          {cleanedText && (
+            <div className="px-3 pt-2 flex items-center gap-1 text-[10px] uppercase tracking-wider">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setView("cleaned");
+                }}
+                className={`px-2 py-1 rounded ${
+                  view === "cleaned"
+                    ? "bg-emerald-600/20 text-emerald-300 border border-emerald-700/40"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Cleaned
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setView("raw");
+                }}
+                className={`px-2 py-1 rounded ${
+                  view === "raw"
+                    ? "bg-emerald-600/20 text-emerald-300 border border-emerald-700/40"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Raw transcript
+              </button>
+            </div>
           )}
+          <div className="px-3 py-2.5 space-y-1.5">
+            {view === "cleaned" && cleanedText ? (
+              <p className="text-xs leading-relaxed text-zinc-200 whitespace-pre-line">
+                {cleanedText}
+              </p>
+            ) : loadingTx && transcripts.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Loading transcript.</p>
+            ) : transcripts.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No transcript rows.</p>
+            ) : (
+              transcripts.map((t) => (
+                <TranscriptLine key={t.id} t={t} token={token} />
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>

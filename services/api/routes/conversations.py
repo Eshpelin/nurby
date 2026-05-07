@@ -34,6 +34,7 @@ def _serialize(c: Conversation) -> dict[str, Any]:
         "transcript_count": c.transcript_count,
         "finalized": c.finalized,
         "summary_text": c.summary_text,
+        "cleaned_text": c.cleaned_text,
         "summary_provider_name": c.summary_provider_name,
         "speakers_seen": c.speakers_seen,
         "created_at": c.created_at.isoformat(),
