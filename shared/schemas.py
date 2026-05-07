@@ -44,6 +44,14 @@ class CameraCreate(BaseModel):
     retention_gb: float = Field(default=50.0, ge=1.0, le=10000.0)
     motion_zones: list[dict] | None = None
     webcam_device: str | None = Field(default=None, max_length=255)
+    # Summary config
+    summary_provider_id: uuid.UUID | None = None
+    summary_mode: str = Field(default="off", max_length=16)
+    summary_period_seconds: int = Field(default=1800, ge=60, le=86400)
+    summary_event_quiet_seconds: int = Field(default=60, ge=5, le=3600)
+    summary_event_trigger_objects: list[str] | None = None
+    summary_event_min_duration_seconds: int = Field(default=5, ge=1, le=3600)
+    summary_max_tokens: int = Field(default=400, ge=50, le=2000)
 
 
 class CameraUpdate(BaseModel):
@@ -85,6 +93,14 @@ class CameraUpdate(BaseModel):
     motion_zones: list[dict] | None = None
     webcam_device: str | None = Field(default=None, max_length=255)
     display_order: int | None = None
+    # Summary config
+    summary_provider_id: uuid.UUID | None = None
+    summary_mode: str | None = Field(default=None, max_length=16)
+    summary_period_seconds: int | None = Field(default=None, ge=60, le=86400)
+    summary_event_quiet_seconds: int | None = Field(default=None, ge=5, le=3600)
+    summary_event_trigger_objects: list[str] | None = None
+    summary_event_min_duration_seconds: int | None = Field(default=None, ge=1, le=3600)
+    summary_max_tokens: int | None = Field(default=None, ge=50, le=2000)
 
 
 class CameraReorderItem(BaseModel):
@@ -131,6 +147,13 @@ class CameraResponse(BaseModel):
     status: str
     display_order: int = 0
     webcam_device: str | None = None
+    summary_provider_id: uuid.UUID | None = None
+    summary_mode: str = "off"
+    summary_period_seconds: int = 1800
+    summary_event_quiet_seconds: int = 60
+    summary_event_trigger_objects: list[str] | None = None
+    summary_event_min_duration_seconds: int = 5
+    summary_max_tokens: int = 400
     width: int | None
     height: int | None
     fps: float | None
