@@ -18,6 +18,7 @@ import cv2
 import httpx
 import numpy as np
 
+from services.perception.llm_errors import call_with_retry
 from services.perception.token_budget import (
     resolve_input_cap,
     resolve_output_cap,
@@ -69,6 +70,7 @@ class VLMClient:
         heard_text: str | None = None,
         extra_context: str | None = None,
         max_input_tokens: int | None = None,
+        camera_id: str | None = None,
     ) -> str | None:
         """Send frame to VLM and get a scene description.
 
@@ -195,14 +197,22 @@ class VLMClient:
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
-        response = await http.post(
-            f"{provider.base_url}/v1/chat/completions",
-            headers={"Authorization": f"Bearer {provider.api_key}"},
-            json=payload,
+
+        async def _do():
+            response = await http.post(
+                f"{provider.base_url}/v1/chat/completions",
+                headers={"Authorization": f"Bearer {provider.api_key}"},
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"]
+
+        return await call_with_retry(
+            _do,
+            provider_name=provider.name,
+            provider_kind="openai",
+            op="vlm",
         )
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
 
     async def _call_anthropic(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None) -> str | None:
         http = await self._get_http()
@@ -211,38 +221,47 @@ class VLMClient:
         # Anthropic's API requires max_tokens. Use a generous sentinel
         # when the user has not capped it explicitly.
         anthropic_cap = max_tokens if max_tokens is not None else 4096
-        response = await http.post(
-            f"{provider.base_url}/v1/messages",
-            headers={
-                "x-api-key": provider.api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": model,
-                "max_tokens": anthropic_cap,
-                "system": system_prompt,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                    "data": b64_image,
-                                },
+        body = {
+            "model": model,
+            "max_tokens": anthropic_cap,
+            "system": system_prompt,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": b64_image,
                             },
-                            {"type": "text", "text": prompt},
-                        ],
-                    },
-                ],
-            },
+                        },
+                        {"type": "text", "text": prompt},
+                    ],
+                },
+            ],
+        }
+
+        async def _do():
+            response = await http.post(
+                f"{provider.base_url}/v1/messages",
+                headers={
+                    "x-api-key": provider.api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json=body,
+            )
+            response.raise_for_status()
+            return response.json()["content"][0]["text"]
+
+        return await call_with_retry(
+            _do,
+            provider_name=provider.name,
+            provider_kind="anthropic",
+            op="vlm",
         )
-        response.raise_for_status()
-        data = response.json()
-        return data["content"][0]["text"]
 
     async def _call_google(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None) -> str | None:
         """Call Google Gemini native API (generativelanguage.googleapis.com)."""
@@ -267,14 +286,22 @@ class VLMClient:
         }
         if max_tokens is not None:
             payload["generationConfig"] = {"maxOutputTokens": max_tokens}
-        response = await http.post(
-            f"{provider.base_url}/v1beta/models/{model}:generateContent",
-            headers={"x-goog-api-key": provider.api_key},
-            json=payload,
+
+        async def _do():
+            response = await http.post(
+                f"{provider.base_url}/v1beta/models/{model}:generateContent",
+                headers={"x-goog-api-key": provider.api_key},
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+        return await call_with_retry(
+            _do,
+            provider_name=provider.name,
+            provider_kind="google",
+            op="vlm",
         )
-        response.raise_for_status()
-        data = response.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
 
     async def _call_ollama(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None) -> str | None:
         http = await self._get_http()
@@ -288,14 +315,22 @@ class VLMClient:
         }
         if max_tokens is not None:
             payload["options"] = {"num_predict": max_tokens}
-        response = await http.post(
-            f"{provider.base_url}/api/generate",
-            json=payload,
-            timeout=60.0,
+
+        async def _do():
+            response = await http.post(
+                f"{provider.base_url}/api/generate",
+                json=payload,
+                timeout=60.0,
+            )
+            response.raise_for_status()
+            return response.json().get("response", "")
+
+        return await call_with_retry(
+            _do,
+            provider_name=provider.name,
+            provider_kind="ollama",
+            op="vlm",
         )
-        response.raise_for_status()
-        data = response.json()
-        return data.get("response", "")
 
     async def close(self):
         if self._http:

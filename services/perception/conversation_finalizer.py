@@ -20,6 +20,10 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from services.api.ws import broadcast as ws_broadcast
+from services.perception.conversation_clip import (
+    build_clip_for_conversation,
+    patch_conversation_clip,
+)
 from services.perception.text_llm import call_text
 from services.perception.token_budget import (
     resolve_output_cap,
@@ -170,6 +174,26 @@ class ConversationFinalizer:
                         provider_name=provider.name,
                     )
 
+        # Best-effort. Build a single mp4 clip covering the
+        # conversation window. Skipped silently when ffmpeg is missing
+        # or the camera has no overlapping recordings on disk.
+        clip_built = False
+        try:
+            window_start = tx_rows[0].started_at
+            window_end = tx_rows[-1].ended_at
+            built = await build_clip_for_conversation(
+                conversation_id=conv_id,
+                camera_id=cam.id,
+                started_at=window_start,
+                ended_at=window_end,
+            )
+            if built is not None:
+                clip_path, dur_ms = built
+                await patch_conversation_clip(conv_id, clip_path, dur_ms)
+                clip_built = True
+        except Exception:
+            logger.exception("clip build failed conv=%s", conv_id)
+
         try:
             await self._broadcast(
                 {
@@ -180,6 +204,7 @@ class ConversationFinalizer:
                     "transcript_count": len(tx_rows),
                     "summary_text": summary_text,
                     "cleaned_text": cleaned_text,
+                    "has_clip": clip_built,
                 }
             )
         except Exception:

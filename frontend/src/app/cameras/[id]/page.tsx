@@ -3,6 +3,8 @@
 import { useAuth } from "@/lib/auth";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PersonaPicker } from "@/components/PersonaPicker";
+import type { PersonaPatch } from "@/lib/camera-personas";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -1076,6 +1078,34 @@ export default function CameraConfigPage() {
     return () => { cancelled = true; };
   }, [detectionModels, authFetch]);
 
+  // Apply a persona preset by mapping each patch field onto its
+  // corresponding setState. Only fields the persona defines are
+  // touched. The user still has to click Save to persist.
+  function applyPersona(patch: PersonaPatch) {
+    if (patch.detect_objects !== undefined) setDetectObjects(patch.detect_objects);
+    if (patch.detect_faces !== undefined) setDetectFaces(patch.detect_faces);
+    if (patch.scene_mode !== undefined) setSceneMode(patch.scene_mode);
+    if (patch.object_confidence !== undefined) setObjectConfidence(patch.object_confidence);
+    if (patch.detection_models !== undefined) setDetectionModels(patch.detection_models);
+    if (patch.vlm_trigger !== undefined) setVlmTrigger(patch.vlm_trigger);
+    if (patch.vlm_trigger_objects !== undefined) setVlmTriggerObjects(patch.vlm_trigger_objects);
+    if (patch.vlm_max_tokens !== undefined) setVlmMaxTokens(patch.vlm_max_tokens);
+    if (patch.recording_mode !== undefined) setRecordingMode(patch.recording_mode);
+    if (patch.recording_trigger_objects !== undefined) setRecordingTriggerObjects(patch.recording_trigger_objects);
+    if (patch.recording_clip_pre !== undefined) setRecordingClipPre(patch.recording_clip_pre);
+    if (patch.recording_clip_post !== undefined) setRecordingClipPost(patch.recording_clip_post);
+    if (patch.retention_mode !== undefined) setRetentionMode(patch.retention_mode);
+    if (patch.retention_days !== undefined) setRetentionDays(patch.retention_days);
+    if (patch.retention_gb !== undefined) setRetentionGb(patch.retention_gb);
+    if (patch.summary_mode !== undefined) setSummaryMode(patch.summary_mode);
+    if (patch.summary_period_seconds !== undefined) setSummaryPeriodSeconds(patch.summary_period_seconds);
+    if (patch.summary_event_quiet_seconds !== undefined) setSummaryEventQuietSeconds(patch.summary_event_quiet_seconds);
+    if (patch.summary_event_trigger_objects !== undefined) setSummaryEventTriggerObjects(patch.summary_event_trigger_objects);
+    if (patch.summary_event_min_duration_seconds !== undefined) setSummaryEventMinDurationSeconds(patch.summary_event_min_duration_seconds);
+    if (patch.conversation_gap_seconds !== undefined) setConversationGapSeconds(patch.conversation_gap_seconds);
+    if (patch.conversation_summary_enabled !== undefined) setConversationSummaryEnabled(patch.conversation_summary_enabled);
+  }
+
   async function handleSave() {
     setSaving(true);
     setError(null);
@@ -1240,6 +1270,14 @@ export default function CameraConfigPage() {
       )}
 
       <div className="space-y-5">
+        {/* ── Quick personas ── */}
+        <Section
+          title="Personas"
+          description="Apply a preset bundle to fill detection, recording, and summary settings in one click. Override anything afterward."
+        >
+          <PersonaPicker variant="compact" onApply={(patch) => applyPersona(patch)} />
+        </Section>
+
         {/* ── General ── */}
         <Section title="General" description="Basic camera identification and location">
           <FieldRow label="Name">

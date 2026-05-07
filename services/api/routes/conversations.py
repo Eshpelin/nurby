@@ -13,11 +13,15 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.auth import get_current_user
+from shared.auth import decode_access_token, get_current_user
+from shared.config import settings
 from shared.database import get_db
 from shared.models import Conversation, Transcript, User
 
@@ -37,6 +41,8 @@ def _serialize(c: Conversation) -> dict[str, Any]:
         "cleaned_text": c.cleaned_text,
         "summary_provider_name": c.summary_provider_name,
         "speakers_seen": c.speakers_seen,
+        "has_clip": bool(c.clip_path),
+        "clip_duration_ms": c.clip_duration_ms,
         "created_at": c.created_at.isoformat(),
     }
 
@@ -77,6 +83,28 @@ async def list_conversations(
         q = q.where(Conversation.started_at <= to)
     rows = (await db.execute(q.offset(offset).limit(limit))).scalars().all()
     return [_serialize(r) for r in rows]
+
+
+@router.get("/{conversation_id}/clip")
+async def get_conversation_clip(
+    conversation_id: uuid.UUID,
+    token: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Stream the conversation-anchored mp4 clip. Accepts ?token= so
+    HTML5 <video> can load it without JS-side header injection."""
+    if not token or not decode_access_token(token):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    row = await db.get(Conversation, conversation_id)
+    if row is None or not row.clip_path:
+        raise HTTPException(status_code=404, detail="clip not found")
+    path = os.path.abspath(row.clip_path)
+    allowed = os.path.abspath(settings.recordings_path)
+    if not (path.startswith(allowed + os.sep) or path == allowed):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="clip missing on disk")
+    return FileResponse(path, media_type="video/mp4")
 
 
 @router.post("/{conversation_id}/resummarize")

@@ -10,6 +10,8 @@ import { AudioActiveDot } from "@/components/AudioActiveDot";
 import { VLMStatusBadge } from "@/components/VLMStatusBadge";
 import { SummarizeNowButton } from "@/components/SummarizeNowButton";
 import { SystemHealthFooter } from "@/components/SystemHealthFooter";
+import { LLMErrorToasts } from "@/components/LLMErrorToasts";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { TranscriptCard } from "@/components/TranscriptCard";
 import { SummaryCard } from "@/components/SummaryCard";
 import { ConversationCard } from "@/components/ConversationCard";
@@ -203,6 +205,8 @@ interface Conversation {
   summary_text: string | null;
   cleaned_text: string | null;
   summary_provider_name: string | null;
+  has_clip?: boolean;
+  clip_duration_ms?: number | null;
 }
 
 interface TimelineEntry {
@@ -1714,6 +1718,7 @@ function DashboardContent() {
   // Camera state
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [camerasLoading, setCamerasLoading] = useState(true);
+  const [showWizard, setShowWizard] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalInitialType, setModalInitialType] = useState<StreamType | undefined>(undefined);
   const [activityEvents, setActivityEvents] = useState<Record<string, ActivityEvent[]>>({});
@@ -2099,6 +2104,20 @@ function DashboardContent() {
   useEffect(() => { fetchTimeline(); const i = setInterval(fetchTimeline, 15000); return () => clearInterval(i); }, [fetchTimeline]);
   useEffect(() => { if (cameras.length > 0) cameras.forEach((cam) => { if (!activityEvents[cam.id]) fetchActivity(cam.id); }); }, [cameras]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (cameras.length === 0) return; const i = setInterval(() => cameras.forEach((c) => fetchActivity(c.id)), 15000); return () => clearInterval(i); }, [cameras, fetchActivity]);
+
+  // First-run onboarding. Pop the wizard if no cameras exist and the
+  // user has not dismissed it before.
+  useEffect(() => {
+    if (camerasLoading) return;
+    if (cameras.length > 0) return;
+    let dismissed = false;
+    try {
+      dismissed = localStorage.getItem("nurby-onboarding-dismissed") === "1";
+    } catch {
+      dismissed = true;
+    }
+    if (!dismissed) setShowWizard(true);
+  }, [camerasLoading, cameras.length]);
 
   // Build timeline entries
   let entries: TimelineEntry[] = [];
@@ -3077,6 +3096,7 @@ function DashboardContent() {
                               summaryText={c.summary_text}
                               cleanedText={c.cleaned_text}
                               summaryProviderName={c.summary_provider_name}
+                              hasClip={c.has_clip}
                             />
                           );
                         }
@@ -3255,6 +3275,16 @@ function DashboardContent() {
         cameraName={modalRecording ? cameras.find((c) => c.id === modalRecording.camera_id)?.name : null}
         onClose={() => setModalRecording(null)}
       />
+      <LLMErrorToasts />
+      {showWizard && (
+        <OnboardingWizard
+          onClose={() => setShowWizard(false)}
+          onComplete={() => {
+            setShowWizard(false);
+            fetchCameras();
+          }}
+        />
+      )}
     </div>
   );
 }

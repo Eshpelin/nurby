@@ -15,6 +15,7 @@ from typing import Optional
 
 import httpx
 
+from services.perception.llm_errors import call_with_retry
 from shared.models import Provider
 
 logger = logging.getLogger("nurby.perception.text_llm")
@@ -35,6 +36,7 @@ async def call_text(
     system_prompt: str,
     user_prompt: str,
     max_tokens: int | None = None,
+    camera_id: str | None = None,
 ) -> str | None:
     """Single-shot text completion against any supported provider.
 
@@ -47,7 +49,8 @@ async def call_text(
     """
     http = await _client()
     kind = provider.kind
-    try:
+
+    async def _do() -> str | None:
         if kind == "openai":
             model = provider.default_model or "gpt-4o-mini"
             payload: dict = {
@@ -123,8 +126,13 @@ async def call_text(
             )
             resp.raise_for_status()
             return resp.json().get("response")
-    except httpx.HTTPError:
-        logger.exception("text LLM call failed provider=%s", kind)
+        logger.warning("unknown provider kind for text call: %s", kind)
         return None
-    logger.warning("unknown provider kind for text call: %s", kind)
-    return None
+
+    return await call_with_retry(
+        _do,
+        provider_name=provider.name,
+        provider_kind=kind,
+        op="text",
+        camera_id=camera_id,
+    )

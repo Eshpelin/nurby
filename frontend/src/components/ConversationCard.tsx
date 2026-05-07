@@ -28,6 +28,7 @@ interface ConversationCardProps {
   summaryText?: string | null;
   cleanedText?: string | null;
   summaryProviderName?: string | null;
+  hasClip?: boolean;
   // When the dashboard already has the full transcript list (e.g. from
   // /api/conversations/{id}), pass it in. Otherwise the card lazy-loads
   // when the user expands it.
@@ -76,6 +77,7 @@ export function ConversationCard(props: ConversationCardProps) {
     summaryText,
     cleanedText,
     summaryProviderName,
+    hasClip,
     transcripts: transcriptsProp,
   } = props;
 
@@ -301,7 +303,15 @@ export function ConversationCard(props: ConversationCardProps) {
               />
             )}
           </div>
-          <div className="px-3 py-2.5 space-y-1.5">
+          <div className="px-3 py-2.5 space-y-2">
+            {hasClip && finalized && token && (
+              <video
+                controls
+                preload="metadata"
+                className="w-full rounded border border-border bg-black"
+                src={`/api/conversations/${id}/clip?token=${encodeURIComponent(token)}`}
+              />
+            )}
             {view === "cleaned" && cleanedText ? (
               <p className="text-xs leading-relaxed text-zinc-200 whitespace-pre-line">
                 {cleanedText}
