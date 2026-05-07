@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 
 interface Person {
@@ -511,6 +512,18 @@ export default function PeoplePage() {
 
                     {/* Activity counters */}
                     <div className="flex items-center gap-3 flex-shrink-0">
+                      <Link
+                        href={`/follow/person/${p.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="px-2 py-1 text-xs rounded-md border border-accent/40 text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"
+                        title={`Follow ${p.display_name} across cameras`}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        Follow
+                      </Link>
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleStar(p); }}
                         disabled={togglingStar === p.id}

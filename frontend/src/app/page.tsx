@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useWebcamPublisher, listVideoDevices } from "@/lib/webcam-publisher";
@@ -110,6 +111,7 @@ interface Recording {
 interface FaceDetection {
   person_name: string | null;
   person_id: string | null;
+  cluster_id?: string | null;
   match_distance?: number | null;
   bbox?: number[];
 }
@@ -3413,15 +3415,37 @@ function DashboardContent() {
                                     {hasFaces && (
                                       <div className="flex flex-wrap items-center gap-1 mb-1">
                                         {namedFaces.map((f, i) => (
-                                          <span key={`n${i}`} className="text-xs font-medium text-green-400">
+                                          <span key={`n${i}`} className="inline-flex items-center gap-1 text-xs font-medium text-green-400">
                                             {f.person_name}
-                                            {f.match_distance != null && <span className="ml-1 text-[10px] text-muted-foreground">{((1 - f.match_distance) * 100).toFixed(0)}%</span>}
+                                            {f.match_distance != null && <span className="text-[10px] text-muted-foreground">{((1 - f.match_distance) * 100).toFixed(0)}%</span>}
+                                            {f.person_id && (
+                                              <Link
+                                                href={`/follow/person/${f.person_id}`}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="ml-0.5 text-[10px] text-accent hover:underline"
+                                                title={`Follow ${f.person_name} across cameras`}
+                                              >
+                                                follow ↗
+                                              </Link>
+                                            )}
                                           </span>
                                         ))}
                                         {namedFaces.length > 0 && unknownFaces.length > 0 && <span className="text-[10px] text-muted-foreground">+</span>}
-                                        {unknownFaces.length > 0 && (
+                                        {unknownFaces.length > 0 && unknownFaces[0]?.cluster_id ? (
+                                          <span className="inline-flex items-center gap-1 text-xs text-yellow-400">
+                                            {unknownFaces.length === 1 ? "Unknown person" : `${unknownFaces.length} unknown`}
+                                            <Link
+                                              href={`/follow/cluster/${unknownFaces[0].cluster_id}`}
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="ml-0.5 text-[10px] text-accent hover:underline"
+                                              title="Follow this recurring stranger"
+                                            >
+                                              follow ↗
+                                            </Link>
+                                          </span>
+                                        ) : unknownFaces.length > 0 ? (
                                           <span className="text-xs text-yellow-400">{unknownFaces.length === 1 ? "Unknown person" : `${unknownFaces.length} unknown`}</span>
-                                        )}
+                                        ) : null}
                                       </div>
                                     )}
 
