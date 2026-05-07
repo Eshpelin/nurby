@@ -44,6 +44,10 @@ from shared.models import (
     Transcript,
 )
 from services.perception.text_llm import call_text
+from services.perception.token_budget import (
+    resolve_output_cap,
+    trim_sections_to_budget,
+)
 from services.perception.vlm import VLMClient, get_active_provider
 from services.search.embeddings import generate_embedding, get_embedding_provider
 
@@ -286,13 +290,18 @@ class CameraSummarizer:
             window_end=window_end,
             obs_rows=obs_rows,
             tx_rows=tx_rows,
+            input_cap=getattr(provider, "max_input_tokens", None),
         )
 
+        output_cap = resolve_output_cap(
+            cam.summary_max_tokens,
+            getattr(provider, "max_output_tokens", None),
+        )
         text = await call_text(
             provider=provider,
             system_prompt=SUMMARY_SYSTEM_PROMPT,
             user_prompt=prompt,
-            max_tokens=int(cam.summary_max_tokens or 400),
+            max_tokens=output_cap,
         )
         if not text:
             logger.warning(
@@ -355,19 +364,22 @@ class CameraSummarizer:
         window_end: datetime,
         obs_rows: list[Observation],
         tx_rows: list[Transcript],
+        input_cap: int | None = None,
     ) -> str:
-        lines: list[str] = []
+        # Build prompt as discrete sections, then trim to fit the
+        # provider's input token cap. Order is keep-priority low to
+        # high: oldest history drops first, identity facts and the
+        # instruction line stay.
         cam_bits = [b for b in (cam.name, cam.location_label) if b]
-        lines.append(
-            f"Camera: {' / '.join(cam_bits) if cam_bits else 'unnamed'}."
-        )
-        lines.append(
+        header = (
+            f"Camera: {' / '.join(cam_bits) if cam_bits else 'unnamed'}.\n"
             f"Window: {window_start.isoformat()} -> {window_end.isoformat()}"
             f" ({int((window_end - window_start).total_seconds())}s, kind={kind})."
         )
 
+        obs_block = ""
         if obs_rows:
-            lines.append(f"\nObservations ({len(obs_rows)}):")
+            obs_lines = [f"Observations ({len(obs_rows)}):"]
             for o in obs_rows[:60]:
                 t = o.started_at.strftime("%H:%M:%S")
                 desc = (o.vlm_description or "").strip().replace("\n", " ")
@@ -378,34 +390,58 @@ class CameraSummarizer:
                         for d in objs[:5]
                     )
                 if desc:
-                    lines.append(f"- {t} {desc[:200]}")
+                    obs_lines.append(f"- {t} {desc[:200]}")
             if len(obs_rows) > 60:
-                lines.append(f"- (+{len(obs_rows) - 60} more)")
+                obs_lines.append(f"- (+{len(obs_rows) - 60} more)")
+            obs_block = "\n".join(obs_lines)
 
+        tx_block = ""
         if tx_rows:
-            lines.append(f"\nTranscripts ({len(tx_rows)}):")
+            tx_lines = [f"Transcripts ({len(tx_rows)}):"]
             for t in tx_rows[:60]:
                 ts = t.started_at.strftime("%H:%M:%S")
-                lines.append(f'- {ts} "{(t.text or "").strip()[:200]}"')
+                tx_lines.append(f'- {ts} "{(t.text or "").strip()[:200]}"')
             if len(tx_rows) > 60:
-                lines.append(f"- (+{len(tx_rows) - 60} more)")
+                tx_lines.append(f"- (+{len(tx_rows) - 60} more)")
+            tx_block = "\n".join(tx_lines)
 
         people, plates, _ = self._aggregate_facts(obs_rows)
+        people_block = ""
         if people:
-            lines.append("\nPeople seen:")
+            ppl_lines = ["People seen:"]
             for p in people:
-                lines.append(
+                ppl_lines.append(
                     f"- {p['name']}: {p['sightings']}x"
                     f" ({p['first_seen']} -> {p['last_seen']})"
                 )
-        if plates:
-            lines.append(f"\nPlates: {', '.join(plates)}.")
-
-        lines.append(
-            "\nWrite a 2-4 sentence narrative recap. Use the people and"
+            people_block = "\n".join(ppl_lines)
+        plates_block = f"Plates: {', '.join(plates)}." if plates else ""
+        instruction = (
+            "Write a 2-4 sentence narrative recap. Use the people and"
             " plate facts as ground truth. Be specific about times."
         )
-        return "\n".join(lines)
+
+        # Drop order: oldest observations first, then transcripts, then
+        # plates, then people seen, then header. instruction always
+        # stays.
+        sections: list[tuple[str, str]] = []
+        if obs_block:
+            sections.append(("observations", obs_block))
+        if tx_block:
+            sections.append(("transcripts", tx_block))
+        if plates_block:
+            sections.append(("plates", plates_block))
+        if people_block:
+            sections.append(("people", people_block))
+        sections.append(("header", header))
+        sections.append(("instruction", instruction))
+
+        sections = trim_sections_to_budget(sections, input_cap)
+        # Reassemble in human-readable order. header, observations,
+        # transcripts, people, plates, instruction.
+        order = ["header", "observations", "transcripts", "people", "plates", "instruction"]
+        by_name = dict(sections)
+        return "\n\n".join(by_name[k] for k in order if k in by_name)
 
     @staticmethod
     def _aggregate_facts(obs_rows: list[Observation]):

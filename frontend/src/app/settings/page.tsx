@@ -10,6 +10,8 @@ interface Provider {
   base_url: string;
   default_model: string | null;
   active: boolean;
+  max_input_tokens: number | null;
+  max_output_tokens: number | null;
   created_at: string;
 }
 
@@ -166,6 +168,8 @@ export default function SettingsPage() {
   const [formApiKey, setFormApiKey] = useState("");
   const [formModel, setFormModel] = useState("");
   const [formActive, setFormActive] = useState(true);
+  const [formMaxInputTokens, setFormMaxInputTokens] = useState<string>("");
+  const [formMaxOutputTokens, setFormMaxOutputTokens] = useState<string>("");
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
@@ -349,6 +353,7 @@ export default function SettingsPage() {
   const resetForm = () => {
     setFormName(""); setFormKind("openai"); setFormBaseUrl(""); setFormApiKey("");
     setFormModel(""); setFormActive(true); setFormError(""); setShowPresets(false);
+    setFormMaxInputTokens(""); setFormMaxOutputTokens("");
   };
 
   const openCreate = (presetName?: string) => {
@@ -376,6 +381,8 @@ export default function SettingsPage() {
     setFormApiKey("");
     setFormModel(p.default_model || "");
     setFormActive(p.active);
+    setFormMaxInputTokens(p.max_input_tokens != null ? String(p.max_input_tokens) : "");
+    setFormMaxOutputTokens(p.max_output_tokens != null ? String(p.max_output_tokens) : "");
     setFormError("");
     setShowPresets(false);
     setShowProviderModal(true);
@@ -407,10 +414,18 @@ export default function SettingsPage() {
     setSubmitting(true);
     setFormError("");
 
+    const parseCap = (raw: string): number | null => {
+      const v = raw.trim();
+      if (!v) return null;
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+    };
     const body: Record<string, unknown> = {
       name: formName.trim(), kind: formKind,
       base_url: formBaseUrl.trim().replace(/\/+$/, ""),
       default_model: formModel.trim() || null, active: formActive,
+      max_input_tokens: parseCap(formMaxInputTokens),
+      max_output_tokens: parseCap(formMaxOutputTokens),
     };
     if (formApiKey.trim()) body.api_key = formApiKey.trim();
 
@@ -1090,6 +1105,44 @@ export default function SettingsPage() {
                 <input type="text" value={formModel} onChange={(e) => setFormModel(e.target.value)}
                   className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:border-accent"
                   placeholder={formKind === "openai" ? "gpt-4o-mini" : formKind === "anthropic" ? "claude-sonnet-4-20250514" : "moondream"} />
+              </div>
+
+              {/* Token caps */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">
+                    Max input tokens
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={64}
+                    value={formMaxInputTokens}
+                    onChange={(e) => setFormMaxInputTokens(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:border-accent"
+                    placeholder="unlimited"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Cap on the prompt size we send. Empty means use the model default.
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">
+                    Max output tokens
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={16}
+                    value={formMaxOutputTokens}
+                    onChange={(e) => setFormMaxOutputTokens(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:border-accent"
+                    placeholder="unlimited"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Hard ceiling on the response. Per-camera caps further tighten this.
+                  </p>
+                </div>
               </div>
 
               {/* Active */}

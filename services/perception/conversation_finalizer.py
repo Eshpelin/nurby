@@ -21,6 +21,10 @@ from sqlalchemy import select
 
 from services.api.ws import broadcast as ws_broadcast
 from services.perception.text_llm import call_text
+from services.perception.token_budget import (
+    resolve_output_cap,
+    trim_sections_to_budget,
+)
 from services.perception.vlm import get_active_provider
 from services.search.embeddings import generate_embedding, get_embedding_provider
 from shared.database import async_session
@@ -207,29 +211,42 @@ class ConversationFinalizer:
     async def _call_summary(
         self, provider: Provider, tx_rows: list[Transcript]
     ) -> str | None:
-        # Render the conversation as a labeled transcript so the VLM can
-        # tell turns apart even when speaker attribution is missing.
-        lines = []
-        for t in tx_rows:
+        # Render each transcript line as its own section so older lines
+        # drop first when the input token cap is tight. Speaker tag is
+        # included so the VLM can tell turns apart even when speaker
+        # attribution is missing.
+        line_sections: list[tuple[str, str]] = []
+        for i, t in enumerate(tx_rows):
             ts = t.started_at.strftime("%H:%M:%S")
-            speaker = "speaker"
-            if t.speaker_person_id:
-                speaker = f"person:{str(t.speaker_person_id)[:8]}"
+            speaker = (
+                f"person:{str(t.speaker_person_id)[:8]}"
+                if t.speaker_person_id
+                else "speaker"
+            )
             text = (t.text or "").strip().replace("\n", " ")
             if text:
-                lines.append(f"[{ts}] {speaker}: {text}")
-        if not lines:
+                line_sections.append((f"line_{i}", f"[{ts}] {speaker}: {text}"))
+        if not line_sections:
             return None
-        prompt = (
-            "Summarize the following short conversation in one concise"
-            " sentence. If the conversation is too trivial or garbled to"
-            " be useful, return SKIP.\n\n" + "\n".join(lines)
+        instruction = (
+            "Summarize the following short conversation. If the"
+            " conversation is too trivial or garbled to be useful,"
+            ' return {"summary": "SKIP", "cleaned": ""}.'
+        )
+        # Keep instruction last (highest priority). Older lines drop
+        # first.
+        sections = list(line_sections) + [("instruction", instruction)]
+        input_cap = getattr(provider, "max_input_tokens", None)
+        sections = trim_sections_to_budget(sections, input_cap)
+        prompt = "\n".join(text for _, text in sections)
+        output_cap = resolve_output_cap(
+            getattr(provider, "max_output_tokens", None),
         )
         return await call_text(
             provider=provider,
             system_prompt=CONVERSATION_SYSTEM_PROMPT,
             user_prompt=prompt,
-            max_tokens=200,
+            max_tokens=output_cap,
         )
 
     @staticmethod

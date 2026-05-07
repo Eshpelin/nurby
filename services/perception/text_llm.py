@@ -34,30 +34,43 @@ async def call_text(
     provider: Provider,
     system_prompt: str,
     user_prompt: str,
-    max_tokens: int = 400,
+    max_tokens: int | None = None,
 ) -> str | None:
-    """Single-shot text completion against any supported provider."""
+    """Single-shot text completion against any supported provider.
+
+    When ``max_tokens`` is None, the request omits the cap field
+    entirely so the provider applies its model default. Anthropic is
+    the exception. its API requires ``max_tokens`` so we send a high
+    sentinel rather than omit. ``provider.max_output_tokens`` should
+    already have been folded into ``max_tokens`` by the caller via
+    :func:`token_budget.resolve_output_cap`.
+    """
     http = await _client()
     kind = provider.kind
     try:
         if kind == "openai":
             model = provider.default_model or "gpt-4o-mini"
+            payload: dict = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+            }
+            if max_tokens is not None:
+                payload["max_tokens"] = max_tokens
             resp = await http.post(
                 f"{provider.base_url}/v1/chat/completions",
                 headers={"Authorization": f"Bearer {provider.api_key}"},
-                json={
-                    "model": model,
-                    "max_tokens": max_tokens,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                },
+                json=payload,
             )
             resp.raise_for_status()
             return resp.json()["choices"][0]["message"]["content"]
         if kind == "anthropic":
             model = provider.default_model or "claude-sonnet-4-20250514"
+            # Anthropic's API requires max_tokens. Use a generous
+            # sentinel when the user did not cap.
+            anthropic_cap = max_tokens if max_tokens is not None else 4096
             resp = await http.post(
                 f"{provider.base_url}/v1/messages",
                 headers={
@@ -67,7 +80,7 @@ async def call_text(
                 },
                 json={
                     "model": model,
-                    "max_tokens": max_tokens,
+                    "max_tokens": anthropic_cap,
                     "system": system_prompt,
                     "messages": [{"role": "user", "content": user_prompt}],
                 },
@@ -76,14 +89,19 @@ async def call_text(
             return resp.json()["content"][0]["text"]
         if kind == "google":
             model = provider.default_model or "gemini-1.5-flash"
+            gen_config: dict = {}
+            if max_tokens is not None:
+                gen_config["maxOutputTokens"] = max_tokens
+            payload = {
+                "systemInstruction": {"parts": [{"text": system_prompt}]},
+                "contents": [{"parts": [{"text": user_prompt}]}],
+            }
+            if gen_config:
+                payload["generationConfig"] = gen_config
             resp = await http.post(
                 f"{provider.base_url}/v1beta/models/{model}:generateContent",
                 params={"key": provider.api_key},
-                json={
-                    "systemInstruction": {"parts": [{"text": system_prompt}]},
-                    "contents": [{"parts": [{"text": user_prompt}]}],
-                    "generationConfig": {"maxOutputTokens": max_tokens},
-                },
+                json=payload,
             )
             resp.raise_for_status()
             cands = resp.json().get("candidates") or []
@@ -92,14 +110,16 @@ async def call_text(
             return None
         if kind == "ollama":
             model = provider.default_model or "gemma3:4b"
+            payload = {
+                "model": model,
+                "prompt": f"{system_prompt}\n\n{user_prompt}",
+                "stream": False,
+            }
+            if max_tokens is not None:
+                payload["options"] = {"num_predict": max_tokens}
             resp = await http.post(
                 f"{provider.base_url}/api/generate",
-                json={
-                    "model": model,
-                    "prompt": f"{system_prompt}\n\n{user_prompt}",
-                    "stream": False,
-                    "options": {"num_predict": max_tokens},
-                },
+                json=payload,
             )
             resp.raise_for_status()
             return resp.json().get("response")

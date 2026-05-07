@@ -93,7 +93,7 @@ class VLMJob:
     detections: list[dict]
     provider: Provider
     system_prompt: str | None
-    max_tokens: int
+    max_tokens: int | None
     timestamp: datetime
     heard_text: str | None = None
     extra_context: str | None = None

@@ -18,6 +18,10 @@ import cv2
 import httpx
 import numpy as np
 
+from services.perception.token_budget import (
+    resolve_output_cap,
+    trim_sections_to_budget,
+)
 from shared.database import async_session
 from shared.models import Provider
 from sqlalchemy import select
@@ -60,7 +64,7 @@ class VLMClient:
         detections: list[dict],
         provider: Provider,
         system_prompt: str | None = None,
-        max_tokens: int = 200,
+        max_tokens: int | None = None,
         heard_text: str | None = None,
         extra_context: str | None = None,
     ) -> str | None:
@@ -100,21 +104,10 @@ class VLMClient:
                         f" Objects detected by YOLO: {', '.join(det_parts)}."
                     )
 
-            extra_block = ""
-            if extra_context and extra_context.strip():
-                trimmed = extra_context.strip()
-                if len(trimmed) > 600:
-                    trimmed = trimmed[:600].rstrip() + "..."
-                extra_block = f" {trimmed}"
-
-            heard_context = ""
+            heard_block = ""
             if heard_text and heard_text.strip():
-                # Cap at a sane length so we never blow the prompt budget on
-                # a long monologue. The VLM only needs the gist.
                 snippet = heard_text.strip()
-                if len(snippet) > 400:
-                    snippet = snippet[:400].rstrip() + "..."
-                heard_context = (
+                heard_block = (
                     f' Heard during this scene: "{snippet}".'
                     " Incorporate the speech into your description when it"
                     " clarifies who is speaking, what is happening, or the"
@@ -122,22 +115,48 @@ class VLMClient:
                     " ignore it."
                 )
 
-            user_prompt = (
-                f"Describe this security camera frame."
-                f"{detection_context}{extra_block}{heard_context}"
+            extra_block = ""
+            if extra_context and extra_context.strip():
+                extra_block = f" {extra_context.strip()}"
+
+            base_block = (
+                "Describe this security camera frame."
                 " Use the identity, plate, and location facts above as"
                 " ground truth. Do not contradict them or re-guess from"
                 " pixels."
             )
 
+            # Section list in keep-priority order, low to high. The
+            # heard_text block is the first to drop because the rest
+            # already encodes its content (face IDs, plates) more
+            # densely. extra_context (face/plate/location) is the
+            # specialist-model ground truth and outranks YOLO labels.
+            sections: list[tuple[str, str]] = []
+            if heard_block:
+                sections.append(("heard", heard_block))
+            if detection_context:
+                sections.append(("detections", detection_context))
+            if extra_block:
+                sections.append(("extra", extra_block))
+            sections.append(("base", base_block))
+
+            input_cap = getattr(provider, "max_input_tokens", None)
+            sections = trim_sections_to_budget(sections, input_cap)
+            user_prompt = "".join(text for _, text in sections).strip()
+
+            output_cap = resolve_output_cap(
+                max_tokens,
+                getattr(provider, "max_output_tokens", None),
+            )
+
             if provider.kind == "openai":
-                return await self._call_openai(b64_image, user_prompt, provider, prompt, max_tokens)
+                return await self._call_openai(b64_image, user_prompt, provider, prompt, output_cap)
             elif provider.kind == "anthropic":
-                return await self._call_anthropic(b64_image, user_prompt, provider, prompt, max_tokens)
+                return await self._call_anthropic(b64_image, user_prompt, provider, prompt, output_cap)
             elif provider.kind == "google":
-                return await self._call_google(b64_image, user_prompt, provider, prompt, max_tokens)
+                return await self._call_google(b64_image, user_prompt, provider, prompt, output_cap)
             elif provider.kind == "ollama":
-                return await self._call_ollama(b64_image, user_prompt, provider, prompt, max_tokens)
+                return await self._call_ollama(b64_image, user_prompt, provider, prompt, output_cap)
             else:
                 logger.warning("Unknown provider kind: %s", provider.kind)
                 return None
@@ -146,42 +165,47 @@ class VLMClient:
             logger.exception("VLM call failed for provider %s", provider.name)
             return None
 
-    async def _call_openai(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int = 200) -> str | None:
+    async def _call_openai(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None) -> str | None:
         http = await self._get_http()
         model = provider.default_model or "gpt-4o-mini"
 
+        payload: dict = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{b64_image}",
+                                "detail": "low",
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         response = await http.post(
             f"{provider.base_url}/v1/chat/completions",
             headers={"Authorization": f"Bearer {provider.api_key}"},
-            json={
-                "model": model,
-                "max_tokens": max_tokens,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{b64_image}",
-                                    "detail": "low",
-                                },
-                            },
-                        ],
-                    },
-                ],
-            },
+            json=payload,
         )
         response.raise_for_status()
         data = response.json()
         return data["choices"][0]["message"]["content"]
 
-    async def _call_anthropic(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int = 200) -> str | None:
+    async def _call_anthropic(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None) -> str | None:
         http = await self._get_http()
         model = provider.default_model or "claude-sonnet-4-20250514"
 
+        # Anthropic's API requires max_tokens. Use a generous sentinel
+        # when the user has not capped it explicitly.
+        anthropic_cap = max_tokens if max_tokens is not None else 4096
         response = await http.post(
             f"{provider.base_url}/v1/messages",
             headers={
@@ -191,7 +215,7 @@ class VLMClient:
             },
             json={
                 "model": model,
-                "max_tokens": max_tokens,
+                "max_tokens": anthropic_cap,
                 "system": system_prompt,
                 "messages": [
                     {
@@ -215,48 +239,53 @@ class VLMClient:
         data = response.json()
         return data["content"][0]["text"]
 
-    async def _call_google(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int = 200) -> str | None:
+    async def _call_google(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None) -> str | None:
         """Call Google Gemini native API (generativelanguage.googleapis.com)."""
         http = await self._get_http()
         model = provider.default_model or "gemini-2.0-flash"
 
+        payload: dict = {
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inlineData": {
+                                "mimeType": "image/jpeg",
+                                "data": b64_image,
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+        if max_tokens is not None:
+            payload["generationConfig"] = {"maxOutputTokens": max_tokens}
         response = await http.post(
             f"{provider.base_url}/v1beta/models/{model}:generateContent",
             headers={"x-goog-api-key": provider.api_key},
-            json={
-                "systemInstruction": {"parts": [{"text": system_prompt}]},
-                "contents": [
-                    {
-                        "parts": [
-                            {"text": prompt},
-                            {
-                                "inlineData": {
-                                    "mimeType": "image/jpeg",
-                                    "data": b64_image,
-                                },
-                            },
-                        ],
-                    },
-                ],
-                "generationConfig": {"maxOutputTokens": max_tokens},
-            },
+            json=payload,
         )
         response.raise_for_status()
         data = response.json()
         return data["candidates"][0]["content"]["parts"][0]["text"]
 
-    async def _call_ollama(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int = 200) -> str | None:
+    async def _call_ollama(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None) -> str | None:
         http = await self._get_http()
         model = provider.default_model or "moondream"
 
+        payload: dict = {
+            "model": model,
+            "prompt": f"{system_prompt}\n\n{prompt}",
+            "images": [b64_image],
+            "stream": False,
+        }
+        if max_tokens is not None:
+            payload["options"] = {"num_predict": max_tokens}
         response = await http.post(
             f"{provider.base_url}/api/generate",
-            json={
-                "model": model,
-                "prompt": f"{system_prompt}\n\n{prompt}",
-                "images": [b64_image],
-                "stream": False,
-            },
+            json=payload,
             timeout=60.0,
         )
         response.raise_for_status()

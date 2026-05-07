@@ -402,6 +402,9 @@ class ProviderCreate(BaseModel):
     api_key: str | None = Field(default=None, max_length=512)
     default_model: str | None = Field(default=None, max_length=255)
     active: bool = True
+    # NULL = no cap, defer to the provider's model default.
+    max_input_tokens: int | None = Field(default=None, ge=64, le=2_000_000)
+    max_output_tokens: int | None = Field(default=None, ge=16, le=200_000)
 
 
 class ProviderResponse(BaseModel):
@@ -411,6 +414,8 @@ class ProviderResponse(BaseModel):
     base_url: str
     default_model: str | None
     active: bool
+    max_input_tokens: int | None = None
+    max_output_tokens: int | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

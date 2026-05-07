@@ -258,6 +258,11 @@ class Provider(Base):
     api_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     default_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Token caps. NULL = no cap, defer to the provider's model default.
+    # Per-camera vlm_max_tokens / summary_max_tokens further tighten
+    # the output cap when set.
+    max_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
