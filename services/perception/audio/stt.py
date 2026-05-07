@@ -50,12 +50,16 @@ def known_kinds() -> list[str]:
 # Eager-register the always-available providers. Heavy imports stay
 # inside the factory bodies.
 
-async def _faster_whisper_factory(model: str = "small.en", device: str = "cpu") -> STTProvider:
+async def _faster_whisper_factory(
+    model: str = "small.en",
+    device: str = "cpu",
+    language: str | None = "en",
+) -> STTProvider:
     from services.perception.audio.providers.faster_whisper_provider import (
         FasterWhisperProvider,
     )
 
-    return FasterWhisperProvider(model=model, device=device)
+    return FasterWhisperProvider(model=model, device=device, language=language)
 
 
 async def _mock_factory(**_: object) -> STTProvider:

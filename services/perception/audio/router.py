@@ -351,4 +351,8 @@ def _resolve_provider_kwargs(camera) -> dict:
     from shared.config import settings
 
     model = getattr(settings, "audio_stt_model", None) or "small.en"
-    return {"model": model, "device": "cpu"}
+    # Per-camera language. ``auto`` (or empty) lets Whisper detect the
+    # language from each segment.
+    raw_lang = (getattr(camera, "audio_language", None) or "en").strip().lower()
+    language = None if raw_lang in ("auto", "", "any") else raw_lang
+    return {"model": model, "device": "cpu", "language": language}

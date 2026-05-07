@@ -41,12 +41,15 @@ CONVERSATION_SYSTEM_PROMPT = (
     " disfluencies.\n\n"
     "Return strict JSON with exactly two string fields.\n"
     '  "summary": one concise sentence describing what was said and'
-    " the apparent purpose of the exchange.\n"
+    " the apparent purpose of the exchange. Always write the summary"
+    " in English regardless of the spoken language.\n"
     '  "cleaned": the same conversation with fillers removed (um, uh,'
     " like, you know), punctuation normalized, capitalization fixed,"
     " and obvious ASR errors corrected when context makes them clear."
     " Preserve speaker turns on separate lines when speakers differ."
-    " Do NOT invent words that were not said. Do NOT translate.\n\n"
+    " Keep the cleaned text in the original spoken language."
+    " Do NOT invent words that were not said. Do NOT translate the"
+    " cleaned field.\n\n"
     "If the speech is too garbled or trivial to summarize meaningfully,"
     ' return {"summary": "SKIP", "cleaned": ""}.'
     " Output JSON only. No prose, no markdown fences."

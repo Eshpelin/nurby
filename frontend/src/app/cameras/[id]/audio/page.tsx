@@ -216,6 +216,31 @@ export default function CameraAudioPage() {
               onChange={(v) => update({ transcript_store: v })}
               disabled={saving}
             />
+            <SelectRow
+              label="Spoken language"
+              value={config.audio_language}
+              options={[
+                { v: "auto", l: "Auto-detect" },
+                { v: "en", l: "English" },
+                { v: "es", l: "Spanish" },
+                { v: "fr", l: "French" },
+                { v: "de", l: "German" },
+                { v: "it", l: "Italian" },
+                { v: "pt", l: "Portuguese" },
+                { v: "nl", l: "Dutch" },
+                { v: "pl", l: "Polish" },
+                { v: "ru", l: "Russian" },
+                { v: "tr", l: "Turkish" },
+                { v: "ar", l: "Arabic" },
+                { v: "hi", l: "Hindi" },
+                { v: "bn", l: "Bengali" },
+                { v: "ja", l: "Japanese" },
+                { v: "ko", l: "Korean" },
+                { v: "zh", l: "Chinese" },
+              ]}
+              onChange={(v) => update({ audio_language: v })}
+              disabled={saving}
+            />
           </div>
         </section>
 

@@ -25,10 +25,20 @@ class FasterWhisperProvider:
     kind = "faster_whisper"
     is_local = True
 
-    def __init__(self, model: str = "small.en", device: str = "cpu") -> None:
+    def __init__(
+        self,
+        model: str = "small.en",
+        device: str = "cpu",
+        language: str | None = "en",
+    ) -> None:
         self.model = model
         self.name = f"faster-whisper {model}"
         self._device = device
+        # Whisper accepts None to auto-detect. Some users have multi-
+        # language households or non-English cameras (intercom in front
+        # door area, kitchen with shared family). Per-camera setting
+        # flows in via cam.audio_language.
+        self._language: str | None = language or None
         self._whisper: Any | None = None
         self._lock = asyncio.Lock()
 
@@ -54,9 +64,11 @@ class FasterWhisperProvider:
             import numpy as np
 
             audio = np.frombuffer(segment.pcm, dtype=np.int16).astype("float32") / 32768.0
+            # language=None lets Whisper auto-detect. Pinning the
+            # language is faster and more accurate when known.
             segments, info = whisper.transcribe(
                 audio,
-                language="en",
+                language=self._language,
                 beam_size=1,
                 vad_filter=False,
                 condition_on_previous_text=False,
