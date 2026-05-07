@@ -8,6 +8,7 @@ import { StarredStatusRow } from "@/components/StarredStatusRow";
 import { LiveCaptionOverlay } from "@/components/LiveCaptionOverlay";
 import { AudioActiveDot } from "@/components/AudioActiveDot";
 import { TranscriptCard } from "@/components/TranscriptCard";
+import { SummaryCard } from "@/components/SummaryCard";
 import { RecordingModal } from "@/components/RecordingModal";
 
 const WEBRTC_URL =
@@ -158,12 +159,26 @@ interface Transcript {
   provider: string;
 }
 
+interface Summary {
+  id: string;
+  camera_id: string;
+  kind: "periodic" | "event" | string;
+  started_at: string;
+  ended_at: string;
+  provider_name: string | null;
+  trigger_reason: string;
+  summary_text: string;
+  people_seen: { name: string; sightings: number; first_seen?: string; last_seen?: string }[] | null;
+  plates_seen: string[] | null;
+  object_counts: Record<string, number> | null;
+}
+
 interface TimelineEntry {
   id: string;
-  type: "recording" | "observation" | "status" | "search_result" | "notification" | "transcript";
+  type: "recording" | "observation" | "status" | "search_result" | "notification" | "transcript" | "summary";
   camera_id: string;
   timestamp: string;
-  data: Recording | Observation | StatusLog | SearchResult | Notification | Transcript;
+  data: Recording | Observation | StatusLog | SearchResult | Notification | Transcript | Summary;
 }
 
 interface ActivityEvent {
@@ -195,7 +210,7 @@ const STREAM_TYPES: { value: StreamType; label: string; hint: string; placeholde
 ];
 
 type TimeRange = "today" | "7d" | "30d";
-type EventFilter = "recordings" | "observations" | "status" | "transcripts";
+type EventFilter = "recordings" | "observations" | "status" | "transcripts" | "summaries";
 
 // ── Helpers ──
 
@@ -1688,6 +1703,7 @@ function DashboardContent() {
   const [observations, setObservations] = useState<Observation[]>([]);
   const [statusLogs, setStatusLogs] = useState<StatusLog[]>([]);
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
+  const [summaries, setSummaries] = useState<Summary[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
   const [activeEntry, setActiveEntry] = useState<string | null>(null);
   const [modalRecording, setModalRecording] = useState<Recording | null>(null);
@@ -1742,6 +1758,9 @@ function DashboardContent() {
             fetchTimeline();
           }
           if (data.type === "transcript_created") {
+            fetchTimeline();
+          }
+          if (data.type === "summary_created") {
             fetchTimeline();
           }
         } catch { /* ignore */ }
@@ -1855,12 +1874,13 @@ function DashboardContent() {
       const statusParams = new URLSearchParams({ limit: "100" });
       if (selectedCamera) statusParams.set("camera_id", selectedCamera);
 
-      const [recRes, obsRes, statusRes, notifRes, tlRes] = await Promise.all([
+      const [recRes, obsRes, statusRes, notifRes, tlRes, sumRes] = await Promise.all([
         authFetch(`/api/recordings?${params}`),
         authFetch(`/api/observations?${params}`),
         authFetch(`/api/cameras/status-logs?${statusParams}`),
         authFetch(`/api/notifications?limit=100`),
         authFetch(`/api/timeline?${params}`),
+        authFetch(`/api/summaries?${params}`),
       ]);
 
       const now = Date.now();
@@ -1873,6 +1893,14 @@ function DashboardContent() {
       if (notifRes.ok) {
         const all: Notification[] = await notifRes.json();
         setNotifications(all.filter((n) => new Date(n.created_at).getTime() >= cutoff && (!selectedCamera || n.camera_id === selectedCamera)));
+      }
+      if (sumRes.ok) {
+        const all: Summary[] = await sumRes.json();
+        setSummaries(
+          (Array.isArray(all) ? all : []).filter(
+            (s) => new Date(s.started_at).getTime() >= cutoff
+          )
+        );
       }
       if (tlRes.ok) {
         const tl = await tlRes.json();
@@ -1974,7 +2002,7 @@ function DashboardContent() {
 
   const clearAllFilters = () => {
     setTimeRange("7d");
-    setEventFilters(new Set(["recordings", "observations", "status", "transcripts"]));
+    setEventFilters(new Set(["recordings", "observations", "status", "transcripts", "summaries"]));
     setFilterPerson("");
     setFilterObject("");
     setSelectedCamera(null);
@@ -2025,6 +2053,7 @@ function DashboardContent() {
     if (eventFilters.has("observations")) entries.push(...observations.map((o) => ({ id: `obs-${o.id}`, type: "observation" as const, camera_id: o.camera_id, timestamp: o.started_at, data: o })));
     if (eventFilters.has("status")) entries.push(...statusLogs.map((s) => ({ id: `status-${s.id}`, type: "status" as const, camera_id: s.camera_id, timestamp: s.timestamp, data: s })));
     if (eventFilters.has("transcripts")) entries.push(...transcripts.map((t) => ({ id: `tx-${t.id}`, type: "transcript" as const, camera_id: t.camera_id, timestamp: t.started_at, data: t })));
+    if (eventFilters.has("summaries")) entries.push(...summaries.map((s) => ({ id: `sum-${s.id}`, type: "summary" as const, camera_id: s.camera_id, timestamp: s.ended_at, data: s })));
     // Always include notifications. they are explicit rule fires and deserve
     // priority in the digest even when the "status" filter is off.
     entries.push(...notifications.map((n) => ({
@@ -2359,7 +2388,7 @@ function DashboardContent() {
                 <div>
                   <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">Event Types</span>
                   <div className="flex flex-col gap-1">
-                    {([["recordings", "Recordings"], ["observations", "AI Observations"], ["transcripts", "Transcripts"], ["status", "Status Changes"]] as [EventFilter, string][]).map(([value, label]) => (
+                    {([["recordings", "Recordings"], ["observations", "AI Observations"], ["transcripts", "Transcripts"], ["summaries", "Summaries"], ["status", "Status Changes"]] as [EventFilter, string][]).map(([value, label]) => (
                       <label key={value} className="flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
                         <input type="checkbox" checked={eventFilters.has(value)} onChange={() => toggleEventFilter(value)}
                           className="w-3.5 h-3.5 rounded border-border accent-accent" />
@@ -2914,6 +2943,27 @@ function DashboardContent() {
                                 {row}
                               </button>
                             </div>
+                          );
+                        }
+
+                        if (entry.type === "summary") {
+                          const s = entry.data as Summary;
+                          return (
+                            <SummaryCard
+                              key={entry.id}
+                              id={s.id}
+                              cameraId={s.camera_id}
+                              cameraName={cam?.name}
+                              kind={s.kind}
+                              startedAt={s.started_at}
+                              endedAt={s.ended_at}
+                              providerName={s.provider_name}
+                              triggerReason={s.trigger_reason}
+                              summaryText={s.summary_text}
+                              peopleSeen={s.people_seen}
+                              platesSeen={s.plates_seen}
+                              objectCounts={s.object_counts}
+                            />
                           );
                         }
 

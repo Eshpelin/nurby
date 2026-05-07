@@ -42,6 +42,13 @@ interface Camera {
   detection_models: {model: string; confidence: number; enabled: boolean; label_filter: string[]}[] | null;
   detection_merge: string;
   detection_consensus_min: number;
+  summary_provider_id: string | null;
+  summary_mode: string;
+  summary_period_seconds: number;
+  summary_event_quiet_seconds: number;
+  summary_event_trigger_objects: string[] | null;
+  summary_event_min_duration_seconds: number;
+  summary_max_tokens: number;
   motion_zones: MotionZone[] | null;
   status: string;
   width: number | null;
@@ -953,6 +960,13 @@ export default function CameraConfigPage() {
   const [retentionMode, setRetentionMode] = useState("none");
   const [retentionDays, setRetentionDays] = useState(30);
   const [retentionGb, setRetentionGb] = useState(50);
+  const [summaryProviderId, setSummaryProviderId] = useState<string | null>(null);
+  const [summaryMode, setSummaryMode] = useState("off");
+  const [summaryPeriodSeconds, setSummaryPeriodSeconds] = useState(1800);
+  const [summaryEventQuietSeconds, setSummaryEventQuietSeconds] = useState(60);
+  const [summaryEventTriggerObjects, setSummaryEventTriggerObjects] = useState<string[]>(["person"]);
+  const [summaryEventMinDurationSeconds, setSummaryEventMinDurationSeconds] = useState(5);
+  const [summaryMaxTokens, setSummaryMaxTokens] = useState(400);
   const [motionZones, setMotionZones] = useState<MotionZone[]>([]);
 
   const fetchData = useCallback(async () => {
@@ -1007,6 +1021,13 @@ export default function CameraConfigPage() {
       setRetentionMode(cam.retention_mode ?? "none");
       setRetentionDays(cam.retention_days ?? 30);
       setRetentionGb(cam.retention_gb ?? 50);
+      setSummaryProviderId(cam.summary_provider_id ?? null);
+      setSummaryMode(cam.summary_mode ?? "off");
+      setSummaryPeriodSeconds(cam.summary_period_seconds ?? 1800);
+      setSummaryEventQuietSeconds(cam.summary_event_quiet_seconds ?? 60);
+      setSummaryEventTriggerObjects(cam.summary_event_trigger_objects ?? ["person"]);
+      setSummaryEventMinDurationSeconds(cam.summary_event_min_duration_seconds ?? 5);
+      setSummaryMaxTokens(cam.summary_max_tokens ?? 400);
       setMotionZones(cam.motion_zones ?? []);
     } catch {
       setError("Failed to load camera");
@@ -1081,6 +1102,13 @@ export default function CameraConfigPage() {
         retention_mode: retentionMode,
         retention_days: retentionDays,
         retention_gb: retentionGb,
+        summary_provider_id: summaryProviderId,
+        summary_mode: summaryMode,
+        summary_period_seconds: summaryPeriodSeconds,
+        summary_event_quiet_seconds: summaryEventQuietSeconds,
+        summary_event_trigger_objects: summaryEventTriggerObjects.length > 0 ? summaryEventTriggerObjects : null,
+        summary_event_min_duration_seconds: summaryEventMinDurationSeconds,
+        summary_max_tokens: summaryMaxTokens,
         motion_zones: motionZones.length > 0 ? motionZones : null,
       };
 
@@ -1837,6 +1865,150 @@ export default function CameraConfigPage() {
                     Reset to default
                   </button>
                 )}
+              </FieldRow>
+            </>
+          )}
+        </Section>
+
+        {/* ── Summarization ── */}
+        <Section
+          title="Summarization"
+          description="Generate periodic or event-bound narrative recaps using a VLM. Summaries fuse per-frame descriptions, transcripts, and identity facts into a single story."
+        >
+          <FieldRow label="Mode" hint="Periodic fires on a fixed timer. Event opens on detection and closes after a quiet window. Both runs them independently.">
+            <div className="flex gap-1.5">
+              {(["off", "periodic", "event", "both"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setSummaryMode(m)}
+                  className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
+                    summaryMode === m
+                      ? "border-accent bg-accent/10 text-accent-foreground"
+                      : "border-border hover:border-muted-foreground text-muted-foreground"
+                  }`}
+                >
+                  {m === "off" ? "Off" : m === "periodic" ? "Periodic" : m === "event" ? "Event" : "Both"}
+                </button>
+              ))}
+            </div>
+          </FieldRow>
+
+          {summaryMode !== "off" && (
+            <>
+              <FieldRow label="Summary Model" hint="Falls back to the AI Analysis provider, then the system default.">
+                <select
+                  value={summaryProviderId || ""}
+                  onChange={(e) => setSummaryProviderId(e.target.value || null)}
+                  className={inputClass}
+                >
+                  <option value="">
+                    Use AI Analysis Provider{vlmProviderId ? "" : activeProvider ? ` (${activeProvider.name})` : ""}
+                  </option>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.default_model ? ` · ${p.default_model}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </FieldRow>
+
+              <FieldRow label="Max Output Tokens" hint="Cap on summary length. 400 fits a 2-4 sentence recap comfortably.">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={100}
+                    max={1500}
+                    step={50}
+                    value={summaryMaxTokens}
+                    onChange={(e) => setSummaryMaxTokens(Number(e.target.value))}
+                    className="flex-1 accent-accent"
+                  />
+                  <span className="font-mono text-xs text-muted-foreground w-20 text-right">
+                    {summaryMaxTokens} tok
+                  </span>
+                </div>
+              </FieldRow>
+            </>
+          )}
+
+          {(summaryMode === "periodic" || summaryMode === "both") && (
+            <FieldRow label="Period" hint="How often a periodic summary fires. The first one anchors when summarization is enabled, not retroactively.">
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={300}
+                  max={14400}
+                  step={300}
+                  value={summaryPeriodSeconds}
+                  onChange={(e) => setSummaryPeriodSeconds(Number(e.target.value))}
+                  className="flex-1 accent-accent"
+                />
+                <span className="font-mono text-xs text-muted-foreground w-20 text-right">
+                  {formatInterval(summaryPeriodSeconds)}
+                </span>
+              </div>
+            </FieldRow>
+          )}
+
+          {(summaryMode === "event" || summaryMode === "both") && (
+            <>
+              <FieldRow label="Event Trigger Objects" hint="Detection labels that count as activity. Default is person. Override for pet-cams, wildlife, vehicles.">
+                <LabelPicker
+                  selected={summaryEventTriggerObjects}
+                  available={modelClasses}
+                  loading={modelClassesLoading}
+                  onChange={setSummaryEventTriggerObjects}
+                  placeholder="Search labels or press Enter for custom"
+                  activeModels={detectionModels.map((m) => m.model)}
+                  onAddModel={(model) => {
+                    if (detectionModels.some((m) => m.model === model)) return;
+                    setDetectionModels([
+                      ...detectionModels,
+                      { model, confidence: 0.35, enabled: true, label_filter: [] },
+                    ]);
+                  }}
+                />
+                {summaryEventTriggerObjects.length === 0 && (
+                  <p className="text-[11px] text-warning mt-1.5">
+                    No labels selected. Event mode will never fire.
+                  </p>
+                )}
+              </FieldRow>
+
+              <FieldRow label="Quiet Window" hint="Seconds without a matching detection before the event closes and gets summarized.">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={10}
+                    max={600}
+                    step={5}
+                    value={summaryEventQuietSeconds}
+                    onChange={(e) => setSummaryEventQuietSeconds(Number(e.target.value))}
+                    className="flex-1 accent-accent"
+                  />
+                  <span className="font-mono text-xs text-muted-foreground w-20 text-right">
+                    {formatInterval(summaryEventQuietSeconds)}
+                  </span>
+                </div>
+              </FieldRow>
+
+              <FieldRow label="Minimum Duration" hint="Drop events shorter than this. Filters out flickers like a bird flying through.">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={1}
+                    max={120}
+                    step={1}
+                    value={summaryEventMinDurationSeconds}
+                    onChange={(e) => setSummaryEventMinDurationSeconds(Number(e.target.value))}
+                    className="flex-1 accent-accent"
+                  />
+                  <span className="font-mono text-xs text-muted-foreground w-20 text-right">
+                    {formatInterval(summaryEventMinDurationSeconds)}
+                  </span>
+                </div>
               </FieldRow>
             </>
           )}
