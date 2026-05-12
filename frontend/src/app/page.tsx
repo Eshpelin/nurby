@@ -14,6 +14,7 @@ import { CameraStatsHover } from "@/components/CameraStatsHover";
 import { RefinedBadge } from "@/components/RefinedBadge";
 import { ObservationGroupCard } from "@/components/ObservationGroupCard";
 import { IncidentCard } from "@/components/IncidentCard";
+import { JourneyCard, type Journey } from "@/components/JourneyCard";
 import {
   coalesceObservations,
   isObservationGroup,
@@ -248,6 +249,7 @@ interface TimelineEntry {
     | "observation"
     | "observation_group"
     | "incident"
+    | "journey"
     | "status"
     | "search_result"
     | "notification"
@@ -261,6 +263,7 @@ interface TimelineEntry {
     | Observation
     | CoalesceGroup
     | Incident
+    | Journey
     | StatusLog
     | SearchResult
     | Notification
@@ -1892,6 +1895,7 @@ function DashboardContent() {
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [journeys, setJourneys] = useState<Journey[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
   const [activeEntry, setActiveEntry] = useState<string | null>(null);
   const [modalRecording, setModalRecording] = useState<Recording | null>(null);
@@ -1980,6 +1984,13 @@ function DashboardContent() {
             // The IncidentCard already splices live state from
             // incident_updated and incident_finalized payloads. The
             // timeline refetch picks up new rows for incident_opened.
+            fetchTimeline();
+          }
+          if (
+            data.type === "journey_opened" ||
+            data.type === "journey_updated" ||
+            data.type === "journey_finalized"
+          ) {
             fetchTimeline();
           }
         } catch { /* ignore */ }
@@ -2093,7 +2104,7 @@ function DashboardContent() {
       const statusParams = new URLSearchParams({ limit: "100" });
       if (selectedCamera) statusParams.set("camera_id", selectedCamera);
 
-      const [recRes, obsRes, statusRes, notifRes, tlRes, sumRes, convRes, incRes] = await Promise.all([
+      const [recRes, obsRes, statusRes, notifRes, tlRes, sumRes, convRes, incRes, jourRes] = await Promise.all([
         authFetch(`/api/recordings?${params}`),
         authFetch(`/api/observations?${params}`),
         authFetch(`/api/cameras/status-logs?${statusParams}`),
@@ -2102,6 +2113,7 @@ function DashboardContent() {
         authFetch(`/api/summaries?${params}`),
         authFetch(`/api/conversations?${params}`),
         authFetch(`/api/incidents?${params}`),
+        authFetch(`/api/journeys?${params}`),
       ]);
 
       const now = Date.now();
@@ -2136,6 +2148,14 @@ function DashboardContent() {
         setIncidents(
           (Array.isArray(all) ? all : []).filter(
             (i) => new Date(i.started_at).getTime() >= cutoff
+          )
+        );
+      }
+      if (jourRes.ok) {
+        const all: Journey[] = await jourRes.json();
+        setJourneys(
+          (Array.isArray(all) ? all : []).filter(
+            (j) => new Date(j.started_at).getTime() >= cutoff
           )
         );
       }
@@ -2308,6 +2328,26 @@ function DashboardContent() {
   } else {
     if (eventFilters.has("recordings")) entries.push(...recordings.map((r) => ({ id: `rec-${r.id}`, type: "recording" as const, camera_id: r.camera_id, timestamp: r.started_at, data: r })));
     if (eventFilters.has("observations")) {
+      // Journeys take precedence over individual incidents when the
+      // subject crossed multiple cameras. We push one JourneyCard per
+      // multi-camera journey and suppress the underlying incidents
+      // (and their observations) from the timeline so the user sees
+      // one rolling story instead of N parallel cards.
+      const journeyIncidentIds = new Set<string>();
+      for (const j of journeys) {
+        if ((j.cameras_seen_count || 0) >= 2) {
+          for (const s of j.segments || []) {
+            if (s.incident_id) journeyIncidentIds.add(s.incident_id);
+          }
+          entries.push({
+            id: `jour-${j.id}`,
+            type: "journey" as const,
+            camera_id: j.segments?.[0]?.camera_id || "",
+            timestamp: j.last_seen_at,
+            data: j,
+          });
+        }
+      }
       // Persistent incidents take precedence over the frontend-only
       // group cards. We push one IncidentCard entry per incident and
       // suppress the underlying observations from the timeline so the
@@ -2316,6 +2356,13 @@ function DashboardContent() {
       // the legacy coalescer below.
       const incidentObsIds = new Set<string>();
       for (const inc of incidents) {
+        if (journeyIncidentIds.has(inc.id)) {
+          // Hidden — its journey card represents it.
+          for (const obsId of inc.observation_ids || []) {
+            incidentObsIds.add(obsId);
+          }
+          continue;
+        }
         for (const obsId of inc.observation_ids || []) {
           incidentObsIds.add(obsId);
         }
@@ -3419,6 +3466,11 @@ function DashboardContent() {
                               </button>
                             </div>
                           );
+                        }
+
+                        if (entry.type === "journey") {
+                          const j = entry.data as Journey;
+                          return <JourneyCard key={entry.id} journey={j} />;
                         }
 
                         if (entry.type === "incident") {
