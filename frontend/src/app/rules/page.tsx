@@ -116,6 +116,8 @@ const TRIGGER_TYPES: TriggerType[] = [
   { value: "face_unknown",    label: "Unknown face",    icon: Icon.userQ,     desc: "Someone not yet matched to a person.",            accent: "amber",  group: "faces" },
   { value: "motion",          label: "Motion",          icon: Icon.wave,      desc: "Pixel-level movement above a threshold.",         accent: "slate",  group: "motion" },
   { value: "audio_event",     label: "Audio event",     icon: Icon.speaker,   desc: "Baby cry, scream, glass, alarm, bark, gunshot.",  accent: "rose",   group: "audio" },
+  { value: "clap_pattern",    label: "Clap pattern",    icon: Icon.speaker,   desc: "Two, three, or more claps in a row.",             accent: "rose",   group: "audio" },
+  { value: "speech_phrase",   label: "Spoken phrase",   icon: Icon.speaker,   desc: "Fire when a phrase is said near a camera.",       accent: "rose",   group: "audio" },
   { value: "loitering",       label: "Loitering",       icon: Icon.clock,     desc: "Someone stays inside a zone too long.",           accent: "amber",  group: "spatial" },
   { value: "line_cross",      label: "Tripwire",        icon: Icon.tripwire,  desc: "A tracked object crosses a line.",                accent: "indigo", group: "spatial" },
   { value: "any",             label: "Any observation", icon: Icon.spark,     desc: "Fire on every processed keyframe.",               accent: "slate",  group: "any" },
@@ -680,6 +682,9 @@ export default function RulesPage() {
   const [formTriggerGeomPoints, setFormTriggerGeomPoints] = useState<number[][]>([]);
   const [formTriggerLoiterSeconds, setFormTriggerLoiterSeconds] = useState("30");
   const [formTriggerObjectClass, setFormTriggerObjectClass] = useState("");
+  const [formTriggerClapCount, setFormTriggerClapCount] = useState("2");
+  const [formTriggerPhrases, setFormTriggerPhrases] = useState<string[]>([]);
+  const [formTriggerPhraseMatch, setFormTriggerPhraseMatch] = useState<"any" | "all">("any");
   const [formCondCameras, setFormCondCameras] = useState<string[]>([]);
   const [formScheduleMode, setFormScheduleMode] = useState<"always" | "custom">("always");
   const [formCondDays, setFormCondDays] = useState<string[]>([]);
@@ -888,6 +893,9 @@ export default function RulesPage() {
     setFormTriggerGeomPoints(Array.isArray(pts) ? pts : []);
     setFormTriggerLoiterSeconds(tp.threshold_seconds != null ? String(tp.threshold_seconds) : "30");
     setFormTriggerObjectClass((tp.label as string) || "");
+    setFormTriggerClapCount(tp.count != null ? String(tp.count) : "2");
+    setFormTriggerPhrases(Array.isArray(tp.phrases) ? (tp.phrases as string[]) : []);
+    setFormTriggerPhraseMatch((tp.match as "any" | "all") === "all" ? "all" : "any");
     // Map min_score back to sensitivity level
     const ms = tp.min_score as number | undefined;
     if (ms != null) {
@@ -1031,6 +1039,13 @@ export default function RulesPage() {
     if (formTriggerType === "audio_event") {
       trigger_pattern.label = formTriggerAudioLabel;
       trigger_pattern.min_score = parseFloat(formTriggerAudioMinScore) || 0.3;
+    }
+    if (formTriggerType === "clap_pattern") {
+      trigger_pattern.count = parseInt(formTriggerClapCount) || 2;
+    }
+    if (formTriggerType === "speech_phrase") {
+      trigger_pattern.phrases = formTriggerPhrases;
+      trigger_pattern.match = formTriggerPhraseMatch;
     }
     if (formTriggerType === "loitering") {
       if (formTriggerGeomCamId) trigger_pattern.camera_id = formTriggerGeomCamId;
@@ -1663,6 +1678,74 @@ export default function RulesPage() {
                     </div>
                     <p className="text-[11px] text-muted-foreground">
                       Detection runs locally on each camera&apos;s audio track. Needs an RTSP stream that publishes audio.
+                    </p>
+                  </div>
+                )}
+
+                {formTriggerType === "clap_pattern" && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Number of claps</label>
+                      <div className="flex gap-1.5">
+                        {["2", "3", "4", "5"].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setFormTriggerClapCount(n)}
+                            className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                              formTriggerClapCount === n
+                                ? "border-rose-500 bg-rose-500/10 text-rose-300"
+                                : "border-border text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {n} claps
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Counts claps that land within ~2s of each other.
+                      Two claps lights one action, three claps another.
+                      Needs audio enabled on the camera.
+                    </p>
+                  </div>
+                )}
+
+                {formTriggerType === "speech_phrase" && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Phrases to listen for</label>
+                      <RulePhraseInput
+                        values={formTriggerPhrases}
+                        onChange={setFormTriggerPhrases}
+                        placeholder='e.g. "lights on", "we have a problem"'
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Match mode</label>
+                      <div className="flex gap-1.5">
+                        {([
+                          { v: "any", l: "Any phrase" },
+                          { v: "all", l: "All phrases" },
+                        ] as const).map((m) => (
+                          <button
+                            key={m.v}
+                            type="button"
+                            onClick={() => setFormTriggerPhraseMatch(m.v)}
+                            className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                              formTriggerPhraseMatch === m.v
+                                ? "border-rose-500 bg-rose-500/10 text-rose-300"
+                                : "border-border text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {m.l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Matches transcript text from the camera&apos;s STT pipeline.
+                      Case-insensitive substring. Needs audio + transcription enabled.
                     </p>
                   </div>
                 )}
@@ -2558,6 +2641,60 @@ export default function RulesPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function RulePhraseInput({
+  values,
+  onChange,
+  placeholder,
+}: {
+  values: string[];
+  onChange: (v: string[]) => void;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const commit = () => {
+    const cleaned = draft.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!cleaned.length) return;
+    onChange(Array.from(new Set([...values, ...cleaned])));
+    setDraft("");
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 min-h-[2.25rem] px-2 py-1 rounded-md border border-border bg-background focus-within:border-accent">
+      {values.map((v) => (
+        <span
+          key={v}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded bg-rose-500/15 text-rose-300 border border-rose-500/30"
+        >
+          {v}
+          <button
+            type="button"
+            onClick={() => onChange(values.filter((x) => x !== v))}
+            className="text-rose-300/70 hover:text-rose-200"
+            aria-label={`Remove ${v}`}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            commit();
+          } else if (e.key === "Backspace" && !draft && values.length > 0) {
+            onChange(values.slice(0, -1));
+          }
+        }}
+        onBlur={commit}
+        placeholder={values.length === 0 ? placeholder : ""}
+        className="flex-1 min-w-[10rem] bg-transparent text-sm focus:outline-none"
+      />
     </div>
   );
 }

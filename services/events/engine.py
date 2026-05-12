@@ -164,6 +164,49 @@ class RuleEngine:
                 return False
             return float(ev.get("score", 0)) >= float(min_score)
 
+        elif trigger_type == "clap_pattern":
+            # Fires when the rolling clap counter on this camera hits
+            # the configured count within the configured window. The
+            # audio worker tags rule_data with clap_pattern when a
+            # clap event closes a window. count=2 = double clap,
+            # count=3 = triple, etc. Optional camera filter.
+            cp = data.get("clap_pattern") or {}
+            if not cp:
+                return False
+            want_count = int(pattern.get("count", 2))
+            if int(cp.get("count", 0)) != want_count:
+                return False
+            pcam = pattern.get("camera_id")
+            if pcam and pcam != data.get("camera_id"):
+                return False
+            return True
+
+        elif trigger_type == "speech_phrase":
+            # Matches transcript text against a phrase list. Fires when
+            # any phrase appears (case-insensitive substring). Set
+            # match="all" to require every phrase. Optional camera
+            # filter so a 'kitchen lights on' phrase only fires from
+            # the kitchen camera.
+            tx = data.get("transcript") or {}
+            if not tx:
+                return False
+            text = (tx.get("text") or "").strip().lower()
+            if not text:
+                return False
+            phrases = pattern.get("phrases") or []
+            if not phrases:
+                return False
+            pcam = pattern.get("camera_id")
+            if pcam and pcam != data.get("camera_id"):
+                return False
+            match_mode = (pattern.get("match") or "any").lower()
+            phrases_lc = [str(p).strip().lower() for p in phrases if p]
+            if not phrases_lc:
+                return False
+            if match_mode == "all":
+                return all(p in text for p in phrases_lc)
+            return any(p in text for p in phrases_lc)
+
         elif trigger_type == "loitering":
             # Inline geometry mode. trigger carries its own polygon.
             pts = pattern.get("points")

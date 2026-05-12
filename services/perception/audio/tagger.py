@@ -52,6 +52,12 @@ AUDIOSET_LABEL_MAP: dict[str, str] = {
     "machine gun": "gunshot",
     "fusillade": "gunshot",
     "explosion": "gunshot",
+    # Clap + snap. Surfaces as label="clap" so workflow rules can
+    # count multiple claps within a short window (double, triple).
+    "clapping": "clap",
+    "hands": "clap",
+    "applause": "clap",
+    "finger snapping": "clap",
 }
 
 _lock = threading.Lock()

@@ -45,12 +45,21 @@ REDIS_STREAM_MAXLEN = 500
 
 
 class AudioWorker:
+    # Clap aggregation. count claps that land within CLAP_WINDOW_S
+    # seconds of each other. Counter resets on idle. The result drives
+    # clap_pattern rule triggers (double-clap = workflow A,
+    # triple-clap = workflow B, etc.). 2s tracks the "intentional"
+    # clap cadence well without false-merging applause bursts.
+    CLAP_WINDOW_S = 2.0
+
     def __init__(self, camera_id: uuid.UUID, stream_url: str):
         self.camera_id = camera_id
         self.stream_url = stream_url
         self._running = True
         self._last_emit: dict[str, float] = {}
         self._redis = None
+        # (count, last_clap_monotonic).
+        self._clap_run: tuple[int, float] = (0, 0.0)
 
     def stop(self):
         self._running = False
@@ -231,6 +240,27 @@ class AudioWorker:
             "audio_event": {"label": label, "score": score, "raw_class": raw},
             "confidence": score,
         }
+
+        # Clap pattern. Roll a count when consecutive claps land within
+        # CLAP_WINDOW_S of each other. Fire the rule engine ONCE per
+        # closing count so two claps = one evaluate with count=2, three
+        # claps = one evaluate with count=3, etc. Reset on gap.
+        if label == "clap":
+            import time as _t
+
+            now = _t.monotonic()
+            cnt, last = self._clap_run
+            if last > 0 and (now - last) <= self.CLAP_WINDOW_S:
+                cnt = cnt + 1
+            else:
+                cnt = 1
+            self._clap_run = (cnt, now)
+            if cnt >= 2:
+                rule_data["clap_pattern"] = {
+                    "count": cnt,
+                    "window_seconds": self.CLAP_WINDOW_S,
+                }
+
         try:
             await _get_rule_engine().evaluate(rule_data)
         except Exception:

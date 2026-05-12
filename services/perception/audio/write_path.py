@@ -161,6 +161,29 @@ async def _write(
         await _broadcast(
             camera_id, transcript.id, segment, result, conversation_id, speaker_name
         )
+        # Fire rule engine for speech_phrase triggers. Done outside
+        # the DB session so a slow rule action does not stall the
+        # transcript commit.
+        try:
+            from services.events.engine import RuleEngine
+
+            engine = RuleEngine()
+            await engine.evaluate(
+                {
+                    "observation_id": None,
+                    "camera_id": str(camera_id),
+                    "timestamp": segment.started_at.isoformat(),
+                    "transcript": {
+                        "id": str(transcript.id),
+                        "text": result.text,
+                        "language": result.language,
+                        "speaker_name": speaker_name,
+                    },
+                    "confidence": result.confidence or 0.0,
+                }
+            )
+        except Exception:
+            logger.exception("rule engine failed for transcript")
         # Schedule VLM re-enrichment for any observations this transcript
         # overlaps. Debounced inside the enrichment module so multiple
         # transcripts on the same observation do not amplify VLM load.
