@@ -17,6 +17,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -107,9 +108,15 @@ async def get_conversation_clip(
     return FileResponse(path, media_type="video/mp4")
 
 
+class ReinterpretRequest(BaseModel):
+    provider_id: uuid.UUID | None = None
+
+
+@router.post("/{conversation_id}/reinterpret")
 @router.post("/{conversation_id}/resummarize")
-async def resummarize_conversation(
+async def reinterpret_conversation(
     conversation_id: uuid.UUID,
+    body: ReinterpretRequest | None = None,
     _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -149,16 +156,23 @@ async def resummarize_conversation(
     if not tx_rows:
         raise HTTPException(status_code=400, detail="no transcripts to summarize")
 
-    # Resolve provider with the same precedence the finalizer uses.
+    # Reinterpret. user-picked provider wins. Otherwise the same
+    # precedence the finalizer uses.
     provider: Provider | None = None
-    for pid in (cam.summary_provider_id, cam.vlm_provider_id):
-        if pid:
-            provider = await db.get(Provider, pid)
-            if provider:
-                db.expunge(provider)
-                break
-    if provider is None:
-        provider = await get_active_provider()
+    if body and body.provider_id:
+        provider = await db.get(Provider, body.provider_id)
+        if provider is None:
+            raise HTTPException(status_code=404, detail="provider not found")
+        db.expunge(provider)
+    else:
+        for pid in (cam.summary_provider_id, cam.vlm_provider_id):
+            if pid:
+                provider = await db.get(Provider, pid)
+                if provider:
+                    db.expunge(provider)
+                    break
+        if provider is None:
+            provider = await get_active_provider()
     if provider is None:
         raise HTTPException(status_code=500, detail="no provider configured")
 

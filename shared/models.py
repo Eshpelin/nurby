@@ -572,3 +572,24 @@ class Journey(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class DailyDigest(Base):
+    """Household-wide morning summary. One row per generation run.
+
+    Aggregates the last 24h across observations, incidents,
+    journeys, audio detections, and conversations. Free-form
+    summary_text plus a structured ``facts`` dict so the UI can
+    render bullet lists without re-parsing the LLM output.
+    """
+
+    __tablename__ = "daily_digests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    provider_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    summary_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    facts: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)

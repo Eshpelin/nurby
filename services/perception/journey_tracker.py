@@ -35,18 +35,26 @@ from services.perception.text_llm import call_text
 from services.perception.token_budget import resolve_output_cap
 from services.perception.vlm import get_active_provider
 from services.search.embeddings import generate_embedding, get_embedding_provider
+from shared.app_settings import get_setting
 from shared.database import async_session
 from shared.models import Camera, Incident, Journey, Provider
 
 logger = logging.getLogger("nurby.perception.journey")
 
 
-# Idle window for the journey to stay open across cameras. Larger
-# than the per-camera incident idle window because a subject can
-# spend minutes between cameras (walking across a property). Hard-
-# coded today; could move to a system setting if users want it
-# tunable per-property.
-JOURNEY_IDLE_SECONDS = 300  # 5 minutes
+# Default idle window for the journey to stay open across cameras.
+# Larger than the per-camera incident idle window because a subject
+# can spend minutes between cameras (walking across a property).
+# User-tunable via the ``journey_idle_seconds`` AppSetting.
+JOURNEY_IDLE_SECONDS_DEFAULT = 300  # 5 minutes
+
+
+async def _journey_idle_seconds() -> int:
+    try:
+        raw = await get_setting("journey_idle_seconds", JOURNEY_IDLE_SECONDS_DEFAULT)
+        return max(60, min(86400, int(raw)))
+    except Exception:
+        return JOURNEY_IDLE_SECONDS_DEFAULT
 
 
 JOURNEY_SUMMARY_PROMPT = (
@@ -80,7 +88,8 @@ async def assign_journey(
     """
     if incident.signature_kind not in _TRACKABLE_KINDS:
         return None
-    cutoff = incident.last_seen_at - timedelta(seconds=JOURNEY_IDLE_SECONDS)
+    idle_s = await _journey_idle_seconds()
+    cutoff = incident.last_seen_at - timedelta(seconds=idle_s)
     existing = (
         await db.execute(
             select(Journey)
@@ -242,6 +251,7 @@ class JourneyFinalizer:
 
     async def _tick(self) -> None:
         now = datetime.now(timezone.utc)
+        idle_s = await _journey_idle_seconds()
         async with async_session() as db:
             open_rows = (
                 await db.execute(
@@ -253,7 +263,7 @@ class JourneyFinalizer:
             ).scalars().all()
         for j in open_rows:
             quiet_for = (now - j.last_seen_at).total_seconds()
-            if quiet_for < JOURNEY_IDLE_SECONDS:
+            if quiet_for < idle_s:
                 continue
             await self._finalize(j.id)
 

@@ -7,7 +7,12 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel as PydanticBaseModel
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func as sa_func, or_, select
+
+
+def sa_lower(col):
+    return sa_func.lower(col)
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.config import settings
@@ -147,6 +152,7 @@ async def name_cluster(
     if cluster.status != "pending":
         raise HTTPException(status_code=400, detail="Cluster already processed")
 
+    await _ensure_unique_display_name(db, body.display_name)
     # Create Person
     person = Person(
         display_name=body.display_name,
@@ -673,8 +679,30 @@ async def _auto_star_top_persons(db: AsyncSession, limit: int = 3) -> list[Perso
 # ── Person CRUD endpoints ──
 
 
+async def _ensure_unique_display_name(
+    db: AsyncSession, name: str, exclude_id: uuid.UUID | None = None
+) -> None:
+    """Case-insensitive uniqueness check on persons.display_name.
+    Backs the DB constraint with a friendly 409 instead of an opaque
+    integrity error."""
+    name_norm = (name or "").strip().lower()
+    if not name_norm:
+        return
+    q = select(Person).where(sa_lower(Person.display_name) == name_norm)
+    if exclude_id is not None:
+        q = q.where(Person.id != exclude_id)
+    existing = (await db.execute(q.limit(1))).scalars().first()
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A person named '{existing.display_name}' already exists. "
+            "Two people cannot share a display name; journeys would fuse them.",
+        )
+
+
 @router.post("", response_model=PersonResponse, status_code=201)
 async def create_person(body: PersonCreate, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _ensure_unique_display_name(db, body.display_name)
     person = Person(**body.model_dump())
     db.add(person)
     await db.commit()
@@ -698,7 +726,12 @@ async def update_person(
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    updates = body.model_dump(exclude_unset=True)
+    if "display_name" in updates and updates["display_name"]:
+        await _ensure_unique_display_name(
+            db, updates["display_name"], exclude_id=person_id
+        )
+    for field, value in updates.items():
         setattr(person, field, value)
 
     await db.commit()

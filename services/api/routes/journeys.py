@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -106,9 +107,15 @@ async def get_journey(
     return payload
 
 
+class ReinterpretRequest(BaseModel):
+    provider_id: uuid.UUID | None = None
+
+
+@router.post("/{journey_id}/reinterpret")
 @router.post("/{journey_id}/resummarize")
-async def resummarize_journey(
+async def reinterpret_journey(
     journey_id: uuid.UUID,
+    body: ReinterpretRequest | None = None,
     _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -116,10 +123,18 @@ async def resummarize_journey(
     if row is None:
         raise HTTPException(status_code=404, detail="journey not found")
 
+    from shared.models import Provider
     from services.perception.journey_tracker import JourneyFinalizer
 
     finalizer = JourneyFinalizer()
-    provider = await finalizer._resolve_provider()  # noqa: SLF001
+    provider: Provider | None = None
+    if body and body.provider_id:
+        provider = await db.get(Provider, body.provider_id)
+        if provider is None:
+            raise HTTPException(status_code=404, detail="provider not found")
+        db.expunge(provider)
+    else:
+        provider = await finalizer._resolve_provider()  # noqa: SLF001
     if provider is None:
         raise HTTPException(status_code=500, detail="no provider configured")
     text = await finalizer._build_summary(provider, row)  # noqa: SLF001

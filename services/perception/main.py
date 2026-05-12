@@ -11,6 +11,7 @@ import logging
 
 from services.perception.conversation_finalizer import ConversationFinalizer
 from services.perception.incident_tracker import IncidentFinalizer
+from services.perception.daily_digest import DailyDigestScheduler
 from services.perception.journey_tracker import JourneyFinalizer
 from services.perception.live_detector import LiveDetector
 from services.perception.pipeline import PerceptionPipeline
@@ -36,6 +37,7 @@ async def main():
     finalizer = ConversationFinalizer()
     incident_finalizer = IncidentFinalizer()
     journey_finalizer = JourneyFinalizer()
+    daily_digest = DailyDigestScheduler()
     await asyncio.gather(
         pipeline.run(),
         live.run(),
@@ -43,6 +45,7 @@ async def main():
         finalizer.run(),
         incident_finalizer.run(),
         journey_finalizer.run(),
+        daily_digest.run(),
     )
 
 
