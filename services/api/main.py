@@ -43,9 +43,17 @@ def _run_migrations() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await asyncio.to_thread(_run_migrations)
-    task = asyncio.create_task(run_digest_loop())
+    digest_task = asyncio.create_task(run_digest_loop())
+    # Body re-identification housekeeping. Decay tentative clusters and
+    # fuse body+face overlaps so face naming retroactively confirms
+    # recent body-only sightings.
+    from services.perception.reid_sweeper import BodyReIDSweeper
+    reid_sweeper = BodyReIDSweeper()
+    reid_task = asyncio.create_task(reid_sweeper.run())
     yield
-    task.cancel()
+    digest_task.cancel()
+    reid_sweeper.stop()
+    reid_task.cancel()
 
 
 app = FastAPI(

@@ -29,6 +29,17 @@ DEFAULTS: dict[str, Any] = {
     "system_timezone": None,
     # PANNs audio tagging master switch.
     "audio_events": True,
+    # Body re-identification housekeeping. Tentative body clusters
+    # (no face co-verification) get pruned after this many days of
+    # inactivity. Confirmed clusters (linked to a Person) are never
+    # auto-pruned. Set 0 to disable decay.
+    "body_reid_tentative_decay_days": 14,
+    # Body+face fusion sweeper interval (seconds).
+    "body_reid_fusion_interval_seconds": 300,
+    # Tracklet centroid buffer. How many body samples buffered per
+    # Journey before a centroid-clustering pass replaces the
+    # per-frame cluster decisions.
+    "body_reid_tracklet_min_samples": 5,
 }
 
 
