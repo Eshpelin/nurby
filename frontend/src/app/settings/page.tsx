@@ -3,6 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 
+const COMMON_TIMEZONES = [
+  "America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York",
+  "America/Toronto", "America/Vancouver", "America/Mexico_City", "America/Sao_Paulo",
+  "Europe/London", "Europe/Berlin", "Europe/Paris", "Europe/Amsterdam",
+  "Europe/Madrid", "Europe/Athens", "Europe/Moscow",
+  "Africa/Cairo", "Africa/Johannesburg",
+  "Asia/Dubai", "Asia/Karachi", "Asia/Kolkata", "Asia/Dhaka",
+  "Asia/Bangkok", "Asia/Singapore", "Asia/Shanghai", "Asia/Tokyo", "Asia/Seoul",
+  "Australia/Sydney", "Australia/Melbourne", "Pacific/Auckland", "UTC",
+];
+
 interface Provider {
   id: string;
   name: string;
@@ -152,6 +163,7 @@ export default function SettingsPage() {
   const [dailyDigestEnabled, setDailyDigestEnabled] = useState<boolean>(true);
   const [dailyDigestHour, setDailyDigestHour] = useState<number>(7);
   const [dailyDigestProviderId, setDailyDigestProviderId] = useState<string>("");
+  const [systemTimezone, setSystemTimezone] = useState<string>("");
   const [extraSaving, setExtraSaving] = useState<boolean>(false);
 
   // Ollama auto-deploy state
@@ -318,6 +330,7 @@ export default function SettingsPage() {
         if (typeof data.daily_digest_enabled === "boolean") setDailyDigestEnabled(data.daily_digest_enabled);
         if (typeof data.daily_digest_hour === "number") setDailyDigestHour(data.daily_digest_hour);
         if (typeof data.daily_digest_provider_id === "string") setDailyDigestProviderId(data.daily_digest_provider_id);
+        if (typeof data.system_timezone === "string") setSystemTimezone(data.system_timezone);
       }
     } catch { /* silent */ }
     finally { setNudityLoading(false); }
@@ -1015,7 +1028,7 @@ export default function SettingsPage() {
             </button>
           </div>
           {dailyDigestEnabled && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="text-[11px] text-muted-foreground block mb-1">
                   Hour of day (local)
@@ -1053,6 +1066,27 @@ export default function SettingsPage() {
                   {providers.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground block mb-1">
+                  System timezone
+                </label>
+                <select
+                  value={systemTimezone}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSystemTimezone(v);
+                    saveExtra({ system_timezone: v || null });
+                  }}
+                  className="w-full px-2 py-1.5 text-xs rounded border border-border bg-background"
+                >
+                  <option value="">(server local)</option>
+                  {COMMON_TIMEZONES.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
                     </option>
                   ))}
                 </select>

@@ -7,6 +7,40 @@ import { PersonaPicker } from "@/components/PersonaPicker";
 import type { PersonaPatch } from "@/lib/camera-personas";
 import { ConversationCard } from "@/components/ConversationCard";
 import { SummaryCard } from "@/components/SummaryCard";
+import { PrivacyZonesSection } from "@/components/PrivacyZonesSection";
+
+const COMMON_TIMEZONES = [
+  "America/Los_Angeles",
+  "America/Denver",
+  "America/Chicago",
+  "America/New_York",
+  "America/Toronto",
+  "America/Vancouver",
+  "America/Mexico_City",
+  "America/Sao_Paulo",
+  "Europe/London",
+  "Europe/Berlin",
+  "Europe/Paris",
+  "Europe/Amsterdam",
+  "Europe/Madrid",
+  "Europe/Athens",
+  "Europe/Moscow",
+  "Africa/Cairo",
+  "Africa/Johannesburg",
+  "Asia/Dubai",
+  "Asia/Karachi",
+  "Asia/Kolkata",
+  "Asia/Dhaka",
+  "Asia/Bangkok",
+  "Asia/Singapore",
+  "Asia/Shanghai",
+  "Asia/Tokyo",
+  "Asia/Seoul",
+  "Australia/Sydney",
+  "Australia/Melbourne",
+  "Pacific/Auckland",
+  "UTC",
+];
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -64,6 +98,9 @@ interface Camera {
   conversation_min_messages_for_summary: number;
   incident_tracking_enabled: boolean;
   incident_idle_seconds: number;
+  privacy_zone_targets: string[] | null;
+  privacy_zone_blur_strength: number;
+  timezone: string | null;
   motion_zones: MotionZone[] | null;
   status: string;
   width: number | null;
@@ -1051,6 +1088,9 @@ export default function CameraConfigPage() {
   const [conversationMinMessages, setConversationMinMessages] = useState(2);
   const [incidentTrackingEnabled, setIncidentTrackingEnabled] = useState(true);
   const [incidentIdleSeconds, setIncidentIdleSeconds] = useState(600);
+  const [privacyZoneTargets, setPrivacyZoneTargets] = useState<string[]>([]);
+  const [privacyZoneBlurStrength, setPrivacyZoneBlurStrength] = useState(55);
+  const [cameraTimezone, setCameraTimezone] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"settings" | "activity">("settings");
   const [motionZones, setMotionZones] = useState<MotionZone[]>([]);
 
@@ -1124,6 +1164,9 @@ export default function CameraConfigPage() {
       setConversationMinMessages(cam.conversation_min_messages_for_summary ?? 2);
       setIncidentTrackingEnabled(cam.incident_tracking_enabled ?? true);
       setIncidentIdleSeconds(cam.incident_idle_seconds ?? 600);
+      setPrivacyZoneTargets(cam.privacy_zone_targets ?? []);
+      setPrivacyZoneBlurStrength(cam.privacy_zone_blur_strength ?? 55);
+      setCameraTimezone(cam.timezone ?? "");
       setMotionZones(cam.motion_zones ?? []);
     } catch {
       setError("Failed to load camera");
@@ -1257,6 +1300,9 @@ export default function CameraConfigPage() {
         conversation_min_messages_for_summary: conversationMinMessages,
         incident_tracking_enabled: incidentTrackingEnabled,
         incident_idle_seconds: incidentIdleSeconds,
+        privacy_zone_targets: privacyZoneTargets.length > 0 ? privacyZoneTargets : null,
+        privacy_zone_blur_strength: privacyZoneBlurStrength,
+        timezone: cameraTimezone.trim() || null,
         motion_zones: motionZones.length > 0 ? motionZones : null,
       };
 
@@ -1317,6 +1363,7 @@ export default function CameraConfigPage() {
     summaryEventMinDurationSeconds, summaryMaxTokens,
     conversationGapSeconds, conversationSummaryEnabled, conversationMinMessages,
     incidentTrackingEnabled, incidentIdleSeconds,
+    privacyZoneTargets, privacyZoneBlurStrength, cameraTimezone,
     motionZones,
   ]);
 
@@ -2410,6 +2457,46 @@ export default function CameraConfigPage() {
               </div>
             </FieldRow>
           )}
+        </Section>
+
+        {/* ── Privacy zones ── */}
+        <Section
+          title="Smart privacy zones"
+          description="AI detects beds, bathrooms, monitors, windows on every keyframe and blurs them before the frame is stored, sent to the VLM, or used for thumbnails."
+        >
+          <PrivacyZonesSection
+            cameraId={cameraId as string}
+            targets={privacyZoneTargets}
+            setTargets={setPrivacyZoneTargets}
+            blurStrength={privacyZoneBlurStrength}
+            setBlurStrength={setPrivacyZoneBlurStrength}
+          />
+        </Section>
+
+        {/* ── Timezone ── */}
+        <Section
+          title="Timezone"
+          description="Used to render timestamps in this camera's local time. Anchors per-camera scheduling too."
+        >
+          <FieldRow label="Timezone">
+            <select
+              value={cameraTimezone}
+              onChange={(e) => setCameraTimezone(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">(use system default)</option>
+              {COMMON_TIMEZONES.map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Pick the timezone where this camera is physically located.
+              Leave blank to follow the household-wide system timezone
+              from Settings.
+            </p>
+          </FieldRow>
         </Section>
 
         {/* ── Retention ── */}
