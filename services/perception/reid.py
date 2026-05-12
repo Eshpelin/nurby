@@ -45,6 +45,12 @@ logger = logging.getLogger("nurby.perception.reid")
 # the cosine distance is bounded in [0, 2].
 MATCH_THRESHOLD = 0.30   # link to a known Person via body
 CLUSTER_THRESHOLD = 0.27  # tighter band for opening / merging clusters
+# Color similarity gate. Used only as a tie-break when two body
+# clusters are within a narrow cosine band of each other. Lower
+# chi-square = more similar. 0.35 is a soft filter; clothing has to
+# look at least roughly comparable.
+COLOR_TIE_BAND = 0.04       # cosine distance margin where ties apply
+COLOR_CHI_THRESHOLD = 0.35  # max chi-square distance to keep a tie
 
 # Limit. number of clusters compared per query before we give up and
 # open a new one. pgvector ANN with ivfflat handles the heavy lifting
@@ -193,17 +199,37 @@ class BodyReID:
         person_id, face_cluster_id = await self._resolve_face_prior(face_cluster_ids)
 
         candidates = await self._search_clusters(body_emb)
-        best_id = None
-        best_distance = float("inf")
-        for cluster_id, rep_emb, cluster_person_id in candidates:
-            distance = _cosine_distance(body_emb, rep_emb)
-            # When we have a face prior, only merge with clusters that
-            # are unlinked or already linked to the same Person.
-            if person_id is not None and cluster_person_id is not None and cluster_person_id != person_id:
+        # First pass. cosine distances, applying face-prior exclusivity.
+        scored: list[tuple[uuid.UUID, float, dict | None]] = []
+        for cluster_id, rep_emb, cluster_person_id, color in candidates:
+            if (
+                person_id is not None
+                and cluster_person_id is not None
+                and cluster_person_id != person_id
+            ):
                 continue
-            if distance < best_distance:
-                best_distance = distance
-                best_id = cluster_id
+            scored.append((cluster_id, _cosine_distance(body_emb, rep_emb), color))
+        scored.sort(key=lambda x: x[1])
+
+        best_id: uuid.UUID | None = None
+        best_distance: float = float("inf")
+        if scored:
+            top_id, top_dist, top_color = scored[0]
+            best_id, best_distance = top_id, top_dist
+            # Color tie-break. If a runner-up is within COLOR_TIE_BAND
+            # and its clothing matches the query crop more closely, pick
+            # that one instead. Two delivery drivers in similar jackets
+            # land in the same cosine band; clothing color disambiguates.
+            query_color = det.get("color_histogram")
+            if query_color and len(scored) > 1:
+                best_chi = _chi_square(query_color, top_color) if top_color else float("inf")
+                for cand_id, cand_dist, cand_color in scored[1:]:
+                    if cand_dist - top_dist > COLOR_TIE_BAND:
+                        break
+                    chi = _chi_square(query_color, cand_color) if cand_color else float("inf")
+                    if chi < best_chi and chi < COLOR_CHI_THRESHOLD:
+                        best_chi = chi
+                        best_id, best_distance = cand_id, cand_dist
 
         thumbnail_path = None
         if frame is not None:
@@ -248,17 +274,21 @@ class BodyReID:
 
     async def _search_clusters(
         self, body_emb: np.ndarray,
-    ) -> list[tuple[uuid.UUID, np.ndarray, uuid.UUID | None]]:
-        """Top-K nearest body clusters by cosine distance."""
+    ) -> list[tuple[uuid.UUID, np.ndarray, uuid.UUID | None, dict | None]]:
+        """Top-K nearest body clusters by cosine distance.
+
+        Returns (id, representative_embedding, person_id, color_hist)
+        so the caller can apply a color-histogram tie-break when two
+        clusters are within COLOR_TIE_BAND.
+        """
         try:
             async with async_session() as db:
-                # pgvector cosine search. `<=>` is cosine distance for
-                # vector_cosine_ops index. Cast to list for SQL bind.
                 stmt = (
                     select(
                         BodyCluster.id,
                         BodyCluster.representative_embedding,
                         BodyCluster.person_id,
+                        BodyCluster.representative_color,
                     )
                     .where(BodyCluster.status != "ignored")
                     .order_by(BodyCluster.representative_embedding.cosine_distance(body_emb.tolist()))
@@ -268,7 +298,7 @@ class BodyReID:
                 out = []
                 for row in rows.all():
                     rep = np.array(row.representative_embedding, dtype=np.float32)
-                    out.append((row.id, rep, row.person_id))
+                    out.append((row.id, rep, row.person_id, row.representative_color))
                 return out
         except Exception:
             logger.exception("body cluster search failed")
@@ -391,6 +421,30 @@ def _cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
     if na == 0 or nb == 0:
         return 1.0
     return float(1.0 - np.dot(a, b) / (na * nb))
+
+
+def _chi_square(a: dict | None, b: dict | None) -> float:
+    """Symmetric chi-square distance over the HSV histogram dict.
+
+    Both inputs are produced by `_hsv_histogram`. Returns infinity
+    when either side is missing or malformed so the tie-break treats
+    that pair as incomparable rather than as a match.
+    """
+    if not a or not b:
+        return float("inf")
+    total = 0.0
+    for key in ("h", "s"):
+        va = a.get(key) or []
+        vb = b.get(key) or []
+        if not va or not vb or len(va) != len(vb):
+            return float("inf")
+        for x, y in zip(va, vb):
+            denom = x + y
+            if denom <= 0:
+                continue
+            diff = x - y
+            total += (diff * diff) / denom
+    return total
 
 
 def _hsv_histogram(crop: np.ndarray) -> dict:
