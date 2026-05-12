@@ -135,6 +135,22 @@ class CameraUpdate(BaseModel):
     conversation_min_messages_for_summary: int | None = Field(default=None, ge=1, le=20)
     incident_tracking_enabled: bool | None = None
     incident_idle_seconds: int | None = Field(default=None, ge=30, le=86400)
+    # Smart Track
+    ptz_smart_track_enabled: bool | None = None
+    ptz_smart_track_targets: list[str] | None = None
+    ptz_smart_track_ignore: list[str] | None = None
+    ptz_smart_track_priority: list[str] | None = None
+    ptz_smart_track_lost_seconds: int | None = Field(default=None, ge=1, le=300)
+    ptz_smart_track_home_preset: str | None = Field(default=None, max_length=64)
+    ptz_smart_track_zoom: bool | None = None
+    ptz_smart_track_deadzone: float | None = Field(default=None, ge=0.0, le=0.5)
+    ptz_smart_track_max_speed: float | None = Field(default=None, ge=0.05, le=1.0)
+    ptz_smart_track_gain: float | None = Field(default=None, ge=0.1, le=5.0)
+    ptz_smart_track_no_go: list[dict] | None = None
+    ptz_smart_track_min_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    ptz_smart_track_require_face: list[uuid.UUID] | None = None
+    ptz_smart_track_move_budget_per_minute: int | None = Field(default=None, ge=1, le=600)
+    ptz_profile_token: str | None = Field(default=None, max_length=64)
 
 
 class CameraReorderItem(BaseModel):
@@ -204,6 +220,21 @@ class CameraResponse(BaseModel):
     conversation_min_messages_for_summary: int = 2
     incident_tracking_enabled: bool = True
     incident_idle_seconds: int = 600
+    ptz_smart_track_enabled: bool = False
+    ptz_smart_track_targets: list[str] | None = None
+    ptz_smart_track_ignore: list[str] | None = None
+    ptz_smart_track_priority: list[str] | None = None
+    ptz_smart_track_lost_seconds: int = 3
+    ptz_smart_track_home_preset: str | None = None
+    ptz_smart_track_zoom: bool = False
+    ptz_smart_track_deadzone: float = 0.15
+    ptz_smart_track_max_speed: float = 0.5
+    ptz_smart_track_gain: float = 1.5
+    ptz_smart_track_no_go: list[dict] | None = None
+    ptz_smart_track_min_confidence: float = 0.45
+    ptz_smart_track_require_face: list[uuid.UUID] | None = None
+    ptz_smart_track_move_budget_per_minute: int = 30
+    ptz_profile_token: str = "Profile_1"
     width: int | None
     height: int | None
     fps: float | None

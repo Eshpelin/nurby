@@ -101,6 +101,19 @@ interface Camera {
   privacy_zone_targets: string[] | null;
   privacy_zone_blur_strength: number;
   timezone: string | null;
+  ptz_smart_track_enabled: boolean;
+  ptz_smart_track_targets: string[] | null;
+  ptz_smart_track_ignore: string[] | null;
+  ptz_smart_track_priority: string[] | null;
+  ptz_smart_track_lost_seconds: number;
+  ptz_smart_track_home_preset: string | null;
+  ptz_smart_track_zoom: boolean;
+  ptz_smart_track_deadzone: number;
+  ptz_smart_track_max_speed: number;
+  ptz_smart_track_gain: number;
+  ptz_smart_track_min_confidence: number;
+  ptz_smart_track_move_budget_per_minute: number;
+  ptz_profile_token: string;
   motion_zones: MotionZone[] | null;
   status: string;
   width: number | null;
@@ -1103,6 +1116,21 @@ export default function CameraConfigPage() {
   const [privacyZoneBlurStrength, setPrivacyZoneBlurStrength] = useState(55);
   const [yoloWorldPrompts, setYoloWorldPrompts] = useState<string[]>([]);
   const [cameraTimezone, setCameraTimezone] = useState<string>("");
+  // Smart Track state
+  const [smartTrackEnabled, setSmartTrackEnabled] = useState(false);
+  const [smartTrackTargets, setSmartTrackTargets] = useState<string[]>([]);
+  const [smartTrackIgnore, setSmartTrackIgnore] = useState<string[]>([]);
+  const [smartTrackPriority, setSmartTrackPriority] = useState<string[]>([]);
+  const [smartTrackLostSeconds, setSmartTrackLostSeconds] = useState(3);
+  const [smartTrackHomePreset, setSmartTrackHomePreset] = useState<string>("");
+  const [smartTrackZoom, setSmartTrackZoom] = useState(false);
+  const [smartTrackDeadzone, setSmartTrackDeadzone] = useState(0.15);
+  const [smartTrackMaxSpeed, setSmartTrackMaxSpeed] = useState(0.5);
+  const [smartTrackGain, setSmartTrackGain] = useState(1.5);
+  const [smartTrackMinConfidence, setSmartTrackMinConfidence] = useState(0.45);
+  const [smartTrackMoveBudget, setSmartTrackMoveBudget] = useState(30);
+  const [ptzProfileToken, setPtzProfileToken] = useState("Profile_1");
+  const [smartTrackPresets, setSmartTrackPresets] = useState<{token: string; name: string}[]>([]);
   const [activeTab, setActiveTab] = useState<"settings" | "activity">("settings");
   const [motionZones, setMotionZones] = useState<MotionZone[]>([]);
 
@@ -1181,6 +1209,19 @@ export default function CameraConfigPage() {
       setYoloWorldPrompts((cam as Camera & { yolo_world_prompts?: string[] | null }).yolo_world_prompts ?? []);
       setCameraTimezone(cam.timezone ?? "");
       setMotionZones(cam.motion_zones ?? []);
+      setSmartTrackEnabled(cam.ptz_smart_track_enabled ?? false);
+      setSmartTrackTargets(cam.ptz_smart_track_targets ?? []);
+      setSmartTrackIgnore(cam.ptz_smart_track_ignore ?? []);
+      setSmartTrackPriority(cam.ptz_smart_track_priority ?? []);
+      setSmartTrackLostSeconds(cam.ptz_smart_track_lost_seconds ?? 3);
+      setSmartTrackHomePreset(cam.ptz_smart_track_home_preset ?? "");
+      setSmartTrackZoom(cam.ptz_smart_track_zoom ?? false);
+      setSmartTrackDeadzone(cam.ptz_smart_track_deadzone ?? 0.15);
+      setSmartTrackMaxSpeed(cam.ptz_smart_track_max_speed ?? 0.5);
+      setSmartTrackGain(cam.ptz_smart_track_gain ?? 1.5);
+      setSmartTrackMinConfidence(cam.ptz_smart_track_min_confidence ?? 0.45);
+      setSmartTrackMoveBudget(cam.ptz_smart_track_move_budget_per_minute ?? 30);
+      setPtzProfileToken(cam.ptz_profile_token ?? "Profile_1");
     } catch {
       setError("Failed to load camera");
     } finally {
@@ -1320,6 +1361,19 @@ export default function CameraConfigPage() {
         yolo_world_prompts: yoloWorldPrompts.length > 0 ? yoloWorldPrompts : null,
         timezone: cameraTimezone.trim() || null,
         motion_zones: motionZones.length > 0 ? motionZones : null,
+        ptz_smart_track_enabled: smartTrackEnabled,
+        ptz_smart_track_targets: smartTrackTargets.length > 0 ? smartTrackTargets : null,
+        ptz_smart_track_ignore: smartTrackIgnore.length > 0 ? smartTrackIgnore : null,
+        ptz_smart_track_priority: smartTrackPriority.length > 0 ? smartTrackPriority : null,
+        ptz_smart_track_lost_seconds: smartTrackLostSeconds,
+        ptz_smart_track_home_preset: smartTrackHomePreset.trim() || null,
+        ptz_smart_track_zoom: smartTrackZoom,
+        ptz_smart_track_deadzone: smartTrackDeadzone,
+        ptz_smart_track_max_speed: smartTrackMaxSpeed,
+        ptz_smart_track_gain: smartTrackGain,
+        ptz_smart_track_min_confidence: smartTrackMinConfidence,
+        ptz_smart_track_move_budget_per_minute: smartTrackMoveBudget,
+        ptz_profile_token: ptzProfileToken.trim() || "Profile_1",
       };
 
       if (username.trim()) payload.username = username.trim();
@@ -1381,7 +1435,30 @@ export default function CameraConfigPage() {
     incidentTrackingEnabled, incidentIdleSeconds,
     privacyZoneTargets, privacyZoneBlurStrength, yoloWorldPrompts, cameraTimezone,
     motionZones,
+    smartTrackEnabled, smartTrackTargets, smartTrackIgnore, smartTrackPriority,
+    smartTrackLostSeconds, smartTrackHomePreset, smartTrackZoom,
+    smartTrackDeadzone, smartTrackMaxSpeed, smartTrackGain,
+    smartTrackMinConfidence, smartTrackMoveBudget, ptzProfileToken,
   ]);
+
+  // Fetch ONVIF presets when Smart Track section visible. Used to
+  // populate the home preset dropdown so the user doesn't type tokens.
+  useEffect(() => {
+    if (camera?.stream_type !== "rtsp") return;
+    if (!smartTrackEnabled) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(`/api/cameras/${cameraId}/ptz/presets`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) setSmartTrackPresets(data);
+      } catch {
+        if (!cancelled) setSmartTrackPresets([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [cameraId, camera?.stream_type, smartTrackEnabled, authFetch]);
 
   async function handleDelete() {
     try {
@@ -2474,6 +2551,191 @@ export default function CameraConfigPage() {
             </FieldRow>
           )}
         </Section>
+
+        {/* ── Smart Track (PTZ auto-follow) ── */}
+        {camera?.stream_type === "rtsp" && (
+          <Section
+            title="Smart Track"
+            description="Auto-follow detections with the camera's PTZ motor. Requires ONVIF pan/tilt support. The camera will keep the target near frame center and return to the home preset after the target leaves for a few seconds."
+          >
+            <FieldRow label="Enabled" hint="Master switch. Off means manual PTZ only.">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={smartTrackEnabled}
+                  onChange={(e) => setSmartTrackEnabled(e.target.checked)}
+                  className="accent-accent"
+                />
+                <span className="text-sm">{smartTrackEnabled ? "Following" : "Off"}</span>
+              </label>
+            </FieldRow>
+
+            {smartTrackEnabled && (
+              <>
+                <FieldRow label="Follow these labels" hint="Detections matching any of these labels are eligible targets. Empty means follow anything not in the ignore list.">
+                  <KeywordChipInput
+                    values={smartTrackTargets}
+                    onChange={setSmartTrackTargets}
+                    placeholder="person, cat, ..."
+                  />
+                </FieldRow>
+
+                <FieldRow label="Never follow" hint="Hard deny. The camera will not chase these. Useful if you have a resident dog.">
+                  <KeywordChipInput
+                    values={smartTrackIgnore}
+                    onChange={setSmartTrackIgnore}
+                    placeholder="dog, ..."
+                  />
+                </FieldRow>
+
+                <FieldRow label="Priority order" hint="When multiple targets are visible, the camera picks the first label in this list. Falls back to bbox area then confidence.">
+                  <KeywordChipInput
+                    values={smartTrackPriority}
+                    onChange={setSmartTrackPriority}
+                    placeholder="person, cat, ..."
+                  />
+                </FieldRow>
+
+                <FieldRow label="Home preset" hint="ONVIF preset to return to when no target has been seen for the lost window. Set presets on the camera itself, then pick one here.">
+                  <select
+                    value={smartTrackHomePreset}
+                    onChange={(e) => setSmartTrackHomePreset(e.target.value)}
+                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+                  >
+                    <option value="">No home (just stop)</option>
+                    {smartTrackPresets.map((p) => (
+                      <option key={p.token} value={p.token}>{p.name} ({p.token})</option>
+                    ))}
+                  </select>
+                </FieldRow>
+
+                <FieldRow label="Lost window" hint="Seconds without a target before returning home.">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={1}
+                      max={30}
+                      step={1}
+                      value={smartTrackLostSeconds}
+                      onChange={(e) => setSmartTrackLostSeconds(Number(e.target.value))}
+                      className="flex-1 accent-accent"
+                    />
+                    <span className="font-mono text-xs text-muted-foreground w-12 text-right">
+                      {smartTrackLostSeconds}s
+                    </span>
+                  </div>
+                </FieldRow>
+
+                <FieldRow label="Auto-zoom" hint="When target is small, zoom in. When target fills the frame, zoom out. Off by default since over-zoom can lose the target on fast motion.">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={smartTrackZoom}
+                      onChange={(e) => setSmartTrackZoom(e.target.checked)}
+                      className="accent-accent"
+                    />
+                    <span className="text-sm">{smartTrackZoom ? "Auto zoom on" : "Fixed zoom"}</span>
+                  </label>
+                </FieldRow>
+
+                <FieldRow label="Deadzone" hint="Tolerance around frame center where no move is issued. Higher = less twitchy, lower = tighter centering.">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={0.05}
+                      max={0.4}
+                      step={0.01}
+                      value={smartTrackDeadzone}
+                      onChange={(e) => setSmartTrackDeadzone(Number(e.target.value))}
+                      className="flex-1 accent-accent"
+                    />
+                    <span className="font-mono text-xs text-muted-foreground w-12 text-right">
+                      {smartTrackDeadzone.toFixed(2)}
+                    </span>
+                  </div>
+                </FieldRow>
+
+                <FieldRow label="Max speed" hint="Cap on ONVIF pan/tilt velocity. 1.0 is the camera's hardware max. Lower values produce smoother but slower follow.">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={1.0}
+                      step={0.05}
+                      value={smartTrackMaxSpeed}
+                      onChange={(e) => setSmartTrackMaxSpeed(Number(e.target.value))}
+                      className="flex-1 accent-accent"
+                    />
+                    <span className="font-mono text-xs text-muted-foreground w-12 text-right">
+                      {smartTrackMaxSpeed.toFixed(2)}
+                    </span>
+                  </div>
+                </FieldRow>
+
+                <FieldRow label="Gain" hint="Proportional gain on the bbox error. Higher = snappier, lower = smoother. 1.5 is a good default for most ONVIF cams.">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={3.0}
+                      step={0.1}
+                      value={smartTrackGain}
+                      onChange={(e) => setSmartTrackGain(Number(e.target.value))}
+                      className="flex-1 accent-accent"
+                    />
+                    <span className="font-mono text-xs text-muted-foreground w-12 text-right">
+                      {smartTrackGain.toFixed(1)}
+                    </span>
+                  </div>
+                </FieldRow>
+
+                <FieldRow label="Min confidence" hint="Detections below this confidence are ignored as follow targets.">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={0.2}
+                      max={0.9}
+                      step={0.05}
+                      value={smartTrackMinConfidence}
+                      onChange={(e) => setSmartTrackMinConfidence(Number(e.target.value))}
+                      className="flex-1 accent-accent"
+                    />
+                    <span className="font-mono text-xs text-muted-foreground w-12 text-right">
+                      {smartTrackMinConfidence.toFixed(2)}
+                    </span>
+                  </div>
+                </FieldRow>
+
+                <FieldRow label="Move budget" hint="Hard cap on ContinuousMove commands per minute. Protects against mechanical wear on the gimbal motor.">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={5}
+                      max={120}
+                      step={5}
+                      value={smartTrackMoveBudget}
+                      onChange={(e) => setSmartTrackMoveBudget(Number(e.target.value))}
+                      className="flex-1 accent-accent"
+                    />
+                    <span className="font-mono text-xs text-muted-foreground w-20 text-right">
+                      {smartTrackMoveBudget}/min
+                    </span>
+                  </div>
+                </FieldRow>
+
+                <FieldRow label="ONVIF profile token" hint="Most cameras use Profile_1. Change only if your camera uses a different media profile.">
+                  <input
+                    type="text"
+                    value={ptzProfileToken}
+                    onChange={(e) => setPtzProfileToken(e.target.value)}
+                    placeholder="Profile_1"
+                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono"
+                  />
+                </FieldRow>
+              </>
+            )}
+          </Section>
+        )}
 
         {/* ── YOLO-World prompts ── */}
         {detectionModels.some((m) => m.model.includes("world")) && (

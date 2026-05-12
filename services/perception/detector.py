@@ -122,6 +122,7 @@ class ObjectDetector:
         model_configs: list[dict],
         merge: str = "any",
         consensus_min: int = 2,
+        yolo_world_prompts: list[str] | None = None,
     ) -> list[dict]:
         """Run detection with multiple models and merge results.
 
@@ -148,8 +149,19 @@ class ObjectDetector:
             model_name = cfg.get("model", DEFAULT_MODEL)
             conf = cfg.get("confidence", DEFAULT_CONFIDENCE)
             label_filter = cfg.get("label_filter")
+            # YOLO-World models accept a custom class list via
+            # model.set_classes. Pass the per-camera prompts when the
+            # model is a -world or -worldv2 variant. Other models
+            # ignore the prompts.
+            prompts = (
+                yolo_world_prompts
+                if ("world" in model_name and yolo_world_prompts)
+                else None
+            )
             tasks.append(
-                loop.run_in_executor(None, self._detect_sync, frame, conf, model_name, label_filter)
+                loop.run_in_executor(
+                    None, self._detect_sync, frame, conf, model_name, label_filter, prompts
+                )
             )
 
         all_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -176,11 +188,28 @@ class ObjectDetector:
         confidence: float,
         model_name: str,
         label_filter: list[str] | None = None,
+        prompts: list[str] | None = None,
     ) -> list[dict]:
-        """Synchronous detection with a specific model (runs in thread pool)."""
+        """Synchronous detection with a specific model (runs in thread pool).
+
+        For YOLO-World variants, prompts override the default vocabulary
+        via model.set_classes. Non-world models ignore prompts.
+        """
         model = self._load_model(model_name)
         if model is None:
             return []
+
+        # YOLO-World open-vocabulary path. set_classes replaces the
+        # active class list with the per-camera prompts. Safe to call
+        # repeatedly. Other model families do not expose set_classes.
+        if prompts and "world" in model_name:
+            try:
+                model.set_classes(prompts)
+            except Exception as exc:  # pragma: no cover
+                logger.warning(
+                    "set_classes failed on '%s'. Falling back to defaults. %s",
+                    model_name, exc,
+                )
 
         results = model(frame, conf=confidence, verbose=False)
         detections = []
@@ -195,9 +224,16 @@ class ObjectDetector:
                 label = model.names[cls_id]
                 conf_val = float(boxes.conf[i])
 
-                # Apply label filter. Per-model filter takes priority,
-                # otherwise fall back to default security-relevant classes
-                allowed = set(label_filter) if label_filter else DEFAULT_CLASSES
+                # Apply label filter. Priority order.
+                # 1. Explicit per-model label_filter
+                # 2. YOLO-World prompts (open-vocab classes the user asked for)
+                # 3. Default security-relevant COCO subset
+                if label_filter:
+                    allowed = set(label_filter)
+                elif prompts and "world" in model_name:
+                    allowed = set(prompts)
+                else:
+                    allowed = DEFAULT_CLASSES
                 if label not in allowed:
                     continue
 

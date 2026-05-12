@@ -111,6 +111,29 @@ class Camera(Base):
     # observations into one rolling artifact with a stable id.
     incident_tracking_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     incident_idle_seconds: Mapped[int] = mapped_column(Integer, default=600, nullable=False)
+    # Smart Track. Auto-follow detections via ONVIF PTZ. Reads
+    # detections from the perception pipeline, sends ContinuousMove
+    # commands to keep the target near frame center, returns to home
+    # preset after `lost_seconds` of no target.
+    ptz_smart_track_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ptz_smart_track_targets: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # labels to follow
+    ptz_smart_track_ignore: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # labels to never follow
+    ptz_smart_track_priority: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # tie-break order
+    ptz_smart_track_lost_seconds: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    ptz_smart_track_home_preset: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ptz_smart_track_zoom: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ptz_smart_track_deadzone: Mapped[float] = mapped_column(Float, default=0.15, nullable=False)
+    ptz_smart_track_max_speed: Mapped[float] = mapped_column(Float, default=0.5, nullable=False)
+    ptz_smart_track_gain: Mapped[float] = mapped_column(Float, default=1.5, nullable=False)
+    # Optional ONVIF angle no-go boxes. [{"pan_min":..,"pan_max":..,"tilt_min":..,"tilt_max":..}]
+    ptz_smart_track_no_go: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    ptz_smart_track_min_confidence: Mapped[float] = mapped_column(Float, default=0.45, nullable=False)
+    # Optional. Only follow these Person UUIDs (via face match).
+    ptz_smart_track_require_face: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Mechanical wear cap. Max ContinuousMove commands per minute.
+    ptz_smart_track_move_budget_per_minute: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # ONVIF media profile token. Most cameras use "Profile_1".
+    ptz_profile_token: Mapped[str] = mapped_column(String(64), default="Profile_1", nullable=False)
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fps: Mapped[float | None] = mapped_column(Float, nullable=True)

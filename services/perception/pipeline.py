@@ -343,8 +343,13 @@ class PerceptionPipeline:
                 # Multi-model path
                 merge_strategy = cam.detection_merge if cam else "any"
                 consensus_min = cam.detection_consensus_min if cam else 2
+                world_prompts = getattr(cam, "yolo_world_prompts", None) if cam else None
                 detections = await self._detector.detect_multi(
-                    frame, model_configs, merge=merge_strategy, consensus_min=consensus_min
+                    frame,
+                    model_configs,
+                    merge=merge_strategy,
+                    consensus_min=consensus_min,
+                    yolo_world_prompts=world_prompts,
                 )
             else:
                 # Single model fallback
@@ -441,6 +446,20 @@ class PerceptionPipeline:
                 frame = apply_privacy_blur(frame, zones, strength=strength)
         except Exception:
             logger.exception("privacy blur failed camera=%s", camera_id)
+
+        # Smart Track. Feed detections to the PTZ tracker so it can
+        # auto-follow targets. Non-blocking. Pipeline keeps moving.
+        try:
+            if cam and getattr(cam, "ptz_smart_track_enabled", False):
+                from services.perception.ptz_tracker import manager as ptz_manager
+                ptz_manager.on_frame(
+                    camera=cam,
+                    detections=detections,
+                    frame_shape=frame.shape,
+                    current_pose=locals().get("current_pose"),
+                )
+        except Exception:
+            logger.exception("smart-track dispatch failed camera=%s", camera_id)
 
         # Step 3. Save thumbnail
         thumbnail_path = await self._save_thumbnail(camera_id, timestamp, frame, detections)
