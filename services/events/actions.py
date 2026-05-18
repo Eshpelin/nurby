@@ -715,7 +715,20 @@ TELEGRAM_TEMPLATE_VARS = (
 # ``telegram_poller._handle_callback_query`` and the schema validator
 # in ``shared.schemas._VALID_TELEGRAM_BUTTON_ACTIONS`` must be kept in
 # lockstep.
-TELEGRAM_BUTTON_ACTIONS = ("ack", "mute_event", "snooze_rule", "open")
+TELEGRAM_BUTTON_ACTIONS = (
+    "ack",
+    "mute_event",
+    "snooze_rule",
+    "open",
+    # Phase 4. These are NOT exposed in the rule builder UI. They are
+    # emitted only by the system-initiated cluster naming prompts and
+    # the optional ask-yes-no dialog. Listed here so the callback
+    # dispatch path in telegram_poller passes its allowlist check.
+    "open_cluster",
+    "name_cluster_telegram",
+    "yn_yes",
+    "yn_no",
+)
 
 
 def _resolve_event_url(event_id) -> str | None:
@@ -876,7 +889,13 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
     """
     from shared.crypto import InvalidToken, decrypt_secret
     from shared.models import TelegramChannel
-    from services.notify.telegram import TelegramAPI, TelegramError, PHOTO_CAPTION_MAX, PHOTO_FALLBACK_SENTINEL
+    from services.notify.telegram import (
+        TelegramAPI,
+        TelegramError,
+        PHOTO_CAPTION_MAX,
+        PHOTO_FALLBACK_SENTINEL,
+        store_message_index,
+    )
 
     channel_id_raw = action.get("channel_id")
     if not channel_id_raw:
@@ -984,6 +1003,18 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
                 "Telegram photo sent for rule='%s' channel='%s' message_id=%s",
                 rule.name, channel_label, photo_result.get("message_id"),
             )
+            # Phase 4. Index the outbound message so a later user
+            # reply resolves back to this Event for note-taking.
+            sent_msg_id = photo_result.get("message_id")
+            if sent_msg_id:
+                await store_message_index(
+                    channel_uuid, int(sent_msg_id),
+                    {
+                        "event_id": str(event_id),
+                        "rule_id": str(rule.id),
+                        "kind": "alert",
+                    },
+                )
             await _update_event_status(
                 event_id, "telegram",
                 "success" if not note else "success",
@@ -1002,6 +1033,16 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
                 "Telegram sent for rule '%s' channel='%s' message_id=%s",
                 rule.name, channel_label, result.get("message_id"),
             )
+            sent_msg_id = result.get("message_id")
+            if sent_msg_id:
+                await store_message_index(
+                    channel_uuid, int(sent_msg_id),
+                    {
+                        "event_id": str(event_id),
+                        "rule_id": str(rule.id),
+                        "kind": "alert",
+                    },
+                )
             note = "thumbnail_missing" if (include_thumbnail and not have_thumb) else None
             await _update_event_status(event_id, "telegram", "success", note)
     except TelegramError as exc:

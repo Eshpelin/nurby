@@ -40,6 +40,11 @@ export interface TelegramChannel {
   rate_limit_per_chat_qps: number;
   rate_limit_per_chat_burst: number;
   dedupe_window_seconds: number;
+  // Phase 4 household sharing.
+  shared_with_household: boolean;
+  share_permissions: "use" | "use_and_test";
+  owned_by_me: boolean;
+  owner_display_name: string | null;
   created_at: string;
 }
 
@@ -337,7 +342,7 @@ function ChannelRow({
     <div className="rounded-md border border-border bg-background/40 px-3 py-2.5">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="text-sm font-medium truncate">{channel.label}</div>
             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${pill.cls}`}>
               {pill.label}
@@ -352,6 +357,28 @@ function ChannelRow({
             >
               {channel.delivery_mode === "webhook" ? "Webhook" : "Long poll"}
             </span>
+            {/* Phase 4. Owner badge + shared-by chip. */}
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                channel.owned_by_me
+                  ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                  : "bg-purple-500/15 text-purple-400 border-purple-500/30"
+              }`}
+              title={
+                channel.owned_by_me
+                  ? "You own this channel"
+                  : `Shared by ${channel.owner_display_name || "another user"}. You can use it in your rules.`
+              }
+            >
+              {channel.owned_by_me
+                ? "You"
+                : `Shared by ${channel.owner_display_name || "other"}`}
+            </span>
+            {channel.shared_with_household && channel.owned_by_me && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border bg-purple-500/15 text-purple-400 border-purple-500/30">
+                Household
+              </span>
+            )}
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
             {channel.bot_username ? <span>@{channel.bot_username}</span> : <span>(no bot)</span>}
@@ -387,28 +414,38 @@ function ChannelRow({
             </button>
           )}
 
-          <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer select-none">
+          <label
+            className={`flex items-center gap-1 text-[11px] text-muted-foreground select-none ${
+              channel.owned_by_me ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+            }`}
+            title={channel.owned_by_me ? "" : "Owner-only setting"}
+          >
             <input
               type="checkbox"
               checked={channel.default_silent}
-              disabled={savingField !== null}
+              disabled={savingField !== null || !channel.owned_by_me}
               onChange={(e) => patch({ default_silent: e.target.checked })}
               className="accent-green-500"
             />
             silent
           </label>
-          <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer select-none">
+          <label
+            className={`flex items-center gap-1 text-[11px] text-muted-foreground select-none ${
+              channel.owned_by_me ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+            }`}
+            title={channel.owned_by_me ? "" : "Owner-only setting"}
+          >
             <input
               type="checkbox"
               checked={channel.enabled}
-              disabled={savingField !== null}
+              disabled={savingField !== null || !channel.owned_by_me}
               onChange={(e) => patch({ enabled: e.target.checked })}
               className="accent-green-500"
             />
             enabled
           </label>
 
-          {channel.pairing_status === "paired" && (
+          {channel.pairing_status === "paired" && (channel.owned_by_me || channel.share_permissions === "use_and_test") && (
             <button
               type="button"
               disabled={testing}
@@ -430,7 +467,9 @@ function ChannelRow({
           <button
             type="button"
             onClick={askDelete}
-            className="px-2 py-1 text-[11px] rounded border border-border hover:bg-muted text-muted-foreground"
+            disabled={!channel.owned_by_me}
+            title={channel.owned_by_me ? "" : "Only the owner can delete a shared channel"}
+            className="px-2 py-1 text-[11px] rounded border border-border hover:bg-muted text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           >
             Delete
           </button>
@@ -439,6 +478,69 @@ function ChannelRow({
 
       {showAdvanced && (
         <div className="mt-3 border-t border-border pt-3 space-y-4">
+          {/* Phase 4. Household sharing. Visible to everyone; owner
+              can toggle, non-owners see a tooltip explainer. */}
+          <div>
+            <div className="text-xs font-medium mb-1.5">Household sharing</div>
+            {channel.owned_by_me ? (
+              <>
+                <label className="flex items-center gap-2 text-[11px] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={channel.shared_with_household}
+                    disabled={savingField !== null}
+                    onChange={(e) =>
+                      patch({ shared_with_household: e.target.checked } as Partial<TelegramChannel>)
+                    }
+                    className="accent-purple-500"
+                  />
+                  Share with household. Everyone can use this channel in their rules.
+                </label>
+                {channel.shared_with_household && (
+                  <div className="mt-2">
+                    <div className="text-[11px] text-muted-foreground mb-1">
+                      Share permissions
+                    </div>
+                    <div className="flex gap-2">
+                      {(["use", "use_and_test"] as const).map((p) => (
+                        <label key={p} className="flex items-center gap-1.5 text-[11px] cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`share-${channel.id}`}
+                            checked={channel.share_permissions === p}
+                            disabled={savingField !== null}
+                            onChange={() =>
+                              patch({ share_permissions: p } as Partial<TelegramChannel>)
+                            }
+                            className="accent-purple-500"
+                          />
+                          {p === "use" ? "Use only" : "Use and test"}
+                        </label>
+                      ))}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      Token + chat binding stay yours. Others can pick this channel for their
+                      rules. "Use and test" also lets them fire the Send test button.
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-[11px] text-muted-foreground bg-muted/30 border border-border rounded px-2 py-1.5">
+                Shared by <span className="text-foreground/90 font-medium">{channel.owner_display_name || "another user"}</span>.
+                You can pick this channel in your rules. Delete + token replacement are owner-only.
+              </div>
+            )}
+          </div>
+
+          {/* Owner-only knobs below. Non-owners see a short note. */}
+          {!channel.owned_by_me && (
+            <div className="text-[11px] text-muted-foreground">
+              Delivery, media quality, rate limit, and dedupe are owner-only.
+            </div>
+          )}
+          {channel.owned_by_me && (
+          <>
           {/* Delivery mode */}
           <div>
             <div className="text-xs font-medium mb-1.5">Delivery mode</div>
@@ -653,6 +755,8 @@ function ChannelRow({
               Suppresses identical messages within this window so a chatty rule doesn't spam.
             </div>
           </div>
+          </>
+          )}
         </div>
       )}
 

@@ -378,7 +378,22 @@ _VALID_ACTION_TYPES = {
 # ``_CALLBACK_ACTIONS`` tuple in the Telegram poller. Phase 4 will add
 # variants like ``name_cluster``; extending this set is the documented
 # extension point.
-_VALID_TELEGRAM_BUTTON_ACTIONS = {"ack", "mute_event", "snooze_rule", "open"}
+_VALID_TELEGRAM_BUTTON_ACTIONS = {
+    "ack",
+    "mute_event",
+    "snooze_rule",
+    "open",
+    # Phase 4. Deep-link to a cluster on the web (uses ``url=``) and
+    # kick off an in-chat naming dialog. The cluster-naming actions are
+    # only emitted by the system-initiated cluster prompts, not the
+    # rule builder UI. Their schema validation still lives here so any
+    # internal caller routes through the same allowlist.
+    "open_cluster",
+    "name_cluster_telegram",
+    # Phase 4 stretch. yes/no follow-up answer captured onto event_notes.
+    "yn_yes",
+    "yn_no",
+}
 _MAX_TELEGRAM_BUTTONS = 4
 
 
@@ -708,6 +723,10 @@ class TelegramChannelUpdate(BaseModel):
     rate_limit_per_chat_qps: float | None = Field(default=None, ge=0.05, le=10.0)
     rate_limit_per_chat_burst: int | None = Field(default=None, ge=1, le=20)
     dedupe_window_seconds: int | None = Field(default=None, ge=0, le=600)
+    # Phase 4. Household sharing. Owner-only; the route rejects PATCH
+    # by non-owners. ``share_permissions`` is 'use' or 'use_and_test'.
+    shared_with_household: bool | None = None
+    share_permissions: str | None = Field(default=None, pattern=r"^(use|use_and_test)$")
 
 
 class TelegramChannelResponse(BaseModel):
@@ -731,6 +750,30 @@ class TelegramChannelResponse(BaseModel):
     rate_limit_per_chat_qps: float
     rate_limit_per_chat_burst: int
     dedupe_window_seconds: int
+    # Phase 4. Household sharing. ``owned_by_me`` is computed by the
+    # route per-request so a non-owner sees the channel as
+    # "shared by <Other>". ``owner_display_name`` is best-effort.
+    shared_with_household: bool = False
+    share_permissions: str = "use"
+    owned_by_me: bool = True
+    owner_display_name: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class EventNoteCreate(BaseModel):
+    text: str = Field(min_length=1, max_length=4096)
+
+
+class EventNoteResponse(BaseModel):
+    id: uuid.UUID
+    event_id: uuid.UUID
+    author_user_id: uuid.UUID | None = None
+    author_display_name: str | None = None
+    source: str  # telegram | web | api
+    text: str
+    telegram_message_id: int | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

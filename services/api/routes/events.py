@@ -7,10 +7,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Event, Observation, User
-from shared.schemas import EventResponse
+from shared.models import Event, EventNote, Observation, User
+from shared.schemas import EventNoteCreate, EventNoteResponse, EventResponse
 
 router = APIRouter()
+
+
+async def _serialize_note(db: AsyncSession, note: EventNote) -> dict:
+    """Resolve the author's display name for the EventNote response."""
+    display_name: str | None = None
+    if note.author_user_id is not None:
+        author = await db.get(User, note.author_user_id)
+        if author is not None:
+            display_name = author.display_name or author.email
+    return {
+        "id": note.id,
+        "event_id": note.event_id,
+        "author_user_id": note.author_user_id,
+        "author_display_name": display_name,
+        "source": note.source,
+        "text": note.text,
+        "telegram_message_id": note.telegram_message_id,
+        "created_at": note.created_at,
+    }
 
 
 @router.get("", response_model=list[EventResponse])
@@ -51,12 +70,101 @@ async def event_history(
     return result.scalars().all()
 
 
-@router.get("/{event_id}", response_model=EventResponse)
-async def get_event(event_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@router.get("/{event_id}")
+async def get_event(
+    event_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a single event with its annotation notes.
+
+    Phase 4. The response now embeds an array of ``notes`` (web,
+    telegram, api). Pre-Phase-4 callers that only read top-level
+    Event fields keep working because the new key is additive.
+    """
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    return event
+    notes_result = await db.execute(
+        select(EventNote)
+        .where(EventNote.event_id == event_id)
+        .order_by(EventNote.created_at.asc())
+    )
+    notes_rows = list(notes_result.scalars().all())
+    notes_out = [await _serialize_note(db, n) for n in notes_rows]
+    base = EventResponse.model_validate(event).model_dump()
+    base["notes"] = notes_out
+    return base
+
+
+# ── Phase 4. Event notes (annotations) ──
+
+@router.get("/{event_id}/notes", response_model=list[EventNoteResponse])
+async def list_event_notes(
+    event_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    result = await db.execute(
+        select(EventNote)
+        .where(EventNote.event_id == event_id)
+        .order_by(EventNote.created_at.asc())
+    )
+    return [await _serialize_note(db, n) for n in result.scalars().all()]
+
+
+@router.post("/{event_id}/notes", response_model=EventNoteResponse, status_code=201)
+async def create_event_note(
+    event_id: uuid.UUID,
+    body: EventNoteCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Attach a free-text annotation to an event. Source defaults to
+    ``web`` since this endpoint backs the timeline's "+ Add note" UI.
+    Telegram replies create their own rows via the poller path."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Note text cannot be empty")
+    note = EventNote(
+        event_id=event_id,
+        author_user_id=current_user.id,
+        source="web",
+        text=text[:4096],
+    )
+    db.add(note)
+    await db.commit()
+    await db.refresh(note)
+    return await _serialize_note(db, note)
+
+
+@router.delete("/{event_id}/notes/{note_id}", status_code=204)
+async def delete_event_note(
+    event_id: uuid.UUID,
+    note_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hard-delete an event note. Author or admin only.
+
+    We picked hard delete over soft delete because notes are cheap and
+    a half-empty row in the timeline would just confuse users. Audit
+    history lives on the Event itself.
+    """
+    note = await db.get(EventNote, note_id)
+    if note is None or note.event_id != event_id:
+        raise HTTPException(status_code=404, detail="Note not found")
+    is_admin = (getattr(current_user, "role", "") or "").lower() == "admin"
+    if note.author_user_id != current_user.id and not is_admin:
+        raise HTTPException(status_code=403, detail="Only the author or an admin can delete this note")
+    await db.delete(note)
+    await db.commit()
 
 
 @router.post("/{event_id}/acknowledge", response_model=EventResponse)

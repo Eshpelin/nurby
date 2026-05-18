@@ -71,6 +71,70 @@ class BodyReIDSweeper:
             await self._decay_tentative(db)
             await self._fuse_face_overlaps(db)
             await db.commit()
+        # Phase 4. Prompt the household to name new clusters that
+        # crossed the sightings threshold. Wrapped in a try so a
+        # Telegram outage never breaks the perception sweep.
+        try:
+            await self._prompt_cluster_naming()
+        except Exception:
+            logger.exception("cluster naming prompts failed")
+
+    async def _prompt_cluster_naming(self) -> None:
+        """Send a Telegram naming prompt for any face or body cluster
+        that just crossed the configured sighting threshold.
+
+        Idempotent. ``naming_prompted_at`` is stamped on first send so
+        we never re-prompt the same cluster. Requires at least one
+        ``shared_with_household=true`` or paired channel; the
+        initiator module no-ops otherwise so a deployment without
+        Telegram doesn't trip on this code path.
+        """
+        from services.notify.cluster_naming_telegram import (
+            request_body_cluster_naming,
+            request_face_cluster_naming,
+        )
+
+        # Threshold knobs share the existing app_settings table so an
+        # ops user can flip them without a redeploy.
+        min_sightings = int(await get_setting("cluster_naming_min_sightings", 3))
+        if min_sightings <= 0:
+            return
+
+        async with async_session() as db:
+            face_rows = (
+                await db.execute(
+                    select(FaceCluster.id)
+                    .where(FaceCluster.status == "pending")
+                    .where(FaceCluster.sighting_count >= min_sightings)
+                    .where(FaceCluster.naming_prompted_at.is_(None))
+                    .limit(5)
+                )
+            ).all()
+            body_rows = (
+                await db.execute(
+                    select(BodyCluster.id)
+                    .where(BodyCluster.status == "pending")
+                    .where(BodyCluster.person_id.is_(None))
+                    .where(BodyCluster.sighting_count >= min_sightings)
+                    .where(BodyCluster.naming_prompted_at.is_(None))
+                    .limit(5)
+                )
+            ).all()
+
+        for (fc_id,) in face_rows:
+            try:
+                await request_face_cluster_naming(fc_id)
+            except Exception:
+                logger.exception(
+                    "request_face_cluster_naming failed cluster=%s", fc_id,
+                )
+        for (bc_id,) in body_rows:
+            try:
+                await request_body_cluster_naming(bc_id)
+            except Exception:
+                logger.exception(
+                    "request_body_cluster_naming failed cluster=%s", bc_id,
+                )
 
     async def _decay_tentative(self, db: AsyncSession) -> None:
         """Mark long-stale tentative clusters as ignored."""

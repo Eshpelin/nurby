@@ -33,9 +33,26 @@ from sqlalchemy import select
 from shared.config import settings
 from shared.crypto import InvalidToken, decrypt_secret
 from shared.database import async_session
-from shared.models import Event, Rule, TelegramChannel, User
+from shared.models import (
+    BodyCluster,
+    Event,
+    EventNote,
+    FaceCluster,
+    Person,
+    Rule,
+    TelegramChannel,
+    TelegramDialog,
+    User,
+)
 
-from services.notify.telegram import TelegramAPI, TelegramError, verify_callback
+from services.notify.telegram import (
+    TelegramAPI,
+    TelegramError,
+    get_message_index,
+    send_message_guarded,
+    set_message_reaction,
+    verify_callback,
+)
 
 logger = logging.getLogger("nurby.notify.telegram_poller")
 
@@ -65,13 +82,31 @@ _BOT_COMMANDS = [
     ("ack", "Acknowledge latest alert"),
     ("mute", "Mute 10 minutes"),
     ("snooze", "Snooze rule 1 hour"),
+    # Phase 4. Backup path for the reply-to-add-note feature.
+    # Used when Redis lost the original alert's message index
+    # (TTL expired or restart with a different Redis).
+    ("notes", "Add a note to an event. /notes <event_id> <text>"),
 ]
 
 # Allowed callback actions. Documented as an extension point. Phase 4
 # household sharing + face-cluster naming will add new variants like
 # ``name_cluster``; the verify -> dispatch path here keys off this
 # tuple so a stray future deployment cannot replay an unknown action.
-_CALLBACK_ACTIONS = ("ack", "mute_event", "snooze_rule", "open")
+_CALLBACK_ACTIONS = (
+    "ack",
+    "mute_event",
+    "snooze_rule",
+    "open",
+    # Phase 4 cluster naming + ask-yes-no.
+    "open_cluster",
+    "name_cluster_telegram",
+    "yn_yes",
+    "yn_no",
+)
+
+# Hard cap on free-text annotation length to match the Telegram message
+# size cap. Anything longer gets truncated + the user is told.
+_NOTE_MAX_CHARS = 4096
 
 
 def offset_key(channel_id) -> str:
@@ -294,22 +329,53 @@ class TelegramPollerManager:
         message = update.get("message")
         if not message:
             return
+
+        # Phase 4. Reply-to-add-note. A user replying to a Telegram
+        # alert attaches free text to the originating event. Must be
+        # handled before the generic text branch so a reply that
+        # happens to start with "/" is still treated as a note.
+        reply_to = message.get("reply_to_message")
+        if reply_to and reply_to.get("message_id"):
+            handled = await self._handle_reply(channel_id, message, reply_to)
+            if handled:
+                return
+
         text = (message.get("text") or "").strip()
         if not text:
+            # Phase 4 edge case. Replying with a photo / sticker is
+            # only meaningful as a note if it carries a reply_to we
+            # could not match above; otherwise drop silently.
             return
-        # Match `/start <nonce>` or `/pair <nonce>`. Strip optional bot
-        # suffix like `/start@MyBot`.
+
+        # Match slash commands first so `/start <nonce>`, `/pair
+        # <nonce>` and the new `/notes <event_id> <text>` keep working
+        # without colliding with dialog text input.
         parts = text.split(maxsplit=1)
-        if not parts:
+        cmd = parts[0].split("@", 1)[0].lower() if parts else ""
+
+        if cmd in ("/start", "/pair"):
+            nonce = parts[1].strip() if len(parts) > 1 else ""
+            if not nonce:
+                return
+            await self._try_pair(channel_id, message, nonce)
             return
-        cmd = parts[0].split("@", 1)[0].lower()
-        if cmd not in ("/start", "/pair"):
-            logger.debug("telegram channel=%s ignoring text. %r", channel_id, text[:80])
+
+        if cmd == "/notes":
+            tail = parts[1].strip() if len(parts) > 1 else ""
+            await self._handle_notes_command(channel_id, message, tail)
             return
-        nonce = parts[1].strip() if len(parts) > 1 else ""
-        if not nonce:
-            return
-        await self._try_pair(channel_id, message, nonce)
+
+        # Phase 4. Dialog text input. The cluster-naming flow parks an
+        # awaiting='name_input' row; the user's next plain text reply
+        # in the same chat lands here.
+        chat = message.get("chat") or {}
+        chat_id = chat.get("id")
+        if chat_id is not None:
+            consumed = await self._handle_dialog_text(channel_id, str(chat_id), message, text)
+            if consumed:
+                return
+
+        logger.debug("telegram channel=%s ignoring text. %r", channel_id, text[:80])
 
     async def _handle_callback_query(self, channel_id: str, callback: dict) -> None:
         """Dispatch an inline-button press.
@@ -414,6 +480,34 @@ class TelegramPollerManager:
                 text_reply, new_markup = await self._do_mute_event(event_id, duration or 600)
             elif action == "snooze_rule":
                 text_reply, new_markup = await self._do_snooze_rule(rule_id, duration or 3600)
+            elif action == "open_cluster":
+                # Phase 4. "Same as <Name>" + Skip variants both ride
+                # this action. Payload carries cluster id under 'c',
+                # cluster kind under 'k', and either a person id 'p'
+                # or the sentinel 'skip'.
+                cluster_id_raw = payload.get("c")
+                cluster_kind = str(payload.get("k") or "")
+                person_choice = payload.get("p")
+                text_reply, new_markup = await self._do_link_cluster(
+                    cluster_id_raw, cluster_kind, person_choice,
+                )
+            elif action == "name_cluster_telegram":
+                # Phase 4. "Name as..." button. Switches the open
+                # dialog row's awaiting state so the user's next text
+                # reply lands in ``_handle_dialog_text``.
+                cluster_id_raw = payload.get("c")
+                cluster_kind = str(payload.get("k") or "")
+                text_reply, new_markup = await self._do_open_name_dialog(
+                    channel_id, chat_id, message_id, cluster_id_raw, cluster_kind,
+                )
+            elif action in ("yn_yes", "yn_no"):
+                # Phase 4 stretch. Capture the user's yes/no answer as
+                # a note. Follow-up rule action routing is intentionally
+                # not wired here. see commit message + summary for the
+                # hand-off comment.
+                text_reply, new_markup = await self._do_record_yn(
+                    event_id, action == "yn_yes",
+                )
         except Exception:
             logger.exception("telegram callback handler failed channel=%s action=%s", channel_id, action)
             text_reply = "Could not update Nurby. Try again from the web UI."
@@ -497,6 +591,513 @@ class TelegramPollerManager:
             f"Rule snoozed until {when}.",
             _markup_disabled(f"💤 Rule snoozed until {when}"),
         )
+
+    # ------------------------------------------------------------------
+    # Phase 4. reply-to-add-note + dialog text + slash /notes backup.
+    # ------------------------------------------------------------------
+
+    async def _handle_reply(self, channel_id: str, message: dict, reply_to: dict) -> bool:
+        """Attach a free-text reply as an EventNote.
+
+        Resolves the originating Event via the Redis message-index.
+        Edge cases handled.
+        * Reply to a non-alert message (e.g. a cluster prompt). we
+          treat the reply as dialog text input by returning False so
+          ``_handle_dialog_text`` gets the next pass.
+        * Index expired. tell the user about ``/notes`` so they can
+          still annotate manually.
+        * Different chat than the original alert. reject so a
+          forwarded-alert reply in a private chat doesn't leak the
+          note into the wrong household event.
+        * Non-text reply (photo, sticker). ask politely for text.
+        """
+        reply_msg_id = int(reply_to.get("message_id") or 0)
+        if not reply_msg_id:
+            return False
+
+        chat = message.get("chat") or {}
+        chat_id = chat.get("id")
+        if chat_id is None:
+            return False
+
+        channel_uuid = _to_uuid(channel_id)
+        index = await get_message_index(channel_uuid, reply_msg_id)
+        if index is None:
+            # Could not resolve the original message. Surface the
+            # backup path so the user keeps moving.
+            await self._send_followup(
+                channel_id, chat_id,
+                "I can't link this reply to an alert (it may have expired). "
+                "Use <code>/notes &lt;event_id&gt; your text</code> to attach manually.",
+            )
+            return True
+
+        kind = index.get("kind")
+        if kind == "cluster_naming":
+            # Cluster-naming prompt reply. Fall through so the dialog
+            # state machine picks it up rather than the note path.
+            return False
+        if kind != "alert":
+            return False
+
+        # Validate the chat matches the channel's bound chat. This is
+        # the "forwarded alert" edge case.
+        async with async_session() as db:
+            ch = await db.get(TelegramChannel, channel_uuid)
+            if ch is None:
+                return True
+            if ch.chat_id and str(chat_id) != str(ch.chat_id):
+                try:
+                    token_only = decrypt_secret(ch.bot_token_enc)
+                    await TelegramAPI.send_message(
+                        token_only, chat_id,
+                        f"Replies must be in the original chat <i>{(ch.chat_title or 'Nurby')[:64]}</i>.",
+                        parse_mode="HTML",
+                    )
+                except (InvalidToken, TelegramError):
+                    pass
+                return True
+
+        raw_text = message.get("text") or message.get("caption") or ""
+        text_value = raw_text.strip()
+        if not text_value:
+            await self._send_followup(
+                channel_id, chat_id,
+                "I can only attach text notes. Please reply to the alert with a short text.",
+            )
+            return True
+
+        truncated = False
+        if len(text_value) > _NOTE_MAX_CHARS:
+            text_value = text_value[:_NOTE_MAX_CHARS]
+            truncated = True
+
+        event_id_raw = index.get("event_id")
+        try:
+            event_id = _to_uuid(event_id_raw) if event_id_raw else None
+        except Exception:
+            event_id = None
+        if event_id is None:
+            await self._send_followup(
+                channel_id, chat_id, "I can't find the event this reply belongs to.",
+            )
+            return True
+
+        from_user = message.get("from") or {}
+        from_msg_id = int(message.get("message_id") or 0) or None
+
+        async with async_session() as db:
+            event = await db.get(Event, event_id)
+            if event is None:
+                await self._send_followup(
+                    channel_id, chat_id, "That alert's event no longer exists.",
+                )
+                return True
+            # Author resolution. Owner-replied alerts attribute to the
+            # channel owner. We don't have a real Telegram->User table
+            # so the channel owner is the best signal for the
+            # household member who replied.
+            ch = await db.get(TelegramChannel, channel_uuid)
+            author_user_id = ch.user_id if ch is not None else None
+
+            note = EventNote(
+                event_id=event_id,
+                author_user_id=author_user_id,
+                source="telegram",
+                text=text_value,
+                telegram_message_id=from_msg_id,
+            )
+            db.add(note)
+            await db.commit()
+
+        # Confirm to the user. A reaction emoji on the original
+        # reply when available + a short "Noted." text fallback so
+        # bots without reactions still feel responsive.
+        try:
+            token = await self._channel_token(channel_id)
+            if token and from_msg_id:
+                await set_message_reaction(token, chat_id, from_msg_id, "\U0001F44D")
+        except Exception:
+            logger.debug("set_message_reaction raised", exc_info=True)
+
+        suffix = " (truncated to 4096 chars)" if truncated else ""
+        await self._send_followup(
+            channel_id, chat_id, f"Noted.{suffix}",
+        )
+        return True
+
+    async def _handle_notes_command(
+        self, channel_id: str, message: dict, tail: str,
+    ) -> None:
+        """Backup path for attaching a note when the reply index is gone.
+
+        Usage. ``/notes <event_id> <text>``. The event_id may be any
+        UUID-shaped string we already minted; users typically copy it
+        from the web UI's event detail page.
+        """
+        chat = message.get("chat") or {}
+        chat_id = chat.get("id")
+        if chat_id is None:
+            return
+        if not tail:
+            await self._send_followup(
+                channel_id, chat_id,
+                "Usage. <code>/notes &lt;event_id&gt; your text</code>",
+            )
+            return
+        parts = tail.split(maxsplit=1)
+        event_id_raw = parts[0]
+        text_value = (parts[1] if len(parts) > 1 else "").strip()
+        if not text_value:
+            await self._send_followup(
+                channel_id, chat_id,
+                "Add the note text after the event id. e.g. <code>/notes 1234... false alarm</code>",
+            )
+            return
+        try:
+            event_id = _to_uuid(event_id_raw)
+        except Exception:
+            await self._send_followup(
+                channel_id, chat_id, "That event id is not a valid UUID.",
+            )
+            return
+
+        truncated = len(text_value) > _NOTE_MAX_CHARS
+        if truncated:
+            text_value = text_value[:_NOTE_MAX_CHARS]
+
+        channel_uuid = _to_uuid(channel_id)
+        async with async_session() as db:
+            event = await db.get(Event, event_id)
+            if event is None:
+                await self._send_followup(
+                    channel_id, chat_id, "No event with that id exists.",
+                )
+                return
+            ch = await db.get(TelegramChannel, channel_uuid)
+            author_user_id = ch.user_id if ch is not None else None
+            note = EventNote(
+                event_id=event_id,
+                author_user_id=author_user_id,
+                source="telegram",
+                text=text_value,
+                telegram_message_id=int(message.get("message_id") or 0) or None,
+            )
+            db.add(note)
+            await db.commit()
+
+        suffix = " (truncated to 4096 chars)" if truncated else ""
+        await self._send_followup(
+            channel_id, chat_id, f"Note attached to event.{suffix}",
+        )
+
+    async def _handle_dialog_text(
+        self, channel_id: str, chat_id: str, message: dict, text: str,
+    ) -> bool:
+        """Consume a plain text message as input for an open dialog.
+
+        Returns True when the message landed on a dialog (whether the
+        downstream action succeeded or not). False when no dialog was
+        open so the outer dispatcher can move on.
+        """
+        from datetime import datetime, timezone
+
+        channel_uuid = _to_uuid(channel_id)
+        now = datetime.now(timezone.utc)
+        async with async_session() as db:
+            result = await db.execute(
+                select(TelegramDialog)
+                .where(TelegramDialog.channel_id == channel_uuid)
+                .where(TelegramDialog.chat_id == str(chat_id))
+                .where(TelegramDialog.awaiting == "name_input")
+                .order_by(TelegramDialog.created_at.desc())
+                .limit(1)
+            )
+            dialog = result.scalars().first()
+            if dialog is None:
+                return False
+            if dialog.expires_at <= now:
+                # Stale dialog. Clear it and tell the user.
+                await db.delete(dialog)
+                await db.commit()
+                await self._send_followup(
+                    channel_id, chat_id,
+                    "That naming prompt expired. Tap the photo's buttons to start again.",
+                )
+                return True
+
+            ctx = dialog.context or {}
+            cluster_kind = str(ctx.get("kind") or "")
+            cluster_id_raw = ctx.get("cluster_id")
+            try:
+                cluster_id = _to_uuid(cluster_id_raw) if cluster_id_raw else None
+            except Exception:
+                cluster_id = None
+            if cluster_id is None or cluster_kind not in ("face", "body"):
+                await db.delete(dialog)
+                await db.commit()
+                return True
+
+            display_name = text.strip()[:255]
+            if not display_name:
+                await self._send_followup(
+                    channel_id, chat_id,
+                    "Please reply with a non-empty name, or tap Skip.",
+                )
+                return True
+
+            # Uniqueness check. Reuse persons route helper for the
+            # friendly 409 message.
+            try:
+                from services.api.routes.persons import _ensure_unique_display_name
+                await _ensure_unique_display_name(db, display_name)
+            except Exception as exc:
+                detail = getattr(exc, "detail", None) or str(exc)
+                await self._send_followup(
+                    channel_id, chat_id,
+                    f"Could not save that name. {detail[:200]}",
+                )
+                return True
+
+            # Mutate cluster + new Person under the channel lock so
+            # two concurrent presses on the same prompt don't double-
+            # create persons. The lock is already held by the outer
+            # ``handle_update`` so this DB section is serialized.
+            if cluster_kind == "face":
+                cluster = await db.get(FaceCluster, cluster_id)
+            else:
+                cluster = await db.get(BodyCluster, cluster_id)
+            if cluster is None:
+                await db.delete(dialog)
+                await db.commit()
+                await self._send_followup(
+                    channel_id, chat_id,
+                    "That cluster was removed before naming completed.",
+                )
+                return True
+            if cluster.status != "pending":
+                await db.delete(dialog)
+                await db.commit()
+                await self._send_followup(
+                    channel_id, chat_id,
+                    "Already named by someone else. Future sightings will use the existing label.",
+                )
+                return True
+
+            person = Person(
+                display_name=display_name,
+                consent_given=True,
+                photo_path=cluster.sample_thumbnail_path,
+            )
+            db.add(person)
+            await db.flush()
+            cluster.person_id = person.id
+            cluster.status = "named"
+            if cluster_kind == "body":
+                cluster.confidence = "confirmed"
+            await db.delete(dialog)
+            await db.commit()
+
+        await self._send_followup(
+            channel_id, chat_id,
+            f"Saved as <b>{display_name}</b>. Future sightings will be labeled.",
+        )
+        return True
+
+    async def _channel_token(self, channel_id: str) -> str | None:
+        async with async_session() as db:
+            ch = await db.get(TelegramChannel, _to_uuid(channel_id))
+            if ch is None:
+                return None
+            try:
+                return decrypt_secret(ch.bot_token_enc)
+            except InvalidToken:
+                return None
+
+    async def _send_followup(self, channel_id: str, chat_id, text: str) -> None:
+        """Send a short confirmation back into the chat through the
+        guarded send wrapper so it respects the per-chat rate limit.
+        Errors are logged but never bubble up to the caller."""
+        async with async_session() as db:
+            ch = await db.get(TelegramChannel, _to_uuid(channel_id))
+            if ch is None:
+                return
+            try:
+                token = decrypt_secret(ch.bot_token_enc)
+            except InvalidToken:
+                return
+            qps = float(ch.rate_limit_per_chat_qps or 1.0)
+            burst = int(ch.rate_limit_per_chat_burst or 3)
+        try:
+            await send_message_guarded(
+                token=token,
+                channel_id=_to_uuid(channel_id),
+                chat_id=chat_id,
+                text=text,
+                qps=qps,
+                burst=burst,
+                dedupe_window_seconds=0,
+                parse_mode="HTML",
+            )
+        except TelegramError as exc:
+            logger.debug("telegram followup send failed. %s", exc)
+        except Exception:
+            logger.debug("telegram followup send raised", exc_info=True)
+
+    async def _do_link_cluster(
+        self, cluster_id_raw, cluster_kind: str, person_choice,
+    ) -> tuple[str, dict]:
+        """Handle "Same as <Name>" + Skip button presses on a cluster
+        naming prompt. ``person_choice`` is either a UUID string or
+        the literal 'skip' for the dismissal button."""
+        if not cluster_id_raw or cluster_kind not in ("face", "body"):
+            return ("Invalid cluster prompt.", _markup_disabled("⚠ Invalid"))
+        try:
+            cluster_id = _to_uuid(cluster_id_raw)
+        except Exception:
+            return ("Invalid cluster id.", _markup_disabled("⚠ Invalid"))
+
+        async with async_session() as db:
+            if cluster_kind == "face":
+                cluster = await db.get(FaceCluster, cluster_id)
+            else:
+                cluster = await db.get(BodyCluster, cluster_id)
+            if cluster is None:
+                return ("Cluster no longer exists.", _markup_disabled("⚠ Gone"))
+            if cluster.status != "pending":
+                # Concurrency. Another presser won the race. Tell the
+                # second user but don't overwrite the existing link.
+                existing_name = "someone"
+                if cluster.person_id is not None:
+                    person = await db.get(Person, cluster.person_id)
+                    if person is not None:
+                        existing_name = person.display_name
+                return (
+                    f"Already named by {existing_name}.",
+                    _markup_disabled(f"✓ {existing_name}"),
+                )
+
+            if person_choice == "skip" or person_choice is None:
+                cluster.status = "ignored"
+                # Best-effort dialog cleanup so a stray text reply
+                # doesn't try to name an ignored cluster.
+                from sqlalchemy import delete as _delete
+                await db.execute(
+                    _delete(TelegramDialog).where(
+                        TelegramDialog.context.op("->>")("cluster_id") == str(cluster_id)
+                    )
+                )
+                await db.commit()
+                return ("OK, ignored for now.", _markup_disabled("Skipped"))
+
+            try:
+                person_id = _to_uuid(person_choice)
+            except Exception:
+                return ("Invalid person id.", _markup_disabled("⚠ Invalid"))
+            person = await db.get(Person, person_id)
+            if person is None:
+                return ("That person no longer exists.", _markup_disabled("⚠ Gone"))
+
+            cluster.person_id = person.id
+            cluster.status = "named"
+            if cluster_kind == "body":
+                cluster.confidence = "confirmed"
+            from sqlalchemy import delete as _delete
+            await db.execute(
+                _delete(TelegramDialog).where(
+                    TelegramDialog.context.op("->>")("cluster_id") == str(cluster_id)
+                )
+            )
+            await db.commit()
+            link_name = person.display_name
+
+        return (
+            f"Linked to {link_name}.",
+            _markup_disabled(f"✓ Linked to {link_name}"),
+        )
+
+    async def _do_open_name_dialog(
+        self,
+        channel_id: str,
+        chat_id,
+        message_id,
+        cluster_id_raw,
+        cluster_kind: str,
+    ) -> tuple[str, dict | None]:
+        """User tapped "Name as...". Bump the dialog row's expiry +
+        attach the user as the driver so the next text reply lands.
+        Returns no markup change because the original photo's buttons
+        stay useful (the user may still tap Skip).
+        """
+        from datetime import datetime, timezone, timedelta
+
+        if not cluster_id_raw or cluster_kind not in ("face", "body"):
+            return ("Invalid cluster prompt.", None)
+        try:
+            cluster_id = _to_uuid(cluster_id_raw)
+        except Exception:
+            return ("Invalid cluster id.", None)
+
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(minutes=15)
+        channel_uuid = _to_uuid(channel_id)
+        async with async_session() as db:
+            result = await db.execute(
+                select(TelegramDialog)
+                .where(TelegramDialog.channel_id == channel_uuid)
+                .where(TelegramDialog.chat_id == str(chat_id))
+                .where(TelegramDialog.awaiting == "name_input")
+                .order_by(TelegramDialog.created_at.desc())
+                .limit(1)
+            )
+            dialog = result.scalars().first()
+            if dialog is None:
+                # Initiator never persisted one (e.g. dialog was
+                # cleaned up) – recreate so the user's reply is
+                # actually consumed.
+                dialog = TelegramDialog(
+                    channel_id=channel_uuid,
+                    chat_id=str(chat_id),
+                    kind=f"name_{cluster_kind}_cluster",
+                    context={"cluster_id": str(cluster_id), "kind": cluster_kind},
+                    awaiting="name_input",
+                    last_message_id=int(message_id) if message_id else None,
+                    expires_at=expires_at,
+                )
+                db.add(dialog)
+            else:
+                dialog.expires_at = expires_at
+                dialog.context = {"cluster_id": str(cluster_id), "kind": cluster_kind}
+                dialog.kind = f"name_{cluster_kind}_cluster"
+            await db.commit()
+
+        return (
+            "Reply with the name (next 15 min).",
+            None,
+        )
+
+    async def _do_record_yn(self, event_id, yes: bool) -> tuple[str, dict]:
+        """Phase 4 stretch. Stash a yes/no answer onto the event as a
+        note + return a confirmation. Wiring the answer back into a
+        rule's follow-up action chain is left for a follow-up commit
+        because it requires a Rule.actions descriptor change that
+        bleeds into the rule builder UI.
+        """
+        if event_id is None:
+            return ("This prompt is missing an event id.", _markup_disabled("⚠ Invalid"))
+        label = "Yes" if yes else "No"
+        async with async_session() as db:
+            event = await db.get(Event, event_id)
+            if event is None:
+                return ("Event no longer exists.", _markup_disabled("⚠ Gone"))
+            note = EventNote(
+                event_id=event_id,
+                source="telegram",
+                text=label,
+            )
+            db.add(note)
+            await db.commit()
+        return (f"Recorded. {label}", _markup_disabled(f"✓ {label}"))
 
     async def _try_pair(self, channel_id: str, message: dict, nonce: str) -> None:
         redis = await self._redis_client()

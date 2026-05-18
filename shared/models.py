@@ -215,6 +215,10 @@ class FaceCluster(Base):
     auto_label_number: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True)  # "Unknown 645"
     appearance_description: Mapped[str | None] = mapped_column(Text, nullable=True)  # VLM short demographics/clothing
     appearance_description_status: Mapped[str] = mapped_column(String(16), default="pending")  # pending, done, failed
+    # Phase 4. Stamped once we DM a household admin asking them to name
+    # this cluster. Stays null until then so the cluster-naming
+    # initiator can lock-step against it without re-prompting.
+    naming_prompted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class FaceClusterSample(Base):
@@ -261,6 +265,8 @@ class BodyCluster(Base):
     confidence: Mapped[str] = mapped_column(String(16), default="tentative", nullable=False)
     auto_label_number: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True)
     appearance_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Phase 4. Mirrors FaceCluster.naming_prompted_at.
+    naming_prompted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class BodyClusterSample(Base):
@@ -784,6 +790,13 @@ class TelegramChannel(Base):
     rate_limit_per_chat_qps: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
     rate_limit_per_chat_burst: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     dedupe_window_seconds: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # Phase 4. Household sharing. When true, every user can pick this
+    # channel in their rule builder + receive alerts on it. Ownership
+    # (token, delete, edit token) stays with user_id. share_permissions
+    # is 'use' (others can pick it) or 'use_and_test' (others can also
+    # fire the test endpoint).
+    shared_with_household: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    share_permissions: Mapped[str] = mapped_column(String(16), default="use", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -813,4 +826,64 @@ class TelegramOutboxDedupe(Base):
     hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class EventNote(Base):
+    """Free-text annotation on an Event.
+
+    Phase 4. Replying to a Telegram alert lands here with
+    ``source='telegram'``. The web UI also exposes POST + DELETE on
+    these rows under /api/events/{id}/notes. Deleting is a hard delete;
+    notes are cheap and the source row's history (Event) is preserved.
+    """
+
+    __tablename__ = "event_notes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    author_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    source: Mapped[str] = mapped_column(String(16), nullable=False)  # telegram | web | api
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    telegram_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class TelegramDialog(Base):
+    """Multi-step in-chat state machine state.
+
+    Phase 4. Drives face/body cluster naming over Telegram and the
+    optional ask-yes-no prompt. One open dialog per (channel_id,
+    chat_id, awaiting) is the contract enforced by the lookup index.
+    ``context`` carries the kind-specific payload (cluster_id,
+    event_id, etc.). ``expires_at`` is bumped on each user reply and
+    a stale dialog is treated as terminal.
+    """
+
+    __tablename__ = "telegram_dialogs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    channel_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("telegram_channels.id", ondelete="CASCADE"), nullable=False
+    )
+    chat_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    context: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    awaiting: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

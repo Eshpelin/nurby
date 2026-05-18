@@ -844,6 +844,118 @@ def recode_bytes_lowq(data: bytes) -> bytes | None:
         return None
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Phase 4. message-index store + setMessageReaction wrapper.
+# ──────────────────────────────────────────────────────────────────────────
+#
+# Reply-to-add-note + cluster-naming initiator both need a way to look
+# up "what was this Telegram message about" given (channel_id,
+# message_id). We park that in Redis with a 7-day TTL so a user
+# replying to an alert from yesterday still resolves cleanly. Redis is
+# already used for offset + pair keys so no new infra.
+
+_MSG_INDEX_KEY_PREFIX = "nurby:tg_msg:"
+_MSG_INDEX_TTL_SECONDS = 7 * 24 * 3600
+
+
+def _msg_index_key(channel_id, message_id: int) -> str:
+    return f"{_MSG_INDEX_KEY_PREFIX}{channel_id}:{int(message_id)}"
+
+
+async def store_message_index(channel_id, message_id: int, payload: dict) -> None:
+    """Persist a small JSON blob keyed by (channel_id, message_id).
+
+    Used by the action executor right after a successful send so a
+    later reply to that message can resolve the originating Event /
+    Rule / dialog. Failures are logged but never raise, matching the
+    "alert delivery is more important than provenance" rule that
+    governs the whole notify stack.
+    """
+    try:
+        import redis.asyncio as aioredis  # local import. avoids cycle
+
+        client = aioredis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            await client.set(
+                _msg_index_key(channel_id, message_id),
+                json.dumps(payload, default=str),
+                ex=_MSG_INDEX_TTL_SECONDS,
+            )
+        finally:
+            try:
+                await client.aclose()
+            except Exception:
+                pass
+    except Exception:
+        logger.debug(
+            "telegram store_message_index failed channel=%s msg=%s",
+            channel_id, message_id, exc_info=True,
+        )
+
+
+async def get_message_index(channel_id, message_id: int) -> dict | None:
+    """Read the index entry persisted by :func:`store_message_index`.
+
+    Returns ``None`` on miss or any read failure. Callers must handle
+    the miss because TTL expiry, restart-without-redis, or an alert
+    that pre-dated Phase 4 will all show up as missing entries.
+    """
+    try:
+        import redis.asyncio as aioredis
+
+        client = aioredis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            raw = await client.get(_msg_index_key(channel_id, message_id))
+        finally:
+            try:
+                await client.aclose()
+            except Exception:
+                pass
+        if not raw:
+            return None
+        try:
+            obj = json.loads(raw)
+            return obj if isinstance(obj, dict) else None
+        except Exception:
+            return None
+    except Exception:
+        logger.debug(
+            "telegram get_message_index failed channel=%s msg=%s",
+            channel_id, message_id, exc_info=True,
+        )
+        return None
+
+
+async def set_message_reaction(
+    token: str,
+    chat_id: str | int,
+    message_id: int,
+    emoji: str = "\U0001F44D",
+) -> bool:
+    """Best-effort wrapper around Telegram's setMessageReaction.
+
+    Returns True when the API returned ok=true, False otherwise. Some
+    bots (notably those that haven't set the privacy mode) get
+    BAD_REQUEST. We degrade silently because reactions are a polish
+    detail; the textual "Noted." confirmation is the actual ack.
+    """
+    payload = {
+        "chat_id": chat_id,
+        "message_id": int(message_id),
+        "reaction": [{"type": "emoji", "emoji": emoji}],
+        "is_big": False,
+    }
+    try:
+        await TelegramAPI._post(token, "setMessageReaction", payload, timeout=8.0)
+        return True
+    except TelegramError as exc:
+        logger.debug("setMessageReaction failed. %s", exc.description)
+        return False
+    except Exception:
+        logger.debug("setMessageReaction raised", exc_info=True)
+        return False
+
+
 __all__ = [
     "TelegramAPI",
     "TelegramError",
@@ -866,4 +978,8 @@ __all__ = [
     "RATE_LIMITED_DROPPED",
     "MEDIA_OFF_SENTINEL",
     "RATE_LIMIT_MAX_WAIT_SECONDS",
+    # Phase 4.
+    "store_message_index",
+    "get_message_index",
+    "set_message_reaction",
 ]

@@ -68,7 +68,20 @@ def _pairing_status(ch: TelegramChannel) -> str:
     return "paired"
 
 
-def _serialize(ch: TelegramChannel) -> dict:
+def _serialize(
+    ch: TelegramChannel,
+    *,
+    current_user_id: uuid.UUID | None = None,
+    owner_display_name: str | None = None,
+) -> dict:
+    """Project a TelegramChannel row into the response shape.
+
+    ``current_user_id`` flips the computed ``owned_by_me`` flag. The
+    Phase 4 list endpoint passes it so a non-owner sees a shared
+    channel with ``owned_by_me=false`` and a friendly
+    ``owner_display_name``.
+    """
+    owned = current_user_id is None or ch.user_id == current_user_id
     return {
         "id": ch.id,
         "label": ch.label,
@@ -90,6 +103,11 @@ def _serialize(ch: TelegramChannel) -> dict:
         "rate_limit_per_chat_qps": float(getattr(ch, "rate_limit_per_chat_qps", 1.0) or 1.0),
         "rate_limit_per_chat_burst": int(getattr(ch, "rate_limit_per_chat_burst", 3) or 3),
         "dedupe_window_seconds": int(getattr(ch, "dedupe_window_seconds", 30) or 30),
+        # Phase 4 household sharing fields.
+        "shared_with_household": bool(getattr(ch, "shared_with_household", False)),
+        "share_permissions": getattr(ch, "share_permissions", None) or "use",
+        "owned_by_me": owned,
+        "owner_display_name": owner_display_name,
         "created_at": ch.created_at,
     }
 
@@ -97,10 +115,46 @@ def _serialize(ch: TelegramChannel) -> dict:
 async def _load_channel(
     channel_id: uuid.UUID, user: User, db: AsyncSession
 ) -> TelegramChannel:
+    """Load a channel that the caller owns. Used for owner-only ops."""
     ch = await db.get(TelegramChannel, channel_id)
     if ch is None or ch.user_id != user.id:
         raise HTTPException(status_code=404, detail="Channel not found")
     return ch
+
+
+async def _load_channel_visible(
+    channel_id: uuid.UUID, user: User, db: AsyncSession
+) -> TelegramChannel:
+    """Load a channel the caller can at least see (owner OR household).
+
+    Returns the row when the caller is the owner OR the channel has
+    ``shared_with_household=True``. 404 otherwise so we don't leak
+    existence to outsiders.
+    """
+    ch = await db.get(TelegramChannel, channel_id)
+    if ch is None:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    if ch.user_id == user.id:
+        return ch
+    if bool(getattr(ch, "shared_with_household", False)):
+        return ch
+    raise HTTPException(status_code=404, detail="Channel not found")
+
+
+async def _owner_name_map(
+    db: AsyncSession, owner_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """Resolve user_id -> display_name for the channel list response."""
+    if not owner_ids:
+        return {}
+    unique = list({uid for uid in owner_ids if uid is not None})
+    if not unique:
+        return {}
+    result = await db.execute(select(User).where(User.id.in_(unique)))
+    out: dict[uuid.UUID, str] = {}
+    for u in result.scalars().all():
+        out[u.id] = u.display_name or u.email or "someone"
+    return out
 
 
 @router.post("/channels", response_model=TelegramChannelResponse, status_code=201)
@@ -131,7 +185,7 @@ async def create_channel(
     db.add(ch)
     await db.commit()
     await db.refresh(ch)
-    return _serialize(ch)
+    return _serialize(ch, current_user_id=current_user.id)
 
 
 @router.get("/channels", response_model=list[TelegramChannelResponse])
@@ -139,12 +193,35 @@ async def list_channels(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Owned + household-shared channels.
+
+    Phase 4. A user sees their own channels plus any other user's
+    channel that flipped ``shared_with_household`` on. The response
+    distinguishes owner via ``owned_by_me`` so the UI can hide
+    destructive controls for non-owners.
+    """
+    from sqlalchemy import or_ as sa_or
+
     result = await db.execute(
         select(TelegramChannel)
-        .where(TelegramChannel.user_id == current_user.id)
+        .where(
+            sa_or(
+                TelegramChannel.user_id == current_user.id,
+                TelegramChannel.shared_with_household.is_(True),
+            )
+        )
         .order_by(TelegramChannel.created_at.desc())
     )
-    return [_serialize(c) for c in result.scalars().all()]
+    rows = list(result.scalars().all())
+    name_map = await _owner_name_map(db, [c.user_id for c in rows])
+    return [
+        _serialize(
+            c,
+            current_user_id=current_user.id,
+            owner_display_name=name_map.get(c.user_id),
+        )
+        for c in rows
+    ]
 
 
 @router.get("/channels/{channel_id}", response_model=TelegramChannelResponse)
@@ -153,8 +230,13 @@ async def get_channel(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    ch = await _load_channel(channel_id, current_user, db)
-    return _serialize(ch)
+    ch = await _load_channel_visible(channel_id, current_user, db)
+    name_map = await _owner_name_map(db, [ch.user_id])
+    return _serialize(
+        ch,
+        current_user_id=current_user.id,
+        owner_display_name=name_map.get(ch.user_id),
+    )
 
 
 @router.patch("/channels/{channel_id}", response_model=TelegramChannelResponse)
@@ -188,9 +270,15 @@ async def update_channel(
         ch.rate_limit_per_chat_burst = int(data["rate_limit_per_chat_burst"])
     if "dedupe_window_seconds" in data and data["dedupe_window_seconds"] is not None:
         ch.dedupe_window_seconds = int(data["dedupe_window_seconds"])
+    # Phase 4 household sharing. Owner-only because _load_channel
+    # already enforces ownership.
+    if "shared_with_household" in data and data["shared_with_household"] is not None:
+        ch.shared_with_household = bool(data["shared_with_household"])
+    if "share_permissions" in data and data["share_permissions"] is not None:
+        ch.share_permissions = data["share_permissions"]
     await db.commit()
     await db.refresh(ch)
-    return _serialize(ch)
+    return _serialize(ch, current_user_id=current_user.id)
 
 
 @router.delete("/channels/{channel_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -199,7 +287,18 @@ async def delete_channel(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    ch = await _load_channel(channel_id, current_user, db)
+    # Phase 4. Deleting a shared channel by a non-owner is forbidden
+    # so a household member can't quietly nuke another user's bot.
+    ch = await db.get(TelegramChannel, channel_id)
+    if ch is None:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    if ch.user_id != current_user.id:
+        if bool(getattr(ch, "shared_with_household", False)):
+            raise HTTPException(
+                status_code=403,
+                detail="Only the owner can delete a shared channel. Ask them to revoke sharing first.",
+            )
+        raise HTTPException(status_code=404, detail="Channel not found")
     await db.delete(ch)
     await db.commit()
 
@@ -207,16 +306,20 @@ async def delete_channel(
 @router.get("/channels/{channel_id}/rule-usage")
 async def channel_rule_usage(
     channel_id: uuid.UUID,
+    scope: str = "all",
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Count rules whose action chain references this channel. Used by
-    the frontend delete confirmation so the user can see the blast
-    radius before tearing down a paired chat.
+    """Count rules whose action chain references this channel.
+
+    Phase 4. Household-shared channels can be picked by any user so
+    the default count crosses owners. ``?scope=mine`` keeps the
+    pre-Phase-4 behaviour for callers that want to gate their own
+    rule-builder UI. Rules don't carry an owner column today so the
+    scope filter is a no-op until ownership lands; documented here so
+    the endpoint contract is stable.
     """
-    ch = await _load_channel(channel_id, current_user, db)
-    # Rules aren't owner-scoped today (Phase 1 limitation). We scan all
-    # rules for any `telegram` action targeting this channel id.
+    ch = await _load_channel_visible(channel_id, current_user, db)
     target = str(ch.id)
     result = await db.execute(select(Rule))
     count = 0
@@ -230,7 +333,7 @@ async def channel_rule_usage(
             if isinstance(a, dict) and a.get("type") == "telegram" and str(a.get("channel_id") or "") == target:
                 count += 1
                 break
-    return {"rule_count": count}
+    return {"rule_count": count, "scope": scope}
 
 
 @router.post("/channels/{channel_id}/pair-init", response_model=TelegramPairInitResponse)
@@ -269,7 +372,21 @@ async def test_channel(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    ch = await _load_channel(channel_id, current_user, db)
+    # Phase 4. Test send respects share_permissions. Owner always
+    # allowed. Non-owner allowed only when the channel is shared AND
+    # share_permissions='use_and_test'. Plain 'use' channels can be
+    # referenced in rules but not test-fired by non-owners.
+    ch = await db.get(TelegramChannel, channel_id)
+    if ch is None:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    if ch.user_id != current_user.id:
+        if not bool(getattr(ch, "shared_with_household", False)):
+            raise HTTPException(status_code=404, detail="Channel not found")
+        if (getattr(ch, "share_permissions", None) or "use") != "use_and_test":
+            raise HTTPException(
+                status_code=403,
+                detail="The owner of this channel has not granted test-send permission.",
+            )
     if not ch.chat_id or not ch.paired_at:
         raise HTTPException(status_code=400, detail="Channel is not paired yet")
     try:
