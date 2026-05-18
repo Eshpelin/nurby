@@ -373,6 +373,50 @@ _VALID_ACTION_TYPES = {
     "webhook", "api_call", "broadcast", "notify", "email", "vlm_call", "telegram",
 }
 
+# Phase 2 inline-button actions. Kept in lockstep with
+# ``services.events.actions.TELEGRAM_BUTTON_ACTIONS`` and the
+# ``_CALLBACK_ACTIONS`` tuple in the Telegram poller. Phase 4 will add
+# variants like ``name_cluster``; extending this set is the documented
+# extension point.
+_VALID_TELEGRAM_BUTTON_ACTIONS = {"ack", "mute_event", "snooze_rule", "open"}
+_MAX_TELEGRAM_BUTTONS = 4
+
+
+def _validate_telegram_buttons(buttons, idx: int) -> None:
+    if buttons is None:
+        return
+    if not isinstance(buttons, list):
+        raise ValueError(f"action[{idx}] buttons must be a list")
+    if len(buttons) > _MAX_TELEGRAM_BUTTONS:
+        raise ValueError(
+            f"action[{idx}] has {len(buttons)} buttons; max {_MAX_TELEGRAM_BUTTONS}"
+        )
+    for b_idx, btn in enumerate(buttons):
+        if not isinstance(btn, dict):
+            raise ValueError(f"action[{idx}].buttons[{b_idx}] must be an object")
+        label = btn.get("label")
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError(f"action[{idx}].buttons[{b_idx}].label is required")
+        b_action = btn.get("action")
+        if b_action not in _VALID_TELEGRAM_BUTTON_ACTIONS:
+            raise ValueError(
+                f"action[{idx}].buttons[{b_idx}].action must be one of "
+                f"{sorted(_VALID_TELEGRAM_BUTTON_ACTIONS)}"
+            )
+        if b_action == "open":
+            url = btn.get("url")
+            if not isinstance(url, str) or not url.strip():
+                raise ValueError(
+                    f"action[{idx}].buttons[{b_idx}].url is required for action='open'"
+                )
+        if b_action in ("mute_event", "snooze_rule"):
+            dur = btn.get("duration_seconds")
+            if dur is not None:
+                if not isinstance(dur, int) or isinstance(dur, bool) or dur <= 0:
+                    raise ValueError(
+                        f"action[{idx}].buttons[{b_idx}].duration_seconds must be a positive int"
+                    )
+
 
 def _validate_action_chain(actions):
     """Static checks. each action is a dict, has a known type, and
@@ -392,6 +436,9 @@ def _validate_action_chain(actions):
         a_type = action.get("type")
         if a_type not in _VALID_ACTION_TYPES:
             raise ValueError(f"action[{idx}] has unknown type '{a_type}'")
+
+        if a_type == "telegram":
+            _validate_telegram_buttons(action.get("buttons"), idx)
 
         refs = collect_refs(action)
         for ref in refs:
@@ -463,6 +510,12 @@ class EventResponse(BaseModel):
     action_status: str
     action_error: str | None
     action_type: str | None
+    # Phase 2 ack fields. ``acked_via`` is one of ``telegram``,
+    # ``web``, ``api`` (or null if not yet acknowledged).
+    acked_at: datetime | None = None
+    acked_by_user_id: uuid.UUID | None = None
+    acked_via: str | None = None
+    muted_until: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -648,6 +701,13 @@ class TelegramChannelUpdate(BaseModel):
     label: str | None = Field(default=None, min_length=1, max_length=64)
     default_silent: bool | None = None
     enabled: bool | None = None
+    # Phase 3 settings. delivery_mode is NOT settable here. use the
+    # dedicated /delivery endpoint so we can call setWebhook /
+    # deleteWebhook atomically.
+    media_quality: str | None = Field(default=None, pattern=r"^(off|low|high)$")
+    rate_limit_per_chat_qps: float | None = Field(default=None, ge=0.05, le=10.0)
+    rate_limit_per_chat_burst: int | None = Field(default=None, ge=1, le=20)
+    dedupe_window_seconds: int | None = Field(default=None, ge=0, le=600)
 
 
 class TelegramChannelResponse(BaseModel):
@@ -664,9 +724,42 @@ class TelegramChannelResponse(BaseModel):
     last_test_ok: bool | None
     last_error: str | None
     pairing_status: str  # pending | paired | blocked | disabled | error
+    # Phase 3 fields. webhook_secret is intentionally never exposed.
+    delivery_mode: str  # long_poll | webhook
+    webhook_url: str | None
+    media_quality: str  # off | low | high
+    rate_limit_per_chat_qps: float
+    rate_limit_per_chat_burst: int
+    dedupe_window_seconds: int
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class TelegramDeliveryUpdate(BaseModel):
+    """Request body for POST /channels/{id}/delivery."""
+
+    mode: str = Field(pattern=r"^(long_poll|webhook)$")
+    # When flipping webhook -> long_poll. ask Telegram to discard
+    # pending updates instead of replaying them on the next poll.
+    drop_pending_updates: bool = False
+
+
+class TelegramWebhookInfoResponse(BaseModel):
+    """Passthrough of Telegram getWebhookInfo for the settings UI."""
+
+    url: str | None = None
+    has_custom_certificate: bool = False
+    pending_update_count: int = 0
+    last_error_date: int | None = None
+    last_error_message: str | None = None
+    ip_address: str | None = None
+    max_connections: int | None = None
+    # Backend reachability check. None means we did not attempt the
+    # probe. true/false reflects an HTTP GET from the backend to
+    # ``public_base_url + /api/health``.
+    backend_reachable: bool | None = None
+    backend_probe_error: str | None = None
 
 
 class TelegramPairInitResponse(BaseModel):

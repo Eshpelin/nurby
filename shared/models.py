@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -345,6 +345,12 @@ class Rule(Base):
     conditions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     actions: Mapped[dict] = mapped_column(JSON, nullable=False)
     cooldown_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    # Rule-level snooze. Set by the "Snooze rule 1h" Telegram button.
+    # While now() < snoozed_until, the telegram action skips all sends
+    # for this rule regardless of event/camera. Cleared by ops or by
+    # the user from the rule builder. Mute and snooze are deliberately
+    # separate. snooze is rule-wide, mute is per-event. Snooze wins.
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -362,6 +368,21 @@ class Event(Base):
     action_status: Mapped[str] = mapped_column(String(16), default="pending")
     action_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     action_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Phase 2 ack triad. Set in lockstep by either the Telegram callback
+    # handler or POST /api/events/{id}/ack. ``acked_via`` is one of
+    # ``telegram``, ``web``, or ``api``. Pre-existing ``acknowledged_at``
+    # is left in place for back-compat with old admin tooling but new
+    # code should read ``acked_at``.
+    acked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acked_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    acked_via: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Per-event mute. Set by the "Mute 10 min" Telegram button. While
+    # now() < muted_until, downstream Telegram re-sends for the
+    # rule+camera combo of this event are skipped. Snooze wins over
+    # mute because snooze is rule-wide.
+    muted_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Provider(Base):
@@ -746,9 +767,50 @@ class TelegramChannel(Base):
     last_test_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_test_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     last_error: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Phase 3. delivery + rate limit + dedupe knobs.
+    # delivery_mode is "long_poll" or "webhook". When "webhook" the
+    # poller manager skips this channel and updates arrive via
+    # POST /api/telegram/webhook/{channel_id}.
+    delivery_mode: Mapped[str] = mapped_column(String(16), default="long_poll", nullable=False)
+    # webhook_secret is a hex random shared secret. Telegram echoes it
+    # in the X-Telegram-Bot-Api-Secret-Token header on every delivery
+    # so we can reject forged updates. Functions like a per-channel
+    # API key. never returned in API responses after creation.
+    webhook_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Cached for display + setWebhook idempotency.
+    webhook_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # off | low (re-encode to 720p JPEG q70) | high (original bytes).
+    media_quality: Mapped[str] = mapped_column(String(16), default="high", nullable=False)
+    rate_limit_per_chat_qps: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+    rate_limit_per_chat_burst: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    dedupe_window_seconds: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class TelegramOutboxDedupe(Base):
+    """Short-lived ledger of outbound message hashes.
+
+    Used by :class:`services.notify.telegram.DedupeStore` to suppress
+    sending the same content to the same chat repeatedly within a
+    user-configurable window. Rows older than an hour are pruned
+    opportunistically on insert. an explicit retention worker is not
+    needed because traffic naturally garbage-collects.
+    """
+
+    __tablename__ = "telegram_outbox_dedupe"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    channel_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("telegram_channels.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )

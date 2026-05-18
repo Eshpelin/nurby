@@ -24,7 +24,7 @@ import uuid
 from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,8 +37,10 @@ from shared.schemas import (
     TelegramChannelCreate,
     TelegramChannelResponse,
     TelegramChannelUpdate,
+    TelegramDeliveryUpdate,
     TelegramPairInitResponse,
     TelegramTestResponse,
+    TelegramWebhookInfoResponse,
 )
 from services.notify.telegram import TelegramAPI, TelegramError
 from services.notify.telegram_poller import store_pair_nonce
@@ -81,6 +83,13 @@ def _serialize(ch: TelegramChannel) -> dict:
         "last_test_ok": ch.last_test_ok,
         "last_error": ch.last_error,
         "pairing_status": _pairing_status(ch),
+        # Phase 3 fields. webhook_secret is intentionally never exposed.
+        "delivery_mode": getattr(ch, "delivery_mode", None) or "long_poll",
+        "webhook_url": getattr(ch, "webhook_url", None),
+        "media_quality": getattr(ch, "media_quality", None) or "high",
+        "rate_limit_per_chat_qps": float(getattr(ch, "rate_limit_per_chat_qps", 1.0) or 1.0),
+        "rate_limit_per_chat_burst": int(getattr(ch, "rate_limit_per_chat_burst", 3) or 3),
+        "dedupe_window_seconds": int(getattr(ch, "dedupe_window_seconds", 30) or 30),
         "created_at": ch.created_at,
     }
 
@@ -168,6 +177,17 @@ async def update_channel(
         # successful send confirms; a failed test will reset it).
         if ch.enabled and ch.last_test_ok is False:
             ch.last_error = None
+    # Phase 3 settings. delivery_mode is NOT writable here. it lives
+    # behind POST /channels/{id}/delivery so we can call setWebhook /
+    # deleteWebhook atomically with the row update.
+    if "media_quality" in data and data["media_quality"] is not None:
+        ch.media_quality = data["media_quality"]
+    if "rate_limit_per_chat_qps" in data and data["rate_limit_per_chat_qps"] is not None:
+        ch.rate_limit_per_chat_qps = float(data["rate_limit_per_chat_qps"])
+    if "rate_limit_per_chat_burst" in data and data["rate_limit_per_chat_burst"] is not None:
+        ch.rate_limit_per_chat_burst = int(data["rate_limit_per_chat_burst"])
+    if "dedupe_window_seconds" in data and data["dedupe_window_seconds"] is not None:
+        ch.dedupe_window_seconds = int(data["dedupe_window_seconds"])
     await db.commit()
     await db.refresh(ch)
     return _serialize(ch)
@@ -280,6 +300,276 @@ async def test_channel(
             pass
         await db.commit()
         return TelegramTestResponse(ok=False, error=exc.description)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3. delivery-mode switch + webhook receiver + diagnostics.
+# ---------------------------------------------------------------------------
+
+
+# In-process leaky bucket for the webhook receiver. 50 webhooks/sec
+# per channel returns 429 thereafter. Prevents abuse if the secret
+# leaks AND someone wants to DoS a single channel; per-channel scope
+# means a noisy channel cannot starve the others.
+_WEBHOOK_RATE_PER_CHANNEL_PER_SEC = 50
+_webhook_buckets: dict[str, list[float]] = {}
+
+
+def _webhook_allow(channel_id: str) -> bool:
+    import time as _time
+
+    now = _time.monotonic()
+    arr = _webhook_buckets.setdefault(channel_id, [])
+    # Drop samples older than 1 second.
+    cutoff = now - 1.0
+    while arr and arr[0] < cutoff:
+        arr.pop(0)
+    if len(arr) >= _WEBHOOK_RATE_PER_CHANNEL_PER_SEC:
+        return False
+    arr.append(now)
+    return True
+
+
+def _webhook_url_for(channel_id) -> str | None:
+    base = (settings.public_base_url or "").strip().rstrip("/")
+    if not base:
+        return None
+    return f"{base}/api/telegram/webhook/{channel_id}"
+
+
+async def _probe_backend_health() -> tuple[bool | None, str | None]:
+    """HTTP-GET ``public_base_url/api/health`` from this process so we
+    can surface "Backend not reachable" before the user finds out the
+    hard way (Telegram silently shelving updates).
+    """
+    base = (settings.public_base_url or "").strip().rstrip("/")
+    if not base:
+        return None, "public_base_url is not set"
+    import httpx as _httpx
+
+    try:
+        async with _httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{base}/api/health")
+        if resp.status_code >= 400:
+            return False, f"GET {base}/api/health returned {resp.status_code}"
+        return True, None
+    except Exception as exc:  # pragma: no cover. network-shape
+        return False, f"GET {base}/api/health failed. {exc}"
+
+
+@router.post("/channels/{channel_id}/delivery", response_model=TelegramChannelResponse)
+async def set_delivery_mode(
+    channel_id: uuid.UUID,
+    body: TelegramDeliveryUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Atomically flip a channel between long-poll and webhook
+    delivery. On switch to webhook we mint a fresh secret + call
+    setWebhook; on switch back we call deleteWebhook so updates start
+    flowing through getUpdates again on the next poll-manager
+    reconcile.
+    """
+    ch = await _load_channel(channel_id, current_user, db)
+    try:
+        token = decrypt_secret(ch.bot_token_enc)
+    except InvalidToken:
+        raise HTTPException(status_code=500, detail="Bot token is unreadable. Replace it and re-pair.")
+
+    if body.mode == "long_poll":
+        try:
+            await TelegramAPI.delete_webhook(
+                token, drop_pending_updates=bool(body.drop_pending_updates)
+            )
+        except TelegramError as exc:
+            # Surface but don't fail. the row flip is what matters; the
+            # next poller reconcile clears any leftover webhook anyway.
+            logger.warning("deleteWebhook failed for channel=%s. %s", ch.id, exc)
+        ch.delivery_mode = "long_poll"
+        ch.webhook_secret = None
+        ch.webhook_url = None
+        await db.commit()
+        await db.refresh(ch)
+        return _serialize(ch)
+
+    # mode == "webhook"
+    if not settings.public_base_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Set public base URL in Settings → System before enabling webhook delivery.",
+        )
+
+    new_secret = secrets.token_hex(32)
+    url = _webhook_url_for(ch.id)
+    assert url is not None  # guarded by public_base_url check above
+    try:
+        await TelegramAPI.set_webhook(
+            token,
+            url=url,
+            secret=new_secret,
+            allowed_updates=["message", "callback_query"],
+        )
+    except TelegramError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=exc.description or "Telegram rejected the webhook URL",
+        )
+
+    ch.delivery_mode = "webhook"
+    ch.webhook_secret = new_secret
+    ch.webhook_url = url
+    await db.commit()
+    await db.refresh(ch)
+    return _serialize(ch)
+
+
+@router.get("/channels/{channel_id}/webhook-info", response_model=TelegramWebhookInfoResponse)
+async def get_webhook_info_route(
+    channel_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Passthrough of Telegram getWebhookInfo + a backend reachability
+    probe so the settings UI can render the full diagnostic state
+    (URL, pending updates, last error, backend probe)."""
+    ch = await _load_channel(channel_id, current_user, db)
+    try:
+        token = decrypt_secret(ch.bot_token_enc)
+    except InvalidToken:
+        raise HTTPException(status_code=500, detail="Bot token is unreadable. Replace it and re-pair.")
+
+    try:
+        info = await TelegramAPI.get_webhook_info(token)
+    except TelegramError as exc:
+        raise HTTPException(status_code=400, detail=exc.description or "Telegram getWebhookInfo failed")
+
+    backend_ok, backend_err = await _probe_backend_health()
+
+    return {
+        "url": info.get("url") or None,
+        "has_custom_certificate": bool(info.get("has_custom_certificate") or False),
+        "pending_update_count": int(info.get("pending_update_count") or 0),
+        "last_error_date": info.get("last_error_date"),
+        "last_error_message": info.get("last_error_message"),
+        "ip_address": info.get("ip_address"),
+        "max_connections": info.get("max_connections"),
+        "backend_reachable": backend_ok,
+        "backend_probe_error": backend_err,
+    }
+
+
+@router.post("/channels/{channel_id}/refresh-webhook", response_model=TelegramChannelResponse)
+async def refresh_webhook(
+    channel_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-call setWebhook for a channel already in webhook mode. used
+    after public_base_url changes so the registered URL catches up.
+    Re-uses the existing secret to avoid invalidating in-flight
+    deliveries Telegram may be retrying."""
+    ch = await _load_channel(channel_id, current_user, db)
+    if (ch.delivery_mode or "long_poll") != "webhook":
+        raise HTTPException(status_code=400, detail="Channel is not in webhook mode.")
+    if not settings.public_base_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Set public base URL in Settings → System before refreshing webhook.",
+        )
+    try:
+        token = decrypt_secret(ch.bot_token_enc)
+    except InvalidToken:
+        raise HTTPException(status_code=500, detail="Bot token is unreadable. Replace it and re-pair.")
+
+    new_url = _webhook_url_for(ch.id)
+    secret = ch.webhook_secret or secrets.token_hex(32)
+    try:
+        await TelegramAPI.set_webhook(
+            token,
+            url=new_url,
+            secret=secret,
+            allowed_updates=["message", "callback_query"],
+        )
+    except TelegramError as exc:
+        raise HTTPException(status_code=400, detail=exc.description or "setWebhook failed")
+    ch.webhook_url = new_url
+    ch.webhook_secret = secret
+    await db.commit()
+    await db.refresh(ch)
+    return _serialize(ch)
+
+
+@router.post("/webhook/{channel_id}")
+async def telegram_webhook_receiver(
+    channel_id: uuid.UUID,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    """Telegram delivers updates here when ``delivery_mode='webhook'``.
+
+    Verifies the shared secret in the
+    ``X-Telegram-Bot-Api-Secret-Token`` header with a constant-time
+    compare. Returns 200 immediately and processes the update in a
+    BackgroundTask so we never block more than ~100ms (Telegram
+    retries on slow webhook responses, which would cascade into
+    duplicate deliveries).
+
+    Rate-limited to 50 updates/sec per channel as an abuse guard.
+    """
+    # Local imports keep the routes module's top-level import set
+    # focused. Request/BackgroundTasks are FastAPI dependencies but
+    # we want to avoid a top-level reshuffle.
+    import hmac as _hmac
+
+    async with async_session() as db:
+        ch = await db.get(TelegramChannel, channel_id)
+        if ch is None or not ch.webhook_secret:
+            # Don't reveal whether the channel exists. Telegram never
+            # exposes 401 to end-users either; a constant 401 makes
+            # secret-guessing useless.
+            raise HTTPException(status_code=401, detail="unauthorized")
+        expected = ch.webhook_secret
+
+    supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token") or ""
+    if not _hmac.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+    if not _webhook_allow(str(channel_id)):
+        raise HTTPException(status_code=429, detail="webhook rate limit")
+
+    try:
+        update = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid json")
+    if not isinstance(update, dict):
+        raise HTTPException(status_code=400, detail="invalid update shape")
+
+    # Defer the actual dispatch so Telegram gets the 200 OK fast.
+    from services.notify.telegram_poller import handle_update as _handle_update
+
+    background_tasks.add_task(_handle_update, str(channel_id), update)
+    return {"ok": True}
+
+
+@router.post("/channels/{channel_id}/test-webhook-delivery")
+async def test_webhook_delivery(
+    channel_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Self-test that loops back through our own public URL.
+
+    We HTTP-GET ``public_base_url + /api/health`` from this backend
+    to confirm the public URL is reachable from outside. setWebhook
+    can succeed against an unreachable URL (Telegram doesn't probe)
+    so this round-trip is the only honest reachability check we can
+    do without staging a real /start.
+    """
+    ch = await _load_channel(channel_id, current_user, db)
+    if (ch.delivery_mode or "long_poll") != "webhook":
+        raise HTTPException(status_code=400, detail="Channel is not in webhook mode.")
+    ok, err = await _probe_backend_health()
+    return {"ok": bool(ok), "error": err, "probed_url": (settings.public_base_url or "").rstrip("/") + "/api/health" if settings.public_base_url else None}
 
 
 def _escape_html(value: str) -> str:

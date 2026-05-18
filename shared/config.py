@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     recap_timeout_seconds: float = 20.0
     recap_default_provider: str = ""  # openai|anthropic|google|ollama. empty = auto
 
+    # Public base URL of this backend. Used by Phase 2's {event_url}
+    # template variable in notification bodies AND by Phase 3's
+    # Telegram webhook delivery mode (setWebhook target). Must not
+    # have a trailing slash. None disables features that require an
+    # externally-reachable URL.
+    public_base_url: str | None = None
+
     # SMTP settings for email notifications
     smtp_host: str = ""
     smtp_port: int = 587

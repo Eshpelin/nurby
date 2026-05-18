@@ -33,7 +33,26 @@ export interface TelegramChannel {
   last_test_ok: boolean | null;
   last_error: string | null;
   pairing_status: "pending" | "paired" | "blocked" | "disabled" | "error";
+  // Phase 3 fields. webhook_secret is intentionally never sent over the wire.
+  delivery_mode: "long_poll" | "webhook";
+  webhook_url: string | null;
+  media_quality: "off" | "low" | "high";
+  rate_limit_per_chat_qps: number;
+  rate_limit_per_chat_burst: number;
+  dedupe_window_seconds: number;
   created_at: string;
+}
+
+interface WebhookInfo {
+  url: string | null;
+  has_custom_certificate: boolean;
+  pending_update_count: number;
+  last_error_date: number | null;
+  last_error_message: string | null;
+  ip_address: string | null;
+  max_connections: number | null;
+  backend_reachable: boolean | null;
+  backend_probe_error: string | null;
 }
 
 interface PairInit {
@@ -181,6 +200,77 @@ function ChannelRow({
   const [deleting, setDeleting] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [ruleCount, setRuleCount] = useState<number | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [webhookInfo, setWebhookInfo] = useState<WebhookInfo | null>(null);
+  const [webhookBusy, setWebhookBusy] = useState(false);
+  const [webhookError, setWebhookError] = useState<string | null>(null);
+  // Local sliders. So the user can drag without firing a PATCH per tick.
+  // Committed onMouseUp / onBlur.
+  const [qpsLocal, setQpsLocal] = useState<number>(channel.rate_limit_per_chat_qps);
+  const [burstLocal, setBurstLocal] = useState<number>(channel.rate_limit_per_chat_burst);
+  const [dedupeLocal, setDedupeLocal] = useState<number>(channel.dedupe_window_seconds);
+  useEffect(() => {
+    setQpsLocal(channel.rate_limit_per_chat_qps);
+    setBurstLocal(channel.rate_limit_per_chat_burst);
+    setDedupeLocal(channel.dedupe_window_seconds);
+  }, [channel.rate_limit_per_chat_qps, channel.rate_limit_per_chat_burst, channel.dedupe_window_seconds]);
+
+  const fetchWebhookInfo = useCallback(async () => {
+    try {
+      const res = await authFetch(`/api/telegram/channels/${channel.id}/webhook-info`);
+      if (res.ok) {
+        setWebhookInfo(await res.json());
+      } else {
+        const body = await res.json().catch(() => null);
+        setWebhookError(body?.detail || "Could not fetch webhook info");
+      }
+    } catch {
+      setWebhookError("Network error fetching webhook info");
+    }
+  }, [authFetch, channel.id]);
+
+  useEffect(() => {
+    if (!showAdvanced) return;
+    void fetchWebhookInfo();
+  }, [showAdvanced, fetchWebhookInfo]);
+
+  const switchDelivery = async (mode: "long_poll" | "webhook", dropPending = false) => {
+    setWebhookBusy(true);
+    setWebhookError(null);
+    try {
+      const res = await authFetch(`/api/telegram/channels/${channel.id}/delivery`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode, drop_pending_updates: dropPending }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setWebhookError(body?.detail || `Switch failed (${res.status}).`);
+      } else {
+        onChange();
+        await fetchWebhookInfo();
+      }
+    } catch {
+      setWebhookError("Network error.");
+    } finally {
+      setWebhookBusy(false);
+    }
+  };
+
+  const requestSwitchToLongPoll = async () => {
+    // Phase 3 UX note. If Telegram has pending updates queued, ask
+    // before discarding them so the user doesn't lose acks/pairs in
+    // flight.
+    const pending = webhookInfo?.pending_update_count ?? 0;
+    let drop = false;
+    if (pending > 0) {
+      drop = window.confirm(
+        `Telegram has ${pending} unprocessed update${pending === 1 ? "" : "s"} queued.\n\n` +
+          `OK = discard them and switch.\nCancel = keep them and switch anyway (they'll replay on next poll).`,
+      );
+    }
+    await switchDelivery("long_poll", drop);
+  };
 
   const patch = async (patchBody: Partial<TelegramChannel>) => {
     setSavingField(Object.keys(patchBody)[0] || null);
@@ -252,6 +342,16 @@ function ChannelRow({
             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${pill.cls}`}>
               {pill.label}
             </span>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                channel.delivery_mode === "webhook"
+                  ? "bg-blue-500/15 text-blue-400 border-blue-500/30"
+                  : "bg-muted text-muted-foreground border-border"
+              }`}
+              title={channel.delivery_mode === "webhook" ? "Updates arrive via webhook POST" : "Long-polling getUpdates"}
+            >
+              {channel.delivery_mode === "webhook" ? "Webhook" : "Long poll"}
+            </span>
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
             {channel.bot_username ? <span>@{channel.bot_username}</span> : <span>(no bot)</span>}
@@ -321,6 +421,14 @@ function ChannelRow({
 
           <button
             type="button"
+            onClick={() => setShowAdvanced((s) => !s)}
+            className="px-2 py-1 text-[11px] rounded border border-border hover:bg-muted text-muted-foreground"
+          >
+            {showAdvanced ? "Hide advanced" : "Advanced"}
+          </button>
+
+          <button
+            type="button"
             onClick={askDelete}
             className="px-2 py-1 text-[11px] rounded border border-border hover:bg-muted text-muted-foreground"
           >
@@ -328,6 +436,225 @@ function ChannelRow({
           </button>
         </div>
       </div>
+
+      {showAdvanced && (
+        <div className="mt-3 border-t border-border pt-3 space-y-4">
+          {/* Delivery mode */}
+          <div>
+            <div className="text-xs font-medium mb-1.5">Delivery mode</div>
+            <div className="flex gap-2">
+              <label className="flex items-center gap-1.5 text-[11px] cursor-pointer">
+                <input
+                  type="radio"
+                  name={`delivery-${channel.id}`}
+                  checked={channel.delivery_mode === "long_poll"}
+                  disabled={webhookBusy}
+                  onChange={() => void requestSwitchToLongPoll()}
+                  className="accent-green-500"
+                />
+                Long poll (default)
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] cursor-pointer">
+                <input
+                  type="radio"
+                  name={`delivery-${channel.id}`}
+                  checked={channel.delivery_mode === "webhook"}
+                  disabled={webhookBusy}
+                  onChange={() => void switchDelivery("webhook")}
+                  className="accent-blue-500"
+                />
+                Webhook (requires public URL)
+              </label>
+            </div>
+            {webhookError && (
+              <div className="mt-1.5 text-[11px] text-red-400 bg-red-500/10 border border-red-500/30 rounded px-2 py-1">
+                {webhookError}
+                {/not set/i.test(webhookError) && (
+                  <>
+                    {" "}
+                    <a href="/settings#system" className="underline">
+                      Open System settings
+                    </a>
+                  </>
+                )}
+              </div>
+            )}
+            {channel.delivery_mode === "webhook" && webhookInfo && (
+              <div className="mt-2 text-[11px] text-muted-foreground space-y-1">
+                <div>
+                  URL.{" "}
+                  <span className="font-mono text-foreground/90 break-all">
+                    {webhookInfo.url || "(not registered)"}
+                  </span>
+                </div>
+                <div>
+                  Pending updates.{" "}
+                  <span
+                    className={
+                      webhookInfo.pending_update_count > 0
+                        ? "text-amber-400 font-medium"
+                        : "text-foreground/80"
+                    }
+                  >
+                    {webhookInfo.pending_update_count}
+                  </span>
+                </div>
+                {webhookInfo.pending_update_count > 0 && (
+                  <div className="text-amber-400">
+                    Telegram has {webhookInfo.pending_update_count} unprocessed updates.
+                    Check your public URL is reachable.
+                  </div>
+                )}
+                {webhookInfo.last_error_message && (
+                  <div className="text-red-400">
+                    Last error. {webhookInfo.last_error_message}
+                  </div>
+                )}
+                {webhookInfo.backend_reachable === false && (
+                  <div className="text-red-400">
+                    Backend not reachable at the public URL.{" "}
+                    {webhookInfo.backend_probe_error || "Webhook delivery will silently fail."}
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => void fetchWebhookInfo()}
+                    className="px-2 py-0.5 text-[10px] rounded border border-border hover:bg-muted"
+                  >
+                    Refresh
+                  </button>
+                  <button
+                    type="button"
+                    disabled={webhookBusy}
+                    onClick={async () => {
+                      setWebhookBusy(true);
+                      try {
+                        await authFetch(
+                          `/api/telegram/channels/${channel.id}/refresh-webhook`,
+                          { method: "POST" },
+                        );
+                        await fetchWebhookInfo();
+                        onChange();
+                      } finally {
+                        setWebhookBusy(false);
+                      }
+                    }}
+                    className="px-2 py-0.5 text-[10px] rounded border border-border hover:bg-muted disabled:opacity-50"
+                  >
+                    Refresh URL with Telegram
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const res = await authFetch(
+                        `/api/telegram/channels/${channel.id}/test-webhook-delivery`,
+                        { method: "POST" },
+                      );
+                      const data = await res.json().catch(() => null);
+                      if (data?.ok) {
+                        alert(`Backend reachable at ${data?.probed_url || "public URL"}.`);
+                      } else {
+                        alert(`Backend NOT reachable. ${data?.error || "unknown error"}`);
+                      }
+                    }}
+                    className="px-2 py-0.5 text-[10px] rounded border border-border hover:bg-muted"
+                  >
+                    Test webhook delivery
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Media quality */}
+          <div>
+            <div className="text-xs font-medium mb-1.5">Media quality</div>
+            <div className="flex gap-2">
+              {(["off", "low", "high"] as const).map((q) => (
+                <label key={q} className="flex items-center gap-1.5 text-[11px] cursor-pointer">
+                  <input
+                    type="radio"
+                    name={`media-${channel.id}`}
+                    checked={channel.media_quality === q}
+                    disabled={savingField !== null}
+                    onChange={() => void patch({ media_quality: q } as Partial<TelegramChannel>)}
+                    className="accent-green-500"
+                  />
+                  {q === "off" ? "Off" : q === "low" ? "Low (720p, q70)" : "High (original)"}
+                </label>
+              ))}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-1">
+              Low reduces bandwidth for outdoor cameras. Off sends text alerts only.
+            </div>
+          </div>
+
+          {/* Per-chat rate limit */}
+          <div>
+            <div className="text-xs font-medium mb-1.5">Per-chat rate limit</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[11px] text-muted-foreground mb-0.5">
+                  QPS. <span className="text-foreground/90">{qpsLocal.toFixed(2)}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0.2}
+                  max={5.0}
+                  step={0.1}
+                  value={qpsLocal}
+                  onChange={(e) => setQpsLocal(parseFloat(e.target.value))}
+                  onMouseUp={() => void patch({ rate_limit_per_chat_qps: qpsLocal } as Partial<TelegramChannel>)}
+                  onTouchEnd={() => void patch({ rate_limit_per_chat_qps: qpsLocal } as Partial<TelegramChannel>)}
+                  className="w-full accent-green-500"
+                />
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground mb-0.5">
+                  Burst. <span className="text-foreground/90">{burstLocal}</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={burstLocal}
+                  onChange={(e) => setBurstLocal(parseInt(e.target.value, 10))}
+                  onMouseUp={() => void patch({ rate_limit_per_chat_burst: burstLocal } as Partial<TelegramChannel>)}
+                  onTouchEnd={() => void patch({ rate_limit_per_chat_burst: burstLocal } as Partial<TelegramChannel>)}
+                  className="w-full accent-green-500"
+                />
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-1">
+              Telegram limits group chats to 20 messages/minute. Tighten if you hit blockages.
+            </div>
+          </div>
+
+          {/* Dedupe window */}
+          <div>
+            <div className="text-xs font-medium mb-1.5">
+              Dedupe window.{" "}
+              <span className="text-muted-foreground font-normal">{dedupeLocal}s</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={300}
+              step={5}
+              value={dedupeLocal}
+              onChange={(e) => setDedupeLocal(parseInt(e.target.value, 10))}
+              onMouseUp={() => void patch({ dedupe_window_seconds: dedupeLocal } as Partial<TelegramChannel>)}
+              onTouchEnd={() => void patch({ dedupe_window_seconds: dedupeLocal } as Partial<TelegramChannel>)}
+              className="w-full accent-green-500"
+            />
+            <div className="text-[11px] text-muted-foreground mt-1">
+              Suppresses identical messages within this window so a chatty rule doesn't spam.
+            </div>
+          </div>
+        </div>
+      )}
 
       {testResult && (
         <div
