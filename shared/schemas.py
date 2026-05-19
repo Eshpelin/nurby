@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 # ── Camera schemas ──
@@ -794,6 +794,41 @@ class StorageResponse(BaseModel):
     cameras: list[CameraStorageStats]
     total_recording_bytes: int
     total_observations: int
+
+
+class SystemSettingsResponse(BaseModel):
+    """Safe-to-expose subset of runtime flags. Mirrors the whitelist
+    in ``services/api/routes/system.py``."""
+
+    system_timezone: str | None = None
+    journey_idle_seconds: int = 300
+    daily_digest_enabled: bool = True
+    daily_digest_hour: int = 7
+    nudity_blur: bool = True
+    audio_events: bool = True
+    body_reid_tentative_decay_days: int = 14
+    cluster_naming_min_sightings: int = 3
+    public_base_url: str | None = None
+    rules_cooldown_backend: str = "redis"
+
+
+class SystemSettingsUpdate(BaseModel):
+    """Partial-update body for PATCH /api/system/settings. Pydantic's
+    ``extra=forbid`` makes the route reject typos and stray keys with
+    a 422 before our whitelist check even runs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    system_timezone: str | None = None
+    journey_idle_seconds: int | None = Field(default=None, ge=1, le=24 * 3600)
+    daily_digest_enabled: bool | None = None
+    daily_digest_hour: int | None = Field(default=None, ge=0, le=23)
+    nudity_blur: bool | None = None
+    audio_events: bool | None = None
+    body_reid_tentative_decay_days: int | None = Field(default=None, ge=0, le=3650)
+    cluster_naming_min_sightings: int | None = Field(default=None, ge=0, le=1000)
+    public_base_url: str | None = None
+    rules_cooldown_backend: str | None = Field(default=None, pattern="^(redis|memory)$")
 
 
 # -- User schemas --

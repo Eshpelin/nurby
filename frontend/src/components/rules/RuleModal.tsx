@@ -74,6 +74,10 @@ export function RuleModal({
   const [cooldownCustom, setCooldownCustom] = useState(false);
 
   const [systemTz, setSystemTz] = useState<string>("");
+  // True when systemTz came from the browser because the backend
+  // had no system_timezone configured (or the fetch failed). Drives
+  // the inline hint in ConditionsSection.
+  const [systemTzIsFallback, setSystemTzIsFallback] = useState(false);
 
   const [cardErrors, setCardErrors] = useState<Record<number, string>>({});
 
@@ -130,11 +134,25 @@ export function RuleModal({
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled) return;
-        const tz = data?.system_timezone || data?.timezone;
-        setSystemTz(typeof tz === "string" && tz ? tz : browserTz);
+        // The endpoint returns 200 with `{ system_timezone: string | null, ... }`.
+        // null = no override configured. fall back to the browser tz
+        // and surface the hint so the operator knows to set one.
+        const tz = data?.system_timezone;
+        if (typeof tz === "string" && tz) {
+          setSystemTz(tz);
+          setSystemTzIsFallback(false);
+        } else {
+          setSystemTz(browserTz);
+          setSystemTzIsFallback(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setSystemTz(browserTz);
+        // 401 or network error. fall back silently so the modal
+        // still works for non-admins or offline cases.
+        if (!cancelled) {
+          setSystemTz(browserTz);
+          setSystemTzIsFallback(false);
+        }
       });
     return () => { cancelled = true; };
   }, [open, authFetch]);
@@ -470,6 +488,7 @@ export function RuleModal({
           <ConditionsSection
             cameras={cameras}
             systemTz={systemTz}
+            systemTzIsFallback={systemTzIsFallback}
             formCondCameras={state.formCondCameras}
             setFormCondCameras={setterFor("formCondCameras")}
             formScheduleMode={state.formScheduleMode}

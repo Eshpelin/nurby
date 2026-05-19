@@ -5,6 +5,10 @@ import type { Camera } from "./types";
 export interface ConditionsSectionProps {
   cameras: Camera[];
   systemTz?: string;
+  // True when systemTz was filled from the browser because the
+  // backend has no system_timezone configured. Shows a hint nudging
+  // the operator to set one in Settings.
+  systemTzIsFallback?: boolean;
   formCondCameras: string[];
   setFormCondCameras: (v: string[]) => void;
   formScheduleMode: "always" | "custom";
@@ -23,6 +27,7 @@ export function ConditionsSection(props: ConditionsSectionProps) {
   const {
     cameras,
     systemTz,
+    systemTzIsFallback,
     formCondCameras,
     setFormCondCameras,
     formScheduleMode,
@@ -163,6 +168,11 @@ export function ConditionsSection(props: ConditionsSectionProps) {
                   title="Change in Settings → System."
                 >
                   Schedule evaluated in {systemTz}.
+                </div>
+              )}
+              {systemTzIsFallback && (
+                <div className="mt-1 text-[10px] text-amber-400">
+                  No system timezone set. Falling back to your browser&apos;s. Set one in Settings → System.
                 </div>
               )}
             </div>

@@ -1,6 +1,6 @@
 import time
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,13 @@ from shared.config import settings
 from shared.database import get_db
 from shared.email import send_email
 from shared.models import Camera, Observation, Recording, User
-from shared.schemas import CameraStorageStats, StorageResponse, SystemStatus
+from shared.schemas import (
+    CameraStorageStats,
+    StorageResponse,
+    SystemSettingsResponse,
+    SystemSettingsUpdate,
+    SystemStatus,
+)
 from services.perception.vlm_queue import get_vlm_stats
 
 router = APIRouter()
@@ -240,37 +246,83 @@ async def test_smtp(body: SmtpTestRequest, _current_user: User = Depends(require
 
 
 # ── Runtime app settings ──
+#
+# Whitelisted, safe-to-expose runtime flags. GET is auth-only and
+# returns the merged value (override falls through to DEFAULTS). PATCH
+# is admin-only and accepts a partial body. Any unknown key on PATCH
+# is rejected with 400 so the surface stays narrow and audit-friendly.
 
-class AppSettingsBody(BaseModel):
-    nudity_blur: bool | None = None
-    nudity_blur_min_score: float | None = None
-    # Cross-camera journey idle window. Formerly hardcoded.
-    journey_idle_seconds: int | None = None
-    # Daily household digest.
-    daily_digest_enabled: bool | None = None
-    daily_digest_hour: int | None = None
-    daily_digest_provider_id: str | None = None
-    # IANA timezone string (e.g. "America/Los_Angeles"). Anchors
-    # daily digest hour selection.
-    system_timezone: str | None = None
-    # PANNs audio tagging master switch (already in app_settings).
-    audio_events: bool | None = None
-
-
-@router.get("/settings")
-async def get_settings(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """Current runtime flags merged with defaults."""
-    from shared.app_settings import get_all_settings
-    return await get_all_settings(db)
+SETTINGS_WHITELIST: tuple[str, ...] = (
+    "system_timezone",
+    "journey_idle_seconds",
+    "daily_digest_enabled",
+    "daily_digest_hour",
+    "nudity_blur",
+    "audio_events",
+    "body_reid_tentative_decay_days",
+    "cluster_naming_min_sightings",
+    "public_base_url",
+    "rules_cooldown_backend",
+)
 
 
-@router.patch("/settings")
-async def patch_settings(body: AppSettingsBody, _current_user: User = Depends(require_admin)):
-    """Update a subset of runtime flags."""
-    from shared.app_settings import set_setting, get_all_settings
-    from shared.database import async_session
+def _validate_timezone(tz: str | None) -> None:
+    """Reject anything zoneinfo can't resolve. None is allowed and
+    means "use the host locale" (consumed downstream)."""
+    if tz is None:
+        return
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError, KeyError):
+        raise HTTPException(status_code=400, detail="Invalid timezone")
+
+
+async def _read_whitelisted_settings() -> dict[str, object]:
+    """Pull every whitelisted key via ``get_setting`` so DEFAULTS act
+    as the floor. ``public_base_url`` additionally falls back to the
+    env config so deployments that only configured the env still see
+    a value from the API."""
+    from shared.app_settings import DEFAULTS, get_setting
+
+    out: dict[str, object] = {}
+    for key in SETTINGS_WHITELIST:
+        val = await get_setting(key, DEFAULTS.get(key))
+        if key == "public_base_url" and not val:
+            val = settings.public_base_url or None
+        out[key] = val
+    return out
+
+
+@router.get("/settings", response_model=SystemSettingsResponse)
+async def get_settings(_current_user: User = Depends(get_current_user)) -> SystemSettingsResponse:
+    """Return the whitelisted runtime flags. Auth required."""
+    data = await _read_whitelisted_settings()
+    return SystemSettingsResponse(**data)
+
+
+@router.patch("/settings", response_model=SystemSettingsResponse)
+async def patch_settings(
+    body: SystemSettingsUpdate,
+    _current_user: User = Depends(require_admin),
+) -> SystemSettingsResponse:
+    """Admin-only partial update. Unknown keys 400. Bad timezone 400."""
+    from shared.app_settings import set_setting
+
+    # Pydantic already rejects unknown keys (model_config below), but
+    # we also defensively check against the whitelist so a future
+    # accidental schema addition can't widen the public surface.
     updates = body.model_dump(exclude_unset=True)
+    for key in updates:
+        if key not in SETTINGS_WHITELIST:
+            raise HTTPException(status_code=400, detail="Unknown setting key")
+
+    if "system_timezone" in updates:
+        _validate_timezone(updates["system_timezone"])
+
     for k, v in updates.items():
         await set_setting(k, v)
-    async with async_session() as db:
-        return await get_all_settings(db)
+
+    data = await _read_whitelisted_settings()
+    return SystemSettingsResponse(**data)
