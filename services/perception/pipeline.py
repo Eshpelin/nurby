@@ -69,6 +69,14 @@ class PerceptionPipeline:
 
         r = await self._get_redis()
 
+        # Start rule-invalidation pubsub listener so rule edits in the
+        # API process flush this engine's cache within ~1s instead of
+        # waiting on the 30s passive reload.
+        try:
+            await self._rule_engine.start_invalidation_listener()
+        except Exception:
+            logger.exception("rule invalidation listener failed to start")
+
         # Create consumer group if it doesn't exist
         try:
             await r.xgroup_create(REDIS_STREAM_KEY, CONSUMER_GROUP, id="0", mkstream=True)
