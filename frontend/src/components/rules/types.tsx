@@ -516,6 +516,413 @@ export interface RuleReplayResponse {
   samples: RuleReplaySample[];
 }
 
+// ── Multi-action chain. ActionDraft union ──
+//
+// Each card in the action chain editor holds a draft of one action.
+// Drafts are converted to the dict shape the backend expects at submit
+// time (see `draftToDict` in this file and `buildPayload` in RuleModal).
+// The discriminated union here mirrors the action shapes accepted by
+// `_validate_action_chain` in `shared/schemas.py`.
+
+export type ActionType =
+  | "webhook"
+  | "api_call"
+  | "broadcast"
+  | "notify"
+  | "email"
+  | "telegram"
+  | "vlm_call";
+
+export interface WebhookDraft {
+  type: "webhook" | "api_call";
+  url: string;
+  method: string;
+  authType: string;
+  authToken: string;
+  authHeader: string;
+  authKey: string;
+  authUser: string;
+  authPass: string;
+  useCustomPayload: boolean;
+  payloadTemplate: string;
+  payloadError: string;
+}
+export interface BroadcastDraft {
+  type: "broadcast";
+  useCustomPayload: boolean;
+  payloadTemplate: string;
+  payloadError: string;
+}
+export interface NotifyDraft {
+  type: "notify";
+  message: string;
+  severity: string;
+}
+export interface EmailDraft {
+  type: "email";
+  to: string;
+  subject: string;
+  body: string;
+}
+export interface TelegramDraft {
+  type: "telegram";
+  channelId: string;
+  template: string;
+  silent: boolean;
+  includeThumbnail: boolean;
+  buttons: TelegramButton[];
+  defaultsApplied: boolean;
+}
+export interface VlmCallDraft {
+  type: "vlm_call";
+  provider: string;
+  model: string;
+  system: string;
+  prompt: string;
+  attachImage: boolean;
+  useSchema: boolean;
+  schemaText: string;
+  output: string;
+  maxRetries: string;
+  onError: string;
+  timeoutMs: string;
+}
+
+export type ActionDraft =
+  | WebhookDraft
+  | BroadcastDraft
+  | NotifyDraft
+  | EmailDraft
+  | TelegramDraft
+  | VlmCallDraft;
+
+export const MAX_ACTIONS_PER_RULE = 8;
+
+// Build a fresh draft for a given type. Used when adding a new action
+// card or switching a card's type. Drafts must be self-contained so a
+// type switch fully wipes prior-type fields.
+export function defaultDraftForType(type: ActionType): ActionDraft {
+  switch (type) {
+    case "webhook":
+    case "api_call":
+      return {
+        type,
+        url: "",
+        method: "POST",
+        authType: "none",
+        authToken: "",
+        authHeader: "X-API-Key",
+        authKey: "",
+        authUser: "",
+        authPass: "",
+        useCustomPayload: false,
+        payloadTemplate: "",
+        payloadError: "",
+      };
+    case "broadcast":
+      return { type, useCustomPayload: false, payloadTemplate: "", payloadError: "" };
+    case "notify":
+      return { type, message: "", severity: "info" };
+    case "email":
+      return { type, to: "", subject: "", body: "" };
+    case "telegram":
+      return {
+        type,
+        channelId: "",
+        template: TELEGRAM_DEFAULT_TEMPLATE,
+        silent: false,
+        includeThumbnail: false,
+        buttons: [...TELEGRAM_DEFAULT_BUTTONS],
+        defaultsApplied: true,
+      };
+    case "vlm_call":
+      return {
+        type,
+        provider: "openai",
+        model: "gpt-4o-mini",
+        system: "{{defaults.system}}",
+        prompt: "Describe the scene. Focus on people, vehicles, and unusual activity.",
+        attachImage: true,
+        useSchema: false,
+        schemaText: VLM_SCHEMA_PRESETS.threat,
+        output: "result",
+        maxRetries: "1",
+        onError: "continue",
+        timeoutMs: "20000",
+      };
+  }
+}
+
+// Hydrate a draft from a backend action dict (one entry from
+// rule.actions). Mirrors the field mapping that lived in the old
+// RuleModal hydrate block.
+export function dictToDraft(raw: Record<string, unknown>): ActionDraft {
+  const t = (raw?.type as ActionType) || "notify";
+  switch (t) {
+    case "webhook":
+    case "api_call": {
+      const auth = (raw.auth as Record<string, string> | undefined) || undefined;
+      const pt = raw.payload_template;
+      return {
+        type: t,
+        url: (raw.url as string) || "",
+        method: (raw.method as string) || "POST",
+        authType: auth?.type || "none",
+        authToken: auth?.token || "",
+        authHeader: auth?.header || "X-API-Key",
+        authKey: auth?.key || "",
+        authUser: auth?.username || "",
+        authPass: auth?.password || "",
+        useCustomPayload: !!pt,
+        payloadTemplate: pt ? JSON.stringify(pt, null, 2) : "",
+        payloadError: "",
+      };
+    }
+    case "broadcast": {
+      const pt = raw.payload_template;
+      return {
+        type: "broadcast",
+        useCustomPayload: !!pt,
+        payloadTemplate: pt ? JSON.stringify(pt, null, 2) : "",
+        payloadError: "",
+      };
+    }
+    case "notify":
+      return {
+        type: "notify",
+        message: (raw.message as string) || "",
+        severity: (raw.severity as string) || "info",
+      };
+    case "email":
+      return {
+        type: "email",
+        to: (raw.to as string) || "",
+        subject: (raw.subject as string) || "",
+        body: (raw.body as string) || "",
+      };
+    case "telegram": {
+      const existingButtons = Array.isArray(raw.buttons)
+        ? (raw.buttons as TelegramButton[])
+        : [];
+      return {
+        type: "telegram",
+        channelId: (raw.channel_id as string) || "",
+        template: (raw.template as string) || TELEGRAM_DEFAULT_TEMPLATE,
+        silent: Boolean(raw.silent),
+        includeThumbnail: Boolean(raw.include_thumbnail),
+        buttons: existingButtons,
+        defaultsApplied: true,
+      };
+    }
+    case "vlm_call":
+      return {
+        type: "vlm_call",
+        provider: (raw.provider as string) || "openai",
+        model: (raw.model as string) || "gpt-4o-mini",
+        system: (raw.system as string) || "{{defaults.system}}",
+        prompt:
+          (raw.prompt as string) ||
+          "Describe the scene. Focus on people, vehicles, and unusual activity.",
+        attachImage: raw.attach_image !== false,
+        useSchema: !!raw.response_schema,
+        schemaText: raw.response_schema
+          ? JSON.stringify(raw.response_schema, null, 2)
+          : VLM_SCHEMA_PRESETS.threat,
+        output: (raw.output as string) || "result",
+        maxRetries: raw.max_retries != null ? String(raw.max_retries) : "1",
+        onError: (raw.on_error as string) || "continue",
+        timeoutMs: raw.timeout_ms != null ? String(raw.timeout_ms) : "20000",
+      };
+  }
+  // Fallback. unknown type. coerce to notify.
+  return defaultDraftForType("notify");
+}
+
+// Convert a draft to the dict shape posted to the backend.
+export function draftToDict(d: ActionDraft): Record<string, unknown> {
+  if (d.type === "webhook" || d.type === "api_call") {
+    const action: Record<string, unknown> = { type: d.type, url: d.url };
+    if (d.type === "api_call") action.method = d.method;
+    if (d.authType !== "none") {
+      const auth: Record<string, string> = { type: d.authType };
+      if (d.authType === "bearer") auth.token = d.authToken;
+      if (d.authType === "api_key") {
+        auth.header = d.authHeader;
+        auth.key = d.authKey;
+      }
+      if (d.authType === "basic") {
+        auth.username = d.authUser;
+        auth.password = d.authPass;
+      }
+      action.auth = auth;
+    }
+    if (d.useCustomPayload && d.payloadTemplate.trim()) {
+      try {
+        action.payload_template = JSON.parse(d.payloadTemplate);
+      } catch {
+        /* caught at submit validation */
+      }
+    }
+    return action;
+  }
+  if (d.type === "broadcast") {
+    const action: Record<string, unknown> = { type: "broadcast" };
+    if (d.useCustomPayload && d.payloadTemplate.trim()) {
+      try {
+        action.payload_template = JSON.parse(d.payloadTemplate);
+      } catch {
+        /* caught at submit validation */
+      }
+    }
+    return action;
+  }
+  if (d.type === "notify") {
+    return {
+      type: "notify",
+      message: d.message || "Rule '{rule_name}' triggered",
+      severity: d.severity,
+    };
+  }
+  if (d.type === "email") {
+    return {
+      type: "email",
+      to: d.to,
+      subject: d.subject || "Nurby alert. {{rule_name}}",
+      body: d.body || "Rule {{rule_name}} fired at {{timestamp}}",
+    };
+  }
+  if (d.type === "telegram") {
+    const action: Record<string, unknown> = {
+      type: "telegram",
+      channel_id: d.channelId,
+      template: d.template,
+      silent: d.silent,
+      include_thumbnail: d.includeThumbnail,
+    };
+    if (d.buttons.length > 0) {
+      action.buttons = d.buttons.map((b) => {
+        const out: Record<string, unknown> = { label: b.label, action: b.action };
+        if (b.action === "open") out.url = b.url || "{event_url}";
+        if (b.action === "mute_event" || b.action === "snooze_rule") {
+          if (b.duration_seconds && b.duration_seconds > 0) {
+            out.duration_seconds = b.duration_seconds;
+          }
+        }
+        return out;
+      });
+    }
+    return action;
+  }
+  if (d.type === "vlm_call") {
+    const action: Record<string, unknown> = {
+      type: "vlm_call",
+      provider: d.provider,
+      model: d.model,
+      system: d.system,
+      prompt: d.prompt,
+      attach_image: d.attachImage,
+      output: d.output || "result",
+      max_retries: parseInt(d.maxRetries) || 1,
+      on_error: d.onError,
+      timeout_ms: parseInt(d.timeoutMs) || 20000,
+    };
+    if (d.useSchema && d.schemaText.trim()) {
+      try {
+        action.response_schema = JSON.parse(d.schemaText);
+      } catch {
+        /* caught at submit */
+      }
+    }
+    return action;
+  }
+  // Unreachable. all union members handled above.
+  return { type: (d as ActionDraft).type };
+}
+
+// Regex mirrors services/events/templates.py `_TOKEN_RE`. Returns
+// the dotted paths inside every `{{name.path}}` token in a string.
+const VAR_TOKEN_RE = /\{\{\s*([a-zA-Z_][\w.]*)\s*\}\}/g;
+
+export function collectRefsFromValue(value: unknown): string[] {
+  const refs: string[] = [];
+  const walk = (v: unknown) => {
+    if (v == null) return;
+    if (typeof v === "string") {
+      let m: RegExpExecArray | null;
+      VAR_TOKEN_RE.lastIndex = 0;
+      while ((m = VAR_TOKEN_RE.exec(v))) refs.push(m[1]);
+      return;
+    }
+    if (Array.isArray(v)) {
+      for (const x of v) walk(x);
+      return;
+    }
+    if (typeof v === "object") {
+      for (const x of Object.values(v as Record<string, unknown>)) walk(x);
+    }
+  };
+  walk(value);
+  return refs;
+}
+
+// Walk the chain left-to-right. For each action, collect every
+// `{{vars.NAME.*}}` reference and reject if NAME was not declared as
+// an `output` by an earlier vlm_call. Mirrors the server-side check in
+// `_validate_action_chain`. Returns the index + message of the first
+// offending card, or null if the chain is clean.
+export function validateActionChainRefs(
+  drafts: ActionDraft[],
+): { index: number; message: string } | null {
+  const known = new Set<string>();
+  for (let i = 0; i < drafts.length; i++) {
+    const d = drafts[i];
+    const dict = draftToDict(d);
+    const refs = collectRefsFromValue(dict);
+    for (const ref of refs) {
+      if (!ref.startsWith("vars.")) continue;
+      const tail = ref.slice("vars.".length);
+      const name = tail.split(".", 1)[0];
+      if (!known.has(name)) {
+        return {
+          index: i,
+          message: `vars.${name} referenced before declaration`,
+        };
+      }
+    }
+    if (d.type === "vlm_call" && d.output) {
+      known.add(d.output);
+    }
+  }
+  return null;
+}
+
+// Available vars an action card at index `i` may reference. Used to
+// drive the "Insert var" dropdown. Pulled from prior vlm_call outputs.
+export function availableVarsBefore(
+  drafts: ActionDraft[],
+  index: number,
+): { name: string; keys: string[] }[] {
+  const out: { name: string; keys: string[] }[] = [];
+  for (let i = 0; i < index; i++) {
+    const d = drafts[i];
+    if (d.type !== "vlm_call" || !d.output) continue;
+    const keys: string[] = [];
+    if (d.useSchema && d.schemaText.trim()) {
+      try {
+        const schema = JSON.parse(d.schemaText);
+        const props = schema?.properties;
+        if (props && typeof props === "object") {
+          for (const k of Object.keys(props)) keys.push(k);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    out.push({ name: d.output, keys });
+  }
+  return out;
+}
+
 export function buildRuleSummary(rule: Rule, cameras: Camera[]): string {
   const cond = rule.conditions || {};
   const camIds = (cond.camera_ids as string[]) || (cond.camera_id ? [cond.camera_id as string] : []);
