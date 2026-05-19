@@ -54,20 +54,44 @@ logger = logging.getLogger("nurby.events.engine")
 
 
 class RuleEngine:
+    # Redis key scheme for cross-process cooldown state.
+    COOLDOWN_KEY_PREFIX = "nurby:rule_cooldown:"
+    # TTL buffer added on top of cooldown_seconds when writing the key.
+    COOLDOWN_TTL_BUFFER = 60
+    # In-process microcache window. Within this many seconds of a Redis
+    # read, the engine trusts its local copy and skips a roundtrip. Keeps
+    # the cooldown semantics tight for back-to-back evaluations from the
+    # same worker without spamming Redis.
+    COOLDOWN_MICROCACHE_SECONDS = 1.0
+
     def __init__(self):
         self._rules: list[Rule] = []
         self._last_load = 0.0
-        self._cooldowns: dict[uuid.UUID, float] = {}
+        # Microcache only. Authoritative cooldown state lives in Redis so
+        # it survives perception restarts and is shared across workers.
+        # Maps rule_id -> (cached_at_epoch, last_fired_epoch). Entries are
+        # only honored for COOLDOWN_MICROCACHE_SECONDS, after which the
+        # engine re-reads Redis. Note. epoch (time.time) not monotonic;
+        # monotonic is process-local and cannot be persisted.
+        self._cooldowns: dict[uuid.UUID, tuple[float, float]] = {}
         self._cache_ttl = 30  # reload rules every 30s
         # Per-(rule_id, track_id) entry timestamp for inline-geometry loiter rules.
         self._loiter_entry: dict[tuple[uuid.UUID, int], float] = {}
         # Pubsub invalidator. set when start_invalidation_listener is called.
         self._invalidate_stop: asyncio.Event | None = None
         self._invalidate_task: asyncio.Task | None = None
+        # Redis client for cooldown state. Lazy-initialized on first use.
+        self._cooldown_redis = None
+        self._cooldown_redis_failed = False
+        # Cached value of the rules_cooldown_backend app setting. Refreshed
+        # on the same cadence as the rules list.
+        self._cooldown_backend = "redis"
+        self._cooldown_backend_loaded_at = 0.0
 
     async def evaluate(self, observation_data: dict):
         """Evaluate an observation against all active rules."""
         await self._maybe_reload_rules()
+        await self._maybe_reload_cooldown_backend()
 
         # Resolve the household timezone once per tick. Day-of-week
         # and time-window checks pin against this zone so a 22:00 to
@@ -78,11 +102,14 @@ class RuleEngine:
             if not rule.enabled:
                 continue
 
-            # Check cooldown
-            now = time.monotonic()
-            last_fired = self._cooldowns.get(rule.id, 0)
-            if now - last_fired < rule.cooldown_seconds:
-                continue
+            # Check cooldown. cooldown_seconds=0 means no cooldown and
+            # skips all Redis traffic so chatty triggers (motion, etc.)
+            # do not generate per-keyframe roundtrips.
+            now = time.time()
+            if rule.cooldown_seconds and rule.cooldown_seconds > 0:
+                last_fired = await self._read_cooldown(rule.id)
+                if last_fired and (now - last_fired) < rule.cooldown_seconds:
+                    continue
 
             # Match trigger
             if not self._match_trigger(rule.trigger_pattern, observation_data, rule.id):
@@ -94,7 +121,8 @@ class RuleEngine:
 
             # Rule matched. Fire actions.
             logger.info("Rule '%s' triggered by observation", rule.name)
-            self._cooldowns[rule.id] = now
+            if rule.cooldown_seconds and rule.cooldown_seconds > 0:
+                await self._write_cooldown(rule.id, now, rule.cooldown_seconds)
 
             # Store event
             event_id = await self._store_event(
@@ -133,6 +161,100 @@ class RuleEngine:
             logger.debug("Loaded %d active rules", len(self._rules))
         except Exception:
             logger.exception("Failed to load rules")
+
+    async def _maybe_reload_cooldown_backend(self) -> None:
+        """Refresh the rules_cooldown_backend app setting on the same
+        30s cadence as the rules list. Lets operators flip to in-memory
+        cooldown without a redeploy.
+        """
+        now = time.monotonic()
+        if now - self._cooldown_backend_loaded_at < self._cache_ttl:
+            return
+        try:
+            from shared.app_settings import get_setting
+            val = await get_setting("rules_cooldown_backend", "redis")
+            if val not in ("redis", "memory"):
+                val = "redis"
+            self._cooldown_backend = val
+        except Exception:
+            self._cooldown_backend = "redis"
+        self._cooldown_backend_loaded_at = now
+
+    async def _get_cooldown_redis(self):
+        """Lazy-init a Redis client for cooldown state. Returns None if
+        Redis is unreachable or the operator has set rules_cooldown_backend
+        to "memory".
+        """
+        if self._cooldown_backend == "memory":
+            return None
+        if self._cooldown_redis_failed:
+            return None
+        if self._cooldown_redis is not None:
+            return self._cooldown_redis
+        try:
+            import redis.asyncio as aioredis
+            from shared.config import settings
+            self._cooldown_redis = aioredis.from_url(
+                settings.redis_url, decode_responses=True
+            )
+        except Exception:
+            logger.exception("cooldown redis init failed; using in-process microcache only")
+            self._cooldown_redis_failed = True
+            self._cooldown_redis = None
+        return self._cooldown_redis
+
+    async def _read_cooldown(self, rule_id: uuid.UUID) -> float | None:
+        """Return the last-fired epoch for rule_id, or None if no
+        cooldown is recorded. Hits the in-process microcache first, then
+        Redis. Redis errors degrade silently to microcache-only.
+        """
+        now = time.time()
+        cached = self._cooldowns.get(rule_id)
+        if cached is not None:
+            cached_at, last_fired = cached
+            if now - cached_at < self.COOLDOWN_MICROCACHE_SECONDS:
+                return last_fired
+        client = await self._get_cooldown_redis()
+        if client is None:
+            # Degraded mode. fall back to whatever the microcache has.
+            return cached[1] if cached else None
+        try:
+            raw = await client.get(self.COOLDOWN_KEY_PREFIX + str(rule_id))
+        except Exception:
+            logger.warning("cooldown redis GET failed for rule %s; using microcache", rule_id)
+            return cached[1] if cached else None
+        if raw is None:
+            # Key expired in Redis. clear stale microcache entry so the
+            # rule can fire again.
+            self._cooldowns.pop(rule_id, None)
+            return None
+        try:
+            last_fired = float(raw)
+        except (TypeError, ValueError):
+            return None
+        self._cooldowns[rule_id] = (now, last_fired)
+        return last_fired
+
+    async def _write_cooldown(
+        self, rule_id: uuid.UUID, fired_at: float, cooldown_seconds: int
+    ) -> None:
+        """Persist last-fired epoch to Redis with TTL =
+        cooldown_seconds + buffer. Always updates the microcache, even
+        when Redis is unreachable, so the same process at least sees its
+        own recent fires.
+        """
+        self._cooldowns[rule_id] = (fired_at, fired_at)
+        client = await self._get_cooldown_redis()
+        if client is None:
+            return
+        try:
+            await client.set(
+                self.COOLDOWN_KEY_PREFIX + str(rule_id),
+                str(fired_at),
+                ex=int(cooldown_seconds) + self.COOLDOWN_TTL_BUFFER,
+            )
+        except Exception:
+            logger.warning("cooldown redis SET failed for rule %s; degraded mode", rule_id)
 
     def _match_trigger(self, pattern: dict, data: dict, rule_id: uuid.UUID | None = None) -> bool:
         """Check if observation data matches trigger pattern."""

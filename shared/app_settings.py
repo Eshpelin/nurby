@@ -40,6 +40,18 @@ DEFAULTS: dict[str, Any] = {
     # Journey before a centroid-clustering pass replaces the
     # per-frame cluster decisions.
     "body_reid_tracklet_min_samples": 5,
+    # Minimum sighting count before a body/face cluster is offered
+    # for naming via Telegram. Used by reid_sweeper.
+    "cluster_naming_min_sightings": 3,
+    # Public-facing base URL for the API (used in templated
+    # notifications and Telegram webhook registration). Sourced from
+    # env config by default; an explicit override stored here wins.
+    "public_base_url": None,
+    # Rule cooldown backing store. "redis" persists per-rule last-fired
+    # epoch across perception restarts and across multiple workers;
+    # "memory" reverts to single-process in-RAM tracking (cooldowns
+    # reset on restart). Default redis so cooldowns survive restarts.
+    "rules_cooldown_backend": "redis",
 }
 
 
