@@ -79,6 +79,9 @@ _CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:8000",
+    "http://localhost:4747",
+    "http://127.0.0.1:4747",
+    "http://localhost:4748",
 ]
 # Allow extra origins from CORS_ORIGINS env var (comma-separated)
 if settings.cors_origins:

@@ -8,6 +8,7 @@ WORKDIR /app
 # which the perception pipeline pulls for frame decoding.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 libpq-dev ffmpeg \
+    cmake build-essential libboost-all-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .

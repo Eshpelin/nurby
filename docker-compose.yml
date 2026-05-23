@@ -54,7 +54,7 @@ services:
       dockerfile: services/api/Dockerfile
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "4748:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://nurby:${POSTGRES_PASSWORD:-nurby_dev}@postgres:5432/nurby
       REDIS_URL: redis://redis:6379/0
@@ -123,10 +123,10 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "4747:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXT_PUBLIC_WS_URL: ws://localhost:8000
+      NEXT_PUBLIC_API_URL: http://localhost:4748
+      NEXT_PUBLIC_WS_URL: ws://localhost:4748
       NEXT_PUBLIC_WEBRTC_URL: http://localhost:8889
     depends_on:
       - api

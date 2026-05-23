@@ -2,6 +2,9 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Standalone build output. Required by the Docker runner stage
+  // which copies .next/standalone into the final image.
+  output: "standalone",
   // Pin workspace root to this directory so Turbopack ignores any
   // stray lockfile higher up in $HOME.
   turbopack: {
