@@ -52,6 +52,27 @@ DEFAULTS: dict[str, Any] = {
     # "memory" reverts to single-process in-RAM tracking (cooldowns
     # reset on restart). Default redis so cooldowns survive restarts.
     "rules_cooldown_backend": "redis",
+    # ── Agent v1 (Wave 1A, docs/agent-design.md section 7) ──────────
+    # Per-user daily token budget across all agent runs. Counted on
+    # both orchestration LLM + analyzer (VLM) tokens.
+    "agent_daily_token_budget_per_user": 500000,
+    # Per-user daily cost budget in USD cents ($5/day).
+    "agent_daily_cost_cents_per_user": 500,
+    # Hard cap on tool turns per single agent run. Driver stops the
+    # loop and triggers the partial-answer synthesis path on hit.
+    "agent_max_turns_per_run": 15,
+    # Hard cap on VLM analyzer calls per single agent run.
+    "agent_max_vlm_calls_per_run": 8,
+    # Refuse analyze_clip targets wider than this many minutes. Keeps
+    # stitched-clip frame sampling bounded.
+    "agent_max_clip_minutes": 60,
+    # Default orchestration provider for agent runs. Null = the user
+    # picks one each ask (or the UI defaults to the user's last pick).
+    "agent_default_provider_id": None,
+    # Soft warning threshold (% of either daily token or cost budget).
+    # The driver emits a banner to the user once usage crosses this
+    # line; runs are still allowed up to 100%.
+    "agent_warn_threshold_pct": 80,
 }
 
 

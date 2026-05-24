@@ -2,8 +2,8 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import JSON, UUID
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSON, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.database import Base
@@ -185,6 +185,11 @@ class Person(Base):
     recap_cached_status: Mapped[str | None] = mapped_column(Text, nullable=True)
     recap_cached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     recap_stale: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Agent v1 (resolution 5, docs/agent-design.md section 17). Marks
+    # persons whose audio transcripts should be redacted before being
+    # exposed to the agent. Lands now so v2 can flip without another
+    # migration; tool layer reads it as a no-op until v2 wires it up.
+    audio_redact: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -884,6 +889,196 @@ class TelegramDialog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+# ── Agent v1 (Wave 1A) ──────────────────────────────────────────────
+#
+# Lifecycle + audit + cache tables for the agentic Q&A layer
+# (docs/agent-design.md sections 5.4, 7, 11.1). Wave 1B (tool registry)
+# writes AgentToolCall rows. Wave 1C (analyzer) writes AgentVlmCall +
+# VlmFrameAnalysis. The driver in services/agent/runs.py owns row
+# creation; see services/agent/budget.py for the daily-usage rollup.
+
+
+class AgentRun(Base):
+    """One agentic Q&A invocation.
+
+    Started when a user submits a question. The driver appends tool
+    calls + vlm calls during the run loop, updates the rollup
+    counters as turns complete, and stamps a terminal ``status`` plus
+    ``ended_at`` when the loop exits. ``parent_run_id`` is set on
+    multi-turn follow-ups so the audit page can group a conversation.
+    """
+
+    __tablename__ = "agent_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    parent_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    plan: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # status in {running, completed, failed, cancelled, budget_exhausted}
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
+    final_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True
+    )
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    turns_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tokens_in: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentToolCall(Base):
+    """One tool invocation inside an AgentRun.
+
+    ``turn_index`` is monotonically increasing per run; multiple tool
+    calls inside the same agent turn share the same index. Written by
+    Wave 1B's tool registry via ``services.agent.runs.append_tool_call``.
+    """
+
+    __tablename__ = "agent_tool_calls"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    turn_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    arguments: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tokens_in: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AgentVlmCall(Base):
+    """One VLM analyzer invocation inside an AgentRun.
+
+    Cheap row even on a cache hit (``cached=true``, ``tokens_*=0``,
+    ``cost_cents=0``) so the audit trail always shows what the agent
+    looked at. Wave 1C's analyzer writes this via
+    ``services.agent.runs.record_vlm_call``.
+    """
+
+    __tablename__ = "agent_vlm_calls"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    tool_call_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_tool_calls.id", ondelete="CASCADE"), nullable=True
+    )
+    provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True
+    )
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # target_kind in {frame, clip}
+    target_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    observation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("observations.id", ondelete="SET NULL"), nullable=True
+    )
+    recording_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("recordings.id", ondelete="SET NULL"), nullable=True
+    )
+    time_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    time_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    frame_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tokens_in: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    thumbnails_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class VlmFrameAnalysis(Base):
+    """Eternal cache row keyed by (frame target, question, model).
+
+    Section 5.4. Lifetime tied to the underlying media via FK CASCADE.
+    Exactly one of (observation_id, recording_id) must be non-null
+    (CHECK constraint). Partial unique indexes enforce one row per
+    target+question+provider+model. Written by Wave 1C's analyzer.
+    """
+
+    __tablename__ = "vlm_frame_analysis"
+    __table_args__ = (
+        CheckConstraint(
+            "(observation_id IS NOT NULL) OR (recording_id IS NOT NULL)",
+            name="ck_vlm_frame_analysis_target_present",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    observation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("observations.id", ondelete="CASCADE"), nullable=True
+    )
+    recording_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("recordings.id", ondelete="CASCADE"), nullable=True
+    )
+    question_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True
+    )
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    response_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cost_tokens_in: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    thumbnail_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AgentDailyUsage(Base):
+    """Per-user per-day rollup used by ``services.agent.budget``.
+
+    UPSERT-ed on every recorded usage event. Cheap-to-query so the
+    pre-run budget check is fast. Older rows are kept for the audit
+    page; no auto-prune in v1.
+    """
+
+    __tablename__ = "agent_daily_usage"
+    __table_args__ = (
+        UniqueConstraint("user_id", "usage_date", name="uq_agent_daily_usage_user_day"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    usage_date: Mapped[datetime] = mapped_column(Date, nullable=False)
+    tokens_in: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    run_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
