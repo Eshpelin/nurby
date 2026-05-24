@@ -52,3 +52,6 @@ dev/logs/
 dev/sample-cctv.mp4
 
 logs/
+
+# Agent eval artifact
+.eval-report.md

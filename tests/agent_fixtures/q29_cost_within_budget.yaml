@@ -1,0 +1,31 @@
+id: q29_cost_within_budget
+question: "Has the mail been delivered?"
+tags: [budget, cheap_path]
+seed:
+  observations:
+    - id: "aaaaaaaa-0000-0000-0000-0000000000f0"
+      camera_id: "11111111-1111-1111-1111-111111111111"
+      camera_name: "Front Door"
+      timestamp: "2026-05-24T13:14:00Z"
+      description: "Mail carrier opened the mailbox and left envelopes."
+      detections: { objects: [{ label: "person", confidence: 0.94 }] }
+      person_names: ["Unknown"]
+mocked_llm:
+  - tokens_in: 800
+    tokens_out: 60
+    cost_cents: 1
+    tool_uses:
+      - name: query_observations
+        arguments: { query: "mail delivery", hours: 12 }
+  - tokens_in: 200
+    tokens_out: 40
+    cost_cents: 1
+    text: "Yes, the mail carrier delivered at 1:14 PM today and left envelopes in the mailbox."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["mail", "delivered"]
+  tools_called: ["query_observations"]
+  vlm_calls_max: 0
+  status: completed
+  cost_cents_max: 10
+  citations_min: 1

@@ -332,6 +332,24 @@ All endpoints except `/api/auth/*` require a valid JWT in the Authorization head
 
 Full interactive docs available at `/docs` when the API is running.
 
+## Agent eval suite
+
+The agentic Q&A surface is gated by a 30-fixture eval suite under
+`tests/agent_fixtures/`. The harness is fully mocked so it runs in
+seconds without a database or LLM provider, and Phase 1 ships when
+at least 27 of 30 fixtures pass on three consecutive nightly runs.
+
+Run locally.
+
+```
+python -m pytest tests/test_agent_eval.py -v
+```
+
+CI runs the same command nightly via `.github/workflows/agent-eval.yml`
+and posts the per-fixture report (`.eval-report.md`) as a PR comment
+when the workflow is triggered on a pull request. See
+`docs/agent-eval.md` for the fixture format and how to add new cases.
+
 ## License
 
 Proprietary. All rights reserved.

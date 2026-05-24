@@ -1,0 +1,75 @@
+name: agent-eval
+
+# Runs the agent eval suite. Nightly at 02:00 UTC so the suite catches
+# regressions from any merge that day, and on every pull_request that
+# touches the agent surface so reviewers see the result before merging.
+# CI uses the MOCKED path. No real LLM calls, no provider keys needed.
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  pull_request:
+    paths:
+      - "services/agent/**"
+      - "tests/agent_fixtures/**"
+      - "tests/test_agent_eval.py"
+      - ".github/workflows/agent-eval.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install minimal deps
+        # The eval harness is intentionally DB-free in CI. We only need
+        # the packages the runner actually imports. pyyaml is the YAML
+        # parser; pytest + pytest-asyncio drive the suite; sqlalchemy +
+        # pgvector are imported transitively by shared/models.py.
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio pyyaml \
+            "sqlalchemy[asyncio]>=2.0.0" "pydantic>=2.0.0" \
+            "pgvector>=0.3.0" "asyncpg>=0.30.0"
+
+      - name: Run agent eval
+        env:
+          # Ensure CI uses the mocked path even if a contributor sets
+          # the flag accidentally in their fork.
+          AGENT_EVAL_REAL_LLM: "0"
+        run: |
+          python -m pytest tests/test_agent_eval.py -v --tb=short
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-eval-report
+          path: .eval-report.md
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('.eval-report.md')) return;
+            const body = fs.readFileSync('.eval-report.md', 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

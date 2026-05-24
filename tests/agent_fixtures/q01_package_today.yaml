@@ -1,0 +1,41 @@
+id: q01_package_today
+question: "Did a package arrive at the front door today?"
+tags: [indexed, household, package]
+seed:
+  cameras:
+    - id: "11111111-1111-1111-1111-111111111111"
+      name: "Front Door"
+      location_label: "porch"
+      role: "entry"
+      status: "online"
+  observations:
+    - id: "aaaaaaaa-0000-0000-0000-000000000001"
+      camera_id: "11111111-1111-1111-1111-111111111111"
+      camera_name: "Front Door"
+      timestamp: "2026-05-24T14:02:00Z"
+      description: "A delivery person placed a brown cardboard package on the porch."
+      detections: { objects: [{ label: "package", confidence: 0.91 }, { label: "person", confidence: 0.88 }] }
+      person_names: ["Unknown courier"]
+  journeys:
+    - id: "bbbbbbbb-0000-0000-0000-000000000001"
+      person_name: "Unknown courier"
+      cameras: [{ id: "11111111-1111-1111-1111-111111111111", name: "Front Door" }]
+      started_at: "2026-05-24T14:01:50Z"
+      ended_at: "2026-05-24T14:02:20Z"
+      observation_count: 1
+mocked_llm:
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "package delivery front door", hours: 24 }
+  - tool_uses:
+      - name: get_journeys
+        arguments: { hours: 24 }
+  - text: "Yes, a package was delivered to the front door at 2:02 PM today by an unknown courier."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["package", "front door"]
+  citations_min: 1
+  tools_called: ["query_observations"]
+  vlm_calls_max: 0
+  status: completed
+  cost_cents_max: 10

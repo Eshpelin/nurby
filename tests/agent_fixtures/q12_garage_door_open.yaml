@@ -1,0 +1,42 @@
+id: q12_garage_door_open
+question: "Is the garage door open?"
+tags: [analyzer, household, layout]
+seed:
+  cameras:
+    - { id: "55555555-5555-5555-5555-555555555555", name: "Garage", location_label: "garage", role: "garage", status: "online" }
+  observations:
+    - id: "aaaaaaaa-0000-0000-0000-000000000090"
+      camera_id: "55555555-5555-5555-5555-555555555555"
+      camera_name: "Garage"
+      timestamp: "2026-05-24T16:30:00Z"
+      description: "Garage interior with cars and the bay door visible."
+      detections: { objects: [{ label: "car", confidence: 0.93 }] }
+      person_names: []
+  tool_results:
+    analyze_frame:
+      answer: "The garage bay door is fully closed. Daylight is not visible at the bottom."
+      confidence: 0.91
+      frames_analyzed: 1
+      cached: false
+      cost_cents: 2
+      verdict: "no"
+mocked_llm:
+  - tool_uses:
+      - name: get_camera_layout
+        arguments: {}
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "garage door", hours: 6, camera_ids: ["55555555-5555-5555-5555-555555555555"] }
+  - tool_uses:
+      - name: analyze_frame
+        arguments:
+          observation_id: "aaaaaaaa-0000-0000-0000-000000000090"
+          question: "Is the garage bay door open or closed?"
+  - text: "No, the garage door is closed based on the most recent garage frame."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["garage", "closed"]
+  tools_called: ["get_camera_layout", "analyze_frame"]
+  vlm_calls_min: 1
+  status: completed
+  citations_min: 1

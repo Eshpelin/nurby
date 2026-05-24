@@ -1,0 +1,31 @@
+id: q24_clarification_then_answer
+question: "Who was here?"
+tags: [conversation_memory, clarification]
+seed:
+  tool_results:
+    get_journeys:
+      journeys:
+        - id: "bbbbbbbb-0000-0000-0000-000000000100"
+          person_name: "Aisha"
+          started_at: "2026-05-23T15:00:00Z"
+          ended_at: "2026-05-23T15:40:00Z"
+          cameras: [{ id: "11111111-1111-1111-1111-111111111111", name: "Front Door" }]
+          observation_count: 4
+conversation:
+  - question: "Who was here?"
+  - question: "I meant yesterday afternoon."
+mocked_llm:
+  # Turn 1. ambiguous question, agent asks to clarify.
+  - text: "Could you tell me which time window you're asking about, today, yesterday, this week?"
+    stop_reason: end_turn
+  # Turn 2. user clarified, agent answers.
+  - tool_uses:
+      - name: get_journeys
+        arguments: { hours: 24 }
+  - text: "Yesterday afternoon Aisha visited from 3:00 PM to 3:40 PM at the front door."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["aisha", "yesterday afternoon"]
+  tools_called: ["get_journeys"]
+  status: completed
+  citations_min: 1

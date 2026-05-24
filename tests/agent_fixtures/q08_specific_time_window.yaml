@@ -1,0 +1,31 @@
+id: q08_specific_time_window
+question: "Anything happen between 9 and 11pm last night?"
+tags: [indexed, time_window]
+seed:
+  observations:
+    - id: "aaaaaaaa-0000-0000-0000-000000000050"
+      camera_id: "22222222-2222-2222-2222-222222222222"
+      camera_name: "Living Room"
+      timestamp: "2026-05-23T21:34:00Z"
+      description: "Two adults sat on the couch watching TV."
+      detections: { objects: [{ label: "person", confidence: 0.97 }] }
+      person_names: ["Aisha", "Father"]
+    - id: "aaaaaaaa-0000-0000-0000-000000000051"
+      camera_id: "33333333-3333-3333-3333-333333333333"
+      camera_name: "Backyard"
+      timestamp: "2026-05-23T22:48:00Z"
+      description: "A neighbor's cat walked along the fence."
+      detections: { objects: [{ label: "cat", confidence: 0.78 }] }
+      person_names: []
+mocked_llm:
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "any activity", hours: 24 }
+  - text: "Between 9 and 11 PM last night two adults were watching TV in the living room around 9:34 PM and a neighbor's cat walked along the back fence at 10:48 PM."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["living room", "cat"]
+  tools_called: ["query_observations"]
+  vlm_calls_max: 0
+  status: completed
+  citations_min: 1

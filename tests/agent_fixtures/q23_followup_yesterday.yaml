@@ -1,0 +1,33 @@
+id: q23_followup_yesterday
+question: "What about yesterday?"
+tags: [conversation_memory, multi_turn]
+# Two-turn conversation. The first turn establishes context ("dad
+# eating today"); the second turn re-asks the same question framed as
+# "yesterday" and the driver must answer from yesterday's window. The
+# scripted LLM stitches together both turns in order.
+seed:
+  tool_results:
+    query_observations:
+      - { count: 1, observations: [{ id: "aaaaaaaa-0000-0000-0000-0000000000c0", camera_id: "66666666-6666-6666-6666-666666666666", camera_name: "Dining Room", timestamp: "2026-05-24T19:12:00Z", description: "Father eating pasta", person_names: ["Father"], detections: { objects: [{ label: "person", confidence: 0.95 }] } }] }
+      - { count: 1, observations: [{ id: "aaaaaaaa-0000-0000-0000-0000000000c1", camera_id: "66666666-6666-6666-6666-666666666666", camera_name: "Dining Room", timestamp: "2026-05-23T18:50:00Z", description: "Father eating salad", person_names: ["Father"], detections: { objects: [{ label: "person", confidence: 0.94 }] } }] }
+conversation:
+  - question: "Did Daddy eat dinner today?"
+  - question: "What about yesterday?"
+mocked_llm:
+  # First turn. answer for today.
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "dad eating dinner", hours: 12 }
+  - text: "Yes, Daddy ate pasta at 7:12 PM tonight."
+    stop_reason: end_turn
+  # Second turn. resolves "yesterday" using parent context.
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "dad eating dinner", hours: 48 }
+  - text: "Yesterday Daddy ate salad at 6:50 PM in the dining room."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["yesterday", "salad"]
+  tools_called: ["query_observations"]
+  status: completed
+  citations_min: 1

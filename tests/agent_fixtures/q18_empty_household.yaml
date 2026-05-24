@@ -1,0 +1,20 @@
+id: q18_empty_household
+question: "Did anything happen?"
+tags: [failure_mode, empty, no_evidence]
+seed:
+  tool_results:
+    query_observations: { count: 0, observations: [] }
+    get_journeys: { journeys: [] }
+mocked_llm:
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "any activity", hours: 24 }
+  - tool_uses:
+      - name: get_journeys
+        arguments: { hours: 24 }
+  - text: "No recent activity was recorded in the last 24 hours across your cameras."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["no recent activity"]
+  tools_called: ["query_observations", "get_journeys"]
+  status: completed

@@ -1,0 +1,37 @@
+id: q02_who_at_door_morning
+question: "Who came to the door this morning?"
+tags: [indexed, household, identity]
+seed:
+  cameras:
+    - id: "11111111-1111-1111-1111-111111111111"
+      name: "Front Door"
+      location_label: "porch"
+      role: "entry"
+      status: "online"
+  observations:
+    - id: "aaaaaaaa-0000-0000-0000-000000000002"
+      camera_id: "11111111-1111-1111-1111-111111111111"
+      camera_name: "Front Door"
+      timestamp: "2026-05-24T07:42:00Z"
+      description: "Aisha walked up to the front door carrying a coffee cup."
+      detections: { objects: [{ label: "person", confidence: 0.96 }] }
+      person_names: ["Aisha"]
+    - id: "aaaaaaaa-0000-0000-0000-000000000003"
+      camera_id: "11111111-1111-1111-1111-111111111111"
+      camera_name: "Front Door"
+      timestamp: "2026-05-24T09:15:00Z"
+      description: "A mail carrier in uniform dropped off envelopes."
+      detections: { objects: [{ label: "person", confidence: 0.92 }] }
+      person_names: ["Unknown"]
+mocked_llm:
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "front door visitor", hours: 12, labels: ["person"] }
+  - text: "This morning Aisha arrived at the front door around 7:42 AM, and the mail carrier dropped off envelopes at 9:15 AM."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["aisha", "mail carrier"]
+  tools_called: ["query_observations"]
+  vlm_calls_max: 0
+  status: completed
+  citations_min: 1

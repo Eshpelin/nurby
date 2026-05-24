@@ -1,0 +1,44 @@
+id: q09_did_dad_eat
+question: "Did Daddy eat dinner today?"
+tags: [analyzer, household, family]
+seed:
+  tool_results:
+    query_observations:
+      count: 1
+      observations:
+        - id: "aaaaaaaa-0000-0000-0000-000000000060"
+          camera_id: "66666666-6666-6666-6666-666666666666"
+          camera_name: "Dining Room"
+          timestamp: "2026-05-24T19:12:00Z"
+          description: "A man sat at the dining table near a plate."
+          detections: { objects: [{ label: "person", confidence: 0.95 }, { label: "dining table", confidence: 0.87 }] }
+          person_names: ["Father"]
+    analyze_clip:
+      answer: "Yes. The man (matched to Father) is eating pasta with a fork from a plate."
+      confidence: 0.82
+      frames_analyzed: 12
+      cached: false
+      cost_cents: 6
+      verdict: "yes"
+      food_type: "pasta"
+mocked_llm:
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "dad eating dinner", hours: 12 }
+  - tool_uses:
+      - name: analyze_clip
+        arguments:
+          camera_id: "66666666-6666-6666-6666-666666666666"
+          time_from: "2026-05-24T19:10:00Z"
+          time_to: "2026-05-24T19:14:00Z"
+          question: "Is the person at the dining table eating? If so, what food?"
+  - text: "Yes, Daddy was eating dinner around 7:12 PM tonight. The footage shows him eating pasta at the dining table."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["yes", "pasta"]
+  tools_called: ["query_observations", "analyze_clip"]
+  vlm_calls_min: 1
+  vlm_calls_max: 2
+  status: completed
+  citations_min: 1
+  cost_cents_max: 25

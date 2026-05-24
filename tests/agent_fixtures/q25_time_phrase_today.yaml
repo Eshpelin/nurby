@@ -1,0 +1,26 @@
+id: q25_time_phrase_today
+question: "Was the front door opened today?"
+tags: [time_grounding, today]
+seed:
+  observations:
+    - id: "aaaaaaaa-0000-0000-0000-0000000000d0"
+      camera_id: "11111111-1111-1111-1111-111111111111"
+      camera_name: "Front Door"
+      timestamp: "2026-05-24T08:05:00Z"
+      description: "Front door swung open as a person stepped outside."
+      detections: { objects: [{ label: "door", confidence: 0.82 }, { label: "person", confidence: 0.93 }] }
+      person_names: ["Aisha"]
+mocked_llm:
+  # "today" must resolve to a 24-hour window in the user's local tz.
+  # The mocked LLM proves it by emitting hours=24 (a today-bounded
+  # window) rather than e.g. hours=168.
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "front door opened", hours: 24 }
+  - text: "Yes, the front door was opened today at 8:05 AM when Aisha stepped outside."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["today", "8:05"]
+  tools_called: ["query_observations"]
+  status: completed
+  citations_min: 1

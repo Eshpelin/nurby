@@ -1,0 +1,29 @@
+id: q28_name_alias_dad
+question: "When did dad get home?"
+tags: [identity, alias]
+seed:
+  # Person row has display_name="Father" with aliases=["dad", "daddy"].
+  # The driver resolves "dad" via the alias index and queries journeys
+  # by the canonical name. The mocked tool returns Father's last
+  # journey.
+  tool_results:
+    get_journeys:
+      journeys:
+        - id: "bbbbbbbb-0000-0000-0000-000000000300"
+          person_id: "cccccccc-0000-0000-0000-000000000020"
+          person_name: "Father"
+          started_at: "2026-05-24T18:32:00Z"
+          ended_at: "2026-05-24T18:34:00Z"
+          cameras: [{ id: "11111111-1111-1111-1111-111111111111", name: "Front Door" }]
+          observation_count: 2
+mocked_llm:
+  - tool_uses:
+      - name: get_journeys
+        arguments: { person_name: "Father", hours: 24 }
+  - text: "Dad got home at 6:32 PM today, captured by the front door camera."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["dad", "6:32"]
+  tools_called: ["get_journeys"]
+  status: completed
+  citations_min: 1

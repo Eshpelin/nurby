@@ -1,0 +1,29 @@
+id: q03_known_visitor_yesterday
+question: "When did Aisha visit yesterday?"
+tags: [indexed, journey, identity]
+seed:
+  tool_results:
+    get_journeys:
+      journeys:
+        - id: "bbbbbbbb-0000-0000-0000-000000000010"
+          person_id: "cccccccc-0000-0000-0000-000000000001"
+          person_name: "Aisha"
+          started_at: "2026-05-23T18:04:00Z"
+          ended_at: "2026-05-23T18:51:00Z"
+          duration_seconds: 2820
+          cameras:
+            - { id: "11111111-1111-1111-1111-111111111111", name: "Front Door" }
+            - { id: "22222222-2222-2222-2222-222222222222", name: "Living Room" }
+          observation_count: 8
+mocked_llm:
+  - tool_uses:
+      - name: get_journeys
+        arguments: { person_name: "Aisha", hours: 48 }
+  - text: "Aisha visited yesterday from 6:04 PM to 6:51 PM, moving from the front door into the living room."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["aisha", "yesterday"]
+  tools_called: ["get_journeys"]
+  vlm_calls_max: 0
+  status: completed
+  citations_min: 1

@@ -1,0 +1,21 @@
+id: q06_camera_count
+question: "How many cameras do I have?"
+tags: [indexed, layout, meta]
+seed:
+  cameras:
+    - { id: "11111111-1111-1111-1111-111111111111", name: "Front Door", location_label: "porch", role: "entry", status: "online" }
+    - { id: "22222222-2222-2222-2222-222222222222", name: "Living Room", location_label: "living", role: "living", status: "online" }
+    - { id: "33333333-3333-3333-3333-333333333333", name: "Backyard", location_label: "backyard", role: "outdoor", status: "online" }
+    - { id: "55555555-5555-5555-5555-555555555555", name: "Garage", location_label: "garage", role: "garage", status: "offline" }
+mocked_llm:
+  - tool_uses:
+      - name: get_camera_layout
+        arguments: {}
+  - text: "You have 4 cameras configured. Front Door, Living Room, Backyard, and Garage. The Garage camera is currently offline."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["4", "garage"]
+  tools_called: ["get_camera_layout"]
+  vlm_calls_max: 0
+  status: completed
+  citations_min: 1

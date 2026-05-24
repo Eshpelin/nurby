@@ -1,0 +1,45 @@
+id: q30_cached_analyzer_call
+question: "Is the front porch package still there?"
+tags: [analyzer, cache]
+# Two turns asking the same frame question. The first analyze_frame
+# call costs 2 cents and writes the cache; the second is a cache hit
+# with cost=0 and cached=true. The mocked tool returns the canned
+# list in order to model exactly that.
+seed:
+  observations:
+    - id: "aaaaaaaa-0000-0000-0000-000000000100"
+      camera_id: "11111111-1111-1111-1111-111111111111"
+      camera_name: "Front Door"
+      timestamp: "2026-05-24T16:00:00Z"
+      description: "Brown package on porch step."
+      detections: { objects: [{ label: "package", confidence: 0.92 }] }
+  tool_results:
+    analyze_frame:
+      - { answer: "Yes, the package is still on the porch.", verdict: "yes", confidence: 0.9, frames_analyzed: 1, cached: false, cost_cents: 2 }
+      - { answer: "Yes, the package is still on the porch.", verdict: "yes", confidence: 0.9, frames_analyzed: 1, cached: true, cost_cents: 0 }
+conversation:
+  - question: "Is the front porch package still there?"
+  - question: "Is the front porch package still there?"
+mocked_llm:
+  # Turn 1.
+  - tool_uses:
+      - name: analyze_frame
+        arguments:
+          observation_id: "aaaaaaaa-0000-0000-0000-000000000100"
+          question: "Is the package still on the porch?"
+  - text: "Yes, the package is still on the porch."
+    stop_reason: end_turn
+  # Turn 2. same args, the mocked tool returns the cached row.
+  - tool_uses:
+      - name: analyze_frame
+        arguments:
+          observation_id: "aaaaaaaa-0000-0000-0000-000000000100"
+          question: "Is the package still on the porch?"
+  - text: "Yes, still there based on the most recent porch frame."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["still", "porch"]
+  tools_called: ["analyze_frame"]
+  vlm_calls_min: 1
+  vlm_cached: true
+  status: completed

@@ -1,0 +1,24 @@
+id: q20_tool_loop_detected
+question: "Did the cat come back?"
+tags: [failure_mode, loop_detection]
+seed:
+  tool_results:
+    query_observations: { count: 0, observations: [] }
+mocked_llm:
+  # The LLM keeps calling the same tool with the same args. The
+  # driver's dedupe trips on the third identical invocation.
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "cat", hours: 24 }
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "cat", hours: 24 }
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "cat", hours: 24 }
+  - text: "I couldn't find any sightings of the cat in the last 24 hours and my retries didn't surface anything new, so I stopped looking."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["couldn't find", "stopped"]
+  tools_called: ["query_observations"]
+  status: completed

@@ -1,0 +1,37 @@
+id: q10_is_package_still_there
+question: "Is the package still on the porch?"
+tags: [analyzer, household, package]
+seed:
+  observations:
+    - id: "aaaaaaaa-0000-0000-0000-000000000070"
+      camera_id: "11111111-1111-1111-1111-111111111111"
+      camera_name: "Front Door"
+      timestamp: "2026-05-24T15:55:00Z"
+      description: "A brown box is visible on the porch step."
+      detections: { objects: [{ label: "package", confidence: 0.89 }] }
+      person_names: []
+  tool_results:
+    analyze_frame:
+      answer: "Yes, a brown cardboard box is still sitting on the porch step. No one is near it."
+      confidence: 0.88
+      frames_analyzed: 1
+      cached: false
+      cost_cents: 2
+      verdict: "yes"
+mocked_llm:
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "package porch", hours: 6 }
+  - tool_uses:
+      - name: analyze_frame
+        arguments:
+          observation_id: "aaaaaaaa-0000-0000-0000-000000000070"
+          question: "Is the package still visible on the porch?"
+  - text: "Yes, the package is still on the porch as of the most recent front-door frame. No one has picked it up."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["package", "porch"]
+  tools_called: ["query_observations", "analyze_frame"]
+  vlm_calls_min: 1
+  status: completed
+  citations_min: 1

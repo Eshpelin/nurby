@@ -1,0 +1,34 @@
+id: q14_no_evidence_pet_after_eviction
+question: "What did the cat do at noon two weeks ago?"
+tags: [failure_mode, retention, no_evidence]
+seed:
+  tool_results:
+    query_observations:
+      count: 0
+      observations: []
+    analyze_clip:
+      error: "clip_evicted"
+      message: "underlying recording was deleted by the retention policy"
+      retryable: false
+      answer: null
+      confidence: 0.0
+      frames_analyzed: 0
+      cached: false
+      cost_cents: 0
+mocked_llm:
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "cat", hours: 720 }
+  - tool_uses:
+      - name: analyze_clip
+        arguments:
+          camera_id: "22222222-2222-2222-2222-222222222222"
+          time_from: "2026-05-10T12:00:00Z"
+          time_to: "2026-05-10T12:05:00Z"
+          question: "What is the cat doing?"
+  - text: "I can't answer that, the footage from two weeks ago is no longer available because the retention policy already deleted it."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["no longer available"]
+  tools_called: ["query_observations", "analyze_clip"]
+  status: completed

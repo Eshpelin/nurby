@@ -1,0 +1,35 @@
+id: q27_time_phrase_last_weekend
+question: "Any visitors last weekend?"
+tags: [time_grounding, weekend]
+seed:
+  tool_results:
+    get_journeys:
+      journeys:
+        - id: "bbbbbbbb-0000-0000-0000-000000000200"
+          person_name: "Neighbor (Mark)"
+          started_at: "2026-05-18T14:00:00Z"
+          ended_at: "2026-05-18T14:30:00Z"
+          cameras: [{ id: "11111111-1111-1111-1111-111111111111", name: "Front Door" }]
+          observation_count: 5
+        - id: "bbbbbbbb-0000-0000-0000-000000000201"
+          person_name: "Aisha"
+          started_at: "2026-05-17T19:00:00Z"
+          ended_at: "2026-05-17T22:30:00Z"
+          cameras:
+            - { id: "11111111-1111-1111-1111-111111111111", name: "Front Door" }
+            - { id: "22222222-2222-2222-2222-222222222222", name: "Living Room" }
+          observation_count: 14
+mocked_llm:
+  # "last weekend" = previous Saturday + Sunday. Sunday is 2026-05-24,
+  # so last weekend was 2026-05-16 + 2026-05-17 (Sat + Sun). The mock
+  # expresses this as a 192-hour window (today is Sun 2026-05-24).
+  - tool_uses:
+      - name: get_journeys
+        arguments: { hours: 192 }
+  - text: "Last weekend you had two visitors. Mark dropped by Sunday afternoon and Aisha stayed Saturday evening through Saturday night."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["weekend", "mark", "aisha"]
+  tools_called: ["get_journeys"]
+  status: completed
+  citations_min: 1

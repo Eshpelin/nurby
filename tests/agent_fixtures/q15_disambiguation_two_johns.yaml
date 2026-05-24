@@ -1,0 +1,21 @@
+id: q15_disambiguation_two_johns
+question: "When was John here?"
+tags: [failure_mode, identity, disambiguation]
+seed:
+  tool_results:
+    get_journeys:
+      journeys: []
+      disambiguation:
+        - { person_id: "cccccccc-0000-0000-0000-000000000010", display_name: "John (Father)" }
+        - { person_id: "cccccccc-0000-0000-0000-000000000011", display_name: "John (Plumber)" }
+mocked_llm:
+  - tool_uses:
+      - name: get_journeys
+        arguments: { person_name: "John", hours: 168 }
+  - text: "I found two people named John in your household. Did you mean John (Father) or John (Plumber)?"
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["two", "john"]
+  final_answer_forbidden: ["unknown"]
+  tools_called: ["get_journeys"]
+  status: completed

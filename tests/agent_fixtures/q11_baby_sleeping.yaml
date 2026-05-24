@@ -1,0 +1,37 @@
+id: q11_baby_sleeping
+question: "Is the baby sleeping now?"
+tags: [analyzer, household, nursery]
+seed:
+  observations:
+    - id: "aaaaaaaa-0000-0000-0000-000000000080"
+      camera_id: "77777777-7777-7777-7777-777777777777"
+      camera_name: "Nursery"
+      timestamp: "2026-05-24T13:01:00Z"
+      description: "An infant is in the crib under a blanket."
+      detections: { objects: [{ label: "person", confidence: 0.75 }] }
+      person_names: []
+  tool_results:
+    analyze_frame:
+      answer: "The infant is lying still in the crib with eyes closed. Consistent with sleep."
+      confidence: 0.79
+      frames_analyzed: 1
+      cached: false
+      cost_cents: 2
+      verdict: "yes"
+mocked_llm:
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "baby nursery", hours: 1 }
+  - tool_uses:
+      - name: analyze_frame
+        arguments:
+          observation_id: "aaaaaaaa-0000-0000-0000-000000000080"
+          question: "Is the infant in the crib asleep?"
+  - text: "Yes, the baby appears to be sleeping in the crib as of the latest nursery frame."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["sleep", "crib"]
+  tools_called: ["analyze_frame"]
+  vlm_calls_min: 1
+  status: completed
+  citations_min: 1

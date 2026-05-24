@@ -1,0 +1,34 @@
+id: q05_dog_visible
+question: "Where's the dog now?"
+tags: [indexed, journey, pet]
+seed:
+  observations:
+    - id: "aaaaaaaa-0000-0000-0000-000000000030"
+      camera_id: "44444444-4444-4444-4444-444444444444"
+      camera_name: "Living Room"
+      timestamp: "2026-05-24T15:20:00Z"
+      description: "The family dog is curled up on the couch."
+      detections: { objects: [{ label: "dog", confidence: 0.94 }] }
+      person_names: []
+  journeys:
+    - id: "bbbbbbbb-0000-0000-0000-000000000030"
+      person_name: "Buddy"
+      started_at: "2026-05-24T15:18:00Z"
+      ended_at: "2026-05-24T15:22:00Z"
+      cameras: [{ id: "44444444-4444-4444-4444-444444444444", name: "Living Room" }]
+      observation_count: 3
+mocked_llm:
+  - tool_uses:
+      - name: query_observations
+        arguments: { query: "dog", hours: 1, labels: ["dog"] }
+  - tool_uses:
+      - name: get_journeys
+        arguments: { person_name: "Buddy", hours: 2 }
+  - text: "The dog is in the living room, curled up on the couch as of 3:20 PM."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["living room", "dog"]
+  tools_called: ["query_observations"]
+  vlm_calls_max: 0
+  status: completed
+  citations_min: 1

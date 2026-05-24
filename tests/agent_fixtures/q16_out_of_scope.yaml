@@ -1,0 +1,11 @@
+id: q16_out_of_scope
+question: "What's the weather?"
+tags: [failure_mode, out_of_scope, safety]
+seed: {}
+mocked_llm:
+  - text: "I can only answer questions about your camera footage and household activity. For weather, please use a weather app."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["camera", "weather"]
+  tools_not_called: ["query_observations", "analyze_clip", "analyze_frame"]
+  status: completed

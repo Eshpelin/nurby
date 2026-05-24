@@ -1,0 +1,36 @@
+id: q04_motion_overnight
+question: "Was there motion in the backyard overnight?"
+tags: [indexed, motion, camera_filter]
+seed:
+  cameras:
+    - id: "33333333-3333-3333-3333-333333333333"
+      name: "Backyard"
+      location_label: "backyard"
+      role: "outdoor"
+      status: "online"
+  observations:
+    - id: "aaaaaaaa-0000-0000-0000-000000000020"
+      camera_id: "33333333-3333-3333-3333-333333333333"
+      camera_name: "Backyard"
+      timestamp: "2026-05-24T02:14:00Z"
+      description: "A raccoon crossed the lawn near the shed."
+      detections: { objects: [{ label: "animal", confidence: 0.71 }] }
+      person_names: []
+mocked_llm:
+  - tool_uses:
+      - name: get_camera_layout
+        arguments: {}
+  - tool_uses:
+      - name: query_observations
+        arguments:
+          query: "motion backyard"
+          hours: 12
+          camera_ids: ["33333333-3333-3333-3333-333333333333"]
+  - text: "Yes, the backyard camera caught a raccoon crossing the lawn at 2:14 AM. No human motion was detected."
+    stop_reason: end_turn
+expected:
+  final_answer_contains: ["backyard", "raccoon"]
+  tools_called: ["get_camera_layout", "query_observations"]
+  vlm_calls_max: 0
+  status: completed
+  citations_min: 1
