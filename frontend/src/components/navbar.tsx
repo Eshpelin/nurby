@@ -10,6 +10,7 @@ import { NotificationItem, NotificationsDropdown } from "./notifications";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/" },
+  { label: "Ask Nurby", href: "/ask" },
   { label: "Recordings", href: "/recordings" },
   { label: "People", href: "/people" },
   { label: "Rules", href: "/rules" },
