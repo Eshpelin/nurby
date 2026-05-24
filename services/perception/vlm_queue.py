@@ -127,6 +127,7 @@ class CameraVLMStats:
     total_errors: int = 0
     total_dropped: int = 0         # frames dropped due to backpressure
     total_deduped: int = 0         # frames dropped by pHash dedupe
+    total_gated: int = 0           # frames dropped by CLIP "boring" gate
     last_call_at: float = 0.0      # monotonic timestamp
     last_result_at: float = 0.0    # monotonic timestamp
     status: str = "idle"           # idle, processing, slow, stalled
@@ -155,6 +156,9 @@ class CameraVLMStats:
     def record_dedupe(self):
         self.total_deduped += 1
 
+    def record_gated(self):
+        self.total_gated += 1
+
     def set_backlog(self, high: int, normal: int) -> None:
         self.backlog_high = int(high)
         self.backlog_normal = int(normal)
@@ -180,6 +184,7 @@ class CameraVLMStats:
             "total_errors": self.total_errors,
             "total_dropped": self.total_dropped,
             "total_deduped": self.total_deduped,
+            "total_gated": self.total_gated,
             "backlog": {
                 "high": self.backlog_high,
                 "normal": self.backlog_normal,
@@ -276,6 +281,40 @@ class VLMQueue:
                     return
             except Exception:
                 logger.debug("dedupe check failed, allowing enqueue", exc_info=True)
+
+            # CLIP zero-shot gate. Outdoor cams with wind / leaves /
+            # parked-only cars trip motion + change the scene enough
+            # that pHash doesn't dedupe, but there's still nothing
+            # worth a 15-second VLM call. Skip those frames here.
+            try:
+                from services.perception.vlm_gate import maybe_skip_via_gate
+                from shared.app_settings import get_setting as _get_setting
+
+                enabled = bool(await _get_setting("vlm_gate_enabled", True))
+                margin = float(await _get_setting("vlm_gate_margin", 0.05))
+                floor = float(await _get_setting("vlm_gate_min_interesting_score", 0.20))
+                int_prompts = await _get_setting("vlm_gate_interesting_prompts", None)
+                bor_prompts = await _get_setting("vlm_gate_boring_prompts", None)
+                decision = await maybe_skip_via_gate(
+                    job.frame,
+                    enabled=enabled,
+                    interesting_prompts=int_prompts,
+                    boring_prompts=bor_prompts,
+                    margin=margin,
+                    min_interesting_score=floor,
+                )
+                if not decision.allow:
+                    self._stats[camera_id].record_gated()
+                    logger.info(
+                        "VLM gate skip camera=%s reason=%s int=%.3f(%s) bor=%.3f(%s)",
+                        camera_id, decision.reason,
+                        decision.interesting_score, decision.interesting_label,
+                        decision.boring_score, decision.boring_label,
+                    )
+                    return
+            except Exception:
+                logger.debug("VLM gate check failed, allowing enqueue", exc_info=True)
+
             size_before = await self._backlog.size(camera_id)
             try:
                 await self._backlog.enqueue(

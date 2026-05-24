@@ -24,6 +24,9 @@ dependencies = [
     # OSNet wrapper. CPU works; CUDA or MPS auto-detected at load time.
     "torch>=2.1.0",
     "torchreid>=0.2.5",
+    # CLIP zero-shot pre-classifier for the VLM enqueue gate.
+    # ViT-B-32 weights are ~150MB; downloaded once and cached.
+    "open_clip_torch>=2.24.0",
     "face_recognition>=1.3.0",
     "passlib[bcrypt]>=1.7.4",
     "python-jose[cryptography]>=3.3.0",

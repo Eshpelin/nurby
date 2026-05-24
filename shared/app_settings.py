@@ -81,6 +81,21 @@ DEFAULTS: dict[str, Any] = {
     # If the worker can't catch up within the window, the frame self-
     # expires and the worker skips the stale entry with a drop record.
     "vlm_frame_ttl_seconds": 1800,
+    # ── CLIP zero-shot gate (Section 7H, "is anything interesting") ──
+    # Master switch. When false the gate falls open and every frame
+    # past dedupe + motion still hits the VLM enqueue.
+    "vlm_gate_enabled": True,
+    # Boring class must beat interesting by at least this much to
+    # trigger a skip. Tighter (smaller) = skip more aggressively;
+    # looser = let through more frames.
+    "vlm_gate_margin": 0.05,
+    # Absolute floor on the top interesting score. Below this the
+    # classifier wasn't confident anything interesting was present.
+    "vlm_gate_min_interesting_score": 0.20,
+    # Override prompt lists per-camera in a future revision; for v1
+    # the defaults baked into services/perception/vlm_gate.py win.
+    "vlm_gate_interesting_prompts": None,
+    "vlm_gate_boring_prompts": None,
 }
 
 
