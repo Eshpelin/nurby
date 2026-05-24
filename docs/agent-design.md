@@ -527,11 +527,42 @@ Decision. The agent never tells the user "no" based on a single `cannot_tell`. i
 
 ### 5.4 Caching
 
-Decision. Exact-string cache keyed by `(target_hash, sha256(normalized_question), frame_sample_strategy_version)`, 7-day TTL, stored in Redis. Normalization. lowercase, strip punctuation, collapse whitespace.
+**Decision (locked by product).** Cache lives at the FRAME level, not the household / user / question level. Every successful VLM analyzer call writes a row to a new `vlm_frame_analysis` table keyed by `(observation_id OR recording_segment_hash, question_hash, provider_id, model)`. Rows persist for the life of the underlying media — no TTL.
 
-Rejected. Semantic (embedding-similarity) question cache. Two reasons. (1) cheap cache key matters more than recall here because cache misses are tolerable while a false hit ("did dad eat?" served for "did dad sleep?") is catastrophic. (2) embedding-cache lookups themselves cost an embedding call, which negates much of the saving on questions that turn out to be unique.
+Schema sketch.
 
-Cache invalidation. Cache rows hold a `recording_id` (or `observation_id`) reference; deleting the underlying file via the retention loop nukes the cache row in the same transaction. AgentRuns that cite a cache row keep their textual citation but lose the playback link.
+```
+vlm_frame_analysis (
+  id uuid PK,
+  observation_id uuid FK -> observations.id ON DELETE CASCADE,
+  recording_id uuid FK -> recordings.id ON DELETE CASCADE (nullable; one side set),
+  question_hash varchar(64),   -- sha256 of normalized question text
+  question_text text,          -- raw, for audit + debugging
+  provider_id uuid FK -> providers.id ON DELETE SET NULL,
+  model varchar(128),
+  response_json jsonb,         -- the structured analyzer response
+  confidence float,
+  cost_tokens_in int,
+  cost_tokens_out int,
+  cost_cents int,
+  created_at timestamptz default now(),
+  UNIQUE (observation_id, question_hash, provider_id, model)  -- partial unique
+)
+```
+
+Rationale. If we burned tokens analyzing frame F for "is the person eating?", that judgment about F is permanent. Any future user, in any future question, that finds itself looking at frame F for an eating-related question gets the cached answer for free. The cache key is the FRAME + QUESTION, not the household + question. This is the asymmetry. work is per-frame; the same frame answers many questions.
+
+Lookup. Before each analyzer call, the analyzer checks the table. Cache hit = the analyzer skips the VLM, returns the cached JSON, and the AgentRun records `cached: true` in the audit trail.
+
+Question normalization for the hash. lowercase, strip punctuation, collapse whitespace. Still exact-string. No semantic cache (see below).
+
+Cross-user note. Cache rows are household-scoped because the underlying observations + recordings are household-scoped; there is no cross-household leakage. Within a household, any user benefits from any prior user's analyzer work.
+
+Rejected. Semantic (embedding-similarity) question cache. Two reasons. (1) cheap cache key matters more than recall here because cache misses are tolerable while a false hit ("did dad eat?" served for "did dad sleep?") is catastrophic. (2) embedding-cache lookups themselves cost an embedding call.
+
+Rejected. TTL-based cache. Frames do not change; their VLM answer does not need to expire. Provider model upgrades are addressed by keying on `provider_id + model`, so a new model produces a new row alongside the old.
+
+Cache invalidation. Single rule. cache rows die with their media. Foreign key `ON DELETE CASCADE` from both `observations.id` and `recordings.id`. When the retention loop deletes a Recording mp4, all `vlm_frame_analysis` rows for it vanish in the same transaction. When perception eventually prunes old Observations (Phase 2 retention), their cache rows go with them. AgentRuns that cite a now-deleted cache row keep their textual citation but lose the playback + re-verify link.
 
 ### 5.5 Long-clip stitching
 
@@ -824,11 +855,13 @@ Pass criterion. Phase 1 ships when >= 27/30 pass.
 
 The model running the tool-use loop. Picks tools, drafts plans, decides when to stop, composes synthesis.
 
-Decision. Default = Anthropic Claude Sonnet 4.x (or current generation). It has stable tool-use, fast TTFT, and the cost/quality balance is the best for multi-turn loops. Falls back to OpenAI GPT-4o-class if no Anthropic provider is configured. Falls back further to the household's existing primary VLM provider's text endpoint, last resort.
+**Decision (locked by product).** The user picks the orchestration model PER QUESTION. The chat input ships a model selector chip beside the send button, defaulting to whatever the user last picked. The platform never makes this choice on the user's behalf. No silent default; the selector must be visible. Selector options are drawn from the household's configured Providers (auth.tsx fetches `/api/providers`) filtered to those whose `kind` advertises tool-use support (claude family, gpt family, gemini family, ollama models with native tool-use). Selector remembers the last pick in localStorage per user.
 
-Rejected. Always use Opus. 5x cost for marginal quality on tool-use loops. Reserve Opus for the optional escalation in 12.2.
+UI requirement. The selected model + provider name is rendered on the AgentRun audit trace so users see exactly which model answered each question, and so cost accounting attributes correctly.
 
-Rejected. Always use the household's existing VLM provider. The VLM provider chain is configured for vision, not tool-use; defaulting to Gemini Flash for tool-use is a worse experience than Sonnet.
+Rejected. Hard-coded "Claude Sonnet 4.x default" was the original recommendation; product overruled because Nurby's positioning is provider-agnostic and choosing for the user contradicts that. We do not gate on a provider we picked.
+
+Rejected. Always use the household's existing VLM provider. The VLM provider chain is configured for vision and may be a model that handles tool-use poorly; forcing it would degrade orchestration quality silently.
 
 ### 12.2 Synthesis model (final answer composition)
 
@@ -967,19 +1000,19 @@ Exit criterion. CLIP image search wins eval delta of >= 5 fixtures over text-onl
 
 ## 17. Open questions
 
-These need an answer from the team before Phase 1 build kicks off. Recommendations marked.
+Resolved by product. Recorded here as the source of truth that supersedes earlier sections.
 
-1. **OPEN.** Should agent answers be cached per-question for the entire household, or per-user, or always re-run? Recommendation. cache per-household per `question_hash` for 15 minutes, with a "rerun" button on the answer. Reasoning. household members commonly ask similar questions back-to-back. Decision owner. product.
+1. **RESOLVED. Question caching policy.** Cache lives at the FRAME level, eternal, keyed by `(observation_id OR recording_id, question_hash, provider_id, model)`. Not per-household, not per-user, not per-question-string. Section 5.4 holds the authoritative spec. Rationale. work is per-frame; the answer about a frame does not expire while the frame still exists. Foreign keys cascade so cache dies with its media. Within a household, all users benefit from any prior user's analyzer work.
 
-2. **OPEN.** Should VLM analyzer thumbnails (the blurred frames we sent to the provider) persist to disk for audit, or be re-extracted on demand from the original recording? Recommendation. persist for 7 days alongside the AgentVLMCall row, then drop. Disk cost is bounded by the per-user budget; on-demand re-extraction risks the recording having been evicted by retention. Decision owner. backend lead.
+2. **OPEN.** Should VLM analyzer thumbnails (the redacted frames we sent to the provider) persist to disk for audit, or be re-extracted on demand from the original recording? Recommendation. persist alongside the cache row for the life of the underlying media (matches the frame-cache policy in resolution 1), then drop when the media drops. Decision owner. backend lead.
 
 3. **OPEN.** Do we charge agent tokens to the user's per-user budget, or absorb as platform cost? For self-hosted Nurby this is moot; for any future hosted offering it is critical. Recommendation. always charge to the user's budget so the per-day cap meaningfully bounds spend. Hosted-only billing surface is out of scope. Decision owner. product + finance.
 
-4. **OPEN.** If the agent calls VLM on a recording older than `Camera.retention_days`, should it fail gracefully or block at query time? Recommendation. block at the `analyze_clip_with_vlm` tool level. The Recording row is the source of truth. if it is gone the tool returns `{error: "clip_evicted"}`. Decision owner. backend lead.
+4. **RESOLVED. Retention vs analyzer.** Retention is the source of truth. Cache rows are bound to their media via `ON DELETE CASCADE`. If the user asks about a window whose recording was already evicted by retention, the analyzer tool returns `{error: "clip_evicted"}` and the agent reports honestly that the footage was no longer available. Section 5.4 carries this in the schema; section 6.4 keeps it in the hard-blocks list.
 
 5. **OPEN.** Should the agent be allowed to read transcripts that contain text from a Person whose `privacy_blur=true`? Right now visual blur is the only privacy lever. Recommendation. yes for Phase 1 (visual privacy and audio privacy are independent today), but add a `Person.audio_redact` boolean in Phase 2 and respect it. Decision owner. product + privacy.
 
-6. **OPEN.** Default orchestration model. Sonnet 4.x vs the household's current text provider? Recommendation. ship with a setup screen on first agent use that asks the user to pick (Anthropic, OpenAI, or "use my existing VLM provider"); default to Anthropic if a key is configured. Decision owner. product.
+6. **RESOLVED. Orchestration model.** User picks per question via a model selector chip in the chat input. The platform never sets a silent default. Selector is fed by `/api/providers` filtered to those advertising tool-use. Last pick is remembered in localStorage per user. Section 12.1 holds the authoritative spec.
 
 7. **OPEN.** Should we support a "household admin only" mode where viewers cannot use the agent? Camera ACLs already gate viewers per camera. Recommendation. agent respects `UserCameraAccess` automatically (filters all tool results to the user's accessible cameras); no separate global gate. Decision owner. backend lead.
 
@@ -987,7 +1020,9 @@ These need an answer from the team before Phase 1 build kicks off. Recommendatio
 
 9. **OPEN.** Do we expose a Telegram bot command (`/ask <question>`) in Phase 1, or wait? Recommendation. wait for Phase 3. Telegram surface for asynchronous Q&A is high value but doubles the surface area to harden. Decision owner. product.
 
-10. **OPEN.** Should the audit page be admin-only or visible to the user who ran the query? Recommendation. visible to the user who ran the query (it is their answer), plus admins household-wide. Decision owner. product.
+10. **RESOLVED. Audit page visibility.** All household admins see every AgentRun's audit page, not only the asker. The query asker sees their own runs by default in their personal Q&A history. Admins get a household-wide view at `/agent/admin/runs` for oversight. Builders should gate `/agent/runs/{id}` on `current_user.role == "admin" OR current_user.id == run.user_id`.
+
+11. **RESOLVED. Cloud VLM TOS modal.** Not required. The user opted into cloud VLM exposure when they configured the Provider during initial setup. The agent reuses the existing provider configuration verbatim; no separate consent flow is needed for the agent surface. The doc's section 18.1 risk wording should be softened (operator-disclosure, not first-use-modal).
 
 ---
 
@@ -995,9 +1030,11 @@ These need an answer from the team before Phase 1 build kicks off. Recommendatio
 
 ### 18.1 Cloud VLM provider TOS
 
-OpenAI, Anthropic, and Google each have data-use clauses that vary. household footage may or may not be covered under "consumer" vs "enterprise" agreements. The agent doubles the rate of cloud VLM calls compared to baseline perception. Risk. an opaque TOS violation when a household sends a stranger's face to a cloud provider for ad-hoc analysis.
+OpenAI, Anthropic, and Google each have data-use clauses that vary. household footage may or may not be covered under "consumer" vs "enterprise" agreements. The agent increases the rate of cloud VLM calls compared to baseline perception.
 
-Mitigation. (a) the existing privacy redaction pipeline blurs Persons flagged `privacy_blur=true`; unknown faces are NOT blurred today, which is a gap; (b) ship a settings screen on first agent use that names which cloud providers will receive footage and requires the household admin to acknowledge; (c) document the recommendation. for household footage, prefer Ollama.
+Consent posture (locked by product). Configuring a cloud Provider in Nurby is the user's consent surface. No first-use modal is added for the agent because the agent reuses the existing provider chain that the user already opted into during setup. Cloud exposure has the same shape as today's perception VLM calls; the agent just makes more of them.
+
+Mitigation that we still ship. (a) the existing privacy redaction pipeline blurs Persons flagged `privacy_blur=true` before frames leave the box; (b) audit trail records exactly which provider received which frame for every agent run, so a household admin can review; (c) docs recommend Ollama for households uncomfortable with cloud exposure. We do NOT gate the agent behind a separate consent click.
 
 ### 18.2 Liability of automated synthesis
 
