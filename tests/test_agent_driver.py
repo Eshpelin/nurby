@@ -406,3 +406,36 @@ def test_ws_replay_returns_buffered_events_after_seq(monkeypatch):
 
     backlog = _run(go())
     assert [e["seq"] for e in backlog] == [2, 3]
+
+
+def test_summarize_prior_evidence_returns_lines(monkeypatch):
+    """Parent-context evidence preamble surfaces the prior run's tool calls."""
+
+def test_format_evidence_preamble_renders_tool_calls():
+    """Parent-context evidence preamble surfaces the prior run's tool calls."""
+    from services.agent.driver import _format_evidence_preamble
+    from types import SimpleNamespace
+
+    rows_newest_first = [
+        SimpleNamespace(
+            tool_name="query_observations",
+            arguments={"query": "cat", "hours": 24},
+            result={"count": 0, "observations": []},
+        ),
+        SimpleNamespace(
+            tool_name="get_household_snapshot",
+            arguments={},
+            result={"cameras": [1, 2, 3, 4]},
+        ),
+    ]
+    out = _format_evidence_preamble(rows_newest_first)
+    assert "Prior evidence I gathered:" in out
+    assert "get_household_snapshot" in out
+    assert "query_observations" in out
+    # Output is oldest-first (input is newest-first; the formatter reverses).
+    assert out.index("get_household_snapshot") < out.index("query_observations")
+
+
+def test_format_evidence_preamble_empty_when_no_rows():
+    from services.agent.driver import _format_evidence_preamble
+    assert _format_evidence_preamble([]) == ""

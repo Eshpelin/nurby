@@ -149,7 +149,15 @@ def _result_summary(name: str, result: dict) -> str:
 
 async def _load_parent_chain(parent_run_id: uuid.UUID, db) -> list[dict]:
     """Walk up to PARENT_CONTEXT_MAX_DEPTH ancestors and return canonical
-    Anthropic-style messages summarizing prior turns. Newest last."""
+    Anthropic-style messages summarizing prior turns. Newest last.
+
+    Each ancestor contributes.
+        - the original user question, AND
+        - the prior assistant answer with a short evidence preamble that
+          lists the top citations the LLM made last time. Carrying the
+          evidence (not just the prose) lets follow-up turns reference
+          observation_ids and journey_ids without re-running tools.
+    """
     out: list[dict] = []
     cur = parent_run_id
     depth = 0
@@ -163,9 +171,69 @@ async def _load_parent_chain(parent_run_id: uuid.UUID, db) -> list[dict]:
         depth += 1
     for run in reversed(chain):
         out.append({"role": "user", "content": run.question})
-        if run.final_answer:
-            out.append({"role": "assistant", "content": run.final_answer})
+        # Compose an evidence preamble from the prior run's tool_calls
+        # so the LLM can cite back to the same observations without
+        # having to re-search. Cap at the 5 most recent calls and
+        # truncate each result summary to keep token cost bounded.
+        preamble = await _summarize_prior_evidence(run.id, db)
+        body = run.final_answer or ""
+        if preamble:
+            body = preamble + ("\n\n" + body if body else "")
+        if body:
+            out.append({"role": "assistant", "content": body})
     return out
+
+
+async def _fetch_recent_tool_calls(run_id: uuid.UUID, db, limit: int = 5) -> list:
+    """Return the most recent AgentToolCall rows for a run (newest first)."""
+    from sqlalchemy import select as _select
+
+    from shared.models import AgentToolCall
+
+    try:
+        return (
+            await db.execute(
+                _select(AgentToolCall)
+                .where(AgentToolCall.run_id == run_id)
+                .order_by(AgentToolCall.created_at.desc())
+                .limit(limit)
+            )
+        ).scalars().all()
+    except Exception:
+        return []
+
+
+def _format_evidence_preamble(tool_call_rows: list) -> str:
+    """Render an evidence preamble from prior-run AgentToolCall rows.
+
+    Returns text like:
+        Prior evidence I gathered:
+        - get_household_snapshot -> 4 cameras, 2 named persons
+        - query_observations(query='cat', hours=24) -> 0 observations
+        - get_last_sightings -> cat last seen 19h ago at Back Door
+
+    Designed to slot into the previous-turn assistant message so the
+    LLM in this turn can chain citations across turns.
+    """
+    if not tool_call_rows:
+        return ""
+    lines = ["Prior evidence I gathered:"]
+    for r in reversed(tool_call_rows):
+        args = getattr(r, "arguments", None) or {}
+        arg_bits = ", ".join(
+            f"{k}={str(v)[:30]}" for k, v in list(args.items())[:3]
+        ) if args else ""
+        result = getattr(r, "result", None)
+        summary = _result_summary(r.tool_name, result if isinstance(result, dict) else {})
+        head = f"{r.tool_name}({arg_bits})" if arg_bits else r.tool_name
+        lines.append(f"- {head} -> {summary}")
+    return "\n".join(lines)
+
+
+async def _summarize_prior_evidence(run_id: uuid.UUID, db) -> str:
+    """Convenience wrapper. Fetches recent tool calls and formats them."""
+    rows = await _fetch_recent_tool_calls(run_id, db)
+    return _format_evidence_preamble(rows)
 
 
 # ── Driver class ─────────────────────────────────────────────────────
