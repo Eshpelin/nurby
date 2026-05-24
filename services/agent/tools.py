@@ -1066,11 +1066,16 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
     {
         "name": "query_observations",
         "description": (
-            "Search past camera observations by text query, time window, person, "
-            "and label. Returns observation rows with thumbnails, descriptions, "
-            "and detected objects. Use this BEFORE running the expensive analyzer; "
-            "if the user's question can be answered from indexed data, this is "
-            "the cheap path."
+            "Semantic + filter search over indexed camera observations. "
+            "Cheap. Each result row carries an observation_id, a "
+            "timestamp, a thumbnail_url, the VLM description, and the "
+            "raw detections. WINDOW. Defaults to the last 24h. If a "
+            "question implies older footage, set hours explicitly (168 "
+            "= 7 days, 720 = 30 days). If your default-window query "
+            "returns zero rows for an entity that probably exists, RE-"
+            "QUERY with hours=168 then 720 before concluding it wasn't "
+            "seen. Use get_last_sightings as a cheaper alternative when "
+            "you only need the most recent timestamp per entity."
         ),
         "input_schema": _QUERY_OBSERVATIONS_SCHEMA,
         "fn": query_observations,
@@ -1080,10 +1085,14 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
     {
         "name": "get_journeys",
         "description": (
-            "List cross-camera Person sightings sessions. A Journey is a "
-            "contiguous period when a Person was visible across one or more "
-            "cameras. Use this to answer 'when was X around today?' or "
-            "'where did the dog go?'."
+            "Cross-camera Person sighting sessions. A Journey ties one "
+            "Person's appearances across one or more cameras into a "
+            "single timeline row with started_at + last_seen_at + the "
+            "camera path. Best tool for 'when was Aisha here?', 'where "
+            "did Dad go after the kitchen?', 'is anyone still around?'. "
+            "WINDOW. Defaults to last 24h. Widen via hours=168 or 720 "
+            "for older context. Returns disambiguation when person_name "
+            "matches more than one Person. Cheap."
         ),
         "input_schema": _GET_JOURNEYS_SCHEMA,
         "fn": get_journeys,
@@ -1093,10 +1102,12 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
     {
         "name": "get_camera_layout",
         "description": (
-            "Get the list of cameras in this household, their roles "
-            "(front_door, kitchen, etc.), and current online status. Call this "
-            "FIRST when answering location questions so you know which cameras "
-            "exist."
+            "Static camera inventory. Returns id, name, inferred role "
+            "(entry, kitchen, garage, outdoor, nursery, living, other), "
+            "scene_mode (indoor/outdoor), online status, and timezone. "
+            "Use when you need to know which camera covers which area. "
+            "Prefer get_household_snapshot when you also want last-"
+            "observation freshness per camera. Cheap."
         ),
         "input_schema": _GET_CAMERA_LAYOUT_SCHEMA,
         "fn": get_camera_layout,
@@ -1137,12 +1148,16 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
     {
         "name": "analyze_clip",
         "description": (
-            "Run a VLM against a video clip from a specific camera over a time "
-            "window. Use this when the user's question requires looking at "
-            "footage that wasn't pre-indexed, e.g. 'was Daddy eating?', 'is the "
-            "package still there?', 'did anyone come in through the gate at "
-            "2pm?'. EXPENSIVE. only call after confirming query_observations "
-            "doesn't already answer the question."
+            "EXPENSIVE. Runs a VLM against actual video frames over a "
+            "[time_from, time_to] window on one camera. Use ONLY when "
+            "query_observations + get_last_sightings + get_journeys "
+            "cannot answer the question because the concept isn't in "
+            "our indexed taxonomy ('was he eating?', 'is the package "
+            "still there?', 'did anyone come through the gate at 2 "
+            "PM?'). Cached per (recording, question, model) forever — "
+            "asking the same question about the same window again is "
+            "free. Returns a structured answer with verdict, confidence, "
+            "evidence frames, and a vlm_call_id you must cite."
         ),
         "input_schema": _ANALYZE_CLIP_SCHEMA,
         "fn": analyze_clip,
@@ -1152,9 +1167,14 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
     {
         "name": "analyze_frame",
         "description": (
-            "Run a VLM against a single Observation's thumbnail. Cheapest VLM "
-            "call. Use when you have a specific observation_id from "
-            "query_observations and want to verify or extract a detail."
+            "MEDIUM cost. Runs a VLM against ONE Observation's "
+            "thumbnail. Use when you already have a specific "
+            "observation_id (from query_observations or "
+            "get_last_sightings) and need to verify or extract a "
+            "single detail ('is the dog in this frame holding "
+            "anything?', 'what color is the visitor's jacket?'). "
+            "Cached per (observation, question, model) forever. "
+            "Returns the same structured answer schema as analyze_clip."
         ),
         "input_schema": _ANALYZE_FRAME_SCHEMA,
         "fn": analyze_frame,
