@@ -66,9 +66,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading) return;
-    if (!token && !PUBLIC_PATHS.includes(pathname)) {
-      router.replace("/login");
-    }
+    if (token || PUBLIC_PATHS.includes(pathname)) return;
+    // No token on a protected path. A brand-new install with zero users
+    // should land on /setup, not a sign-in form for an account that does
+    // not exist. Ask the backend before bouncing.
+    let cancelled = false;
+    (async () => {
+      let dest = "/login";
+      try {
+        const res = await fetch("/api/auth/needs-setup");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.needs_setup) dest = "/setup";
+        }
+      } catch {
+        /* default to /login on any error */
+      }
+      if (!cancelled) router.replace(dest);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [loading, token, pathname, router]);
 
   const saveAuth = useCallback((data: TokenResponse) => {

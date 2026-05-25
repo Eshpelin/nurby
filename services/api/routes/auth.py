@@ -12,6 +12,19 @@ from shared.schemas import AdminSetup, TokenResponse, UserCreate, UserLogin, Use
 router = APIRouter()
 
 
+@router.get("/needs-setup")
+async def needs_setup(db: AsyncSession = Depends(get_db)):
+    """Public. Returns whether the instance has zero users yet.
+
+    A brand-new install has no admin account, so the frontend should
+    route a tokenless visitor to /setup instead of /login. Without this
+    the user lands on a sign-in form for an account that does not exist
+    and has to notice the small "First time?" link.
+    """
+    count = (await db.execute(select(func.count()).select_from(User))).scalar() or 0
+    return {"needs_setup": count == 0}
+
+
 @router.post("/setup", response_model=TokenResponse, status_code=201)
 async def initial_admin_setup(body: AdminSetup, db: AsyncSession = Depends(get_db)):
     """Create the first admin account. Only works when no users exist in the system."""
