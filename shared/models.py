@@ -174,6 +174,11 @@ class Person(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Household-wide colloquial name shown in place of display_name across
+    # all view surfaces (notifications, digest, timeline, agent answers).
+    # Purely presentational. Identity matching, journey signatures, and
+    # cluster naming always use the canonical display_name.
+    nickname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     relationship: Mapped[str | None] = mapped_column(String(64), nullable=True)
     consent_given: Mapped[bool] = mapped_column(Boolean, default=False)
     privacy_blur: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

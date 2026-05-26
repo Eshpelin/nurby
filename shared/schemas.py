@@ -278,6 +278,7 @@ class RecordingResponse(BaseModel):
 
 class PersonCreate(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
+    nickname: str | None = Field(default=None, max_length=255)
     relationship: str | None = Field(default=None, max_length=64)
     consent_given: bool = False
     privacy_blur: bool = False
@@ -289,6 +290,7 @@ class PersonCreate(BaseModel):
 
 class PersonUpdate(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    nickname: str | None = Field(default=None, max_length=255)
     relationship: str | None = Field(default=None, max_length=64)
     consent_given: bool | None = None
     privacy_blur: bool | None = None
@@ -301,6 +303,7 @@ class PersonUpdate(BaseModel):
 class PersonResponse(BaseModel):
     id: uuid.UUID
     display_name: str
+    nickname: str | None
     relationship: str | None
     consent_given: bool
     privacy_blur: bool
