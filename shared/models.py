@@ -1094,3 +1094,31 @@ class AgentDailyUsage(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+class ApiKey(Base):
+    """Long-lived machine credential for programmatic API access.
+
+    The plaintext key (``nrb_<random>``) is shown once at creation and
+    never stored. We persist a sha256 hash for constant-time lookup and
+    a short prefix for display. Keys are scoped (read / write) and can
+    carry an optional expiry; revocation stamps ``revoked_at``.
+    """
+
+    __tablename__ = "api_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    # sha256 hex of the full plaintext key. Indexed for O(1) auth lookup.
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    # First chars of the key (e.g. "nrb_ab12cd") for UI display only.
+    prefix: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Advisory scope. "read" or "write". write implies read.
+    scope: Mapped[str] = mapped_column(String(16), default="read", nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

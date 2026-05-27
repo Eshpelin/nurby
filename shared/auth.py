@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -10,11 +12,56 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.config import settings
 from shared.database import get_db
-from shared.models import User, UserCameraAccess
+from shared.models import ApiKey, User, UserCameraAccess
 
 bearer_scheme = HTTPBearer()
 
 ALGORITHM = "HS256"
+
+# Programmatic API keys are issued as ``nrb_<urlsafe-random>``. The
+# plaintext is shown once; only its sha256 is stored.
+API_KEY_PREFIX = "nrb_"
+
+
+def generate_api_key() -> tuple[str, str, str]:
+    """Mint a new API key. Returns (plaintext, sha256_hex, display_prefix).
+
+    The plaintext is returned to the caller exactly once and never
+    persisted. Store the hash; show the prefix in listings.
+    """
+    plaintext = API_KEY_PREFIX + secrets.token_urlsafe(32)
+    return plaintext, hash_api_key(plaintext), plaintext[:12]
+
+
+def hash_api_key(plaintext: str) -> str:
+    """sha256 hex of a plaintext key. The key is high-entropy random, so
+    a fast hash is safe here (no brute-force surface like a password)."""
+    return hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
+
+
+async def _user_from_api_key(token: str, db: AsyncSession) -> User | None:
+    """Resolve a ``nrb_`` token to its owning user, or None when the key
+    is unknown, revoked, or expired. Stamps last_used_at best-effort."""
+    key_hash = hash_api_key(token)
+    row = (
+        await db.execute(select(ApiKey).where(ApiKey.key_hash == key_hash))
+    ).scalar_one_or_none()
+    if row is None or row.revoked_at is not None:
+        return None
+    now = datetime.now(timezone.utc)
+    if row.expires_at is not None and row.expires_at <= now:
+        return None
+    user = await db.get(User, row.user_id)
+    if user is None or not user.is_active:
+        return None
+    # Throttle the write. only stamp when stale by > 60s.
+    if row.last_used_at is None or (now - row.last_used_at).total_seconds() > 60:
+        try:
+            row.last_used_at = now
+            await db.commit()
+        except Exception:
+            await db.rollback()
+    return user
 
 
 def hash_password(password: str) -> str:
@@ -50,8 +97,24 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """FastAPI dependency that extracts and validates the current user from the Authorization header."""
-    user_id = decode_access_token(credentials.credentials)
+    """FastAPI dependency that extracts and validates the current user.
+
+    Accepts either a user JWT or a programmatic API key (``nrb_`` prefix)
+    in the Authorization: Bearer header, so scripts and integrations can
+    authenticate without a login round-trip.
+    """
+    token = credentials.credentials
+
+    if token.startswith(API_KEY_PREFIX):
+        user = await _user_from_api_key(token, db)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid, revoked, or expired API key",
+            )
+        return user
+
+    user_id = decode_access_token(token)
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
