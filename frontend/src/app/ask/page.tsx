@@ -62,8 +62,33 @@ export default function AskPage() {
         }
         if (res.ok) {
           const data = await res.json();
-          const list: ProviderModel[] = Array.isArray(data) ? data : data.models ?? [];
-          if (!cancelled) setProviders(list);
+          // The endpoint returns one object per provider, each carrying a
+          // nested `models` array. Flatten to the per-model rows the
+          // selector renders, threading the supports_tools flag so we can
+          // warn on local models that cannot drive the agent's tool loop.
+          const provObjs: Array<{
+            provider_id: string;
+            kind: string;
+            label: string;
+            models?: Array<{ name: string; label?: string; recommended?: boolean; supports_tools?: boolean }>;
+            suggested_tool_model?: string | null;
+          }> = Array.isArray(data) ? data : [];
+          const flat: ProviderModel[] = [];
+          for (const pr of provObjs) {
+            for (const m of pr.models ?? []) {
+              flat.push({
+                id: m.name,
+                name: m.label || m.name,
+                kind: pr.kind,
+                provider_id: pr.provider_id,
+                provider_name: pr.label,
+                recommended: m.recommended,
+                supports_tools: m.supports_tools !== false,
+                suggested_tool_model: pr.suggested_tool_model ?? null,
+              });
+            }
+          }
+          if (!cancelled) setProviders(flat);
         }
       } catch {/* ignore */}
       finally { if (!cancelled) setProvidersLoading(false); }

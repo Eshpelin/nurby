@@ -62,9 +62,36 @@ router = APIRouter()
 TOOL_USE_KINDS = {"anthropic", "claude", "openai", "gpt", "gemini", "google", "ollama"}
 RECOMMENDED_PREFIXES = ("claude-sonnet-4",)
 
+# Cloud kinds support tool/function calling for any modern model. Ollama
+# is the trap. only some local models implement the tools API. A user who
+# picks "Local, no data leaves" and the default vision model (gemma3) then
+# finds Ask-Nurby silently broken because that model cannot call tools.
+# Match the families Ollama documents as tool-capable.
+_OLLAMA_TOOL_MODEL_PREFIXES = (
+    "qwen2.5", "qwen3", "llama3.1", "llama3.2", "llama3.3", "llama4",
+    "mistral", "mixtral", "command-r", "firefunction", "hermes3", "smollm2",
+)
+SUGGESTED_OLLAMA_TOOL_MODEL = "qwen2.5:3b"
+
 
 def _is_tool_use_kind(kind: str | None) -> bool:
     return (kind or "").strip().lower() in TOOL_USE_KINDS
+
+
+def _model_supports_tools(kind: str | None, model: str | None) -> bool:
+    """Whether (kind, model) can drive the agent's tool-use loop.
+
+    Cloud tool-use kinds. always true. Ollama. only the documented
+    tool-capable families. Used to warn in the model selector before a
+    user picks a local model that will make the agent silently fail.
+    """
+    k = (kind or "").strip().lower()
+    if k in ("anthropic", "claude", "openai", "gpt", "gemini", "google"):
+        return True
+    if k == "ollama":
+        m = (model or "").strip().lower()
+        return any(m.startswith(pfx) for pfx in _OLLAMA_TOOL_MODEL_PREFIXES)
+    return False
 
 
 def _normalize_question(q: str) -> str:
@@ -339,12 +366,17 @@ async def list_agent_providers(
                 "name": default_model,
                 "label": default_model,
                 "recommended": any(default_model.lower().startswith(pfx) for pfx in RECOMMENDED_PREFIXES),
+                "supports_tools": _model_supports_tools(p.kind, default_model),
             })
         out.append({
             "provider_id": str(p.id),
             "kind": p.kind,
             "label": p.name,
             "models": models,
+            # Hint the UI can show when a local model lacks tool-calling.
+            "suggested_tool_model": SUGGESTED_OLLAMA_TOOL_MODEL
+            if (p.kind or "").lower() == "ollama"
+            else None,
         })
     return out
 

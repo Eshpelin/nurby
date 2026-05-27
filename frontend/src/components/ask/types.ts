@@ -73,6 +73,11 @@ export interface ProviderModel {
   recommended?: boolean;
   cost_per_1k_in?: number;
   cost_per_1k_out?: number;
+  // False for local Ollama models that lack the tools API. The agent
+  // cannot drive its tool-use loop on these, so the selector warns.
+  supports_tools?: boolean;
+  // Suggested tool-capable local model when supports_tools is false.
+  suggested_tool_model?: string | null;
 }
 
 export interface UsageToday {

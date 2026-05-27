@@ -106,10 +106,23 @@ export default function ModelSelector({
                               recommended
                             </span>
                           )}
+                          {m.supports_tools === false && (
+                            <span className="text-[9px] px-1 py-px rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                              no tools
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-muted-foreground font-mono truncate">
                           {m.provider_name}
                         </div>
+                        {m.supports_tools === false && (
+                          <div className="text-[10px] text-amber-400/90 mt-0.5 leading-tight">
+                            This local model can&apos;t call tools, so Ask Nurby won&apos;t work with it.
+                            {m.suggested_tool_model
+                              ? ` Pull ${m.suggested_tool_model} (Settings → Local AI) for the agent.`
+                              : ""}
+                          </div>
+                        )}
                       </div>
                       {(m.cost_per_1k_in !== undefined || m.cost_per_1k_out !== undefined) && (
                         <div className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">
