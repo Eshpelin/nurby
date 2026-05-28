@@ -565,6 +565,21 @@ function ProviderStep({
               />
             </FieldRow>
           )}
+          {preset.keyRequired ? (
+            <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-300/90 leading-relaxed">
+              Cloud providers bill per call. Nurby caps Ask-Nurby spend with a
+              per-user daily budget (default $5/day, adjustable in Settings), and
+              the perception pipeline only calls the model on real motion, so
+              idle cameras cost nothing.
+            </div>
+          ) : (
+            <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[11px] text-emerald-300/90 leading-relaxed">
+              Local models are free and private. nothing leaves your network. This
+              model captions what cameras see. For Ask-Nurby you&apos;ll also want a
+              tool-capable local model (e.g. qwen2.5:3b) which you can deploy from
+              Settings → Local AI.
+            </div>
+          )}
         </div>
       )}
 
