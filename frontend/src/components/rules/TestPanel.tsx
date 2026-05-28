@@ -394,8 +394,8 @@ export default function TestPanel({
           {replayResult.scanned > 0 && replayResult.matched === 0 && (
             <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded p-2">
               {isNonReplayable
-                ? `Trigger never fired against persisted observations. Some trigger types (audio_event, clap_pattern, speech_phrase, inline-geometry loitering, line_cross) cannot be replayed because their match data is not persisted on the observations table.`
-                : `Trigger never fired against persisted observations. Some trigger types (audio_event, clap_pattern, speech_phrase, inline-geometry loitering, line_cross) cannot be replayed because their match data is not persisted on the observations table.`}
+                ? `This trigger type cannot be replayed. Its match data (audio, clap, speech) is not persisted on the observations table, so a historical scan can never re-detect it. Use a live Test instead.`
+                : `Trigger never matched in this window. Nothing in the last scan satisfied the trigger and conditions. Widen the window or loosen the rule.`}
             </div>
           )}
 

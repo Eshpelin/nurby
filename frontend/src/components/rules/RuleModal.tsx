@@ -25,6 +25,7 @@ import { SummaryCard } from "./SummaryCard";
 import { TriggerSection } from "./TriggerSection";
 import { ConditionsSection } from "./ConditionsSection";
 import { ActionsSection } from "./ActionsSection";
+import TestPanel from "./TestPanel";
 
 export interface RuleModalProps {
   open: boolean;
@@ -573,6 +574,12 @@ export function RuleModal({
           </div>
 
           <SummaryCard text={formSummary} className="p-3" />
+
+          <TestPanel
+            payload={buildPayload}
+            existingRuleId={editRule?.id ?? null}
+            cameras={cameras}
+          />
 
           {state.formError && (
             <div className="text-xs text-red-400">{state.formError}</div>
