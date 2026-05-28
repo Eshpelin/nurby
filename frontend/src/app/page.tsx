@@ -24,6 +24,7 @@ import {
 import { SystemHealthFooter } from "@/components/SystemHealthFooter";
 import { LLMErrorToasts } from "@/components/LLMErrorToasts";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
+import CameraBrandHelp from "@/components/CameraBrandHelp";
 import { TranscriptCard } from "@/components/TranscriptCard";
 import { SummaryCard } from "@/components/SummaryCard";
 import { ConversationCard } from "@/components/ConversationCard";
@@ -1722,6 +1723,16 @@ function AddCameraModal({ onClose, onSuccess, initialStreamType }: { onClose: ()
               <label className="block text-sm text-muted-foreground mb-1.5">
                 {streamType === "usb" ? "Device Index or Path" : streamType === "file" ? "File Path" : streamType === "audio_rtsp" ? "Audio Stream URL" : "Stream URL"}
               </label>
+              {["rtsp", "http_mjpeg", "http_snapshot", "hls"].includes(streamType) && (
+                <div className="mb-2">
+                  <CameraBrandHelp
+                    onUseTemplate={(url) => {
+                      setStreamType("rtsp");
+                      setStreamUrl(url);
+                    }}
+                  />
+                </div>
+              )}
               {streamType === "usb" && !manualInput ? (
                 <div className="space-y-3">
                   <button type="button" onClick={handleDetectDevices} disabled={scanningDevices}

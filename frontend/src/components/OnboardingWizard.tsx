@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { CAMERA_PERSONAS, type PersonaPatch } from "@/lib/camera-personas";
+import CameraBrandHelp from "@/components/CameraBrandHelp";
 
 interface Provider {
   id: string;
@@ -705,13 +706,21 @@ function CameraStep({
         </FieldRow>
 
         <FieldRow label="Stream URL">
-          <input
-            type="text"
-            value={camStreamUrl}
-            onChange={(e) => setCamStreamUrl(e.target.value)}
-            placeholder={streamPreset?.placeholder}
-            className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:border-accent"
-          />
+          <div className="space-y-2">
+            <CameraBrandHelp
+              onUseTemplate={(url) => {
+                setCamStreamType("rtsp");
+                setCamStreamUrl(url);
+              }}
+            />
+            <input
+              type="text"
+              value={camStreamUrl}
+              onChange={(e) => setCamStreamUrl(e.target.value)}
+              placeholder={streamPreset?.placeholder}
+              className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:border-accent"
+            />
+          </div>
         </FieldRow>
 
         <FieldRow label="Location" hint="Where this camera is, e.g. Front porch">
