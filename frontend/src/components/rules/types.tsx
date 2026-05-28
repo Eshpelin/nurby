@@ -209,6 +209,8 @@ export const TELEGRAM_TEMPLATE_VARS = [
   { key: "observation_id", desc: "Database id of the observation" },
   { key: "event_id", desc: "Database id of the fired event" },
   { key: "event_url", desc: "Web UI deep link to the event (needs public base URL)" },
+  { key: "recording_url", desc: "Direct link to the footage clip covering the alert" },
+  { key: "thumbnail_url", desc: "Link to the observation thumbnail image" },
 ];
 
 export const TELEGRAM_BUTTON_ACTION_OPTIONS: { value: TelegramButtonAction; label: string }[] = [
@@ -321,14 +323,20 @@ export const TEMPLATE_VARIABLES = [
   { key: "vlm_description", desc: "VLM scene description" },
   { key: "confidence", desc: "VLM confidence" },
   { key: "observation_id", desc: "Observation UUID" },
+  { key: "camera_name", desc: "Camera name" },
+  { key: "recording_url", desc: "Direct link to the footage clip" },
+  { key: "thumbnail_url", desc: "Observation thumbnail image link" },
+  { key: "event_url", desc: "Web UI deep link to the event" },
 ];
 
 export const DEFAULT_PAYLOAD_TEMPLATE = `{
   "event": "{{rule_name}}",
-  "camera": "{{camera_id}}",
+  "camera": "{{camera_name}}",
   "timestamp": "{{timestamp}}",
   "description": "{{vlm_description}}",
-  "detections": "{{object_detections}}"
+  "detections": "{{object_detections}}",
+  "recording_url": "{{recording_url}}",
+  "thumbnail_url": "{{thumbnail_url}}"
 }`;
 
 export const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri"];
