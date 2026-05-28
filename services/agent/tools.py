@@ -36,6 +36,7 @@ from sqlalchemy import String as SAString
 
 from services.agent.access import accessible_camera_ids
 from shared.models import Camera, Event, Journey, Observation, Person, Rule
+from shared.person_alias import alias_names, display_name_for
 
 logger = logging.getLogger("nurby.agent.tools")
 
@@ -167,6 +168,21 @@ async def _person_journeys(
     rows = (await db.execute(stmt)).scalars().all()
     out = [j for j in rows if display_name in _subject_names(j.subject_key)]
     return out[:limit] if limit else out
+
+
+async def _alias_map(db) -> dict[str, str]:
+    """Load canonical display_name -> household nickname for all persons.
+
+    One cheap query per tool call. Used to rewrite canonical names pulled
+    from Journey.subject_key or stored detections into the household
+    nickname before the result reaches the model.
+    """
+    rows = (await db.execute(select(Person.display_name, Person.nickname))).all()
+    return {
+        dn: nk.strip()
+        for dn, nk in rows
+        if dn and isinstance(nk, str) and nk.strip()
+    }
 
 
 def _seg_camera_id(seg) -> uuid.UUID | None:
@@ -323,6 +339,7 @@ async def query_observations(
         )
         camera_map = {cid: cname for cid, cname in cam_rows.all()}
 
+    amap = await _alias_map(db)
     out_rows: list[dict[str, Any]] = []
     for (obs, dist) in rows:
         if obs.camera_id not in allowed:
@@ -335,6 +352,7 @@ async def query_observations(
             name = face.get("person_name")
             if name:
                 person_names.append(name)
+        person_names = alias_names(person_names, amap)
         out_rows.append(
             {
                 "id": str(obs.id),
@@ -425,10 +443,16 @@ async def get_journeys(
             return {"journeys": [], "error": "person not found"}
     elif person_name:
         like = f"%{person_name.strip()}%"
+        # Match the typed name on canonical display_name or household
+        # nickname. resolved_name stays canonical because Journey
+        # subject_key is keyed by canonical names.
         person_rows = (
             await db.execute(
-                select(Person.id, Person.display_name).where(
-                    Person.display_name.ilike(like)
+                select(Person.id, Person.display_name, Person.nickname).where(
+                    or_(
+                        Person.display_name.ilike(like),
+                        Person.nickname.ilike(like),
+                    )
                 )
             )
         ).all()
@@ -438,8 +462,8 @@ async def get_journeys(
             return {
                 "journeys": [],
                 "disambiguation": [
-                    {"person_id": str(pid), "display_name": dname}
-                    for pid, dname in person_rows
+                    {"person_id": str(pid), "display_name": (nk or dname)}
+                    for pid, dname, nk in person_rows
                 ],
             }
         resolved_name = person_rows[0][1]
@@ -516,6 +540,7 @@ async def get_journeys(
             if tpath:
                 thumb_by_obs[oid] = tpath
 
+    amap = await _alias_map(db)
     journeys_out: list[dict[str, Any]] = []
     for j in rows:
         # Filter segments to accessible cameras and skip the journey if
@@ -552,6 +577,7 @@ async def get_journeys(
             continue
 
         ns = _names(j.subject_key)
+        ns_display = alias_names(ns, amap)
         person_id_out = name_to_id.get(ns[0]) if len(ns) == 1 else None
 
         started = j.started_at
@@ -562,8 +588,8 @@ async def get_journeys(
             {
                 "id": str(j.id),
                 "person_id": person_id_out,
-                "person_name": j.subject_key,
-                "person_names": ns,
+                "person_name": ", ".join(ns_display) if ns_display else j.subject_key,
+                "person_names": ns_display,
                 "started_at": started.isoformat() if started else None,
                 "ended_at": ended.isoformat() if ended else None,
                 "duration_seconds": duration_s,
@@ -697,7 +723,7 @@ async def get_household_snapshot(ctx: dict) -> dict:
         persons.append(
             {
                 "person_id": str(p.id),
-                "display_name": p.display_name,
+                "display_name": display_name_for(p),
                 "relationship": p.relationship,
                 "last_seen_at": j.last_seen_at.isoformat() if j and j.last_seen_at else None,
                 "last_journey_id": str(j.id) if j else None,
@@ -717,6 +743,7 @@ async def get_household_snapshot(ctx: dict) -> dict:
             .limit(20)
         )
     ).scalars().all()
+    amap = await _alias_map(db)
     active_journeys: list[dict] = []
     for j in active:
         # Only surface if it touches an accessible camera.
@@ -727,7 +754,7 @@ async def get_household_snapshot(ctx: dict) -> dict:
         active_journeys.append(
             {
                 "journey_id": str(j.id),
-                "person_names": _subject_names(j.subject_key)
+                "person_names": alias_names(_subject_names(j.subject_key), amap)
                 if j.subject_kind == "person"
                 else [],
                 "started_at": j.started_at.isoformat() if j.started_at else None,
@@ -822,13 +849,20 @@ async def get_last_sightings(
     person_rows: list[Person] = []
     if person_name:
         needle = f"%{person_name.strip().lower()}%"
+        # Match the typed name against either the canonical display_name
+        # or the household nickname, so "mommy" finds "Salma Bekom".
         rs = await db.execute(
-            select(Person).where(func.lower(Person.display_name).like(needle))
+            select(Person).where(
+                or_(
+                    func.lower(Person.display_name).like(needle),
+                    func.lower(Person.nickname).like(needle),
+                )
+            )
         )
         person_rows = list(rs.scalars().all())
         if len(person_rows) > 1:
             disambiguation = [
-                {"person_id": str(p.id), "display_name": p.display_name}
+                {"person_id": str(p.id), "display_name": display_name_for(p)}
                 for p in person_rows
             ]
     else:
@@ -849,7 +883,7 @@ async def get_last_sightings(
                 persons_block.append(
                     {
                         "person_id": str(p.id),
-                        "display_name": p.display_name,
+                        "display_name": display_name_for(p),
                         "last_seen_at": None,
                         "last_camera_id": None,
                         "last_journey_id": None,
@@ -863,7 +897,7 @@ async def get_last_sightings(
             persons_block.append(
                 {
                     "person_id": str(p.id),
-                    "display_name": p.display_name,
+                    "display_name": display_name_for(p),
                     "last_seen_at": j.last_seen_at.isoformat() if j.last_seen_at else None,
                     "last_camera_id": str(visible[0]["camera_id"]) if visible else None,
                     "last_camera_name": visible[0].get("camera_name") if visible else None,
@@ -1142,7 +1176,7 @@ async def summarize_activity(ctx: dict, hours: int = 24) -> dict:
             persons_block.append(
                 {
                     "person_id": str(p.id),
-                    "display_name": p.display_name,
+                    "display_name": display_name_for(p),
                     "sighting_count": len(j_rows),
                     "observation_count": seg_count,
                     "first_seen_at": j_rows[0].started_at.isoformat()
@@ -1454,16 +1488,22 @@ async def _resolve_subject(
                 "type": "person",
                 "person_id": p.id,
                 "display_name": p.display_name,
+                "display": display_name_for(p),
             }
         # An unknown UUID. nothing to resolve.
         return {"type": "unresolved"}
 
-    # Person display_name substring match.
+    # Person match on canonical display_name or household nickname. The
+    # returned display_name stays canonical so the journey subject_key
+    # filter matches; ``display`` carries the nickname for the user echo.
     like = f"%{subj.lower()}%"
     person_rows = (
         await db.execute(
-            select(Person.id, Person.display_name).where(
-                func.lower(Person.display_name).like(like)
+            select(Person.id, Person.display_name, Person.nickname).where(
+                or_(
+                    func.lower(Person.display_name).like(like),
+                    func.lower(Person.nickname).like(like),
+                )
             )
         )
     ).all()
@@ -1471,15 +1511,17 @@ async def _resolve_subject(
         return {
             "type": "disambiguation",
             "candidates": [
-                {"person_id": str(pid), "display_name": dname}
-                for pid, dname in person_rows
+                {"person_id": str(pid), "display_name": (nk or dname)}
+                for pid, dname, nk in person_rows
             ],
         }
     if len(person_rows) == 1:
+        pid, dname, nk = person_rows[0]
         return {
             "type": "person",
-            "person_id": person_rows[0][0],
-            "display_name": person_rows[0][1],
+            "person_id": pid,
+            "display_name": dname,
+            "display": (nk.strip() if isinstance(nk, str) and nk.strip() else dname),
         }
 
     # No Person matched. Treat a known label word as an object subject.
@@ -1514,7 +1556,7 @@ def _subject_echo(subject: dict[str, Any]) -> dict[str, Any]:
         return {
             "type": "person",
             "person_id": str(subject["person_id"]),
-            "display_name": subject["display_name"],
+            "display_name": subject.get("display") or subject["display_name"],
         }
     if subject["type"] == "label":
         return {"type": "label", "label": subject["label"]}

@@ -64,6 +64,15 @@ class FakeResult:
     def all(self):
         return list(self._rows)
 
+    def first(self):
+        return self._rows[0] if self._rows else None
+
+    def scalar_one_or_none(self):
+        if not self._rows:
+            return None
+        r = self._rows[0]
+        return r[0] if isinstance(r, tuple) else r
+
     def scalars(self):
         # Each row is either (obj,) or a bare obj. scalars() should
         # return the first column.
@@ -342,7 +351,7 @@ async def test_get_journeys_disambiguation(monkeypatch):
     def responder(stmt: str):
         s = stmt.lower()
         if "from persons" in s:
-            return [(p1, "Dad"), (p2, "Daddy")]
+            return [(p1, "Dad", None), (p2, "Daddy", None)]
         return []
 
     db = FakeDB(responder)
@@ -717,7 +726,7 @@ async def test_query_relationships_co_present(monkeypatch):
     def responder(stmt: str):
         s = stmt.lower()
         if "from persons" in s:
-            return [(uuid.uuid4(), "Dad")] if "lower" in s else []
+            return [(uuid.uuid4(), "Dad", None)] if "lower" in s else []
         if "from journeys" in s:
             # The subject query filters on subject_kind in its WHERE; the
             # candidate-others query filters only on last_seen_at. Return
@@ -860,7 +869,7 @@ async def test_query_relationships_seen_with_label(monkeypatch):
     def responder(stmt: str):
         s = stmt.lower()
         if "from persons" in s:
-            return [(person_id, "Dad")]
+            return [(person_id, "Dad", None)]
         if "from journeys" in s:
             return [(j,)]
         if "from observations" in s:
@@ -888,7 +897,7 @@ async def test_query_relationships_disambiguation(monkeypatch):
     def responder(stmt: str):
         s = stmt.lower()
         if "from persons" in s:
-            return [(p1, "Dad"), (p2, "Daddy")]
+            return [(p1, "Dad", None), (p2, "Daddy", None)]
         return []
 
     db = FakeDB(responder)
@@ -938,3 +947,69 @@ async def test_query_relationships_clamps(monkeypatch):
     out = await query_relationships(ctx, subject="cat", relation="path", hours=9999, limit=999)
     assert out["hours"] == 720  # clamped
     assert out["results"] == []
+
+
+# ── household nickname (view-layer alias) ───────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_last_sightings_shows_nickname_and_matches_it(monkeypatch):
+    # A person typed as "Mommy" (their nickname) resolves, and the
+    # rendered display_name is the nickname, not the canonical name.
+    cam_id = uuid.uuid4()
+    person = SimpleNamespace(
+        id=uuid.uuid4(), display_name="Salma Bekom", nickname="Mommy"
+    )
+
+    async def fake_access(user, db):
+        return {cam_id}
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+
+    def responder(stmt: str):
+        s = stmt.lower()
+        if "from persons" in s:
+            return [(person,)]
+        return []  # no journeys
+
+    db = FakeDB(responder)
+    out = await get_last_sightings(
+        {"user": _user("admin"), "run_id": None, "db": db}, person_name="Mommy"
+    )
+    assert out["persons"]
+    assert out["persons"][0]["display_name"] == "Mommy"
+
+
+@pytest.mark.asyncio
+async def test_get_household_snapshot_shows_nickname(monkeypatch):
+    cam = _camera("Kitchen")
+    person = SimpleNamespace(
+        id=uuid.uuid4(),
+        display_name="Salma Bekom",
+        nickname="Mommy",
+        relationship="mother",
+    )
+
+    async def fake_access(user, db):
+        return {cam.id}
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+
+    def responder(stmt: str):
+        s = stmt.lower()
+        if "from cameras" in s:
+            return [(cam,)]
+        if "from persons" in s:
+            # Full ORM person select carries photo_path; the alias-map
+            # select is just (display_name, nickname).
+            if "persons.photo_path" in s:
+                return [(person,)]
+            return [("Salma Bekom", "Mommy")]
+        return []  # no journeys, no observations
+
+    db = FakeDB(responder)
+    out = await get_household_snapshot(
+        {"user": _user("admin"), "run_id": None, "db": db}
+    )
+    assert out["persons"]
+    assert out["persons"][0]["display_name"] == "Mommy"
