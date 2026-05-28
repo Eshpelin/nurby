@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover - py<3.9
     ZoneInfo = None  # type: ignore
 
 from shared.database import async_session
-from shared.models import Event, Rule
+from shared.models import Event, Recording, Rule
 from services.events.actions import execute_action
 from services.perception.spatial_events import (
     _point_in_polygon,
@@ -123,6 +123,10 @@ class RuleEngine:
             logger.info("Rule '%s' triggered by observation", rule.name)
             if rule.cooldown_seconds and rule.cooldown_seconds > 0:
                 await self._write_cooldown(rule.id, now, rule.cooldown_seconds)
+
+            # Resolve the footage clip covering this observation so the
+            # event and any webhook payload carry a direct link to it.
+            await self._attach_footage(observation_data)
 
             # Store event
             event_id = await self._store_event(
@@ -586,6 +590,60 @@ class RuleEngine:
         return []
 
     @staticmethod
+    async def _attach_footage(data: dict) -> None:
+        """Enrich observation_data with recording_id + recording_url for
+        the clip that covers this observation on the same camera.
+
+        Resolved once per observation. Matches the most recent Recording
+        whose window contains the observation timestamp. Best-effort. a
+        missing clip just leaves the fields empty.
+        """
+        if "recording_id" in data:
+            return
+        data["recording_id"] = None
+        data["recording_url"] = ""
+        cam_raw = data.get("camera_id")
+        ts_raw = data.get("timestamp")
+        if not cam_raw or not ts_raw:
+            return
+        try:
+            cam_id = uuid.UUID(str(cam_raw))
+        except (ValueError, TypeError):
+            return
+        if isinstance(ts_raw, datetime):
+            ts = ts_raw
+        else:
+            try:
+                ts = datetime.fromisoformat(str(ts_raw).replace("Z", "+00:00"))
+            except ValueError:
+                return
+        try:
+            async with async_session() as db:
+                rec = (
+                    await db.execute(
+                        select(Recording)
+                        .where(Recording.camera_id == cam_id)
+                        .where(Recording.started_at <= ts)
+                        .where(
+                            (Recording.ended_at.is_(None))
+                            | (Recording.ended_at >= ts)
+                        )
+                        .order_by(Recording.started_at.desc())
+                        .limit(1)
+                    )
+                ).scalars().first()
+        except Exception:
+            logger.exception("footage lookup failed")
+            return
+        if rec is None:
+            return
+        from shared.config import settings as _settings
+
+        base = (_settings.public_base_url or "").rstrip("/")
+        data["recording_id"] = str(rec.id)
+        data["recording_url"] = f"{base}/api/recordings/{rec.id}/stream"
+
+    @staticmethod
     async def _store_event(
         rule_id: uuid.UUID,
         observation_id: str | None,
@@ -597,9 +655,16 @@ class RuleEngine:
         except (ValueError, TypeError):
             obs_uuid = None
 
+        rec_raw = payload.get("recording_id")
+        try:
+            rec_uuid = uuid.UUID(str(rec_raw)) if rec_raw else None
+        except (ValueError, TypeError):
+            rec_uuid = None
+
         event = Event(
             rule_id=rule_id,
             observation_id=obs_uuid,
+            recording_id=rec_uuid,
             payload=payload,
         )
         try:

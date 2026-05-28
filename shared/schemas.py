@@ -722,6 +722,7 @@ class EventResponse(BaseModel):
     id: uuid.UUID
     rule_id: uuid.UUID | None
     observation_id: uuid.UUID | None
+    recording_id: uuid.UUID | None = None
     fired_at: datetime
     payload: dict | None
     acknowledged_at: datetime | None

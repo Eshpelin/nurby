@@ -385,6 +385,11 @@ class Event(Base):
     observation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True, index=True
     )
+    # Footage covering the observation, resolved at fire time by camera +
+    # timestamp. Lets an alert consumer jump straight to the clip.
+    recording_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     fired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

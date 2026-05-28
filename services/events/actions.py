@@ -88,6 +88,8 @@ def _build_template_context(
         "detections_summary": _summarize_detections(observation_data),
         "confidence": observation_data.get("confidence"),
         "observation_id": observation_data.get("observation_id", ""),
+        "recording_id": observation_data.get("recording_id") or "",
+        "recording_url": observation_data.get("recording_url") or "",
         "thumbnail_url": observation_data.get("thumbnail_url") or observation_data.get("thumbnail_path", ""),
         "thumbnail_path": observation_data.get("thumbnail_path", ""),
         "vars": vars_bag,
@@ -151,11 +153,17 @@ def _build_default_payload(context: dict) -> dict:
         "rule_id": context["rule_id"],
         "rule_name": context["rule_name"],
         "camera_id": context["camera_id"],
+        "camera_name": context.get("camera_name", ""),
         "timestamp": context["timestamp"],
         "motion_score": context["motion_score"],
         "object_detections": context["object_detections"],
         "person_detections": context["person_detections"],
         "vlm_description": context["vlm_description"],
+        "observation_id": context.get("observation_id", ""),
+        "recording_id": context.get("recording_id", ""),
+        "recording_url": context.get("recording_url", ""),
+        "thumbnail_url": context.get("thumbnail_url", ""),
+        "event_url": context.get("event_url", ""),
     }
 
 
