@@ -23,7 +23,7 @@ import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from shared.database import async_session
 from shared.models import (
@@ -33,10 +33,13 @@ from shared.models import (
     Event,
     FaceCluster,
     FaceClusterSample,
+    Incident,
+    Journey,
     Observation,
     Person,
     Rule,
 )
+from services.perception.incident_tracker import assign_incident
 
 UTC = timezone.utc
 NOW = datetime.now(UTC)
@@ -124,9 +127,9 @@ CAMERAS = [
 # ── Household members ──
 
 PERSONS = [
-    {"display_name": "Sarah Chen", "relationship": "Family", "consent_given": True},
-    {"display_name": "Mike Rodriguez", "relationship": "Family", "consent_given": True},
-    {"display_name": "Emma Wilson", "relationship": "Family", "consent_given": True},
+    {"display_name": "Sarah Chen", "nickname": "Mom", "relationship": "Family", "consent_given": True},
+    {"display_name": "Mike Rodriguez", "nickname": "Dad", "relationship": "Family", "consent_given": True},
+    {"display_name": "Emma Wilson", "nickname": "Em", "relationship": "Family", "consent_given": True},
     {"display_name": "James Park", "relationship": "Neighbor", "consent_given": True},
 ]
 
@@ -566,8 +569,9 @@ async def seed():
         if clean:
             print("Cleaning existing data.")
             for table in [
-                Event, DigestEntry, Observation, CameraStatusLog,
-                FaceClusterSample, FaceCluster, Person, Rule, Camera,
+                Event, DigestEntry, Observation, Incident, Journey,
+                CameraStatusLog, FaceClusterSample, FaceCluster,
+                Person, Rule, Camera,
             ]:
                 await db.execute(delete(table))
             await db.commit()
@@ -576,11 +580,13 @@ async def seed():
         # ── 1. Cameras ──
         print("Creating cameras.")
         camera_ids: dict[str, uuid.UUID] = {}
+        camera_objs: dict[str, Camera] = {}
         for cam_def in CAMERAS:
             cam = Camera(**cam_def)
             db.add(cam)
             await db.flush()
             camera_ids[cam_def["name"]] = cam.id
+            camera_objs[cam_def["name"]] = cam
         await db.commit()
         print(f"  Created {len(camera_ids)} cameras.")
 
@@ -597,7 +603,7 @@ async def seed():
 
         # ── 3. Face clusters (pending unknown people suggestions) ──
         print("Creating face cluster suggestions.")
-        fake_embedding_128 = [random.uniform(-0.1, 0.1) for _ in range(128)]
+        fake_embedding_512 = [random.uniform(-0.1, 0.1) for _ in range(512)]
         clusters_created = 0
         cluster_cameras = ["Front Door", "Backyard"]
         for cam_name in cluster_cameras:
@@ -606,7 +612,7 @@ async def seed():
             first_seen = weighted_time_in_last_hours(60)
             last_seen = weighted_time_in_last_hours(3)
             cluster = FaceCluster(
-                representative_embedding=fake_embedding_128,
+                representative_embedding=fake_embedding_512,
                 sighting_count=sightings,
                 first_seen_at=min(first_seen, last_seen),
                 last_seen_at=max(first_seen, last_seen),
@@ -621,7 +627,7 @@ async def seed():
                 sample = FaceClusterSample(
                     cluster_id=cluster.id,
                     camera_id=cam_id,
-                    embedding=fake_embedding_128,
+                    embedding=fake_embedding_512,
                     captured_at=weighted_time_in_last_hours(48),
                 )
                 db.add(sample)
@@ -676,6 +682,69 @@ async def seed():
 
         await db.commit()
         print(f"  Created {scenario_count} scenarios, {obs_count} observations.")
+
+        # ── 4b. Deterministic anchor scenarios ──
+        # Guarantee the journeys the smoke assertions rely on exist
+        # regardless of the random draw. Times are anchored to NOW so
+        # "today" / "this morning" questions land.
+        print("Adding deterministic anchor scenarios.")
+        person_obj = [{"label": "person", "confidence": 0.92, "bbox": bbox_person()}]
+
+        def _anchor_obs(cam_name, started, faces, objs, desc):
+            pd = person_detections_from_faces(faces, objs, person_ids)
+            o = Observation(
+                camera_id=camera_ids[cam_name],
+                started_at=started,
+                ended_at=started + timedelta(seconds=8),
+                object_detections={"objects": objs, "count": len(objs)} if objs else None,
+                person_detections=pd,
+                vlm_description=desc,
+                vlm_provider=VLM_PROVIDER,
+                confidence=0.9,
+            )
+            db.add(o)
+
+        # Co-presence. Mom and Dad together in the Kitchen this morning.
+        morn = NOW - timedelta(hours=5)
+        _anchor_obs("Kitchen", morn, ["Sarah Chen", "Mike Rodriguez"], person_obj,
+                    "Two people at the kitchen table having breakfast together.")
+        _anchor_obs("Kitchen", morn + timedelta(seconds=45), ["Sarah Chen", "Mike Rodriguez"], person_obj,
+                    "Two people talking in the kitchen.")
+        # Cross-camera journey. Mom enters the Front Door then the Kitchen.
+        aft = NOW - timedelta(hours=3)
+        _anchor_obs("Front Door", aft, ["Sarah Chen"], person_obj,
+                    "A woman unlocks and enters through the front door.")
+        _anchor_obs("Kitchen", aft + timedelta(minutes=2), ["Sarah Chen"], person_obj,
+                    "A woman sets groceries on the kitchen counter.")
+        await db.commit()
+
+        # ── 4c. Build incidents + journeys via the production path ──
+        # Replay every observation, in time order, through the real
+        # incident_tracker. It writes Incident rows and stitches them
+        # into Journeys with exactly the subject_key/segments shapes the
+        # agent tools read. Time order matters for cross-camera stitching.
+        print("Building incidents and journeys via prod aggregation.")
+        cams = (await db.execute(select(Camera))).scalars().all()
+        cam_by_id = {c.id: c for c in cams}
+        obs_rows = (
+            await db.execute(
+                select(Observation).order_by(Observation.started_at.asc())
+            )
+        ).scalars().all()
+        for o in obs_rows:
+            cam = cam_by_id.get(o.camera_id)
+            if cam is None:
+                continue
+            iid = await assign_incident(db, cam, o)
+            if iid is not None:
+                o.incident_id = iid
+        await db.commit()
+        journeys = (await db.execute(select(Journey))).scalars().all()
+        person_journeys = [j for j in journeys if j.subject_kind == "person"]
+        print(
+            f"  Built {len(journeys)} journeys "
+            f"({len(person_journeys)} person), from {len(obs_rows)} observations."
+        )
 
         # ── 5. Camera status logs ──
         print("Creating status logs.")
