@@ -119,6 +119,17 @@ async def generate_digest(
     # Resolve cluster_id -> named-person display_name so historic
     # observations captured before the user named the cluster still
     # show up under the person's real name in the digest.
+    # Household nicknames are shown in place of canonical names. Live
+    # detections store the canonical name; map it through here too.
+    alias_rows = (
+        await db.execute(select(Person.display_name, Person.nickname))
+    ).all()
+    name_alias = {
+        dn: nk.strip()
+        for dn, nk in alias_rows
+        if dn and isinstance(nk, str) and nk.strip()
+    }
+
     cluster_name_map: dict[str, str] = {}
     cluster_ids_seen: set[str] = set()
     for obs in observations:
@@ -129,20 +140,23 @@ async def generate_digest(
     if cluster_ids_seen:
         try:
             rows = await db.execute(
-                select(FaceCluster.id, Person.display_name)
+                select(FaceCluster.id, Person.display_name, Person.nickname)
                 .join(Person, FaceCluster.person_id == Person.id)
                 .where(FaceCluster.id.in_([uuid.UUID(c) for c in cluster_ids_seen]))
             )
-            for cid, name in rows.all():
-                cluster_name_map[str(cid)] = name
+            for cid, name, nick in rows.all():
+                cluster_name_map[str(cid)] = (
+                    nick.strip() if isinstance(nick, str) and nick.strip() else name
+                )
         except Exception:
             logger.exception("Failed to resolve cluster -> person names")
 
     def _resolve_face_name(face: dict) -> str | None:
-        """Prefer live match, then the cluster's named owner if any."""
+        """Prefer live match, then the cluster's named owner if any.
+        Canonical names are rewritten to the household nickname."""
         name = face.get("person_name")
         if name:
-            return name
+            return name_alias.get(name, name)
         cid = face.get("cluster_id")
         if cid:
             return cluster_name_map.get(str(cid))

@@ -244,6 +244,20 @@ async def _chunk_facts(
             if l_iso and (not bucket["last_seen_at"] or l_iso > bucket["last_seen_at"]):
                 bucket["last_seen_at"] = l_iso
         citations.append({"kind": "journey", "id": str(j.id)})
+    # Rewrite canonical names to household nicknames for display. Names
+    # are bucketed by canonical subject_key value; only the rendered
+    # display_name changes.
+    if by_name:
+        alias_rows = (
+            await db.execute(select(Person.display_name, Person.nickname))
+        ).all()
+        amap = {
+            dn: nk.strip()
+            for dn, nk in alias_rows
+            if dn and isinstance(nk, str) and nk.strip()
+        }
+        for canon, bucket in by_name.items():
+            bucket["display_name"] = amap.get(canon, canon)
     persons_block = sorted(by_name.values(), key=lambda p: -p["sighting_count"])
 
     # ── per-Rule Event rollup ───────────────────────────────────────

@@ -88,9 +88,14 @@ async def _generate_camera_digest(db: AsyncSession, camera: Camera, since: datet
     person_names = []
     if person_ids:
         persons_result = await db.execute(
-            select(Person.display_name).where(Person.id.in_(list(person_ids)))
+            select(Person.display_name, Person.nickname).where(
+                Person.id.in_(list(person_ids))
+            )
         )
-        person_names = [name for (name,) in persons_result]
+        person_names = [
+            (nk.strip() if isinstance(nk, str) and nk.strip() else dn)
+            for (dn, nk) in persons_result
+        ]
 
     # Build summary text
     period_label = camera.digest_period
