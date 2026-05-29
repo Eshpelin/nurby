@@ -68,9 +68,11 @@ def test_webhook_payload_renders_chained_var(monkeypatch):
         async def __aexit__(self, *args):
             return None
 
-        async def post(self, url, json=None, headers=None, timeout=None):
+        async def request(self, method, url, content=None, headers=None, params=None, timeout=None):
+            import json as _json
+
             captured["url"] = url
-            captured["json"] = json
+            captured["json"] = _json.loads(content) if content else None
             return _FakeResponse()
 
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: _FakeClient())
