@@ -1013,3 +1013,43 @@ async def test_get_household_snapshot_shows_nickname(monkeypatch):
     )
     assert out["persons"]
     assert out["persons"][0]["display_name"] == "Mommy"
+
+
+@pytest.mark.asyncio
+async def test_get_last_sightings_label_path_uses_started_at(monkeypatch):
+    # Regression. the label branch read row.timestamp, which an
+    # Observation has never had (the column is started_at). It only
+    # fires when a labelled observation exists, so the empty-DB tests
+    # missed it; the realistic seed surfaced it live.
+    cam_id = uuid.uuid4()
+    cam = _camera("Front Door")
+    cam.id = cam_id
+    obs = SimpleNamespace(
+        id=uuid.uuid4(),
+        camera_id=cam_id,
+        started_at=datetime.now(timezone.utc) - timedelta(hours=2),
+        thumbnail_path=None,
+        object_detections={"objects": [{"label": "person"}]},
+    )
+
+    async def fake_access(user, db):
+        return {cam_id}
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+
+    def responder(stmt: str):
+        s = stmt.lower()
+        if "from persons" in s:
+            return []
+        if "from observations" in s:
+            return [(obs,)]
+        if "from cameras" in s:
+            return [(cam,)]
+        return []
+
+    db = FakeDB(responder)
+    out = await get_last_sightings({"user": _user("admin"), "run_id": None, "db": db})
+    assert out["labels"]
+    seen = [lb for lb in out["labels"] if lb["last_seen_at"]]
+    assert seen, "expected at least one label with a last_seen_at"
+    assert seen[0]["last_camera_name"] == "Front Door"

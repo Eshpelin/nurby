@@ -944,12 +944,12 @@ async def get_last_sightings(
         label_block.append(
             {
                 "label": lab,
-                "last_seen_at": row.timestamp.isoformat(),
+                "last_seen_at": row.started_at.isoformat(),
                 "last_camera_id": str(row.camera_id),
                 "last_camera_name": cam.name if cam else None,
                 "last_observation_id": str(row.id),
                 "thumbnail_url": _thumbnail_url(row.thumbnail_path),
-                "days_since_seen": (datetime.now(timezone.utc) - row.timestamp).days,
+                "days_since_seen": (datetime.now(timezone.utc) - row.started_at).days,
             }
         )
 
