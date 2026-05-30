@@ -8,6 +8,7 @@ import {
   type WebhookDraft,
 } from "../types";
 import { VarInserter, type VarSpec } from "./VarInserter";
+import { DevicePresetPicker } from "./DevicePresetPicker";
 
 export interface WebhookEditorProps {
   draft: WebhookDraft;
@@ -20,6 +21,9 @@ export function WebhookEditor({ draft, onChange, availableVars }: WebhookEditorP
   const set = (patch: Partial<WebhookDraft>) => onChange({ ...d, ...patch });
   return (
     <div className="space-y-3">
+      {d.type === "webhook" && (
+        <DevicePresetPicker onApply={(patch) => set(patch)} />
+      )}
       {d.type === "api_call" && (
         <div>
           <label className="text-xs text-muted-foreground block mb-1">HTTP Method</label>
