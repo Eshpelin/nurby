@@ -775,10 +775,39 @@ function DoneStep({ onClose }: { onClose: () => void }) {
       </div>
       <h3 className="text-lg font-semibold">You&apos;re set</h3>
       <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
-        Your camera is connected. The perception worker will start
-        sending observations and audio captions as soon as motion or
-        speech is detected. Check the timeline to see them.
+        Your camera is connected. Give it ~30 seconds. Nurby starts
+        describing activity as soon as it sees motion, and the first
+        observations will land on your timeline.
       </p>
+      <div className="text-left max-w-md mx-auto space-y-2">
+        <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+          Two things worth doing next
+        </div>
+        <a
+          href="/rules"
+          className="flex items-start gap-3 rounded-md border border-border bg-card/40 px-3 py-2 hover:border-accent/50 transition-colors"
+        >
+          <span className="text-base leading-none">🔔</span>
+          <span>
+            <span className="block text-xs font-medium">Create your first rule</span>
+            <span className="block text-[11px] text-muted-foreground leading-tight">
+              Get a Telegram or email alert when something specific happens.
+            </span>
+          </span>
+        </a>
+        <a
+          href="/ask"
+          className="flex items-start gap-3 rounded-md border border-border bg-card/40 px-3 py-2 hover:border-accent/50 transition-colors"
+        >
+          <span className="text-base leading-none">💬</span>
+          <span>
+            <span className="block text-xs font-medium">Ask Nurby anything</span>
+            <span className="block text-[11px] text-muted-foreground leading-tight">
+              &ldquo;What happened today?&rdquo; &middot; &ldquo;Was anyone at the door?&rdquo;
+            </span>
+          </span>
+        </a>
+      </div>
       <button
         type="button"
         onClick={onClose}
