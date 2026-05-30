@@ -33,8 +33,10 @@ import uuid
 
 import httpx
 
+from datetime import datetime, timezone
+
 from shared.database import async_session
-from shared.models import Event, Notification, Provider
+from shared.models import Event, Notification, Provider, WebhookSubscription
 from sqlalchemy import select
 
 from services.events.templates import (
@@ -47,6 +49,49 @@ logger = logging.getLogger("nurby.events.actions")
 
 # Outbound delivery defaults. retries with exponential backoff.
 _RETRY_BACKOFF = (0.5, 1.5, 3.0)
+
+
+async def dispatch_subscriptions(observation_data: dict, rule, event_id) -> None:
+    """Fan a fired event out to every active webhook subscription whose
+    filters match. Independent of per-rule webhook actions. Best-effort.
+    a failed delivery is recorded on the subscription, never raised."""
+    try:
+        async with async_session() as db:
+            subs = (
+                await db.execute(
+                    select(WebhookSubscription).where(
+                        WebhookSubscription.active.is_(True)
+                    )
+                )
+            ).scalars().all()
+    except Exception:
+        logger.exception("failed to load webhook subscriptions")
+        return
+    if not subs:
+        return
+
+    ctx = _build_template_context(observation_data, rule, event_id)
+    payload = _build_default_payload(ctx)
+    cam = observation_data.get("camera_id")
+    rid = str(getattr(rule, "id", "")) if rule is not None else ""
+
+    for sub in subs:
+        if sub.rule_ids and rid not in [str(r) for r in sub.rule_ids]:
+            continue
+        if sub.camera_ids and cam not in [str(c) for c in sub.camera_ids]:
+            continue
+        ok, detail = await deliver_signed(
+            "POST", sub.url, payload, secret=sub.secret or None,
+        )
+        try:
+            async with async_session() as db2:
+                row = await db2.get(WebhookSubscription, sub.id)
+                if row is not None:
+                    row.last_delivery_at = datetime.now(timezone.utc)
+                    row.last_status = (("ok " if ok else "fail ") + detail)[:120]
+                    await db2.commit()
+        except Exception:
+            logger.exception("failed to record subscription delivery")
 
 
 def sign_body(body: bytes, secret: str) -> str:

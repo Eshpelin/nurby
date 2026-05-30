@@ -1127,3 +1127,26 @@ class ApiKey(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class WebhookSubscription(Base):
+    """Standing outbound webhook. Every fired Event is fanned out to all
+    active subscriptions, in addition to per-rule webhook actions.
+
+    Optional ``rule_ids`` / ``camera_ids`` JSON lists scope which events
+    a subscription receives. ``secret`` enables HMAC body signing.
+    """
+
+    __tablename__ = "webhook_subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # JSON filter lists. NULL/empty means "all".
+    rule_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    camera_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    last_delivery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_status: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

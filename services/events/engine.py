@@ -150,6 +150,14 @@ class RuleEngine:
                 except Exception:
                     logger.exception("Action failed for rule '%s'", rule.name)
 
+            # Fan the fired event out to standing webhook subscriptions.
+            try:
+                from services.events.actions import dispatch_subscriptions
+
+                await dispatch_subscriptions(observation_data, rule, event_id)
+            except Exception:
+                logger.exception("subscription dispatch failed for rule '%s'", rule.name)
+
     async def _maybe_reload_rules(self):
         now = time.monotonic()
         if now - self._last_load < self._cache_ttl:
