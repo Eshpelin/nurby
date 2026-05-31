@@ -47,6 +47,34 @@ const USER_KEY = "nurby_user";
 
 const PUBLIC_PATHS = ["/login", "/setup"];
 
+// Error that also carries the HTTP status, so callers can react to a
+// 409 (duplicate / already done) without string-matching the message.
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+// FastAPI returns `detail` as a string for app-level errors but as an
+// array of { msg, loc } objects for 422 validation failures. Render a
+// clean human string in both cases (this is what produced the
+// "[object Object]" message before).
+function extractDetail(body: unknown, fallback: string): string {
+  if (!body || typeof body !== "object") return fallback;
+  const detail = (body as { detail?: unknown }).detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => (d && typeof d === "object" ? (d as { msg?: string }).msg : String(d)))
+      .filter(Boolean);
+    if (msgs.length) return msgs.join(". ");
+  }
+  return fallback;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -105,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || "Login failed");
+        throw new ApiError(extractDetail(body, "Login failed"), res.status);
       }
       const data: TokenResponse = await res.json();
       saveAuth(data);
@@ -127,7 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || "Setup failed");
+        throw new ApiError(extractDetail(body, "Setup failed"), res.status);
       }
       const data: TokenResponse = await res.json();
       saveAuth(data);
