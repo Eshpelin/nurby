@@ -240,6 +240,18 @@ export default function AskPage() {
     if (r) loadRun(r);
   }, [search, loadRun]);
 
+  // ----- deep-link via ?q= (e.g. the dashboard "try asking" chips).
+  // Auto-sends the prefilled question once a model is selected so a
+  // brand-new user gets a real answer in one click. Runs at most once.
+  const askedQ = useRef(false);
+  useEffect(() => {
+    if (askedQ.current) return;
+    const q = search.get("q");
+    if (!q || !model) return;
+    askedQ.current = true;
+    sendQuestion(q);
+  }, [search, model, sendQuestion]);
+
   // ----- global keyboard. Cmd/Ctrl+K focuses composer.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

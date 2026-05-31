@@ -3684,6 +3684,7 @@ function DashboardContent() {
         onClose={() => setModalRecording(null)}
       />
       <LLMErrorToasts />
+      {cameras.length > 0 && <AskHintCard />}
       {showWizard && (
         <OnboardingWizard
           onClose={() => setShowWizard(false)}
@@ -3693,6 +3694,73 @@ function DashboardContent() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// Dismissible nudge toward the agent. The /ask page is the payoff but
+// it is just a nav item; a first-time user won't know it exists. Shows
+// once (per browser) with example questions that deep-link to a real
+// answer via /ask?q=. Hidden after dismissal or first click.
+function AskHintCard() {
+  const [dismissed, setDismissed] = useState(true);
+  useEffect(() => {
+    try {
+      setDismissed(localStorage.getItem("nurby-ask-hint-dismissed") === "1");
+    } catch {
+      setDismissed(true);
+    }
+  }, []);
+  function close() {
+    try {
+      localStorage.setItem("nurby-ask-hint-dismissed", "1");
+    } catch {
+      /* ignore */
+    }
+    setDismissed(true);
+  }
+  if (dismissed) return null;
+  const examples = [
+    "What happened today?",
+    "Was anyone at the door?",
+    "Where's the dog right now?",
+  ];
+  return (
+    <div className="fixed bottom-4 right-4 z-40 w-72 rounded-lg border border-accent/30 bg-card-elevated shadow-xl p-3">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="text-xs font-semibold flex items-center gap-1.5">
+          <span>💬</span> Try asking Nurby
+        </div>
+        <button
+          onClick={close}
+          aria-label="Dismiss"
+          className="text-muted-foreground hover:text-foreground text-sm leading-none"
+        >
+          &times;
+        </button>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-tight mb-2">
+        Ask in plain English. Nurby investigates your feed and answers with
+        evidence.
+      </p>
+      <div className="space-y-1.5">
+        {examples.map((q) => (
+          <a
+            key={q}
+            href={`/ask?q=${encodeURIComponent(q)}`}
+            onClick={() => {
+              try {
+                localStorage.setItem("nurby-ask-hint-dismissed", "1");
+              } catch {
+                /* ignore */
+              }
+            }}
+            className="block w-full text-left px-2.5 py-1.5 text-[11px] rounded-md border border-border bg-background hover:border-accent/50 hover:bg-accent/5 transition-colors"
+          >
+            {q}
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
