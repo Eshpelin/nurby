@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 interface Person {
   id: string;
   display_name: string;
+  nickname: string | null;
   relationship: string | null;
   consent_given: boolean;
   privacy_blur?: boolean;
@@ -19,6 +20,7 @@ interface Person {
 interface PersonSummary {
   person_id: string;
   display_name: string;
+  nickname: string | null;
   relationship: string | null;
   photo_path: string | null;
   total_sightings: number;
@@ -117,6 +119,7 @@ export default function PeoplePage() {
 
   // Edit form state
   const [formName, setFormName] = useState("");
+  const [formNickname, setFormNickname] = useState("");
   const [formRelationship, setFormRelationship] = useState("");
   const [formConsent, setFormConsent] = useState(false);
   const [formStarred, setFormStarred] = useState(false);
@@ -290,6 +293,7 @@ export default function PeoplePage() {
   const openEdit = (p: Person) => {
     setEditPerson(p);
     setFormName(p.display_name);
+    setFormNickname(p.nickname || "");
     setFormRelationship(p.relationship || "");
     setFormConsent(p.consent_given);
     setFormStarred(!!p.is_starred);
@@ -332,6 +336,7 @@ export default function PeoplePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           display_name: formName.trim(),
+          nickname: formNickname.trim() || null,
           relationship: formRelationship.trim() || null,
           consent_given: formConsent,
           is_starred: formStarred,
@@ -692,8 +697,13 @@ export default function PeoplePage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium truncate">
-                          {p.display_name}
+                          {p.nickname || p.display_name}
                         </span>
+                        {p.nickname && (
+                          <span className="text-xs text-muted-foreground truncate">
+                            {p.display_name}
+                          </span>
+                        )}
                         {p.relationship && (
                           <span className="text-xs text-muted-foreground px-1.5 py-0.5 rounded bg-muted">
                             {p.relationship}
@@ -914,6 +924,22 @@ export default function PeoplePage() {
                   placeholder="Display name"
                   autoFocus
                 />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">
+                  Nickname
+                </label>
+                <input
+                  type="text"
+                  value={formNickname}
+                  onChange={(e) => setFormNickname(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
+                  placeholder="What you call them, e.g. Mommy or Lee"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Shown in updates, digests, and answers in place of the full name.
+                </p>
               </div>
 
               <div>
