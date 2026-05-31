@@ -532,6 +532,50 @@ async def test_summarize_activity_empty_household(monkeypatch):
     assert out["labels"] == []
 
 
+@pytest.mark.asyncio
+async def test_summarize_activity_runs_per_person_path(monkeypatch):
+    # Regression. the per-Person rollup queried Journey.person_id, a
+    # column that does not exist (journeys key persons by name in
+    # subject_key). The empty-household test never entered this loop, so
+    # the AttributeError only blew up live. This exercises it with a real
+    # Person + matching Journey.
+    cam_id = uuid.uuid4()
+    person = SimpleNamespace(
+        id=uuid.uuid4(), display_name="Dad", relationship="father"
+    )
+    now = datetime.now(timezone.utc)
+    journey = SimpleNamespace(
+        id=uuid.uuid4(),
+        subject_kind="person",
+        subject_key="Dad",
+        started_at=now - timedelta(minutes=20),
+        last_seen_at=now,
+        ended_at=now,
+        segments=[
+            {"camera_id": str(cam_id), "camera_name": "Kitchen", "occurrence_count": 4}
+        ],
+    )
+
+    async def fake_access(user, db):
+        return {cam_id}
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+
+    def responder(stmt: str):
+        s = stmt.lower()
+        if "from persons" in s:
+            return [(person,)]
+        if "from journeys" in s:
+            return [(journey,)]
+        return []
+
+    db = FakeDB(responder)
+    out = await summarize_activity({"user": _user("admin"), "run_id": None, "db": db})
+    # The per-Person path ran without an AttributeError and rolled Dad up.
+    assert any(p["display_name"] == "Dad" for p in out["persons"])
+    assert out["totals"]["persons_seen"] >= 1
+
+
 def test_get_events_in_registry():
     entry = get_tool("get_events")
     assert entry is not None

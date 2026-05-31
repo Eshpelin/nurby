@@ -129,6 +129,63 @@ def _thumbnail_url(thumbnail_path: str | None) -> str | None:
     return thumbnail_path
 
 
+def _subject_names(subject_key: str | None) -> list[str]:
+    """Split a Journey.subject_key into its component names/labels.
+
+    Journeys key persons by a comma-joined set of display NAMES (see
+    incident_tracker.compute_signature), never a person_id.
+    """
+    return [n.strip() for n in (subject_key or "").split(",") if n.strip()]
+
+
+async def _person_journeys(
+    db,
+    display_name: str,
+    *,
+    since: datetime | None = None,
+    order_desc: bool = True,
+    limit: int | None = None,
+) -> list:
+    """Return Journey rows for a Person, matched by display-name signature.
+
+    Journey has no person_id column. persons are identified by
+    subject_kind == 'person' plus their display name living inside the
+    comma-joined subject_key. A coarse SQL ILIKE prefilters, then an
+    exact-token check drops coincidental substring hits ("Ann" must not
+    match a journey for "Anna").
+    """
+    stmt = (
+        select(Journey)
+        .where(Journey.subject_kind == "person")
+        .where(Journey.subject_key.ilike(f"%{display_name}%"))
+    )
+    if since is not None:
+        stmt = stmt.where(Journey.last_seen_at >= since)
+    stmt = stmt.order_by(
+        Journey.last_seen_at.desc() if order_desc else Journey.started_at.asc()
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    out = [j for j in rows if display_name in _subject_names(j.subject_key)]
+    return out[:limit] if limit else out
+
+
+def _seg_camera_id(seg) -> uuid.UUID | None:
+    """Parse a Journey segment's camera_id into a UUID, or None.
+
+    Journey.segments entries are dicts shaped like
+    {camera_id, camera_name, location_label, incident_id, started_at,
+    last_seen_at, occurrence_count, peak_observation_id}. There is no
+    ``cameras`` attribute and segments key the camera as ``camera_id``,
+    not ``id``.
+    """
+    if not isinstance(seg, dict):
+        return None
+    try:
+        return uuid.UUID(str(seg.get("camera_id")))
+    except (ValueError, TypeError):
+        return None
+
+
 # ── Tool 1. query_observations ────────────────────────────────────────
 
 
@@ -635,14 +692,8 @@ async def get_household_snapshot(ctx: dict) -> dict:
     person_rows = (await db.execute(select(Person).order_by(Person.display_name))).scalars().all()
     persons: list[dict] = []
     for p in person_rows:
-        j = (
-            await db.execute(
-                select(Journey)
-                .where(Journey.person_id == p.id)
-                .order_by(Journey.last_seen_at.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
+        js = await _person_journeys(db, p.display_name, order_desc=True, limit=1)
+        j = js[0] if js else None
         persons.append(
             {
                 "person_id": str(p.id),
@@ -669,17 +720,23 @@ async def get_household_snapshot(ctx: dict) -> dict:
     active_journeys: list[dict] = []
     for j in active:
         # Only surface if it touches an accessible camera.
-        segs = j.cameras or []
-        visible = [s for s in segs if uuid.UUID(s.get("id")) in allowed] if segs else []
+        segs = j.segments or []
+        visible = [s for s in segs if _seg_camera_id(s) in allowed] if segs else []
         if not visible and segs:
             continue
         active_journeys.append(
             {
                 "journey_id": str(j.id),
-                "person_id": str(j.person_id) if j.person_id else None,
+                "person_names": _subject_names(j.subject_key)
+                if j.subject_kind == "person"
+                else [],
                 "started_at": j.started_at.isoformat() if j.started_at else None,
                 "last_seen_at": j.last_seen_at.isoformat() if j.last_seen_at else None,
-                "cameras": [{"id": s.get("id"), "name": s.get("name")} for s in (visible or segs)],
+                "cameras": [
+                    {"id": s.get("camera_id"), "name": s.get("camera_name")}
+                    for s in (visible or segs)
+                    if isinstance(s, dict)
+                ],
             }
         )
 
@@ -784,15 +841,10 @@ async def get_last_sightings(
             # camera. Journey is the right grain because the pipeline
             # writes a Journey row whenever a Person shows across one
             # or more cameras.
-            j = (
-                await db.execute(
-                    select(Journey)
-                    .where(Journey.person_id == p.id)
-                    .where(Journey.last_seen_at >= cutoff)
-                    .order_by(Journey.last_seen_at.desc())
-                    .limit(1)
-                )
-            ).scalar_one_or_none()
+            js = await _person_journeys(
+                db, p.display_name, since=cutoff, order_desc=True, limit=1
+            )
+            j = js[0] if js else None
             if j is None:
                 persons_block.append(
                     {
@@ -805,16 +857,16 @@ async def get_last_sightings(
                     }
                 )
                 continue
-            cams = j.cameras or []
-            # Filter Journey cameras down to those the user can see.
-            visible = [c for c in cams if uuid.UUID(c.get("id")) in allowed] if cams else []
+            cams = j.segments or []
+            # Filter Journey segments down to cameras the user can see.
+            visible = [c for c in cams if _seg_camera_id(c) in allowed] if cams else []
             persons_block.append(
                 {
                     "person_id": str(p.id),
                     "display_name": p.display_name,
                     "last_seen_at": j.last_seen_at.isoformat() if j.last_seen_at else None,
-                    "last_camera_id": str(visible[0]["id"]) if visible else None,
-                    "last_camera_name": visible[0].get("name") if visible else None,
+                    "last_camera_id": str(visible[0]["camera_id"]) if visible else None,
+                    "last_camera_name": visible[0].get("camera_name") if visible else None,
                     "last_journey_id": str(j.id),
                     "days_since_seen": (datetime.now(timezone.utc) - j.last_seen_at).days
                     if j.last_seen_at
@@ -1069,28 +1121,24 @@ async def summarize_activity(ctx: dict, hours: int = 24) -> dict:
     if allowed:
         rs = await db.execute(select(Person).order_by(Person.display_name))
         for p in rs.scalars().all():
-            j_rows = (
-                await db.execute(
-                    select(Journey)
-                    .where(Journey.person_id == p.id)
-                    .where(Journey.last_seen_at >= cutoff)
-                    .order_by(Journey.started_at.asc())
-                )
-            ).scalars().all()
+            j_rows = await _person_journeys(
+                db, p.display_name, since=cutoff, order_desc=False
+            )
             if not j_rows:
                 continue
             # Coalesce camera names visible to this user.
             cams_seen: list[str] = []
             seg_count = 0
             for j in j_rows:
-                for seg in j.cameras or []:
-                    try:
-                        cid = uuid.UUID(seg.get("id"))
-                    except (ValueError, TypeError):
+                for seg in j.segments or []:
+                    cid = _seg_camera_id(seg)
+                    if cid is None:
                         continue
-                    if cid in allowed and seg.get("name") not in cams_seen:
-                        cams_seen.append(seg.get("name"))
-                seg_count += int(getattr(j, "observation_count", 0) or 0)
+                    name = seg.get("camera_name")
+                    if cid in allowed and name and name not in cams_seen:
+                        cams_seen.append(name)
+                    if cid in allowed:
+                        seg_count += int(seg.get("occurrence_count") or 0)
             persons_block.append(
                 {
                     "person_id": str(p.id),
