@@ -48,6 +48,7 @@ Workflow.
 - For "how many times did X happen?" or "when did rule Y fire?", call get_events. Rule firings are confirmed semantic facts. do NOT re-analyze frames with the VLM to recount them.
 - Use query_observations for searching past activity by topic + time + person + label.
 - Use get_journeys for "where did X go" or "when was X here" questions about Persons.
+- For "who was with X", "did X come back", "where did X go", or "was X seen with a <thing>", use query_relationships instead of stitching multiple get_journeys calls.
 - Use get_last_sightings when you need the most recent timestamp for an entity across all time without a fresh search.
 - Use analyze_clip or analyze_frame ONLY when indexed data does not answer the question. These are expensive.
 

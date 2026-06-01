@@ -1215,6 +1215,641 @@ async def summarize_activity(ctx: dict, hours: int = 24) -> dict:
     }
 
 
+# ── Tool 3e. query_relationships ──────────────────────────────────────
+
+
+# Labels we accept as object-style subjects/objects. Matches the YOLO
+# taxonomy the incident tracker writes into Journey.subject_key when
+# subject_kind == "object" (see services/perception/incident_tracker.py
+# compute_signature) and the labels get_last_sightings baselines on.
+_KNOWN_LABELS = (
+    "person",
+    "cat",
+    "dog",
+    "car",
+    "truck",
+    "bus",
+    "bicycle",
+    "motorcycle",
+    "package",
+    "bird",
+    "backpack",
+    "handbag",
+    "suitcase",
+    "umbrella",
+)
+
+_REVISIT_GAP_SECONDS = 30 * 60  # 30 min between journeys counts as a return
+
+_RELATIONS = (
+    "co_present_with",
+    "revisited",
+    "path",
+    "seen_with_label",
+    "transitions",
+)
+
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I
+)
+
+
+_QUERY_RELATIONSHIPS_SCHEMA = {
+    "type": "object",
+    "required": ["subject", "relation"],
+    "additionalProperties": False,
+    "properties": {
+        "subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": (
+                "Person display_name (case-insensitive substring), a "
+                "person_id UUID, or a label like 'cat' / 'car' / "
+                "'package'."
+            ),
+        },
+        "relation": {
+            "type": "string",
+            "enum": list(_RELATIONS),
+            "description": (
+                "co_present_with (who/what overlapped subject on the same "
+                "camera), revisited (subject came back after a >30min "
+                "gap), path (ordered camera transitions of the subject's "
+                "most recent journey), seen_with_label (a label detected "
+                "during the subject's journey windows), transitions (all "
+                "camera-to-camera movement gaps in the window)."
+            ),
+        },
+        "object": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": (
+                "Optional second party. For co_present_with, restrict to "
+                "this person/label. For seen_with_label, the label to look "
+                "for (e.g. 'dog'). Ignored by other relations."
+            ),
+        },
+        "hours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": _MAX_WINDOW_HOURS,
+            "default": 168,
+        },
+        "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50},
+    },
+}
+
+
+def _looks_like_uuid(value: str) -> bool:
+    return bool(_UUID_RE.match(value.strip()))
+
+
+def _seg_cam_ids(journey: Any, allowed: set[uuid.UUID]) -> set[uuid.UUID]:
+    """Accessible camera UUIDs touched by a journey's segments."""
+    out: set[uuid.UUID] = set()
+    for seg in journey.segments or []:
+        if not isinstance(seg, dict):
+            continue
+        cid = seg.get("camera_id")
+        if not cid:
+            continue
+        try:
+            cu = uuid.UUID(cid)
+        except (TypeError, ValueError):
+            continue
+        if cu in allowed:
+            out.add(cu)
+    return out
+
+
+def _journey_window(journey: Any) -> tuple[datetime | None, datetime | None]:
+    start = journey.started_at
+    end = journey.ended_at or journey.last_seen_at
+    return start, end
+
+
+def _windows_overlap(
+    a_start: datetime | None,
+    a_end: datetime | None,
+    b_start: datetime | None,
+    b_end: datetime | None,
+) -> bool:
+    if not (a_start and a_end and b_start and b_end):
+        return False
+    return a_start < b_end and a_end > b_start
+
+
+async def _resolve_subject(
+    subject: str, db: Any
+) -> dict[str, Any]:
+    """Resolve a subject string to a (kind, key-set) descriptor.
+
+    Returns one of.
+      {"type": "person", "person_id": uuid, "display_name": str}
+      {"type": "label", "label": str}
+      {"type": "disambiguation", "candidates": [...]}
+      {"type": "unresolved"}
+
+    Person journeys are keyed by display_name(s) in Journey.subject_key
+    (the incident tracker joins person_name values, NOT the person_id),
+    so we resolve a Person row to get its display_name and match journeys
+    on subject_kind == 'person' + name-in-subject_key downstream.
+    """
+    subj = subject.strip()
+    if not subj:
+        return {"type": "unresolved"}
+
+    # UUID -> a Person row by id.
+    if _looks_like_uuid(subj):
+        try:
+            p = await db.get(Person, uuid.UUID(subj))
+        except Exception:
+            p = None
+        if p is not None:
+            return {
+                "type": "person",
+                "person_id": p.id,
+                "display_name": p.display_name,
+            }
+        # An unknown UUID. nothing to resolve.
+        return {"type": "unresolved"}
+
+    # Person display_name substring match.
+    like = f"%{subj.lower()}%"
+    person_rows = (
+        await db.execute(
+            select(Person.id, Person.display_name).where(
+                func.lower(Person.display_name).like(like)
+            )
+        )
+    ).all()
+    if len(person_rows) > 1:
+        return {
+            "type": "disambiguation",
+            "candidates": [
+                {"person_id": str(pid), "display_name": dname}
+                for pid, dname in person_rows
+            ],
+        }
+    if len(person_rows) == 1:
+        return {
+            "type": "person",
+            "person_id": person_rows[0][0],
+            "display_name": person_rows[0][1],
+        }
+
+    # No Person matched. Treat a known label word as an object subject.
+    if subj.lower() in _KNOWN_LABELS:
+        return {"type": "label", "label": subj.lower()}
+
+    return {"type": "unresolved"}
+
+
+def _subject_journey_filter(subject: dict[str, Any]) -> list[Any]:
+    """SQLAlchemy filters selecting the journeys that belong to a
+    resolved subject. Person journeys match by display_name inside the
+    comma-joined subject_key; label journeys match subject_kind=='object'
+    with the label inside subject_key."""
+    if subject["type"] == "person":
+        return [
+            Journey.subject_kind == "person",
+            cast(Journey.subject_key, SAString).ilike(
+                f"%{subject['display_name']}%"
+            ),
+        ]
+    if subject["type"] == "label":
+        return [
+            Journey.subject_kind == "object",
+            cast(Journey.subject_key, SAString).ilike(f"%{subject['label']}%"),
+        ]
+    return [select(Journey.id).where(False)]  # never matches
+
+
+def _subject_echo(subject: dict[str, Any]) -> dict[str, Any]:
+    if subject["type"] == "person":
+        return {
+            "type": "person",
+            "person_id": str(subject["person_id"]),
+            "display_name": subject["display_name"],
+        }
+    if subject["type"] == "label":
+        return {"type": "label", "label": subject["label"]}
+    return {"type": "unresolved"}
+
+
+async def query_relationships(
+    ctx: dict,
+    *,
+    subject: str,
+    relation: str,
+    object: str | None = None,
+    hours: int = 168,
+    limit: int = 50,
+) -> dict:
+    """Walk relationships between people, animals, vehicles, cameras, and
+    time over the existing Journey graph (foreign keys + segments /
+    transitions JSON). One DB pass, no new tables.
+
+    All results are filtered through accessible_camera_ids. When the
+    subject name resolves to more than one Person the response carries a
+    ``disambiguation`` block and an empty ``results`` list, matching the
+    get_journeys convention.
+    """
+    user = ctx["user"]
+    db = ctx["db"]
+
+    hours = _clamp_hours(hours)
+    limit = _clamp_limit(limit, default=50, max_=100)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+    if relation not in _RELATIONS:
+        return {
+            "relation": relation,
+            "subject": {"type": "unresolved"},
+            "hours": hours,
+            "results": [],
+            "error": "unknown_relation",
+        }
+
+    allowed = await accessible_camera_ids(user, db)
+    base = {"relation": relation, "hours": hours}
+    if not allowed:
+        return {**base, "subject": {"type": "unresolved"}, "results": []}
+
+    subject_desc = await _resolve_subject(subject, db)
+    if subject_desc["type"] == "disambiguation":
+        return {
+            **base,
+            "subject": {"type": "person_ambiguous"},
+            "results": [],
+            "disambiguation": subject_desc["candidates"],
+        }
+    if subject_desc["type"] == "unresolved":
+        return {**base, "subject": {"type": "unresolved"}, "results": []}
+
+    subj_echo = _subject_echo(subject_desc)
+
+    # Load the subject's journeys in the window once. Every relation but
+    # `transitions` is grounded on this set.
+    subj_filters = _subject_journey_filter(subject_desc) + [
+        Journey.last_seen_at >= cutoff
+    ]
+    subj_journeys = (
+        await db.execute(
+            select(Journey)
+            .where(and_(*subj_filters))
+            .order_by(Journey.last_seen_at.desc())
+            .limit(200)
+        )
+    ).scalars().all()
+    # Keep only journeys that touch at least one accessible camera.
+    subj_journeys = [j for j in subj_journeys if _seg_cam_ids(j, allowed)]
+
+    if relation == "co_present_with":
+        results = await _rel_co_present(
+            db, subject_desc, subj_journeys, allowed, cutoff, object, limit
+        )
+    elif relation == "revisited":
+        results = _rel_revisited(subj_journeys, allowed, limit)
+    elif relation == "path":
+        results = _rel_path(subj_journeys, allowed, limit)
+    elif relation == "seen_with_label":
+        results = await _rel_seen_with_label(
+            db, subj_journeys, allowed, object, limit
+        )
+    else:  # transitions
+        results = await _rel_transitions(db, allowed, cutoff, limit)
+
+    return {**base, "subject": subj_echo, "results": results}
+
+
+async def _rel_co_present(
+    db: Any,
+    subject_desc: dict[str, Any],
+    subj_journeys: list[Any],
+    allowed: set[uuid.UUID],
+    cutoff: datetime,
+    object_filter: str | None,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Other subjects whose journey windows overlap the subject's
+    journeys on the SAME camera."""
+    if not subj_journeys:
+        return []
+
+    # Precompute subject (window, camera-set) tuples.
+    subj_spans: list[tuple[datetime, datetime, set[uuid.UUID]]] = []
+    subj_keys: set[str] = set()
+    for j in subj_journeys:
+        s, e = _journey_window(j)
+        if s and e:
+            subj_spans.append((s, e, _seg_cam_ids(j, allowed)))
+        subj_keys.add(j.subject_key)
+
+    # Candidate journeys. everything else in the window. We over-fetch
+    # then filter in Python for the overlap + shared-camera test.
+    others = (
+        await db.execute(
+            select(Journey)
+            .where(Journey.last_seen_at >= cutoff)
+            .order_by(Journey.last_seen_at.desc())
+            .limit(500)
+        )
+    ).scalars().all()
+
+    obj_needle = object_filter.strip().lower() if object_filter else None
+
+    out: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    for o in others:
+        if o.subject_key in subj_keys:
+            continue  # the subject themselves
+        if obj_needle and obj_needle not in (o.subject_key or "").lower():
+            continue
+        o_cams = _seg_cam_ids(o, allowed)
+        if not o_cams:
+            continue
+        o_start, o_end = _journey_window(o)
+        shared: set[uuid.UUID] | None = None
+        for (s, e, cams) in subj_spans:
+            if _windows_overlap(s, e, o_start, o_end) and (cams & o_cams):
+                shared = cams & o_cams
+                break
+        if shared is None:
+            continue
+        if o.subject_key in seen_keys:
+            continue
+        seen_keys.add(o.subject_key)
+        out.append(
+            {
+                "journey_id": str(o.id),
+                "subject_kind": o.subject_kind,
+                "subject_key": o.subject_key,
+                "person_id": str(o.person_id)
+                if getattr(o, "person_id", None)
+                else None,
+                "overlap_cameras": [
+                    {"id": str(cid), "name": _seg_cam_name(o, cid)}
+                    for cid in shared
+                ],
+                "started_at": o.started_at.isoformat() if o.started_at else None,
+                "last_seen_at": o.last_seen_at.isoformat()
+                if o.last_seen_at
+                else None,
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _seg_cam_name(journey: Any, cam_id: uuid.UUID) -> str | None:
+    for seg in journey.segments or []:
+        if isinstance(seg, dict) and seg.get("camera_id") == str(cam_id):
+            return seg.get("camera_name")
+    return None
+
+
+def _rel_revisited(
+    subj_journeys: list[Any], allowed: set[uuid.UUID], limit: int
+) -> list[dict[str, Any]]:
+    """Same subject_key appearing in 2+ journeys separated by a >30min
+    gap. Works on body-cluster / object subjects without a face."""
+    by_key: dict[str, list[Any]] = {}
+    for j in subj_journeys:
+        by_key.setdefault(j.subject_key, []).append(j)
+
+    out: list[dict[str, Any]] = []
+    for key, group in by_key.items():
+        if len(group) < 2:
+            continue
+        ordered = sorted(group, key=lambda j: j.started_at or datetime.min.replace(tzinfo=timezone.utc))
+        for i in range(1, len(ordered)):
+            prev = ordered[i - 1]
+            cur = ordered[i]
+            prev_end = prev.ended_at or prev.last_seen_at
+            cur_start = cur.started_at
+            if not (prev_end and cur_start):
+                continue
+            gap = int((cur_start - prev_end).total_seconds())
+            if gap < _REVISIT_GAP_SECONDS:
+                continue
+            out.append(
+                {
+                    "subject_key": key,
+                    "subject_kind": cur.subject_kind,
+                    "gap_seconds": gap,
+                    "gap_minutes": round(gap / 60),
+                    "first_journey_id": str(prev.id),
+                    "first_left_at": prev_end.isoformat(),
+                    "return_journey_id": str(cur.id),
+                    "returned_at": cur_start.isoformat(),
+                    "return_cameras": [
+                        {"id": str(cid), "name": _seg_cam_name(cur, cid)}
+                        for cid in _seg_cam_ids(cur, allowed)
+                    ],
+                }
+            )
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def _rel_path(
+    subj_journeys: list[Any], allowed: set[uuid.UUID], limit: int
+) -> list[dict[str, Any]]:
+    """Ordered camera transitions for the subject's most recent journey,
+    read from Journey.transitions, falling back to segment order."""
+    if not subj_journeys:
+        return []
+    j = subj_journeys[0]  # already ordered last_seen_at desc
+
+    out: list[dict[str, Any]] = []
+    transitions = j.transitions or []
+    for t in transitions:
+        if not isinstance(t, dict):
+            continue
+        from_cid = t.get("from_camera_id")
+        to_cid = t.get("to_camera_id")
+        # ACL. only surface a hop when both endpoints are accessible.
+        try:
+            if from_cid and uuid.UUID(from_cid) not in allowed:
+                continue
+            if to_cid and uuid.UUID(to_cid) not in allowed:
+                continue
+        except (TypeError, ValueError):
+            continue
+        out.append(
+            {
+                "journey_id": str(j.id),
+                "from_camera_id": from_cid,
+                "from_camera_name": t.get("from_camera_name"),
+                "to_camera_id": to_cid,
+                "to_camera_name": t.get("to_camera_name"),
+                "gap_seconds": t.get("gap_seconds"),
+                "at": t.get("ts"),
+            }
+        )
+        if len(out) >= limit:
+            break
+
+    if not out:
+        # No transition rows (single-camera journey). Surface the ordered
+        # segment cameras so the agent still gets the path shape.
+        for seg in j.segments or []:
+            if not isinstance(seg, dict):
+                continue
+            cid = seg.get("camera_id")
+            try:
+                if cid and uuid.UUID(cid) not in allowed:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            out.append(
+                {
+                    "journey_id": str(j.id),
+                    "camera_id": cid,
+                    "camera_name": seg.get("camera_name"),
+                    "started_at": seg.get("started_at"),
+                    "last_seen_at": seg.get("last_seen_at"),
+                }
+            )
+            if len(out) >= limit:
+                break
+    return out
+
+
+async def _rel_seen_with_label(
+    db: Any,
+    subj_journeys: list[Any],
+    allowed: set[uuid.UUID],
+    label: str | None,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Observations carrying ``label`` in object_detections that fall
+    inside one of the subject's journey windows on a shared camera."""
+    if not label or not subj_journeys:
+        return []
+    needle = label.strip()
+    if not needle:
+        return []
+
+    out: list[dict[str, Any]] = []
+    seen_obs: set[str] = set()
+    for j in subj_journeys:
+        j_start, j_end = _journey_window(j)
+        if not (j_start and j_end):
+            continue
+        cams = _seg_cam_ids(j, allowed)
+        if not cams:
+            continue
+        # Same JSON label-in-detections filter get_last_sightings uses,
+        # over Observation.object_detections (the real column name).
+        rows = (
+            await db.execute(
+                select(Observation)
+                .where(Observation.camera_id.in_(cams))
+                .where(Observation.started_at >= j_start)
+                .where(Observation.started_at <= j_end)
+                .where(
+                    cast(Observation.object_detections, SAString).ilike(
+                        f'%"label": "{needle}"%'
+                    )
+                )
+                .order_by(Observation.started_at.desc())
+                .limit(limit)
+            )
+        ).scalars().all()
+        for obs in rows:
+            if str(obs.id) in seen_obs:
+                continue
+            if obs.camera_id not in allowed:
+                continue
+            seen_obs.add(str(obs.id))
+            out.append(
+                {
+                    "observation_id": str(obs.id),
+                    "journey_id": str(j.id),
+                    "label": needle,
+                    "camera_id": str(obs.camera_id),
+                    "camera_name": _seg_cam_name(j, obs.camera_id),
+                    "timestamp": obs.started_at.isoformat()
+                    if obs.started_at
+                    else None,
+                    "description": obs.vlm_description,
+                    "thumbnail_url": _thumbnail_url(obs.thumbnail_path),
+                }
+            )
+            if len(out) >= limit:
+                return out
+    return out
+
+
+async def _rel_transitions(
+    db: Any, allowed: set[uuid.UUID], cutoff: datetime, limit: int
+) -> list[dict[str, Any]]:
+    """Aggregate of all camera-to-camera movement gaps across journeys
+    in the window. Answers 'what's the usual path through the house?'."""
+    journeys = (
+        await db.execute(
+            select(Journey)
+            .where(Journey.last_seen_at >= cutoff)
+            .order_by(Journey.last_seen_at.desc())
+            .limit(1000)
+        )
+    ).scalars().all()
+
+    agg: dict[tuple[str, str], dict[str, Any]] = {}
+    for j in journeys:
+        for t in j.transitions or []:
+            if not isinstance(t, dict):
+                continue
+            from_cid = t.get("from_camera_id")
+            to_cid = t.get("to_camera_id")
+            if not (from_cid and to_cid):
+                continue
+            try:
+                if uuid.UUID(from_cid) not in allowed:
+                    continue
+                if uuid.UUID(to_cid) not in allowed:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            k = (from_cid, to_cid)
+            bucket = agg.setdefault(
+                k,
+                {
+                    "from_camera_id": from_cid,
+                    "from_camera_name": t.get("from_camera_name"),
+                    "to_camera_id": to_cid,
+                    "to_camera_name": t.get("to_camera_name"),
+                    "count": 0,
+                    "_gap_total": 0,
+                },
+            )
+            bucket["count"] += 1
+            bucket["_gap_total"] += int(t.get("gap_seconds") or 0)
+
+    out: list[dict[str, Any]] = []
+    for bucket in sorted(agg.values(), key=lambda b: -b["count"]):
+        cnt = bucket["count"]
+        out.append(
+            {
+                "from_camera_id": bucket["from_camera_id"],
+                "from_camera_name": bucket["from_camera_name"],
+                "to_camera_id": bucket["to_camera_id"],
+                "to_camera_name": bucket["to_camera_name"],
+                "count": cnt,
+                "avg_gap_seconds": round(bucket["_gap_total"] / cnt) if cnt else 0,
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
 # ── Tool 4. analyze_clip ──────────────────────────────────────────────
 
 
@@ -1548,6 +2183,25 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
         ),
         "input_schema": _SUMMARIZE_ACTIVITY_SCHEMA,
         "fn": summarize_activity,
+        "side_effect": "read",
+        "cost_class": "cheap",
+    },
+    {
+        "name": "query_relationships",
+        "description": (
+            "Walk relationships between people, animals, vehicles, "
+            "cameras, and time. Answers 'who was with X', 'did X come "
+            "back later', 'where did X go', 'was X seen with a <label>', "
+            "'what's the usual path'. Cheap; one DB pass over the Journey "
+            "graph (segments + transitions JSON). Use this BEFORE "
+            "stitching multiple get_journeys calls. Relations. "
+            "co_present_with, revisited, path, seen_with_label, "
+            "transitions. Subject is a Person name/id or a label like "
+            "'cat'/'car'. Returns disambiguation when a name matches more "
+            "than one Person."
+        ),
+        "input_schema": _QUERY_RELATIONSHIPS_SCHEMA,
+        "fn": query_relationships,
         "side_effect": "read",
         "cost_class": "cheap",
     },

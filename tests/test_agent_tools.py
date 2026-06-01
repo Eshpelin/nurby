@@ -33,6 +33,7 @@ from services.agent.tools import (
     summarize_activity,
     get_tool,
     query_observations,
+    query_relationships,
 )
 
 
@@ -539,6 +540,300 @@ def test_registry_lookup():
         "get_last_sightings",
         "get_events",
         "summarize_activity",
+        "query_relationships",
         "analyze_clip",
         "analyze_frame",
     }
+
+
+# ── query_relationships ─────────────────────────────────────────────
+
+
+def _segment(cam_id, cam_name, started, last_seen, incident_id=None):
+    return {
+        "camera_id": str(cam_id),
+        "camera_name": cam_name,
+        "location_label": None,
+        "incident_id": str(incident_id or uuid.uuid4()),
+        "started_at": started.isoformat(),
+        "last_seen_at": last_seen.isoformat(),
+        "occurrence_count": 1,
+        "peak_observation_id": None,
+    }
+
+
+def _journey(subject_kind, subject_key, started, last_seen, segments, transitions=None, ended=None, person_id=None):
+    return SimpleNamespace(
+        id=uuid.uuid4(),
+        subject_kind=subject_kind,
+        subject_key=subject_key,
+        started_at=started,
+        last_seen_at=last_seen,
+        ended_at=ended,
+        segments=segments,
+        transitions=transitions or [],
+        person_id=person_id,
+    )
+
+
+def test_query_relationships_in_registry():
+    entry = get_tool("query_relationships")
+    assert entry is not None
+    assert entry["cost_class"] == "cheap"
+    assert entry["side_effect"] == "read"
+
+
+def test_query_relationships_dialects_valid():
+    # The new tool must serialize cleanly to every provider dialect.
+    for prov in ("anthropic", "openai", "gemini"):
+        out = all_tools_for_provider(prov)
+        names = [
+            (e.get("name") or e.get("function", {}).get("name")) for e in out
+        ]
+        assert "query_relationships" in names
+    anth = next(e for e in all_tools_for_provider("anthropic") if e["name"] == "query_relationships")
+    jsonschema.Draft202012Validator.check_schema(anth["input_schema"])
+
+
+@pytest.mark.asyncio
+async def test_query_relationships_co_present(monkeypatch):
+    cam_id = uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    dad = _journey(
+        "person", "Dad", now - timedelta(minutes=20), now,
+        [_segment(cam_id, "Kitchen", now - timedelta(minutes=20), now)],
+    )
+    aisha = _journey(
+        "person", "Aisha", now - timedelta(minutes=15), now - timedelta(minutes=5),
+        [_segment(cam_id, "Kitchen", now - timedelta(minutes=15), now - timedelta(minutes=5))],
+    )
+
+    async def fake_access(user, db):
+        return {cam_id}
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+
+    def responder(stmt: str):
+        s = stmt.lower()
+        if "from persons" in s:
+            return [(uuid.uuid4(), "Dad")] if "lower" in s else []
+        if "from journeys" in s:
+            # The subject query filters on subject_kind in its WHERE; the
+            # candidate-others query filters only on last_seen_at. Return
+            # just the subject for the former and both for the latter so
+            # the overlap test is real.
+            if "subject_kind =" in s:
+                return [(dad,)]
+            return [(dad,), (aisha,)]
+        return []
+
+    db = FakeDB(responder)
+    ctx = {"user": _user("admin"), "run_id": None, "db": db}
+    out = await query_relationships(ctx, subject="Dad", relation="co_present_with")
+    keys = {r["subject_key"] for r in out["results"]}
+    assert "Aisha" in keys
+    assert "Dad" not in keys  # subject excludes itself
+
+
+@pytest.mark.asyncio
+async def test_query_relationships_revisited(monkeypatch):
+    cam_id = uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    # Two journeys for the same body-cluster subject_key, >30min apart.
+    first = _journey(
+        "cluster", "cluster-abc", now - timedelta(hours=3), now - timedelta(hours=2, minutes=30),
+        [_segment(cam_id, "Front Door", now - timedelta(hours=3), now - timedelta(hours=2, minutes=30))],
+        ended=now - timedelta(hours=2, minutes=30),
+    )
+    second = _journey(
+        "cluster", "cluster-abc", now - timedelta(minutes=20), now,
+        [_segment(cam_id, "Front Door", now - timedelta(minutes=20), now)],
+    )
+
+    async def fake_access(user, db):
+        return {cam_id}
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+
+    def responder(stmt: str):
+        s = stmt.lower()
+        if "from persons" in s:
+            return []
+        if "from journeys" in s:
+            return [(second,), (first,)]
+        return []
+
+    db = FakeDB(responder)
+    ctx = {"user": _user("admin"), "run_id": None, "db": db}
+    # "cluster-abc" is not a known label nor a person; resolve via... it
+    # is neither. Use a label-style subject path is not applicable, so we
+    # drive it through a person-id-shaped resolution is impossible. The
+    # tool resolves only persons/labels, so to exercise revisited we use
+    # a label subject that matches subject_kind=object. Re-key as object.
+    first.subject_kind = "object"
+    first.subject_key = "cat"
+    second.subject_kind = "object"
+    second.subject_key = "cat"
+    out = await query_relationships(ctx, subject="cat", relation="revisited")
+    assert len(out["results"]) == 1
+    assert out["results"][0]["gap_minutes"] >= 30
+
+    # Single journey -> not flagged.
+    def responder_single(stmt: str):
+        s = stmt.lower()
+        if "from journeys" in s:
+            return [(second,)]
+        return []
+
+    db2 = FakeDB(responder_single)
+    ctx2 = {"user": _user("admin"), "run_id": None, "db": db2}
+    out2 = await query_relationships(ctx2, subject="cat", relation="revisited")
+    assert out2["results"] == []
+
+
+@pytest.mark.asyncio
+async def test_query_relationships_path(monkeypatch):
+    cam_a, cam_b = uuid.uuid4(), uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    j = _journey(
+        "object", "cat", now - timedelta(minutes=10), now,
+        [
+            _segment(cam_a, "Kitchen", now - timedelta(minutes=10), now - timedelta(minutes=6)),
+            _segment(cam_b, "Hallway", now - timedelta(minutes=5), now),
+        ],
+        transitions=[
+            {
+                "from_camera_id": str(cam_a),
+                "from_camera_name": "Kitchen",
+                "to_camera_id": str(cam_b),
+                "to_camera_name": "Hallway",
+                "gap_seconds": 60,
+                "ts": (now - timedelta(minutes=5)).isoformat(),
+            }
+        ],
+    )
+
+    async def fake_access(user, db):
+        return {cam_a, cam_b}
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+
+    def responder(stmt: str):
+        s = stmt.lower()
+        if "from journeys" in s:
+            return [(j,)]
+        return []
+
+    db = FakeDB(responder)
+    ctx = {"user": _user("admin"), "run_id": None, "db": db}
+    out = await query_relationships(ctx, subject="cat", relation="path")
+    assert len(out["results"]) == 1
+    hop = out["results"][0]
+    assert hop["from_camera_name"] == "Kitchen"
+    assert hop["to_camera_name"] == "Hallway"
+
+
+@pytest.mark.asyncio
+async def test_query_relationships_seen_with_label(monkeypatch):
+    cam_id = uuid.uuid4()
+    person_id = uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    j = _journey(
+        "person", "Dad", now - timedelta(minutes=30), now,
+        [_segment(cam_id, "Kitchen", now - timedelta(minutes=30), now)],
+    )
+    obs = SimpleNamespace(
+        id=uuid.uuid4(),
+        camera_id=cam_id,
+        started_at=now - timedelta(minutes=10),
+        vlm_description="dad with the dog",
+        thumbnail_path="t.jpg",
+        object_detections={"objects": [{"label": "dog"}]},
+    )
+
+    async def fake_access(user, db):
+        return {cam_id}
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+
+    def responder(stmt: str):
+        s = stmt.lower()
+        if "from persons" in s:
+            return [(person_id, "Dad")]
+        if "from journeys" in s:
+            return [(j,)]
+        if "from observations" in s:
+            return [(obs,)]
+        return []
+
+    db = FakeDB(responder)
+    ctx = {"user": _user("admin"), "run_id": None, "db": db}
+    out = await query_relationships(ctx, subject="Dad", relation="seen_with_label", object="dog")
+    assert len(out["results"]) == 1
+    assert out["results"][0]["label"] == "dog"
+    assert out["results"][0]["observation_id"] == str(obs.id)
+
+
+@pytest.mark.asyncio
+async def test_query_relationships_disambiguation(monkeypatch):
+    cam_id = uuid.uuid4()
+    p1, p2 = uuid.uuid4(), uuid.uuid4()
+
+    async def fake_access(user, db):
+        return {cam_id}
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+
+    def responder(stmt: str):
+        s = stmt.lower()
+        if "from persons" in s:
+            return [(p1, "Dad"), (p2, "Daddy")]
+        return []
+
+    db = FakeDB(responder)
+    ctx = {"user": _user("admin"), "run_id": None, "db": db}
+    out = await query_relationships(ctx, subject="Dad", relation="co_present_with")
+    assert out["results"] == []
+    assert {d["display_name"] for d in out["disambiguation"]} == {"Dad", "Daddy"}
+
+
+@pytest.mark.asyncio
+async def test_query_relationships_access_filter(monkeypatch):
+    # The subject's journey only touches a camera the user cannot see ->
+    # no results.
+    visible_cam = uuid.uuid4()
+    hidden_cam = uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    j = _journey(
+        "object", "cat", now - timedelta(minutes=10), now,
+        [_segment(hidden_cam, "Garage", now - timedelta(minutes=10), now)],
+    )
+
+    async def fake_access(user, db):
+        return {visible_cam}
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+
+    def responder(stmt: str):
+        s = stmt.lower()
+        if "from journeys" in s:
+            return [(j,)]
+        return []
+
+    db = FakeDB(responder)
+    ctx = {"user": _user("admin"), "run_id": None, "db": db}
+    out = await query_relationships(ctx, subject="cat", relation="path")
+    assert out["results"] == []
+
+
+@pytest.mark.asyncio
+async def test_query_relationships_clamps(monkeypatch):
+    async def fake_access(user, db):
+        return set()  # short-circuit before any journey query
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    db = FakeDB(lambda s: [])
+    ctx = {"user": _user("admin"), "run_id": None, "db": db}
+    out = await query_relationships(ctx, subject="cat", relation="path", hours=9999, limit=999)
+    assert out["hours"] == 720  # clamped
+    assert out["results"] == []
