@@ -25,20 +25,24 @@ in plain functions so it is unit-testable without the ``mcp`` package
 installed. The ``mcp`` SDK is only imported inside ``build_server`` and
 ``main`` so importing this module never requires the SDK.
 
-MCP-SDK-ASSUMPTION (verify against the installed package):
+SDK API (VERIFIED against the installed package, mcp 1.27.2):
   * Package import name is ``mcp`` (PyPI ``mcp>=1.2.0``).
-  * Low-level server. ``from mcp.server import Server``.
+  * Low-level server. ``from mcp.server import Server``. [confirmed]
   * stdio transport. ``from mcp.server.stdio import stdio_server`` yielding
-    ``(read_stream, write_stream)``.
+    ``(read_stream, write_stream)``. [confirmed]
   * Types. ``from mcp.types import Tool, TextContent``. ``Tool`` takes
-    ``name``, ``description``, ``inputSchema`` (camelCase). ``TextContent``
-    takes ``type="text"`` and ``text=...``.
+    ``name``, ``description``, ``inputSchema`` (camelCase. confirmed via
+    ``Tool.model_fields``). ``TextContent`` takes ``type="text"`` and
+    ``text=...``. [confirmed]
   * Handlers registered via ``@server.list_tools()`` returning
     ``list[Tool]`` and ``@server.call_tool()`` returning
     ``list[TextContent]``. ``server.run(read, write, init_options)`` with
     ``init_options`` from ``server.create_initialization_options()``.
-  Every assumption is marked inline with ``# MCP-SDK-ASSUMPTION:`` so a
-  follow-up can reconcile against the real API surface.
+    [confirmed: list_tools/call_tool/create_initialization_options all
+    present; ListToolsRequest handler registers]
+  The two SDK-dependent tests now run (no longer importorskip) and pass.
+  The HTTP transport factory path (streamable_http) still varies across
+  versions and stays best-effort; stdio is the supported transport.
 """
 
 from __future__ import annotations
@@ -249,7 +253,7 @@ def build_server() -> Any:
     Validates the launch token eagerly so a misconfigured server fails
     fast with a clear message at startup rather than on the first call.
     """
-    # MCP-SDK-ASSUMPTION: low-level Server + types live at these paths.
+    # VERIFIED (mcp 1.27.2): low-level Server + types live at these paths.
     from mcp.server import Server  # type: ignore
     from mcp.types import TextContent, Tool  # type: ignore
 
@@ -264,18 +268,18 @@ def build_server() -> Any:
 
     server = Server(SERVER_NAME)
 
-    @server.list_tools()  # MCP-SDK-ASSUMPTION: decorator returns list[Tool]
+    @server.list_tools()  # VERIFIED (mcp 1.27.2): decorator returns list[Tool]
     async def _list_tools() -> list[Any]:
         return [
             Tool(
                 name=d["name"],
                 description=d["description"],
-                inputSchema=d["input_schema"],  # MCP-SDK-ASSUMPTION: camelCase
+                inputSchema=d["input_schema"],  # VERIFIED (mcp 1.27.2): camelCase field
             )
             for d in tool_definitions()
         ]
 
-    @server.call_tool()  # MCP-SDK-ASSUMPTION: (name, arguments) -> list[content]
+    @server.call_tool()  # VERIFIED (mcp 1.27.2): (name, arguments) -> list[content]
     async def _call_tool(name: str, arguments: dict[str, Any] | None) -> list[Any]:
         payload = await dispatch_tool_call(
             name, arguments, token=_token_from_env()
@@ -287,12 +291,12 @@ def build_server() -> Any:
 
 async def run_stdio() -> None:
     """Serve over stdio. the must-have transport for Claude Desktop."""
-    # MCP-SDK-ASSUMPTION: stdio_server yields (read_stream, write_stream).
+    # VERIFIED (mcp 1.27.2): stdio_server yields (read_stream, write_stream).
     from mcp.server.stdio import stdio_server  # type: ignore
 
     server = build_server()
     async with stdio_server() as (read_stream, write_stream):
-        # MCP-SDK-ASSUMPTION: create_initialization_options() exists.
+        # VERIFIED (mcp 1.27.2): create_initialization_options() exists.
         init_options = server.create_initialization_options()
         await server.run(read_stream, write_stream, init_options)
 
