@@ -55,3 +55,6 @@ logs/
 
 # Agent eval artifact
 .eval-report.md
+
+# Local Claude Code tooling (agents, skills, launch configs)
+.claude/
