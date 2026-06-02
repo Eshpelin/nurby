@@ -56,5 +56,14 @@ logs/
 # Agent eval artifact
 .eval-report.md
 
-# Local Claude Code tooling (agents, skills, launch configs)
-.claude/
+# Claude Code. ship the shared dev-workflow agents/skills + launch config,
+# but never the local settings, runtime locks, or session state.
+.claude/*
+!.claude/agents/
+!.claude/skills/
+!.claude/launch.json
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# macOS
+.DS_Store
