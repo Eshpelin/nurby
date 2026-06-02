@@ -266,6 +266,11 @@ It pulls the latest code, rebuilds, and restarts. migrations run
 automatically on startup. An optional in-app one-click update button is
 available too. see [docs/updating.md](docs/updating.md).
 
+Prefer not to build on a low-power box? Every release publishes prebuilt
+images to the GitHub Container Registry, so you can `docker compose pull`
+and `docker compose up -d` instead of building. See
+[docs/releasing.md](docs/releasing.md).
+
 ## Database migrations
 
 ```bash

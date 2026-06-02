@@ -1,0 +1,91 @@
+name: release
+
+# Cut a release by tagging a commit:
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# This builds every Nurby service image, pushes them to the GitHub
+# Container Registry (ghcr.io), and creates a GitHub Release. It is free
+# for public repositories. Actions minutes and GHCR storage are included.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # create the GitHub Release
+  packages: write   # push images to ghcr.io
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            context: .
+            dockerfile: services/api/Dockerfile
+          - name: mcp
+            context: .
+            dockerfile: services/mcp/Dockerfile
+          - name: ingestion
+            context: .
+            dockerfile: services/ingestion/Dockerfile
+          - name: perception
+            context: .
+            dockerfile: services/perception/Dockerfile
+          - name: frontend
+            context: ./frontend
+            dockerfile: frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image name and version
+        id: meta
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"            # lowercased for GHCR
+          version="${GITHUB_REF_NAME#v}"                  # strip the leading v
+          echo "image=ghcr.io/${owner}/nurby-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:latest
+          build-args: |
+            NURBY_BUILD_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    needs: images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            Prebuilt images for this release are on the GitHub Container Registry.
+            Pull them instead of building locally:
+
+            ```bash
+            docker compose pull
+            docker compose up -d
+            ```

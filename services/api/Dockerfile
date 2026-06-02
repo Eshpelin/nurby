@@ -2,6 +2,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Exact build commit, surfaced by /api/system/version. Set by CI on
+# release; harmless when unset for local builds.
+ARG NURBY_BUILD_SHA=""
+ENV NURBY_BUILD_SHA=$NURBY_BUILD_SHA
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 libpq-dev ffmpeg \
     cmake build-essential libboost-all-dev \
