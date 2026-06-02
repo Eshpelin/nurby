@@ -18,6 +18,78 @@ Stranger at the door 2am    ->  Email you + record a clip + sound an ESP32 buzze
 - **Automation that reaches the real world.** Rules can notify, email, call webhooks, sound physical alarms, and gate on a second AI confirmation before firing.
 - **Programmable.** A documented REST API, long-lived API keys, signed webhooks, and an MCP server let you build on top of it.
 
+## Get Nurby running on your computer
+
+New to this kind of software? This is the whole setup. You do not need to know Docker, Python, or databases. You copy four commands, wait once, and open a web page. It runs the same way on macOS, Windows, and Linux.
+
+### Step 1. Install Docker Desktop
+
+Docker is the one tool Nurby needs. It runs everything else for you (the database, the AI services, the web app) in the background so you do not install them one by one.
+
+- Download and install **Docker Desktop** from [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/).
+- Open it once after installing and leave it running. You will see a whale icon in your menu bar or system tray when it is ready.
+
+On Windows, accept the WSL 2 prompt if it appears. that is Docker setting itself up, and it is normal.
+
+### Step 2. Download Nurby
+
+Open a terminal (on Mac, the Terminal app. on Windows, PowerShell) and run.
+
+```bash
+git clone https://github.com/Eshpelin/nurby-backend.git
+cd nurby-backend
+```
+
+No `git`? Install [Git](https://git-scm.com/downloads), or download the project as a ZIP from the green "Code" button on GitHub, unzip it, and `cd` into the folder.
+
+### Step 3. Create your settings file
+
+```bash
+cp .env.example .env
+```
+
+This makes a `.env` file from the template. The defaults are fine for trying it on your own machine. you do not need to edit anything yet.
+
+### Step 4. Start it
+
+```bash
+docker compose up --build
+```
+
+The first time, this downloads and assembles everything. it can take **5 to 15 minutes** and print a lot of text. That is expected, and only happens once. Later starts take seconds. When it settles and stops scrolling, Nurby is running. Leave this terminal window open while you use it.
+
+### Step 5. Open Nurby
+
+Open your web browser and go to **[http://localhost:4747](http://localhost:4747)**.
+
+The first visit takes you to a short setup wizard.
+
+1. **Create your account.** the first account is the admin.
+2. **Pick a vision model.** this is the AI that describes what cameras see. If you have [Ollama](https://ollama.com/download) running on your computer, Nurby finds it and lets you use it in one click, fully free and offline. Otherwise paste an API key for OpenAI, Anthropic, or Gemini. You can skip this and add it later.
+3. **Add a camera.** paste your camera's RTSP or ONVIF link. The built-in brand guide shows where to find that link for 26 popular camera brands. **No camera handy?** Nurby can use your laptop or phone webcam as a camera to try things out.
+
+That is it. You now have Nurby running. Open **Ask** and try a question, or build your first rule.
+
+### Stopping, starting, and resetting
+
+- **Stop it.** press `Ctrl+C` in the terminal, or run `docker compose down`.
+- **Start it again.** `docker compose up` (no `--build` needed after the first time).
+- **Update to the latest version.** `./scripts/update.sh`. See [Updating](#updating).
+- **Start completely fresh.** `docker compose down -v` wipes all data and gives you a clean slate. this deletes everything, so only do it on purpose.
+
+### If something does not work
+
+| Problem | Fix |
+|---|---|
+| `docker: command not found` or "Cannot connect to the Docker daemon" | Docker Desktop is not installed or not running. Open it and wait for the whale icon, then retry. |
+| "port is already allocated" | Another program is using a port Nurby needs (4747 or 4748). Quit that program, or change the port on the left side of the mapping in `docker-compose.yml`. |
+| The first `up --build` seems stuck | It is downloading. give it up to 15 minutes the first time. A fast internet connection helps. |
+| The page at localhost:4747 will not load | Wait until the terminal stops scrolling and shows the services are up, then refresh. On Windows make sure Docker is using WSL 2. |
+| "I do not have an RTSP link for my camera" | Use the in-app brand guide when adding a camera, or start with your webcam to explore. |
+| No AI model offered in setup | Install [Ollama](https://ollama.com/download) and start it, then click "Check again" in the model step, or paste a cloud provider API key. |
+
+Want more control (custom passwords, HTTPS, a public address)? See [Configuration](#configuration) and [Requirements](#requirements) below.
+
 ## Feature highlights
 
 ### Cameras and ingestion
@@ -111,20 +183,13 @@ A four-layer pipeline runs as services in one Docker Compose stack.
 
 GPU is optional. The perception pipeline is tuned to run on CPU.
 
-## Quick start
+## Ports and addresses
 
-```bash
-git clone https://github.com/Eshpelin/nurby-backend.git
-cd nurby-backend
-cp .env.example .env
-docker compose up --build
-```
-
-With the default compose file the stack is exposed on these host ports.
+The setup walkthrough is in [Get Nurby running on your computer](#get-nurby-running-on-your-computer) above. For reference, the default compose file exposes the stack on these host ports.
 
 | Service        | URL                          |
 |----------------|------------------------------|
-| Frontend       | http://localhost:4747        |
+| Frontend (app) | http://localhost:4747        |
 | API            | http://localhost:4748        |
 | API docs       | http://localhost:4748/docs   |
 | WebRTC (WHEP)  | http://localhost:8889        |
@@ -133,20 +198,7 @@ With the default compose file the stack is exposed on these host ports.
 | Postgres       | localhost:5433               |
 | Redis          | localhost:6379               |
 
-Then open http://localhost:4747 and follow first-run setup.
-
-### First-run setup
-
-1. Open http://localhost:4747. a fresh install routes you to `/setup`.
-2. Create the first admin account.
-3. Pick a vision model. if Ollama is reachable (locally or on your Docker host) the onboarding detects it and lets you use an installed model in one click, or pull a RAM-appropriate one. Otherwise enter a provider API key.
-4. Add your first camera. the brand cheat sheet helps you find the RTSP/ONVIF URL.
-5. Choose a detection model on the camera page so the rule builder can source its class list.
-6. Create a rule, or just open Ask and ask a question.
-
-### Using a local model with Docker
-
-One-click Ollama deploy pulls models on the machine that runs the API. When the API runs in Docker, install Ollama on the host and Nurby will auto-detect it at `http://host.docker.internal:11434`. You can also set `OLLAMA_BASE_URL` to point anywhere on your network.
+Running a local model with Docker. one-click Ollama deploy pulls models on the machine that runs the API, so when the API runs in Docker, install Ollama on the host and Nurby auto-detects it at `http://host.docker.internal:11434`. You can also set `OLLAMA_BASE_URL` to point anywhere on your network.
 
 ## Configuration
 
