@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 
 interface VisionModel {
@@ -19,26 +19,27 @@ interface OllamaStatus {
   recommended_model: string | null;
   system_ram_gb: number | null;
   available_models: VisionModel[];
+  reachable_url: string | null;
 }
 
 export interface OllamaDeployPanelProps {
-  // Called after a successful deploy. the backend auto-creates the
-  // Ollama provider, so the parent should refresh providers and advance.
+  // Called after the provider is provisioned (deployed or reused). the
+  // parent refreshes providers and advances the wizard.
   onProvisioned: () => void;
 }
 
-// One-click local model deployment for onboarding. Checks the server's
-// Ollama status, recommends a model for the detected RAM, and pulls it.
-// When Ollama is not available on the server (e.g. a dockerised API), it
-// explains that and points the user to the URL fallback below.
+// Detects an existing Ollama (local or on the Docker host), lets the
+// user reuse an already-installed vision model, or pulls a recommended
+// one for the detected RAM. Falls back to a clear message + the URL
+// field when no Ollama is reachable.
 export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
   const { authFetch } = useAuth();
   const [status, setStatus] = useState<OllamaStatus | null>(null);
   const [statusError, setStatusError] = useState("");
   const [model, setModel] = useState("");
-  const [deploying, setDeploying] = useState(false);
-  const [deployMsg, setDeployMsg] = useState("");
-  const [deployError, setDeployError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -57,11 +58,62 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
     };
   }, [authFetch]);
 
+  // Vision models that are already pulled on the detected Ollama.
+  const installedVision = useMemo(() => {
+    if (!status) return [] as VisionModel[];
+    const names = new Set(status.models);
+    const known = status.available_models.filter((m) => names.has(m.name));
+    // Surface any other installed model too (in case it isn't in our list).
+    const extra = status.models
+      .filter((n) => !status.available_models.some((m) => m.name === n))
+      .map((n) => ({ name: n, label: n, family: "", ram_gb: 0, quality: "", description: "" }));
+    return [...known, ...extra];
+  }, [status]);
+
+  const [reuseModel, setReuseModel] = useState("");
+  useEffect(() => {
+    if (installedVision.length && !reuseModel) setReuseModel(installedVision[0].name);
+  }, [installedVision, reuseModel]);
+
+  async function createProviderAt(baseUrl: string, modelName: string) {
+    const res = await authFetch("/api/providers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `Ollama (${modelName})`,
+        kind: "ollama",
+        base_url: baseUrl,
+        default_model: modelName,
+        active: true,
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.detail || `Failed to add provider (${res.status})`);
+    }
+  }
+
+  const useExisting = async () => {
+    if (!status?.reachable_url || !reuseModel) return;
+    setBusy(true);
+    setError("");
+    setMsg("Connecting to your existing Ollama.");
+    try {
+      await createProviderAt(status.reachable_url, reuseModel);
+      onProvisioned();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+      setMsg("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const deploy = async () => {
     if (!model) return;
-    setDeploying(true);
-    setDeployError("");
-    setDeployMsg("Deploying. starting Ollama and pulling the model. This can take a few minutes on first run.");
+    setBusy(true);
+    setError("");
+    setMsg("Deploying. starting Ollama and pulling the model. This can take a few minutes on first run.");
     try {
       const res = await authFetch("/api/ollama/deploy", {
         method: "POST",
@@ -70,17 +122,16 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.stage === "done") {
-        setDeployMsg(data.message || "Model ready.");
         onProvisioned();
         return;
       }
-      setDeployError(data.message || `Deploy failed (${res.status})`);
-      setDeployMsg("");
+      setError(data.message || `Deploy failed (${res.status})`);
+      setMsg("");
     } catch {
-      setDeployError("Network error during deploy");
-      setDeployMsg("");
+      setError("Network error during deploy");
+      setMsg("");
     } finally {
-      setDeploying(false);
+      setBusy(false);
     }
   };
 
@@ -92,82 +143,107 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
       </div>
     );
   }
-
   if (!status) {
-    return <div className="text-[11px] text-muted-foreground">Checking local AI.</div>;
+    return <div className="text-[11px] text-muted-foreground">Checking for a local AI.</div>;
   }
 
-  // Ollama is not available where the Nurby server runs (common with a
-  // dockerised API). Explain and let them use the URL fallback.
-  if (!status.installed) {
-    return (
-      <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-[11px] text-amber-300/90 leading-relaxed space-y-1">
-        <div className="font-medium text-amber-200">Ollama is not running on the Nurby server.</div>
-        <div>
-          One-click deploy needs Ollama installed where the Nurby API runs. If you
-          run the API in Docker, install Ollama on the host (
-          <a href="https://ollama.com/download" target="_blank" rel="noreferrer" className="underline">
-            ollama.com/download
-          </a>
-          ) and point the Base URL below at it (e.g.{" "}
-          <span className="font-mono">http://host.docker.internal:11434</span>).
-        </div>
-      </div>
-    );
-  }
-
-  const alreadyHave = model && status.models.includes(model);
-
-  return (
-    <div className="rounded-md border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-3 space-y-3">
+  // Case A. an Ollama is reachable. reuse it.
+  const detectedBlock = status.running && status.reachable_url && (
+    <div className="rounded-md border border-emerald-500/25 bg-emerald-500/[0.05] px-3 py-3 space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-xs font-medium text-emerald-200">Deploy a local model</div>
+        <div className="text-xs font-medium text-emerald-200">Existing Ollama detected</div>
+        <div className="text-[10px] text-muted-foreground font-mono">{status.reachable_url}</div>
+      </div>
+      {installedVision.length > 0 ? (
+        <>
+          <select
+            value={reuseModel}
+            onChange={(e) => setReuseModel(e.target.value)}
+            disabled={busy}
+            className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-xs"
+          >
+            {installedVision.map((m) => (
+              <option key={m.name} value={m.name}>
+                {m.label}
+                {m.ram_gb ? ` . ~${m.ram_gb} GB` : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={useExisting}
+            disabled={busy || !reuseModel}
+            className="w-full px-3 py-1.5 text-xs rounded-md bg-emerald-500/90 text-black font-medium hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? "Connecting." : `Use ${reuseModel}`}
+          </button>
+        </>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">
+          Connected, but no vision model is installed yet. Pull one below.
+        </p>
+      )}
+    </div>
+  );
+
+  // Case B. we can pull a model (the server has the Ollama binary).
+  const deployBlock = status.installed && (
+    <div className="rounded-md border border-border bg-background/40 px-3 py-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-medium">
+          {status.running ? "Pull another model" : "Deploy a local model"}
+        </div>
         {status.system_ram_gb != null && (
-          <div className="text-[10px] text-muted-foreground">{status.system_ram_gb} GB RAM detected</div>
+          <div className="text-[10px] text-muted-foreground">{status.system_ram_gb} GB RAM</div>
         )}
       </div>
-
-      <div className="space-y-1">
-        <label className="text-[10px] text-muted-foreground block">Model</label>
-        <select
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          disabled={deploying}
-          className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-xs"
-        >
-          {status.available_models.map((m) => (
-            <option key={m.name} value={m.name}>
-              {m.label} . ~{m.ram_gb} GB . {m.quality}
-              {m.name === status.recommended_model ? " (recommended)" : ""}
-            </option>
-          ))}
-        </select>
-        {model && (
-          <p className="text-[10px] text-muted-foreground">
-            {status.available_models.find((m) => m.name === model)?.description}
-          </p>
-        )}
-      </div>
-
-      {deployError && <div className="text-[11px] text-red-400">{deployError}</div>}
-      {deployMsg && <div className="text-[11px] text-emerald-300/90">{deployMsg}</div>}
-
+      <select
+        value={model}
+        onChange={(e) => setModel(e.target.value)}
+        disabled={busy}
+        className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-xs"
+      >
+        {status.available_models.map((m) => (
+          <option key={m.name} value={m.name}>
+            {m.label} . ~{m.ram_gb} GB . {m.quality}
+            {m.name === status.recommended_model ? " (recommended)" : ""}
+          </option>
+        ))}
+      </select>
       <button
         type="button"
         onClick={deploy}
-        disabled={deploying || !model}
-        className="w-full px-3 py-1.5 text-xs rounded-md bg-emerald-500/90 text-black font-medium hover:opacity-90 disabled:opacity-50"
+        disabled={busy || !model}
+        className="w-full px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
       >
-        {deploying
-          ? "Deploying."
-          : alreadyHave
-          ? `Use ${model} (already installed)`
-          : `Deploy ${model}`}
+        {busy ? "Working." : `Deploy ${model}`}
       </button>
-      <p className="text-[10px] text-muted-foreground">
-        Pulls the model with Ollama on the Nurby server and configures it as your
-        vision provider. Free, private, and offline.
-      </p>
+    </div>
+  );
+
+  // Case C. nothing reachable and no local binary.
+  const noneBlock = !status.running && !status.installed && (
+    <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-[11px] text-amber-300/90 leading-relaxed space-y-1">
+      <div className="font-medium text-amber-200">No Ollama detected.</div>
+      <div>
+        Install Ollama (
+        <a href="https://ollama.com/download" target="_blank" rel="noreferrer" className="underline">
+          ollama.com/download
+        </a>
+        ) on the machine or host that runs Nurby. If it runs in Docker, start Ollama on the
+        host and point the Base URL below at{" "}
+        <span className="font-mono">http://host.docker.internal:11434</span>.
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-2">
+      {detectedBlock}
+      {deployBlock}
+      {noneBlock}
+      {error && <div className="text-[11px] text-red-400">{error}</div>}
+      {msg && <div className="text-[11px] text-emerald-300/90">{msg}</div>}
     </div>
   );
 }

@@ -82,6 +82,10 @@ class OllamaStatus(BaseModel):
     recommended_model: str | None
     system_ram_gb: float | None
     available_models: list[dict]
+    # URL where a running Ollama was detected (may be the Docker host),
+    # or None. Use this as the provider base_url when reusing an existing
+    # install rather than the hardcoded localhost.
+    reachable_url: str | None = None
 
 
 class DeployRequest(BaseModel):
@@ -122,35 +126,78 @@ def _recommend_model(ram_gb: float | None) -> str:
     return "gemma3:1b"
 
 
-async def _is_ollama_running() -> bool:
-    """Check if Ollama API is responding."""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{OLLAMA_URL}/api/tags")
-            return resp.status_code == 200
-    except (httpx.ConnectError, httpx.TimeoutException, OSError):
-        return False
+import os
 
 
-async def _get_installed_models() -> list[str]:
-    """Get list of models installed in Ollama."""
+def _candidate_urls() -> list[str]:
+    """Ollama base URLs to probe, in priority order.
+
+    Covers the local process, an explicit override, and the host as seen
+    from inside a Docker container (host.docker.internal on Mac/Windows,
+    the default bridge gateway on Linux). De-duplicated, order preserved.
+    """
+    urls = [
+        os.environ.get("OLLAMA_BASE_URL", "").strip(),
+        OLLAMA_URL,
+        "http://host.docker.internal:11434",
+        "http://172.17.0.1:11434",
+    ]
+    seen: set[str] = set()
+    out: list[str] = []
+    for u in urls:
+        if u and u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
+
+
+async def _probe(url: str) -> list[str] | None:
+    """Return the installed model names at ``url``, or None if it is not
+    a reachable Ollama."""
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{OLLAMA_URL}/api/tags")
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{url}/api/tags")
             if resp.status_code == 200:
                 return [m["name"] for m in resp.json().get("models", [])]
     except (httpx.ConnectError, httpx.TimeoutException, OSError):
         pass
-    return []
+    return None
+
+
+async def _detect_running() -> tuple[str | None, list[str]]:
+    """Find the first reachable Ollama across the candidate URLs.
+
+    Returns (reachable_url, installed_models). (None, []) when nothing
+    answers. Lets onboarding reuse an Ollama the user already runs,
+    including one on the Docker host, instead of only checking localhost.
+    """
+    for url in _candidate_urls():
+        models = await _probe(url)
+        if models is not None:
+            return url, models
+    return None, []
+
+
+async def _is_ollama_running() -> bool:
+    """Check if the local Ollama API is responding."""
+    return (await _probe(OLLAMA_URL)) is not None
+
+
+async def _get_installed_models() -> list[str]:
+    """Get list of models installed in the local Ollama."""
+    return (await _probe(OLLAMA_URL)) or []
 
 
 @router.get("/status", response_model=OllamaStatus)
 async def get_ollama_status(_current_user: User = Depends(require_admin)):
     """Check Ollama installation status and recommend a model."""
     ollama_path = _find_ollama_binary()
-    installed = ollama_path is not None
-    running = await _is_ollama_running()
-    models = await _get_installed_models() if running else []
+    # Detect a running Ollama anywhere we can reach. local process, an
+    # override URL, or the Docker host. installed means we can also pull
+    # new models locally; reachable means we can at least use it as-is.
+    reachable_url, models = await _detect_running()
+    running = reachable_url is not None
+    installed = ollama_path is not None or running
     ram_gb = _get_system_ram_gb()
     recommended = _recommend_model(ram_gb)
 
@@ -161,6 +208,7 @@ async def get_ollama_status(_current_user: User = Depends(require_admin)):
         recommended_model=recommended,
         system_ram_gb=round(ram_gb, 1) if ram_gb else None,
         available_models=VISION_MODELS,
+        reachable_url=reachable_url,
     )
 
 
