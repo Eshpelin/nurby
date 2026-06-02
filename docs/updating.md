@@ -61,6 +61,6 @@ Releases for the banner to work.
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `NURBY_GITHUB_REPO` | Repo to check for releases | `Eshpelin/nurby-backend` |
+| `NURBY_GITHUB_REPO` | Repo to check for releases | `Eshpelin/nurby` |
 | `NURBY_SELF_UPDATE` | Enable the one-click button | off |
 | `NURBY_UPDATE_TRIGGER` | Path the API writes to signal the updater | `/data/update.request` |

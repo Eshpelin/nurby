@@ -345,7 +345,7 @@ async def patch_settings(
 import os
 import time
 
-_GITHUB_REPO = os.environ.get("NURBY_GITHUB_REPO", "Eshpelin/nurby-backend")
+_GITHUB_REPO = os.environ.get("NURBY_GITHUB_REPO", "Eshpelin/nurby")
 # A path on a shared volume the updater sidecar watches. Writing it asks
 # the host to update. Only meaningful when NURBY_SELF_UPDATE is enabled
 # and the updater service is running.

@@ -42,8 +42,8 @@ On Windows, accept the WSL 2 prompt if it appears. that is Docker setting itself
 Open a terminal (on Mac, the Terminal app. on Windows, PowerShell) and run.
 
 ```bash
-git clone https://github.com/Eshpelin/nurby-backend.git
-cd nurby-backend
+git clone https://github.com/Eshpelin/nurby.git
+cd nurby
 ```
 
 No `git`? Install [Git](https://git-scm.com/downloads), or download the project as a ZIP from the green "Code" button on GitHub, unzip it, and `cd` into the folder.
@@ -289,7 +289,7 @@ In Docker the API applies migrations automatically on startup.
 ## Project structure
 
 ```
-nurby-backend/
+nurby/
 +-- services/
 |   +-- api/            FastAPI REST + WebSocket + auth + routes
 |   +-- ingestion/      RTSP decode, motion, recording, retention
