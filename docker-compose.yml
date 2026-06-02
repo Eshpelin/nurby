@@ -12,6 +12,9 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Runs once on a fresh volume to enable the pgvector extension so
+      # vector columns work before the first migration. See PR #2.
+      - ./config/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nurby"]
       interval: 5s
