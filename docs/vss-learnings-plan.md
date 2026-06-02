@@ -55,7 +55,7 @@ except today our rule fires on raw detection, not a verified one.
 
 ### What we build
 A new action type **`verify`** plus an opt-in rule flag that makes the
-action chain conditional on a VLM confirmation.
+action chain conditional on a VLM confirmation:
 
 - New action shape.
   ```json
@@ -73,12 +73,12 @@ action chain conditional on a VLM confirmation.
   question + the existing `ANALYZER_RESPONSE_SCHEMA` (verdict +
   confidence + cannot_tell). We already built this analyzer with the
   eternal frame cache, so a repeat verification of the same frame is
-  free.
+  free:
 - Gate. If `verdict != "yes"` OR `confidence < min_confidence` OR
   `verdict == "cannot_tell"`, and `on_fail == "stop"`, abort the rest
   of the action chain. The engine already supports chain-abort
   (`RuntimeError` from vlm_call breaks the loop) so this reuses the
-  same control flow.
+  same control flow:
 - Audit. The verification result lands on the `Event.payload` so the
   timeline + the agent can see "fired but VLM rejected, suppressed."
 
@@ -100,7 +100,7 @@ action chain conditional on a VLM confirmation.
    it honors `vlm_call` `on_error=stop`.
 5. Tests. Verify passes → chain continues. Verify fails →
    chain aborts. Cannot_tell → treated as fail. Cached frame → no
-   second VLM call.
+   second VLM call:
 6. Plain-language preview. "When a person is detected on Front Door,
    confirm with AI that it is really a person, then send Telegram."
 
@@ -121,12 +121,12 @@ from Tuesday return Friday?" "Who was with Dad in the kitchen?"
 
 ### Where Nurby is today
 We already have the graph. It is just relational rows we do not expose
-to the agent relationally.
+to the agent relationally:
 
 - `Person` ←→ `Journey` (subject_key) ←→ `Incident` ←→ `Observation`
 - `Person` ←→ `FaceCluster` / `BodyCluster`
 - `Journey.segments` + `Journey.transitions` JSON already encode the
-  camera-to-camera path and movement gaps.
+  camera-to-camera path and movement gaps:
 - `Event` ←→ `Rule` ←→ `Observation`.
 
 Our agent tools (`query_observations`, `get_journeys`, `get_events`,
@@ -137,7 +137,7 @@ calls together, which small models do poorly.
 ### What we build
 A new agent tool **`query_relationships`** that answers a bounded set
 of relational question shapes with a single DB round-trip, by walking
-the existing foreign keys + JSON segment data.
+the existing foreign keys + JSON segment data:
 
 - Schema.
   ```json
@@ -155,7 +155,7 @@ the existing foreign keys + JSON segment data.
     the same camera. Answers "who was with Dad?"
   - `revisited`. Same subject_key with two Journeys separated by a gap.
     Answers "did the delivery guy come back?" using BodyCluster identity
-    even without a face.
+    even without a face:
   - `path`. Ordered camera transitions for a Journey from
     `Journey.transitions`. Answers "where did the cat go after the
     kitchen?"
@@ -169,9 +169,9 @@ the existing foreign keys + JSON segment data.
 
 ### Why this is cheap for us
 - Zero new tables. Pure joins + JSON traversal over Journey / Incident /
-  Observation / Person / BodyCluster that already exist.
+  Observation / Person / BodyCluster that already exist:
 - The tool registry already converts JSON-schema tools to each provider
-  dialect, so adding one tool is one registry entry.
+  dialect, so adding one tool is one registry entry:
 - The driver, budget, audit, streaming all work unchanged.
 
 ### Deliverables
@@ -205,10 +205,10 @@ them as an MCP server.
 
 ### What we build
 A standalone **Nurby MCP server** (`services/mcp/server.py`) that
-re-exports the existing tool registry over MCP stdio + HTTP transports.
+re-exports the existing tool registry over MCP stdio + HTTP transports:
 
 - Each MCP tool maps 1:1 to a `TOOL_REGISTRY` entry. We already have
-  name, description, input_schema.
+  name, description, input_schema:
 - Auth. An MCP-issued token scoped to a Nurby user, so
   `accessible_camera_ids` filtering still applies. No tool bypasses
   the household ACL.
@@ -216,7 +216,7 @@ re-exports the existing tool registry over MCP stdio + HTTP transports.
   cost budget as `/ask` (reuse `services/agent/budget.py`).
 - Read-only by default. Only `side_effect: read` tools are exposed
   over MCP in v1.6. The verify / write tools stay internal until we
-  have a confirmation flow for external clients.
+  have a confirmation flow for external clients:
 - Distribution. A `docker compose` profile + a documented
   `claude_desktop_config.json` snippet so a user can point Claude
   Desktop at their own Nurby.
@@ -237,7 +237,7 @@ we offer it to a household on a NUC.
 2. Token-scoped auth bridging to a Nurby user + ACL.
 3. Budget enforcement reuse.
 4. Compose profile `mcp` + docs in `docs/mcp.md` with the Claude
-   Desktop config snippet.
+   Desktop config snippet:
 5. Smoke. Start the MCP server, list tools, call `summarize_activity`
    through an MCP client, get a household rollup back.
 
@@ -265,21 +265,21 @@ captioning.
 
 ### What we build
 A **hierarchical summarizer** invoked when a requested summary window
-exceeds a threshold.
+exceeds a threshold:
 
 - Map. Partition the window into chunks (by hour, or by Incident/Journey
   boundary which is more semantic). Produce a mini-summary per chunk from
   the rollup + any cached VLM captions. Cheap, no new VLM calls when
-  cache hits.
+  cache hits:
 - Reduce. Fold mini-summaries pairwise / in batches into a final
-  narrative, each reduce step bounded to a safe token budget.
+  narrative, each reduce step bounded to a safe token budget:
 - Surface. A new agent path (the driver detects a large-window summary
   request and runs the map-reduce loop) + reuse in `daily_digest` for
   weekly / monthly digests.
 
 ### Deliverables
 1. `services/agent/summarizer.py` with `summarize_window(hours)` doing
-   chunk → map → reduce.
+   chunk → map → reduce:
 2. Chunk boundary by Incident/Journey when available, else hourly.
 3. Token-budget-aware reduce (respect `agent_max_*` settings).
 4. Driver. Route "summarize the last N days" to this path.
@@ -328,10 +328,10 @@ similarity even when no caption mentioned running.
 - **Milvus / Neo4j / Kafka / DeepStream.** Our Postgres + pgvector +
   Redis stack covers every learning above without new infra. Adding a
   graph DB to answer relational questions our foreign keys already
-  encode would be pure complexity.
+  encode would be pure complexity:
 - **GPU-mandatory models (Cosmos NIM).** Our provider-agnostic chain +
   the v1.3/v1.4 CPU-survival work (backlog, dedupe, CLIP gate) is the
-  whole point. We stay CPU-viable.
+  whole point. We stay CPU-viable:
 - **Their always-on dense-caption-every-chunk model.** Our motion gate +
   pHash dedupe + CLIP gate + eternal frame cache mean we caption far
   fewer frames. We get the same retrieval quality at a fraction of the

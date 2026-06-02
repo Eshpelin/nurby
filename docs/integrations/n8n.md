@@ -4,7 +4,7 @@
 
 ## 1. Send Nurby events into n8n
 
-Use this to react to alerts. send a Slack or Telegram message, append a row to a sheet, flip a smart plug, start a phone call.
+Use this to react to alerts. send a Slack or Telegram message, append a row to a sheet, flip a smart plug, start a phone call:
 
 1. In n8n, create a new workflow and add a **Webhook** node. Set it to `POST` and copy the **Production URL** it gives you.
 2. In Nurby, open **Rules**. You have two choices.
@@ -30,7 +30,7 @@ Use this to react to alerts. send a Slack or Telegram message, append a row to a
 
 ### Verifying the signature in n8n (optional)
 
-Add a **Code** node right after the Webhook node.
+Add a **Code** node right after the Webhook node:
 
 ```javascript
 const crypto = require('crypto');
@@ -45,7 +45,7 @@ return $input.all();
 
 ## 2. Drive Nurby from n8n
 
-Use this to have an n8n workflow read or change Nurby. on a schedule, or in response to anything else in your stack.
+Use this to have an n8n workflow read or change Nurby. on a schedule, or in response to anything else in your stack:
 
 1. In Nurby, open **Settings** and create an **API key**. Copy it once (it starts with `nrb_`).
 2. In n8n, add an **HTTP Request** node.

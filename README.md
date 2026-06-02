@@ -26,7 +26,7 @@ Nurby is free, open-source software for recording and understanding your securit
 
 ## Real-world use cases
 
-What people actually run Nurby for.
+What people actually run Nurby for:
 
 - **Front door and porch.** Know when a package is dropped, when a stranger lingers, or when a known face (a family member, a dog walker) arrives. Get an email with a clip and a link to the footage.
 - **Baby and elder care.** A gentle "still moving" check on a crib or a room, and passive check-ins that do not spam you with alerts. Audio triggers catch a baby cry or a smoke alarm.
@@ -44,7 +44,7 @@ New to this kind of software? This is the whole setup. You do not need to know D
 
 ### Step 1. Install Docker Desktop
 
-Docker is the one tool Nurby needs. It runs everything else for you (the database, the AI services, the web app) in the background so you do not install them one by one.
+Docker is the one tool Nurby needs. It runs everything else for you (the database, the AI services, the web app) in the background so you do not install them one by one:
 
 - Download and install **Docker Desktop** from [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/).
 - Open it once after installing and leave it running. You will see a whale icon in your menu bar or system tray when it is ready.
@@ -53,7 +53,7 @@ On Windows, accept the WSL 2 prompt if it appears. That is Docker setting itself
 
 ### Step 2. Download Nurby
 
-Open a terminal (on Mac, the Terminal app. On Windows, PowerShell) and run.
+Open a terminal (on Mac, the Terminal app. On Windows, PowerShell) and run:
 
 ```bash
 git clone https://github.com/Eshpelin/nurby.git
@@ -82,17 +82,17 @@ The first time, this downloads and assembles everything. It can take **5 to 15 m
 
 Open your web browser and go to **[http://localhost:4747](http://localhost:4747)**.
 
-The first visit takes you to a short setup wizard.
+The first visit takes you to a short setup wizard:
 
-1. **Create your account.** the first account is the admin.
-2. **Pick a vision model.** this is the AI that describes what cameras see. If you have [Ollama](https://ollama.com/download) running on your computer, Nurby finds it and lets you use it in one click, fully free and offline. Otherwise paste an API key for OpenAI, Anthropic, or Gemini. You can skip this and add it later.
-3. **Add a camera.** paste your camera's RTSP or ONVIF link. The built-in brand guide shows where to find that link for 26 popular camera brands. **No camera handy?** Nurby can use your laptop or phone webcam as a camera to try things out.
+1. **Create your account.** The first account is the admin.
+2. **Pick a vision model.** This is the AI that describes what cameras see. If you have [Ollama](https://ollama.com/download) running on your computer, Nurby finds it and lets you use it in one click, fully free and offline. Otherwise paste an API key for OpenAI, Anthropic, or Gemini. You can skip this and add it later.
+3. **Add a camera.** Paste your camera's RTSP or ONVIF link. The built-in brand guide shows where to find that link for 26 popular camera brands. **No camera handy?** Nurby can use your laptop or phone webcam as a camera to try things out.
 
 That is it. You now have Nurby running. Open **Ask** and try a question, or build your first rule.
 
 ### Stopping, starting, and resetting
 
-- **Stop it.** press `Ctrl+C` in the terminal, or run `docker compose down`.
+- **Stop it.** Press `Ctrl+C` in the terminal, or run `docker compose down`.
 - **Start it again.** `docker compose up` (no `--build` needed after the first time).
 - **Update to the latest version.** `./scripts/update.sh`. See [Updating](#updating).
 - **Start completely fresh.** `docker compose down -v` wipes all data and gives you a clean slate. This deletes everything, so only do it on purpose.
@@ -161,7 +161,7 @@ See the [docs](docs/) for deeper guides. [REST API](docs/api.md), [webhooks](doc
 
 ## Architecture
 
-A four-layer pipeline runs as services in one Docker Compose stack.
+A four-layer pipeline runs as services in one Docker Compose stack:
 
 ```
 +---------------------------------------------------------+
@@ -205,7 +205,7 @@ GPU is optional. The perception pipeline is tuned to run on CPU.
 
 ## Ports and addresses
 
-The setup walkthrough is in [Get Nurby running on your computer](#get-nurby-running-on-your-computer) above. For reference, the default compose file exposes the stack on these host ports.
+The setup walkthrough is in [Get Nurby running on your computer](#get-nurby-running-on-your-computer) above. For reference, the default compose file exposes the stack on these host ports:
 
 | Service        | URL                          |
 |----------------|------------------------------|
@@ -222,7 +222,7 @@ Running a local model with Docker. One-click Ollama deploy pulls models on the m
 
 ## Configuration
 
-Copy `.env.example` to `.env` and adjust. Key variables.
+Copy `.env.example` to `.env` and adjust. Key variables:
 
 | Variable | Purpose |
 |---|---|
@@ -240,7 +240,7 @@ Runtime settings such as timezone, blur defaults, and digest options live in the
 
 ## Local development
 
-Backend.
+Backend:
 
 ```bash
 pip install -e ".[dev]"
@@ -248,7 +248,7 @@ alembic upgrade head
 uvicorn services.api.main:app --reload   # serves on :8000
 ```
 
-Frontend.
+Frontend:
 
 ```bash
 cd frontend
@@ -276,7 +276,7 @@ The agentic Q&A surface has a separate 30-fixture eval suite (`tests/test_agent_
 ## Updating
 
 Nurby checks GitHub for new releases and shows an "Update available"
-banner in Settings. To update, run one command on the host.
+banner in Settings. To update, run one command on the host:
 
 ```bash
 ./scripts/update.sh
@@ -368,7 +368,7 @@ Open source CCTV, self-hosted NVR, network video recorder, video management syst
 
 ## Contributing
 
-Contributions are welcome. A good loop is.
+Contributions are welcome. A good loop is:
 
 1. Fork and branch from `main`.
 2. Make focused changes with tests. Run `python -m pytest -q` and, for frontend work, `cd frontend && npm run build`.

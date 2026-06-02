@@ -27,7 +27,7 @@ blocking, so Nurby's delivery never times out.
 
 ### ESP32 Buzzer Alarm
 
-A pocket Wi-Fi alarm. Sounds a piezo buzzer.
+A pocket Wi-Fi alarm. Sounds a piezo buzzer:
 
 - Hardware. ESP32 board, active piezo buzzer.
 - Wiring. Buzzer + to GPIO 23, buzzer - to GND.
@@ -37,7 +37,7 @@ A pocket Wi-Fi alarm. Sounds a piezo buzzer.
 
 ### ESP8266 Relay Lights
 
-Switches a lamp, strobe, or siren through a relay.
+Switches a lamp, strobe, or siren through a relay:
 
 - Hardware. ESP8266 (Wemos D1 mini or NodeMCU), opto-isolated 5V relay.
 - Wiring. Relay IN to GPIO 5 (D1), VCC to 5V, GND to GND, load through
@@ -48,7 +48,7 @@ Switches a lamp, strobe, or siren through a relay.
 
 ### Raspberry Pi Speaker
 
-Announces the alert out loud or plays a sound file.
+Announces the alert out loud or plays a sound file:
 
 - Hardware. Any networked Pi plus a speaker.
 - Script. `raspberry_pi_speaker.py`.
@@ -59,7 +59,7 @@ Announces the alert out loud or plays a sound file.
 
 ### Raspberry Pi Relay Alarm
 
-Drives a GPIO relay to fire a 12V siren or strobe.
+Drives a GPIO relay to fire a 12V siren or strobe:
 
 - Hardware. Any Pi with GPIO, 5V relay, 12V siren with its own supply.
 - Wiring. Relay IN to GPIO 17 (pin 11), VCC to 5V (pin 2), GND to GND
@@ -74,7 +74,7 @@ Drives a GPIO relay to fire a 12V siren or strobe.
 1. Run or flash the receiver and note the device IP.
 2. In Nurby, edit a rule and add a webhook action.
 3. Pick the device preset. Nurby pre-fills the action with the right URL
-   shape (`http://<ip>:<port>/alert`) and the standard payload.
+   shape (`http://<ip>:<port>/alert`) and the standard payload:
 4. Enter the device IP, and the same secret you set on the device.
 5. Save and fire a test event. The device should react.
 

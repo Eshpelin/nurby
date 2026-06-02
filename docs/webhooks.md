@@ -1,10 +1,10 @@
 # Nurby Webhooks
 
 Nurby pushes alerts to your own services and devices over HTTP. There
-are two ways to receive them.
+are two ways to receive them:
 
 - Per-rule webhook action. Add a `webhook` or `api_call` action to a
-  rule. Fires only when that rule fires.
+  rule. Fires only when that rule fires:
 - Standing subscription. Register a URL once and receive every fired
   event (optionally filtered by rule or camera).
 
@@ -47,7 +47,7 @@ these variables interpolate with `{var}` or `{{var}}`.
 `detections_summary`, `confidence`, `observation_id`, `recording_id`,
 `recording_url`, `thumbnail_url`.
 
-Example template.
+Example template:
 
 ```json
 { "text": "{rule_name} on {camera_name} at {timestamp_local}",
@@ -60,7 +60,7 @@ Set a `secret` on the action or subscription and Nurby signs the exact
 request body. The header is `X-Nurby-Signature: sha256=<hex>`. Recompute
 it over the raw bytes you receive and compare.
 
-Python receiver example.
+Python receiver example:
 
 ```python
 import hashlib, hmac

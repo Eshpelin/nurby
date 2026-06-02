@@ -21,24 +21,24 @@ providers behind a pluggable interface.
 
 ## 3. Architectural invariants
 
-These must not be violated by any PR in any phase.
+These must not be violated by any PR in any phase:
 
 1. **One ffmpeg per camera.** Video and audio come from the same process
-   with `-map` outputs. No second RTSP session.
+   with `-map` outputs. No second RTSP session:
 2. **One clock.** Host wall-clock stamped at packet demux. Never camera PTS,
-   never provider return time.
+   never provider return time:
 3. **No FK coupling between transcripts and observations.** Overlap join at
-   read time only. GiST indexed.
+   read time only. GiST indexed:
 4. **No fake audio-only observations.** Speech with no video event becomes a
-   `transcript_event` row, not an `observation` row.
+   `transcript_event` row, not an `observation` row:
 5. **Video path never blocks on audio.** All audio queues are bounded with
-   drop-oldest backpressure.
+   drop-oldest backpressure:
 6. **Feature flag gated.** `NURBY_AUDIO_ENABLED` controls whether any
    capture task spawns.
 
 ## 4. Privacy model
 
-Four independent per-camera toggles.
+Four independent per-camera toggles:
 
 1. `audio_capture_enabled`. Default off.
 2. `audio_transcribe_enabled`. Default off. Requires #1.
@@ -46,7 +46,7 @@ Four independent per-camera toggles.
 4. `transcript_store`. Default on when #2 is on. If off, transcript lives in
    memory only for VLM enrichment then discarded.
 
-Plus.
+Plus:
 
 - Audit log row on every toggle change (who, when, IP). Debugging, not legal.
 - Transcript export endpoint (user convenience).
@@ -158,7 +158,7 @@ Numbered execution steps.
        bounded by. min 500 ms, max 15000 ms, silence-close 800 ms. Output to
        `segment_queue` (max 50).
 6.2.3. `hallucination_filter.py`. Pure function. Takes `TranscriptResult`,
-       returns `(keep: bool, reason: str)`. Rules.
+       returns `(keep: bool, reason: str)`. Rules:
        - Drop if `no_speech_prob > 0.6`.
        - Drop if `avg_logprob < -1.0`.
        - Drop if text in blocklist (ship 30-phrase list).
@@ -166,7 +166,7 @@ Numbered execution steps.
        - Drop if duration < 300 ms and token count == 1.
        Filtered segments still written with `filtered=true` for audit, not
        surfaced on timeline.
-6.2.4. `stt.py`. Protocol + dispatcher.
+6.2.4. `stt.py`. Protocol + dispatcher:
        ```python
        class STTProvider(Protocol):
            kind: str
@@ -184,11 +184,11 @@ Numbered execution steps.
 
 ### 6.3. Write path
 
-Exact sequence on STT completion.
+Exact sequence on STT completion:
 
 1. Apply hallucination filter.
 2. If `transcript_store == false`, skip DB write. Pass transcript to in-memory
-   enrichment buffer only.
+   enrichment buffer only:
 3. Else insert `transcripts` row. `observation_id` left null.
 4. Query overlapping observations via GiST range.
 5. If any observation is within its enrichment window, schedule
@@ -236,7 +236,7 @@ observations lands in Phase 2.
 6.7.3. Settings UI "System health" panel polls the endpoint.
 6.7.4. Counter backend is swappable. If ever needed, drop in
        `prometheus_client` without touching call sites.
-6.7.5. Metrics to ship.
+6.7.5. Metrics to ship:
        - `stt_segments_total{provider,camera,status}`
        - `stt_latency_seconds{provider}` (p50, p95, p99 from a ring)
        - `stt_queue_depth{stage}`
@@ -278,16 +278,16 @@ observations lands in Phase 2.
 7.4. `services/search/query.py` extended to union-search observations and
      transcripts. Merge and rank. Tune cosine-distance threshold on real
      data.
-7.5. Cost caps.
+7.5. Cost caps:
      - Per-camera `stt_budget_minutes_per_hour` already in schema. Enforce
-       in router with a sliding-window counter.
+       in router with a sliding-window counter:
      - Global `stt_monthly_budget_minutes` in settings. At 80%, WS warning
        banner. At 100%, switch all cameras to local-only or disable STT
        depending on user setting.
 7.6. Digest generation reads transcripts too. Surface "what was heard" in
      the 24 h recap.
 7.7. **Tier A speaker attribution. Video-correlated.**
-     7.7.1. Schema additions.
+     7.7.1. Schema additions:
             ```sql
             ALTER TABLE transcripts
               ADD COLUMN speaker_person_id UUID REFERENCES persons(id) ON DELETE SET NULL,
@@ -327,7 +327,7 @@ observations lands in Phase 2.
      Export returns zip of CSV + Opus files (respecting per-camera
      `audio_store_raw`).
 8.8. **Tier B speaker attribution. Voice embeddings.**
-     8.8.1. Schema additions.
+     8.8.1. Schema additions:
             ```sql
             ALTER TABLE persons
               ADD COLUMN voice_embedding vector(192),
@@ -369,13 +369,13 @@ observations lands in Phase 2.
 
 ## 9. Phase 4. Live, mic-only, multi-speaker diarization (scoping pass only)
 
-Not planned in detail. Placeholders.
+Not planned in detail. Placeholders:
 
 - Browser mic WHIP audio track.
 - Standalone mic as `source_type = "audio_only"` camera.
 - Streaming STT with partial results over WS.
 - Multi-speaker diarization (pyannote) for segments where multiple voices
-  overlap. Splits a single transcript row into multiple per-speaker rows.
+  overlap. Splits a single transcript row into multiple per-speaker rows:
 - Mouth-open landmark delta as a third attribution signal.
 
 Re-scope before starting.
@@ -408,13 +408,13 @@ AUDIO_MIN_DURATION_S_FOR_EMBED = 1.0
 ## 11. Resolved decisions (2026-04-23)
 
 1. **Metrics.** In-process counters + `GET /api/admin/stats` JSON. No
-   Prometheus dependency.
+   Prometheus dependency:
 2. **Audit log actor.** `user_id = authenticated JWT user`. Store actor
-   only, not owner.
+   only, not owner:
 3. **Consent dialog.** Dropped. Operator responsibility.
 4. **faster-whisper default.** `small.en` on hosts ≥ 8 GB RAM, else
    `base.en` with a settings banner. Picker exposes tiny/base/small/medium
-   per user preference.
+   per user preference:
 5. **Speaker attribution.** Two tiers added to Phase 2 (video) and Phase 3
    (voice embeddings). Not deferred to Phase 4.
 

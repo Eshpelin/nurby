@@ -104,15 +104,15 @@ conversation:
 ## Adding a new fixture
 
 1. Pick the next `q{NN}_short_slug.yaml` filename. The slug is the
-   single source of truth for the human-readable id.
+   single source of truth for the human-readable id:
 2. Write the question the way a real household member would ask it.
-   Avoid "test data" phrasing.
+   Avoid "test data" phrasing:
 3. Decide if the question needs the analyzer. The system prompt tells
    the LLM to call `query_observations` first; the fixture should
-   reflect that ordering.
+   reflect that ordering:
 4. Fill `seed` with the minimum data the tool calls need to look
    real. A package-detection fixture should include a `package` label
-   and a description that mentions a package.
+   and a description that mentions a package:
 5. Script every LLM turn including the final synthesis. Under-scripted
    fixtures fail loudly with `MockLLMClient exhausted`.
 6. Set `expected` tightly. `final_answer_contains` should be the
@@ -121,7 +121,7 @@ conversation:
 
 ## Interpreting the report
 
-Each run produces `.eval-report.md` at the repo root.
+Each run produces `.eval-report.md` at the repo root:
 
 ```
 # Agent Eval Report
@@ -154,12 +154,12 @@ so reviewers do not have to dig through job logs.
 
 Until Wave 2A lands the real driver every fixture runs through
 `MockDriver`. Two classes of fixture exercise features that depend on
-the real driver's behavior and may need touch-up once it lands.
+the real driver's behavior and may need touch-up once it lands:
 
 - `q19_budget_exhausted`. The mock driver checks `budget_cents` before
   each turn. The real driver should call the same hook from
   `services.agent.budget.check_user_budget`; if the field name there
-  differs we will need to map them.
+  differs we will need to map them:
 - `q23_followup_yesterday` + `q24_clarification_then_answer`. The
   mock driver treats `parent_run_id` as an opaque token; the real
   driver loads parent context to ground "yesterday" / "this morning"

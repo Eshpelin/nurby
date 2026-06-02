@@ -74,7 +74,7 @@ Yes. Dad ate at least twice today.
 Midday clip at 12:30 was inconclusive.
 ```
 
-#### Example C. No-evidence failure case.
+#### Example C. No-evidence failure case:
 
 ```
 User. Did the cat go outside last night?
@@ -94,7 +94,7 @@ The cat was seen indoors at 22:14 and 02:30 on the Living Room camera.
 Caveats. I cannot see through walls, and your back door does not have a camera that I have access to. If a camera is offline I will not catch its events.
 ```
 
-#### Example D. Multi-turn follow-up.
+#### Example D. Multi-turn follow-up:
 
 ```
 User. How about the day before?
@@ -202,12 +202,12 @@ The original brief listed 12 candidate tools. We ship 5 in Phase 1, trading per-
 
 Purpose. Bootstraps the agent with the same orientation a new household member would get. Cameras, who lives here, what time zone, what time it is now. Always called first in Phase 1 (driver injects the result as the first observation so the LLM does not have to choose to call it).
 
-Params schema.
+Params schema:
 ```json
 { "type": "object", "properties": {}, "additionalProperties": false }
 ```
 
-Response schema.
+Response schema:
 ```json
 {
   "type": "object",
@@ -256,7 +256,7 @@ Today's behavior. Reads from `Camera`, `Person`, `AppSetting` (system_timezone).
 
 Purpose. The agent's primary data lens. Wraps the existing `services.search.query` helpers and the per-kind list endpoints (services/api/routes/observations.py, transcripts.py, conversations.py, journeys.py, incidents.py, recordings.py, audio.py). Returns a normalized result list across kinds so the LLM does not have to know about every row type.
 
-Params schema.
+Params schema:
 ```json
 {
   "type": "object",
@@ -283,7 +283,7 @@ Params schema.
 }
 ```
 
-Response schema.
+Response schema:
 ```json
 {
   "type": "object",
@@ -325,7 +325,7 @@ Rejected alternative. Separate tools per row kind (list_observations, list_trans
 
 Purpose. Fuzzy name lookup with disambiguation. The LLM passes a freeform name from the user's question; the tool returns 0, 1, or multiple candidate Person rows with match scores. The LLM decides whether to ask the user, pick the highest-confidence match, or proceed with all candidates.
 
-Params schema.
+Params schema:
 ```json
 {
   "type": "object",
@@ -335,7 +335,7 @@ Params schema.
 }
 ```
 
-Response schema.
+Response schema:
 ```json
 {
   "type": "object",
@@ -370,7 +370,7 @@ Rejected alternative. Auto-pick the best match silently. Too unsafe when "Daddy"
 
 Purpose. Run an ad-hoc VLM call against frames extracted from a Recording or Observation clip with a focused question. This is the escape hatch for any concept that was never indexed by the perception pipeline (eating, sleeping, holding object X, wearing color Y). The hard part is not the call. It is sampling, redaction, schema enforcement, hallucination control. Section 5 covers this tool in depth.
 
-Params schema.
+Params schema:
 ```json
 {
   "type": "object",
@@ -403,7 +403,7 @@ Side effects. None to data. Logs to AgentRun.vlm_calls.
 
 Purpose. Special-cased "tool" that terminates the run with a question for the user instead of an answer.
 
-Params schema.
+Params schema:
 ```json
 {
   "type": "object",
@@ -440,7 +440,7 @@ This is the single most important component of the agentic layer because it is t
 
 Inputs. A target (observation, recording, or camera+time-range), a question, a `max_frames` cap.
 
-Decision tree.
+Decision tree:
 
 1. If target is an Observation and the Observation has `clip_path` set, use that clip.
 2. Else if target is a Recording id, use `recordings[id].file_path` resolved via the same helper at services/api/routes/recordings.py `_resolve_recording_path`.
@@ -511,7 +511,7 @@ Mandatory response schema (enforced via the provider's structured-output feature
 
 ### 5.3 Hallucination gate
 
-Confidence policy in the agent driver.
+Confidence policy in the agent driver:
 
 | confidence | cannot_tell | Driver treats as |
 |---|---|---|
@@ -529,7 +529,7 @@ Decision. The agent never tells the user "no" based on a single `cannot_tell`. i
 
 **Decision (locked by product).** Cache lives at the FRAME level, not the household / user / question level. Every successful VLM analyzer call writes a row to a new `vlm_frame_analysis` table keyed by `(observation_id OR recording_segment_hash, question_hash, provider_id, model)`. Rows persist for the life of the underlying media — no TTL.
 
-Schema sketch.
+Schema sketch:
 
 ```
 vlm_frame_analysis (
@@ -808,7 +808,7 @@ Companion table `agent_run_events` for the trace replay (schema. `run_id`, `seq`
 
 ### 11.2 User-facing audit page
 
-`/agent/runs/{id}` route in the frontend. Renders.
+`/agent/runs/{id}` route in the frontend. Renders:
 
 - The original question.
 - The plan.
@@ -823,7 +823,7 @@ Linked from every final answer via "Why did Nurby say this?".
 
 Location. `tests/agent_fixtures/*.yaml`.
 
-Format.
+Format:
 ```yaml
 id: cat_outside_last_night
 question: "Did the cat go outside last night?"
@@ -920,7 +920,7 @@ Phase 1 is strictly read-only. Every tool is annotated with `side_effect: "read"
 
 Future write tools (Phase 3 only). `add_event_note`, `acknowledge_event`, `snooze_rule`. None of these mutate camera or person data; all are user-confirmation-required.
 
-Policy.
+Policy:
 
 - Write tools MUST emit a `confirmation_required` event to the chat instead of executing immediately.
 - The user clicks "Confirm" in the chat UI which POSTs back to the driver with the confirmation token.
@@ -935,7 +935,7 @@ Hard prohibition. The agent will never have access to camera config writes, pers
 
 ### Phase 1. Foundation (must-have)
 
-Scope.
+Scope:
 
 - Tool registry with 5 tools above.
 - Agent driver with budget enforcement, dedupe, audit logging.
@@ -950,7 +950,7 @@ Scope.
 - Camera role_hint keyword classifier.
 - Documentation. /docs/agent-design.md (this), /docs/agent-runbook.md (ops), /docs/agent-prompts.md (the actual system prompts checked in for review).
 
-Deliverables checklist.
+Deliverables checklist:
 
 - [ ] Migration `add_agent_tables`
 - [ ] services/agent/driver.py
@@ -972,7 +972,7 @@ Exit criterion. >= 27/30 eval fixtures pass on three consecutive nightly runs. P
 
 ### Phase 2. Polish + memory (should-have)
 
-Scope.
+Scope:
 
 - Conversation memory across turns (parent_run_id wiring + chat composer).
 - Identity disambiguation UI (alias editor on Person detail page).
@@ -987,7 +987,7 @@ Exit criterion. >= 72/80 eval pass. Per-question p50 cost < 1 cent.
 
 ### Phase 3. Action + advanced retrieval (nice-to-have)
 
-Scope.
+Scope:
 
 - Image embeddings (CLIP) for visual concepts never described in text. Backfill thumbnails into a new `image_embeddings` table.
 - Write tools with confirmation flow (`add_event_note`, `acknowledge_event`, `snooze_rule`).
@@ -1000,7 +1000,7 @@ Exit criterion. CLIP image search wins eval delta of >= 5 fixtures over text-onl
 
 ## 17. Open questions
 
-Resolved by product. Recorded here as the source of truth that supersedes earlier sections.
+Resolved by product. Recorded here as the source of truth that supersedes earlier sections:
 
 1. **RESOLVED. Question caching policy.** Cache lives at the FRAME level, eternal, keyed by `(observation_id OR recording_id, question_hash, provider_id, model)`. Not per-household, not per-user, not per-question-string. Section 5.4 holds the authoritative spec. Rationale. Work is per-frame; the answer about a frame does not expire while the frame still exists. Foreign keys cascade so cache dies with its media. Within a household, all users benefit from any prior user's analyzer work.
 

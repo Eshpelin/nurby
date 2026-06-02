@@ -15,7 +15,7 @@ The same data is on `GET /api/system/version`.
 
 ## Option 1. one command on the host (recommended)
 
-On the machine that runs Docker Compose.
+On the machine that runs Docker Compose:
 
 ```bash
 ./scripts/update.sh
@@ -31,7 +31,7 @@ commit or stash them first.
 You can let an admin update from the Settings page with a button. This
 runs a small **updater** container that performs Option 1 for you.
 
-Enable it by starting the stack with the updater overlay.
+Enable it by starting the stack with the updater overlay:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.update.yml up -d

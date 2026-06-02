@@ -67,3 +67,6 @@ logs/
 
 # macOS
 .DS_Store
+
+# Nested preview tooling
+frontend/.claude/

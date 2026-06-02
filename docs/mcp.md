@@ -20,14 +20,14 @@ read-only tools are exposed.
 ## How to get a token
 
 The MCP server authenticates with a normal Nurby JWT, the same token a
-logged-in browser session uses.
+logged-in browser session uses:
 
 1. Log in to Nurby in your browser.
 2. Open the browser dev tools, Application / Storage, and copy the access
    token your session stores (the value sent as the
    `Authorization: Bearer <token>` header on API calls). Alternatively,
    any token minted by `shared.auth.create_access_token` for your user
-   works.
+   works:
 3. Treat it like a password. It grants read access to every camera your
    user can see, counted against your daily budget.
 
@@ -51,7 +51,7 @@ talks to it over stdin/stdout.
 ### Docker Compose (behind the `mcp` profile)
 
 The `mcp` service does NOT start with a plain `docker compose up`. Start
-it explicitly.
+it explicitly:
 
 ```bash
 NURBY_MCP_TOKEN=<your-jwt> docker compose --profile mcp up mcp
@@ -61,7 +61,7 @@ NURBY_MCP_TOKEN=<your-jwt> docker compose --profile mcp up mcp
 
 Set `NURBY_MCP_HTTP=1` (or pass `--http`) to serve over Streamable HTTP on
 port 4749 instead of stdio, when the installed MCP SDK supports it. Stdio
-is the must-have default; HTTP is best-effort.
+is the must-have default; HTTP is best-effort:
 
 ```bash
 NURBY_MCP_HTTP=1 NURBY_MCP_TOKEN=<your-jwt> python -m services.mcp.server --http --port 4749
@@ -117,7 +117,7 @@ exposed in v1.6.
 ## Security notes
 
 - **Token-scoped to one user.** The launch token decodes to a single
-  Nurby user; every call runs as that user.
+  Nurby user; every call runs as that user:
 - **ACL respected.** Each tool funnels results through
   `accessible_camera_ids`, exactly as `/ask` does. No tool bypasses the
   household camera ACL.
@@ -134,8 +134,8 @@ exposed in v1.6.
 
 - **No write tools.** The verify action and any future write / action
   tools stay internal until there is a confirmation flow for external
-  clients. V1.6 is read-only by design.
+  clients. V1.6 is read-only by design:
 - **One token per server.** The token is read once at launch. Refreshing
-  it requires restarting the server. Launch a separate server per user.
+  it requires restarting the server. Launch a separate server per user:
 - **HTTP transport is best-effort.** The exact Streamable-HTTP app symbol
   has churned across MCP SDK versions. Stdio is the supported path.

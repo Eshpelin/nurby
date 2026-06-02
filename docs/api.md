@@ -6,10 +6,10 @@ events, people, and journeys. Every route is auto-documented at
 
 ## Authentication
 
-Two credential types work in the `Authorization: Bearer` header.
+Two credential types work in the `Authorization: Bearer` header:
 
 - User JWT. obtained from `POST /api/auth/login`. Short-lived. Good for
-  the web app.
+  the web app:
 - API key. Long-lived `nrb_...` token for scripts and integrations.
   Preferred for programmatic access.
 
@@ -30,7 +30,7 @@ curl -s -X POST http://localhost:4748/api/api-keys \
 # -> { "id": "...", "prefix": "nrb_AbC12", "key": "nrb_AbC12...full...", ... }
 ```
 
-Use the key from then on.
+Use the key from then on:
 
 ```bash
 KEY="nrb_AbC12...full..."
