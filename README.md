@@ -2,6 +2,8 @@
 
 Self-hostable, privacy-first AI camera surveillance you fully own. Point Nurby at any IP camera and a vision model of your choice (local or cloud), and it turns raw video into people, journeys, events, and answers. Ask it "where was the dog last night" in plain language, wire a rule that flashes a siren when a stranger appears after 10pm, and keep every frame on your own hardware.
 
+Nurby is an **open-source, self-hosted CCTV and NVR platform**. a privacy-first **video management system (VMS)** with on-device AI. Run it on your own hardware as a free alternative to cloud security-camera subscriptions, and as an AI-native companion to projects like Frigate, Scrypted, MotionEye, Shinobi, and Blue Iris.
+
 Privacy first. Provider agnostic. CPU friendly. Yours to run and modify.
 
 ```
@@ -9,6 +11,10 @@ Privacy first. Provider agnostic. CPU friendly. Yours to run and modify.
 "Anything unusual today?"   ->  Map-reduce summary of every observation
 Stranger at the door 2am    ->  Email you + record a clip + sound an ESP32 buzzer
 ```
+
+## What is Nurby?
+
+Nurby is free, open-source software for recording and understanding your security cameras on your own server. It is a self-hosted network video recorder (NVR) and AI surveillance platform. it ingests RTSP and ONVIF IP cameras, detects objects and recognizes faces locally, captions scenes with a vision-language model, and lets you ask questions about your footage in plain language. Everything runs on hardware you control with Docker, so with a local model no video ever leaves your network. People use it as a private home-security camera system, a small-business CCTV setup, and a programmable surveillance platform with a REST API, webhooks, and physical alarm integrations.
 
 ## Why Nurby
 
@@ -303,6 +309,38 @@ nurby-backend/
 +-- docs/               API, webhooks, devices, MCP, agent guides
 +-- docker-compose.yml  full stack
 ```
+
+## FAQ
+
+**Is Nurby free and open source?**
+Yes. Nurby is free and open source under the AGPL-3.0 license. There is no paid tier, no account, and no cloud lock-in. you self-host it.
+
+**Is Nurby a Frigate alternative?**
+Nurby covers similar ground to Frigate, Scrypted, Shinobi, MotionEye, and Blue Iris (recording IP cameras, object detection, alerts) and adds AI on top. faces and people, cross-camera journeys, vision-language scene understanding, and plain-language questions about your footage. You can run it instead of or alongside them.
+
+**Does it work fully offline and keep my video private?**
+Yes. With a local model via Ollama, all detection and reasoning happen on your hardware and no video leaves your network. Cloud vision models are optional.
+
+**What cameras work with Nurby?**
+Any RTSP or ONVIF IP camera, plus HTTP MJPEG and snapshot cameras, HLS streams, USB cameras, and even a phone or laptop webcam. An in-app guide covers 26 popular camera brands.
+
+**Do I need a GPU?**
+No. The perception pipeline is tuned to run on CPU. A GPU helps with larger local vision models but is not required.
+
+**What hardware do I need?**
+A machine that runs Docker with roughly 4 GB of free RAM for a small setup. more for bigger local models. It runs on a NAS, a mini PC, an old laptop, or a home server.
+
+**How do I install it?**
+Install Docker Desktop, clone the repo, and run `docker compose up --build`, then open http://localhost:4747. See [Get Nurby running on your computer](#get-nurby-running-on-your-computer).
+
+**Can I build on top of it?**
+Yes. Nurby has a documented REST API, long-lived API keys, HMAC-signed webhooks, an MCP server for AI agents, and physical-device alert integrations (Arduino, ESP32, Raspberry Pi).
+
+## Keywords
+
+Open source CCTV, self-hosted NVR, network video recorder, video management system (VMS), home security camera software, AI surveillance, computer vision security cameras, RTSP and ONVIF recorder, privacy-first surveillance, self-hosted home security, Frigate alternative, Scrypted alternative, Blue Iris alternative, local AI camera monitoring, face recognition security camera, smart home security, Docker security camera server.
+
+> Maintainer note. GitHub ranks repositories by the "About" description and Topics, not just the README. Set a keyword-rich About description and add Topics such as `cctv`, `nvr`, `surveillance`, `security-camera`, `self-hosted`, `home-security`, `computer-vision`, `object-detection`, `face-recognition`, `rtsp`, `onvif`, `ai`, `privacy`, `docker`, and `vms` in the repository settings.
 
 ## Contributing
 
