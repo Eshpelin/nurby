@@ -82,13 +82,22 @@ The first time, this downloads and assembles everything. It can take **5 to 15 m
 
 Open your web browser and go to **[http://localhost:4747](http://localhost:4747)**.
 
-The first visit takes you to a short setup wizard:
+The first visit drops you straight in. no account wall, no forms. You pick how to start:
 
-1. **Create your account.** The first account is the admin.
-2. **Pick a vision model.** This is the AI that describes what cameras see. If you have [Ollama](https://ollama.com/download) running on your computer, Nurby finds it and lets you use it in one click, fully free and offline. Otherwise paste an API key for OpenAI, Anthropic, or Gemini. You can skip this and add it later.
-3. **Add a camera.** Paste your camera's RTSP or ONVIF link. The built-in brand guide shows where to find that link for 26 popular camera brands. **No camera handy?** Nurby can use your laptop or phone webcam as a camera to try things out.
+- **Show me some magic.** One click. Nurby adds a live demo camera, sets up a private local vision model if one is reachable, and lands you on the dashboard watching footage. Nothing leaves your machine.
+- **Set it up myself.** A short guided flow. add your own camera (paste its RTSP or ONVIF link, the built-in brand guide covers 26 popular brands, or use your laptop or phone webcam), then optionally pick a vision model, local or cloud.
+
+When you are ready, a **Secure your account** button in the top bar lets you set an email and password so only you can get back in. Until then you are signed in as a provisional owner.
 
 That is it. You now have Nurby running. Open **Ask** and try a question, or build your first rule.
+
+**Want AI scene descriptions with zero setup?** Detection, faces, and rules all work without a vision model. For plain-language captions and Ask Nurby, start the optional bundled local AI once:
+
+```bash
+docker compose --profile local-ai up -d ollama
+```
+
+Nurby detects it automatically, and Settings → AI Providers can deploy a model in one click. It stays opt-in so a plain `docker compose up` remains light.
 
 ### Stopping, starting, and resetting
 

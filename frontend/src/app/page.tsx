@@ -3080,6 +3080,7 @@ function DashboardContent() {
       />
       <LLMErrorToasts />
       <SecureAccountNudge hasFootage={cameras.length > 0} />
+      {cameras.length > 0 && <LocalAIHintCard />}
       {cameras.length > 0 && <AskHintCard />}
       {showWizard && (
         <OnboardingWizard
@@ -3134,6 +3135,105 @@ function SecureAccountNudge({ hasFootage }: { hasFootage: boolean }) {
       </div>
       {open && <SecureAccountModal onClose={() => setOpen(false)} />}
     </>
+  );
+}
+
+// Nudge to turn on local AI when no vision provider is configured. The
+// product works without a VLM (detection, faces, rules), but scene
+// captions and Ask need one. We keep the bundled Ollama opt-in so a plain
+// `docker compose up` stays light, and surface the one command here so a
+// first-time user gets AI "without doing much". Hidden once a provider is
+// active or the user dismisses it.
+function LocalAIHintCard() {
+  const { authFetch } = useAuth();
+  const [show, setShow] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const cmd = "docker compose --profile local-ai up -d ollama";
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("nurby-localai-hint-dismissed") === "1") return;
+    } catch {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch("/api/providers");
+        if (!res.ok) return;
+        const list: { active?: boolean }[] = await res.json();
+        // Only nudge when nothing is configured at all.
+        if (!cancelled && Array.isArray(list) && !list.some((p) => p.active)) {
+          setShow(true);
+        }
+      } catch {
+        /* stay hidden on error */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch]);
+
+  function dismiss() {
+    try {
+      localStorage.setItem("nurby-localai-hint-dismissed", "1");
+    } catch {
+      /* ignore */
+    }
+    setShow(false);
+  }
+
+  function copy() {
+    navigator.clipboard?.writeText(cmd).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      () => undefined
+    );
+  }
+
+  if (!show) return null;
+  return (
+    <div className="fixed bottom-4 left-4 z-40 w-80 rounded-lg border border-accent/30 bg-card-elevated shadow-xl p-3">
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div className="text-xs font-semibold flex items-center gap-1.5">
+          <span>🧠</span> Add AI descriptions
+        </div>
+        <button
+          onClick={dismiss}
+          aria-label="Dismiss"
+          className="text-muted-foreground hover:text-foreground text-sm leading-none"
+        >
+          &times;
+        </button>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-snug mb-2">
+        Nurby is detecting motion and faces already. To get plain-language
+        scene captions and Ask Nurby, run a private local model. one command,
+        no API key.
+      </p>
+      <div className="flex items-center gap-1.5 mb-2">
+        <code className="flex-1 text-[10px] font-mono bg-background border border-border rounded px-2 py-1.5 overflow-x-auto whitespace-nowrap">
+          {cmd}
+        </code>
+        <button
+          onClick={copy}
+          className="text-[10px] px-2 py-1.5 rounded border border-border hover:border-accent/50 hover:text-foreground text-muted-foreground transition-colors flex-shrink-0"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <p className="text-[10px] text-muted-foreground leading-snug">
+        Then open{" "}
+        <a href="/settings" className="text-accent hover:underline">
+          Settings → AI Providers
+        </a>{" "}
+        and deploy a model in one click. Or skip it. everything else keeps
+        working.
+      </p>
+    </div>
   );
 }
 

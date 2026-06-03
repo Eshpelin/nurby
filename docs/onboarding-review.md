@@ -69,6 +69,20 @@ opportunities. Items marked DONE were fixed in the same pass.
    work is in flight.
 7. **Dead `submitting` prop** on `ProviderStep`. DONE. removed.
 
+## Decision. local AI stays opt-in, made frictionless
+
+The choice was. ship the bundled Ollama in the default compose profile
+(heavy, a ~1.5 GB image pull on every `up`) or keep it opt-in and make
+enabling it trivial. Kept it opt-in. Forcing a multi-GB image on every
+deployment, including CI, ARM SBCs, and users who only want local YOLO
+detection, is the wrong default for a self-hostable product. Instead.
+- A dashboard `LocalAIHintCard` appears when no provider is configured,
+  with the one enable command and a copy button.
+- The README documents `docker compose --profile local-ai up -d ollama`
+  as the recommended full-experience start.
+- Magic already auto-deploys a model when an Ollama is reachable, so once
+  the profile is up, first-timers get a VLM with no further steps.
+
 ## Known tradeoffs (intentional, documented)
 
 - First visitor on the network becomes the provisional owner. This is the
