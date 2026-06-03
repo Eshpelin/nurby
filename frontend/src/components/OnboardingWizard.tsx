@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import CameraBrandHelp from "@/components/CameraBrandHelp";
 import { OllamaDeployPanel } from "@/components/OllamaDeployPanel";
 import { AddCameraModal } from "@/components/AddCameraModal";
+import { ONBOARDING_PRESETS } from "@/lib/provider-presets";
 
 interface Provider {
   id: string;
@@ -22,40 +23,8 @@ interface Props {
 
 type Step = "camera" | "provider" | "done";
 
-const PROVIDER_PRESETS = [
-  {
-    kind: "ollama",
-    name: "Local (Ollama)",
-    base_url: "http://localhost:11434",
-    default_model: "gemma3:4b",
-    keyRequired: false,
-    hint: "Runs locally. No API key. No data leaves your network.",
-  },
-  {
-    kind: "openai",
-    name: "OpenAI",
-    base_url: "https://api.openai.com",
-    default_model: "gpt-4o-mini",
-    keyRequired: true,
-    hint: "Cloud. Best image understanding. Pay-per-call.",
-  },
-  {
-    kind: "anthropic",
-    name: "Anthropic Claude",
-    base_url: "https://api.anthropic.com",
-    default_model: "claude-sonnet-4-20250514",
-    keyRequired: true,
-    hint: "Cloud. Strong at language and reasoning.",
-  },
-  {
-    kind: "google",
-    name: "Google Gemini",
-    base_url: "https://generativelanguage.googleapis.com",
-    default_model: "gemini-2.0-flash",
-    keyRequired: true,
-    hint: "Cloud. Generous free tier.",
-  },
-];
+// Curated subset of the shared provider catalog (see @/lib/provider-presets).
+const PROVIDER_PRESETS = ONBOARDING_PRESETS;
 
 
 /**
