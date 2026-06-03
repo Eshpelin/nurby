@@ -1,11 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth, ApiError } from "@/lib/auth";
 
 export default function SetupPage() {
   const { register } = useAuth();
+  const router = useRouter();
+
+  // If setup is already complete, this form can only 409. Bounce home so
+  // an existing install never lands on a doomed "Create account" screen.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/needs-setup");
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data && data.needs_setup === false) {
+            router.replace("/");
+          }
+        }
+      } catch {
+        /* stay on the form if the check fails */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");

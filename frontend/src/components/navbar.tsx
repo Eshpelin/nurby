@@ -301,12 +301,18 @@ export function Navbar() {
             <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
               {getInitials(user?.display_name)}
             </div>
-            <button
-              onClick={logout}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Logout
-            </button>
+            {/* A provisional owner has random credentials it never saw, so a
+                plain logout would lock it out permanently (re-bootstrap is
+                blocked once a user exists). Hide logout until the account is
+                secured. the red Secure-account button is the way forward. */}
+            {!user?.is_provisional && (
+              <button
+                onClick={logout}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Logout
+              </button>
+            )}
           </div>
         </div>
       </div>

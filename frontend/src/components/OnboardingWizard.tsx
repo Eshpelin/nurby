@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import CameraBrandHelp from "@/components/CameraBrandHelp";
 import { OllamaDeployPanel } from "@/components/OllamaDeployPanel";
@@ -188,6 +188,17 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
     onClose();
   }
 
+  // Escape closes the wizard, except while magic is provisioning (work is
+  // in flight and a half-finished close would be confusing).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && step !== "magic") dismiss();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="rounded-xl border border-border bg-card w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
@@ -248,7 +259,6 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
               onProvisioned={onOllamaProvisioned}
               error={providerError}
               testMsg={providerTestMsg}
-              submitting={providerSubmitting}
               cloudMode={cloudMode}
               setCloudMode={(b) => {
                 setCloudMode(b);
@@ -433,8 +443,14 @@ function MagicStep({
     vlm: "pending",
   });
   const [error, setError] = useState<string | null>(null);
+  // Run the provisioning sequence exactly once per mount lifetime. Guards
+  // against a strict-mode double-invoke or any remount firing two demo
+  // POSTs and two deploys.
+  const startedRef = useRef(false);
 
   useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
     let cancelled = false;
     let creep: ReturnType<typeof setInterval> | null = null;
     const set = (p: number, l?: string) => {
@@ -613,7 +629,6 @@ function ProviderStep({
   onProvisioned,
   error,
   testMsg,
-  submitting,
   cloudMode,
   setCloudMode,
 }: {
@@ -631,7 +646,6 @@ function ProviderStep({
   onProvisioned: () => void;
   error: string | null;
   testMsg: string | null;
-  submitting: boolean;
   cloudMode: boolean;
   setCloudMode: (b: boolean) => void;
 }) {
