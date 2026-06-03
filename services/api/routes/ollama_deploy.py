@@ -188,6 +188,34 @@ async def _get_installed_models() -> list[str]:
     return (await _probe(OLLAMA_URL)) or []
 
 
+async def _pull_via_http(base_url: str, model: str) -> tuple[bool, str]:
+    """Pull a model on a remote Ollama through its HTTP API.
+
+    Used when Nurby has no local ``ollama`` binary (e.g. running in Docker)
+    but can reach an Ollama server, such as the bundled ``ollama`` compose
+    service. Returns (ok, message). The pull can take minutes on first run,
+    so the timeout is generous. stream is disabled so the call returns once
+    the model is fully present.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=900.0) as client:
+            resp = await client.post(
+                f"{base_url}/api/pull",
+                json={"model": model, "stream": False},
+            )
+            if resp.status_code != 200:
+                return False, f"Pull failed at {base_url} (status {resp.status_code})"
+            status = (resp.json() or {}).get("status", "")
+            # Ollama returns {"status": "success"} on completion.
+            if status and status != "success":
+                return False, f"Pull did not complete. {status}"
+            return True, "ok"
+    except httpx.TimeoutException:
+        return False, f"Pull timed out. Try a smaller model or run 'ollama pull {model}' manually."
+    except (httpx.ConnectError, OSError) as exc:
+        return False, f"Could not reach Ollama at {base_url}. {exc}"
+
+
 @router.get("/status", response_model=OllamaStatus)
 async def get_ollama_status(_current_user: User = Depends(require_admin)):
     """Check Ollama installation status and recommend a model."""
@@ -229,56 +257,75 @@ async def deploy_model(
     if not model_name or "/" in model_name or ".." in model_name:
         return DeployStatus(stage="error", message="Invalid model name")
 
-    # Step 1. Check if Ollama is installed
+    # Decide how to reach Ollama. A local binary lets us serve + pull via
+    # the CLI. Otherwise (typical in Docker), look for a reachable Ollama
+    # server such as the bundled compose service and pull over HTTP. The
+    # provider is registered at whichever URL actually serves the model.
     ollama_path = _find_ollama_binary()
-    if not ollama_path:
+    remote_url, _remote_models = await _detect_running()
+
+    if ollama_path:
+        # Local binary path. start the daemon if needed, pull via CLI.
+        if not await _is_ollama_running():
+            try:
+                await asyncio.create_subprocess_exec(
+                    ollama_path, "serve",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                for _ in range(10):
+                    await asyncio.sleep(1)
+                    if await _is_ollama_running():
+                        break
+                else:
+                    return DeployStatus(stage="error", message="Ollama started but API not responding after 10 seconds")
+            except (OSError, FileNotFoundError) as exc:
+                return DeployStatus(stage="error", message=f"Failed to start Ollama. {str(exc)}")
+
+        installed = await _get_installed_models()
+        if model_name not in installed and not any(m.startswith(model_name.split(":")[0]) for m in installed if ":" in model_name):
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    ollama_path, "pull", model_name,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                _stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=600,  # 10 min timeout for large models
+                )
+                if proc.returncode != 0:
+                    error_msg = stderr.decode().strip() if stderr else "Unknown error"
+                    return DeployStatus(stage="error", message=f"Failed to pull {model_name}. {error_msg}")
+            except asyncio.TimeoutError:
+                return DeployStatus(stage="error", message=f"Model pull timed out after 10 minutes. Try running 'ollama pull {model_name}' manually.")
+            except (OSError, FileNotFoundError) as exc:
+                return DeployStatus(stage="error", message=f"Pull failed. {str(exc)}")
+        provider_url = OLLAMA_URL
+
+    elif remote_url:
+        # No local binary, but a reachable Ollama server (bundled service or
+        # one on the host/network). Pull over the HTTP API.
+        installed = _remote_models
+        if model_name not in installed and not any(m.startswith(model_name.split(":")[0]) for m in installed if ":" in model_name):
+            ok, msg = await _pull_via_http(remote_url, model_name)
+            if not ok:
+                return DeployStatus(stage="error", message=msg)
+        provider_url = remote_url
+
+    else:
         return DeployStatus(
             stage="error",
-            message="Ollama not found. Install from https://ollama.com/download. If already installed via Ollama.app, launch it once to finish setup.",
+            message=(
+                "No Ollama found. Install it from https://ollama.com/download on the "
+                "machine running Nurby, start the bundled service with "
+                "`docker compose --profile local-ai up -d ollama`, or point a cloud "
+                "provider in the previous step."
+            ),
         )
 
-    # Step 2. Start Ollama if not running
-    if not await _is_ollama_running():
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                ollama_path, "serve",
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            # Give it a moment to start
-            for _ in range(10):
-                await asyncio.sleep(1)
-                if await _is_ollama_running():
-                    break
-            else:
-                return DeployStatus(stage="error", message="Ollama started but API not responding after 10 seconds")
-        except (OSError, FileNotFoundError) as exc:
-            return DeployStatus(stage="error", message=f"Failed to start Ollama. {str(exc)}")
-
-    # Step 3. Check if model already pulled
-    installed = await _get_installed_models()
-    if model_name not in installed and not any(m.startswith(model_name.split(":")[0]) for m in installed if ":" in model_name):
-        # Pull the model
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                ollama_path, "pull", model_name,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=600,  # 10 min timeout for large models
-            )
-            if proc.returncode != 0:
-                error_msg = stderr.decode().strip() if stderr else "Unknown error"
-                return DeployStatus(stage="error", message=f"Failed to pull {model_name}. {error_msg}")
-        except asyncio.TimeoutError:
-            return DeployStatus(stage="error", message=f"Model pull timed out after 10 minutes. Try running 'ollama pull {model_name}' manually.")
-        except (OSError, FileNotFoundError) as exc:
-            return DeployStatus(stage="error", message=f"Pull failed. {str(exc)}")
-
-    # Step 4. Check if provider already exists
+    # Check if a provider already exists at this URL.
     result = await db.execute(
-        select(Provider).where(Provider.kind == "ollama", Provider.base_url == OLLAMA_URL)
+        select(Provider).where(Provider.kind == "ollama", Provider.base_url == provider_url)
     )
     existing = result.scalar_one_or_none()
 
@@ -293,11 +340,11 @@ async def deploy_model(
             message=f"{model_name} is ready. Updated existing Ollama provider.",
         )
 
-    # Step 5. Create provider record
+    # Create provider record at the URL that serves the model.
     provider = Provider(
         name=f"Ollama ({model_name})",
         kind="ollama",
-        base_url=OLLAMA_URL,
+        base_url=provider_url,
         api_key=None,
         default_model=model_name,
         active=True,

@@ -65,6 +65,10 @@ services:
       MEDIAMTX_API_URL: http://mediamtx:9997
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
+      # Where to reach Ollama for one-click local AI. Defaults to the
+      # bundled `ollama` service below (start it with the local-ai profile).
+      # Falls back to the Docker host if that service is not running.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     volumes:
       - recordings:/data/recordings
       - thumbnails:/data/thumbnails
@@ -73,6 +77,30 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  # Bundled local AI. An optional Ollama server so Docker users get
+  # one-click, fully local VLM without installing anything on the host.
+  # Behind the "local-ai" profile because the image plus a pulled model is
+  # multi-GB and wants real RAM (and a GPU helps). Start it with:
+  #   docker compose --profile local-ai up -d ollama
+  # The onboarding wizard and Settings then detect it at http://ollama:11434
+  # and pull a RAM-appropriate model over the HTTP API. To use GPUs,
+  # uncomment the `deploy.resources.reservations.devices` block.
+  ollama:
+    profiles: ["local-ai"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
 
   # Nurby MCP server. exposes the read-only agent tools over the Model
   # Context Protocol so any MCP client (Claude Desktop, etc) can query a
@@ -149,6 +177,9 @@ services:
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
       AUDIO_STORAGE_PATH: /data/audio
+      # Reach the bundled Ollama service the same way the API does, so VLM
+      # captions resolve the provider base_url on the compose network.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     volumes:
       - recordings:/data/recordings
       - thumbnails:/data/thumbnails
@@ -188,3 +219,4 @@ volumes:
   recordings:
   thumbnails:
   audio:
+  ollama_models:
