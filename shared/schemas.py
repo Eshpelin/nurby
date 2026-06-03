@@ -881,10 +881,19 @@ class UserResponse(BaseModel):
     display_name: str | None
     role: str
     is_active: bool
+    # True for the auto-created first-run owner that has not yet set a
+    # real email + password. Drives the "Secure your account" prompt.
+    is_provisional: bool = False
     created_at: datetime
     last_login_at: datetime | None
 
     model_config = {"from_attributes": True}
+
+
+class AccountClaim(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=255)
+    display_name: str | None = Field(default=None, max_length=255)
 
 
 class UserUpdate(BaseModel):

@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.auth import create_access_token, get_current_user, hash_password, verify_password
 from shared.database import get_db
 from shared.models import InviteKey, User, UserCameraAccess
-from shared.schemas import AdminSetup, TokenResponse, UserCreate, UserLogin, UserResponse
+from shared.schemas import AccountClaim, AdminSetup, TokenResponse, UserCreate, UserLogin, UserResponse
 
 router = APIRouter()
 
@@ -49,6 +50,74 @@ async def initial_admin_setup(body: AdminSetup, db: AsyncSession = Depends(get_d
 
     token = create_access_token(user.id)
     return TokenResponse(access_token=token, user=UserResponse.model_validate(user))
+
+
+@router.post("/bootstrap", response_model=TokenResponse, status_code=201)
+async def bootstrap(db: AsyncSession = Depends(get_db)):
+    """Drop a brand-new install straight in.
+
+    On first run (no users) this auto-creates a provisional owner account
+    and returns a login token, so a first-time user never hits a signup
+    wall. The account is flagged ``is_provisional`` until the user claims
+    it (sets a real email + password) via ``/auth/claim``. Idempotent-ish.
+    if any user already exists it returns 409 so the caller falls back to
+    the normal login screen.
+    """
+    count = (await db.execute(select(func.count()).select_from(User))).scalar() or 0
+    if count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Setup already completed. An account exists.",
+        )
+
+    # Random, unusable-by-design credentials. The user never sees these.
+    # they exist only so the row is valid until the account is claimed.
+    placeholder_email = f"owner+{secrets.token_hex(6)}@nurby.local"
+    user = User(
+        email=placeholder_email,
+        display_name="Owner",
+        password_hash=hash_password(secrets.token_urlsafe(32)),
+        role="admin",
+        is_active=True,
+        is_provisional=True,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    token = create_access_token(user.id)
+    return TokenResponse(access_token=token, user=UserResponse.model_validate(user))
+
+
+@router.post("/claim", response_model=UserResponse)
+async def claim_account(
+    body: AccountClaim,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Secure a provisional owner account.
+
+    Sets the real email + password and clears the provisional flag. Also
+    works for an already-real account as a credential update. Rejects an
+    email already taken by a different user.
+    """
+    existing = await db.execute(
+        select(User).where(User.email == body.email, User.id != current_user.id)
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this email already exists",
+        )
+
+    current_user.email = body.email
+    if body.display_name:
+        current_user.display_name = body.display_name
+    current_user.password_hash = hash_password(body.password)
+    current_user.is_provisional = False
+    await db.commit()
+    await db.refresh(current_user)
+    return UserResponse.model_validate(current_user)
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)

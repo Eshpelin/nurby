@@ -440,6 +440,10 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="viewer")  # admin, viewer
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Auto-created first-run owner that has not set real credentials yet.
+    # The app drops a new user straight in via /auth/bootstrap, then nags
+    # them to claim the account (set email + password) which clears this.
+    is_provisional: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
