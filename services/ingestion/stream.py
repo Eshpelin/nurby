@@ -327,7 +327,14 @@ class StreamWorker:
         # Force FFmpeg backend for all network streams. The default OpenCV
         # backend on macOS/Windows wheels often lacks RTSP support, which
         # manifests as a 30s timeout on a perfectly healthy stream.
-        if self.stream_type in (STREAM_TYPE_RTSP, STREAM_TYPE_HLS, STREAM_TYPE_HTTP_MJPEG, STREAM_TYPE_WEBCAM):
+        # A FILE source pointed at a remote URL (e.g. the demo footage)
+        # needs the FFmpeg backend. a local path uses the default one.
+        file_is_remote = (
+            self.stream_type == STREAM_TYPE_FILE
+            and isinstance(source, str)
+            and source.startswith(("http://", "https://", "rtsp://"))
+        )
+        if file_is_remote or self.stream_type in (STREAM_TYPE_RTSP, STREAM_TYPE_HLS, STREAM_TYPE_HTTP_MJPEG, STREAM_TYPE_WEBCAM):
             # RTSP over TCP is more reliable than default UDP across NAT.
             # stimeout is socket read timeout in microseconds. Without it,
             # OpenCV's FFmpeg wrapper can hang indefinitely on silent peers.

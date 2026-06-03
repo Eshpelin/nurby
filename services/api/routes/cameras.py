@@ -272,6 +272,41 @@ async def create_camera(body: CameraCreate, _current_user: User = Depends(requir
     return _camera_to_response(camera)
 
 
+@router.post("/demo", status_code=201)
+async def create_demo_camera(_current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Create a ready-to-use demo camera that streams looping sample
+    footage, so a new user can try Nurby without owning a camera. The
+    source URL is configurable via NURBY_DEMO_VIDEO_URL."""
+    import os
+
+    demo_url = os.environ.get(
+        "NURBY_DEMO_VIDEO_URL",
+        "https://nurby.ai/static/SecurityCamCompilation.mp4",
+    )
+    max_result = await db.execute(select(Camera.display_order))
+    orders = [o for (o,) in max_result.all()]
+    camera = Camera(
+        name="Demo Camera",
+        stream_url=demo_url,
+        stream_type="file",
+        location_label="Demo footage",
+        scene_mode="outdoor",
+        detect_objects=True,
+        detect_faces=True,
+        recording_enabled=False,
+        display_order=(max(orders) + 1) if orders else 0,
+    )
+    db.add(camera)
+    await db.commit()
+    await db.refresh(camera)
+    try:
+        from services.ingestion.mediamtx_mux import mux_manager
+        await mux_manager.ensure(camera)
+    except Exception:
+        pass
+    return _camera_to_response(camera)
+
+
 @router.post("/reorder", status_code=200)
 async def reorder_cameras(
     items: list[CameraReorderItem],
