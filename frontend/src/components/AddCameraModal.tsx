@@ -153,7 +153,7 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
   );
 }
 
-export function AddCameraModal({ onClose, onSuccess, initialStreamType }: { onClose: () => void; onSuccess: () => void; initialStreamType?: StreamType }) {
+export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded = false }: { onClose: () => void; onSuccess: () => void; initialStreamType?: StreamType; embedded?: boolean }) {
   const { authFetch } = useAuth();
   const { startPublish, stopPublish } = useWebcamPublisher();
   const [activeTab, setActiveTab] = useState<ModalTab>("manual");
@@ -420,13 +420,19 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType }: { onCl
   const inputClass = "w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg mx-4 rounded-lg border border-border bg-card-elevated p-6 shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold">Add Camera</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors text-xl leading-none">&times;</button>
-        </div>
+    <div className={embedded ? "" : "fixed inset-0 z-50 flex items-center justify-center"}>
+      {!embedded && (
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      )}
+      <div className={embedded
+        ? "relative w-full"
+        : "relative w-full max-w-lg mx-4 rounded-lg border border-border bg-card-elevated p-6 shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin"}>
+        {!embedded && (
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-lg font-semibold">Add Camera</h2>
+            <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors text-xl leading-none">&times;</button>
+          </div>
+        )}
 
         {/* Tab switcher */}
         <div className="flex gap-1 mb-5 p-1 rounded-md bg-muted/30 border border-border">
