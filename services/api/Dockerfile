@@ -30,6 +30,8 @@ COPY services/discovery/ services/discovery/
 COPY services/agent/ services/agent/
 COPY services/recap.py services/recap.py
 COPY services/__init__.py services/__init__.py
+# Device alert presets. routes/devices.py imports integrations.devices.
+COPY integrations/ integrations/
 COPY alembic/ alembic/
 COPY alembic.ini .
 COPY VERSION .
