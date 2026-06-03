@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useWebcamPublisher, listVideoDevices } from "@/lib/webcam-publisher";
+import { STREAM_TYPES } from "@/lib/camera-types";
+import type { StreamType, DiscoveredDevice, DiscoveredOnvifDevice, ModalTab } from "@/lib/camera-types";
 import { StarredStatusRow } from "@/components/StarredStatusRow";
 import { LiveCaptionOverlay } from "@/components/LiveCaptionOverlay";
 import { AudioActiveDot } from "@/components/AudioActiveDot";
@@ -33,7 +35,6 @@ import { RecordingModal } from "@/components/RecordingModal";
 const WEBRTC_URL =
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
 
-type StreamType = "rtsp" | "http_mjpeg" | "http_snapshot" | "hls" | "usb" | "file" | "webcam" | "audio_rtsp" | "browser_mic";
 
 interface Camera {
   id: string;
@@ -291,18 +292,6 @@ interface Notification {
   read: boolean;
   created_at: string;
 }
-
-const STREAM_TYPES: { value: StreamType; label: string; hint: string; placeholder: string }[] = [
-  { value: "webcam", label: "This Device", hint: "Use your laptop or phone webcam as a test camera", placeholder: "" },
-  { value: "rtsp", label: "RTSP", hint: "IP cameras, NVRs, most security cameras", placeholder: "rtsp://192.168.1.100:554/stream1" },
-  { value: "http_mjpeg", label: "HTTP MJPEG", hint: "Motion JPEG over HTTP. Webcams, ESP32-CAM", placeholder: "http://192.168.1.100:8080/video" },
-  { value: "http_snapshot", label: "HTTP Snapshot", hint: "Periodic JPEG pull. Low-bandwidth cameras", placeholder: "http://192.168.1.100/snapshot.jpg" },
-  { value: "hls", label: "HLS", hint: "HTTP Live Streaming. Cloud cameras, Wyze, Ring", placeholder: "http://192.168.1.100/live/stream.m3u8" },
-  { value: "usb", label: "USB / Local", hint: "Locally attached USB or CSI cameras", placeholder: "0" },
-  { value: "file", label: "File / Test", hint: "Local video file for testing", placeholder: "/path/to/video.mp4" },
-  { value: "browser_mic", label: "Phone Mic", hint: "Use a phone or laptop as a wireless mic. No camera needed.", placeholder: "" },
-  { value: "audio_rtsp", label: "Network Mic", hint: "Audio-only RTSP, HTTP, or ESP32 mic. No video.", placeholder: "rtsp://mic.local:8554/audio" },
-];
 
 type TimeRange = "today" | "7d" | "30d";
 type EventFilter = "recordings" | "observations" | "status" | "transcripts" | "conversations" | "summaries";
@@ -1042,29 +1031,6 @@ function CameraSidebarCard({
 
 // ── Add Camera Modal ──
 
-interface DiscoveredDevice {
-  index: number;
-  path: string;
-  name: string;
-  resolution: string;
-}
-
-interface DiscoveredOnvifDevice {
-  ip: string;
-  port: number;
-  name: string;
-  manufacturer: string;
-  model: string;
-  firmware: string | null;
-  onvif_url: string;
-  stream_url: string | null;
-  profiles: string[];
-  auth_required: boolean;
-  resolution: string | null;
-  already_added: boolean;
-}
-
-type ModalTab = "manual" | "scan";
 
 function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: DiscoveredOnvifDevice, username?: string, password?: string) => void }) {
   const { authFetch } = useAuth();
