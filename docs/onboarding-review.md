@@ -33,6 +33,24 @@ opportunities. Items marked DONE were fixed in the same pass.
    fire two demo-camera POSTs and two deploys. Fix. a ref guard runs the
    sequence once per mount lifetime.
 
+## Found in deep audit (parallel review agents)
+
+8. **The demo camera tile rendered black.** DONE, highest impact.
+   The dashboard builds a WebRTC iframe URL from the stream filename for
+   every camera. But file-type streams are never published into MediaMTX
+   (ingestion pulls them direct for perception only), so the path does not
+   exist and the tile shows black. The demo, whose whole job is to show
+   footage, would have looked broken. Fix. a remote http(s) file camera now
+   renders a looping muted `<video>` the browser plays directly. footage
+   appears in ~1-2s, independent of the ingestion poll-and-connect cycle.
+   (frontend/src/app/page.tsx camera tile, both list and card layouts.)
+
+9. **Claim/setup accepted malformed emails → permanent lockout.** DONE.
+   `AccountClaim` and `AdminSetup` only checked `min_length`, so a value
+   like "abc" could be stored as the login email. The owner could then
+   never type a matching string at `/login`. Fix. server-side email-shape
+   validation on both schemas.
+
 ## Robustness already handled (verified, no change)
 
 - Magic VLM step is best-effort. no reachable Ollama is marked "skipped"

@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime
 
@@ -890,10 +891,24 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Pragmatic email shape check. Not full RFC 5322, just enough to stop a
+# malformed value from being stored as the login email, which would lock
+# the owner out (they could never type a matching string at /login).
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
 class AccountClaim(BaseModel):
     email: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=8, max_length=255)
     display_name: str | None = Field(default=None, max_length=255)
+
+    @field_validator("email")
+    @classmethod
+    def _valid_email(cls, v: str) -> str:
+        v = v.strip()
+        if not _EMAIL_RE.match(v):
+            raise ValueError("Enter a valid email address")
+        return v
 
 
 class UserUpdate(BaseModel):
@@ -912,6 +927,14 @@ class AdminSetup(BaseModel):
     email: str = Field(min_length=3, max_length=255)
     display_name: str | None = Field(default=None, max_length=255)
     password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("email")
+    @classmethod
+    def _valid_email(cls, v: str) -> str:
+        v = v.strip()
+        if not _EMAIL_RE.match(v):
+            raise ValueError("Enter a valid email address")
+        return v
 
 
 # -- Invite key schemas --
