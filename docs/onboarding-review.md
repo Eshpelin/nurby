@@ -69,6 +69,40 @@ opportunities. Items marked DONE were fixed in the same pass.
    work is in flight.
 7. **Dead `submitting` prop** on `ProviderStep`. DONE. removed.
 
+## Found by the live rebuild + smoke (deploy-blocking, pre-existing)
+
+Running the stack from freshly built images, not just unit tests, surfaced
+four bugs that break a real containerized deploy of current `main`. None
+are caused by the onboarding work. the rebuild simply exercised paths the
+running stack had not.
+
+10. **api crash-loop. `integrations/` never copied into the image.** DONE.
+    `routes/devices.py` imports `integrations.devices`, but the api
+    Dockerfile did not ship it. Added the COPY and an `__init__.py`.
+
+11. **ingestion crash-loop. missing sibling packages.** DONE.
+    The audio worker and manager import `services.events` and the
+    perception audio pipeline, which transitively need more siblings. The
+    Dockerfile shipped only `services/ingestion`. Now ships the full set.
+
+12. **perception crash-loop + no detection.** DONE.
+    Same missing-sibling class (`services.events` and friends). Then, once
+    it loaded, YOLO weight download failed with `CERTIFICATE_VERIFY_FAILED`
+    because the slim base lacks `ca-certificates`. Fix. ship the siblings,
+    add `ca-certificates`, and pre-bake `yolov8n.pt` into the image so the
+    first detection is instant and works offline.
+
+13. **demo camera recorded to disk forever.** DONE.
+    The ingestion worker honors `recording_mode`, not the deprecated
+    `recording_enabled`. The demo set only the latter, so it inherited the
+    model default `recording_mode="always"` and wrote its looping 769 MB
+    feed to disk continuously (428 MB in minutes). Fix. demo sets
+    `recording_mode="off"`.
+
+Verified live. fresh install bootstraps a provisional owner, the demo
+camera connects and decodes at 1280x720, the smoke suite passes, and the
+frontend serves.
+
 ## Decision. local AI stays opt-in, made frictionless
 
 The choice was. ship the bundled Ollama in the default compose profile
