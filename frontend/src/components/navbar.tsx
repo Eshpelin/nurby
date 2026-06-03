@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { NotificationItem, NotificationsDropdown } from "./notifications";
+import { SecureAccountModal } from "./SecureAccountModal";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/" },
@@ -84,6 +85,7 @@ export function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [secureOpen, setSecureOpen] = useState(false);
 
   const fetchProvider = useCallback(async () => {
     try {
@@ -217,6 +219,21 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Provisional owner. The account has no real credentials yet,
+              so the install is wide open to anyone who can reach it. Make
+              securing it the loudest thing on the bar. */}
+          {user?.is_provisional && (
+            <button
+              onClick={() => setSecureOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition-colors animate-pulse"
+              title="No password is set yet. Anyone who reaches this page is an admin. Secure it now."
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              Secure account
+            </button>
+          )}
           <Link
             href="/settings"
             className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -293,6 +310,7 @@ export function Navbar() {
           </div>
         </div>
       </div>
+      {secureOpen && <SecureAccountModal onClose={() => setSecureOpen(false)} />}
     </div>
   );
 }

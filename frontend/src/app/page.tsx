@@ -26,6 +26,7 @@ import {
 import { SystemHealthFooter } from "@/components/SystemHealthFooter";
 import { LLMErrorToasts } from "@/components/LLMErrorToasts";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
+import { SecureAccountModal } from "@/components/SecureAccountModal";
 import CameraBrandHelp from "@/components/CameraBrandHelp";
 import { TranscriptCard } from "@/components/TranscriptCard";
 import { SummaryCard } from "@/components/SummaryCard";
@@ -3060,6 +3061,7 @@ function DashboardContent() {
         onClose={() => setModalRecording(null)}
       />
       <LLMErrorToasts />
+      <SecureAccountNudge hasFootage={cameras.length > 0} />
       {cameras.length > 0 && <AskHintCard />}
       {showWizard && (
         <OnboardingWizard
@@ -3071,6 +3073,49 @@ function DashboardContent() {
         />
       )}
     </div>
+  );
+}
+
+// Top-right nudge for a provisional owner. Nurby drops a first-run user
+// straight into a working feed without forcing signup, so the trade is.
+// you're already watching footage, but the account has no password yet.
+// This box celebrates the footage and points at securing the account.
+// It opens the same claim modal as the navbar's red button.
+function SecureAccountNudge({ hasFootage }: { hasFootage: boolean }) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  if (!user?.is_provisional || dismissed) return null;
+  return (
+    <>
+      <div className="fixed top-[4.5rem] right-4 z-40 w-80 rounded-lg border border-red-500/40 bg-card-elevated shadow-xl p-3">
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <div className="text-xs font-semibold flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 pulse-dot" />
+            {hasFootage ? "Your footage is live" : "You're all set up"}
+          </div>
+          <button
+            onClick={() => setDismissed(true)}
+            aria-label="Dismiss"
+            className="text-muted-foreground hover:text-foreground text-sm leading-none"
+          >
+            &times;
+          </button>
+        </div>
+        <p className="text-[11px] text-muted-foreground leading-snug mb-2.5">
+          {hasFootage
+            ? "Nurby is already watching. One thing left. you haven't set a password, so anyone who reaches this page is an admin. Lock it down."
+            : "One thing left. you haven't set a password, so anyone who reaches this page is an admin. Lock it down."}
+        </p>
+        <button
+          onClick={() => setOpen(true)}
+          className="w-full px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 hover:bg-red-500 text-white transition-colors"
+        >
+          Secure your account
+        </button>
+      </div>
+      {open && <SecureAccountModal onClose={() => setOpen(false)} />}
+    </>
   );
 }
 

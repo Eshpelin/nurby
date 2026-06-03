@@ -16,6 +16,9 @@ export interface User {
   display_name: string;
   role: string;
   is_active: boolean;
+  // Auto-created first-run owner that has not set real credentials yet.
+  // Drives the "Secure your account" prompt across the app.
+  is_provisional?: boolean;
   created_at: string;
   last_login_at: string | null;
 }
@@ -33,6 +36,13 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (
+    email: string,
+    password: string,
+    displayName: string
+  ) => Promise<void>;
+  // Secure a provisional owner account (set real email + password). On
+  // success the in-memory user loses its is_provisional flag.
+  claimAccount: (
     email: string,
     password: string,
     displayName: string
@@ -92,37 +102,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    if (loading) return;
-    if (token || PUBLIC_PATHS.includes(pathname)) return;
-    // No token on a protected path. A brand-new install with zero users
-    // should land on /setup, not a sign-in form for an account that does
-    // not exist. Ask the backend before bouncing.
-    let cancelled = false;
-    (async () => {
-      let dest = "/login";
-      try {
-        const res = await fetch("/api/auth/needs-setup");
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.needs_setup) dest = "/setup";
-        }
-      } catch {
-        /* default to /login on any error */
-      }
-      if (!cancelled) router.replace(dest);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [loading, token, pathname, router]);
-
   const saveAuth = useCallback((data: TokenResponse) => {
     setToken(data.access_token);
     setUser(data.user);
     localStorage.setItem(TOKEN_KEY, data.access_token);
     localStorage.setItem(USER_KEY, JSON.stringify(data.user));
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    if (token || PUBLIC_PATHS.includes(pathname)) return;
+    // No token on a protected path. A brand-new install (zero users) should
+    // drop the visitor straight in. auto-create a provisional owner via
+    // /auth/bootstrap and log them in, so they never hit a signup wall.
+    // they secure the account later. Only an install that already has a
+    // user bounces to /login.
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/needs-setup");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.needs_setup) {
+            const boot = await fetch("/api/auth/bootstrap", { method: "POST" });
+            if (boot.ok) {
+              const tokenData: TokenResponse = await boot.json();
+              if (!cancelled) {
+                saveAuth(tokenData);
+                router.replace("/");
+              }
+              return;
+            }
+          }
+        }
+      } catch {
+        /* fall through to /login on any error */
+      }
+      if (!cancelled) router.replace("/login");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, token, pathname, router, saveAuth]);
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -164,6 +185,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [saveAuth, router]
   );
 
+  const claimAccount = useCallback(
+    async (email: string, password: string, displayName: string) => {
+      const headers = new Headers({ "Content-Type": "application/json" });
+      if (token) headers.set("Authorization", `Bearer ${token}`);
+      const res = await fetch("/api/auth/claim", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ email, password, display_name: displayName }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new ApiError(extractDetail(body, "Could not secure account"), res.status);
+      }
+      const updated: User = await res.json();
+      setUser(updated);
+      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+    },
+    [token]
+  );
+
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
@@ -195,8 +236,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ user, token, loading, login, logout, register, authFetch }),
-    [user, token, loading, login, logout, register, authFetch]
+    () => ({ user, token, loading, login, logout, register, claimAccount, authFetch }),
+    [user, token, loading, login, logout, register, claimAccount, authFetch]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
