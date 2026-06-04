@@ -45,13 +45,14 @@ class _FakeUser:
         self.last_login_at = None
 
 
-def _exec_result(*, scalar=None, scalar_one_or_none=None, first=None):
+def _exec_result(*, scalar=None, scalar_one_or_none=None, first=None, all=None):
     """Build a stub result object for db.execute() return values."""
     res = MagicMock()
     res.scalar.return_value = scalar
     res.scalar_one_or_none.return_value = scalar_one_or_none
     scalars = MagicMock()
     scalars.first.return_value = first
+    scalars.all.return_value = all if all is not None else []
     res.scalars.return_value = scalars
     return res
 
@@ -63,10 +64,10 @@ def test_bootstrap_creates_provisional_owner_on_fresh_install():
     db.add = MagicMock()
     db.commit = AsyncMock()
 
-    # Two execute() calls. the advisory lock, then the user count (0).
+    # Two execute() calls. the advisory lock, then the user query (none).
     db.execute.side_effect = [
         _exec_result(),            # pg_advisory_xact_lock
-        _exec_result(scalar=0),    # count == 0
+        _exec_result(all=[]),      # no users yet
     ]
 
     async def _refresh(obj):
@@ -88,16 +89,34 @@ def test_bootstrap_creates_provisional_owner_on_fresh_install():
     db.commit.assert_awaited()
 
 
-def test_bootstrap_conflicts_when_a_user_already_exists():
+def test_bootstrap_conflicts_when_a_claimed_user_exists():
+    claimed = _FakeUser(provisional=False, email="real@example.com")
     db = AsyncMock()
     db.execute.side_effect = [
-        _exec_result(),            # lock
-        _exec_result(scalar=1),    # count > 0
+        _exec_result(),                 # lock
+        _exec_result(all=[claimed]),    # a real account exists
     ]
 
     with pytest.raises(HTTPException) as ei:
         _run(auth_routes.bootstrap(db=db))
     assert ei.value.status_code == 409
+
+
+def test_bootstrap_readopts_unclaimed_provisional_owner():
+    # A visitor who lost their token re-adopts the existing unclaimed owner
+    # instead of being stranded. No new user is created.
+    owner = _FakeUser(provisional=True)
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.execute.side_effect = [
+        _exec_result(),               # lock
+        _exec_result(all=[owner]),    # only an unclaimed provisional owner
+    ]
+
+    token = _run(auth_routes.bootstrap(db=db))
+    assert token.user.id == owner.id
+    assert token.user.is_provisional is True
+    db.add.assert_not_called()
 
 
 # ── claim ────────────────────────────────────────────────────────────

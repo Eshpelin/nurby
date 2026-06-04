@@ -22,8 +22,13 @@ async def needs_setup(db: AsyncSession = Depends(get_db)):
     the user lands on a sign-in form for an account that does not exist
     and has to notice the small "First time?" link.
     """
-    count = (await db.execute(select(func.count()).select_from(User))).scalar() or 0
-    return {"needs_setup": count == 0}
+    users = (await db.execute(select(User))).scalars().all()
+    # provisional_open. the only account(s) are unclaimed provisional
+    # owners, so a tokenless visitor can re-adopt the session via
+    # /auth/bootstrap rather than being stranded at /login (cleared
+    # cookies, new browser). False once any account is claimed.
+    provisional_open = len(users) > 0 and all(u.is_provisional for u in users)
+    return {"needs_setup": len(users) == 0, "provisional_open": provisional_open}
 
 
 @router.post("/setup", response_model=TokenResponse, status_code=201)
@@ -59,20 +64,34 @@ async def bootstrap(db: AsyncSession = Depends(get_db)):
     On first run (no users) this auto-creates a provisional owner account
     and returns a login token, so a first-time user never hits a signup
     wall. The account is flagged ``is_provisional`` until the user claims
-    it (sets a real email + password) via ``/auth/claim``. Idempotent-ish.
-    if any user already exists it returns 409 so the caller falls back to
-    the normal login screen.
+    it (sets a real email + password) via ``/auth/claim``.
+
+    Re-adoptable while unclaimed. if the only account is an unclaimed
+    provisional owner, a fresh visitor (no token. cleared cookies, new
+    browser) gets a session for that same owner instead of being locked
+    out. Once the account is claimed (real credentials), this returns 409
+    and the caller falls back to the login screen.
     """
     # Serialize concurrent first-run requests. Without this, two tabs or a
     # double-fired client effect could both pass the count check and create
     # two owners. The lock is transaction-scoped and released on commit.
     await db.execute(text("SELECT pg_advisory_xact_lock(481566)"))
 
-    count = (await db.execute(select(func.count()).select_from(User))).scalar() or 0
-    if count > 0:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Setup already completed. An account exists.",
+    users = (await db.execute(select(User))).scalars().all()
+    if users:
+        # Any claimed (real) account means setup is done. require login.
+        if any(not u.is_provisional for u in users):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Setup already completed. An account exists.",
+            )
+        # Only an unclaimed provisional owner exists. re-adopt it so a
+        # visitor who lost their token can still get into their own
+        # not-yet-secured install rather than being stranded at /login.
+        owner = min(users, key=lambda u: u.created_at)
+        token = create_access_token(owner.id)
+        return TokenResponse(
+            access_token=token, user=UserResponse.model_validate(owner)
         )
 
     # Random, unusable-by-design credentials. The user never sees these.

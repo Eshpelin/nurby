@@ -123,7 +123,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const res = await fetch("/api/auth/needs-setup");
         if (res.ok) {
           const data = await res.json();
-          if (data?.needs_setup) {
+          // Fresh install, or an unclaimed provisional install whose token
+          // this browser lost. either way, (re-)adopt the owner session so
+          // the visitor is never stranded at /login on their own setup.
+          if (data?.needs_setup || data?.provisional_open) {
             const boot = await fetch("/api/auth/bootstrap", { method: "POST" });
             if (boot.ok) {
               const tokenData: TokenResponse = await boot.json();
@@ -220,14 +223,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers.set("Authorization", `Bearer ${token}`);
       }
       const res = await fetch(url, { ...init, headers });
-      // Stale or invalid token. Clear auth and bounce to login.
+      // Stale or invalid token. Clear auth and let the bootstrap effect
+      // re-route. sending to "/" (not "/login") means an unclaimed
+      // provisional install re-adopts the owner instead of stranding the
+      // visitor on a sign-in form they have no credentials for.
       if (res.status === 401 && token) {
         setToken(null);
         setUser(null);
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
         if (!PUBLIC_PATHS.includes(pathname)) {
-          router.replace("/login");
+          router.replace("/");
         }
       }
       return res;
