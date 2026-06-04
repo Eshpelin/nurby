@@ -7,6 +7,11 @@ WORKDIR /app
 # cache mount so a killed or retried build resumes instead of re-pulling
 # the whole ML stack. Bump the network timeout for flaky/slow mirrors.
 ENV PIP_DEFAULT_TIMEOUT=120
+# Point Python's ssl at the system CA bundle (installed below via
+# ca-certificates). Without this, urllib in the slim image can fail model
+# downloads (YOLO, InsightFace) with CERTIFICATE_VERIFY_FAILED.
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV SSL_CERT_DIR=/etc/ssl/certs
 
 # ffmpeg is required for the conversation-anchored clip builder
 # (slices an mp4 covering the conversation window from the matching

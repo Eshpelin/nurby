@@ -4,6 +4,10 @@ FROM python:3.12-slim
 WORKDIR /app
 
 ENV PIP_DEFAULT_TIMEOUT=120
+# Point Python's ssl at the system CA bundle so model downloads (whisper,
+# panns) don't fail with CERTIFICATE_VERIFY_FAILED in the slim image.
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV SSL_CERT_DIR=/etc/ssl/certs
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 libpq-dev ffmpeg ca-certificates \
