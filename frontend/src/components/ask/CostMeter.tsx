@@ -13,7 +13,9 @@ interface CostMeterProps {
 }
 
 function fmtCents(c: number): string {
-  if (!Number.isFinite(c)) return "$?.??";
+  // Non-finite (missing/NaN from the usage API, common on a free local
+  // model) reads as $0.00, not a confusing "$?.??".
+  if (!Number.isFinite(c)) return "$0.00";
   return `$${(c / 100).toFixed(2)}`;
 }
 
@@ -57,7 +59,9 @@ export default function CostMeter({ usage, loading }: CostMeterProps) {
         className="inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-md border border-border bg-background hover:bg-muted transition-colors"
       >
         <span className={`font-mono ${textColor}`}>
-          {fmtCents(usage.cost_cents)} / {fmtCents(usage.cost_cents_cap)} today
+          {Number.isFinite(usage.cost_cents_cap) && usage.cost_cents_cap > 0
+            ? `${fmtCents(usage.cost_cents)} / ${fmtCents(usage.cost_cents_cap)} today`
+            : `${fmtCents(usage.cost_cents)} today`}
         </span>
         <span className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
           <span className={`block h-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />

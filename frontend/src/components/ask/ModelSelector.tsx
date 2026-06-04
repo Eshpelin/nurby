@@ -13,6 +13,10 @@ interface ModelSelectorProps {
   onChange: (m: ProviderModel) => void;
   providers: ProviderModel[];
   loading?: boolean;
+  // Deploy a tool-capable local model in one click (Ollama). Shown when no
+  // installed model can drive the agent.
+  onDeployToolModel?: (model: string) => Promise<void>;
+  deploying?: boolean;
 }
 
 function groupByKind(list: ProviderModel[]): Record<string, ProviderModel[]> {
@@ -35,9 +39,17 @@ export default function ModelSelector({
   onChange,
   providers,
   loading,
+  onDeployToolModel,
+  deploying,
 }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // Whether any offered model can drive the agent, and the model to deploy
+  // if none can. drives the one-click "Set up Ask Nurby" affordance.
+  const hasToolModel = providers.some((p) => p.supports_tools !== false);
+  const suggestedTool =
+    providers.find((p) => p.suggested_tool_model)?.suggested_tool_model || "qwen2.5:3b";
 
   useEffect(() => {
     if (!open) return;
@@ -79,6 +91,25 @@ export default function ModelSelector({
 
       {open && (
         <div className="absolute bottom-full mb-2 left-0 z-50 w-80 max-h-[420px] overflow-auto rounded-lg border border-border bg-card shadow-xl">
+          {/* No installed model can call tools. offer a one-click deploy of
+              a small tool-capable local model so Ask Nurby just works. */}
+          {providers.length > 0 && !hasToolModel && onDeployToolModel && (
+            <div className="p-3 border-b border-border bg-amber-500/[0.06]">
+              <div className="text-[11px] text-amber-300/90 leading-snug mb-2">
+                None of your models can call tools, which Ask Nurby needs.
+                Deploy a small local model to enable it. no API key, stays on
+                your machine.
+              </div>
+              <button
+                type="button"
+                disabled={deploying}
+                onClick={() => onDeployToolModel(suggestedTool)}
+                className="w-full px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:opacity-90 disabled:opacity-50"
+              >
+                {deploying ? `Deploying ${suggestedTool}.` : `Set up Ask Nurby (${suggestedTool})`}
+              </button>
+            </div>
+          )}
           {providers.length === 0 ? (
             <div className="p-3 text-xs text-muted-foreground">
               No providers configured. Add one in Settings → Providers.
@@ -117,10 +148,7 @@ export default function ModelSelector({
                         </div>
                         {m.supports_tools === false && (
                           <div className="text-[10px] text-amber-400/90 mt-0.5 leading-tight">
-                            This local model can&apos;t call tools, so Ask Nurby won&apos;t work with it.
-                            {m.suggested_tool_model
-                              ? ` Pull ${m.suggested_tool_model} (Settings → Local AI) for the agent.`
-                              : ""}
+                            Can&apos;t call tools. great for scene captions, not for Ask Nurby.
                           </div>
                         )}
                       </div>

@@ -20,6 +20,8 @@ interface ChatComposerProps {
   onModelChange: (m: ProviderModel) => void;
   providers: ProviderModel[];
   providersLoading: boolean;
+  onDeployToolModel?: (model: string) => Promise<void>;
+  deploying?: boolean;
   usage: UsageToday | null;
   usageLoading: boolean;
   focusKey?: number;
@@ -35,6 +37,8 @@ export default function ChatComposer({
   onModelChange,
   providers,
   providersLoading,
+  onDeployToolModel,
+  deploying,
   usage,
   usageLoading,
   focusKey = 0,
@@ -81,6 +85,8 @@ export default function ChatComposer({
             onChange={onModelChange}
             providers={providers}
             loading={providersLoading}
+            onDeployToolModel={onDeployToolModel}
+            deploying={deploying}
           />
           <CostMeter usage={usage} loading={usageLoading} />
           <div className="ml-auto flex items-center gap-2">

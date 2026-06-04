@@ -33,6 +33,7 @@ export default function AskPage() {
   const [model, setModel] = useState<ProviderModel | null>(null);
   const [usage, setUsage] = useState<UsageToday | null>(null);
   const [usageLoading, setUsageLoading] = useState(true);
+  const [deploying, setDeploying] = useState(false);
 
   const [text, setText] = useState("");
   const [activeQuestion, setActiveQuestion] = useState<string | null>(null);
@@ -50,63 +51,90 @@ export default function AskPage() {
   const lastTurnFinishedAt = useRef<number>(0);
 
   // ----- bootstrap providers + restore last model + onboarding gate
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setProvidersLoading(true);
-      try {
-        const res = await authFetch("/api/agent/providers");
-        if (res.status === 404) {
-          if (!cancelled) { setProvidersMissing(true); setProviders([]); }
-          return;
-        }
-        if (res.ok) {
-          const data = await res.json();
-          // The endpoint returns one object per provider, each carrying a
-          // nested `models` array. Flatten to the per-model rows the
-          // selector renders, threading the supports_tools flag so we can
-          // warn on local models that cannot drive the agent's tool loop.
-          const provObjs: Array<{
-            provider_id: string;
-            kind: string;
-            label: string;
-            models?: Array<{ name: string; label?: string; recommended?: boolean; supports_tools?: boolean }>;
-            suggested_tool_model?: string | null;
-          }> = Array.isArray(data) ? data : [];
-          const flat: ProviderModel[] = [];
-          for (const pr of provObjs) {
-            for (const m of pr.models ?? []) {
-              flat.push({
-                id: m.name,
-                name: m.label || m.name,
-                kind: pr.kind,
-                provider_id: pr.provider_id,
-                provider_name: pr.label,
-                recommended: m.recommended,
-                supports_tools: m.supports_tools !== false,
-                suggested_tool_model: pr.suggested_tool_model ?? null,
-              });
-            }
+  const fetchProviders = useCallback(async () => {
+    setProvidersLoading(true);
+    try {
+      const res = await authFetch("/api/agent/providers");
+      if (res.status === 404) {
+        setProvidersMissing(true);
+        setProviders([]);
+        return;
+      }
+      if (res.ok) {
+        const data = await res.json();
+        // The endpoint returns one object per provider, each carrying a
+        // nested `models` array (now including every installed Ollama
+        // model). Flatten to the per-model rows the selector renders,
+        // threading supports_tools so we can warn on / skip local models
+        // that cannot drive the agent's tool loop.
+        const provObjs: Array<{
+          provider_id: string;
+          kind: string;
+          label: string;
+          models?: Array<{ name: string; label?: string; recommended?: boolean; supports_tools?: boolean }>;
+          suggested_tool_model?: string | null;
+        }> = Array.isArray(data) ? data : [];
+        const flat: ProviderModel[] = [];
+        for (const pr of provObjs) {
+          for (const m of pr.models ?? []) {
+            flat.push({
+              id: m.name,
+              name: m.label || m.name,
+              kind: pr.kind,
+              provider_id: pr.provider_id,
+              provider_name: pr.label,
+              recommended: m.recommended,
+              supports_tools: m.supports_tools !== false,
+              suggested_tool_model: pr.suggested_tool_model ?? null,
+            });
           }
-          if (!cancelled) setProviders(flat);
         }
-      } catch {/* ignore */}
-      finally { if (!cancelled) setProvidersLoading(false); }
-    })();
-    return () => { cancelled = true; };
+        setProviders(flat);
+      }
+    } catch {/* ignore */}
+    finally { setProvidersLoading(false); }
   }, [authFetch]);
+
+  useEffect(() => { fetchProviders(); }, [fetchProviders]);
+
+  // Deploy a tool-capable local model (e.g. qwen2.5:3b) so the agent works,
+  // then refresh the list and select it. Used by the model selector when no
+  // installed model can call tools. one click instead of "go to Settings".
+  const deployToolModel = useCallback(async (modelName: string) => {
+    setDeploying(true);
+    try {
+      const res = await authFetch("/api/ollama/deploy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: modelName }),
+      });
+      if (res.ok) await fetchProviders();
+    } finally {
+      setDeploying(false);
+    }
+  }, [authFetch, fetchProviders]);
 
   useEffect(() => {
     if (providersLoading || providers.length === 0) return;
+    // Prefer a tool-capable model. the agent needs tool-calling, and
+    // onboarding sets up a vision model (gemma3) that lacks it. Auto-pick
+    // so Ask works without the user hunting for the right model.
+    const bestTool =
+      providers.find((p) => p.supports_tools && p.recommended) ||
+      providers.find((p) => p.supports_tools) ||
+      null;
     try {
       const raw = localStorage.getItem(LS_MODEL_KEY);
       if (raw) {
         const saved = JSON.parse(raw) as { provider_id: string; id: string };
         const found = providers.find((p) => p.provider_id === saved.provider_id && p.id === saved.id);
-        if (found) { setModel(found); return; }
+        // Honor a saved pick, unless it can't call tools and a working
+        // model exists. don't strand the user on a saved dead-end model.
+        if (found && (found.supports_tools || !bestTool)) { setModel(found); return; }
       }
     } catch {/* ignore */}
-    // Not picked yet. Show onboarding once.
+    if (bestTool) { setModel(bestTool); return; }
+    // No tool-capable model at all. Show onboarding once to guide deploy.
     const onboarded = localStorage.getItem(LS_ONBOARDED_KEY);
     if (!onboarded) setShowOnboarding(true);
   }, [providersLoading, providers]);
@@ -334,6 +362,8 @@ export default function AskPage() {
           onModelChange={persistModel}
           providers={providers}
           providersLoading={providersLoading}
+          onDeployToolModel={deployToolModel}
+          deploying={deploying}
           usage={usage}
           usageLoading={usageLoading}
           focusKey={composerFocusKey}

@@ -357,26 +357,51 @@ async def list_agent_providers(
     for p in rows:
         if not _is_tool_use_kind(p.kind):
             continue
-        # We expose only the configured default_model in v1 plus a
-        # convention slot. The UI is free to let users type any model.
+        is_ollama = (p.kind or "").lower() == "ollama"
         default_model = p.default_model or ""
-        models: list[dict] = []
+
+        # Collect candidate model names. the configured default, plus every
+        # model actually installed on the reachable Ollama. Onboarding sets
+        # up a vision model (e.g. gemma3) that cannot call tools, so without
+        # listing the installed models the selector would only offer that
+        # one and Ask-Nurby would be a dead end. Surfacing the installed
+        # tool-capable models (e.g. qwen2.5:3b) lets the user just pick one.
+        names: list[str] = []
         if default_model:
+            names.append(default_model)
+        if is_ollama:
+            try:
+                from services.api.routes.ollama_deploy import _probe
+                installed = await _probe(p.base_url) if p.base_url else None
+                for m in installed or []:
+                    if m not in names:
+                        names.append(m)
+            except Exception:
+                pass  # best-effort. fall back to default_model only
+
+        models: list[dict] = []
+        for name in names:
             models.append({
-                "name": default_model,
-                "label": default_model,
-                "recommended": any(default_model.lower().startswith(pfx) for pfx in RECOMMENDED_PREFIXES),
-                "supports_tools": _model_supports_tools(p.kind, default_model),
+                "name": name,
+                "label": name,
+                "recommended": (
+                    any(name.lower().startswith(pfx) for pfx in RECOMMENDED_PREFIXES)
+                    or (is_ollama and _model_supports_tools(p.kind, name))
+                ),
+                "supports_tools": _model_supports_tools(p.kind, name),
             })
+        # Surface tool-capable models first so the selector defaults sanely.
+        models.sort(key=lambda m: (not m["supports_tools"], m["name"]))
+
         out.append({
             "provider_id": str(p.id),
             "kind": p.kind,
             "label": p.name,
             "models": models,
-            # Hint the UI can show when a local model lacks tool-calling.
-            "suggested_tool_model": SUGGESTED_OLLAMA_TOOL_MODEL
-            if (p.kind or "").lower() == "ollama"
-            else None,
+            # Whether any offered model can drive the agent. the UI uses this
+            # plus suggested_tool_model to show a one-click deploy when not.
+            "has_tool_model": any(m["supports_tools"] for m in models),
+            "suggested_tool_model": SUGGESTED_OLLAMA_TOOL_MODEL if is_ollama else None,
         })
     return out
 
