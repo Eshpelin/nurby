@@ -11,6 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
+# CPU-only torch first (no GPU in these containers). avoids the ~426MB
+# CUDA wheel that stalled on slow networks; the main install reuses it.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 RUN --mount=type=cache,target=/root/.cache/pip pip install .
 
 # Speech transcription engine. the audio pipeline (run here) uses

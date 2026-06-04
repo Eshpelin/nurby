@@ -18,6 +18,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
+# Install CPU-only torch first, from PyTorch's own CDN. these containers
+# have no GPU (InsightFace, faster-whisper, and YOLO all run on CPU), so
+# the default CUDA torch wheel is ~426MB of unused GPU libs that also
+# stalled repeatedly on slow networks. The CPU wheel is ~190MB and once
+# torch is satisfied, the main install below won't pull it again.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 RUN --mount=type=cache,target=/root/.cache/pip pip install .
 
 # Pre-bake the default YOLO weights into the image. Without this, the

@@ -1,6 +1,9 @@
+# syntax=docker/dockerfile:1
 FROM python:3.12-slim
 
 WORKDIR /app
+
+ENV PIP_DEFAULT_TIMEOUT=120
 
 # Exact build commit, surfaced by /api/system/version. Set by CI on
 # release; harmless when unset for local builds.
@@ -13,7 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+# CPU-only torch first (no GPU here). avoids the ~426MB CUDA wheel that
+# stalls on slow networks; the main install reuses the satisfied torch.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN --mount=type=cache,target=/root/.cache/pip pip install .
 
 COPY shared/ shared/
 COPY services/api/ services/api/
