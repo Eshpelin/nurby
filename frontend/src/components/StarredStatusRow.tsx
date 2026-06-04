@@ -49,11 +49,28 @@ function Avatar({ it, size = "md" }: { it: StarredStatus; size?: "sm" | "md" }) 
   );
 }
 
+interface NamedPerson {
+  id: string;
+  display_name: string;
+  photo_path: string | null;
+  is_starred: boolean;
+}
+interface UnknownCluster {
+  id: string;
+  sample_thumbnail_path: string | null;
+  sighting_count: number;
+}
+
 export function StarredStatusRow() {
   const { authFetch, token } = useAuth();
   const [items, setItems] = useState<StarredStatus[]>([]);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  // Empty-state discovery. people detected but not starred, and unnamed
+  // face clusters awaiting a name. Drives a useful empty row instead of a
+  // dead-end "no one to watch" message.
+  const [people, setPeople] = useState<NamedPerson[] | null>(null);
+  const [clusters, setClusters] = useState<UnknownCluster[] | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const fetchStatus = useCallback(async (force = false) => {
@@ -65,11 +82,46 @@ export function StarredStatusRow() {
     }
   }, [authFetch]);
 
+  // When nobody is being watched, find out who HAS been detected so the
+  // empty state can show them with name/star actions.
+  const fetchDetected = useCallback(async () => {
+    try {
+      const [pRes, cRes] = await Promise.all([
+        authFetch("/api/persons"),
+        authFetch("/api/persons/suggestions"),
+      ]);
+      if (pRes.ok) setPeople(await pRes.json());
+      else setPeople([]);
+      if (cRes.ok) setClusters(await cRes.json());
+      else setClusters([]);
+    } catch {
+      setPeople([]);
+      setClusters([]);
+    }
+  }, [authFetch]);
+
+  const starPerson = useCallback(async (id: string) => {
+    try {
+      await authFetch(`/api/persons/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_starred: true }),
+      });
+      await fetchStatus(true);
+    } catch {
+      /* silent */
+    }
+  }, [authFetch, fetchStatus]);
+
   useEffect(() => {
     fetchStatus();
     const t = setInterval(() => fetchStatus(), 120000);
     return () => clearInterval(t);
   }, [fetchStatus]);
+
+  useEffect(() => {
+    if (items.length === 0) fetchDetected();
+  }, [items.length, fetchDetected]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -108,20 +160,56 @@ export function StarredStatusRow() {
   }, [authFetch]);
 
   if (items.length === 0) {
+    const namedUnstarred = (people || []).filter((p) => !p.is_starred);
+    const unknown = clusters || [];
+    // Nothing detected yet (or still loading). show nothing rather than a
+    // dead-end message. faces populate this as soon as they are seen.
+    if ((people === null && clusters === null) || (namedUnstarred.length === 0 && unknown.length === 0)) {
+      return null;
+    }
+    // People have been seen but none are starred. invite naming / starring.
     return (
-      <div className="flex-shrink-0 mb-3 flex items-center gap-3 px-1 py-1.5">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400/80 flex-shrink-0">
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-        </svg>
-        <span className="text-xs text-muted-foreground">
-          No one to watch yet. Star a person to see their recap here.
-        </span>
-        <a
-          href="/people"
-          className="ml-auto text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Open People
-        </a>
+      <div className="flex-shrink-0 mb-3 rounded-lg border border-border bg-card/40 px-3 py-2.5">
+        <div className="flex items-center gap-2 mb-2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400/80">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+          <span className="text-[11px] font-medium">
+            {namedUnstarred.length > 0 ? "Star people to watch them here" : "New faces detected"}
+          </span>
+          <a href="/people" className="ml-auto text-[11px] text-accent hover:underline">
+            Manage in People →
+          </a>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {namedUnstarred.slice(0, 6).map((p) => (
+            <button
+              key={p.id}
+              onClick={() => starPerson(p.id)}
+              title={`Watch ${p.display_name}`}
+              className="group flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full border border-border bg-background hover:border-amber-500/50 transition-colors"
+            >
+              {p.photo_path ? (
+                <img src={`/api/persons/${p.id}/photo${token ? `?token=${token}` : ""}`} alt="" className="h-6 w-6 rounded-full object-cover" />
+              ) : (
+                <span className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium">{p.display_name.charAt(0).toUpperCase()}</span>
+              )}
+              <span className="text-[11px] truncate max-w-[90px]">{p.display_name}</span>
+              <span className="text-amber-400/70 group-hover:text-amber-400 text-xs leading-none">☆</span>
+            </button>
+          ))}
+          {unknown.slice(0, 6).map((c) => (
+            <a
+              key={c.id}
+              href="/people"
+              title={`Unnamed. seen ${c.sighting_count}x. Click to name.`}
+              className="flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full border border-dashed border-yellow-500/40 bg-yellow-500/5 hover:bg-yellow-500/10 transition-colors"
+            >
+              <img src={`/api/persons/suggestions/${c.id}/thumbnail${token ? `?token=${token}` : ""}`} alt="" className="h-6 w-6 rounded-full object-cover bg-muted" />
+              <span className="text-[11px] text-yellow-300">Name? · {c.sighting_count}x</span>
+            </a>
+          ))}
+        </div>
       </div>
     );
   }
