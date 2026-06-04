@@ -1873,6 +1873,17 @@ function DashboardContent() {
     let recCount = 0;
     const ruleFires: { message: string; camName?: string }[] = [];
     const camHits: Record<string, number> = {};
+    // Incidents and journeys are the primary timeline events. they carry a
+    // VLM summary when finalized. Collect them so a busy hour is never
+    // mislabeled "all quiet" just because there were no raw face rows.
+    const eventHighlights: BucketHighlight[] = [];
+
+    const humanizeSig = (kind: string, key: string): string => {
+      if (kind === "person") return `${key} seen`;
+      if (kind === "cluster" || kind === "unknown") return "Unrecognized person";
+      if (kind === "object") return key.split(",").map((s) => s.trim()).filter(Boolean).join(" + ");
+      return key || "Activity";
+    };
 
     for (const e of bucketEntries) {
       if (e.camera_id) camHits[e.camera_id] = (camHits[e.camera_id] || 0) + 1;
@@ -1883,6 +1894,25 @@ function DashboardContent() {
       } else if (e.type === "notification") {
         const n = e.data as Notification;
         ruleFires.push({ message: n.message, camName });
+      } else if (e.type === "incident") {
+        const inc = e.data as Incident;
+        if (inc.signature_kind === "motion") continue; // ambient, not an event
+        const thumb = inc.peak_observation_id || inc.thumbnails?.[0]?.obs_id || undefined;
+        const occ = inc.occurrence_count > 1 ? ` (${inc.occurrence_count}×)` : "";
+        const label = inc.summary_text?.trim() || `${humanizeSig(inc.signature_kind, inc.signature_key)}${occ}`;
+        eventHighlights.push({
+          tone: inc.signature_kind === "person" ? "person" : inc.signature_kind === "unknown" || inc.signature_kind === "cluster" ? "unknown" : "object",
+          text: label,
+          camName,
+          thumbnailObsId: thumb,
+        });
+      } else if (e.type === "journey") {
+        const j = e.data as Journey;
+        eventHighlights.push({
+          tone: "person",
+          text: j.summary_text?.trim() || "Someone moved across cameras",
+          camName,
+        });
       } else if (e.type === "observation" || e.type === "search_result") {
         const o = e.data as Observation;
         for (const f of o.person_detections?.faces || []) {
@@ -1909,6 +1939,15 @@ function DashboardContent() {
     }
 
     const highlights: BucketHighlight[] = [];
+
+    // Incidents/journeys first. they are the real events for the hour and
+    // carry VLM summaries. Dedupe identical lines (same incident text).
+    const seenEvent = new Set<string>();
+    for (const h of eventHighlights) {
+      if (seenEvent.has(h.text)) continue;
+      seenEvent.add(h.text);
+      highlights.push(h);
+    }
 
     // Named persons are the most useful signal. List them by name.
     for (const p of persons) {
