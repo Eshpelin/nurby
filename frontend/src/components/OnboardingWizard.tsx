@@ -500,19 +500,26 @@ function MagicStep({
           if (cancelled) return;
           setPct((prev) => (prev < 88 ? prev + 2 : prev));
         }, 1500);
-        try {
+        // Try the RAM-recommended model (e.g. Gemma 4). If that pull fails
+        // (tag variance on a host, low RAM), fall back to a proven small
+        // model so magic still ends with a working local VLM.
+        const tryDeploy = async (m: string) => {
           const dr = await authFetch("/api/ollama/deploy", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model }),
+            body: JSON.stringify({ model: m }),
           });
           const data = await dr.json().catch(() => ({}));
-          if (creep) clearInterval(creep);
-          if (dr.ok && data.stage === "done") {
-            if (!cancelled) setTasks((t) => ({ ...t, vlm: "done" }));
-          } else {
-            if (!cancelled) setTasks((t) => ({ ...t, vlm: "skipped" }));
+          return dr.ok && data.stage === "done";
+        };
+        try {
+          let ok = await tryDeploy(model);
+          if (!ok && model !== "gemma3:4b") {
+            if (!cancelled) setLabel("Falling back to a lighter local model");
+            ok = await tryDeploy("gemma3:4b");
           }
+          if (creep) clearInterval(creep);
+          if (!cancelled) setTasks((t) => ({ ...t, vlm: ok ? "done" : "skipped" }));
         } catch {
           if (creep) clearInterval(creep);
           if (!cancelled) setTasks((t) => ({ ...t, vlm: "skipped" }));

@@ -33,7 +33,7 @@ export const ALL_PROVIDERS: ProviderPreset[] = [
   { name: "DeepSeek", kind: "openai", url: "https://api.deepseek.com", model: "deepseek-chat", description: "DeepSeek V3, R1", needsKey: true },
   { name: "OpenRouter", kind: "openai", url: "https://openrouter.ai/api", model: "openai/gpt-4o-mini", description: "Unified gateway to 200+ models", needsKey: true },
   { name: "Perplexity", kind: "openai", url: "https://api.perplexity.ai", model: "llama-3.1-sonar-large-128k-online", description: "Online search-grounded models", needsKey: true },
-  { name: "Ollama", kind: "ollama", url: "http://localhost:11434", model: "moondream", description: "Local models (moondream, llava, etc.)", needsKey: false },
+  { name: "Ollama", kind: "ollama", url: "http://localhost:11434", model: "gemma4:12b", description: "Local models (Gemma 4, gemma3, llava, etc.)", needsKey: false },
   { name: "LMStudio", kind: "openai", url: "http://localhost:1234", model: "local-model", description: "Local OpenAI-compatible server", needsKey: false },
   { name: "vLLM", kind: "openai", url: "http://localhost:8000", model: "local-model", description: "High-throughput local serving", needsKey: false },
 ];

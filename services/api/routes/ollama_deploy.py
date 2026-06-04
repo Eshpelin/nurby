@@ -52,6 +52,13 @@ def _find_ollama_binary() -> str | None:
 # Ollama has no public catalog API, so we maintain this list.
 # Sorted by quality descending within each family.
 VISION_MODELS = [
+    # Gemma 4 (Google, 2026). encoder-free multimodal (text + image, and
+    # native audio on the e-variants). The recommended local default on
+    # capable machines. Listed first so the RAM-aware recommender prefers
+    # it, and falls back to lighter models on modest hardware.
+    {"name": "gemma4:12b", "label": "Gemma 4 12B", "family": "Gemma 4", "ram_gb": 12, "quality": "best", "vision": True, "description": "Newest Google multimodal. agentic, runs on 16GB+ laptops"},
+    {"name": "gemma4:e4b", "label": "Gemma 4 E4B", "family": "Gemma 4", "ram_gb": 8, "quality": "great", "vision": True, "description": "Lighter Gemma 4 with native audio input, for mid-range machines"},
+    {"name": "gemma4:e2b", "label": "Gemma 4 E2B", "family": "Gemma 4", "ram_gb": 6, "quality": "good", "vision": True, "description": "Smallest Gemma 4, native audio, for modest hardware"},
     # Gemma 3 (Google, all sizes support vision)
     {"name": "gemma3:27b", "label": "Gemma 3 27B", "family": "Gemma", "ram_gb": 20, "quality": "best", "vision": True, "description": "Highest quality vision model from Google"},
     {"name": "gemma3:12b", "label": "Gemma 3 12B", "family": "Gemma", "ram_gb": 10, "quality": "great", "vision": True, "description": "Great balance of quality and speed"},
