@@ -23,6 +23,8 @@ interface Facts {
   audio_events?: Record<string, number>;
   audio_event_samples?: Record<string, string[]>;
   cameras_active?: { id: string; name: string; observations: number }[];
+  notable_events?: { when?: string; text: string }[];
+  notable_count?: number;
 }
 
 interface DailyDigest {
@@ -157,51 +159,16 @@ export function DailyDigestCard() {
   );
 }
 
+// Supporting detail under the narrative. the actual notable events with
+// friendly times, not raw counts. The story is the headline. these are the
+// "what specifically" a curious user can scan. Empty on a quiet night.
 function buildBullets(f: Facts): string[] {
-  const out: string[] = [];
-  const visitors = f.visitors || [];
-  for (const v of visitors.slice(0, 5)) {
-    const cams = (v.cameras || []).join(", ") || "?";
-    out.push(`${v.name} seen ${v.sightings}× on ${cams}`);
-  }
-  if (f.unknown_visitors && f.unknown_visitors > 0) {
-    out.push(`${f.unknown_visitors} unknown face sighting${f.unknown_visitors === 1 ? "" : "s"}`);
-  }
-  if (f.packages && f.packages > 0) {
-    out.push(`${f.packages} package detection${f.packages === 1 ? "" : "s"}`);
-  }
-  if (f.vehicles && f.vehicles > 0) {
-    out.push(`${f.vehicles} vehicle detection${f.vehicles === 1 ? "" : "s"}`);
-  }
-  if (f.incidents_count) {
-    out.push(`${f.incidents_count} incidents tracked`);
-  }
-  if (f.journeys_count) {
-    out.push(`${f.journeys_count} cross-camera journeys`);
-  }
-  const audio = f.audio_events || {};
-  const samples = f.audio_event_samples || {};
-  for (const [label, n] of Object.entries(audio)) {
-    if (!n) continue;
-    const labelStr = label.replace(/_/g, " ");
-    const firstSample = (samples[label] || [])[0];
-    const tail = firstSample ? ` (first ${formatSample(firstSample)})` : "";
-    out.push(`${labelStr} detected ${n}×${tail}`);
-  }
-  return out;
+  const events = f.notable_events || [];
+  return events
+    .slice(0, 8)
+    .map((e) => (e.when ? `${e.when} · ${e.text}` : e.text));
 }
 
-function formatSample(s: string): string {
-  // Sample shape "ISO@CamName". Show time + cam concisely.
-  const [iso, cam] = s.split("@");
-  try {
-    const d = new Date(iso);
-    const t = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    return cam ? `${t} on ${cam}` : t;
-  } catch {
-    return s;
-  }
-}
 
 function SunIcon({ className }: { className?: string }) {
   return (

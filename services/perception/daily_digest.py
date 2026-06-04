@@ -53,14 +53,17 @@ logger = logging.getLogger("nurby.perception.daily_digest")
 
 
 DAILY_SYSTEM_PROMPT = (
-    "You are a household security camera analyst. You receive a"
-    " 24-hour roll-up of activity across multiple cameras. Output a"
-    " short morning briefing as a bullet list. Each bullet is one"
-    " line, factual, with a count or timestamp when relevant. Mention"
-    " visitors by name when known, plate by string, unknowns as"
-    ' "unknown person at <camera> <time>". If nothing notable, return'
-    ' the single bullet "Quiet night." Never speculate beyond the'
-    " evidence."
+    "You are a trusted housemate giving someone a quick, warm recap of "
+    "what happened while they were away or asleep, based on home camera "
+    "activity. Write 2 to 5 short natural sentences, like you are filling "
+    "them in over coffee. Lead with the single most notable thing. Name "
+    "people when known and say what they did and roughly when, using "
+    "friendly clock times like '3:10 AM', never dates or ISO timestamps. "
+    "Group repetitive or trivial motion into a phrase ('quiet otherwise', "
+    "'normal street traffic out front'). Do NOT list statistics, counts, "
+    "or bullet points. Do NOT invent anything not in the events. If little "
+    "or nothing notable happened, just say it was a quiet night in one "
+    "sentence. Be concise and human, not a report."
 )
 
 
@@ -389,7 +392,103 @@ async def _collect_facts(
         facts["audio_event_samples"] = {
             k: v[:5] for k, v in samples.items()
         }
+
+        # Chronological list of NOTABLE events for the narrative recap. this
+        # is what the VLM reads. people doing things, described incidents,
+        # sounds, conversations, with friendly local clock times. Raw counts
+        # are deliberately NOT the input. they produce a stats dump, not a
+        # recap.
+        tz = await _get_local_tz()
+        events: list[dict] = []
+
+        for n, c in named.items():
+            cams = ", ".join(cam_name_by_id.get(cid, "?") for cid in named_cams.get(n, set())) or "a camera"
+            first = named_first.get(n)
+            events.append({
+                "ts": first,
+                "when": _fmt_clock(first, tz),
+                "text": f"{n} seen on {cams}" + (f" ({c} times)" if c > 2 else ""),
+            })
+
+        for inc in inc_rows:
+            if inc.signature_kind == "motion":
+                continue  # ambient motion is not a notable event
+            cam = cam_name_by_id.get(str(inc.camera_id), "a camera")
+            iso = inc.started_at.isoformat() if inc.started_at else None
+            if inc.summary_text:
+                text = inc.summary_text.strip()
+            else:
+                subj = _incident_phrase(inc.signature_kind, inc.signature_key)
+                text = f"{subj} at {cam}"
+                if (inc.occurrence_count or 0) > 3:
+                    text += f", repeatedly"
+            events.append({"ts": iso, "when": _fmt_clock(iso, tz), "text": text})
+
+        for lbl, ts, cam_id in ad_rows:
+            iso = ts.isoformat() if ts else None
+            cam = cam_name_by_id.get(str(cam_id), "a camera")
+            events.append({
+                "ts": iso, "when": _fmt_clock(iso, tz),
+                "text": f"{lbl.replace('_', ' ')} heard at {cam}",
+            })
+
+        for c in conv_rows:
+            if c.summary_text:
+                events.append({"ts": None, "when": "", "text": f"Conversation. {c.summary_text.strip()}"})
+
+        events.sort(key=lambda e: e.get("ts") or "")
+        facts["notable_events"] = events[:25]
+        facts["notable_count"] = len(events)
+
     return facts
+
+
+def _incident_phrase(kind: str | None, key: str | None) -> str:
+    k = (kind or "").lower()
+    if k == "person":
+        return key or "someone"
+    if k in ("cluster", "unknown"):
+        return "an unrecognized person"
+    if k == "object":
+        return (key or "activity").replace(",", " and ")
+    return key or "activity"
+
+
+async def _get_local_tz():
+    try:
+        from zoneinfo import ZoneInfo
+        name = await get_setting("system_timezone", None)
+        if name:
+            return ZoneInfo(str(name))
+    except Exception:
+        pass
+    return None
+
+
+def _fmt_clock(iso: str | None, tz) -> str:
+    """ISO -> friendly local clock like '3:10 AM'. Empty on failure."""
+    if not iso:
+        return ""
+    try:
+        dt = datetime.fromisoformat(iso)
+        if tz is not None:
+            dt = dt.astimezone(tz)
+        else:
+            dt = dt.astimezone()
+        return dt.strftime("%-I:%M %p")
+    except Exception:
+        return ""
+
+
+def _window_phrase(window_start: datetime, window_end: datetime) -> str:
+    """Human phrasing for the window based on its length + end hour."""
+    hours = max(1, round((window_end - window_start).total_seconds() / 3600))
+    end_local = window_end.astimezone()
+    if hours <= 14 and end_local.hour <= 11:
+        return "overnight"
+    if hours <= 30:
+        return "since this time yesterday"
+    return f"over the last {hours} hours"
 
 
 def _build_prompt(
@@ -397,55 +496,26 @@ def _build_prompt(
     window_start: datetime,
     window_end: datetime,
 ) -> str:
-    lines = [
-        f"Window. {window_start.isoformat()} to {window_end.isoformat()}.",
-        "",
-    ]
-    if facts.get("visitors"):
-        lines.append("Named visitors.")
-        for v in facts["visitors"]:
-            cams = ", ".join(v.get("cameras") or []) or "?"
-            lines.append(
-                f"- {v['name']}. {v['sightings']} sightings"
-                f" on {cams} from {v.get('first_seen')} to {v.get('last_seen')}"
-            )
-    if facts.get("unknown_visitors"):
-        lines.append(f"Unknown face sightings. {facts['unknown_visitors']}.")
-    if facts.get("packages"):
-        lines.append(f"Package detections. {facts['packages']}.")
-    if facts.get("vehicles"):
-        lines.append(f"Vehicle detections. {facts['vehicles']}.")
-    if facts.get("incidents_count"):
-        lines.append(f"Incidents. {facts['incidents_count']}.")
-    if facts.get("journeys") and facts["journeys"]:
-        lines.append("Cross-camera journeys.")
-        for j in facts["journeys"]:
-            lines.append(
-                f"- {j.get('subject_key', '?')} "
-                f"({j.get('subject_kind')}). {j.get('cameras_seen_count')} cameras."
-                f" started {j.get('started_at')}"
-                + (f". recap. {j.get('summary_text')}" if j.get("summary_text") else "")
-            )
-    if facts.get("audio_events"):
-        lines.append("Audio detections.")
-        for lbl, n in facts["audio_events"].items():
-            samples = facts.get("audio_event_samples", {}).get(lbl) or []
-            sample_str = "; ".join(samples[:3])
-            lines.append(f"- {lbl}. {n} events. samples. {sample_str}")
-    if facts.get("conversations") and facts["conversations"]:
-        lines.append("Notable conversations.")
-        for c in facts["conversations"]:
-            lines.append(f'- {c.get("summary_text")}')
-    if facts.get("cameras_active"):
-        cams = ", ".join(
-            f"{c['name']} ({c['observations']})"
-            for c in facts["cameras_active"][:5]
+    when = _window_phrase(window_start, window_end)
+    events = facts.get("notable_events") or []
+
+    if not events:
+        return (
+            f"There were no notable events {when}. Reply with a single short,"
+            " friendly sentence saying it was a quiet night with nothing of"
+            " note. Do not invent anything."
         )
-        lines.append(f"Most active cameras. {cams}.")
+
+    lines = [f"Here are the notable events {when}, earliest first:", ""]
+    for e in events:
+        clock = e.get("when")
+        prefix = f"{clock} - " if clock else "- "
+        lines.append(f"{prefix}{e.get('text')}")
     lines.append("")
     lines.append(
-        "Write a short bullet list summarizing the last 24h for the"
-        " household. One bullet per topic. Be concrete with counts"
-        " and times. Skip topics with no signal."
+        f"Write a brief, friendly recap of what happened {when} for the person"
+        " who lives here. Lead with the most notable thing, name people and"
+        " say what they did with natural clock times, and fold repetitive"
+        " activity into a short phrase. No counts, no bullet points, no dates."
     )
     return "\n".join(lines)
