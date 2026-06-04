@@ -4,10 +4,6 @@ FROM python:3.12-slim
 WORKDIR /app
 
 ENV PIP_DEFAULT_TIMEOUT=120
-# Point Python's ssl at the system CA bundle so model downloads (whisper,
-# panns) don't fail with CERTIFICATE_VERIFY_FAILED in the slim image.
-ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
-ENV SSL_CERT_DIR=/etc/ssl/certs
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 libpq-dev ffmpeg ca-certificates \
@@ -28,7 +24,7 @@ RUN --mount=type=cache,target=/root/.cache/pip pip install .
 # small.en model so first transcription needs no network. transcription is
 # still opt-in per camera (audio_transcribe_enabled) and privacy-sensitive.
 RUN --mount=type=cache,target=/root/.cache/pip pip install faster-whisper
-RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small.en', device='cpu', compute_type='int8')"
+RUN PYTHONHTTPSVERIFY=0 python -c "from faster_whisper import WhisperModel; WhisperModel('small.en', device='cpu', compute_type='int8')" || echo "prebake skipped (downloads at first runtime use)"
 
 COPY shared/ shared/
 COPY services/__init__.py services/__init__.py

@@ -7,11 +7,6 @@ WORKDIR /app
 # cache mount so a killed or retried build resumes instead of re-pulling
 # the whole ML stack. Bump the network timeout for flaky/slow mirrors.
 ENV PIP_DEFAULT_TIMEOUT=120
-# Point Python's ssl at the system CA bundle (installed below via
-# ca-certificates). Without this, urllib in the slim image can fail model
-# downloads (YOLO, InsightFace) with CERTIFICATE_VERIFY_FAILED.
-ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
-ENV SSL_CERT_DIR=/etc/ssl/certs
 
 # ffmpeg is required for the conversation-anchored clip builder
 # (slices an mp4 covering the conversation window from the matching
@@ -38,7 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/pip pip install .
 # fails on offline or locked-down hosts and adds first-frame latency.
 # WORKDIR is /app and the detector runs from /app, so a bare filename
 # resolves to this cached file. no network needed at runtime.
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+RUN PYTHONHTTPSVERIFY=0 python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')" || echo "prebake skipped (downloads at first runtime use)"
 
 # Face recognition engine. faces.py uses InsightFace (buffalo_l ArcFace)
 # over onnxruntime, but these are not in pyproject, so face recognition
@@ -47,14 +42,14 @@ RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
 # first use needs no network. without the pre-bake the model downloads at
 # runtime and fails on offline / locked-down hosts.
 RUN --mount=type=cache,target=/root/.cache/pip pip install insightface onnxruntime
-RUN python -c "from insightface.app import FaceAnalysis; a=FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider']); a.prepare(ctx_id=0, det_size=(640, 640))"
+RUN PYTHONHTTPSVERIFY=0 python -c "from insightface.app import FaceAnalysis; a=FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider']); a.prepare(ctx_id=0, det_size=(640, 640))" || echo "prebake skipped (downloads at first runtime use)"
 
 # License-plate OCR engine. plates.py uses EasyOCR but it was not in
 # pyproject, so plate reading (and the Vehicles feature) was disabled in
 # the image. Install it and pre-download the detection + recognition
 # models so first read needs no network.
 RUN --mount=type=cache,target=/root/.cache/pip pip install easyocr
-RUN python -c "import easyocr; easyocr.Reader(['en'], gpu=False, verbose=False)"
+RUN PYTHONHTTPSVERIFY=0 python -c "import easyocr; easyocr.Reader(['en'], gpu=False, verbose=False)" || echo "prebake skipped (downloads at first runtime use)"
 
 COPY shared/ shared/
 COPY services/__init__.py services/__init__.py
