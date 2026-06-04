@@ -1,6 +1,12 @@
+# syntax=docker/dockerfile:1
 FROM python:3.12-slim
 
 WORKDIR /app
+
+# Pip downloads (notably the ~426MB torch wheel) are cached in a BuildKit
+# cache mount so a killed or retried build resumes instead of re-pulling
+# the whole ML stack. Bump the network timeout for flaky/slow mirrors.
+ENV PIP_DEFAULT_TIMEOUT=120
 
 # ffmpeg is required for the conversation-anchored clip builder
 # (slices an mp4 covering the conversation window from the matching
@@ -12,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+RUN --mount=type=cache,target=/root/.cache/pip pip install .
 
 # Pre-bake the default YOLO weights into the image. Without this, the
 # first detection downloads yolov8n.pt from GitHub at runtime, which
@@ -27,14 +33,14 @@ RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
 # (perception-only, to keep api/ingestion lean) and pre-bake the model so
 # first use needs no network. without the pre-bake the model downloads at
 # runtime and fails on offline / locked-down hosts.
-RUN pip install --no-cache-dir insightface onnxruntime
+RUN --mount=type=cache,target=/root/.cache/pip pip install insightface onnxruntime
 RUN python -c "from insightface.app import FaceAnalysis; a=FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider']); a.prepare(ctx_id=0, det_size=(640, 640))"
 
 # License-plate OCR engine. plates.py uses EasyOCR but it was not in
 # pyproject, so plate reading (and the Vehicles feature) was disabled in
 # the image. Install it and pre-download the detection + recognition
 # models so first read needs no network.
-RUN pip install --no-cache-dir easyocr
+RUN --mount=type=cache,target=/root/.cache/pip pip install easyocr
 RUN python -c "import easyocr; easyocr.Reader(['en'], gpu=False, verbose=False)"
 
 COPY shared/ shared/
