@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
 import { ReinterpretButton } from "@/components/ReinterpretButton";
+import { MomentModal } from "@/components/MomentModal";
 
 interface IncidentObs {
   id: string;
@@ -91,6 +92,7 @@ const Sparkle = ({ className }: { className?: string }) => (
 export function IncidentCard({ incident, cameraName }: Props) {
   const { token, authFetch } = useAuth();
   const [expanded, setExpanded] = useState(false);
+  const [moment, setMoment] = useState<{ obsId: string; ts: string } | null>(null);
   const [obs, setObs] = useState<IncidentObs[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [live, setLive] = useState({
@@ -244,8 +246,22 @@ export function IncidentCard({ incident, cameraName }: Props) {
               {(incident.thumbnails || []).slice(-8).map((t) => (
                 <span
                   key={t.obs_id}
-                  className={`text-[10px] font-mono ${accent}/80 px-1 py-0.5 rounded bg-violet-500/10`}
-                  title={new Date(t.ts).toLocaleString()}
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    // Don't toggle the card. open the moment modal instead.
+                    e.stopPropagation();
+                    setMoment({ obsId: t.obs_id, ts: t.ts });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setMoment({ obsId: t.obs_id, ts: t.ts });
+                    }
+                  }}
+                  className={`text-[10px] font-mono ${accent}/80 px-1 py-0.5 rounded bg-violet-500/10 hover:bg-violet-500/25 hover:underline transition-colors cursor-pointer`}
+                  title={`View this moment. ${new Date(t.ts).toLocaleString()}`}
                 >
                   {new Date(t.ts).toLocaleTimeString([], {
                     hour: "2-digit",
@@ -303,6 +319,16 @@ export function IncidentCard({ incident, cameraName }: Props) {
             <p className="text-xs text-muted-foreground">No occurrences recorded.</p>
           )}
         </div>
+      )}
+
+      {moment && (
+        <MomentModal
+          observationId={moment.obsId}
+          cameraId={incident.camera_id}
+          cameraName={cameraName}
+          ts={moment.ts}
+          onClose={() => setMoment(null)}
+        />
       )}
     </div>
   );
