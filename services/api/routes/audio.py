@@ -54,6 +54,9 @@ class CameraAudioPatch(BaseModel):
     transcript_retention_days: int | None = Field(default=None, ge=0, le=3650)
     stt_provider_id: uuid.UUID | None = None
     stt_budget_minutes_per_hour: int | None = Field(default=None, ge=0, le=600)
+    audio_stt_beam_size: int | None = Field(default=None, ge=1, le=10)
+    audio_stt_condition_on_previous_text: bool | None = None
+    audio_stt_no_speech_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 _AUDIT_FIELDS = (
@@ -114,4 +117,7 @@ async def patch_camera_audio(
         "transcript_retention_days": cam.transcript_retention_days,
         "stt_provider_id": str(cam.stt_provider_id) if cam.stt_provider_id else None,
         "stt_budget_minutes_per_hour": cam.stt_budget_minutes_per_hour,
+        "audio_stt_beam_size": cam.audio_stt_beam_size,
+        "audio_stt_condition_on_previous_text": cam.audio_stt_condition_on_previous_text,
+        "audio_stt_no_speech_threshold": cam.audio_stt_no_speech_threshold,
     }

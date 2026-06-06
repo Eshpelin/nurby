@@ -95,6 +95,14 @@ class Camera(Base):
     transcript_retention_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     stt_provider_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True, index=True)
     stt_budget_minutes_per_hour: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # STT accuracy/speed knobs. Defaults match the original behavior, so a
+    # camera left alone transcribes exactly as before. Raise beam_size for
+    # better accuracy on noisy audio at a CPU cost. condition_on_previous
+    # carries context across segments (more coherent long speech, but can
+    # propagate a transcription error). no_speech_threshold gates silence.
+    audio_stt_beam_size: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    audio_stt_condition_on_previous_text: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    audio_stt_no_speech_threshold: Mapped[float] = mapped_column(Float, default=0.6, nullable=False)
     # Summarization config (window-level VLM recap)
     summary_provider_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True)
     summary_mode: Mapped[str] = mapped_column(String(16), default="off", nullable=False)  # off, periodic, event, both

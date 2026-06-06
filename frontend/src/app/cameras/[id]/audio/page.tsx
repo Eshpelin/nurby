@@ -36,6 +36,9 @@ interface AudioConfig {
   audio_retention_days: number;
   transcript_retention_days: number;
   stt_budget_minutes_per_hour: number;
+  audio_stt_beam_size: number;
+  audio_stt_condition_on_previous_text: boolean;
+  audio_stt_no_speech_threshold: number;
 }
 
 interface Transcript {
@@ -85,6 +88,11 @@ export default function CameraAudioPage() {
           audio_retention_days: cam.audio_retention_days ?? 7,
           transcript_retention_days: cam.transcript_retention_days ?? 30,
           stt_budget_minutes_per_hour: cam.stt_budget_minutes_per_hour ?? 30,
+          audio_stt_beam_size: cam.audio_stt_beam_size ?? 1,
+          audio_stt_condition_on_previous_text:
+            !!cam.audio_stt_condition_on_previous_text,
+          audio_stt_no_speech_threshold:
+            cam.audio_stt_no_speech_threshold ?? 0.6,
         });
 
         const txResp = await fetch(
@@ -269,6 +277,48 @@ export default function CameraAudioPage() {
         </section>
 
         <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-5 mb-6">
+          <h2 className="text-sm font-medium text-zinc-300 mb-1">
+            Transcription accuracy
+          </h2>
+          <p className="text-xs text-zinc-500 mb-4">
+            Defaults favor speed and run well on a CPU. Raise these for
+            cleaner text on noisy or quiet audio, at a higher compute cost.
+          </p>
+          <div className="grid gap-3">
+            <SelectRow
+              label="Decoding quality (beam size)"
+              value={String(config.audio_stt_beam_size)}
+              options={[
+                { v: "1", l: "Fastest (greedy)" },
+                { v: "2", l: "Balanced (2)" },
+                { v: "3", l: "Better (3)" },
+                { v: "5", l: "Most accurate (5)" },
+              ]}
+              onChange={(v) => update({ audio_stt_beam_size: Number(v) })}
+              disabled={saving}
+            />
+            <ToggleRow
+              label="Carry context across segments"
+              hint="More coherent long speech, but a transcription error can carry into the next segment."
+              value={config.audio_stt_condition_on_previous_text}
+              onChange={(v) =>
+                update({ audio_stt_condition_on_previous_text: v })
+              }
+              disabled={saving}
+            />
+            <NumberRow
+              label="Silence threshold (0 to 1)"
+              value={config.audio_stt_no_speech_threshold}
+              min={0}
+              max={1}
+              step={0.05}
+              onChange={(v) => update({ audio_stt_no_speech_threshold: v })}
+              disabled={saving}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-5 mb-6">
           <h2 className="text-sm font-medium text-zinc-300 mb-3">
             Manual actions
           </h2>
@@ -417,11 +467,17 @@ function NumberRow({
   value,
   onChange,
   disabled,
+  min = 0,
+  max,
+  step,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
   disabled?: boolean;
+  min?: number;
+  max?: number;
+  step?: number;
 }) {
   return (
     <label className="flex flex-col gap-1">
@@ -429,7 +485,9 @@ function NumberRow({
       <input
         type="number"
         value={value}
-        min={0}
+        min={min}
+        max={max}
+        step={step}
         onChange={(e) => onChange(Number(e.target.value))}
         disabled={disabled}
         className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"

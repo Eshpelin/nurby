@@ -512,17 +512,23 @@ def _resolve_provider_kwargs(camera) -> dict:
     # language from each segment.
     raw_lang = (getattr(camera, "audio_language", None) or "en").strip().lower()
     language = None if raw_lang in ("auto", "", "any") else raw_lang
+    # Accuracy/speed knobs. Per-camera, falling back to the global setting
+    # default. Defaults match the original hardcoded values, so a camera
+    # left alone transcribes exactly as before.
+    beam = getattr(camera, "audio_stt_beam_size", None)
+    if beam is None:
+        beam = getattr(settings, "audio_stt_beam_size", 1)
+    cond = getattr(camera, "audio_stt_condition_on_previous_text", None)
+    if cond is None:
+        cond = getattr(settings, "audio_stt_condition_on_previous_text", False)
+    nsp = getattr(camera, "audio_stt_no_speech_threshold", None)
+    if nsp is None:
+        nsp = getattr(settings, "audio_stt_no_speech_threshold", 0.6)
     return {
         "model": model,
         "device": "cpu",
         "language": language,
-        # Accuracy/speed knobs. Global settings, default to the original
-        # hardcoded values so behavior is unchanged unless tuned.
-        "beam_size": int(getattr(settings, "audio_stt_beam_size", 1) or 1),
-        "condition_on_previous_text": bool(
-            getattr(settings, "audio_stt_condition_on_previous_text", False)
-        ),
-        "no_speech_threshold": float(
-            getattr(settings, "audio_stt_no_speech_threshold", 0.6)
-        ),
+        "beam_size": int(beam or 1),
+        "condition_on_previous_text": bool(cond),
+        "no_speech_threshold": float(nsp),
     }
