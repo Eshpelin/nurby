@@ -14,7 +14,14 @@ from sqlalchemy import select, func, and_
 
 from shared.config import settings
 from shared.database import async_session
-from shared.models import AudioCapture, Camera, Recording, Transcript
+from shared.models import (
+    AudioCapture,
+    AudioDetection,
+    Camera,
+    Conversation,
+    Recording,
+    Transcript,
+)
 
 logger = logging.getLogger("nurby.ingestion.retention")
 
@@ -35,6 +42,28 @@ def _resolve_path(file_path: str | None) -> str | None:
             rel = rel[len(prefix):]
             break
     return os.path.join(os.path.abspath(settings.recordings_path), rel)
+
+
+def _resolve_audio_path(file_path: str | None) -> str | None:
+    """Resolve an AudioCapture path to an absolute disk path.
+
+    Audio blobs are written under ``settings.audio_storage_path`` (a
+    different base than recordings), e.g. ``./audio_clips/<cam>/<day>/<id>
+    .opus``. Resolving against that base makes cleanup independent of the
+    process CWD. Relying on the stored relative path only worked while the
+    retention loop happened to run from the same directory as the writer.
+    """
+    if not file_path:
+        return None
+    if os.path.isabs(file_path):
+        return file_path
+    base = os.path.abspath(settings.audio_storage_path)
+    rel = file_path
+    for prefix in ("./audio_clips/", "audio_clips/", "./"):
+        if rel.startswith(prefix):
+            rel = rel[len(prefix):]
+            break
+    return os.path.join(base, rel)
 
 
 def _remove_file(path: str | None) -> tuple[int, bool]:
@@ -98,6 +127,22 @@ class RetentionManager:
                 logger.exception(
                     "Transcript retention failed for camera %s", cam.id
                 )
+            # Conversations and audio-event detections are derived audio
+            # signals. They aged forever because nothing cleaned them up,
+            # so a chatty camera grew the DB without bound. Tie both to the
+            # transcript window since they are the same class of data.
+            try:
+                await self._enforce_conversation_retention(cam)
+            except Exception:
+                logger.exception(
+                    "Conversation retention failed for camera %s", cam.id
+                )
+            try:
+                await self._enforce_audio_event_retention(cam)
+            except Exception:
+                logger.exception(
+                    "Audio event retention failed for camera %s", cam.id
+                )
 
     async def _enforce_audio_retention(self, camera: Camera) -> None:
         """Delete AudioCapture rows + opus blobs older than the camera's
@@ -127,8 +172,17 @@ class RetentionManager:
             freed_bytes = 0
             deleted = 0
             for cap in rows:
-                _, ok = _remove_file(cap.file_path)
+                # Audio paths are stored the same (possibly relative) way as
+                # recordings, so resolve to an absolute disk path before
+                # removing. Without this, a relative path never matches a
+                # file on disk, the delete is a silent no-op, and the row is
+                # dropped anyway, leaking the opus blob forever.
+                _, ok = _remove_file(_resolve_audio_path(cap.file_path))
                 if not ok:
+                    logger.warning(
+                        "Skipping DB delete for audio capture %s, file still on disk",
+                        cap.id,
+                    )
                     continue
                 freed_bytes += int(cap.size_bytes or 0)
                 await db.delete(cap)
@@ -166,6 +220,65 @@ class RetentionManager:
             await db.commit()
             logger.info(
                 "Transcript retention for camera %s. deleted %d rows (cutoff %s, %d days)",
+                camera.name or camera.id, len(rows), cutoff.isoformat(), days,
+            )
+
+    async def _enforce_conversation_retention(self, camera: Camera) -> None:
+        """Delete finalized conversations older than the transcript window.
+
+        Only finalized rows are removed. an open conversation is still
+        accumulating and must be left alone regardless of age. Any
+        attached clip file is removed best-effort.
+        """
+        days = int(getattr(camera, "transcript_retention_days", 0) or 0)
+        if days <= 0:
+            return
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        async with async_session() as db:
+            rows = list(
+                (
+                    await db.execute(
+                        select(Conversation)
+                        .where(Conversation.camera_id == camera.id)
+                        .where(Conversation.finalized.is_(True))
+                        .where(Conversation.started_at < cutoff)
+                    )
+                ).scalars().all()
+            )
+            if not rows:
+                return
+            for conv in rows:
+                _remove_file(_resolve_path(getattr(conv, "clip_path", None)))
+                await db.delete(conv)
+            await db.commit()
+            logger.info(
+                "Conversation retention for camera %s. deleted %d rows (cutoff %s, %d days)",
+                camera.name or camera.id, len(rows), cutoff.isoformat(), days,
+            )
+
+    async def _enforce_audio_event_retention(self, camera: Camera) -> None:
+        """Delete audio-event detections older than the transcript window."""
+        days = int(getattr(camera, "transcript_retention_days", 0) or 0)
+        if days <= 0:
+            return
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        async with async_session() as db:
+            rows = list(
+                (
+                    await db.execute(
+                        select(AudioDetection)
+                        .where(AudioDetection.camera_id == camera.id)
+                        .where(AudioDetection.detected_at < cutoff)
+                    )
+                ).scalars().all()
+            )
+            if not rows:
+                return
+            for det in rows:
+                await db.delete(det)
+            await db.commit()
+            logger.info(
+                "Audio event retention for camera %s. deleted %d detections (cutoff %s, %d days)",
                 camera.name or camera.id, len(rows), cutoff.isoformat(), days,
             )
 

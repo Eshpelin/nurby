@@ -22,11 +22,19 @@ AUDIO_ENRICHMENT_DELAY_S = 3
 AUDIO_LATE_TRANSCRIPT_WINDOW_S = 30
 AUDIO_VLM_RERUN_COOLDOWN_S = 15
 
-# STT worker pool sizing. Local CPU-bound, cloud network-bound.
-AUDIO_STT_WORKERS_LOCAL = 1
+# STT worker pool sizing. Local is CPU-bound. the model releases the GIL
+# during inference and is shared process-wide, so several workers on a
+# multi-core box transcribe concurrent segments instead of serializing
+# them. Cloud is network-bound, so more in-flight requests pay off. Both
+# resolve at router start. local also clamps to the CPU count (see
+# resolve_local_worker_count).
+AUDIO_STT_WORKERS_LOCAL = 2
 AUDIO_STT_WORKERS_CLOUD = 4
 AUDIO_STT_RETRIES = 3
 AUDIO_STT_COOLDOWN_S = 60
+# Hard ceiling on a single transcription. A hung or pathologically slow
+# segment must not pin a worker forever and stall the queue behind it.
+AUDIO_STT_TIMEOUT_S = 30.0
 
 # Audio file storage.
 AUDIO_OPUS_BITRATE_KBPS = 24
