@@ -264,6 +264,8 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     "public_base_url",
     "rules_cooldown_backend",
     "onboarding_dismissed",
+    "vlm_enrichment_enabled",
+    "vlm_enrichment_budget_minutes_per_hour",
 )
 
 

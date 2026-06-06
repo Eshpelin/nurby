@@ -138,6 +138,8 @@ export default function SettingsPage() {
   const [blurSavingId, setBlurSavingId] = useState<string | null>(null);
 
   // Nudity blur (global flag)
+  const [enrichEnabled, setEnrichEnabled] = useState<boolean>(true);
+  const [enrichSaving, setEnrichSaving] = useState<boolean>(false);
   const [nudityBlur, setNudityBlur] = useState<boolean>(true);
   const [nudityMinScore, setNudityMinScore] = useState<number>(0.5);
   const [nudityLoading, setNudityLoading] = useState<boolean>(true);
@@ -307,6 +309,7 @@ export default function SettingsPage() {
       const res = await authFetch("/api/system/settings");
       if (res.ok) {
         const data = await res.json();
+        if (typeof data.vlm_enrichment_enabled === "boolean") setEnrichEnabled(data.vlm_enrichment_enabled);
         if (typeof data.nudity_blur === "boolean") setNudityBlur(data.nudity_blur);
         if (typeof data.nudity_blur_min_score === "number") setNudityMinScore(data.nudity_blur_min_score);
         if (typeof data.journey_idle_seconds === "number") setJourneyIdleSeconds(data.journey_idle_seconds);
@@ -989,6 +992,33 @@ export default function SettingsPage() {
               {Math.round(journeyIdleSeconds / 60)} min
             </span>
           </div>
+        </div>
+
+        {/* Idle AI enrichment */}
+        <div className="rounded-lg border border-border bg-card px-4 py-3.5 flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium mb-1">Idle AI enrichment</div>
+            <p className="text-xs text-muted-foreground">
+              When the live feed is quiet, use the spare AI capacity to take a
+              second look at recent frames and write a richer summary. Every
+              pass is kept as immutable history. runs at lowest priority and
+              never competes with live analysis.
+            </p>
+          </div>
+          <button
+            disabled={enrichSaving}
+            onClick={async () => {
+              const next = !enrichEnabled;
+              setEnrichEnabled(next);
+              setEnrichSaving(true);
+              try { await saveExtra({ vlm_enrichment_enabled: next }); }
+              finally { setEnrichSaving(false); }
+            }}
+            aria-label={enrichEnabled ? "Disable idle enrichment" : "Enable idle enrichment"}
+            className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${enrichEnabled ? "bg-accent" : "bg-muted"} ${enrichSaving ? "opacity-50" : ""}`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${enrichEnabled ? "left-[1.375rem]" : "left-0.5"}`} />
+          </button>
         </div>
 
         {/* Daily digest */}

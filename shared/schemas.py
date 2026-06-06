@@ -840,6 +840,8 @@ class SystemSettingsResponse(BaseModel):
     public_base_url: str | None = None
     rules_cooldown_backend: str = "redis"
     onboarding_dismissed: bool = False
+    vlm_enrichment_enabled: bool = True
+    vlm_enrichment_budget_minutes_per_hour: int = 20
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -860,6 +862,8 @@ class SystemSettingsUpdate(BaseModel):
     public_base_url: str | None = None
     rules_cooldown_backend: str | None = Field(default=None, pattern="^(redis|memory)$")
     onboarding_dismissed: bool | None = None
+    vlm_enrichment_enabled: bool | None = None
+    vlm_enrichment_budget_minutes_per_hour: int | None = Field(default=None, ge=0, le=600)
 
 
 # -- User schemas --

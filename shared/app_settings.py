@@ -101,6 +101,15 @@ DEFAULTS: dict[str, Any] = {
     # the defaults baked into services/perception/vlm_gate.py win.
     "vlm_gate_interesting_prompts": None,
     "vlm_gate_boring_prompts": None,
+    # ── Idle VLM enrichment (docs/vlm-enrichment-design.md) ──────────
+    # When the live VLM backlog is empty, spend spare capacity adding
+    # immutable enrichment passes to already-captured frames and a
+    # synthesized summary. On by default. system-wide toggle. budget caps
+    # how many VLM-minutes per hour enrichment may consume so it never
+    # competes with live work for long.
+    "vlm_enrichment_enabled": True,
+    "vlm_enrichment_budget_minutes_per_hour": 20,
+    "vlm_enrichment_max_passes": 6,
 }
 
 

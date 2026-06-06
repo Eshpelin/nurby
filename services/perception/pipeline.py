@@ -187,10 +187,52 @@ class PerceptionPipeline:
             logger.exception("refiner provider lookup failed")
         return None
 
-    def _should_call_vlm(self, camera_id: str, cam: Camera | None) -> bool:
-        """Check if enough time passed since last VLM call for this camera."""
+    # Adaptive pacing. Keep the live VLM queue shallow so the model always
+    # works a fresh frame instead of grinding through a stale backlog. A
+    # normal-priority frame is skipped while the VLM is still behind, and the
+    # minimum gap between enqueues self-tunes to the VLM's measured per-call
+    # latency (if it can only do one frame every 3s, we stop enqueuing more
+    # often than that). High-priority frames (unknown face, rule trigger)
+    # bypass the gap but still respect a hard backlog ceiling.
+    _PACE_NORMAL_BACKLOG_CAP = 2
+    _PACE_HIGH_BACKLOG_CAP = 6
+
+    def _vlm_pacing_signals(self, camera_id: str) -> tuple[float, int]:
+        """(measured avg latency seconds, current backlog depth) for a camera,
+        from the in-memory VLM stats. (0, 0) before any data exists."""
+        try:
+            from services.perception.vlm_queue import get_vlm_stats
+            s = get_vlm_stats().get(str(camera_id))
+            if not s:
+                return (0.0, 0)
+            return (
+                float(s.get("avg_latency", 0.0) or 0.0),
+                int((s.get("backlog") or {}).get("total", 0) or 0),
+            )
+        except Exception:
+            return (0.0, 0)
+
+    def _should_call_vlm(self, camera_id: str, cam: Camera | None,
+                         priority: str = "normal") -> bool:
+        """Adaptive gate. enqueue a frame only if doing so keeps the live VLM
+        queue fresh and within its measured throughput."""
         import time as _time
-        interval = cam.vlm_interval if cam else 0
+        avg_latency, backlog = self._vlm_pacing_signals(camera_id)
+
+        if priority == "high":
+            # Urgent frames jump the cadence but never flood the queue.
+            return backlog < self._PACE_HIGH_BACKLOG_CAP
+
+        # The VLM is behind. dropping this normal frame keeps the next one it
+        # processes recent instead of stale.
+        if backlog >= self._PACE_NORMAL_BACKLOG_CAP:
+            return False
+
+        # Never enqueue faster than the VLM actually processes. The configured
+        # vlm_interval is a floor; the learned latency raises it when the model
+        # is slow. Before any latency data, this is just the configured floor.
+        base = cam.vlm_interval if cam else 0
+        interval = max(base, avg_latency)
         if interval <= 0:
             return True
         last = self._vlm_last_call.get(camera_id, 0)
@@ -654,7 +696,11 @@ class PerceptionPipeline:
             # matter, so meaningful scenes end up with no description.
             vlm_triggered = has_subject
 
-        if vlm_triggered and self._should_call_vlm(camera_id, cam) and observation_id:
+        vlm_priority = self._vlm_priority_for_frame(
+            camera_id=camera_id, cam=cam, detections=detections, faces=faces,
+        ) if vlm_triggered else "normal"
+        if (vlm_triggered and observation_id
+                and self._should_call_vlm(camera_id, cam, vlm_priority)):
             import time as _time
             provider = await self._get_provider_for_camera(cam)
             if provider:
@@ -694,12 +740,7 @@ class PerceptionPipeline:
                     refiner_keywords=refiner_keywords,
                     refiner_max_tokens=getattr(cam, "vlm_refiner_max_tokens", None) if cam else None,
                     refiner_max_input_tokens=getattr(cam, "vlm_refiner_max_input_tokens", None) if cam else None,
-                    priority=self._vlm_priority_for_frame(
-                        camera_id=camera_id,
-                        cam=cam,
-                        detections=detections,
-                        faces=faces,
-                    ),
+                    priority=vlm_priority,
                 ))
 
         # Step 6. Generate description embedding for detections (VLM embedding added later by queue)

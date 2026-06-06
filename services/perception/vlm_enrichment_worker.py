@@ -151,7 +151,7 @@ class EnrichmentManager:
     # ---- gates ------------------------------------------------------
 
     async def _enabled(self) -> bool:
-        return bool(await get_setting("vlm_enrichment_enabled", False))
+        return bool(await get_setting("vlm_enrichment_enabled", True))
 
     async def _get_redis(self):
         if self._redis is None:
