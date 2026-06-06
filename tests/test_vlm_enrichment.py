@@ -7,7 +7,35 @@ new pass becomes authoritative.
 
 from __future__ import annotations
 
-from services.perception.vlm_enrichment_worker import EnrichmentManager
+from services.perception.vlm_enrichment_worker import (
+    EnrichmentManager,
+    build_attributes,
+)
+
+
+def test_build_attributes_from_detections_and_text():
+    text = "A white SUV with plate ABC1234 is parked in the driveway at night."
+    dets = [{"label": "car"}, {"label": "person"}, {"label": "person"}]
+    a = build_attributes(text, dets)
+    assert a["people_count"] == 2
+    assert {"label": "car", "count": 1} in a["objects"]
+    assert {"label": "person", "count": 2} in a["objects"]
+    assert "white" in a["colors"]
+    assert "night" in a["time_of_day"]
+    assert "ABC1234" in a["text_seen"]
+
+
+def test_build_attributes_empty_text_is_safe():
+    a = build_attributes(None, [])
+    assert a["people_count"] == 0
+    assert a["objects"] == []
+    assert a["colors"] == []
+
+
+def test_text_seen_requires_a_digit():
+    # plain uppercase words should not be mistaken for plates/signage codes
+    a = build_attributes("A PERSON WALKS HERE", [])
+    assert a["text_seen"] == []
 
 
 def test_promote_when_caption_missing():

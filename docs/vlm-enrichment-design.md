@@ -1,6 +1,14 @@
 # Idle-time VLM enrichment (versioned multi-pass)
 
-Status: v2.0 implemented (off by default). v2.1-v2.3 still design.
+Status: v2.0 and v2.1 implemented (off by default). v2.2-v2.3 still design.
+
+v2.1 adds structured `attributes` on each pass (objects, people count, colors,
+time-of-day, plate/sign text), derived from the enrichment text plus the
+existing YOLO detections with no extra VLM call, regenerates the observation's
+search embedding from the enriched caption when a pass is promoted (so
+semantic search reflects enrichment), and surfaces the full pass history in
+the moment modal (collapsible "VLM history" with per-pass lens, model, time,
+text, and attribute chips).
 
 Decisions taken: authoritative caption is **append-only, reduce repoints**
 (original live caption preserved forever, never destroyed). idle trigger is

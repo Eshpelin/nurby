@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -43,6 +44,45 @@ ATTRIBUTES_SYSTEM_PROMPT = (
     "Be factual and specific. Do not invent details you cannot see, and do "
     "not guess names."
 )
+
+
+_COLORS = {
+    "red", "orange", "yellow", "green", "blue", "purple", "pink", "brown",
+    "black", "white", "gray", "grey", "silver", "gold", "tan", "beige",
+}
+_TIME_OF_DAY = {
+    "morning", "afternoon", "evening", "night", "nighttime", "dusk", "dawn",
+    "daytime", "midday", "noon", "sunset", "sunrise",
+}
+
+
+def build_attributes(description: str | None, detections: list[dict]) -> dict:
+    """Derive structured, searchable fields from the enrichment text and the
+    YOLO detections already attached to the observation. Deterministic, no
+    extra VLM round-trip. Feeds search and (later) rule filtering.
+    """
+    desc = description or ""
+    low = desc.lower()
+    counts: dict[str, int] = {}
+    for d in detections or []:
+        lbl = d.get("label")
+        if lbl:
+            counts[lbl] = counts.get(lbl, 0) + 1
+    colors = sorted(c for c in _COLORS if re.search(rf"\b{c}\b", low))
+    tod = sorted(t for t in _TIME_OF_DAY if re.search(rf"\b{t}\b", low))
+    # plate / sign tokens. short uppercase alphanumerics the model read off.
+    text_seen = []
+    for tok in re.findall(r"\b[A-Z0-9]{4,8}\b", desc):
+        if any(ch.isdigit() for ch in tok) and tok not in text_seen:
+            text_seen.append(tok)
+    return {
+        "objects": [{"label": k, "count": v} for k, v in sorted(counts.items())],
+        "people_count": counts.get("person", 0),
+        "colors": colors,
+        "time_of_day": tod,
+        "text_seen": text_seen[:6],
+        "source": "attributes-pass-v1",
+    }
 
 
 class EnrichmentManager:
@@ -193,11 +233,32 @@ class EnrichmentManager:
             return True
         text = text.strip()
 
+        attributes = build_attributes(text, detections)
+        # If this pass will become authoritative, regenerate the search
+        # embedding from the enriched text BEFORE opening the write session,
+        # so the (possibly network-bound) embedding call never holds a DB
+        # connection open. Mirrors how the live VLM patch feeds search.
+        embedding = None
+        if self.should_promote(current_desc, min_len):
+            embedding = await self._embed(text)
+
         await self._store_pass(obs_id, pass_count, provider.name,
-                               provider.default_model, text, current_desc, min_len)
+                               provider.default_model, text, current_desc,
+                               min_len, attributes, embedding)
         logger.info("enriched observation %s (pass %d). %s",
                     obs_id, pass_count + 1, text[:80])
         return True
+
+    async def _embed(self, text: str):
+        try:
+            from services.search.embeddings import (
+                generate_embedding, get_embedding_provider,
+            )
+            ep = await get_embedding_provider()
+            return await generate_embedding(text, ep)
+        except Exception:
+            logger.debug("enrichment embedding failed", exc_info=True)
+            return None
 
     @staticmethod
     def should_promote(current_desc: str | None, min_len: int) -> bool:
@@ -208,7 +269,9 @@ class EnrichmentManager:
 
     async def _store_pass(self, obs_id: uuid.UUID, prev_count: int,
                           provider_name: str | None, model: str | None,
-                          text: str, current_desc: str | None, min_len: int) -> None:
+                          text: str, current_desc: str | None, min_len: int,
+                          attributes: dict | None = None,
+                          embedding=None) -> None:
         new_no = prev_count + 1
         promote = self.should_promote(current_desc, min_len)
         async with async_session() as db:
@@ -222,17 +285,21 @@ class EnrichmentManager:
             db.add(ObservationVlmPass(
                 observation_id=obs_id, pass_no=new_no, lens="attributes",
                 prompt_version="v1", provider_name=provider_name, model=model,
-                description=text, authoritative=promote,
+                description=text, attributes=attributes, authoritative=promote,
             ))
             obs = await db.get(Observation, obs_id)
             if obs is not None:
                 obs.enrich_pass_count = new_no
                 obs.last_enriched_at = datetime.now(timezone.utc)
                 if promote:
-                    # Preserve the original once, then repoint authoritative.
+                    # Preserve the original once, then repoint authoritative
+                    # and refresh the search embedding so semantic search
+                    # reflects the enriched caption.
                     if obs.primary_vlm_description is None and obs.vlm_description:
                         obs.primary_vlm_description = obs.vlm_description
                     obs.vlm_description = text
+                    if embedding is not None:
+                        obs.description_embedding = embedding
             await db.commit()
 
     async def _touch(self, obs_id: uuid.UUID) -> None:

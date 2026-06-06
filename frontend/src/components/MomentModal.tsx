@@ -41,6 +41,22 @@ interface RecordingLike {
   duration_seconds?: number | null;
 }
 
+interface VlmPass {
+  pass_no: number;
+  lens: string;
+  model?: string | null;
+  provider_name?: string | null;
+  description?: string | null;
+  attributes?: {
+    colors?: string[];
+    time_of_day?: string[];
+    text_seen?: string[];
+    people_count?: number;
+  } | null;
+  authoritative: boolean;
+  created_at?: string | null;
+}
+
 export interface MomentModalProps {
   observationId: string;
   cameraId: string;
@@ -55,6 +71,8 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
   const [loading, setLoading] = useState(true);
   const [recording, setRecording] = useState<RecordingLike | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [passes, setPasses] = useState<VlmPass[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -72,6 +90,12 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
         if (r.ok && !cancelled) setObs(await r.json());
       } catch {/* ignore */}
       finally { if (!cancelled) setLoading(false); }
+      // VLM pass history (versioned enrichment). only interesting when more
+      // than the original live pass exists.
+      try {
+        const pr = await authFetch(`/api/observations/${observationId}/vlm-passes`);
+        if (pr.ok && !cancelled) setPasses(await pr.json());
+      } catch {/* ignore */}
       // Best-effort. find a recording covering this moment.
       try {
         const rr = await authFetch(`/api/recordings?camera_id=${cameraId}&limit=200`);
@@ -173,6 +197,59 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
             <p className="text-sm leading-relaxed text-foreground/90">{obs.vlm_description}</p>
           ) : (
             <p className="text-xs text-muted-foreground italic">No scene description for this frame.</p>
+          )}
+
+          {/* Versioned VLM pass history. Pass 1 is the live caption, later
+              passes are idle enrichment. Only shown when enrichment ran. */}
+          {passes.length > 1 && (
+            <div className="rounded-md border border-border bg-muted/20">
+              <button
+                onClick={() => setShowHistory((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span>VLM history · {passes.length} passes</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                  className={`transition-transform ${showHistory ? "rotate-180" : ""}`}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {showHistory && (
+                <div className="px-3 pb-3 space-y-2.5">
+                  {passes.map((p) => (
+                    <div key={p.pass_no} className="text-xs border-l-2 border-border pl-2.5">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent/15 text-accent border border-accent/30">
+                          {p.lens}
+                        </span>
+                        {p.authoritative && (
+                          <span className="text-[10px] text-green-400">authoritative</span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground ml-auto font-mono">
+                          {p.model || p.provider_name || ""}
+                          {p.created_at ? ` · ${new Date(p.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
+                        </span>
+                      </div>
+                      {p.description && (
+                        <p className="text-foreground/80 leading-snug">{p.description}</p>
+                      )}
+                      {p.attributes && (p.attributes.colors?.length || p.attributes.text_seen?.length || p.attributes.time_of_day?.length) ? (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {(p.attributes.colors || []).map((c) => (
+                            <span key={`c${c}`} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">{c}</span>
+                          ))}
+                          {(p.attributes.time_of_day || []).map((t) => (
+                            <span key={`t${t}`} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">{t}</span>
+                          ))}
+                          {(p.attributes.text_seen || []).map((x) => (
+                            <span key={`x${x}`} className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300 border border-yellow-500/30">{x}</span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           <div className="flex items-center justify-between pt-1">
