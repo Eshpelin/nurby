@@ -16,6 +16,7 @@ from services.perception.journey_tracker import JourneyFinalizer
 from services.perception.live_detector import LiveDetector
 from services.perception.pipeline import PerceptionPipeline
 from services.perception.summarizer import CameraSummarizer
+from services.perception.vlm_enrichment_worker import EnrichmentManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
 logger = logging.getLogger("nurby.perception")
@@ -38,6 +39,7 @@ async def main():
     incident_finalizer = IncidentFinalizer()
     journey_finalizer = JourneyFinalizer()
     daily_digest = DailyDigestScheduler()
+    enricher = EnrichmentManager()
     await asyncio.gather(
         pipeline.run(),
         live.run(),
@@ -46,6 +48,7 @@ async def main():
         incident_finalizer.run(),
         journey_finalizer.run(),
         daily_digest.run(),
+        enricher.run(),
     )
 
 

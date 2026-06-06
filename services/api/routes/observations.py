@@ -10,10 +10,48 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.auth import decode_access_token, get_current_user, require_admin
 from shared.config import settings
 from shared.database import get_db
-from shared.models import Observation, Person, User
+from shared.models import Observation, ObservationVlmPass, Person, User
 from shared.schemas import ObservationResponse
 
 router = APIRouter()
+
+
+@router.get("/{observation_id}/vlm-passes")
+async def get_vlm_passes(
+    observation_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ordered version history of every VLM pass over this frame.
+
+    Pass 1 is the original live caption. later passes are idle enrichment.
+    The pass with ``authoritative=true`` is the one currently surfaced as
+    the observation's caption.
+    """
+    obs = await db.get(Observation, observation_id)
+    if obs is None:
+        raise HTTPException(status_code=404, detail="Observation not found")
+    rows = (await db.execute(
+        select(ObservationVlmPass)
+        .where(ObservationVlmPass.observation_id == observation_id)
+        .order_by(ObservationVlmPass.pass_no.asc())
+    )).scalars().all()
+    return [
+        {
+            "pass_no": p.pass_no,
+            "lens": p.lens,
+            "prompt_version": p.prompt_version,
+            "provider_name": p.provider_name,
+            "model": p.model,
+            "description": p.description,
+            "attributes": p.attributes,
+            "confidence": p.confidence,
+            "authoritative": p.authoritative,
+            "superseded": p.superseded,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+        for p in rows
+    ]
 
 
 @router.get("", response_model=list[ObservationResponse])

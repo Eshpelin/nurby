@@ -383,6 +383,55 @@ class Observation(Base):
     # summarize_activity rolls a 'pending' bucket from these.
     vlm_late: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     vlm_enqueued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Idle enrichment bookkeeping. How many VLM passes (including the
+    # original live pass) exist for this observation, and when the last
+    # enrichment ran. Denormalized so candidate selection does not have
+    # to aggregate observation_vlm_passes on every scan.
+    enrich_pass_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ObservationVlmPass(Base):
+    """A single versioned VLM pass over one observation's frame.
+
+    Append-only. The original live caption is stored as ``pass_no=1,
+    lens='live'``; idle enrichment appends later passes with different
+    lenses. ``Observation.vlm_description`` stays authoritative and points
+    at whichever pass the reduce step blesses (tracked by ``authoritative``
+    here), but no pass is ever destroyed, so enrichment is fully
+    reversible and auditable.
+    """
+
+    __tablename__ = "observation_vlm_passes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    observation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("observations.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    pass_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    # live | attributes | temporal | anomaly | reduce
+    lens: Mapped[str] = mapped_column(String(32), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(16), default="v1", nullable=False)
+    provider_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Structured extraction. objects, colors, text/plates read, counts,
+    # time-of-day cues. Drives search and rules in later phases.
+    attributes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # True for the pass currently surfaced as the observation's
+    # authoritative caption. At most one per observation.
+    authoritative: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Set true once a later reduce pass reconciles and replaces this one.
+    superseded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("observation_id", "pass_no", name="ux_obs_pass_no"),
+    )
 
 
 class DigestEntry(Base):

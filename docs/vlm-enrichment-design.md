@@ -1,6 +1,12 @@
 # Idle-time VLM enrichment (versioned multi-pass)
 
-Status: design. Not yet implemented.
+Status: v2.0 implemented (off by default). v2.1-v2.3 still design.
+
+Decisions taken: authoritative caption is **append-only, reduce repoints**
+(original live caption preserved forever, never destroyed). idle trigger is
+**empty-backlog** (any time, budget-capped, reads the real Redis backlog).
+temporal pass (v2.2) sources adjacent frames from **overlapping recordings
+only**, skipping when none exist.
 
 ## Goal
 
