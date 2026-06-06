@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     # faster-whisper model name. tiny.en | base.en | small.en | medium.en
     # | large-v3. Default chosen per the resolved decisions in the plan.
     audio_stt_model: str = "small.en"
+    # STT accuracy/speed knobs. Defaults match the original hardcoded
+    # values, so leaving them alone changes nothing. Raise audio_stt_beam_size
+    # (e.g. 5) for better accuracy on noisy audio at a CPU cost. Enable
+    # audio_stt_condition_on_previous_text to carry context across segments
+    # (more coherent long speech, but can amplify a transcription error
+    # across following segments). no_speech_threshold gates near-silence.
+    audio_stt_beam_size: int = 1
+    audio_stt_condition_on_previous_text: bool = False
+    audio_stt_no_speech_threshold: float = 0.6
     # Filesystem root for opt-in raw audio storage.
     audio_storage_path: str = "./audio_clips"
 

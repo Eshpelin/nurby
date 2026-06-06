@@ -26,6 +26,8 @@ from services.perception.audio.constants import (
     AUDIO_SEGMENT_QUEUE_MAX,
     AUDIO_STT_COOLDOWN_S,
     AUDIO_STT_RETRIES,
+    AUDIO_STT_TIMEOUT_S,
+    AUDIO_STT_WORKERS_CLOUD,
     AUDIO_STT_WORKERS_LOCAL,
 )
 from services.perception.audio.stt import STTProvider, build_provider
@@ -55,12 +57,18 @@ class CameraAudioRouter:
         provider_kind: str,
         provider_kwargs: dict,
         write_callback,
+        budget_minutes_per_hour: int | None = None,
     ) -> None:
         self.camera_id = camera_id
         self.stream_url = stream_url
         self._provider_kind = provider_kind
         self._provider_kwargs = provider_kwargs
         self._write = write_callback
+        # 0 / None means unlimited. Otherwise we transcribe at most this
+        # many minutes of audio per wall-clock hour for this camera.
+        self._budget_minutes = budget_minutes_per_hour or 0
+        self._redis = None
+        self._budget_skipped = 0
 
         self._capture = AudioCapture(camera_id, stream_url)
         self._vad = VadSegmenter(camera_id, on_speech_start=self._on_speech_start)
@@ -71,6 +79,7 @@ class CameraAudioRouter:
         self._tasks: list[asyncio.Task] = []
         self._stopping = asyncio.Event()
         self._cooldown_until = 0.0
+        self._dropped_segments = 0
 
     # ---- lifecycle ---------------------------------------------------
 
@@ -80,10 +89,12 @@ class CameraAudioRouter:
         )
         self._capture.start()
         self._tasks.append(asyncio.create_task(self._segmenter_loop()))
-        for i in range(AUDIO_STT_WORKERS_LOCAL):
+        workers = _resolve_worker_count(self._provider)
+        for i in range(workers):
             self._tasks.append(asyncio.create_task(self._stt_worker(i)))
         logger.info(
-            "audio router started camera=%s provider=%s", self.camera_id, self._provider_kind
+            "audio router started camera=%s provider=%s workers=%d",
+            self.camera_id, self._provider_kind, workers,
         )
 
     async def stop(self) -> None:
@@ -103,6 +114,12 @@ class CameraAudioRouter:
             except asyncio.QueueEmpty:
                 break
         self._tasks.clear()
+        if self._redis is not None:
+            try:
+                await self._redis.aclose()
+            except Exception:
+                pass
+            self._redis = None
         logger.info("audio router stopped camera=%s", self.camera_id)
 
     # ---- segmenter loop ---------------------------------------------
@@ -203,6 +220,16 @@ class CameraAudioRouter:
                 "stt_segments_dropped_total",
                 {"camera": str(self.camera_id), "stage": "segment_queue"},
             )
+            self._dropped_segments += 1
+            # Log is throttled so a sustained overload does not flood the
+            # logs, but the operator still sees that audio is being lost
+            # (the metric alone is easy to miss).
+            if self._dropped_segments == 1 or self._dropped_segments % 50 == 0:
+                logger.warning(
+                    "stt segment queue full, dropping oldest. camera=%s dropped_total=%d "
+                    "(transcription cannot keep up. raise worker count or lower audio load)",
+                    self.camera_id, self._dropped_segments,
+                )
             try:
                 self._segments.get_nowait()
             except asyncio.QueueEmpty:
@@ -225,8 +252,69 @@ class CameraAudioRouter:
         except asyncio.CancelledError:
             raise
 
+    async def _get_redis(self):
+        if self._redis is None:
+            import redis.asyncio as aioredis
+
+            from shared.config import settings
+
+            self._redis = aioredis.from_url(settings.redis_url)
+        return self._redis
+
+    def _usage_key(self) -> str:
+        # Per-camera, per-UTC-hour bucket. Self-expiring so it resets each
+        # hour without a sweeper.
+        hour = datetime.now(timezone.utc).strftime("%Y%m%d%H")
+        return f"nurby:stt_usage:{self.camera_id}:{hour}"
+
+    async def _within_budget(self, seg: SpeechSegment) -> bool:
+        """True if transcribing ``seg`` stays within this hour's budget.
+
+        Unlimited when no budget is set. On any Redis error we fail open
+        (transcribe) so a metering hiccup never silences audio.
+        """
+        if self._budget_minutes <= 0:
+            return True
+        try:
+            r = await self._get_redis()
+            used_seconds = float(await r.get(self._usage_key()) or 0.0)
+        except Exception:
+            logger.debug("stt budget read failed, allowing", exc_info=True)
+            return True
+        if used_seconds >= self._budget_minutes * 60:
+            self._budget_skipped += 1
+            if self._budget_skipped == 1 or self._budget_skipped % 25 == 0:
+                logger.info(
+                    "stt budget reached for camera=%s (%d min/hr). skipping until next hour. skipped=%d",
+                    self.camera_id, self._budget_minutes, self._budget_skipped,
+                )
+            metrics.incr(
+                "stt_segments_total",
+                {
+                    "camera": str(self.camera_id),
+                    "provider": self._provider_kind,
+                    "status": "budget_skipped",
+                },
+            )
+            return False
+        return True
+
+    async def _record_usage(self, seg: SpeechSegment) -> None:
+        if self._budget_minutes <= 0:
+            return
+        try:
+            r = await self._get_redis()
+            key = self._usage_key()
+            await r.incrbyfloat(key, max(0.0, seg.duration_ms / 1000.0))
+            # TTL a bit over an hour so a bucket always ages out.
+            await r.expire(key, 7200)
+        except Exception:
+            logger.debug("stt budget write failed", exc_info=True)
+
     async def _dispatch(self, seg: SpeechSegment) -> None:
         if self._provider is None:
+            return
+        if not await self._within_budget(seg):
             return
         if time.monotonic() < self._cooldown_until:
             metrics.incr(
@@ -243,7 +331,12 @@ class CameraAudioRouter:
         for attempt in range(1, AUDIO_STT_RETRIES + 1):
             t0 = time.monotonic()
             try:
-                result = await provider.transcribe(seg)
+                # Bound every attempt. A hung backend (stuck ffmpeg, wedged
+                # network call, pathological audio) must not pin this worker
+                # and stall every segment queued behind it.
+                result = await asyncio.wait_for(
+                    provider.transcribe(seg), timeout=AUDIO_STT_TIMEOUT_S
+                )
                 latency = time.monotonic() - t0
                 metrics.observe_latency(
                     "stt_latency_seconds", latency, {"provider": provider.kind}
@@ -258,18 +351,27 @@ class CameraAudioRouter:
                         "status": "ok",
                     },
                 )
+                await self._record_usage(seg)
                 await self._write(self.camera_id, seg, result)
                 return
             except Exception as exc:
                 last_exc = exc
+                timed_out = isinstance(exc, asyncio.TimeoutError)
                 metrics.incr(
                     "stt_segments_total",
                     {
                         "camera": str(self.camera_id),
                         "provider": provider.kind,
-                        "status": f"retry_{attempt}",
+                        "status": (
+                            f"timeout_{attempt}" if timed_out else f"retry_{attempt}"
+                        ),
                     },
                 )
+                if timed_out:
+                    logger.warning(
+                        "stt transcribe timed out after %.0fs (attempt %d) camera=%s",
+                        AUDIO_STT_TIMEOUT_S, attempt, self.camera_id,
+                    )
                 await asyncio.sleep(min(0.5 * (2 ** (attempt - 1)), 5.0))
         # Retries exhausted. Cool down so we do not bombard a broken
         # backend.
@@ -329,7 +431,13 @@ class AudioPipelineManager:
             if not url:
                 continue
             seen.add(cam.id)
-            cfg = (url, _resolve_provider_kind(cam), _resolve_provider_kwargs(cam))
+            budget = int(getattr(cam, "stt_budget_minutes_per_hour", 0) or 0)
+            cfg = (
+                url,
+                _resolve_provider_kind(cam),
+                _resolve_provider_kwargs(cam),
+                budget,
+            )
             existing = self._configs.get(cam.id)
             if existing == cfg:
                 continue
@@ -344,6 +452,7 @@ class AudioPipelineManager:
                 provider_kind=kind,
                 provider_kwargs=kwargs,
                 write_callback=self._write,
+                budget_minutes_per_hour=budget,
             )
             try:
                 await router.start()
@@ -367,6 +476,24 @@ class AudioPipelineManager:
         self._configs.clear()
 
 
+def _resolve_worker_count(provider: STTProvider) -> int:
+    """Pick the STT worker count for a provider.
+
+    Local (CPU-bound) transcription now shares one GIL-releasing model
+    process-wide, so several workers transcribe concurrent segments on a
+    multi-core box instead of serializing them. Clamp to the CPU count so
+    we never oversubscribe. Cloud providers are network-bound, so a fixed
+    higher in-flight count pays off regardless of local cores.
+    """
+    is_local = bool(getattr(provider, "is_local", True))
+    if not is_local:
+        return max(1, AUDIO_STT_WORKERS_CLOUD)
+    import os
+
+    cpu = os.cpu_count() or 1
+    return max(1, min(AUDIO_STT_WORKERS_LOCAL, cpu - 1) if cpu > 1 else 1)
+
+
 def _resolve_provider_kind(camera) -> str:
     # Phase 1. always faster_whisper unless an explicit STT provider row
     # is bound. Mock provider only via env override for tests.
@@ -385,4 +512,17 @@ def _resolve_provider_kwargs(camera) -> dict:
     # language from each segment.
     raw_lang = (getattr(camera, "audio_language", None) or "en").strip().lower()
     language = None if raw_lang in ("auto", "", "any") else raw_lang
-    return {"model": model, "device": "cpu", "language": language}
+    return {
+        "model": model,
+        "device": "cpu",
+        "language": language,
+        # Accuracy/speed knobs. Global settings, default to the original
+        # hardcoded values so behavior is unchanged unless tuned.
+        "beam_size": int(getattr(settings, "audio_stt_beam_size", 1) or 1),
+        "condition_on_previous_text": bool(
+            getattr(settings, "audio_stt_condition_on_previous_text", False)
+        ),
+        "no_speech_threshold": float(
+            getattr(settings, "audio_stt_no_speech_threshold", 0.6)
+        ),
+    }

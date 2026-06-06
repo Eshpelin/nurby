@@ -54,12 +54,22 @@ async def _faster_whisper_factory(
     model: str = "small.en",
     device: str = "cpu",
     language: str | None = "en",
+    beam_size: int = 1,
+    condition_on_previous_text: bool = False,
+    no_speech_threshold: float = 0.6,
 ) -> STTProvider:
     from services.perception.audio.providers.faster_whisper_provider import (
         FasterWhisperProvider,
     )
 
-    return FasterWhisperProvider(model=model, device=device, language=language)
+    return FasterWhisperProvider(
+        model=model,
+        device=device,
+        language=language,
+        beam_size=beam_size,
+        condition_on_previous_text=condition_on_previous_text,
+        no_speech_threshold=no_speech_threshold,
+    )
 
 
 async def _mock_factory(**_: object) -> STTProvider:
