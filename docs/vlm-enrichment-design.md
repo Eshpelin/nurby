@@ -1,6 +1,22 @@
 # Idle-time VLM enrichment (versioned multi-pass)
 
-Status: v2.0 and v2.1 implemented (off by default). v2.2-v2.3 still design.
+Status: v2.0 - v2.3 implemented (off by default).
+
+## Immutability model (final)
+
+Every VLM pass over a frame is **immutable**. its description text is never
+edited and never deleted, so the full per-frame analysis history survives
+forever for debugging and audit. Raw lens passes (`attributes`, `temporal`,
+`anomaly`) only add history. they never touch the caption the rest of the
+app reads.
+
+A separate `summary` pass makes its own VLM call that synthesizes the raw
+passes into one clean summary, grounded on their text. That summary is the
+view used everywhere. it populates `Observation.vlm_description` and the
+search embedding. Re-summarizing appends a new summary pass and moves the
+authoritative pointer. the previous summary's text is kept untouched. So
+"reduce" is not a destructive rewrite, it is an additive synthesis on top
+of an immutable record.
 
 v2.1 adds structured `attributes` on each pass (objects, people count, colors,
 time-of-day, plate/sign text), derived from the enrichment text plus the

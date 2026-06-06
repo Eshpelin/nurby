@@ -1,17 +1,49 @@
-"""Unit tests for idle VLM enrichment decision logic.
+"""Unit tests for idle VLM enrichment pure logic.
 
-The DB-touching paths (candidate query, pass storage) are verified live
-against postgres. these cover the pure reduce rule that decides whether a
-new pass becomes authoritative.
+DB-touching paths (pass storage, summary repoint, candidate query) are
+verified live against postgres. these cover the lens sequencing and the
+deterministic attribute extraction.
 """
 
 from __future__ import annotations
 
-from services.perception.vlm_enrichment_worker import (
-    EnrichmentManager,
-    build_attributes,
-)
+from services.perception.vlm_enrichment_worker import build_attributes, next_lens
 
+
+# ---- lens sequencing ----------------------------------------------------
+
+def test_first_lens_is_attributes():
+    assert next_lens(set(), has_recording=False, summary_stale=True) == "attributes"
+
+
+def test_temporal_runs_only_with_recording():
+    have = {"attributes"}
+    assert next_lens(have, has_recording=True, summary_stale=True) == "temporal"
+    # no recording -> skip temporal, go to anomaly
+    assert next_lens(have, has_recording=False, summary_stale=True) == "anomaly"
+
+
+def test_summary_after_raw_passes_when_stale():
+    have = {"attributes", "anomaly"}
+    assert next_lens(have, has_recording=False, summary_stale=True) == "summary"
+
+
+def test_no_summary_when_not_stale():
+    have = {"attributes", "anomaly", "summary"}
+    assert next_lens(have, has_recording=False, summary_stale=False) is None
+
+
+def test_resummarize_when_new_raw_pass_lands():
+    # a temporal pass arrived after the last summary -> summary is stale again
+    have = {"attributes", "anomaly", "summary", "temporal"}
+    assert next_lens(have, has_recording=True, summary_stale=True) == "summary"
+
+
+def test_no_summary_before_any_raw_pass():
+    assert next_lens(set(), has_recording=False, summary_stale=True) == "attributes"
+
+
+# ---- attribute extraction ----------------------------------------------
 
 def test_build_attributes_from_detections_and_text():
     text = "A white SUV with plate ABC1234 is parked in the driveway at night."
@@ -33,29 +65,5 @@ def test_build_attributes_empty_text_is_safe():
 
 
 def test_text_seen_requires_a_digit():
-    # plain uppercase words should not be mistaken for plates/signage codes
     a = build_attributes("A PERSON WALKS HERE", [])
     assert a["text_seen"] == []
-
-
-def test_promote_when_caption_missing():
-    assert EnrichmentManager.should_promote(None, 40) is True
-    assert EnrichmentManager.should_promote("", 40) is True
-    assert EnrichmentManager.should_promote("   ", 40) is True
-
-
-def test_promote_when_caption_thin():
-    assert EnrichmentManager.should_promote("a person", 40) is True
-
-
-def test_append_when_caption_rich():
-    rich = "A man in a green jacket walks toward the front door carrying a parcel."
-    assert len(rich) >= 40
-    assert EnrichmentManager.should_promote(rich, 40) is False
-
-
-def test_threshold_is_inclusive_boundary():
-    exactly_40 = "x" * 40
-    # length == min_len is not below the threshold, so it is not thin
-    assert EnrichmentManager.should_promote(exactly_40, 40) is False
-    assert EnrichmentManager.should_promote("x" * 39, 40) is True
