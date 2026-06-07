@@ -1,6 +1,6 @@
 # Guardian by Nurby. V1 Build Plan
 
-Status: in progress
+Status: V1 built + smoke-passed (branch guardian-by-nurby). See "V1 result" at end.
 Derived from: docs/guardian-portal-product-brief.md section 24 (locked decisions).
 Principle: thin layer over existing engine. Fork no detection/identity/AI logic.
 
@@ -113,3 +113,28 @@ Reuse auth context, theme, navbar. Role-aware nav (guardian sees only Guardian P
 ## Rollout / sequencing
 
 1. Models + migration. 2. Settings. 3. Entitlements engine + tests. 4. Presence + tests. 5. API routes + auth deps + tests. 6. Alert fan-out. 7. MCP tools. 8. Frontend guardian panel. 9. Frontend admin. 10. End-to-end smoke on the running stack. Iterate.
+
+## V1 result (smoke-passed against the running stack)
+
+All built, lint-clean, 111 unit assertions green, and verified end to end on
+real data:
+- Settings expose guardian_* and PATCH-validate.
+- Default facility auto-creates; admin grants a link to an existing Person.
+- Free tier: status + timeline + /me all delayed 30 min; recap 402-gated.
+- Upgrade flags (premium/live_presence/live_video) flip gating live: recap 200,
+  delay removed, image throttle lifted.
+- Presence over real Observation rows: state/zone ("Entrance"), 1-item timeline,
+  and a real 89 KB blurred image served.
+- Alerts: "arrived" green (info), unrecognized pickup yellow (warning), matched
+  pickup "picked up by Mom" (info).
+- Security: a second guardian gets 404 on another's link and an empty /me;
+  revoke flips status to 410 immediately.
+- Guardian MCP tool registered and self-scoped.
+
+### Known V1 boundaries (next increments, not blockers)
+- Alert transport is in-app Notification + recipient list. Per-guardian push
+  (Telegram/email per link) reuses the same decision logic when wired.
+- Perception does not yet auto-call POST /internal/alerts on arrival/departure;
+  that hook is the integration seam and is admin/API-key callable today.
+- Facility camera scoping is all-cameras for the single-household deploy; the
+  max-cameras-per-person governor is modeled and settable.
