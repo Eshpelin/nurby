@@ -851,6 +851,8 @@ class SystemSettingsResponse(BaseModel):
     guardian_free_image_interval_seconds: int = 3600
     guardian_reveal_min_confidence: float = 0.90
     guardian_max_cameras_per_person: int = 12
+    guardian_pickup_detection_enabled: bool = True
+    guardian_pickup_window_seconds: int = 120
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -879,6 +881,8 @@ class SystemSettingsUpdate(BaseModel):
     guardian_free_image_interval_seconds: int | None = Field(default=None, ge=0, le=24 * 3600)
     guardian_reveal_min_confidence: float | None = Field(default=None, ge=0.5, le=1.0)
     guardian_max_cameras_per_person: int | None = Field(default=None, ge=1, le=1000)
+    guardian_pickup_detection_enabled: bool | None = None
+    guardian_pickup_window_seconds: int | None = Field(default=None, ge=10, le=1800)
 
 
 # -- User schemas --
@@ -1307,6 +1311,11 @@ class GuardianAlertPrefsUpdate(BaseModel):
     alert_prefs: dict
 
 
+class GuardianChannelsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    notify_channels: dict
+
+
 class GuardianLinkResponse(BaseModel):
     id: uuid.UUID
     facility_id: uuid.UUID
@@ -1315,6 +1324,7 @@ class GuardianLinkResponse(BaseModel):
     relationship_label: str | None
     tier: str
     alert_prefs: dict | None
+    notify_channels: dict | None
     premium: bool
     live_presence: bool
     live_video: bool

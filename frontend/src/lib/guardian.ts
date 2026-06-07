@@ -18,8 +18,15 @@ export interface Dependant {
   active: boolean;
   expires_at: string | null;
   alert_prefs: Record<string, boolean>;
+  notify_channels: Record<string, boolean>;
   entitlements: Entitlements;
 }
+
+export const NOTIFY_CHANNELS: { key: string; label: string }[] = [
+  { key: "telegram", label: "Telegram" },
+  { key: "email", label: "Email" },
+  { key: "in_app", label: "In-app" },
+];
 
 export interface DependantStatus {
   state: "present" | "away" | "unknown";

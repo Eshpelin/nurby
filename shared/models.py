@@ -1342,6 +1342,9 @@ class GuardianLink(Base):
     # Per-link alert opt-ins within the facility-allowed set. booleans keyed by
     # alert kind: arrived, departed, picked_up, entered_zone, left_zone, not_seen.
     alert_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Channels this guardian receives alerts on. booleans keyed by
+    # channel: telegram, email, in_app. Null = all available channels.
+    notify_channels: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Entitlement flags (brief section 24.11). No billing yet; an admin toggles
     # these and they gate exactly as paid features will.
     premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # recap + smart search

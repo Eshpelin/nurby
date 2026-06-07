@@ -11,8 +11,10 @@ import pytest
 from services.guardian import delivery
 
 
-def _link(uid):
-    return SimpleNamespace(id=uuid.uuid4(), guardian_user_id=uid)
+def _link(uid, notify_channels=None):
+    return SimpleNamespace(
+        id=uuid.uuid4(), guardian_user_id=uid, notify_channels=notify_channels
+    )
 
 
 def _channel(**kw):
@@ -97,6 +99,39 @@ async def test_telegram_failure_isolated(monkeypatch):
     out = await delivery.deliver_to_guardians(db, [_link(uid)], message="hi")
     assert out["telegram_sent"] == 1  # only the successful one counted
     assert calls["n"] == 2  # both attempted
+
+
+@pytest.mark.asyncio
+async def test_channel_pref_disables_email(monkeypatch):
+    uid = uuid.uuid4()
+    user = SimpleNamespace(id=uid, email="p@x.com")
+    db = _db_with_channels([_channel()], user)
+
+    tg = AsyncMock(return_value=True)
+    em = AsyncMock(return_value=True)
+    monkeypatch.setattr(delivery, "_send_telegram", tg)
+    monkeypatch.setattr(delivery, "_send_email", em)
+
+    link = _link(uid, notify_channels={"telegram": True, "email": False, "in_app": True})
+    out = await delivery.deliver_to_guardians(db, [link], message="hi")
+    assert out["telegram_sent"] == 1
+    assert out["email_sent"] == 0
+    em.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_channel_pref_disables_telegram(monkeypatch):
+    uid = uuid.uuid4()
+    user = SimpleNamespace(id=uid, email="p@x.com")
+    db = _db_with_channels([_channel()], user)
+    monkeypatch.setattr(delivery, "_send_email", AsyncMock(return_value=True))
+    tg = AsyncMock(return_value=True)
+    monkeypatch.setattr(delivery, "_send_telegram", tg)
+    link = _link(uid, notify_channels={"telegram": False, "email": True})
+    out = await delivery.deliver_to_guardians(db, [link], message="hi")
+    assert out["telegram_sent"] == 0
+    tg.assert_not_called()
+    assert out["email_sent"] == 1
 
 
 @pytest.mark.asyncio

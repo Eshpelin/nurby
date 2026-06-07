@@ -201,3 +201,21 @@ async def test_alerts_patch_sanitizes(monkeypatch):
     assert out["alert_prefs"]["arrived"] is False
     assert out["alert_prefs"]["not_seen"] is True
     assert "bogus" not in out["alert_prefs"]
+
+
+@pytest.mark.asyncio
+async def test_channels_patch_sanitizes(monkeypatch):
+    owner = _user()
+    link = _link(owner.id)
+    link.notify_channels = None
+    db = FakeDB([link])
+
+    async def fake_log(*a, **k):
+        return None
+
+    monkeypatch.setattr(g, "_log", fake_log)
+    body = SimpleNamespace(notify_channels={"telegram": False, "junk": True})
+    out = await g.link_channels(link.id, body=body, request=None, user=owner, db=db)
+    assert out["notify_channels"]["telegram"] is False
+    assert out["notify_channels"]["email"] is True
+    assert "junk" not in out["notify_channels"]
