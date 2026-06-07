@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import TelegramSection from "@/components/TelegramSection";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
 import { ALL_PROVIDERS, PROVIDER_KINDS } from "@/lib/provider-presets";
+import { ProviderFields } from "@/components/ProviderFields";
 
 const COMMON_TIMEZONES = [
   "America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York",
@@ -1252,39 +1253,17 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* Name */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Display name</label>
-                <input type="text" value={formName} onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
-                  placeholder="My OpenAI" />
-              </div>
-
-              {/* Base URL */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Base URL</label>
-                <input type="url" value={formBaseUrl} onChange={(e) => setFormBaseUrl(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:border-accent"
-                  placeholder="https://api.openai.com" />
-              </div>
-
-              {/* API Key */}
-              {!(formKind === "ollama" || formBaseUrl.includes("localhost") || formBaseUrl.includes("127.0.0.1")) && (
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">API key</label>
-                  <input type="password" value={formApiKey} onChange={(e) => setFormApiKey(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:border-accent"
-                    placeholder={editProvider ? "Leave blank to keep existing key" : "sk-..."} />
-                </div>
-              )}
-
-              {/* Model */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Default model</label>
-                <input type="text" value={formModel} onChange={(e) => setFormModel(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:border-accent"
-                  placeholder={formKind === "openai" ? "gpt-4o-mini" : formKind === "anthropic" ? "claude-sonnet-4-20250514" : "moondream"} />
-              </div>
+              {/* Shared provider fields (also used by the onboarding wizard). */}
+              <ProviderFields
+                values={{ name: formName, kind: formKind, baseUrl: formBaseUrl, model: formModel, apiKey: formApiKey }}
+                editing={!!editProvider}
+                onChange={(field, value) => {
+                  if (field === "name") setFormName(value);
+                  else if (field === "baseUrl") setFormBaseUrl(value);
+                  else if (field === "model") setFormModel(value);
+                  else if (field === "apiKey") setFormApiKey(value);
+                }}
+              />
 
               {/* Token caps */}
               <div className="grid grid-cols-2 gap-3">
