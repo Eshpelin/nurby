@@ -102,6 +102,13 @@ async def identify_vehicles(db, camera_id, detections: list, ts, frame=None,
         return None, []
     plates = [d for d in detections if d.get("label") == "license_plate" and d.get("plate_text")]
 
+    min_sim = 0.90
+    try:
+        from shared.app_settings import get_setting
+        min_sim = float(await get_setting("vehicle_appearance_match_min_similarity", 0.90))
+    except Exception:
+        pass
+
     entries: list[dict] = []
     new_jobs: list = []
 
@@ -154,13 +161,24 @@ async def identify_vehicles(db, camera_id, detections: list, ts, frame=None,
                     new_jobs.append((vehicle.id, vbox))
             entry["vehicle_id"] = str(vehicle.id)
             entry["identity_key"] = identity_key
-        elif frame is not None and plateless_enabled:
-            # Plateless. re-identify by CLIP appearance against recent
-            # same-camera plateless rows. gated per camera.
-            vid, ikey, job = await _identify_plateless(db, camera_id, v, vbox, ts, frame)
+            entry["matched_by"] = "plate"
+            # Give this known vehicle an appearance signature so it can be
+            # recognized later when its plate is not readable.
+            if frame is not None and vehicle.appearance_embedding is None:
+                emb = await _embed_crop(frame, vbox)
+                if emb is not None:
+                    vehicle.appearance_embedding = emb.tolist()
+        elif frame is not None:
+            # No readable plate. recognize a known vehicle by appearance
+            # (always), or group plateless ones (only if enabled per camera).
+            vid, ikey, job, conf, how = await _match_vehicle_by_appearance(
+                db, camera_id, v, vbox, ts, frame, plateless_enabled, min_sim
+            )
             if vid is not None:
                 entry["vehicle_id"] = str(vid)
                 entry["identity_key"] = ikey
+                entry["matched_by"] = how
+                entry["match_confidence"] = conf
                 if job is not None:
                     new_jobs.append(job)
 
@@ -170,55 +188,81 @@ async def identify_vehicles(db, camera_id, detections: list, ts, frame=None,
     return vehicle_detections, new_jobs
 
 
-async def _identify_plateless(db, camera_id, v: dict, vbox: list, ts, frame):
-    """Re-identify a plateless vehicle by CLIP appearance. Returns
-    (vehicle_id, identity_key, new_description_job_or_None) or (None, None, None)
-    when CLIP is unavailable or the crop is unusable."""
+async def _embed_crop(frame, vbox: list):
+    """CLIP appearance embedding for a vehicle crop, or None."""
+    from services.perception.vlm_gate import get_gate
+    crop = _crop(frame, vbox)
+    if crop is None or crop.size == 0:
+        return None
+    return await get_gate().embed_image(crop)
+
+
+def _ema_embedding(vehicle, emb):
+    """Blend a new observation into a vehicle's representative embedding."""
+    old = np.array(vehicle.appearance_embedding, dtype="float32")
+    new = 0.8 * old + 0.2 * emb.astype("float32")
+    n = np.linalg.norm(new)
+    vehicle.appearance_embedding = (new / n).tolist() if n else emb.tolist()
+
+
+async def _match_vehicle_by_appearance(db, camera_id, v: dict, vbox: list, ts, frame,
+                                       plateless_enabled: bool, min_sim: float):
+    """Match a sighting with no readable plate to a vehicle by CLIP appearance.
+
+    Returns (vehicle_id, identity_key, description_job_or_None, confidence, how):
+      how = "appearance" when matched to an existing vehicle (known or
+      plateless), "new-plateless" when a fresh provisional identity was made.
+    (None,)*5 when CLIP is unavailable, the crop is unusable, or no match and
+    plateless grouping is off for this camera.
+
+    A KNOWN (plated) vehicle is always eligible. that is how a car you already
+    know is recognized when its plate is not visible. Creating a NEW plateless
+    identity only happens when ``plateless_enabled``.
+    """
     import uuid as _uuid
     from datetime import timedelta
 
-    from services.perception.vlm_gate import get_gate
-
-    crop = _crop(frame, vbox)
-    if crop is None or crop.size == 0:
-        return None, None, None
-    emb = await get_gate().embed_image(crop)
+    emb = await _embed_crop(frame, vbox)
     if emb is None:
-        return None, None, None
+        return None, None, None, None, None
     vec = emb.tolist()
+    vtype = v.get("label")
+    max_dist = 1.0 - float(min_sim)
 
-    cutoff = ts - timedelta(hours=_PLATELESS_RECENCY_HOURS)
     dist = Vehicle.appearance_embedding.cosine_distance(vec)
-    row = (await db.execute(
+    recent = ts - timedelta(hours=_PLATELESS_RECENCY_HOURS)
+    # Eligible. same camera, type-consistent, has a signature. KNOWN vehicles
+    # any time. plateless ones only within the recency window.
+    candidates = (await db.execute(
         select(Vehicle, dist.label("d"))
-        .where(Vehicle.plateless.is_(True))
         .where(Vehicle.appearance_embedding.is_not(None))
         .where(Vehicle.first_camera_id == camera_id)
-        .where(Vehicle.last_seen_at >= cutoff)
+        .where((Vehicle.vehicle_type == vtype) | (Vehicle.vehicle_type.is_(None)))
+        .where((Vehicle.plateless.is_(False)) | (Vehicle.last_seen_at >= recent))
         .order_by(dist.asc())
         .limit(1)
     )).first()
 
-    if row is not None and row.d is not None and row.d <= _PLATELESS_MAX_DISTANCE:
-        vehicle = row[0]
+    if candidates is not None and candidates.d is not None and candidates.d <= max_dist:
+        vehicle = candidates[0]
         vehicle.last_seen_at = ts
         vehicle.sighting_count = (vehicle.sighting_count or 0) + 1
-        # EMA the representative embedding so it tracks the vehicle's look.
-        old = np.array(vehicle.appearance_embedding, dtype="float32")
-        new = 0.8 * old + 0.2 * emb.astype("float32")
-        n = np.linalg.norm(new)
-        vehicle.appearance_embedding = (new / n).tolist() if n else vec
+        _ema_embedding(vehicle, emb)
         job = None
         if vehicle.description_status == "pending" and not vehicle.description:
             job = (vehicle.id, vbox)
-        return vehicle.id, vehicle.identity_key, job
+        confidence = round(1.0 - float(candidates.d), 3)
+        return vehicle.id, vehicle.identity_key, job, confidence, "appearance"
 
-    # No match. new provisional plateless identity.
+    # No confident match. only mint a new transient identity if grouping is on.
+    if not plateless_enabled:
+        return None, None, None, None, None
+
     identity_key = f"plateless:{_uuid.uuid4()}"
     vehicle = Vehicle(
         identity_key=identity_key,
-        display_name=f"Unidentified {v.get('label') or 'vehicle'}",
-        vehicle_type=v.get("label"),
+        display_name=f"Unidentified {vtype or 'vehicle'}",
+        vehicle_type=vtype,
         plateless=True,
         appearance_embedding=vec,
         first_camera_id=camera_id,
@@ -230,7 +274,7 @@ async def _identify_plateless(db, camera_id, v: dict, vbox: list, ts, frame):
     )
     db.add(vehicle)
     await db.flush()
-    return vehicle.id, identity_key, (vehicle.id, vbox)
+    return vehicle.id, identity_key, (vehicle.id, vbox), None, "new-plateless"
 
 
 # Cap concurrent vehicle-description VLM calls. a burst of new plates must

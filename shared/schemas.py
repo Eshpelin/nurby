@@ -845,6 +845,7 @@ class SystemSettingsResponse(BaseModel):
     onboarding_dismissed: bool = False
     vlm_enrichment_enabled: bool = True
     vlm_enrichment_budget_minutes_per_hour: int = 20
+    vehicle_appearance_match_min_similarity: float = 0.90
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -867,6 +868,7 @@ class SystemSettingsUpdate(BaseModel):
     onboarding_dismissed: bool | None = None
     vlm_enrichment_enabled: bool | None = None
     vlm_enrichment_budget_minutes_per_hour: int | None = Field(default=None, ge=0, le=600)
+    vehicle_appearance_match_min_similarity: float | None = Field(default=None, ge=0.5, le=1.0)
 
 
 # -- User schemas --

@@ -110,6 +110,12 @@ DEFAULTS: dict[str, Any] = {
     "vlm_enrichment_enabled": True,
     "vlm_enrichment_budget_minutes_per_hour": 20,
     "vlm_enrichment_max_passes": 6,
+    # ── Vehicle appearance matching ─────────────────────────────────
+    # When a vehicle's plate is not readable, a new sighting is matched to
+    # an existing vehicle (known/plated or plateless) by CLIP appearance if
+    # the cosine similarity is at least this, and the vehicle type agrees.
+    # Higher = stricter (fewer false matches, more duplicate identities).
+    "vehicle_appearance_match_min_similarity": 0.90,
 }
 
 

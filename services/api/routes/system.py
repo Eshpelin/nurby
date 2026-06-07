@@ -266,6 +266,7 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     "onboarding_dismissed",
     "vlm_enrichment_enabled",
     "vlm_enrichment_budget_minutes_per_hour",
+    "vehicle_appearance_match_min_similarity",
 )
 
 
