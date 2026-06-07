@@ -194,6 +194,26 @@ class ConversationFinalizer:
         except Exception:
             logger.exception("clip build failed conv=%s", conv_id)
 
+        # Native-audio analysis. no-op unless a supports_audio provider is
+        # configured (see docs/native-audio-conversation-design.md). when it
+        # runs, it adds tone / speaker-count / non-verbal cues the transcript
+        # cannot carry, without touching the text summary.
+        if clip_built:
+            try:
+                from services.perception.audio_conversation_analyzer import (
+                    analyze_conversation_audio,
+                )
+                from services.perception.vlm import get_active_provider
+                aprov = await get_active_provider()
+                transcript_text = " ".join(t.text for t in tx_rows if t.text)
+                audio_result = await analyze_conversation_audio(
+                    clip_path, transcript_text, aprov
+                )
+                if audio_result:
+                    await self._patch_audio_analysis(conv_id, audio_result, aprov)
+            except Exception:
+                logger.debug("audio analysis hook failed conv=%s", conv_id, exc_info=True)
+
         try:
             await self._broadcast(
                 {
@@ -324,6 +344,27 @@ class ConversationFinalizer:
         if summary and summary.upper().startswith("SKIP"):
             return None, None
         return summary, cleaned
+
+    async def _patch_audio_analysis(self, conv_id: uuid.UUID, result: dict, provider) -> None:
+        """Store native-audio-derived conversation fields. Never overwrites
+        the text summary."""
+        try:
+            async with async_session() as db:
+                row = await db.get(Conversation, conv_id)
+                if row is None:
+                    return
+                row.audio_speaker_count = result.get("speaker_count")
+                row.audio_tone = result.get("tone")
+                row.audio_non_verbal = result.get("non_verbal")
+                row.audio_gist = result.get("gist")
+                row.audio_analyzed_by = (
+                    f"{getattr(provider, 'name', '')}/{getattr(provider, 'default_model', '')}"
+                )[:64]
+                await db.commit()
+            logger.info("audio analysis conv=%s tone=%s speakers=%s",
+                        conv_id, result.get("tone"), result.get("speaker_count"))
+        except Exception:
+            logger.debug("audio analysis patch failed conv=%s", conv_id, exc_info=True)
 
     async def _patch_summary(
         self,

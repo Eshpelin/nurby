@@ -744,6 +744,15 @@ class Conversation(Base):
     embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
     clip_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     clip_duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Native-audio analysis (docs/native-audio-conversation-design.md).
+    # Populated only when a supports_audio provider analyzes the conversation
+    # clip, capturing what the audio reveals beyond the transcript text.
+    # Distinct from summary_text so provenance stays clear.
+    audio_speaker_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    audio_tone: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    audio_non_verbal: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    audio_gist: Mapped[str | None] = mapped_column(Text, nullable=True)
+    audio_analyzed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
