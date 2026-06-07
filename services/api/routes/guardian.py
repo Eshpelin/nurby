@@ -175,6 +175,12 @@ async def guardian_me(
                 "person_id": str(link.person_id),
                 "display_name": (person.nickname or person.display_name) if person else None,
                 "relationship_label": link.relationship_label,
+                "has_photo": bool(person and person.photo_path),
+                "photo_url": (
+                    f"/api/guardian/links/{link.id}/photo"
+                    if person and person.photo_path
+                    else None
+                ),
                 "active": ent.is_active(link),
                 "expires_at": link.expires_at.isoformat() if link.expires_at else None,
                 "alert_prefs": link.alert_prefs or ent.DEFAULT_ALERT_PREFS,
@@ -319,11 +325,22 @@ async def link_image(
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Image file not found on disk")
 
+    # Privacy spine: blur so no non-dependant face is identifiable. Fail safe.
+    from fastapi import Response
+
+    from services.guardian.imaging import blur_image_file
+
+    radius = int(await get_setting("guardian_image_blur_radius", 12))
+    try:
+        blurred = blur_image_file(path, radius)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Could not process image")
+
     # Stamp the throttle and log the view.
     link.last_image_served_at = datetime.now(timezone.utc)
     await db.commit()
     await _log(db, link, "image", request, {"observation_id": img["observation_id"]})
-    return FileResponse(path, media_type="image/jpeg")
+    return Response(content=blurred, media_type="image/jpeg")
 
 
 @router.get("/links/{link_id}/recap")
@@ -373,9 +390,12 @@ async def link_live(
         raise HTTPException(status_code=404, detail="Dependant not found")
     delay = await _free_delay(db)
     status = await presence_mod.dependant_status(db, link, person, free_delay_seconds=delay)
-    img = None
+    img = clip = None
+    clips_on = bool(await get_setting("guardian_unblurred_clips_enabled", False))
     if link.live_video:
         img = await presence_mod.latest_image(db, link, person, free_delay_seconds=delay)
+        if clips_on:
+            clip = await presence_mod.latest_clip(db, link, person, free_delay_seconds=delay)
     await _log(db, link, "live", request)
     return {
         **status,
@@ -383,7 +403,50 @@ async def link_live(
         "live_video": link.live_video,
         "image_available": img is not None,
         "image_url": f"/api/guardian/links/{link_id}/image" if img is not None else None,
+        "clip_available": clip is not None,
+        "clip_url": f"/api/guardian/links/{link_id}/clip" if clip is not None else None,
     }
+
+
+@router.get("/links/{link_id}/clip")
+async def link_clip(
+    link_id: uuid.UUID,
+    request: Request,
+    token: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Serve the dependant's most recent recording clip. Requires live_video.
+
+    Clips are raw operator footage (faces not blurred), so they are disabled by
+    default to hold the privacy promise. A facility opts in via
+    ``guardian_unblurred_clips_enabled``. Per-frame video blur is the planned
+    enhancement that lets this default flip on safely."""
+    user = await _user_from_token_or_header(token, request, db)
+    link = await _load_link(db, link_id)
+    _ensure_owner_or_admin(link, user)
+    _ensure_active(link)
+    if not link.live_video:
+        raise HTTPException(status_code=402, detail="Live video is a paid feature")
+    if not bool(await get_setting("guardian_unblurred_clips_enabled", False)):
+        raise HTTPException(
+            status_code=403,
+            detail="Blurred live clips are coming. Raw clips are disabled for privacy.",
+        )
+    person = await db.get(Person, link.person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Dependant not found")
+    delay = await _free_delay(db)
+    clip = await presence_mod.latest_clip(db, link, person, free_delay_seconds=delay)
+    if clip is None:
+        raise HTTPException(status_code=404, detail="No recent clip available")
+    path = os.path.abspath(clip["clip_path"])
+    allowed_dir = os.path.abspath(settings.recordings_path)
+    if not (path.startswith(allowed_dir + os.sep) or path == allowed_dir):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Clip file not found on disk")
+    await _log(db, link, "live", request, {"clip_observation_id": clip["observation_id"]})
+    return FileResponse(path, media_type="video/mp4")
 
 
 @router.post("/links/{link_id}/search")
@@ -414,7 +477,7 @@ async def link_search(
     delay = await _free_delay(db)
     cutoff = ent.cutoff_time(link, delay)
     person_needle = f'%"person_id": "{person.id}"%'
-    q = (
+    base = (
         select(Observation)
         .where(Observation.started_at <= cutoff)
         .where(
@@ -424,11 +487,39 @@ async def link_search(
         .where(cast(Observation.person_detections, SAString).ilike(person_needle))
     )
     text = (body.query or "").strip()
+    rows = None
+    mode = "recent"
+
+    # Prefer semantic search over the dependant's sightings. Embed the query
+    # and order by pgvector cosine distance; fall back to caption ILIKE, then
+    # to recent-first, so it always returns something useful.
     if text:
-        q = q.where(Observation.vlm_description.ilike(f"%{text}%"))
-    rows = (
-        await db.execute(q.order_by(Observation.started_at.desc()).limit(body.limit))
-    ).scalars().all()
+        embedding = None
+        try:
+            from services.search.embeddings import generate_embedding, get_embedding_provider
+
+            provider = await get_embedding_provider()
+            embedding = await generate_embedding(text, provider)
+        except Exception:
+            embedding = None
+        if embedding:
+            q = (
+                base.where(Observation.description_embedding.isnot(None))
+                .order_by(Observation.description_embedding.cosine_distance(embedding))
+                .limit(body.limit)
+            )
+            rows = (await db.execute(q)).scalars().all()
+            mode = "semantic"
+        if not rows:
+            q = base.where(Observation.vlm_description.ilike(f"%{text}%"))
+            rows = (
+                await db.execute(q.order_by(Observation.started_at.desc()).limit(body.limit))
+            ).scalars().all()
+            mode = "keyword"
+    if rows is None:
+        rows = (
+            await db.execute(base.order_by(Observation.started_at.desc()).limit(body.limit))
+        ).scalars().all()
 
     results = []
     for obs in rows:
@@ -441,10 +532,165 @@ async def link_search(
                 "caption": obs.vlm_description,
             }
         )
-    await _log(db, link, "search", request, {"query": text, "count": len(results)})
+    await _log(db, link, "search", request, {"query": text, "count": len(results), "mode": mode})
     return {
         "query": text,
+        "mode": mode,
         "results": results,
+        "delayed": ent.effective_delay_seconds(link, delay) > 0,
+    }
+
+
+@router.get("/links/{link_id}/events")
+async def link_events(
+    link_id: uuid.UUID,
+    request: Request,
+    limit: int = Query(default=30, ge=1, le=100),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The dependant's real day-timeline: arrival, pickup, zone events. Clamped
+    to the link cutoff and filtered to the alerts the guardian opted into."""
+    link = await _load_link(db, link_id)
+    _ensure_owner_or_admin(link, user)
+    _ensure_active(link)
+    if not ent.can_view(link, ent.CAP_TIMELINE):
+        raise HTTPException(status_code=403, detail="This tier cannot view a timeline")
+    person = await db.get(Person, link.person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Dependant not found")
+    from shared.models import GuardianEvent
+
+    delay = await _free_delay(db)
+    cutoff = ent.cutoff_time(link, delay)
+    rows = (
+        await db.execute(
+            select(GuardianEvent)
+            .where(GuardianEvent.person_id == person.id)
+            .where(GuardianEvent.at <= cutoff)
+            .order_by(GuardianEvent.at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    items = [
+        {
+            "id": str(e.id),
+            "kind": e.kind,
+            "message": e.message,
+            "severity": e.severity,
+            "zone": e.zone,
+            "at": e.at.isoformat(),
+            "pickup_matched": e.pickup_matched,
+            "pickup_name": e.pickup_name,
+        }
+        for e in rows
+        if ent.alert_enabled(link, e.kind)
+    ]
+    last_pickup = next((i for i in items if i["kind"] == "picked_up"), None)
+    await _log(db, link, "timeline", request, {"events": len(items)})
+    return {
+        "items": items,
+        "last_pickup": last_pickup,
+        "delayed": ent.effective_delay_seconds(link, delay) > 0,
+    }
+
+
+@router.get("/links/{link_id}/photo")
+async def link_photo(
+    link_id: uuid.UUID,
+    request: Request,
+    token: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Serve the dependant's enrolled photo (a consented identity/recognition
+    aid). Token-auth so <img> tags work. Sharp, since it is the guardian's own
+    bound dependant; non-dependant live frames stay blurred elsewhere."""
+    user = await _user_from_token_or_header(token, request, db)
+    link = await _load_link(db, link_id)
+    _ensure_owner_or_admin(link, user)
+    person = await db.get(Person, link.person_id)
+    if person is None or not person.photo_path:
+        raise HTTPException(status_code=404, detail="No photo")
+    path = os.path.abspath(person.photo_path)
+    # Photos live under the thumbnails store in this deploy.
+    allowed = os.path.abspath(settings.thumbnails_path)
+    if not (path.startswith(allowed + os.sep) or path == allowed):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Photo not found on disk")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@router.get("/links/{link_id}/trends")
+async def link_trends(
+    link_id: uuid.UUID,
+    request: Request,
+    days: int = Query(default=7, ge=1, le=30),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Premium weekly wellbeing trends. Gentle signals (days seen, first/last
+    sighting, zone variety), framed as awareness, never judgment. Scoped to the
+    bound dependant and clamped to the link cutoff."""
+    link = await _load_link(db, link_id)
+    _ensure_owner_or_admin(link, user)
+    _ensure_active(link)
+    if not link.premium:
+        raise HTTPException(status_code=402, detail="Trends are a premium feature")
+    person = await db.get(Person, link.person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Dependant not found")
+
+    from datetime import timedelta
+
+    from sqlalchemy import String as SAString
+    from sqlalchemy import cast
+
+    delay = await _free_delay(db)
+    cutoff = ent.cutoff_time(link, delay)
+    needle = f'%"person_id": "{person.id}"%'
+    rows = (
+        await db.execute(
+            select(Observation)
+            .where(Observation.started_at <= cutoff)
+            .where(Observation.started_at >= cutoff - timedelta(days=days))
+            .where(cast(Observation.person_detections, SAString).ilike(needle))
+            .order_by(Observation.started_at.asc())
+        )
+    ).scalars().all()
+
+    by_day: dict[str, dict] = {}
+    cam_names: dict[uuid.UUID, str | None] = {}
+    for o in rows:
+        day = o.started_at.date().isoformat()
+        d = by_day.setdefault(
+            day,
+            {"date": day, "sightings": 0, "first_seen": None, "last_seen": None, "zones": set()},
+        )
+        d["sightings"] += 1
+        ts = o.started_at.isoformat()
+        if d["first_seen"] is None:
+            d["first_seen"] = ts
+        d["last_seen"] = ts
+        if o.camera_id not in cam_names:
+            cam = await db.get(Camera, o.camera_id)
+            cam_names[o.camera_id] = (cam.location_label or cam.name) if cam else None
+        if cam_names[o.camera_id]:
+            d["zones"].add(cam_names[o.camera_id])
+
+    days_list = []
+    for d in by_day.values():
+        d["zones"] = sorted(d["zones"])
+        days_list.append(d)
+    days_list.sort(key=lambda x: x["date"])
+
+    await _log(db, link, "search", request, {"trends_days": days})
+    return {
+        "display_name": person.nickname or person.display_name,
+        "window_days": days,
+        "days_seen": len(days_list),
+        "total_sightings": sum(d["sightings"] for d in days_list),
+        "days": days_list,
         "delayed": ent.effective_delay_seconds(link, delay) > 0,
     }
 
@@ -553,30 +799,54 @@ async def list_links(
     return (await db.execute(q)).scalars().all()
 
 
-@router.post("/links", response_model=GuardianLinkResponse, status_code=201)
+@router.post("/links", status_code=201)
 async def create_link(
     body: GuardianLinkCreate,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Bind a guardian user to an existing person. The facility grants; the
-    guardian never self-grants. Promotes the bound user to role 'guardian' if
-    they were a plain viewer."""
+    guardian never self-grants.
+
+    Invite flow: if only ``guardian_email`` is given and no account exists yet,
+    a guardian account is created with a one-time temporary password returned
+    once to the admin to hand to the parent (who then sets their own password).
+    """
+    import secrets as _secrets
+
+    from shared.auth import hash_password
+
     person = await db.get(Person, body.person_id)
     if person is None:
         raise HTTPException(status_code=404, detail="Person not found")
 
     guardian: User | None = None
+    temp_password: str | None = None
+    guardian_created = False
     if body.guardian_user_id is not None:
         guardian = await db.get(User, body.guardian_user_id)
     elif body.guardian_email is not None:
+        email = body.guardian_email.lower().strip()
         guardian = (
-            await db.execute(select(User).where(User.email == body.guardian_email.lower()))
+            await db.execute(select(User).where(User.email == email))
         ).scalar_one_or_none()
+        if guardian is None:
+            # Invite: create the guardian account with a temp password.
+            temp_password = _secrets.token_urlsafe(9)
+            guardian = User(
+                email=email,
+                display_name=None,
+                password_hash=hash_password(temp_password),
+                role="guardian",
+                is_active=True,
+            )
+            db.add(guardian)
+            await db.flush()
+            guardian_created = True
     if guardian is None:
         raise HTTPException(
-            status_code=404,
-            detail="Guardian user not found. Create the account first.",
+            status_code=400,
+            detail="Provide guardian_user_id or guardian_email.",
         )
 
     facility = (
@@ -622,7 +892,28 @@ async def create_link(
         guardian.role = "guardian"
     await db.commit()
     await db.refresh(link)
-    return link
+    return {
+        "id": str(link.id),
+        "facility_id": str(link.facility_id),
+        "person_id": str(link.person_id),
+        "guardian_user_id": str(link.guardian_user_id),
+        "relationship_label": link.relationship_label,
+        "tier": link.tier,
+        "alert_prefs": link.alert_prefs,
+        "notify_channels": link.notify_channels,
+        "premium": link.premium,
+        "live_presence": link.live_presence,
+        "live_video": link.live_video,
+        "audio": link.audio,
+        "is_primary_parent": link.is_primary_parent,
+        "reveal_min_confidence": link.reveal_min_confidence,
+        "granted_at": link.granted_at.isoformat() if link.granted_at else None,
+        "expires_at": link.expires_at.isoformat() if link.expires_at else None,
+        "revoked_at": None,
+        "guardian_created": guardian_created,
+        "guardian_email": guardian.email,
+        "temp_password": temp_password,
+    }
 
 
 @router.patch("/links/{link_id}", response_model=GuardianLinkResponse)

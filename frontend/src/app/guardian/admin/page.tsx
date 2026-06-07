@@ -134,37 +134,47 @@ function GrantForm({
   const { authFetch } = useAuth();
   const [personId, setPersonId] = useState("");
   const [guardianId, setGuardianId] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
   const [tier, setTier] = useState("full");
   const [relationship, setRelationship] = useState("");
   const [primary, setPrimary] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [invite, setInvite] = useState<{ email: string; password: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
     setErr(null);
-    if (!personId || !guardianId) {
-      setErr("Pick both a person and a guardian account.");
+    setInvite(null);
+    if (!personId || (!guardianId && !inviteEmail.trim())) {
+      setErr("Pick a person, then either select a guardian or invite one by email.");
       return;
     }
     setBusy(true);
     try {
+      const payload: Record<string, unknown> = {
+        person_id: personId,
+        tier,
+        relationship_label: relationship || null,
+        is_primary_parent: primary,
+      };
+      if (guardianId) payload.guardian_user_id = guardianId;
+      else payload.guardian_email = inviteEmail.trim();
       const res = await authFetch("/api/guardian/links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          person_id: personId,
-          guardian_user_id: guardianId,
-          tier,
-          relationship_label: relationship || null,
-          is_primary_parent: primary,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
         setErr(typeof b.detail === "string" ? b.detail : "Could not grant access.");
       } else {
+        const b = await res.json();
+        if (b.guardian_created && b.temp_password) {
+          setInvite({ email: b.guardian_email, password: b.temp_password });
+        }
         setPersonId("");
         setGuardianId("");
+        setInviteEmail("");
         setRelationship("");
         setPrimary(false);
         onGranted();
@@ -197,7 +207,10 @@ function GrantForm({
           <span className="text-muted-foreground text-xs">Guardian account</span>
           <select
             value={guardianId}
-            onChange={(e) => setGuardianId(e.target.value)}
+            onChange={(e) => {
+              setGuardianId(e.target.value);
+              if (e.target.value) setInviteEmail("");
+            }}
             className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
           >
             <option value="">Select a user...</option>
@@ -207,6 +220,21 @@ function GrantForm({
               </option>
             ))}
           </select>
+        </label>
+        <label className="text-sm sm:col-span-2">
+          <span className="text-muted-foreground text-xs">
+            ...or invite a new guardian by email
+          </span>
+          <input
+            type="email"
+            value={inviteEmail}
+            onChange={(e) => {
+              setInviteEmail(e.target.value);
+              if (e.target.value) setGuardianId("");
+            }}
+            placeholder="parent@example.com"
+            className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+          />
         </label>
         <label className="text-sm">
           <span className="text-muted-foreground text-xs">Tier</span>
@@ -235,6 +263,18 @@ function GrantForm({
         <span>Primary parent (a paid primary parent unlocks free extra guardians)</span>
       </label>
       {err && <div className="mt-3 text-sm text-red-400">{err}</div>}
+      {invite && (
+        <div className="mt-3 rounded-md border border-emerald-800 bg-emerald-950/30 p-3 text-sm">
+          <div className="font-medium text-emerald-300">Guardian account created.</div>
+          <div className="mt-1 text-muted-foreground">
+            Share these once. They sign in and set their own password.
+          </div>
+          <div className="mt-2 font-mono text-xs">
+            <div>email: {invite.email}</div>
+            <div>temporary password: {invite.password}</div>
+          </div>
+        </div>
+      )}
       <button
         onClick={submit}
         disabled={busy}
