@@ -535,6 +535,80 @@ async def link_search(
     }
 
 
+@router.get("/links/{link_id}/trends")
+async def link_trends(
+    link_id: uuid.UUID,
+    request: Request,
+    days: int = Query(default=7, ge=1, le=30),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Premium weekly wellbeing trends. Gentle signals (days seen, first/last
+    sighting, zone variety), framed as awareness, never judgment. Scoped to the
+    bound dependant and clamped to the link cutoff."""
+    link = await _load_link(db, link_id)
+    _ensure_owner_or_admin(link, user)
+    _ensure_active(link)
+    if not link.premium:
+        raise HTTPException(status_code=402, detail="Trends are a premium feature")
+    person = await db.get(Person, link.person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Dependant not found")
+
+    from datetime import timedelta
+
+    from sqlalchemy import String as SAString
+    from sqlalchemy import cast
+
+    delay = await _free_delay(db)
+    cutoff = ent.cutoff_time(link, delay)
+    needle = f'%"person_id": "{person.id}"%'
+    rows = (
+        await db.execute(
+            select(Observation)
+            .where(Observation.started_at <= cutoff)
+            .where(Observation.started_at >= cutoff - timedelta(days=days))
+            .where(cast(Observation.person_detections, SAString).ilike(needle))
+            .order_by(Observation.started_at.asc())
+        )
+    ).scalars().all()
+
+    by_day: dict[str, dict] = {}
+    cam_names: dict[uuid.UUID, str | None] = {}
+    for o in rows:
+        day = o.started_at.date().isoformat()
+        d = by_day.setdefault(
+            day,
+            {"date": day, "sightings": 0, "first_seen": None, "last_seen": None, "zones": set()},
+        )
+        d["sightings"] += 1
+        ts = o.started_at.isoformat()
+        if d["first_seen"] is None:
+            d["first_seen"] = ts
+        d["last_seen"] = ts
+        if o.camera_id not in cam_names:
+            cam = await db.get(Camera, o.camera_id)
+            cam_names[o.camera_id] = (cam.location_label or cam.name) if cam else None
+        if cam_names[o.camera_id]:
+            d["zones"].add(cam_names[o.camera_id])
+
+    days_list = []
+    for d in by_day.values():
+        d["zones"] = sorted(d["zones"])
+        days_list.append(d)
+    days_list.sort(key=lambda x: x["date"])
+
+    await _log(db, link, "search", request, {"trends_days": days})
+    return {
+        "display_name": person.nickname or person.display_name,
+        "window_days": days,
+        "days_seen": len(days_list),
+        "total_sightings": sum(d["sightings"] for d in days_list),
+        "days": days_list,
+        "delayed": ent.effective_delay_seconds(link, delay) > 0,
+    }
+
+
 @router.patch("/links/{link_id}/alerts")
 async def link_alerts(
     link_id: uuid.UUID,
