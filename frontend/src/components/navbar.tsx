@@ -82,6 +82,10 @@ export function Navbar() {
   const { user, logout, authFetch} = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
   const [provider, setProvider] = useState<ProviderInfo | null>(null);
+  const [vlmHealth, setVlmHealth] = useState<{
+    configured: boolean; reachable: boolean; name?: string | null;
+    kind?: string | null; message?: string | null;
+  } | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -96,6 +100,9 @@ export function Navbar() {
         const active = list.find((p) => p.active) || null;
         setProvider(active);
       }
+      // Reachability. distinguishes "configured" from "actually working".
+      const h = await authFetch("/api/providers/health");
+      if (h.ok) setVlmHealth(await h.json());
     } catch {
       /* silent */
     } finally {
@@ -235,23 +242,32 @@ export function Navbar() {
               Secure account
             </button>
           )}
-          <Link
-            href="/settings"
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {loaded && (
-              <>
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    provider ? "bg-green-500 pulse-dot" : "bg-yellow-500"
-                  }`}
-                />
-                <span className="font-mono">
-                  {provider ? `${provider.kind} / ${provider.name}` : "no provider configured"}
-                </span>
-              </>
-            )}
-          </Link>
+          {(() => {
+            const offline = vlmHealth ? (vlmHealth.configured && !vlmHealth.reachable) : false;
+            const missing = vlmHealth ? !vlmHealth.configured : !provider;
+            const dot = offline ? "bg-red-500 pulse-dot" : missing ? "bg-yellow-500" : "bg-green-500 pulse-dot";
+            const label = offline
+              ? "AI offline"
+              : missing
+                ? "set up AI"
+                : provider ? `${provider.kind} / ${provider.name}` : "AI ready";
+            const title = vlmHealth?.message
+              || (offline ? "The configured AI model is unreachable." : missing ? "No AI model configured." : "AI model is reachable.");
+            return (
+              <Link
+                href="/settings"
+                title={title}
+                className={`flex items-center gap-2 text-xs transition-colors ${offline ? "text-red-400 hover:text-red-300" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {loaded && (
+                  <>
+                    <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+                    <span className="font-mono">{label}</span>
+                  </>
+                )}
+              </Link>
+            );
+          })()}
 
           {/* Theme toggle */}
           <button

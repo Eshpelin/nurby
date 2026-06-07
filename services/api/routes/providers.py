@@ -28,6 +28,65 @@ async def list_providers(_current_user: User = Depends(get_current_user), db: As
     return result.scalars().all()
 
 
+class VlmHealth(BaseModel):
+    configured: bool
+    reachable: bool
+    name: str | None = None
+    kind: str | None = None
+    message: str | None = None
+
+
+@router.get("/health", response_model=VlmHealth)
+async def vlm_health(
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Is the active AI model actually usable right now?
+
+    Surfaces the common silent failure. a provider is configured (so the UI
+    looks fine) but its backend is unreachable, so every VLM feature quietly
+    no-ops. Returns an actionable message the navbar shows.
+    """
+    prov = (await db.execute(
+        select(Provider).where(Provider.active.is_(True))
+        .order_by(Provider.created_at).limit(1)
+    )).scalars().first()
+
+    if prov is None:
+        return VlmHealth(
+            configured=False, reachable=False,
+            message=("No AI model is set up. Open Settings and deploy a local "
+                     "model or add an API key. Detection, faces, and rules "
+                     "work without it, but scene descriptions and Ask Nurby "
+                     "need a model."),
+        )
+
+    if prov.kind == "ollama":
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                r = await client.get(f"{prov.base_url}/api/tags")
+            ok = r.status_code == 200
+        except Exception:
+            ok = False
+        if not ok:
+            return VlmHealth(
+                configured=True, reachable=False, name=prov.name, kind=prov.kind,
+                message=(f"Ollama is not reachable at {prov.base_url}. AI scene "
+                         "descriptions and Ask Nurby are paused until it is "
+                         "back. Start Ollama (or `docker compose --profile "
+                         "local-ai up -d ollama`), then it resumes automatically."),
+            )
+        return VlmHealth(configured=True, reachable=True, name=prov.name, kind=prov.kind)
+
+    # Cloud providers. cheap check. a missing key is the usual failure.
+    if not prov.api_key:
+        return VlmHealth(
+            configured=True, reachable=False, name=prov.name, kind=prov.kind,
+            message=f"{prov.name} has no API key set. Add it in Settings.",
+        )
+    return VlmHealth(configured=True, reachable=True, name=prov.name, kind=prov.kind)
+
+
 @router.post("", response_model=ProviderResponse, status_code=201)
 async def create_provider(body: ProviderCreate, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     provider = Provider(**body.model_dump())
