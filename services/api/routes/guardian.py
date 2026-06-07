@@ -46,6 +46,7 @@ from shared.schemas import (
     FacilityUpdate,
     GuardianAccessLogResponse,
     GuardianAlertPrefsUpdate,
+    GuardianChannelsUpdate,
     GuardianLinkCreate,
     GuardianLinkResponse,
     GuardianLinkUpdate,
@@ -177,6 +178,7 @@ async def guardian_me(
                 "active": ent.is_active(link),
                 "expires_at": link.expires_at.isoformat() if link.expires_at else None,
                 "alert_prefs": link.alert_prefs or ent.DEFAULT_ALERT_PREFS,
+                "notify_channels": link.notify_channels or ent.DEFAULT_NOTIFY_CHANNELS,
                 "entitlements": ent.entitlement_summary(link),
             }
         )
@@ -463,6 +465,26 @@ async def link_alerts(
     await db.commit()
     await _log(db, link, "alerts_change", request, {"alert_prefs": link.alert_prefs})
     return {"alert_prefs": link.alert_prefs}
+
+
+@router.patch("/links/{link_id}/channels")
+async def link_channels(
+    link_id: uuid.UUID,
+    body: GuardianChannelsUpdate,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Guardian chooses which channels they receive alerts on (telegram, email,
+    in_app). in_app is the shared household notification and is always recorded;
+    telegram and email are the per-guardian transports this gates."""
+    link = await _load_link(db, link_id)
+    _ensure_owner_or_admin(link, user)
+    _ensure_active(link)
+    link.notify_channels = ent.sanitize_notify_channels(body.notify_channels)
+    await db.commit()
+    await _log(db, link, "channels_change", request, {"notify_channels": link.notify_channels})
+    return {"notify_channels": link.notify_channels}
 
 
 # ── facility-admin endpoints ─────────────────────────────────────────

@@ -37,6 +37,11 @@ ALERT_KINDS = (
     "not_seen",
 )
 
+# Channels a guardian can receive alerts on. in_app is the shared household
+# notification (always recorded); telegram/email are per-guardian transports.
+NOTIFY_CHANNELS = ("telegram", "email", "in_app")
+DEFAULT_NOTIFY_CHANNELS = {"telegram": True, "email": True, "in_app": True}
+
 # Defaults for a freshly granted link: the high-value, low-risk green pair on.
 DEFAULT_ALERT_PREFS = {
     "arrived": True,
@@ -194,6 +199,21 @@ def sanitize_alert_prefs(prefs: dict | None, allowed: Iterable[str] | None = Non
         if k not in allowed_set:
             out[k] = False
             continue
+        if prefs and k in prefs:
+            out[k] = bool(prefs[k])
+    return out
+
+
+def channel_enabled(link: LinkLike, channel: str) -> bool:
+    """Whether the guardian opted into a delivery channel. Null prefs = all on."""
+    prefs = getattr(link, "notify_channels", None) or DEFAULT_NOTIFY_CHANNELS
+    return bool(prefs.get(channel, DEFAULT_NOTIFY_CHANNELS.get(channel, False)))
+
+
+def sanitize_notify_channels(prefs: dict | None) -> dict:
+    """Coerce a submitted channel dict to the known keys + booleans."""
+    out = dict(DEFAULT_NOTIFY_CHANNELS)
+    for k in NOTIFY_CHANNELS:
         if prefs and k in prefs:
             out[k] = bool(prefs[k])
     return out

@@ -16,6 +16,7 @@ from typing import Iterable
 
 from sqlalchemy import select
 
+from services.guardian import entitlements as ent
 from shared.config import settings
 from shared.models import TelegramChannel, User
 
@@ -103,21 +104,26 @@ async def deliver_to_guardians(
         if uid is None or uid in seen_users:
             continue
         seen_users.add(uid)
-        try:
-            channels = await _telegram_channels_for(db, uid)
-        except Exception:  # noqa: BLE001
-            channels = []
-        for ch in channels:
-            if await _send_telegram(ch, message, photo_path):
-                telegram_sent += 1
-        # Email fallback/parallel path.
-        try:
-            user = await db.get(User, uid)
-        except Exception:  # noqa: BLE001
-            user = None
-        if user is not None and getattr(user, "email", None):
-            if await _send_email(user.email, subject, message):
-                email_sent += 1
+        want_telegram = ent.channel_enabled(link, "telegram")
+        want_email = ent.channel_enabled(link, "email")
+
+        if want_telegram:
+            try:
+                channels = await _telegram_channels_for(db, uid)
+            except Exception:  # noqa: BLE001
+                channels = []
+            for ch in channels:
+                if await _send_telegram(ch, message, photo_path):
+                    telegram_sent += 1
+
+        if want_email:
+            try:
+                user = await db.get(User, uid)
+            except Exception:  # noqa: BLE001
+                user = None
+            if user is not None and getattr(user, "email", None):
+                if await _send_email(user.email, subject, message):
+                    email_sent += 1
 
     return {
         "telegram_sent": telegram_sent,

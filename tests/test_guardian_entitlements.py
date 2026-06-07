@@ -211,6 +211,29 @@ def test_sanitize_coerces_booleans():
     assert out["picked_up"] is False
 
 
+def test_channel_defaults_all_on():
+    lk = link()
+    assert ent.channel_enabled(lk, "telegram") is True
+    assert ent.channel_enabled(lk, "email") is True
+    assert ent.channel_enabled(lk, "in_app") is True
+
+
+def test_channel_respects_prefs():
+    lk = link(notify_channels={"telegram": False, "email": True})
+    assert ent.channel_enabled(lk, "telegram") is False
+    assert ent.channel_enabled(lk, "email") is True
+    # unset key falls back to default on
+    assert ent.channel_enabled(lk, "in_app") is True
+
+
+def test_sanitize_notify_channels():
+    out = ent.sanitize_notify_channels({"telegram": 0, "bogus": True})
+    assert out["telegram"] is False
+    assert out["email"] is True
+    assert out["in_app"] is True
+    assert "bogus" not in out
+
+
 def test_entitlement_summary_shape():
     s = ent.entitlement_summary(link(premium=True, live_presence=True))
     assert s["delayed"] is False
