@@ -138,3 +138,17 @@ real data:
   that hook is the integration seam and is admin/API-key callable today.
 - Facility camera scoping is all-cameras for the single-household deploy; the
   max-cameras-per-person governor is modeled and settable.
+
+## Round 2 (push transport + perception wiring + live/search)
+
+- Per-guardian delivery: alerts now push to each recipient's paired Telegram +
+  email (best-effort, isolated) and broadcast the in-app notification over WS.
+  services/guardian/delivery.py.
+- Perception wiring: journey open -> "arrived", journey finalize -> "departed",
+  resolved to the bound Person's active links, fire-and-forget and isolated.
+  services/guardian/lifecycle.py + journey_tracker hooks.
+- Live endpoint (live_presence/live_video gated) and premium dependant-scoped
+  smart search; delayed flag derived from entitlement.
+- Frontend premium smart-search panel on the dependant detail page.
+- 83 guardian unit assertions green; rebuilt api/perception/frontend; smoke
+  re-verified (live 200, search delayed=false on a live link).
