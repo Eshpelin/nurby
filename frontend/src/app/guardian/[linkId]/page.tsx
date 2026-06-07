@@ -8,6 +8,7 @@ import {
   ALERT_KINDS,
   Dependant,
   DependantStatus,
+  NOTIFY_CHANNELS,
   stateColor,
   timeAgo,
 } from "@/lib/guardian";
@@ -138,6 +139,14 @@ export default function DependantDetailPage() {
         <AlertToggles linkId={linkId} initial={dependant.alert_prefs} />
       )}
 
+      {/* Delivery channels */}
+      {dependant && (
+        <ChannelToggles
+          linkId={linkId}
+          initial={dependant.notify_channels || { telegram: true, email: true, in_app: true }}
+        />
+      )}
+
       {/* Premium upsell */}
       {ent && <UpsellPanel ent={ent} />}
     </div>
@@ -257,6 +266,68 @@ function AlertToggles({
           </label>
         ))}
       </div>
+    </section>
+  );
+}
+
+function ChannelToggles({
+  linkId,
+  initial,
+}: {
+  linkId: string;
+  initial: Record<string, boolean>;
+}) {
+  const { authFetch } = useAuth();
+  const [channels, setChannels] = useState<Record<string, boolean>>(initial);
+  const [saving, setSaving] = useState(false);
+
+  const toggle = async (key: string) => {
+    const next = { ...channels, [key]: !channels[key] };
+    setChannels(next);
+    setSaving(true);
+    try {
+      const res = await authFetch(`/api/guardian/links/${linkId}/channels`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notify_channels: next }),
+      });
+      if (res.ok) setChannels((await res.json()).notify_channels);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="mt-6">
+      <h2 className="text-sm font-medium text-muted-foreground mb-2">
+        How you get alerts {saving && <span className="text-xs">saving...</span>}
+      </h2>
+      <div className="rounded-lg border border-border bg-card divide-y divide-border">
+        {NOTIFY_CHANNELS.map((ch) => (
+          <label
+            key={ch.key}
+            className="flex items-center justify-between px-4 py-3 text-sm cursor-pointer"
+          >
+            <span>{ch.label}</span>
+            <button
+              type="button"
+              onClick={() => toggle(ch.key)}
+              className={`relative h-5 w-9 rounded-full transition-colors ${
+                channels[ch.key] ? "bg-emerald-600" : "bg-zinc-700"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                  channels[ch.key] ? "translate-x-4" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </label>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground mt-2">
+        Telegram needs a paired bot. Email goes to your account address. In-app always shows here.
+      </p>
     </section>
   );
 }
