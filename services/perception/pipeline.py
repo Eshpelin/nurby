@@ -475,7 +475,7 @@ class PerceptionPipeline:
             try:
                 async with async_session() as vdb:
                     vehicle_detections, vehicle_jobs = await identify_vehicles(
-                        vdb, uuid.UUID(camera_id), detections, timestamp
+                        vdb, uuid.UUID(camera_id), detections, timestamp, frame=frame
                     )
                     await vdb.commit()
                 if vehicle_jobs:

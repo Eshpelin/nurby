@@ -6,10 +6,15 @@ Every vehicle detection in a frame is recorded in
 ``Observation.vehicle_detections`` (mirrors person_detections) so the
 Vehicles tab can query sightings the same way People does.
 
-Plateless vehicles (e.g. forklifts) are still detected and timelined, but
-do not get a persistent identity here. that needs appearance re-id (the
-vehicle analogue of body re-id) and is a separate layer. We never merge
-plateless vehicles into one identity, which would be worse than none.
+Plateless vehicles (e.g. forklifts, or a car at a bad angle) are
+re-identified by their CLIP appearance embedding. a recurring plateless
+vehicle on the same camera within a recent window collapses to one
+provisional Vehicle row instead of getting no identity at all. The match
+threshold is deliberately tight and scoped to the same camera, because
+CLIP captures coarse appearance. it groups a distinctive recurring
+vehicle well but would over-merge a street full of identical sedans, so
+plateless identities are always provisional for a human to confirm or
+split. A dedicated vehicle re-id model would sharpen this later.
 
 A short VLM description ("Red Nissan sedan, tinted windows") is generated
 once per new vehicle in the background so it never blocks the keyframe
@@ -61,11 +66,19 @@ def _bbox_center_inside(plate_bbox: list, vehicle_bbox: list) -> bool:
         return False
 
 
-async def identify_vehicles(db, camera_id, detections: list, ts) -> tuple[dict | None, list]:
-    """Build vehicle_detections and upsert Vehicle rows for plated vehicles.
+# Plateless appearance re-id tuning. Tight so we under-merge rather than
+# collapse distinct vehicles. Same camera, recent, high CLIP similarity.
+_PLATELESS_MAX_DISTANCE = 0.12   # cosine distance. ~0.88 similarity
+_PLATELESS_RECENCY_HOURS = 24
 
-    Returns (vehicle_detections, new_vehicle_jobs) where new_vehicle_jobs is
-    a list of (vehicle_id, bbox) for vehicles that still need a description.
+
+async def identify_vehicles(db, camera_id, detections: list, ts, frame=None) -> tuple[dict | None, list]:
+    """Build vehicle_detections and upsert Vehicle rows.
+
+    Plated vehicles key on the exact plate. Plateless vehicles re-identify by
+    CLIP appearance against recent same-camera plateless rows (needs ``frame``).
+    Returns (vehicle_detections, new_vehicle_jobs) where new_vehicle_jobs is a
+    list of (vehicle_id, bbox) for vehicles that still need a description.
     Runs inside the caller's db session/transaction.
     """
     if not detections:
@@ -128,11 +141,83 @@ async def identify_vehicles(db, camera_id, detections: list, ts) -> tuple[dict |
                     new_jobs.append((vehicle.id, vbox))
             entry["vehicle_id"] = str(vehicle.id)
             entry["identity_key"] = identity_key
+        elif frame is not None:
+            # Plateless. re-identify by CLIP appearance against recent
+            # same-camera plateless rows.
+            vid, ikey, job = await _identify_plateless(db, camera_id, v, vbox, ts, frame)
+            if vid is not None:
+                entry["vehicle_id"] = str(vid)
+                entry["identity_key"] = ikey
+                if job is not None:
+                    new_jobs.append(job)
 
         entries.append(entry)
 
     vehicle_detections = {"vehicles": entries, "count": len(entries)}
     return vehicle_detections, new_jobs
+
+
+async def _identify_plateless(db, camera_id, v: dict, vbox: list, ts, frame):
+    """Re-identify a plateless vehicle by CLIP appearance. Returns
+    (vehicle_id, identity_key, new_description_job_or_None) or (None, None, None)
+    when CLIP is unavailable or the crop is unusable."""
+    import uuid as _uuid
+    from datetime import timedelta
+
+    from services.perception.vlm_gate import get_gate
+
+    crop = _crop(frame, vbox)
+    if crop is None or crop.size == 0:
+        return None, None, None
+    emb = await get_gate().embed_image(crop)
+    if emb is None:
+        return None, None, None
+    vec = emb.tolist()
+
+    cutoff = ts - timedelta(hours=_PLATELESS_RECENCY_HOURS)
+    dist = Vehicle.appearance_embedding.cosine_distance(vec)
+    row = (await db.execute(
+        select(Vehicle, dist.label("d"))
+        .where(Vehicle.plateless.is_(True))
+        .where(Vehicle.appearance_embedding.is_not(None))
+        .where(Vehicle.first_camera_id == camera_id)
+        .where(Vehicle.last_seen_at >= cutoff)
+        .order_by(dist.asc())
+        .limit(1)
+    )).first()
+
+    if row is not None and row.d is not None and row.d <= _PLATELESS_MAX_DISTANCE:
+        vehicle = row[0]
+        vehicle.last_seen_at = ts
+        vehicle.sighting_count = (vehicle.sighting_count or 0) + 1
+        # EMA the representative embedding so it tracks the vehicle's look.
+        old = np.array(vehicle.appearance_embedding, dtype="float32")
+        new = 0.8 * old + 0.2 * emb.astype("float32")
+        n = np.linalg.norm(new)
+        vehicle.appearance_embedding = (new / n).tolist() if n else vec
+        job = None
+        if vehicle.description_status == "pending" and not vehicle.description:
+            job = (vehicle.id, vbox)
+        return vehicle.id, vehicle.identity_key, job
+
+    # No match. new provisional plateless identity.
+    identity_key = f"plateless:{_uuid.uuid4()}"
+    vehicle = Vehicle(
+        identity_key=identity_key,
+        display_name=f"Unidentified {v.get('label') or 'vehicle'}",
+        vehicle_type=v.get("label"),
+        plateless=True,
+        appearance_embedding=vec,
+        first_camera_id=camera_id,
+        first_seen_at=ts,
+        last_seen_at=ts,
+        sighting_count=1,
+        is_provisional=True,
+        description_status="pending",
+    )
+    db.add(vehicle)
+    await db.flush()
+    return vehicle.id, identity_key, (vehicle.id, vbox)
 
 
 # Cap concurrent vehicle-description VLM calls. a burst of new plates must
@@ -204,8 +289,11 @@ async def _describe_vehicle(vehicle_id, crop: np.ndarray) -> None:
                 vehicle.make = make
             if model and not vehicle.model:
                 vehicle.model = model
-            # Upgrade the display name from "Plate X" to something human.
-            if vehicle.display_name.startswith("Plate ") and (color or make):
+            # Upgrade a placeholder name ("Plate X" / "Unidentified car") to
+            # something human once we have color/make.
+            placeholder = (vehicle.display_name.startswith("Plate ")
+                           or vehicle.display_name.startswith("Unidentified "))
+            if placeholder and (color or make):
                 label = " ".join(p for p in [color, make, model] if p).strip()
                 if label:
                     plate = vehicle.license_plate or ""

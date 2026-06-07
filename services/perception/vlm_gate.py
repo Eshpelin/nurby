@@ -122,6 +122,34 @@ class CLIPGate:
                 interesting_label="", boring_label="", reason="error",
             )
 
+    async def embed_image(self, frame_bgr: np.ndarray) -> np.ndarray | None:
+        """Return the L2-normalized CLIP image embedding for a crop, or None
+        if CLIP is unavailable. Reused for plateless vehicle appearance re-id.
+        """
+        if self._load_failed:
+            return None
+        try:
+            return await asyncio.get_event_loop().run_in_executor(
+                None, self._embed_image_sync, frame_bgr,
+            )
+        except Exception:
+            logger.debug("CLIP image embed failed", exc_info=True)
+            return None
+
+    def _embed_image_sync(self, frame_bgr: np.ndarray) -> np.ndarray | None:
+        if not self._load():
+            return None
+        import torch  # type: ignore
+        from PIL import Image  # type: ignore
+
+        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        pil = Image.fromarray(rgb)
+        with torch.no_grad():
+            image = self._preprocess(pil).unsqueeze(0).to(self._device)
+            feats = self._model.encode_image(image)
+            feats = feats / feats.norm(dim=-1, keepdim=True)
+        return feats.squeeze(0).cpu().numpy()
+
     # ── internals ─────────────────────────────────────────────────────
 
     def _load(self) -> bool:

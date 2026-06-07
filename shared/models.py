@@ -340,6 +340,13 @@ class Vehicle(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     first_camera_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     sighting_count: Mapped[int] = mapped_column(Integer, default=1)
+    # Plateless identity. a vehicle with no readable plate (forklift, car at
+    # a bad angle) is re-identified by its CLIP appearance embedding instead.
+    # plateless=True marks these, and appearance_embedding holds the running
+    # representative so a recurring vehicle collapses to one row without a
+    # plate. Plated vehicles leave both unset.
+    plateless: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    appearance_embedding: Mapped[list[float] | None] = mapped_column(Vector(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
