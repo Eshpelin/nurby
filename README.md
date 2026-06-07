@@ -141,6 +141,35 @@ docker compose --profile local-ai up -d ollama
 
 Nurby detects it automatically, and Settings → AI Providers can deploy a model in one click. It stays opt-in so a plain `docker compose up` remains light.
 
+#### Faster local AI on a Mac (native Ollama with the GPU)
+
+The bundled `ollama` container runs the model on the CPU, because Docker Desktop on a Mac cannot reach the Apple GPU. That works, but a vision model can take tens of seconds per frame. For a much faster setup, run Ollama natively on the Mac so it uses the Metal GPU, and point Nurby at it.
+
+1. Install and start [Ollama for macOS](https://ollama.com/download), then pull a vision model:
+
+   ```bash
+   ollama pull gemma3:4b
+   ```
+
+2. Let Ollama accept connections from the Docker containers, then restart it:
+
+   ```bash
+   launchctl setenv OLLAMA_HOST 0.0.0.0
+   osascript -e 'quit app "Ollama"'; open -a Ollama
+   ```
+
+   Note. this binds Ollama to all network interfaces so Docker can reach it, which also exposes it to your local network. On a home network that is low risk. to undo it later, run `launchctl unsetenv OLLAMA_HOST` and restart Ollama.
+
+3. Point Nurby at the host Ollama by adding this to your `.env`, then `docker compose up -d` to apply it:
+
+   ```bash
+   OLLAMA_BASE_URL=http://host.docker.internal:11434
+   ```
+
+4. You no longer need the bundled container, so skip the `--profile local-ai` step. In Settings → AI Providers, deploy or select your model. it now runs on the GPU. On Apple Silicon this is roughly ten to twenty times faster than the CPU container.
+
+This is the recommended setup for anyone on a Mac who wants responsive live captions. Linux hosts with an NVIDIA GPU get the same benefit by giving the bundled `ollama` container GPU access through the NVIDIA Container Toolkit.
+
 ### Stopping, starting, and resetting
 
 - **Stop it.** Press `Ctrl+C` in the terminal, or run `docker compose down`.
