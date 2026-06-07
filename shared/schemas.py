@@ -36,6 +36,7 @@ class CameraCreate(BaseModel):
     detect_objects: bool = True
     detect_faces: bool = True
     scene_mode: str = Field(default="indoor", max_length=16)  # indoor, outdoor
+    plateless_reid_enabled: bool | None = None  # None = auto (off outdoors)
     object_confidence: float = Field(default=0.35, ge=0.05, le=1.0)
     vlm_trigger: str = Field(default="always", max_length=16)  # always, on_object
     vlm_trigger_objects: list[str] | None = None
@@ -101,6 +102,7 @@ class CameraUpdate(BaseModel):
     detect_objects: bool | None = None
     detect_faces: bool | None = None
     scene_mode: str | None = Field(default=None, max_length=16)
+    plateless_reid_enabled: bool | None = None  # null = auto
     object_confidence: float | None = Field(default=None, ge=0.05, le=1.0)
     vlm_trigger: str | None = Field(default=None, max_length=16)
     vlm_trigger_objects: list[str] | None = None
@@ -187,6 +189,7 @@ class CameraResponse(BaseModel):
     detect_objects: bool
     detect_faces: bool
     scene_mode: str
+    plateless_reid_enabled: bool | None = None
     object_confidence: float
     vlm_trigger: str
     vlm_trigger_objects: list[str] | None

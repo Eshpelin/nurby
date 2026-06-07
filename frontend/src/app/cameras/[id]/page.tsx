@@ -73,6 +73,7 @@ interface Camera {
   detect_objects: boolean;
   detect_faces: boolean;
   scene_mode: string;
+  plateless_reid_enabled: boolean | null;
   object_confidence: number;
   vlm_trigger: string;
   vlm_trigger_objects: string[] | null;
@@ -1087,6 +1088,7 @@ export default function CameraConfigPage() {
   const [detectObjects, setDetectObjects] = useState(true);
   const [detectFaces, setDetectFaces] = useState(true);
   const [sceneMode, setSceneMode] = useState("indoor");
+  const [platelessReid, setPlatelessReid] = useState<boolean | null>(null);
   const [objectConfidence, setObjectConfidence] = useState(0.35);
   const [detectionModels, setDetectionModels] = useState<{model: string; confidence: number; enabled: boolean; label_filter: string[]}[]>([]);
   const [detectionMerge, setDetectionMerge] = useState("any");
@@ -1181,6 +1183,7 @@ export default function CameraConfigPage() {
       setDetectObjects(cam.detect_objects ?? true);
       setDetectFaces(cam.detect_faces ?? true);
       setSceneMode(cam.scene_mode ?? "indoor");
+      setPlatelessReid(cam.plateless_reid_enabled ?? null);
       setObjectConfidence(cam.object_confidence ?? 0.35);
       setDetectionModels(cam.detection_models ?? []);
       setDetectionMerge(cam.detection_merge ?? "any");
@@ -1333,6 +1336,7 @@ export default function CameraConfigPage() {
         detect_objects: detectObjects,
         detect_faces: detectFaces,
         scene_mode: sceneMode,
+        plateless_reid_enabled: platelessReid,
         object_confidence: objectConfidence,
         detection_models: detectionModels.length > 0 ? detectionModels : null,
         detection_merge: detectionMerge,
@@ -1424,7 +1428,7 @@ export default function CameraConfigPage() {
     vlmTrigger, vlmTriggerObjects,
     vlmRefinerProviderId, vlmRefinerTriggerObjects, vlmRefinerKeywords,
     vlmRefinerMaxTokens, vlmRefinerMaxInputTokens,
-    detectObjects, detectFaces, sceneMode, objectConfidence,
+    detectObjects, detectFaces, sceneMode, platelessReid, objectConfidence,
     detectionModels, detectionMerge, detectionConsensusMin,
     digestEnabled, digestPeriod, digestProviderId, digestPrompt,
     retentionMode, retentionDays, retentionGb,
@@ -2072,6 +2076,29 @@ export default function CameraConfigPage() {
                 {sceneMode === "outdoor"
                   ? "Outdoor mode will still recognize people you have already named, but will not try to identify unknown faces. This prevents your People page from filling up with strangers walking by."
                   : "Indoor mode will track all faces and suggest unknown people for you to name."}
+              </p>
+            </div>
+          </FieldRow>
+
+          <FieldRow label="Group unplated vehicles" hint="Re-identify vehicles with no readable plate by appearance">
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                {([["auto", null], ["on", true], ["off", false]] as const).map(([key, val]) => {
+                  const active = platelessReid === val;
+                  return (
+                    <button key={key} onClick={() => setPlatelessReid(val)}
+                      className={`flex-1 px-3 py-2 text-xs rounded-lg transition-colors capitalize ${active ? "bg-accent/15 text-accent-foreground font-medium border border-accent/30" : "text-muted-foreground border border-border hover:text-foreground hover:bg-muted/50"}`}>
+                      {key}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {platelessReid === null
+                  ? `Auto. ${sceneMode === "outdoor" ? "off for this outdoor camera, since a busy street would create many one-off vehicles." : "on for this camera."} Override with On or Off.`
+                  : platelessReid
+                    ? "On. unplated vehicles seen repeatedly here are grouped into one provisional identity by appearance."
+                    : "Off. unplated vehicles are still detected and timelined, but not grouped into identities."}
               </p>
             </div>
           </FieldRow>

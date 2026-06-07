@@ -72,14 +72,27 @@ _PLATELESS_MAX_DISTANCE = 0.12   # cosine distance. ~0.88 similarity
 _PLATELESS_RECENCY_HOURS = 24
 
 
-async def identify_vehicles(db, camera_id, detections: list, ts, frame=None) -> tuple[dict | None, list]:
+def plateless_reid_on(cam) -> bool:
+    """Resolve the per-camera plateless re-id tri-state. explicit True/False
+    wins. None = auto, which is on unless the camera is outdoor (where a busy
+    street would spawn too many transient identities)."""
+    if cam is None:
+        return True
+    val = getattr(cam, "plateless_reid_enabled", None)
+    if val is not None:
+        return bool(val)
+    return getattr(cam, "scene_mode", "indoor") != "outdoor"
+
+
+async def identify_vehicles(db, camera_id, detections: list, ts, frame=None,
+                            plateless_enabled: bool = True) -> tuple[dict | None, list]:
     """Build vehicle_detections and upsert Vehicle rows.
 
     Plated vehicles key on the exact plate. Plateless vehicles re-identify by
-    CLIP appearance against recent same-camera plateless rows (needs ``frame``).
-    Returns (vehicle_detections, new_vehicle_jobs) where new_vehicle_jobs is a
-    list of (vehicle_id, bbox) for vehicles that still need a description.
-    Runs inside the caller's db session/transaction.
+    CLIP appearance against recent same-camera plateless rows (needs ``frame``
+    and ``plateless_enabled``). Returns (vehicle_detections, new_vehicle_jobs)
+    where new_vehicle_jobs is a list of (vehicle_id, bbox) for vehicles that
+    still need a description. Runs inside the caller's db session/transaction.
     """
     if not detections:
         return None, []
@@ -141,9 +154,9 @@ async def identify_vehicles(db, camera_id, detections: list, ts, frame=None) -> 
                     new_jobs.append((vehicle.id, vbox))
             entry["vehicle_id"] = str(vehicle.id)
             entry["identity_key"] = identity_key
-        elif frame is not None:
+        elif frame is not None and plateless_enabled:
             # Plateless. re-identify by CLIP appearance against recent
-            # same-camera plateless rows.
+            # same-camera plateless rows. gated per camera.
             vid, ikey, job = await _identify_plateless(db, camera_id, v, vbox, ts, frame)
             if vid is not None:
                 entry["vehicle_id"] = str(vid)

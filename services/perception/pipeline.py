@@ -20,7 +20,7 @@ from services.perception.detector import ObjectDetector
 from services.perception.faces import FaceRecognizer
 from services.perception.reid import BodyReID
 from services.perception.plates import detect_plates
-from services.perception.vehicles import identify_vehicles, schedule_descriptions, VEHICLE_LABELS
+from services.perception.vehicles import identify_vehicles, plateless_reid_on, schedule_descriptions, VEHICLE_LABELS
 from services.perception.vlm import VLMClient, get_active_provider
 from services.perception.vlm_queue import VLMQueue, VLMJob
 from services.search.embeddings import generate_embedding, get_embedding_provider
@@ -475,7 +475,8 @@ class PerceptionPipeline:
             try:
                 async with async_session() as vdb:
                     vehicle_detections, vehicle_jobs = await identify_vehicles(
-                        vdb, uuid.UUID(camera_id), detections, timestamp, frame=frame
+                        vdb, uuid.UUID(camera_id), detections, timestamp, frame=frame,
+                        plateless_enabled=plateless_reid_on(cam),
                     )
                     await vdb.commit()
                 if vehicle_jobs:

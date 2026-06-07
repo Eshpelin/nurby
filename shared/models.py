@@ -46,6 +46,11 @@ class Camera(Base):
     detect_objects: Mapped[bool] = mapped_column(Boolean, default=True)
     detect_faces: Mapped[bool] = mapped_column(Boolean, default=True)
     scene_mode: Mapped[str] = mapped_column(String(16), default="indoor")  # indoor, outdoor
+    # Per-camera plateless vehicle grouping (CLIP appearance re-id). Tri-state.
+    # None = auto (on unless the camera is outdoor, where a busy street would
+    # spawn too many transient identities). True/False force it. plated
+    # vehicles are unaffected.
+    plateless_reid_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     object_confidence: Mapped[float] = mapped_column(Float, default=0.35)  # YOLO confidence threshold
     # VLM trigger config
     vlm_trigger: Mapped[str] = mapped_column(String(16), default="always")  # always, on_object

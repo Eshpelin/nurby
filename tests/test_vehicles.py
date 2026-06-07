@@ -189,3 +189,32 @@ def test_get_vehicles_filters_by_query():
     out = _run(get_vehicles(ctx, query="nissan"))
     assert out["count"] == 1
     assert out["vehicles"][0]["make"] == "Nissan"
+
+
+# ── per-camera plateless toggle resolver ──────────────────────────────
+
+class _Cam:
+    def __init__(self, scene_mode="indoor", plateless_reid_enabled=None):
+        self.scene_mode = scene_mode
+        self.plateless_reid_enabled = plateless_reid_enabled
+
+
+def test_plateless_auto_on_indoor():
+    from services.perception.vehicles import plateless_reid_on
+    assert plateless_reid_on(_Cam("indoor", None)) is True
+
+
+def test_plateless_auto_off_outdoor():
+    from services.perception.vehicles import plateless_reid_on
+    assert plateless_reid_on(_Cam("outdoor", None)) is False
+
+
+def test_plateless_explicit_overrides_scene():
+    from services.perception.vehicles import plateless_reid_on
+    assert plateless_reid_on(_Cam("outdoor", True)) is True   # force on outdoors
+    assert plateless_reid_on(_Cam("indoor", False)) is False  # force off indoors
+
+
+def test_plateless_none_camera_defaults_on():
+    from services.perception.vehicles import plateless_reid_on
+    assert plateless_reid_on(None) is True
