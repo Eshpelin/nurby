@@ -46,6 +46,22 @@ Deploy a local vision model through Ollama with a RAM-aware picker, or bring you
 
 ![Settings page](docs/screenshots/settings.png)
 
+### Guardian by Nurby: follow one person, blur everyone else
+
+The Guardian Panel lets a parent or carer follow one specific dependant in a facility, and nobody else. A calm presence check, a verified-pickup moment, a blurred image where every other face is hidden, and a facility admin that grants, revokes, and audits access. See [Guardian by Nurby](#guardian-by-nurby) for the full write-up.
+
+A parent's view. Each dependant is a calm status card: present, away, or not seen.
+
+![Guardian panel showing a parent's dependants](docs/screenshots/guardian-overview.png)
+
+One dependant. Present at a named zone, a "picked up by Mom" moment, and the latest snapshot blurred so no face is identifiable.
+
+![Guardian dependant detail with a blurred snapshot](docs/screenshots/guardian-detail.png)
+
+The facility side. Grant a guardian or invite one by email, set the tier and entitlements, revoke instantly, and read a full access log.
+
+![Guardian facility admin: grant, revoke, and audit access](docs/screenshots/guardian-admin.png)
+
 ## What is Nurby?
 
 Nurby is free, open-source software for recording and understanding your security cameras on your own server. It is a self-hosted network video recorder (NVR) and AI surveillance platform. It ingests RTSP and ONVIF IP cameras, detects objects and recognizes faces locally, captions scenes with a vision-language model, and lets you ask questions about your footage in plain language. Everything runs on hardware you control with Docker, so with a local model no video ever leaves your network. People use it as a private home-security camera system, a small-business CCTV setup, and a programmable surveillance platform with a REST API, webhooks, and physical alarm integrations.
