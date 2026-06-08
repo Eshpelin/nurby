@@ -8,6 +8,7 @@ interface Person {
   id: string;
   display_name: string;
   nickname: string | null;
+  consent_given?: boolean;
 }
 interface AdminUser {
   id: string;
@@ -184,6 +185,22 @@ function GrantForm({
     }
   };
 
+  const selectedPerson = persons.find((p) => p.id === personId);
+  const [consentBusy, setConsentBusy] = useState(false);
+  const toggleConsent = async (p: Person) => {
+    setConsentBusy(true);
+    try {
+      await authFetch(`/api/guardian/persons/${p.id}/consent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ given: !p.consent_given }),
+      });
+      onGranted();
+    } finally {
+      setConsentBusy(false);
+    }
+  };
+
   return (
     <div className="rounded-lg border border-border bg-card p-5">
       <h2 className="text-sm font-medium mb-3">Grant a guardian</h2>
@@ -202,6 +219,21 @@ function GrantForm({
               </option>
             ))}
           </select>
+          {selectedPerson && (
+            <div className="mt-1.5 flex items-center gap-2 text-xs">
+              <span className={selectedPerson.consent_given ? "text-emerald-400" : "text-amber-400"}>
+                {selectedPerson.consent_given ? "Consent on file" : "No consent on file"}
+              </span>
+              <button
+                type="button"
+                disabled={consentBusy}
+                onClick={() => toggleConsent(selectedPerson)}
+                className="rounded border border-border px-2 py-0.5 hover:bg-muted disabled:opacity-50"
+              >
+                {selectedPerson.consent_given ? "Withdraw" : "Mark consented"}
+              </button>
+            </div>
+          )}
         </label>
         <label className="text-sm">
           <span className="text-muted-foreground text-xs">Guardian account</span>

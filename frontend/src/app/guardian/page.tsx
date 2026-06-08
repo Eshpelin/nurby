@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { DependantAvatar } from "@/components/guardian-avatar";
+import { GuardianNotifications } from "@/components/guardian-notifications";
+import { GuardianTelegram } from "@/components/guardian-telegram";
 import { Dependant, DependantStatus, stateColor, timeAgo } from "@/lib/guardian";
 
 // The 10-second check. One calm status card per dependant. Most sessions end
@@ -65,14 +67,17 @@ export default function GuardianPage() {
             Peace of mind, nothing more. You only ever see the people you are bound to.
           </p>
         </div>
-        {user?.role === "admin" && (
-          <Link
-            href="/guardian/admin"
-            className="px-3 py-1.5 rounded-md border border-border text-sm hover:bg-muted transition-colors"
-          >
-            Manage access
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          <GuardianNotifications />
+          {user?.role === "admin" && (
+            <Link
+              href="/guardian/admin"
+              className="px-3 py-1.5 rounded-md border border-border text-sm hover:bg-muted transition-colors"
+            >
+              Manage access
+            </Link>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -101,6 +106,12 @@ export default function GuardianPage() {
           {dependants.map((d) => (
             <DependantCard key={d.link_id} dependant={d} status={statuses[d.link_id]} />
           ))}
+        </div>
+      )}
+
+      {dependants.length > 0 && (
+        <div className="mt-6">
+          <GuardianTelegram />
         </div>
       )}
     </div>
