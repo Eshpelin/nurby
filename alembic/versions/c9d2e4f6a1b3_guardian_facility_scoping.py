@@ -12,7 +12,7 @@ the single-household behaviour (a person is visible on every camera).
 import sqlalchemy as sa
 from alembic import op
 
-revision = "a1b2c3d4e5f6"
+revision = "c9d2e4f6a1b3"
 down_revision = "e2a4c6f8b0d3"
 branch_labels = None
 depends_on = None
