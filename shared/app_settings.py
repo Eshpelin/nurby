@@ -156,6 +156,11 @@ DEFAULTS: dict[str, Any] = {
     "guardian_clips_enabled": True,
     "guardian_clip_blur_sigma": 20,
     "guardian_unblurred_clips_enabled": False,
+    # Two-sided consent. When on, a person must have consent on file before a
+    # guardian can be linked to them, and their footage (image/clip/live) is
+    # withheld if consent is later withdrawn. Off by default so existing
+    # single-household deploys are unaffected until a facility opts in.
+    "guardian_require_consent": False,
 }
 
 

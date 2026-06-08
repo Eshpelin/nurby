@@ -15,7 +15,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -149,6 +149,16 @@ def _truthy(val) -> bool:
     if isinstance(val, bool):
         return val
     return str(val).strip().lower() not in ("", "0", "false", "no", "off")
+
+
+async def _ensure_consent(person) -> None:
+    """Withhold a person's footage when consent is required but not on file."""
+    if _truthy(await get_setting("guardian_require_consent", False)) and not getattr(
+        person, "consent_given", False
+    ):
+        raise HTTPException(
+            status_code=403, detail="Consent for this person is not on file."
+        )
 
 
 async def _free_delay(db: AsyncSession) -> int:
@@ -320,6 +330,7 @@ async def link_image(
     person = await db.get(Person, link.person_id)
     if person is None:
         raise HTTPException(status_code=404, detail="Dependant not found")
+    await _ensure_consent(person)
     delay = await _free_delay(db)
     img = await presence_mod.latest_image(db, link, person, free_delay_seconds=delay)
     if img is None:
@@ -428,6 +439,7 @@ async def link_live(
     person = await db.get(Person, link.person_id)
     if person is None:
         raise HTTPException(status_code=404, detail="Dependant not found")
+    await _ensure_consent(person)
     delay = await _free_delay(db)
     status = await presence_mod.dependant_status(db, link, person, free_delay_seconds=delay)
     img = clip = None
@@ -473,6 +485,7 @@ async def link_clip(
     person = await db.get(Person, link.person_id)
     if person is None:
         raise HTTPException(status_code=404, detail="Dependant not found")
+    await _ensure_consent(person)
     delay = await _free_delay(db)
     clip = await presence_mod.latest_clip(db, link, person, free_delay_seconds=delay)
     if clip is None:
@@ -876,6 +889,14 @@ async def create_link(
     if person is None:
         raise HTTPException(status_code=404, detail="Person not found")
 
+    # Two-sided consent: a person must have consent on file before anyone can be
+    # bound to follow them. Off unless the facility opts in.
+    if _truthy(await get_setting("guardian_require_consent", False)) and not person.consent_given:
+        raise HTTPException(
+            status_code=409,
+            detail="This person has not consented to being followed. Record consent first.",
+        )
+
     guardian: User | None = None
     temp_password: str | None = None
     guardian_created = False
@@ -1045,6 +1066,24 @@ async def add_pickup(
     await db.commit()
     await db.refresh(pickup)
     return pickup
+
+
+@router.post("/persons/{person_id}/consent", status_code=200)
+async def set_consent(
+    person_id: uuid.UUID,
+    body: dict = Body(...),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record or withdraw a person's consent to being followed by a guardian.
+    Body: ``{"given": true|false}``. Withdrawing does not revoke existing links
+    but withholds footage immediately when consent is required."""
+    person = await db.get(Person, person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found")
+    person.consent_given = bool(body.get("given", False))
+    await db.commit()
+    return {"person_id": str(person_id), "consent_given": person.consent_given}
 
 
 @router.delete("/pickups/{pickup_id}", status_code=200)
