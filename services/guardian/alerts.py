@@ -71,6 +71,10 @@ def severity_for(kind: str, pickup_matched: bool | None = None) -> str:
         return "warning"
     if kind == "not_seen":
         return "warning"
+    if kind == "fell":
+        return "critical"
+    if kind == "attended_meal":
+        return "info"
     return "info"
 
 
@@ -94,6 +98,10 @@ def compose_message(kind: str, display_name: str, *, zone: str | None = None,
     if kind == "not_seen":
         m = f" for {minutes} minutes" if minutes else ""
         return f"{display_name} has not been seen{m}."
+    if kind == "fell":
+        return f"{display_name} may have fallen{where}. Please check on them."
+    if kind == "attended_meal":
+        return f"{display_name} was at the table{where}."
     return f"Update about {display_name}."
 
 

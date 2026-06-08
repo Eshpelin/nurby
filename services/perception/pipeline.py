@@ -672,6 +672,28 @@ class PerceptionPipeline:
         except Exception:
             logger.debug("guardian zone processing failed", exc_info=True)
 
+        # Guardian fall detection (eldercare). A recognised dependant whose body
+        # box looks fallen for several seconds raises a critical alert. Gated by
+        # a setting and best-effort, scoped to recognised dependants only.
+        try:
+            if faces and cam is not None:
+                from shared.app_settings import get_setting
+
+                if bool(await get_setting("guardian_fall_detection_enabled", True)):
+                    from services.perception import guardian_fall
+
+                    person_boxes = [
+                        d.get("bbox")
+                        for d in (detections or [])
+                        if d.get("label") == "person" and d.get("bbox")
+                    ]
+                    if person_boxes:
+                        await guardian_fall.process(
+                            cam, person_boxes, faces, frame.shape[0]
+                        )
+        except Exception:
+            logger.debug("guardian fall processing failed", exc_info=True)
+
         # Step 5. Queue VLM call async (non-blocking)
         from services.perception.incident_tracker import INTERESTING_INCIDENT_LABELS
         has_subject = bool(faces) or any(

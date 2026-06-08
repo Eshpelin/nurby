@@ -35,6 +35,8 @@ ALERT_KINDS = (
     "entered_zone",
     "left_zone",
     "not_seen",
+    "fell",
+    "attended_meal",
 )
 
 # Channels a guardian can receive alerts on. in_app is the shared household
@@ -50,6 +52,8 @@ DEFAULT_ALERT_PREFS = {
     "entered_zone": False,
     "left_zone": False,
     "not_seen": False,
+    "fell": True,
+    "attended_meal": True,
 }
 
 _TIERS = ("full", "summary", "alerts_only")
