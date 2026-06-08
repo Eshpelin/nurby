@@ -103,6 +103,28 @@ async def _latest_observation_with_person(
     return (await db.execute(q)).scalar_one_or_none()
 
 
+async def facility_camera_ids(db, facility_id, cap: int | None = None):
+    """Camera ids a facility exposes, capped to ``cap`` (the governor). Returns
+    ``None`` when the facility scopes no cameras, which falls back to "all
+    cameras" so single-household deploys are unchanged. The cap bounds how many
+    cameras a single dependant can be followed across, protecting others from
+    being trackable building-wide."""
+    if facility_id is None:
+        return None
+    rows = (
+        await db.execute(
+            select(Camera.id)
+            .where(Camera.facility_id == facility_id)
+            .order_by(Camera.name.asc())
+        )
+    ).scalars().all()
+    if not rows:
+        return None
+    if cap is not None and cap > 0:
+        rows = rows[:cap]
+    return rows
+
+
 async def _zone_label(db, camera_id: uuid.UUID) -> tuple[str | None, str | None]:
     cam = (await db.execute(select(Camera).where(Camera.id == camera_id))).scalar_one_or_none()
     if cam is None:

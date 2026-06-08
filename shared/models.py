@@ -18,6 +18,11 @@ class Camera(Base):
     stream_type: Mapped[str] = mapped_column(String(32), default="rtsp")  # rtsp, http_mjpeg, http_snapshot, hls, usb, file
     snapshot_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     location_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Which facility exposes this camera. Null = unscoped (visible to all
+    # facilities), preserving single-household behaviour.
+    facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("facilities.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     auth_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -194,6 +199,10 @@ class Person(Base):
     nickname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     relationship: Mapped[str | None] = mapped_column(String(64), nullable=True)
     consent_given: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Which facility this person belongs to. Null = unscoped (every camera).
+    facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("facilities.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     privacy_blur: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     photo_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     is_starred: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

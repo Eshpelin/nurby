@@ -161,6 +161,20 @@ async def _ensure_consent(person) -> None:
         )
 
 
+async def _allowed_cameras(db: AsyncSession, link, person):
+    """Cameras the dependant may be followed across: the dependant's facility
+    cameras, capped by the governor (link > facility > system). None means
+    unscoped (all cameras), the single-household default."""
+    cap = getattr(link, "max_cameras_per_person", None)
+    if cap is None and getattr(link, "facility_id", None) is not None:
+        fac = await db.get(Facility, link.facility_id)
+        cap = fac.max_cameras_per_person if fac else None
+    if cap is None:
+        cap = int(await get_setting("guardian_max_cameras_per_person", 12))
+    scope_facility = getattr(person, "facility_id", None) or getattr(link, "facility_id", None)
+    return await presence_mod.facility_camera_ids(db, scope_facility, cap)
+
+
 async def _free_delay(db: AsyncSession) -> int:
     return int(await get_setting("guardian_free_delay_seconds", 1800))
 
@@ -231,8 +245,12 @@ async def link_status(
     person = await db.get(Person, link.person_id)
     if person is None:
         raise HTTPException(status_code=404, detail="Dependant not found")
+    await _ensure_consent(person)
+    allowed = await _allowed_cameras(db, link, person)
     delay = await _free_delay(db)
-    status = await presence_mod.dependant_status(db, link, person, free_delay_seconds=delay)
+    status = await presence_mod.dependant_status(
+        db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+    )
     await _log(db, link, "status", request)
     return {**status, "entitlements": ent.entitlement_summary(link)}
 
@@ -331,8 +349,11 @@ async def link_image(
     if person is None:
         raise HTTPException(status_code=404, detail="Dependant not found")
     await _ensure_consent(person)
+    allowed = await _allowed_cameras(db, link, person)
     delay = await _free_delay(db)
-    img = await presence_mod.latest_image(db, link, person, free_delay_seconds=delay)
+    img = await presence_mod.latest_image(
+        db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+    )
     if img is None:
         raise HTTPException(status_code=404, detail="No recent image available")
 
@@ -440,14 +461,21 @@ async def link_live(
     if person is None:
         raise HTTPException(status_code=404, detail="Dependant not found")
     await _ensure_consent(person)
+    allowed = await _allowed_cameras(db, link, person)
     delay = await _free_delay(db)
-    status = await presence_mod.dependant_status(db, link, person, free_delay_seconds=delay)
+    status = await presence_mod.dependant_status(
+        db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+    )
     img = clip = None
     clips_on = _truthy(await get_setting("guardian_clips_enabled", True))
     if link.live_video:
-        img = await presence_mod.latest_image(db, link, person, free_delay_seconds=delay)
+        img = await presence_mod.latest_image(
+            db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+        )
         if clips_on:
-            clip = await presence_mod.latest_clip(db, link, person, free_delay_seconds=delay)
+            clip = await presence_mod.latest_clip(
+                db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+            )
     await _log(db, link, "live", request)
     return {
         **status,
@@ -486,8 +514,11 @@ async def link_clip(
     if person is None:
         raise HTTPException(status_code=404, detail="Dependant not found")
     await _ensure_consent(person)
+    allowed = await _allowed_cameras(db, link, person)
     delay = await _free_delay(db)
-    clip = await presence_mod.latest_clip(db, link, person, free_delay_seconds=delay)
+    clip = await presence_mod.latest_clip(
+        db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+    )
     if clip is None:
         raise HTTPException(status_code=404, detail="No recent clip available")
     path = os.path.abspath(clip["clip_path"])
