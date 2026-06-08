@@ -280,6 +280,8 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     "guardian_clips_enabled",
     "guardian_clip_blur_sigma",
     "guardian_unblurred_clips_enabled",
+    "guardian_require_consent",
+    "guardian_app_base_url",
 )
 
 

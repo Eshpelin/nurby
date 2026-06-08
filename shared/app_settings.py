@@ -161,6 +161,9 @@ DEFAULTS: dict[str, Any] = {
     # withheld if consent is later withdrawn. Off by default so existing
     # single-household deploys are unaffected until a facility opts in.
     "guardian_require_consent": False,
+    # Public base URL of the guardian app, used to build the invite/claim magic
+    # link in onboarding emails (for example "https://app.example.com").
+    "guardian_app_base_url": "",
 }
 
 

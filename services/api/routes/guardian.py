@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.guardian import alerts as alerts_mod
@@ -1000,6 +1000,34 @@ async def create_link(
         guardian.role = "guardian"
     await db.commit()
     await db.refresh(link)
+
+    # Onboarding magic link: when a brand-new guardian account was invited, mail
+    # them a claim link to set their own password instead of relaying a temp
+    # password by hand. Best-effort; the temp_password remains a fallback.
+    claim_url = None
+    email_sent = False
+    if guardian_created:
+        from shared.auth import create_guardian_claim_token
+
+        base = str(await get_setting("guardian_app_base_url", "")).rstrip("/")
+        token_claim = create_guardian_claim_token(guardian.id)
+        claim_url = f"{base}/guardian/claim?token={token_claim}"
+        try:
+            from shared.email import send_email
+
+            await send_email(
+                to=guardian.email,
+                subject="You have been added on Nurby Guardian",
+                body=(
+                    f"You can now follow {person.nickname or person.display_name} on Nurby.\n\n"
+                    f"Set your password and sign in here:\n{claim_url}\n\n"
+                    "This link expires in 7 days."
+                ),
+            )
+            email_sent = True
+        except Exception:
+            email_sent = False
+
     return {
         "id": str(link.id),
         "facility_id": str(link.facility_id),
@@ -1021,6 +1049,8 @@ async def create_link(
         "guardian_created": guardian_created,
         "guardian_email": guardian.email,
         "temp_password": temp_password,
+        "claim_url": claim_url,
+        "claim_email_sent": email_sent,
     }
 
 
@@ -1115,6 +1145,100 @@ async def set_consent(
     person.consent_given = bool(body.get("given", False))
     await db.commit()
     return {"person_id": str(person_id), "consent_given": person.consent_given}
+
+
+@router.post("/claim", status_code=200)
+async def claim_guardian(
+    body: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Claim an invited guardian account via a magic-link token. Sets the
+    password and activates the account. Body: ``{"token": "...", "password": "...",
+    "display_name": "optional"}``. Unauthenticated by design (the token is the
+    credential)."""
+    from shared.auth import create_access_token, decode_guardian_claim_token, hash_password
+
+    token = (body.get("token") or "").strip()
+    password = body.get("password") or ""
+    if not token or len(password) < 8:
+        raise HTTPException(status_code=400, detail="A token and an 8+ character password are required.")
+    user_id = decode_guardian_claim_token(token)
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="This invite link is invalid or has expired.")
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Account not found.")
+    user.password_hash = hash_password(password)
+    user.is_active = True
+    if hasattr(user, "is_provisional"):
+        user.is_provisional = False
+    if body.get("display_name"):
+        user.display_name = str(body["display_name"]).strip()[:255]
+    await db.commit()
+    return {
+        "token": create_access_token(user.id),
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "display_name": user.display_name,
+            "role": user.role,
+        },
+    }
+
+
+@router.get("/notifications")
+async def my_notifications(
+    unread_only: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=200),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The signed-in guardian's private notification inbox."""
+    from shared.models import Notification
+
+    q = select(Notification).where(Notification.user_id == user.id)
+    if unread_only:
+        q = q.where(Notification.read.is_(False))
+    rows = (
+        await db.execute(q.order_by(Notification.created_at.desc()).limit(limit))
+    ).scalars().all()
+    unread = (
+        await db.execute(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.user_id == user.id, Notification.read.is_(False))
+        )
+    ).scalar_one()
+    return {
+        "unread": int(unread),
+        "items": [
+            {
+                "id": str(n.id),
+                "message": n.message,
+                "severity": n.severity,
+                "read": n.read,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in rows
+        ],
+    }
+
+
+@router.post("/notifications/{notification_id}/read", status_code=200)
+async def mark_notification_read(
+    notification_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark one of the guardian's own notifications read."""
+    from shared.models import Notification
+
+    notif = await db.get(Notification, notification_id)
+    if notif is None or notif.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    notif.read = True
+    await db.commit()
+    return {"id": str(notification_id), "read": True}
 
 
 @router.delete("/pickups/{pickup_id}", status_code=200)

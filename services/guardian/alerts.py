@@ -139,6 +139,21 @@ async def emit(
     )
     db.add(notif)
 
+    # Per-guardian copies so each guardian reads a private inbox scoped to their
+    # own dependant, not the shared household feed.
+    for link in recipients:
+        gid = getattr(link, "guardian_user_id", None)
+        if gid is not None:
+            db.add(
+                Notification(
+                    message=message,
+                    severity=severity,
+                    camera_id=camera_id,
+                    observation_id=observation_id,
+                    user_id=gid,
+                )
+            )
+
     # Persist the guardian-facing event so the panel can show a real
     # day-timeline + pickup-moment card (not just raw sightings).
     try:
