@@ -144,6 +144,13 @@ async def _facility_floor(db: AsyncSession, link: GuardianLink) -> float | None:
     return fac.reveal_min_confidence if fac else None
 
 
+def _truthy(val) -> bool:
+    """Coerce a stored setting (bool, or "true"/"0"/"off" string) to bool."""
+    if isinstance(val, bool):
+        return val
+    return str(val).strip().lower() not in ("", "0", "false", "no", "off")
+
+
 async def _free_delay(db: AsyncSession) -> int:
     return int(await get_setting("guardian_free_delay_seconds", 1800))
 
@@ -325,21 +332,54 @@ async def link_image(
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Image file not found on disk")
 
-    # Privacy spine: blur so no non-dependant face is identifiable. Fail safe.
+    # Privacy spine: blur so no non-dependant face is identifiable. The one
+    # exception is the bound dependant's own face, left sharp when a perception
+    # match clears the reveal threshold. Resolving the box is best-effort: any
+    # failure falls back to blurring everything (reveal fails safe).
     from fastapi import Response
 
     from services.guardian.imaging import blur_image_file
 
     radius = int(await get_setting("guardian_image_blur_radius", 12))
+    reveal_box = None
+    revealed = False
     try:
-        blurred = blur_image_file(path, radius)
+        if _truthy(await get_setting("guardian_reveal_enabled", True)):
+            from services.guardian.reveal import (
+                confidence_to_max_distance,
+                reveal_box_for,
+            )
+
+            obs = await db.get(Observation, uuid.UUID(img["observation_id"]))
+            if obs is not None and obs.person_detections:
+                system_floor = float(
+                    await get_setting("guardian_reveal_min_confidence", 0.2)
+                )
+                ref_dist = float(await get_setting("guardian_reveal_ref_distance", 1.1))
+                conf_floor = ent.reveal_threshold(link, system_default=system_floor)
+                reveal_box = reveal_box_for(
+                    obs.person_detections,
+                    link.person_id,
+                    confidence_to_max_distance(conf_floor, ref_dist),
+                )
+                revealed = reveal_box is not None
+    except Exception:
+        reveal_box = None  # fail safe: blur everything
+    try:
+        blurred = blur_image_file(path, radius, reveal_box=reveal_box)
     except Exception:
         raise HTTPException(status_code=500, detail="Could not process image")
 
     # Stamp the throttle and log the view.
     link.last_image_served_at = datetime.now(timezone.utc)
     await db.commit()
-    await _log(db, link, "image", request, {"observation_id": img["observation_id"]})
+    await _log(
+        db,
+        link,
+        "image",
+        request,
+        {"observation_id": img["observation_id"], "revealed": revealed},
+    )
     return Response(content=blurred, media_type="image/jpeg")
 
 
