@@ -149,6 +149,13 @@ DEFAULTS: dict[str, Any] = {
     "guardian_reveal_enabled": True,
     "guardian_reveal_min_confidence": 0.2,
     "guardian_reveal_ref_distance": 1.1,
+    # Eldercare fall detection. A recognised dependant whose body box looks
+    # fallen for several seconds raises a critical guardian alert. Best-effort,
+    # not a certified fall alarm.
+    "guardian_fall_detection_enabled": True,
+    # Eldercare meal attendance. A recognised dependant seen in a dining zone
+    # during a meal window records an attended-meal event. Presence, not intake.
+    "guardian_meal_tracking_enabled": True,
     # Live clips are blurred frame-by-frame and cached before serving, so they
     # are safe to serve by default. Turn the feature off entirely with
     # guardian_clips_enabled. guardian_unblurred_clips_enabled is an explicit
