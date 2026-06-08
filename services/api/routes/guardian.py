@@ -314,6 +314,69 @@ async def link_timeline(
     }
 
 
+@router.get("/links/{link_id}/actions")
+async def link_actions(
+    link_id: uuid.UUID,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+    action: str | None = Query(default=None, max_length=32),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Structured per-person actions for the dependant (eating, fallen, walking,
+    ...), newest first, clamped to the link cutoff. The queryable companion to
+    the prose timeline. Optional single-action filter."""
+    from services.guardian import wellbeing as wb
+
+    link = await _load_link(db, link_id)
+    _ensure_owner_or_admin(link, user)
+    _ensure_active(link)
+    if not ent.can_view(link, ent.CAP_TIMELINE):
+        raise HTTPException(status_code=403, detail="This tier cannot view a timeline")
+    person = await db.get(Person, link.person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Dependant not found")
+    delay = await _free_delay(db)
+    cutoff = ent.cutoff_time(link, delay)
+    items = await wb.recent_actions(
+        db, person.id, cutoff=cutoff, limit=limit, action=action
+    )
+    await _log(db, link, "actions", request, {"count": len(items)})
+    return {
+        "items": items,
+        "delayed": ent.effective_delay_seconds(link, delay) > 0,
+        "as_of": cutoff.isoformat(),
+    }
+
+
+@router.get("/links/{link_id}/wellbeing")
+async def link_wellbeing(
+    link_id: uuid.UUID,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Wellbeing rollup for the dependant. Did they eat today, did they fall,
+    what is the per-action breakdown over the last week. Clamped to the link
+    cutoff. Best-effort signals, never a medical guarantee."""
+    from services.guardian import wellbeing as wb
+
+    link = await _load_link(db, link_id)
+    _ensure_owner_or_admin(link, user)
+    _ensure_active(link)
+    if not ent.can_view(link, ent.CAP_TIMELINE):
+        raise HTTPException(status_code=403, detail="This tier cannot view wellbeing")
+    person = await db.get(Person, link.person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Dependant not found")
+    delay = await _free_delay(db)
+    cutoff = ent.cutoff_time(link, delay)
+    summary = await wb.wellbeing_summary(db, person.id, cutoff=cutoff)
+    summary["delayed"] = ent.effective_delay_seconds(link, delay) > 0
+    await _log(db, link, "wellbeing", request, {})
+    return summary
+
+
 @router.get("/links/{link_id}/image")
 async def link_image(
     link_id: uuid.UUID,

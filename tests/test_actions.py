@@ -62,6 +62,26 @@ def test_confirms_fall_suppresses_on_confident_non_fall():
     assert actions.confirms_fall({"action": "eating"}) is False
 
 
+# ── coarse_action_from_caption (backfill) ────────────────────────────────────
+
+def test_coarse_action_from_caption():
+    assert actions.coarse_action_from_caption("An elderly man eating soup") == "eating"
+    assert actions.coarse_action_from_caption("She is asleep in bed") == "sleeping"
+    assert actions.coarse_action_from_caption("A resident collapsed on the floor") == "fallen"
+    assert actions.coarse_action_from_caption("A person walking down the hall") == "walking"
+    assert actions.coarse_action_from_caption("An empty room with chairs") is None
+    assert actions.coarse_action_from_caption("") is None
+    assert actions.coarse_action_from_caption(None) is None
+
+
+def test_coarse_caption_prefers_fall_over_weaker_cue():
+    # "sitting" appears, but a fall cue must win
+    assert (
+        actions.coarse_action_from_caption("was sitting then fell down on the floor")
+        == "fallen"
+    )
+
+
 # ── body_box_for_face ────────────────────────────────────────────────────────
 
 def test_body_box_for_face_picks_containing_box():
