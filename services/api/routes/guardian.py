@@ -15,10 +15,10 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.guardian import alerts as alerts_mod
@@ -144,6 +144,37 @@ async def _facility_floor(db: AsyncSession, link: GuardianLink) -> float | None:
     return fac.reveal_min_confidence if fac else None
 
 
+def _truthy(val) -> bool:
+    """Coerce a stored setting (bool, or "true"/"0"/"off" string) to bool."""
+    if isinstance(val, bool):
+        return val
+    return str(val).strip().lower() not in ("", "0", "false", "no", "off")
+
+
+async def _ensure_consent(person) -> None:
+    """Withhold a person's footage when consent is required but not on file."""
+    if _truthy(await get_setting("guardian_require_consent", False)) and not getattr(
+        person, "consent_given", False
+    ):
+        raise HTTPException(
+            status_code=403, detail="Consent for this person is not on file."
+        )
+
+
+async def _allowed_cameras(db: AsyncSession, link, person):
+    """Cameras the dependant may be followed across: the dependant's facility
+    cameras, capped by the governor (link > facility > system). None means
+    unscoped (all cameras), the single-household default."""
+    cap = getattr(link, "max_cameras_per_person", None)
+    if cap is None and getattr(link, "facility_id", None) is not None:
+        fac = await db.get(Facility, link.facility_id)
+        cap = fac.max_cameras_per_person if fac else None
+    if cap is None:
+        cap = int(await get_setting("guardian_max_cameras_per_person", 12))
+    scope_facility = getattr(person, "facility_id", None) or getattr(link, "facility_id", None)
+    return await presence_mod.facility_camera_ids(db, scope_facility, cap)
+
+
 async def _free_delay(db: AsyncSession) -> int:
     return int(await get_setting("guardian_free_delay_seconds", 1800))
 
@@ -214,8 +245,12 @@ async def link_status(
     person = await db.get(Person, link.person_id)
     if person is None:
         raise HTTPException(status_code=404, detail="Dependant not found")
+    await _ensure_consent(person)
+    allowed = await _allowed_cameras(db, link, person)
     delay = await _free_delay(db)
-    status = await presence_mod.dependant_status(db, link, person, free_delay_seconds=delay)
+    status = await presence_mod.dependant_status(
+        db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+    )
     await _log(db, link, "status", request)
     return {**status, "entitlements": ent.entitlement_summary(link)}
 
@@ -313,8 +348,12 @@ async def link_image(
     person = await db.get(Person, link.person_id)
     if person is None:
         raise HTTPException(status_code=404, detail="Dependant not found")
+    await _ensure_consent(person)
+    allowed = await _allowed_cameras(db, link, person)
     delay = await _free_delay(db)
-    img = await presence_mod.latest_image(db, link, person, free_delay_seconds=delay)
+    img = await presence_mod.latest_image(
+        db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+    )
     if img is None:
         raise HTTPException(status_code=404, detail="No recent image available")
 
@@ -325,21 +364,54 @@ async def link_image(
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Image file not found on disk")
 
-    # Privacy spine: blur so no non-dependant face is identifiable. Fail safe.
+    # Privacy spine: blur so no non-dependant face is identifiable. The one
+    # exception is the bound dependant's own face, left sharp when a perception
+    # match clears the reveal threshold. Resolving the box is best-effort: any
+    # failure falls back to blurring everything (reveal fails safe).
     from fastapi import Response
 
     from services.guardian.imaging import blur_image_file
 
     radius = int(await get_setting("guardian_image_blur_radius", 12))
+    reveal_box = None
+    revealed = False
     try:
-        blurred = blur_image_file(path, radius)
+        if _truthy(await get_setting("guardian_reveal_enabled", True)):
+            from services.guardian.reveal import (
+                confidence_to_max_distance,
+                reveal_box_for,
+            )
+
+            obs = await db.get(Observation, uuid.UUID(img["observation_id"]))
+            if obs is not None and obs.person_detections:
+                system_floor = float(
+                    await get_setting("guardian_reveal_min_confidence", 0.2)
+                )
+                ref_dist = float(await get_setting("guardian_reveal_ref_distance", 1.1))
+                conf_floor = ent.reveal_threshold(link, system_default=system_floor)
+                reveal_box = reveal_box_for(
+                    obs.person_detections,
+                    link.person_id,
+                    confidence_to_max_distance(conf_floor, ref_dist),
+                )
+                revealed = reveal_box is not None
+    except Exception:
+        reveal_box = None  # fail safe: blur everything
+    try:
+        blurred = blur_image_file(path, radius, reveal_box=reveal_box)
     except Exception:
         raise HTTPException(status_code=500, detail="Could not process image")
 
     # Stamp the throttle and log the view.
     link.last_image_served_at = datetime.now(timezone.utc)
     await db.commit()
-    await _log(db, link, "image", request, {"observation_id": img["observation_id"]})
+    await _log(
+        db,
+        link,
+        "image",
+        request,
+        {"observation_id": img["observation_id"], "revealed": revealed},
+    )
     return Response(content=blurred, media_type="image/jpeg")
 
 
@@ -388,14 +460,22 @@ async def link_live(
     person = await db.get(Person, link.person_id)
     if person is None:
         raise HTTPException(status_code=404, detail="Dependant not found")
+    await _ensure_consent(person)
+    allowed = await _allowed_cameras(db, link, person)
     delay = await _free_delay(db)
-    status = await presence_mod.dependant_status(db, link, person, free_delay_seconds=delay)
+    status = await presence_mod.dependant_status(
+        db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+    )
     img = clip = None
-    clips_on = bool(await get_setting("guardian_unblurred_clips_enabled", False))
+    clips_on = _truthy(await get_setting("guardian_clips_enabled", True))
     if link.live_video:
-        img = await presence_mod.latest_image(db, link, person, free_delay_seconds=delay)
+        img = await presence_mod.latest_image(
+            db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+        )
         if clips_on:
-            clip = await presence_mod.latest_clip(db, link, person, free_delay_seconds=delay)
+            clip = await presence_mod.latest_clip(
+                db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+            )
     await _log(db, link, "live", request)
     return {
         **status,
@@ -417,26 +497,28 @@ async def link_clip(
 ):
     """Serve the dependant's most recent recording clip. Requires live_video.
 
-    Clips are raw operator footage (faces not blurred), so they are disabled by
-    default to hold the privacy promise. A facility opts in via
-    ``guardian_unblurred_clips_enabled``. Per-frame video blur is the planned
-    enhancement that lets this default flip on safely."""
+    The clip is Gaussian-blurred frame-by-frame (faces not identifiable, audio
+    dropped) and cached, so it is safe to serve by default. A facility that
+    explicitly accepts raw footage can flip ``guardian_unblurred_clips_enabled``
+    to bypass the blur. Clips can be turned off entirely with
+    ``guardian_clips_enabled``."""
     user = await _user_from_token_or_header(token, request, db)
     link = await _load_link(db, link_id)
     _ensure_owner_or_admin(link, user)
     _ensure_active(link)
     if not link.live_video:
         raise HTTPException(status_code=402, detail="Live video is a paid feature")
-    if not bool(await get_setting("guardian_unblurred_clips_enabled", False)):
-        raise HTTPException(
-            status_code=403,
-            detail="Blurred live clips are coming. Raw clips are disabled for privacy.",
-        )
+    if not _truthy(await get_setting("guardian_clips_enabled", True)):
+        raise HTTPException(status_code=403, detail="Clips are disabled")
     person = await db.get(Person, link.person_id)
     if person is None:
         raise HTTPException(status_code=404, detail="Dependant not found")
+    await _ensure_consent(person)
+    allowed = await _allowed_cameras(db, link, person)
     delay = await _free_delay(db)
-    clip = await presence_mod.latest_clip(db, link, person, free_delay_seconds=delay)
+    clip = await presence_mod.latest_clip(
+        db, link, person, free_delay_seconds=delay, allowed_camera_ids=allowed
+    )
     if clip is None:
         raise HTTPException(status_code=404, detail="No recent clip available")
     path = os.path.abspath(clip["clip_path"])
@@ -445,8 +527,26 @@ async def link_clip(
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Clip file not found on disk")
-    await _log(db, link, "live", request, {"clip_observation_id": clip["observation_id"]})
-    return FileResponse(path, media_type="video/mp4")
+
+    # Blur every frame unless a facility explicitly accepts raw footage.
+    raw_ok = _truthy(await get_setting("guardian_unblurred_clips_enabled", False))
+    served_path = path
+    blurred = False
+    if not raw_ok:
+        from services.guardian.video import blur_clip_async
+
+        sigma = int(await get_setting("guardian_clip_blur_sigma", 20))
+        try:
+            served_path = await blur_clip_async(path, sigma)
+            blurred = True
+        except Exception:
+            # Fail safe: never fall back to raw footage on blur failure.
+            raise HTTPException(status_code=503, detail="Clip is being prepared. Try again shortly.")
+    await _log(
+        db, link, "live", request,
+        {"clip_observation_id": clip["observation_id"], "blurred": blurred},
+    )
+    return FileResponse(served_path, media_type="video/mp4")
 
 
 @router.post("/links/{link_id}/search")
@@ -820,6 +920,14 @@ async def create_link(
     if person is None:
         raise HTTPException(status_code=404, detail="Person not found")
 
+    # Two-sided consent: a person must have consent on file before anyone can be
+    # bound to follow them. Off unless the facility opts in.
+    if _truthy(await get_setting("guardian_require_consent", False)) and not person.consent_given:
+        raise HTTPException(
+            status_code=409,
+            detail="This person has not consented to being followed. Record consent first.",
+        )
+
     guardian: User | None = None
     temp_password: str | None = None
     guardian_created = False
@@ -892,6 +1000,34 @@ async def create_link(
         guardian.role = "guardian"
     await db.commit()
     await db.refresh(link)
+
+    # Onboarding magic link: when a brand-new guardian account was invited, mail
+    # them a claim link to set their own password instead of relaying a temp
+    # password by hand. Best-effort; the temp_password remains a fallback.
+    claim_url = None
+    email_sent = False
+    if guardian_created:
+        from shared.auth import create_guardian_claim_token
+
+        base = str(await get_setting("guardian_app_base_url", "")).rstrip("/")
+        token_claim = create_guardian_claim_token(guardian.id)
+        claim_url = f"{base}/guardian/claim?token={token_claim}"
+        try:
+            from shared.email import send_email
+
+            await send_email(
+                to=guardian.email,
+                subject="You have been added on Nurby Guardian",
+                body=(
+                    f"You can now follow {person.nickname or person.display_name} on Nurby.\n\n"
+                    f"Set your password and sign in here:\n{claim_url}\n\n"
+                    "This link expires in 7 days."
+                ),
+            )
+            email_sent = True
+        except Exception:
+            email_sent = False
+
     return {
         "id": str(link.id),
         "facility_id": str(link.facility_id),
@@ -913,6 +1049,8 @@ async def create_link(
         "guardian_created": guardian_created,
         "guardian_email": guardian.email,
         "temp_password": temp_password,
+        "claim_url": claim_url,
+        "claim_email_sent": email_sent,
     }
 
 
@@ -989,6 +1127,118 @@ async def add_pickup(
     await db.commit()
     await db.refresh(pickup)
     return pickup
+
+
+@router.post("/persons/{person_id}/consent", status_code=200)
+async def set_consent(
+    person_id: uuid.UUID,
+    body: dict = Body(...),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record or withdraw a person's consent to being followed by a guardian.
+    Body: ``{"given": true|false}``. Withdrawing does not revoke existing links
+    but withholds footage immediately when consent is required."""
+    person = await db.get(Person, person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found")
+    person.consent_given = bool(body.get("given", False))
+    await db.commit()
+    return {"person_id": str(person_id), "consent_given": person.consent_given}
+
+
+@router.post("/claim", status_code=200)
+async def claim_guardian(
+    body: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Claim an invited guardian account via a magic-link token. Sets the
+    password and activates the account. Body: ``{"token": "...", "password": "...",
+    "display_name": "optional"}``. Unauthenticated by design (the token is the
+    credential)."""
+    from shared.auth import create_access_token, decode_guardian_claim_token, hash_password
+
+    token = (body.get("token") or "").strip()
+    password = body.get("password") or ""
+    if not token or len(password) < 8:
+        raise HTTPException(status_code=400, detail="A token and an 8+ character password are required.")
+    user_id = decode_guardian_claim_token(token)
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="This invite link is invalid or has expired.")
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Account not found.")
+    user.password_hash = hash_password(password)
+    user.is_active = True
+    if hasattr(user, "is_provisional"):
+        user.is_provisional = False
+    if body.get("display_name"):
+        user.display_name = str(body["display_name"]).strip()[:255]
+    await db.commit()
+    return {
+        "token": create_access_token(user.id),
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "display_name": user.display_name,
+            "role": user.role,
+        },
+    }
+
+
+@router.get("/notifications")
+async def my_notifications(
+    unread_only: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=200),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The signed-in guardian's private notification inbox."""
+    from shared.models import Notification
+
+    q = select(Notification).where(Notification.user_id == user.id)
+    if unread_only:
+        q = q.where(Notification.read.is_(False))
+    rows = (
+        await db.execute(q.order_by(Notification.created_at.desc()).limit(limit))
+    ).scalars().all()
+    unread = (
+        await db.execute(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.user_id == user.id, Notification.read.is_(False))
+        )
+    ).scalar_one()
+    return {
+        "unread": int(unread),
+        "items": [
+            {
+                "id": str(n.id),
+                "message": n.message,
+                "severity": n.severity,
+                "read": n.read,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in rows
+        ],
+    }
+
+
+@router.post("/notifications/{notification_id}/read", status_code=200)
+async def mark_notification_read(
+    notification_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark one of the guardian's own notifications read."""
+    from shared.models import Notification
+
+    notif = await db.get(Notification, notification_id)
+    if notif is None or notif.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    notif.read = True
+    await db.commit()
+    return {"id": str(notification_id), "read": True}
 
 
 @router.delete("/pickups/{pickup_id}", status_code=200)

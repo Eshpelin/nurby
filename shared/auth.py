@@ -93,6 +93,27 @@ def decode_access_token(token: str) -> uuid.UUID | None:
         return None
 
 
+def create_guardian_claim_token(user_id: uuid.UUID, days: int = 7) -> str:
+    """A single-purpose, time-boxed token a newly invited guardian uses to set
+    their own password (a magic link), instead of an admin handing over a temp
+    password by hand."""
+    expire = datetime.now(timezone.utc) + timedelta(days=days)
+    payload = {"sub": str(user_id), "exp": expire, "purpose": "guardian_claim"}
+    return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
+
+
+def decode_guardian_claim_token(token: str) -> uuid.UUID | None:
+    """Return the user UUID for a valid guardian-claim token, else None."""
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+        if payload.get("purpose") != "guardian_claim":
+            return None
+        sub = payload.get("sub")
+        return uuid.UUID(sub) if sub else None
+    except (JWTError, ValueError):
+        return None
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),

@@ -18,6 +18,11 @@ class Camera(Base):
     stream_type: Mapped[str] = mapped_column(String(32), default="rtsp")  # rtsp, http_mjpeg, http_snapshot, hls, usb, file
     snapshot_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     location_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Which facility exposes this camera. Null = unscoped (visible to all
+    # facilities), preserving single-household behaviour.
+    facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("facilities.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     auth_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -194,6 +199,10 @@ class Person(Base):
     nickname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     relationship: Mapped[str | None] = mapped_column(String(64), nullable=True)
     consent_given: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Which facility this person belongs to. Null = unscoped (every camera).
+    facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("facilities.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     privacy_blur: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     photo_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     is_starred: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -470,6 +479,11 @@ class Notification(Base):
     rule_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     camera_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     observation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # Per-guardian inbox. Null = household/operator-wide notification (the
+    # original behaviour); set = a private copy for one guardian user.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
