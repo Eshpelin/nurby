@@ -4,6 +4,14 @@ Status: plan, ready to schedule. Supersedes the earlier discussion-style drafts.
 the build document: what we implement, how it touches the existing stack, how it shows up
 on the dashboard, and a phased task list with acceptance criteria.
 
+The architecture, stack-impact, dashboard, and edge-case sections were verified against the
+actual code (ingestion `stream.py`/`manager.py`, `services/api/ws.py`, the frontend overlay
+and feed components, the existing tables). Where the code contradicted an earlier assumption
+the plan was corrected: HAR compute offload + global cap (3.1); the live surface is a text
+strip, not bbox-pinned chips (6); reuse `FollowFeedPage`, not a new timeline page (6); keep a
+track-anchored segment table distinct from keyframe-anchored `observation_actions` (5); and
+privacy reveal/zone gating is a hard server-side rule (6).
+
 v1 (single-frame VLM action classifier) shipped in `services/perception/actions.py` and is
 gated on by default. It stays as the fallback until v-next proves out per camera.
 
@@ -88,6 +96,38 @@ Layer detail:
 - **L4 state machine.** Majority-vote smoothing over a short ring buffer, emit on transition
   with a minimum dwell. Produces clean segments and answers "standing then suddenly eating".
 
+### 3.1 Where HAR compute runs (verified, load-bearing)
+
+Confirmed by reading `services/ingestion/stream.py` + `manager.py`. Ingestion is **one
+asyncio process**; the manager spawns **one `StreamWorker` task per camera**
+(`asyncio.create_task(worker.run())`), and each worker owns a `ThreadPoolExecutor`. Blocking
+OpenCV calls (`cap.read`, `_open_capture`) are already offloaded with
+`loop.run_in_executor`. Motion detection runs **synchronously** in the loop only because it
+is a cheap frame-diff every 5th frame.
+
+Therefore HAR inference must **not** run synchronously like motion — that would block the
+single event loop and starve every other camera. Rules:
+
+- Run track/pose/action through `run_in_executor` (onnxruntime and torch release the GIL
+  during native inference, so this genuinely parallelises, same pattern as `cap.read`).
+- Cap concurrency with a **process-wide bounded HAR pool / semaphore** shared across camera
+  workers, not just the per-worker executor, so N cameras cannot thundering-herd the CPU.
+  This shared cap is what the deployment tiers (section 7) actually configure.
+- HAR samples a fixed cadence off the dense stream (start 8-12 fps), decoupled from the
+  motion-keyframe cadence.
+
+This replaces the earlier hand-wave of "add L0/L1/L2 to stream.py"; the offload + global cap
+is the design.
+
+Edge cases found in the same files, now explicit:
+- **Snapshot-polling cameras** (`_process_snapshot_stream`) have no real frame rate, so
+  temporal windows cannot form -> fall back to v1 VLM snapshot for those, no HAR.
+- **Webcam / WHIP cameras** are pulled as RTSP from MediaMTX via the same `StreamWorker`
+  path, so HAR works unchanged.
+- **Audio-only cameras** get no video `StreamWorker` -> no HAR, correctly.
+- **PTZ cameras**: tracking degrades during an active pan/tilt move; suspend HAR while the
+  PTZ tracker reports motion, resume when settled.
+
 ---
 
 ## 4. Impact on the existing stack
@@ -101,13 +141,13 @@ Layer detail:
 | VLM grounding | `services/perception/vlm_queue.py`, `vlm.py` | inject HAR labels into `extra_context`; record agreement |
 | Models | `shared/models.py` | extend `observation_actions` (`track_id`, `source`, `window_*` already added; confirm `detail`); add `person_action_segments` |
 | Migrations | `alembic/versions/` | one migration for the segment table + any column adds |
-| API | `services/api/routes/` (camera routes), `services/api/ws.py` | camera-scoped actions + segments endpoints; `person_actions` WS broadcast |
+| API | camera routes, `services/api/ws.py` | camera-scoped actions/segments endpoints; `person_actions` via the existing global `broadcast()` (clients filter by camera) |
+| Privacy gating | `services/guardian/reveal.py`, privacy-zone logic | action display reuses `reveal_box_for()` + suppresses actions inside active privacy zones (see 6) |
 | Guardian reuse | `services/guardian/wellbeing.py`, `mcp_tools.py` | re-point rollups to segments where cheaper (already shipped) |
 | Settings | `shared/app_settings.py`, `services/api/routes/system.py` | per-camera HAR enable, action set, cadence, thresholds, test mode |
-| Frontend live | `frontend/src/lib/ws.tsx`, `LiveCaptionOverlay.tsx` (+ new `ActionOverlay`) | handle `person_actions`; draw per-track chips on the tile |
-| Frontend history | `frontend/src/app/cameras/[id]/page.tsx` (+ new `ActivityTimeline`) | per-camera action timeline |
-| Frontend cards | `frontend/src/components/ObservationGroupCard.tsx` | action chip + open detail on each observation |
-| Frontend global | `frontend/src/app/timeline/page.tsx` | filter by action |
+| Frontend live | `frontend/src/lib/ws.tsx`, new `CurrentActivityStrip` | `useWSSubscribe("person_actions", h, cameraId)`; text strip of current actions (NOT bbox-pinned, see 6) |
+| Frontend history | extend `frontend/src/components/FollowFeedPage.tsx` | add an action band / action-filtered feed (it already has the 24h heatmap + per-subject timeline) |
+| Frontend cards | `frontend/src/components/ObservationGroupCard.tsx` | action chip + open detail (cheap win; no new timeline page needed, `/timeline` is just a redirect) |
 | Frontend config | camera settings UI | HAR enable, preset, thresholds, test-mode review screen |
 
 Backward-compatible: every change is additive and gated by `guardian_actions_enabled` /
@@ -122,11 +162,19 @@ action, posture, confidence, detail, track_id, source, window_start, window_end,
 observed_at`. Raw, per-window. `source in {skeleton, vlm_crop, skeleton+vlm, geometry,
 caption_backfill}`.
 
-`person_action_segments` (NEW): merged contiguous runs, written by L4 on transition. Columns:
-`id, camera_id, person_id, person_name, track_id, action, confidence_avg, started_at,
-ended_at, source`. Indexed on `(camera_id, started_at)` and `(person_id, started_at)`. This
-is the clean source for the timeline and the wellbeing rollups (cheap range queries instead
-of merging raw rows).
+`person_action_segments` (NEW, and it IS needed): merged contiguous runs, written by L4 on
+transition. Columns: `id, camera_id, person_id, person_name, track_id, action,
+confidence_avg, started_at, ended_at, source`. Indexed on `(camera_id, started_at)` and
+`(person_id, started_at)`.
+
+Why a new table rather than reusing `observation_actions` (a real question the investigation
+raised): `observation_actions.observation_id` is **NOT NULL and keyframe-anchored**. It is
+the right home for the fused, per-observation row the VLM path produces. But continuous HAR
+runs in ingestion and is **track-anchored and observation-independent** — there is no
+observation for most of its windows. Forcing it into `observation_actions` means either a
+nullable FK and a flood of observation-less rows, or losing continuity. Cleaner to keep
+`observation_actions` as the per-observation fused store and add the track-anchored segment
+table as the continuous timeline source. The two are joined by `person_id` + time.
 
 Keypoints: not persisted by default (privacy). Opt-in `track_keypoints` table behind a
 setting, only when collecting a fine-tuning set (see section 7, data flywheel).
@@ -146,32 +194,51 @@ Endpoints:
 
 Three surfaces, smallest to largest commitment:
 
-**A. Live action overlay (camera tile).** Extend `LiveCaptionOverlay.tsx` (or add
-`ActionOverlay.tsx`). On the live feed, draw a small chip per tracked person near their box:
-recognised name (or "Person") + current action + a confidence dot. `fallen` renders red and
-pinned; calm actions render muted. Driven by the new `person_actions` WS event handled in
-`frontend/src/lib/ws.tsx`. This is the "what is happening right now" view and the highest-
-impact surface for trust.
+Reality check from reading the frontend: `LiveCaptionOverlay.tsx` is a translucent caption
+*strip*, not a per-person box overlay, and the live tile has no detection-coordinate layer.
+The WS is one global `/ws` + `broadcast()`; clients filter with
+`useWSSubscribe(type, handler, cameraId)`. The surfaces below are scoped to what actually
+exists, with bbox-pinned chips called out as a separate capability, not assumed.
 
-**B. Activity timeline (camera detail page).** New `ActivityTimeline` on
-`frontend/src/app/cameras/[id]/page.tsx`: a horizontal band per recognised person showing
-action segments across the selected day (sitting 9:00-9:45, walking 9:45-9:50, eating
-12:05-12:35). Reads `GET /cameras/{id}/actions`. Reuses the visual language of the existing
-timeline. Click a segment to jump to that moment/clip. This is the "what happened" view and
-the thing eldercare families and staff actually scan.
+**A. Current-activity strip (camera tile), v1.** A new `CurrentActivityStrip` modelled on
+`LiveCaptionOverlay` (same translucent strip, same `useWSSubscribe("person_actions", h,
+cameraId)` pattern): a compact line listing current actions per recognised person ("Mr
+Rahman, eating, Inara, walking"). `fallen` pinned red. This reuses a proven pattern and ships
+the "what's happening now" value without new infrastructure.
+
+*Stretch (separate task, not assumed):* chips pinned to each person's body on the live video
+require a live detection-overlay capability that does not exist today — streaming bbox coords
+in real time and mapping them onto the displayed video element. Scope it only after the strip
+ships and only if there is demand.
+
+**B. Activity timeline.** Extend `FollowFeedPage.tsx`, which already is the per-subject
+investigative timeline (24h activity heatmap + unified feed). Add an **action band** (segments
+coloured by action across the day) and an **action filter** on the feed, fed by
+`person_action_segments` via `GET /cameras/{id}/actions`. This reuses the existing timeline
+rather than building a new one (`/timeline` is just a redirect today, so there is nothing to
+extend there).
 
 **C. Enriched moment cards.** `ObservationGroupCard.tsx` gains an action chip + the open
-`detail` line, so existing observation cards read "Mr Rahman, eating, plate of food at the
-window" instead of a bare caption. Cheapest win; rides existing data.
+`detail` line, so cards read "Mr Rahman, eating, plate of food at the window". Cheapest win;
+rides existing data; no new page.
 
-**D. Cross-cutting.** The global `/timeline` page gets an action filter; natural-language
-search is now grounded by action labels; the guardian wellbeing panel (shipped) reads the
-segment table. Alerts (fall/meal) already fan out through the existing notification path and
-event feed, no new surface needed.
+**D. Cross-cutting.** Natural-language search is grounded by action labels; the guardian
+wellbeing panel (shipped) reads the segment table; alerts (fall/meal) already fan out through
+the existing notification path, no new surface.
 
-UX rules: actions are advisory, never block the live view; `unknown` is not shown as a chip;
-on cameras where HAR is degraded (section 7) the overlay shows a small "HAR limited" marker
-rather than silently dropping.
+**Privacy gating (hard rule, not optional).** An action label leaks what a person is doing
+even when their face is blurred, and the most sensitive actions (sleeping, toileting, fallen)
+happen exactly where smart privacy zones blur (bed, toilet). So every action surface must:
+- gate per-person action display behind the same reveal test as the face,
+  `services/guardian/reveal.py::reveal_box_for(person_detections, dependant_id, max_distance)`
+  — if the person is not revealed, do not show their action;
+- suppress actions whose track sits inside an active privacy zone for guardian-facing views;
+- honour the guardian delay cutoff (already handled in `wellbeing.recent_actions`).
+This is enforced server-side in the action endpoints, not just hidden in the UI.
+
+UX rules: actions are advisory, never block the live view; `unknown` is never shown; on a
+camera where HAR is degraded (section 7) the strip shows a small "HAR limited" marker rather
+than silently dropping.
 
 ---
 
@@ -276,13 +343,18 @@ their own PRs.
 ### Phase 4 — State machine, segments, and dashboard
 - HAR-4.1 L4 smoothing + transition emission in ingestion.
 - HAR-4.2 `person_action_segments` table + migration; write on transition.
-- HAR-4.3 `GET /cameras/{id}/actions` + `person_actions` WS broadcast in `services/api/ws.py`.
-- HAR-4.4 Live `ActionOverlay` on the camera tile (`ws.tsx`, `LiveCaptionOverlay.tsx`).
-- HAR-4.5 `ActivityTimeline` on `cameras/[id]/page.tsx`; segment click -> moment/clip.
-- HAR-4.6 Action chip + detail on `ObservationGroupCard.tsx`; action filter on `/timeline`.
+- HAR-4.3 `GET /cameras/{id}/actions` + `person_actions` via the existing global
+  `broadcast()`; enforce the privacy reveal + zone gating server-side here.
+- HAR-4.4 `CurrentActivityStrip` (text strip, `useWSSubscribe` pattern, modelled on
+  `LiveCaptionOverlay`). Bbox-pinned chips are a separate, later task, not in this phase.
+- HAR-4.5 Extend `FollowFeedPage.tsx` with an action band + action filter (do not build a new
+  timeline page; `/timeline` is a redirect).
+- HAR-4.6 Action chip + detail on `ObservationGroupCard.tsx`.
 - HAR-4.7 Re-point guardian `wellbeing`/`actions` to segments.
-- Acceptance: operator sees live per-person actions and a per-day activity timeline; fall/
-  meal still fire correctly.
+- HAR-4.8 Privacy enforcement tests: an unrevealed/zoned person never exposes an action via
+  any endpoint.
+- Acceptance: operator sees live current activity and a per-day action timeline; no action is
+  shown for a non-revealed or privacy-zoned person; fall/meal still fire correctly.
 
 ### Phase 5 — Productization, ops, trust
 - HAR-5.1 Deployment-profile detection + min-spec picker at setup.
