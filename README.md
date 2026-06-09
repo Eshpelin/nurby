@@ -1,25 +1,23 @@
 # Nurby
 
 
-Self-hostable, privacy-first AI camera surveillance you fully own. Point Nurby at any IP camera and a vision model of your choice (local or cloud), and it turns raw video into people, journeys, events, and answers. Ask it "where was the dog last night" in plain language, wire a rule that flashes a siren when a stranger appears after 10pm, and keep every frame on your own hardware.
+An open-source AI layer for your security cameras. Nurby turns raw video into people, journeys, events, and answers, on hardware you own. Use it as a self-hosted NVR with built-in vision intelligence, or as an AI-native companion to Frigate, Blue Iris, and Scrypted.
 
-Nurby is an **open-source, self-hosted CCTV and NVR platform**. a privacy-first **video management system (VMS)** with on-device AI. Run it on your own hardware as a free alternative to cloud security-camera subscriptions, and as an AI-native companion to projects like Frigate, Scrypted, MotionEye, Shinobi, and Blue Iris.
+Point it at any IP camera and a vision model of your choice (local or cloud). Ask "where was the dog last night" in plain language, wire a rule that flashes a siren when a stranger appears after 10pm, and keep every frame on your own hardware.
 
 Privacy first. Provider agnostic. CPU friendly. Yours to run and modify.
 
 ```
 "Where was Mom last seen?"  ->  Kitchen, today at 7:42pm (cross-camera journey)
-"Anything unusual today?"   ->  Map-reduce summary of every observation
+"Anything unusual today?"   ->  Summary of every camera, grouped by what matters
 Stranger at the door 2am    ->  Email you + record a clip + sound an ESP32 buzzer
 ```
 
 ## Screenshots
 
-A dark, dense, keyboard-friendly UI. Live camera tiles, a narrative morning brief, recognized people and vehicles, a plain-language rule builder, and one settings page that covers local AI, privacy blur, retention, and digests.
+### Dashboard: live cameras and AI digests of what happened at home
 
-### Dashboard: live tiles, a narrative brief, and a detection timeline
-
-A morning recap written like a housemate, a watching row of recognized people, live camera tiles, and a running timeline of detections you can ask questions about.
+Live camera tiles, recognized people, hourly and daily AI digests, and a running timeline of detections you can ask questions about.
 
 ![Nurby dashboard](docs/screenshots/dashboard.png)
 
@@ -51,7 +49,7 @@ Deploy a local vision model through Ollama with a RAM-aware picker, or bring you
 
 The Guardian Panel lets a parent or carer follow one specific dependant in a facility, and nobody else. A calm presence check, a verified-pickup moment, a blurred image where every other face is hidden, and a facility admin that grants, revokes, and audits access. See [Guardian by Nurby](#guardian-by-nurby) for the full write-up.
 
-A parent's view. Each dependant is a calm status card: present, away, or not seen.
+A parent's view. Each dependant shows as present, away, or not seen.
 
 ![Guardian panel showing a parent's dependants](docs/screenshots/guardian-overview.png)
 
@@ -87,17 +85,15 @@ What people actually run Nurby for:
 - **Small business and farm.** Multi-camera coverage, license-plate reads on vehicles, daily digests of who and what was seen, and event logging you can export.
 - **Build your own automations.** Every event can hit a webhook, so you can push alerts into your home automation, a chat app, a spreadsheet, or a tool like n8n. See [Automate with n8n](#automate-with-n8n).
 
-These map to the building blocks below: detection, faces and people, zones and tripwires, audio events, rules with real-world actions, and natural-language search.
-
 ## Guardian by Nurby
 
-Guardian by Nurby turns the same engine into a calm, privacy-first way for a family to follow one specific person inside a facility, and nobody else. A daycare, a preschool, a coaching center, or an eldercare home runs Nurby on its own cameras. Each parent or adult child gets a Guardian Panel that answers the three questions they actually have. Did they arrive safely. Are they okay right now. Who did they leave with.
+Guardian by Nurby turns the same engine into a privacy-first way for a family to follow one specific person inside a facility, and nobody else. A daycare, a preschool, a coaching center, or an eldercare home runs Nurby on its own cameras. Each parent or adult child gets a Guardian Panel that answers the three questions they actually have. Did they arrive safely. Are they okay right now. Who did they leave with.
 
 It is a thin permission and view layer on top of everything Nurby already does. It forks no detection, identity, or AI logic, so every improvement to the core engine is inherited automatically.
 
 **What a guardian sees**
 
-- **Presence.** A 10-second check. "Inara is at school, Classroom B, seen 30 seconds ago." Calm green, amber, or grey state. It never invents a location.
+- **Presence.** A 10-second check. "Inara is at school, Classroom B, seen 30 seconds ago." Green, amber, or grey. It never invents a location.
 - **Safe arrival and verified pickup.** A push the moment they arrive and the moment they leave. Pickup is checked against an approved-pickup registry of people and vehicles, so you get "picked up by you" or a yellow "left with someone not on the approved list."
 - **A real day timeline.** Arrival, pickup, and zone moments as they happen, grouped by day, with a dedicated pickup-moment card.
 - **Blurred images.** The most recent snapshot, with every face blurred so no one is identifiable. The dependant's own enrolled photo is shown separately as a recognition aid.
@@ -117,7 +113,6 @@ Everything is free right now. Guardian ships as part of Nurby's open-source code
 **Who it is for**
 
 - **Daycares, preschools, and after-school programs.** Parents drop a child off and spend the day wondering. Guardian answers the two questions that actually nag them, did they get there safely and who took them home, without turning the place into a surveillance camera for every other family.
-- **Eldercare and assisted living.** The same "follow one person" engine, with adult children as the guardians, surfacing presence, time out of room, and wellbeing signals.
 - **Eldercare and assisted living.** The same "follow one person" engine, with adult children as the guardians, surfacing presence, time out of room, and wellbeing signals.
 
 Guardians sign in and land on the Guardian Panel at `/guardian`. A facility admin manages grants, the approved-pickup registry, alert policy, and the audit log under `/guardian/admin`, and can invite a parent by email in one step. Guardians can also ask "is my child at school right now" from any MCP client through guardian-scoped, read-only tools that honor the same scope and blur.
@@ -174,10 +169,10 @@ The first time, this downloads and assembles everything. It can take **5 to 15 m
 
 Open your web browser and go to **[http://localhost:4747](http://localhost:4747)**.
 
-The first visit drops you straight in. no account wall, no forms. You pick how to start:
+The first visit drops you straight in. No account wall, no forms. You pick how to start:
 
 - **Show me some magic.** One click. Nurby adds a live demo camera, sets up a private local vision model if one is reachable, and lands you on the dashboard watching footage. Nothing leaves your machine.
-- **Set it up myself.** A short guided flow. add your own camera (paste its RTSP or ONVIF link, the built-in brand guide covers 26 popular brands, or use your laptop or phone webcam), then optionally pick a vision model, local or cloud.
+- **Set it up myself.** A short guided flow. Add your own camera (paste its RTSP or ONVIF link, the built-in brand guide covers 26 popular brands, or use your laptop or phone webcam), then optionally pick a vision model, local or cloud.
 
 When you are ready, a **Secure your account** button in the top bar lets you set an email and password so only you can get back in. Until then you are signed in as a provisional owner.
 
@@ -208,7 +203,7 @@ The bundled `ollama` container runs the model on the CPU, because Docker Desktop
    osascript -e 'quit app "Ollama"'; open -a Ollama
    ```
 
-   Note. this binds Ollama to all network interfaces so Docker can reach it, which also exposes it to your local network. On a home network that is low risk. to undo it later, run `launchctl unsetenv OLLAMA_HOST` and restart Ollama.
+   Note: This binds Ollama to all network interfaces so Docker can reach it, which also exposes it to your local network. On a home network that is low risk. To undo it later, run `launchctl unsetenv OLLAMA_HOST` and restart Ollama.
 
 3. Point Nurby at the host Ollama by adding this to your `.env`, then `docker compose up -d` to apply it:
 
@@ -216,7 +211,7 @@ The bundled `ollama` container runs the model on the CPU, because Docker Desktop
    OLLAMA_BASE_URL=http://host.docker.internal:11434
    ```
 
-4. You no longer need the bundled container, so skip the `--profile local-ai` step. In Settings → AI Providers, deploy or select your model. it now runs on the GPU. On Apple Silicon this is roughly ten to twenty times faster than the CPU container.
+4. You no longer need the bundled container, so skip the `--profile local-ai` step. In Settings → AI Providers, deploy or select your model. It now runs on the GPU. On Apple Silicon this is roughly ten to twenty times faster than the CPU container.
 
 This is the recommended setup for anyone on a Mac who wants responsive live captions. Linux hosts with an NVIDIA GPU get the same benefit by giving the bundled `ollama` container GPU access through the NVIDIA Container Toolkit.
 
