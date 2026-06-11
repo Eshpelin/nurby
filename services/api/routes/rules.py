@@ -426,7 +426,13 @@ async def test_rule(
     engine = RuleEngine()
     tz = await engine._resolve_timezone()
 
-    matched_trigger = engine._match_trigger(body.trigger_pattern, observation, fake_rule.id)
+    # Persistence-aware dry run: a min_frames=N rule needs the same object
+    # to match on N keyframes, so feed the synthesized observation through
+    # N times (the fresh engine instance keeps the streak state in-memory).
+    eval_rounds = max(1, int(body.trigger_pattern.get("min_frames") or 1))
+    matched_trigger = False
+    for _ in range(eval_rounds):
+        matched_trigger = engine._match_trigger(body.trigger_pattern, observation, fake_rule.id)
     matched_conditions = engine._check_conditions(body.conditions or {}, observation, tz)
     schedule_blocked = matched_trigger and not matched_conditions
     matched = matched_trigger and matched_conditions

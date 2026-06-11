@@ -23,6 +23,8 @@ export interface TriggerSectionProps {
   setFormTriggerType: (v: string) => void;
   formTriggerLabel: string;
   setFormTriggerLabel: (v: string) => void;
+  formTriggerMinFrames: string;
+  setFormTriggerMinFrames: (v: string) => void;
   formTriggerPersonId: string;
   setFormTriggerPersonId: (v: string) => void;
   formTriggerSensitivity: string;
@@ -60,6 +62,8 @@ export function TriggerSection(props: TriggerSectionProps) {
     setFormTriggerType,
     formTriggerLabel,
     setFormTriggerLabel,
+    formTriggerMinFrames,
+    setFormTriggerMinFrames,
     formTriggerPersonId,
     setFormTriggerPersonId,
     formTriggerSensitivity,
@@ -118,14 +122,45 @@ export function TriggerSection(props: TriggerSectionProps) {
       </div>
 
       {formTriggerType === "object_detected" && (
-        <ModelClassPicker
-          value={formTriggerLabel}
-          onChange={setFormTriggerLabel}
-          activeModels={activeModels}
-          classes={modelClasses}
-          loading={modelClassesLoading}
-          anyLabel="Any object"
-        />
+        <div className="space-y-3">
+          <ModelClassPicker
+            value={formTriggerLabel}
+            onChange={setFormTriggerLabel}
+            activeModels={activeModels}
+            classes={modelClasses}
+            loading={modelClassesLoading}
+            anyLabel="Any object"
+          />
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Confirmation</label>
+            <div className="flex gap-1.5">
+              {([
+                { v: "1", l: "Instant" },
+                { v: "2", l: "2 frames" },
+                { v: "3", l: "3 frames" },
+                { v: "5", l: "5 frames" },
+              ] as const).map((m) => (
+                <button
+                  key={m.v}
+                  type="button"
+                  onClick={() => setFormTriggerMinFrames(m.v)}
+                  className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                    formTriggerMinFrames === m.v
+                      ? "border-green-500 bg-green-500/10 text-green-300"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {m.l}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5">
+              How many keyframes the same object must persist before firing.
+              Instant reacts fastest; more frames kill one-frame false
+              positives like headlight flare or a leaf gusting past.
+            </p>
+          </div>
+        </div>
       )}
 
       {formTriggerType === "vehicle_detected" && (

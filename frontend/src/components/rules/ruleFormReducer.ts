@@ -17,6 +17,7 @@ export interface RuleFormState {
   // Trigger group
   formTriggerType: string;
   formTriggerLabel: string;
+  formTriggerMinFrames: string;
   formTriggerPersonId: string;
   formTriggerSensitivity: string;
   formTriggerAudioLabel: string;
@@ -53,6 +54,7 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
 
   formTriggerType: "object_detected",
   formTriggerLabel: "",
+  formTriggerMinFrames: "1",
   formTriggerPersonId: "",
   formTriggerSensitivity: "medium",
   formTriggerAudioLabel: "baby_cry",
@@ -84,6 +86,7 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
 // action chain and cooldown are preserved across switches.
 const TRIGGER_FIELDS_TO_RESET: (keyof RuleFormState)[] = [
   "formTriggerLabel",
+  "formTriggerMinFrames",
   "formTriggerPersonId",
   "formTriggerSensitivity",
   "formTriggerAudioLabel",
@@ -137,6 +140,7 @@ export function hydrateFromRule(rule: Rule): RuleFormState {
   base.formEnabled = r.enabled;
 
   base.formTriggerType = (tp.type as string) || "any";
+  base.formTriggerMinFrames = tp.min_frames != null ? String(tp.min_frames) : "1";
   // formTriggerLabel doubles as the object label and the vehicle plate text.
   base.formTriggerLabel = (tp.label as string) || (tp.plate as string) || "";
   base.formTriggerPersonId = (tp.person_id as string) || "";

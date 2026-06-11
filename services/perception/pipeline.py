@@ -926,6 +926,10 @@ class PerceptionPipeline:
                 }
                 for tr in tracker.tracks.values()
             ],
+            # Frame geometry so size/ratio trigger filters can convert
+            # bbox pixels to frame-relative area.
+            "frame_width": int(frame.shape[1]) if frame is not None else None,
+            "frame_height": int(frame.shape[0]) if frame is not None else None,
             "vlm_description": None,  # VLM runs async, not available at rule eval time
             "confidence": None,
         }

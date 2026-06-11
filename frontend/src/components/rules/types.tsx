@@ -359,7 +359,9 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
   const t = pattern.type as string;
   if (t === "object_detected") {
     const label = pattern.label as string | undefined;
-    return label ? `When "${label}" detected` : "When any object detected";
+    const mf = pattern.min_frames as number | undefined;
+    const held = mf && mf > 1 ? `, held for ${mf} frames` : "";
+    return label ? `When "${label}" detected${held}` : `When any object detected${held}`;
   }
   if (t === "vehicle_detected") {
     const plate = pattern.plate as string | undefined;

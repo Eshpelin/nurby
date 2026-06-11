@@ -77,6 +77,12 @@ class RuleEngine:
         self._cache_ttl = 30  # reload rules every 30s
         # Per-(rule_id, track_id) entry timestamp for inline-geometry loiter rules.
         self._loiter_entry: dict[tuple[uuid.UUID, int], float] = {}
+        # Multi-frame persistence state for min_frames triggers. Maps
+        # (rule_id, track_key) -> (first_seen_epoch, hit_count). A rule with
+        # min_frames=3 only fires once the same tracked object has matched
+        # on 3 keyframes inside its window, so a single hot frame (leaf
+        # gusting past, headlight flare) cannot fire an alert.
+        self._persistence: dict[tuple, tuple[float, int]] = {}
         # Pubsub invalidator. set when start_invalidation_listener is called.
         self._invalidate_stop: asyncio.Event | None = None
         self._invalidate_task: asyncio.Task | None = None
@@ -297,9 +303,22 @@ class RuleEngine:
             detections = data.get("object_detections", {}).get("objects", [])
             if not detections:
                 return False
-            if label:
-                return any(d["label"] == label for d in detections)
-            return len(detections) > 0
+            candidates = [d for d in detections if not label or d.get("label") == label]
+            candidates = self._filter_detection_geometry(candidates, pattern, data)
+            if not candidates:
+                return False
+            # Surface the strongest matched detection's confidence so the
+            # min_confidence condition can gate on it (the observation-level
+            # VLM confidence is always None at live eval time).
+            best = max(candidates, key=lambda d: d.get("confidence") or 0)
+            data["_matched_confidence"] = best.get("confidence")
+            min_frames = int(pattern.get("min_frames") or 1)
+            if min_frames <= 1:
+                return True
+            return self._check_persistence(
+                rule_id, pattern, candidates, min_frames,
+                within_seconds=float(pattern.get("within_seconds") or 30),
+            )
 
         elif trigger_type == "vehicle_detected":
             # Vehicle identity trigger. fires on a specific plate, any
@@ -489,6 +508,87 @@ class RuleEngine:
         return False
 
     @staticmethod
+    def _filter_detection_geometry(detections: list, pattern: dict, data: dict) -> list:
+        """Drop detections outside the trigger's size/ratio bounds.
+
+        ``min_area_pct``/``max_area_pct`` are fractions of the frame (0..1);
+        ``min_ratio``/``max_ratio`` bound width:height. Kills the classic
+        false-positive classes: a "person" the size of the whole frame
+        (headlight flare) or a 40:1 "dog" (fence shadow). Detections with
+        no usable bbox pass through; the filter never blocks on missing
+        geometry, only on bad geometry.
+        """
+        min_a = pattern.get("min_area_pct")
+        max_a = pattern.get("max_area_pct")
+        min_r = pattern.get("min_ratio")
+        max_r = pattern.get("max_ratio")
+        if min_a is None and max_a is None and min_r is None and max_r is None:
+            return detections
+        fw = data.get("frame_width")
+        fh = data.get("frame_height")
+        out = []
+        for d in detections:
+            bbox = d.get("bbox")
+            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                out.append(d)
+                continue
+            try:
+                x1, y1, x2, y2 = (float(v) for v in bbox)
+            except (TypeError, ValueError):
+                out.append(d)
+                continue
+            w, h = max(0.0, x2 - x1), max(0.0, y2 - y1)
+            if h > 0:
+                ratio = w / h
+                if min_r is not None and ratio < float(min_r):
+                    continue
+                if max_r is not None and ratio > float(max_r):
+                    continue
+            if fw and fh and (min_a is not None or max_a is not None):
+                area_pct = (w * h) / (float(fw) * float(fh))
+                if min_a is not None and area_pct < float(min_a):
+                    continue
+                if max_a is not None and area_pct > float(max_a):
+                    continue
+            out.append(d)
+        return out
+
+    def _check_persistence(
+        self,
+        rule_id,
+        pattern: dict,
+        candidates: list,
+        min_frames: int,
+        *,
+        within_seconds: float,
+    ) -> bool:
+        """True once any matched object has persisted for ``min_frames``
+        keyframes inside ``within_seconds``. Keyed on tracker_id when the
+        tracker stamped one, else on the label as a coarse fallback."""
+        now = time.time()
+        # Opportunistic GC so a busy scene cannot grow the dict unbounded.
+        if len(self._persistence) > 4096:
+            cutoff = now - max(within_seconds * 2, 120)
+            self._persistence = {
+                k: v for k, v in self._persistence.items() if v[0] >= cutoff
+            }
+        fired = False
+        for d in candidates:
+            track_key = d.get("tracker_id")
+            if track_key is None:
+                track_key = f"label:{d.get('label')}"
+            key = (rule_id, track_key)
+            first, count = self._persistence.get(key, (now, 0))
+            if now - first > within_seconds:
+                # Window expired. start a fresh streak from this frame.
+                first, count = now, 0
+            count += 1
+            self._persistence[key] = (first, count)
+            if count >= min_frames:
+                fired = True
+        return fired
+
+    @staticmethod
     async def _resolve_timezone():
         """Read system_timezone from app settings. Falls back to UTC."""
         try:
@@ -554,8 +654,23 @@ class RuleEngine:
         # threshold (no minimum) is treated the same as falsy 0 today
         # while a None means "no filter configured".
         min_conf = conditions.get("min_confidence")
-        if min_conf is not None and (data.get("confidence") or 0) < min_conf:
-            return False
+        if min_conf is not None:
+            # Live evaluation has no observation-level VLM confidence yet
+            # (the pipeline sends confidence=None), so fall back to the
+            # confidence of the detection the trigger actually matched,
+            # then to the strongest object in frame. Before this fallback
+            # every rule with min_confidence silently never fired live.
+            conf = data.get("confidence")
+            if conf is None:
+                conf = data.get("_matched_confidence")
+            if conf is None:
+                objs = (data.get("object_detections") or {}).get("objects") or []
+                confs = [o.get("confidence") for o in objs if o.get("confidence") is not None]
+                conf = max(confs) if confs else None
+            # No confidence signal at all (audio, status events): the
+            # condition cannot be evaluated, so it does not block.
+            if conf is not None and conf < min_conf:
+                return False
 
         return True
 

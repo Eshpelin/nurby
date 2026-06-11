@@ -181,6 +181,7 @@ export function RuleBuilder({
     const s = state;
     const p: Record<string, unknown> = { type: s.formTriggerType };
     if (s.formTriggerType === "object_detected" && s.formTriggerLabel) p.label = s.formTriggerLabel;
+    if (s.formTriggerType === "object_detected" && parseInt(s.formTriggerMinFrames) > 1) p.min_frames = parseInt(s.formTriggerMinFrames);
     if (s.formTriggerType === "vehicle_detected" && s.formTriggerLabel.trim()) p.plate = s.formTriggerLabel.trim();
     if (s.formTriggerType === "face_recognized" && s.formTriggerPersonId) p.person_id = s.formTriggerPersonId;
     if (s.formTriggerType === "motion") p.min_score = 0.08;
@@ -242,6 +243,7 @@ export function RuleBuilder({
     const s = state;
     const trigger_pattern: Record<string, unknown> = { type: s.formTriggerType };
     if (s.formTriggerType === "object_detected" && s.formTriggerLabel) trigger_pattern.label = s.formTriggerLabel;
+    if (s.formTriggerType === "object_detected" && parseInt(s.formTriggerMinFrames) > 1) trigger_pattern.min_frames = parseInt(s.formTriggerMinFrames);
     if (s.formTriggerType === "vehicle_detected" && s.formTriggerLabel.trim()) trigger_pattern.plate = s.formTriggerLabel.trim();
     if (s.formTriggerType === "face_recognized" && s.formTriggerPersonId) trigger_pattern.person_id = s.formTriggerPersonId;
     if (s.formTriggerType === "motion") {
@@ -436,6 +438,8 @@ export function RuleBuilder({
               setFormTriggerType={(v) => dispatch({ type: "setTriggerType", value: v })}
               formTriggerLabel={state.formTriggerLabel}
               setFormTriggerLabel={setterFor("formTriggerLabel")}
+              formTriggerMinFrames={state.formTriggerMinFrames}
+              setFormTriggerMinFrames={setterFor("formTriggerMinFrames")}
               formTriggerPersonId={state.formTriggerPersonId}
               setFormTriggerPersonId={setterFor("formTriggerPersonId")}
               formTriggerSensitivity={state.formTriggerSensitivity}

@@ -55,8 +55,13 @@ def test_min_confidence_filter(monkeypatch):
     eng, rec = install_engine(monkeypatch, [rule])
     asyncio.run(eng.evaluate({"confidence": 0.9}))
     asyncio.run(eng.evaluate({"confidence": 0.1}))
+    # confidence=None with no detection confidences either: the condition
+    # cannot be evaluated and must NOT block. The live pipeline always
+    # sends confidence=None (VLM runs async), so the old None-blocks
+    # behavior made every min_confidence rule dead in production. The
+    # detection-level gating is covered in tests/test_trigger_quality.py.
     asyncio.run(eng.evaluate({"confidence": None}))
-    assert rec.call_count == 1
+    assert rec.call_count == 2
 
 
 def test_min_confidence_zero_does_not_skip_falsy_check(monkeypatch):
