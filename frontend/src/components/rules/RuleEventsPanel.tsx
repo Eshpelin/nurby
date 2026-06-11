@@ -13,6 +13,7 @@ import {
 import { SummaryCard } from "./SummaryCard";
 import { EventNotesPanel } from "./EventNotesPanel";
 import { EventEvidence } from "@/components/EventEvidence";
+import { formatDateTime } from "@/lib/time";
 
 export interface RuleEventsPanelProps {
   selectedRule: Rule | null;
@@ -189,7 +190,7 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
             })()}
             <div>
               <span className="text-muted-foreground text-xs">Created</span>
-              <div>{new Date(selectedRule.created_at).toLocaleString()}</div>
+              <div>{formatDateTime(selectedRule.created_at)}</div>
             </div>
           </div>
         ) : (
@@ -255,7 +256,7 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                       )}
                     </div>
                     <span className="text-[10px] text-muted-foreground">
-                      {new Date(ev.fired_at).toLocaleString()}
+                      {formatDateTime(ev.fired_at)}
                     </span>
                   </div>
                   {ev.action_status === "failed" && ev.action_error && (

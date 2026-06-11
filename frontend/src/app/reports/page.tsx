@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useToast, useConfirm } from "@/lib/feedback";
+import { EmptyState } from "@/components/EmptyState";
 import { timeAgo } from "@/lib/time";
 
 interface PersonOption {
@@ -383,12 +384,12 @@ export default function ReportsPage() {
       {loading ? (
         <p className="text-sm text-muted-foreground py-12 text-center">Loading reports.</p>
       ) : reports.length === 0 && !showForm ? (
-        <div className="rounded-lg border border-dashed border-border py-12 text-center">
-          <p className="text-sm text-muted-foreground mb-1">No reports yet.</p>
-          <p className="text-xs text-muted-foreground">
-            Create one to get a nightly recap of anyone or anything your cameras watch.
-          </p>
-        </div>
+        <EmptyState
+          title="No scheduled reports yet"
+          body={'A report is a saved question on a clock, like "What was Simon doing all day?" delivered every night at 7 PM to your notifications, email, or Telegram. Create one to get a recap without asking.'}
+          actionLabel="New report"
+          onAction={() => setShowForm(true)}
+        />
       ) : (
         <div className="space-y-2">
           {reports.map((r) => {

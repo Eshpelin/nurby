@@ -31,3 +31,44 @@ export function timeAgo(
   if (d < 30) return `${d}d ago`;
   return `${Math.floor(d / 30)}mo ago`;
 }
+
+// ── Absolute formatting ──────────────────────────────────────────────
+//
+// One house style for absolute dates and times, so the same moment reads
+// the same on every page. Use these instead of ad-hoc `toLocaleString()`,
+// which renders differently across pages and locales. All tolerate
+// null/empty (return "") and an unparseable string (return it verbatim).
+
+function _date(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const t = new Date(iso);
+  return Number.isNaN(t.getTime()) ? null : t;
+}
+
+/** Clock only, e.g. "2:30 PM". */
+export function formatTime(iso: string | null | undefined): string {
+  const d = _date(iso);
+  if (!d) return iso ?? "";
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+/** Calendar date, e.g. "Jun 3, 2026". Omits the year when it is the
+ * current year, e.g. "Jun 3". */
+export function formatDate(iso: string | null | undefined): string {
+  const d = _date(iso);
+  if (!d) return iso ?? "";
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
+
+/** Date + time, e.g. "Jun 3, 2:30 PM" (or with the year when not this
+ * year). The default for any place that shows a full timestamp. */
+export function formatDateTime(iso: string | null | undefined): string {
+  const d = _date(iso);
+  if (!d) return iso ?? "";
+  return `${formatDate(iso)}, ${formatTime(iso)}`;
+}

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import type { AgentRunSummary, RunStatus } from "@/components/ask/types";
+import { formatDateTime } from "@/lib/time";
 
 const STATUS_PILL: Record<RunStatus, string> = {
   running: "bg-blue-500/20 text-blue-300 border-blue-500/30",
@@ -19,7 +20,7 @@ const STATUS_PILL: Record<RunStatus, string> = {
 
 function fmtCents(c: number): string { return `$${(c / 100).toFixed(2)}`; }
 function fmt(iso: string): string {
-  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+  try { return formatDateTime(iso); } catch { return iso; }
 }
 
 export default function AdminRunsPage() {

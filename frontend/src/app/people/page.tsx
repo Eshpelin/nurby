@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { useToast, useConfirm } from "@/lib/feedback";
 import { timeAgo as timeAgoBase } from "@/lib/time";
 
@@ -658,14 +659,13 @@ export default function PeoplePage() {
             Loading.
           </div>
         ) : persons.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-full border border-border flex items-center justify-center mb-4 text-muted-foreground text-2xl">
-              ?
-            </div>
-            <p className="text-muted-foreground text-sm">
-              No people identified yet. When cameras detect faces, they will appear here for you to name.
-            </p>
-          </div>
+          <EmptyState
+            icon={<CameraGlyph />}
+            title="No people recognized yet"
+            body="As your cameras see faces, Nurby groups them into people you can name. If you haven't connected a camera yet, start there — recognition begins automatically once one is live."
+            actionLabel="Go to cameras"
+            actionHref="/"
+          />
         ) : (
           <div className="space-y-3">
             {persons.map((p) => {

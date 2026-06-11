@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
 import { ReinterpretButton } from "@/components/ReinterpretButton";
 import { MomentModal } from "@/components/MomentModal";
+import { formatDateTime } from "@/lib/time";
 
 interface IncidentObs {
   id: string;
@@ -278,7 +279,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
                     }
                   }}
                   className={`text-[10px] font-mono ${accent}/80 px-1 py-0.5 rounded bg-violet-500/10 hover:bg-violet-500/25 hover:underline transition-colors cursor-pointer`}
-                  title={`View this moment. ${new Date(t.ts).toLocaleString()}`}
+                  title={`View this moment. ${formatDateTime(t.ts)}`}
                 >
                   {new Date(t.ts).toLocaleTimeString([], {
                     hour: "2-digit",

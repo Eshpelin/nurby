@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
+import { formatDateTime } from "@/lib/time";
 
 interface RecordingLike {
   id: string;
@@ -19,7 +20,7 @@ interface Props {
 }
 
 function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString();
+  return formatDateTime(iso);
 }
 
 function fmtDuration(s: number | null | undefined): string {

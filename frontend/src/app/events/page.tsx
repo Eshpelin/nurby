@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { timeAgo } from "@/lib/time";
+import { timeAgo, formatDateTime } from "@/lib/time";
 import { EventNotesPanel } from "@/components/rules/EventNotesPanel";
 import { EventEvidence } from "@/components/EventEvidence";
 import type { Camera, EventEntry, Rule } from "@/components/rules/types";
@@ -308,7 +308,7 @@ export default function EventsPage() {
                   )}
                   <span
                     className="ml-auto text-[11px] text-muted-foreground"
-                    title={new Date(ev.fired_at).toLocaleString()}
+                    title={formatDateTime(ev.fired_at)}
                   >
                     {timeAgo(ev.fired_at)}
                   </span>

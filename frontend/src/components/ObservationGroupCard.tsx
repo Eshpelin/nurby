@@ -6,6 +6,7 @@ import type {
   ObservationGroup,
 } from "@/lib/observation-grouping";
 import { RefinedBadge } from "@/components/RefinedBadge";
+import { formatDateTime } from "@/lib/time";
 
 interface Props {
   group: ObservationGroup;
@@ -148,7 +149,7 @@ export function ObservationGroupCard({ group, cameraName, renderObservation }: P
                 <span
                   key={o.id}
                   className="text-[10px] font-mono text-violet-300/80 px-1 py-0.5 rounded bg-violet-500/10"
-                  title={new Date(o.started_at).toLocaleString()}
+                  title={formatDateTime(o.started_at)}
                 >
                   {new Date(o.started_at).toLocaleTimeString([], {
                     hour: "2-digit",

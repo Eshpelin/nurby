@@ -1372,6 +1372,13 @@ function DashboardContent() {
   // Camera state
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [camerasLoading, setCamerasLoading] = useState(true);
+  const [learningDismissed, setLearningDismissed] = useState(true);
+  useEffect(() => {
+    // Default to dismissed during SSR; reveal on the client unless the user
+    // closed it before (kept in localStorage so it stays gone across visits).
+    try { setLearningDismissed(localStorage.getItem("nurby_learning_dismissed") === "1"); }
+    catch { setLearningDismissed(false); }
+  }, []);
   const [showWizard, setShowWizard] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalInitialType, setModalInitialType] = useState<StreamType | undefined>(undefined);
@@ -2193,8 +2200,47 @@ function DashboardContent() {
   }
 
 
+  // First-run reassurance. A freshly-onboarded user lands on a dashboard
+  // with cameras but no timeline yet, because the first frames take a beat
+  // to process. Without this, an empty dashboard reads as broken. Shown
+  // only while cameras exist, nothing has been detected, and the user has
+  // not dismissed it; it disappears on its own once the first entry lands.
+  const showLearningBanner =
+    !camerasLoading &&
+    cameras.length > 0 &&
+    entries.length === 0 &&
+    !searchActive &&
+    !learningDismissed;
+
   return (
     <div className="px-4 py-4 h-[calc(100vh-3.5rem)] flex flex-col">
+
+      {showLearningBanner && (
+        <div className="mb-3 flex items-start gap-3 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
+          <svg className="animate-spin h-4 w-4 text-accent mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <div className="flex-1 text-sm">
+            <span className="font-medium">Nurby is getting to know your cameras.</span>{" "}
+            <span className="text-muted-foreground">
+              The first detections appear here within a minute or so as motion, faces,
+              and objects are processed. You can keep setting up rules and people while it learns.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setLearningDismissed(true);
+              try { localStorage.setItem("nurby_learning_dismissed", "1"); } catch { /* ignore */ }
+            }}
+            aria-label="Dismiss"
+            className="text-muted-foreground hover:text-foreground text-lg leading-none flex-shrink-0"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="mb-3">
         <DailyDigestCard />

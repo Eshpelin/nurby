@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { useToast, useConfirm } from "@/lib/feedback";
 import { timeAgo as timeAgoBase } from "@/lib/time";
 
@@ -138,14 +139,14 @@ export default function VehiclesPage() {
 
   if (vehicles.length === 0) {
     return (
-      <div className="px-6 py-16 max-w-xl mx-auto text-center">
-        <div className="text-4xl mb-3">🚗</div>
-        <h1 className="text-xl font-semibold mb-2">No vehicles identified yet</h1>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          When a camera reads a license plate, the vehicle appears here with
-          its plate, a description, and every time it entered or left. Plates
-          are detected automatically. no setup needed.
-        </p>
+      <div className="px-6 py-16 max-w-xl mx-auto">
+        <EmptyState
+          icon={<CameraGlyph />}
+          title="No vehicles seen yet"
+          body="When a camera reads a license plate, the vehicle appears here with its plate, a description, and every time it came and went. Plate reading is automatic — if no camera is connected yet, add one first."
+          actionLabel="Go to cameras"
+          actionHref="/"
+        />
       </div>
     );
   }

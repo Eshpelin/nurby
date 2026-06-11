@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { formatDateTime } from "@/lib/time";
 
 // Phase 4. Inline notes panel rendered under each expanded event.
 // Lets the household leave free-text annotations. Telegram-sourced
@@ -106,7 +107,7 @@ export function EventNotesPanel({ eventId }: { eventId: string }) {
                 <div className="whitespace-pre-wrap text-foreground/90">{n.text}</div>
                 <div className="text-[10px] text-muted-foreground mt-0.5">
                   {n.author_display_name || "Unknown"} ·{" "}
-                  {new Date(n.created_at).toLocaleString()}
+                  {formatDateTime(n.created_at)}
                 </div>
               </div>
               <button

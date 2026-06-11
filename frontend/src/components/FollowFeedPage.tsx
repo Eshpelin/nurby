@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { formatDateTime } from "@/lib/time";
 
 interface SubjectPerson {
   kind: "person";
@@ -293,7 +294,7 @@ function FollowHeader({
       : subject.appearance_description || "Recurring stranger";
 
   const formatTs = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleString() : "—";
+    iso ? formatDateTime(iso) : "—";
   return (
     <div className="rounded-xl border border-border bg-card/40 p-4 mb-5">
       <div className="flex items-center gap-4 mb-4">
@@ -419,7 +420,7 @@ function peakHour(buckets: Record<string, number>): string | null {
 }
 
 function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
-  const time = new Date(item.ts).toLocaleString();
+  const time = formatDateTime(item.ts);
   if (item.kind === "observation") {
     return (
       <div className="rounded-lg border border-border bg-card/40 p-3">

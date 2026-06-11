@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 
 interface Recording {
   id: string;
@@ -238,25 +239,22 @@ export default function RecordingsPage() {
           Loading recordings.
         </div>
       ) : recordings.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-full border border-border flex items-center justify-center mb-4 text-muted-foreground text-2xl">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <rect x="2" y="4" width="20" height="16" rx="2" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          </div>
-          <p className="text-muted-foreground text-sm">
-            No recordings match your filters. Try adjusting the camera or date
-            range.
-          </p>
-        </div>
+        (cameraFilter || dateFrom || dateTo) ? (
+          <EmptyState
+            title="No recordings match these filters"
+            body="Try a different camera or widen the date range."
+            actionLabel="Clear filters"
+            onAction={() => { setCameraFilter(""); setDateFrom(""); setDateTo(""); }}
+          />
+        ) : (
+          <EmptyState
+            icon={<CameraGlyph />}
+            title="No recordings yet"
+            body="Recordings appear here as your cameras capture clips. Make sure a camera is connected and its recording mode is set to continuous, motion, or clip in its settings."
+            actionLabel="Go to cameras"
+            actionHref="/"
+          />
+        )
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

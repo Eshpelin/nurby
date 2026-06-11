@@ -26,6 +26,7 @@ const ShieldCheck = ({ className }: { className?: string }) => (
 );
 
 import { useAuth } from "@/lib/auth";
+import { formatDateTime } from "@/lib/time";
 
 interface AudioConfig {
   audio_capture_enabled: boolean;
@@ -367,7 +368,7 @@ export default function CameraAudioPage() {
                   }`}
                 >
                   <div className="text-xs text-zinc-500 mb-1 flex items-center gap-2">
-                    <span>{new Date(t.started_at).toLocaleString()}</span>
+                    <span>{formatDateTime(t.started_at)}</span>
                     <span>·</span>
                     <span>{t.provider}</span>
                     {t.filtered && (

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useToast, useConfirm } from "@/lib/feedback";
+import { formatDateTime } from "@/lib/time";
 
 interface Person {
   id: string;
@@ -590,7 +591,7 @@ function AccessLog({ persons, users }: { persons: Person[]; users: AdminUser[] }
                 <span className="text-muted-foreground">{e.action}</span>{" "}
                 <span className="text-foreground">{pName(e.person_id)}</span>
               </span>
-              <span className="text-muted-foreground">{new Date(e.at).toLocaleString()}</span>
+              <span className="text-muted-foreground">{formatDateTime(e.at)}</span>
             </div>
           ))
         )}

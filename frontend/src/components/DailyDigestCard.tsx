@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
+import { formatDateTime } from "@/lib/time";
 
 interface Visitor {
   name: string;
@@ -143,7 +144,7 @@ export function DailyDigestCard() {
                 : "facts only (no LLM)"}
             </span>
             <span>·</span>
-            <span>{new Date(digest.generated_at).toLocaleString()}</span>
+            <span>{formatDateTime(digest.generated_at)}</span>
             <button
               type="button"
               onClick={runNow}
