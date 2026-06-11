@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { useToast, useConfirm } from "@/lib/feedback";
 import { timeAgo as timeAgoBase } from "@/lib/time";
 
 interface Person {
@@ -96,6 +97,8 @@ function formatDate(iso: string): string {
 
 export default function PeoplePage() {
   const { authFetch, token } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [persons, setPersons] = useState<Person[]>([]);
   const [summaries, setSummaries] = useState<PersonSummary[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -350,12 +353,21 @@ export default function PeoplePage() {
   };
 
   const handleDelete = async (id: string) => {
+    const person = persons.find((p) => p.id === id);
+    const ok = await confirm({
+      title: `Delete ${person?.display_name ? `"${person.display_name}"` : "this person"}?`,
+      body: "Their profile and sighting history will be removed. Faces may re-cluster as a new unknown person later. This cannot be undone.",
+      danger: true,
+    });
+    if (!ok) return;
     try {
-      await authFetch(`/api/persons/${id}`, { method: "DELETE" });
+      const res = await authFetch(`/api/persons/${id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) throw new Error();
       fetchPersons();
       fetchSummaries();
+      toast.success("Person deleted");
     } catch {
-      /* silent */
+      toast.error("Could not delete this person.");
     }
   };
 

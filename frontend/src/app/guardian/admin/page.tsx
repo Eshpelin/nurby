@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { useToast, useConfirm } from "@/lib/feedback";
 
 interface Person {
   id: string;
@@ -330,6 +331,8 @@ function LinkRow({
   onChange: () => void;
 }) {
   const { authFetch } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const revoked = !!link.revoked_at;
 
   const patch = async (body: Record<string, unknown>) => {
@@ -341,9 +344,21 @@ function LinkRow({
     onChange();
   };
   const revoke = async () => {
-    if (!confirm(`Revoke ${guardianName}'s access to ${personName}? This is immediate.`)) return;
-    await authFetch(`/api/guardian/links/${link.id}`, { method: "DELETE" });
-    onChange();
+    const ok = await confirm({
+      title: `Revoke ${guardianName}'s access?`,
+      body: `${guardianName} will immediately lose access to ${personName}. This cannot be undone.`,
+      danger: true,
+      confirmLabel: "Revoke access",
+    });
+    if (!ok) return;
+    try {
+      const res = await authFetch(`/api/guardian/links/${link.id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) throw new Error();
+      toast.success("Access revoked");
+      onChange();
+    } catch {
+      toast.error("Could not revoke access.");
+    }
   };
 
   return (

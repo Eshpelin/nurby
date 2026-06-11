@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { useToast, useConfirm } from "@/lib/feedback";
 
 export interface TelegramChannel {
   id: string;
@@ -198,6 +199,8 @@ function ChannelRow({
   onResumePair: () => void;
 }) {
   const { authFetch } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const pill = statusPill(channel);
   const [savingField, setSavingField] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
@@ -269,10 +272,12 @@ function ChannelRow({
     const pending = webhookInfo?.pending_update_count ?? 0;
     let drop = false;
     if (pending > 0) {
-      drop = window.confirm(
-        `Telegram has ${pending} unprocessed update${pending === 1 ? "" : "s"} queued.\n\n` +
-          `OK = discard them and switch.\nCancel = keep them and switch anyway (they'll replay on next poll).`,
-      );
+      drop = await confirm({
+        title: `Discard ${pending} queued Telegram update${pending === 1 ? "" : "s"}?`,
+        body: "Discard them and switch to long-poll, or keep them (Cancel) and they replay on the next poll.",
+        confirmLabel: "Discard and switch",
+        cancelLabel: "Keep and switch",
+      });
     }
     await switchDelivery("long_poll", drop);
   };
@@ -655,9 +660,9 @@ function ChannelRow({
                       );
                       const data = await res.json().catch(() => null);
                       if (data?.ok) {
-                        alert(`Backend reachable at ${data?.probed_url || "public URL"}.`);
+                        toast.success(`Backend reachable at ${data?.probed_url || "public URL"}.`);
                       } else {
-                        alert(`Backend NOT reachable. ${data?.error || "unknown error"}`);
+                        toast.error(`Backend not reachable. ${data?.error || "unknown error"}`);
                       }
                     }}
                     className="px-2 py-0.5 text-[10px] rounded border border-border hover:bg-muted"

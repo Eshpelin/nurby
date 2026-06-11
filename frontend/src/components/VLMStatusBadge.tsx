@@ -72,9 +72,9 @@ export function VLMStatusBadge({ cameraId }: Props) {
       : "text-violet-300";
   const label =
     state.status === "stalled"
-      ? "VLM stalled"
+      ? "AI stalled"
       : state.status === "slow"
-        ? `VLM slow (${state.avg_latency?.toFixed(1)}s)`
+        ? `AI slow (${state.avg_latency?.toFixed(1)}s)`
         : state.status === "queued"
           ? "Queued"
           : isRefining
@@ -86,9 +86,9 @@ export function VLMStatusBadge({ cameraId }: Props) {
       role="status"
       aria-label={label}
       title={
-        state.last_latency
+        (state.last_latency
           ? `${label} · last ${state.last_latency.toFixed(1)}s`
-          : label
+          : label) + " — the AI is describing what this camera sees"
       }
       className={`flex items-center gap-1 rounded-full bg-black/60 backdrop-blur-sm px-1.5 py-0.5 border ${colorBorder}`}
     >

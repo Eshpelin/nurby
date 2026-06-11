@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { useToast, useConfirm } from "@/lib/feedback";
 import {
   cameraLookup,
   personLookup,
@@ -20,6 +21,8 @@ const LAST_FIRED_CACHE_MS = 30_000;
 
 export default function RulesPage() {
   const { authFetch } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const router = useRouter();
   const [rules, setRules] = useState<Rule[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
@@ -137,12 +140,21 @@ export default function RulesPage() {
   const openPersona = (synth: Rule) => stashPrefillAndCreate(synth);
 
   const handleDelete = async (id: string) => {
+    const rule = rules.find((r) => r.id === id);
+    const ok = await confirm({
+      title: `Delete rule${rule ? ` "${rule.name}"` : ""}?`,
+      body: "This stops all alerts for this condition. It cannot be undone.",
+      danger: true,
+    });
+    if (!ok) return;
     try {
-      await authFetch(`/api/rules/${id}`, { method: "DELETE" });
+      const res = await authFetch(`/api/rules/${id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) throw new Error();
       if (selectedRule?.id === id) setSelectedRule(null);
       fetchRules();
+      toast.success("Rule deleted");
     } catch {
-      /* silent */
+      toast.error("Could not delete the rule. Try again.");
     }
   };
 

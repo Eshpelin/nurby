@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { useToast, useConfirm } from "@/lib/feedback";
 import { timeAgo as timeAgoBase } from "@/lib/time";
 
 interface Vehicle {
@@ -59,6 +60,8 @@ const TYPE_ICON: Record<string, string> = {
 
 export default function VehiclesPage() {
   const { authFetch, token } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [summaries, setSummaries] = useState<Record<string, VehicleSummary>>({});
   const [loading, setLoading] = useState(true);
@@ -112,9 +115,22 @@ export default function VehiclesPage() {
   }, [authFetch, fetchAll]);
 
   const remove = useCallback(async (id: string) => {
+    const ok = await confirm({
+      title: "Delete this vehicle?",
+      body: "Its sighting history will be removed. This cannot be undone.",
+      danger: true,
+    });
+    if (!ok) return;
     setVehicles((prev) => prev.filter((x) => x.id !== id));
-    try { await authFetch(`/api/vehicles/${id}`, { method: "DELETE" }); } catch { fetchAll(); }
-  }, [authFetch, fetchAll]);
+    try {
+      const res = await authFetch(`/api/vehicles/${id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) throw new Error();
+      toast.success("Vehicle deleted");
+    } catch {
+      toast.error("Could not delete the vehicle.");
+      fetchAll();
+    }
+  }, [authFetch, fetchAll, confirm, toast]);
 
   if (loading) {
     return <div className="px-6 py-8 text-sm text-muted-foreground">Loading vehicles.</div>;

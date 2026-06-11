@@ -193,7 +193,24 @@ export function IncidentCard({ incident, cameraName }: Props) {
 
   return (
     <div className={`rounded-lg border ${tone} overflow-hidden transition-colors`}>
-      <button type="button" onClick={toggle} className="w-full text-left px-3 py-2.5">
+      {/* div with button semantics: a real <button> here would nest the
+          ReinterpretButton and thumbnail chips inside it, which is invalid
+          HTML and breaks hydration. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={toggle}
+        onKeyDown={(e) => {
+          // Only react to keys on the header itself, not on nested
+          // interactive children (their keydowns bubble up here).
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggle();
+          }
+        }}
+        className="w-full text-left px-3 py-2.5 cursor-pointer"
+      >
         <div className="flex items-center gap-2 text-[11px] mb-1.5">
           <RepeatIcon className={`w-3.5 h-3.5 ${accentDot}`} />
           <span className={`font-medium uppercase tracking-wider ${accent}`}>
@@ -286,7 +303,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
             )}
           </div>
         </div>
-      </button>
+      </div>
 
       {expanded && (
         <div className="border-t border-border/40 bg-black/20 px-3 py-2.5 space-y-2">

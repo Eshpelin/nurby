@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { useToast, useConfirm } from "@/lib/feedback";
 import { timeAgo } from "@/lib/time";
 
 interface PersonOption {
@@ -49,6 +50,8 @@ function fmtTime(hour: number, minute: number): string {
 
 export default function ReportsPage() {
   const { authFetch } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [reports, setReports] = useState<ScheduledReport[]>([]);
   const [persons, setPersons] = useState<PersonOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,16 +192,26 @@ export default function ReportsPage() {
 
   const remove = useCallback(
     async (id: string) => {
+      const report = reports.find((r) => r.id === id);
+      const ok = await confirm({
+        title: `Delete report${report ? ` "${report.name}"` : ""}?`,
+        body: "It will stop running on its schedule. This cannot be undone.",
+        danger: true,
+      });
+      if (!ok) return;
       try {
         const res = await authFetch(`/api/reports/${id}`, { method: "DELETE" });
         if (res.ok || res.status === 204) {
           setReports((prev) => prev.filter((r) => r.id !== id));
+          toast.success("Report deleted");
+        } else {
+          toast.error("Could not delete the report.");
         }
       } catch {
-        /* row stays */
+        toast.error("Could not delete the report.");
       }
     },
-    [authFetch]
+    [authFetch, reports, confirm, toast]
   );
 
   const inputClass =

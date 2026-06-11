@@ -205,9 +205,9 @@ export function Navbar() {
 
   return (
     <div className="border-b border-border bg-background sticky top-0 z-50">
-      <div className="px-6 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2">
+      <div className="px-3 sm:px-6 h-14 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-4 lg:gap-8 min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-7 h-7 rounded-md bg-accent flex items-center justify-center">
               <svg
                 width="16"
@@ -222,19 +222,21 @@ export function Navbar() {
               </svg>
             </div>
             <span className="font-semibold tracking-tight">Nurby</span>
-            <span className="font-mono text-xs text-muted-foreground ml-2">
+            <span className="font-mono text-xs text-muted-foreground ml-2 hidden sm:inline">
               v0.1
             </span>
           </div>
 
-          <nav className="flex items-center gap-1">
+          {/* Horizontal-scroll nav so the full set of links stays reachable
+              on narrow screens instead of clipping off the right edge. */}
+          <nav className="flex items-center gap-1 overflow-x-auto scrollbar-thin -mx-1 px-1 min-w-0">
             {NAV_ITEMS.filter((item) => item.roles.includes(role)).map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`px-3 py-1.5 rounded-md text-sm transition-all ${
+                  className={`px-3 py-1.5 rounded-md text-sm transition-all whitespace-nowrap flex-shrink-0 ${
                     isActive
                       ? "bg-muted text-foreground"
                       : "text-muted-foreground hover:text-foreground"
@@ -247,7 +249,7 @@ export function Navbar() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
           {/* Provisional owner. The account has no real credentials yet,
               so the install is wide open to anyone who can reach it. Make
               securing it the loudest thing on the bar. */}
@@ -283,7 +285,7 @@ export function Navbar() {
                 {loaded && (
                   <>
                     <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-                    <span className="font-mono">{label}</span>
+                    <span className="font-mono hidden md:inline">{label}</span>
                   </>
                 )}
               </Link>

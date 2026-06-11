@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
+import { useEscapeKey } from "@/lib/useEscapeKey";
 import { useWebcamPublisher, listVideoDevices } from "@/lib/webcam-publisher";
 import { STREAM_TYPES } from "@/lib/camera-types";
 import type { StreamType, DiscoveredDevice, DiscoveredOnvifDevice, ModalTab } from "@/lib/camera-types";
@@ -159,6 +160,7 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
 export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded = false }: { onClose: () => void; onSuccess: () => void; initialStreamType?: StreamType; embedded?: boolean }) {
   const { authFetch } = useAuth();
   const { startPublish, stopPublish } = useWebcamPublisher();
+  useEscapeKey(onClose, !embedded);
   const [activeTab, setActiveTab] = useState<ModalTab>("manual");
   const [name, setName] = useState("");
   const [streamType, setStreamType] = useState<StreamType>(initialStreamType || "rtsp");

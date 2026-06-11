@@ -798,7 +798,9 @@ function MiniPTZ({ cameraId, onClose }: { cameraId: string; onClose: () => void 
   const arrowBtn =
     "w-7 h-7 flex items-center justify-center rounded-sm bg-white/10 hover:bg-white/25 text-white/90 text-xs border border-white/10 transition-colors select-none";
 
-  const mk = (pan: number, tilt: number, zoom: number) => ({
+  const mk = (pan: number, tilt: number, zoom: number, label: string) => ({
+    "aria-label": label,
+    title: label,
     onMouseDown: (e: React.MouseEvent) => { e.stopPropagation(); startHold(pan, tilt, zoom); },
     onMouseUp: (e: React.MouseEvent) => { e.stopPropagation(); stopHold(); },
     onMouseLeave: () => { if (holdRef.current) stopHold(); },
@@ -815,20 +817,20 @@ function MiniPTZ({ cameraId, onClose }: { cameraId: string; onClose: () => void 
         {/* Direction pad */}
         <div className="grid grid-cols-3 grid-rows-3 gap-0.5 w-[5.5rem]">
           <span />
-          <button {...mk(0, SPD, 0)} className={arrowBtn}>↑</button>
+          <button {...mk(0, SPD, 0, "Tilt up")} className={arrowBtn}>↑</button>
           <span />
-          <button {...mk(-SPD, 0, 0)} className={arrowBtn}>←</button>
-          <button onClick={(e) => { e.stopPropagation(); stop(); }} className={arrowBtn + " opacity-60"} title="Stop">■</button>
-          <button {...mk(SPD, 0, 0)} className={arrowBtn}>→</button>
+          <button {...mk(-SPD, 0, 0, "Pan left")} className={arrowBtn}>←</button>
+          <button onClick={(e) => { e.stopPropagation(); stop(); }} className={arrowBtn + " opacity-60"} aria-label="Stop movement" title="Stop">■</button>
+          <button {...mk(SPD, 0, 0, "Pan right")} className={arrowBtn}>→</button>
           <span />
-          <button {...mk(0, -SPD, 0)} className={arrowBtn}>↓</button>
+          <button {...mk(0, -SPD, 0, "Tilt down")} className={arrowBtn}>↓</button>
           <span />
         </div>
         {/* Zoom */}
         <div className="flex flex-col gap-0.5">
-          <button {...mk(0, 0, ZSPD)} className={arrowBtn} title="Zoom in">+</button>
-          <button {...mk(0, 0, -ZSPD)} className={arrowBtn} title="Zoom out">−</button>
-          <button onClick={(e) => { e.stopPropagation(); onClose(); }} className={arrowBtn + " opacity-60"} title="Close">×</button>
+          <button {...mk(0, 0, ZSPD, "Zoom in")} className={arrowBtn}>+</button>
+          <button {...mk(0, 0, -ZSPD, "Zoom out")} className={arrowBtn}>−</button>
+          <button onClick={(e) => { e.stopPropagation(); onClose(); }} className={arrowBtn + " opacity-60"} aria-label="Close PTZ controls" title="Close">×</button>
         </div>
       </div>
     </div>
@@ -2200,13 +2202,13 @@ function DashboardContent() {
 
       <StarredStatusRow />
 
-      <div className="flex gap-4 flex-1 min-h-0">
+      <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
         {/* LEFT. Camera feeds */}
         <aside
           ref={sidebarRef}
           style={sidebarWidth ? { width: sidebarWidth } : undefined}
-          className={`relative flex-shrink-0 flex flex-col min-h-0 ${resizing ? "" : "transition-[width]"} ${
-            sidebarWidth ? "" : cameraLayout === "double" ? "w-[480px]" : cameraLayout === "list" ? "w-80" : "w-72"
+          className={`relative flex-shrink-0 flex flex-col min-h-0 w-full lg:w-auto ${resizing ? "" : "transition-[width]"} ${
+            sidebarWidth ? "" : cameraLayout === "double" ? "lg:w-[480px]" : cameraLayout === "list" ? "lg:w-80" : "lg:w-72"
           }`}
         >
           {/* Camera list header with layout toggle */}

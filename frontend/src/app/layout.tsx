@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthShell } from "@/components/auth-shell";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { FeedbackProvider } from "@/lib/feedback";
 import { ThemeProvider, themeInitScript } from "@/lib/theme";
 import { WebcamPublisherProvider } from "@/lib/webcam-publisher";
 import { WebSocketProvider } from "@/lib/ws";
@@ -38,15 +39,17 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>
-          <AuthShell>
-            <WebcamPublisherProvider>
-              <WebSocketProvider>
-                <ErrorBoundary>
-                  {children}
-                </ErrorBoundary>
-              </WebSocketProvider>
-            </WebcamPublisherProvider>
-          </AuthShell>
+          <FeedbackProvider>
+            <AuthShell>
+              <WebcamPublisherProvider>
+                <WebSocketProvider>
+                  <ErrorBoundary>
+                    {children}
+                  </ErrorBoundary>
+                </WebSocketProvider>
+              </WebcamPublisherProvider>
+            </AuthShell>
+          </FeedbackProvider>
         </ThemeProvider>
       </body>
     </html>
