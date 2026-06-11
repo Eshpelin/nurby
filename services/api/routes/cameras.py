@@ -22,6 +22,7 @@ from services.discovery.onvif import (
     ptz_stop,
 )
 from shared.auth import get_current_user, require_admin
+from shared.camera_secrets import seal, unseal
 from shared.config import settings
 from shared.database import get_db
 from shared.models import Camera, CameraStatusLog, User
@@ -281,6 +282,9 @@ async def camera_action_timeline(
 @router.post("", status_code=201)
 async def create_camera(body: CameraCreate, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     payload = body.model_dump()
+    # Credentials are sealed at rest (see shared/camera_secrets).
+    payload["password"] = seal(payload.get("password"))
+    payload["auth_token"] = seal(payload.get("auth_token"))
     # New cameras land at the end of the ordering.
     max_result = await db.execute(select(Camera.display_order))
     orders = [o for (o,) in max_result.all()]
@@ -533,7 +537,7 @@ async def ptz_move(
         ip=ip,
         port=port,
         username=camera.username,
-        password=camera.password,
+        password=unseal(camera.password),
         profile_token=profile_token,
         pan_speed=body.pan,
         tilt_speed=body.tilt,
@@ -558,7 +562,7 @@ async def ptz_stop_movement(
         ip=ip,
         port=port,
         username=camera.username,
-        password=camera.password,
+        password=unseal(camera.password),
         profile_token=profile_token,
     )
     if not ok:
@@ -580,7 +584,7 @@ async def ptz_list_presets(
         ip=ip,
         port=port,
         username=camera.username,
-        password=camera.password,
+        password=unseal(camera.password),
         profile_token=profile_token,
     )
     return presets
@@ -601,7 +605,7 @@ async def ptz_goto(
         ip=ip,
         port=port,
         username=camera.username,
-        password=camera.password,
+        password=unseal(camera.password),
         profile_token=profile_token,
         preset_token=body.preset_token,
     )
@@ -638,13 +642,22 @@ async def update_camera(
 
     updates = body.model_dump(exclude_unset=True)
 
-    # Track if stream-affecting fields changed
+    # Track if stream-affecting fields changed. Credentials compare against
+    # the unsealed stored value, then are sealed before persisting.
     stream_fields = {"stream_url", "stream_type", "username", "password", "auth_token", "snapshot_interval"}
     stream_changed = any(
-        field in updates and getattr(camera, field) != value
+        field in updates
+        and (
+            unseal(getattr(camera, field)) != value
+            if field in ("password", "auth_token")
+            else getattr(camera, field) != value
+        )
         for field, value in updates.items()
         if field in stream_fields
     )
+    for cred in ("password", "auth_token"):
+        if cred in updates:
+            updates[cred] = seal(updates[cred])
 
     for field, value in updates.items():
         setattr(camera, field, value)

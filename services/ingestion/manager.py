@@ -12,6 +12,7 @@ import uuid
 import redis.asyncio as aioredis
 from sqlalchemy import select
 
+from shared.camera_secrets import unseal
 from shared.config import settings
 from shared.database import async_session
 from shared.models import Camera
@@ -33,8 +34,8 @@ def _stream_config_hash(cam: Camera) -> str:
         cam.stream_url or "",
         cam.stream_type or "rtsp",
         cam.username or "",
-        cam.password or "",
-        cam.auth_token or "",
+        unseal(cam.password) or "",
+        unseal(cam.auth_token) or "",
         str(cam.snapshot_interval or 2.0),
         getattr(cam, "webcam_device", "") or "",
         "audio_only" if getattr(cam, "audio_only", False) else "av",
@@ -117,7 +118,7 @@ class CameraManager:
                 audio_url = mic_stream_url(cam.id)
             else:
                 audio_url = build_auth_url(
-                    cam.stream_url, cam.username, cam.password
+                    cam.stream_url, cam.username, unseal(cam.password)
                 )
         else:
             audio_url = mux_rtsp_url(
@@ -130,7 +131,7 @@ class CameraManager:
                 # mux path registration. Prefer direct URL once, retry via
                 # mux on next restart.
                 from services.ingestion.stream import build_auth_url
-                audio_url = build_auth_url(cam.stream_url, cam.username, cam.password)
+                audio_url = build_auth_url(cam.stream_url, cam.username, unseal(cam.password))
         if audio_url:
             aw = AudioWorker(cam_id, audio_url)
             self._audio_workers[cam_id] = aw

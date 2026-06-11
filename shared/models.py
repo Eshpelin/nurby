@@ -39,8 +39,10 @@ class Camera(Base):
         UUID(as_uuid=True), ForeignKey("facilities.id", ondelete="SET NULL"), nullable=True, index=True
     )
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    password: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    auth_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # password and auth_token are Fernet-sealed at rest (shared/camera_secrets).
+    # Width covers the token overhead for long credentials.
+    password: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    auth_token: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     snapshot_interval: Mapped[float] = mapped_column(Float, default=2.0)  # seconds between snapshot pulls
     motion_sensitivity: Mapped[float] = mapped_column(Float, default=0.5)
     recording_enabled: Mapped[bool] = mapped_column(Boolean, default=True)  # deprecated, use recording_mode

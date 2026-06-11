@@ -37,6 +37,7 @@ from typing import Iterable
 
 import httpx
 
+from shared.camera_secrets import unseal
 from shared.config import settings
 from shared.models import Camera
 from services.ingestion.webcam_bridge import bridge_manager as _usb_bridge
@@ -106,10 +107,10 @@ def _build_upstream_source(camera: Camera) -> str | None:
     # avoid a circular import on package load.
     from services.ingestion.stream import build_auth_url
 
-    url = build_auth_url(camera.stream_url, camera.username, camera.password)
+    url = build_auth_url(camera.stream_url, camera.username, unseal(camera.password))
     if camera.auth_token and camera.stream_type == "hls":
         sep = "&" if "?" in url else "?"
-        url = f"{url}{sep}token={camera.auth_token}"
+        url = f"{url}{sep}token={unseal(camera.auth_token)}"
     return url
 
 

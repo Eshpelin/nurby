@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
+from shared.camera_secrets import unseal
 from services.discovery.onvif import (
     ptz_continuous_move,
     ptz_goto_preset,
@@ -259,7 +260,7 @@ class PTZTrackerManager:
             "id": str(camera.id),
             "stream_url": camera.stream_url,
             "username": camera.username,
-            "password": camera.password,
+            "password": unseal(camera.password),
             "profile_token": camera.ptz_profile_token or "Profile_1",
             "home_preset": camera.ptz_smart_track_home_preset,
             "lost_seconds": int(camera.ptz_smart_track_lost_seconds or 3),
@@ -278,7 +279,7 @@ class PTZTrackerManager:
             ip, port = self._ip_port(camera.stream_url)
             ok = await ptz_continuous_move(
                 ip=ip, port=port,
-                username=camera.username, password=camera.password,
+                username=camera.username, password=unseal(camera.password),
                 profile_token=camera.ptz_profile_token or "Profile_1",
                 pan_speed=pan, tilt_speed=tilt, zoom_speed=zoom,
             )
