@@ -7,10 +7,11 @@ from fastapi.responses import FileResponse
 from sqlalchemy import String, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.auth import decode_access_token, get_current_user, require_admin
+from shared.auth import get_current_user, require_query_token
 from shared.config import settings
 from shared.database import get_db
 from shared.models import Observation, ObservationVlmPass, Person, User
+from shared.paths import escape_like, resolve_inside
 from shared.schemas import ObservationResponse
 
 router = APIRouter()
@@ -81,11 +82,15 @@ async def list_observations(
         if not name:
             return []
         query = query.where(
-            cast(Observation.person_detections, String).ilike(f'%"person_name": "{name}"%')
+            cast(Observation.person_detections, String).ilike(
+                f'%"person_name": "{escape_like(name)}"%', escape="\\"
+            )
         )
     if label:
         query = query.where(
-            cast(Observation.object_detections, String).ilike(f'%"label": "{label}"%')
+            cast(Observation.object_detections, String).ilike(
+                f'%"label": "{escape_like(label)}"%', escape="\\"
+            )
         )
     query = query.limit(limit).offset(offset)
     result = await db.execute(query)
@@ -108,16 +113,14 @@ async def get_observation_thumbnail(
 ):
     """Thumbnail auth accepts either Bearer header or a `?token=` query
     param so <img> tags can load without JS."""
-    if not token or not decode_access_token(token):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    require_query_token(token)
     observation = await db.get(Observation, observation_id)
     if not observation:
         raise HTTPException(status_code=404, detail="Observation not found")
     if not observation.thumbnail_path:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    path = os.path.abspath(observation.thumbnail_path)
-    allowed_dir = os.path.abspath(settings.thumbnails_path)
-    if not path.startswith(allowed_dir + os.sep) and not path.startswith(allowed_dir):
+    path = resolve_inside(observation.thumbnail_path, settings.thumbnails_path)
+    if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Thumbnail file not found on disk")

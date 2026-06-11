@@ -9,11 +9,10 @@ expand inline.
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime
 from typing import Any
-
-import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -21,10 +20,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.auth import decode_access_token, get_current_user
+from shared.auth import get_current_user, require_query_token
 from shared.config import settings
 from shared.database import get_db
 from shared.models import Conversation, Transcript, User
+from shared.paths import resolve_inside
 
 router = APIRouter()
 
@@ -94,14 +94,12 @@ async def get_conversation_clip(
 ):
     """Stream the conversation-anchored mp4 clip. Accepts ?token= so
     HTML5 <video> can load it without JS-side header injection."""
-    if not token or not decode_access_token(token):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    require_query_token(token)
     row = await db.get(Conversation, conversation_id)
     if row is None or not row.clip_path:
         raise HTTPException(status_code=404, detail="clip not found")
-    path = os.path.abspath(row.clip_path)
-    allowed = os.path.abspath(settings.recordings_path)
-    if not (path.startswith(allowed + os.sep) or path == allowed):
+    path = resolve_inside(row.clip_path, settings.recordings_path)
+    if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="clip missing on disk")
@@ -129,17 +127,13 @@ async def reinterpret_conversation(
         raise HTTPException(status_code=404, detail="conversation not found")
 
     # Lazy import to avoid pulling perception deps at API import time.
-    from shared.models import Camera, Provider
     from services.perception.conversation_finalizer import ConversationFinalizer
-    from services.perception.text_llm import call_text
-    from services.perception.token_budget import (
-        resolve_output_cap,
-    )
     from services.perception.vlm import get_active_provider
     from services.search.embeddings import (
         generate_embedding,
         get_embedding_provider,
     )
+    from shared.models import Camera, Provider
 
     cam = await db.get(Camera, row.camera_id)
     if cam is None:

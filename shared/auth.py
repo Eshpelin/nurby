@@ -3,9 +3,9 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-import bcrypt
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,6 +91,24 @@ def decode_access_token(token: str) -> uuid.UUID | None:
         return uuid.UUID(sub)
     except (JWTError, ValueError):
         return None
+
+
+def require_query_token(token: str | None) -> uuid.UUID:
+    """Auth for media tags (``<img>``, ``<video>``, ``<a download>``) that
+    cannot send an Authorization header; the JWT rides as ``?token=``.
+
+    Raises 401 when the token is missing, malformed, or expired. Callers must
+    use the raise, not a truthiness check: ``decode_access_token`` returns
+    ``None`` on bad tokens rather than raising, which makes try/except
+    wrappers around it silently pass.
+    """
+    user_id = decode_access_token(token) if token else None
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid token",
+        )
+    return user_id
 
 
 def create_guardian_claim_token(user_id: uuid.UUID, days: int = 7) -> str:
@@ -179,7 +197,6 @@ def require_camera_access(camera_id_param: str = "camera_id"):
             return current_user
 
         # Extract camera_id from path params via the request
-        from fastapi import Request
 
         request = kwargs.get("request")
         if request is None:

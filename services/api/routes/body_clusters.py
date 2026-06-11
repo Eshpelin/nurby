@@ -22,10 +22,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.auth import decode_access_token, get_current_user
+from shared.auth import get_current_user, require_query_token
 from shared.config import settings
 from shared.database import get_db
 from shared.models import BodyCluster, BodyClusterSample, Person, User
+from shared.paths import resolve_inside
 
 router = APIRouter()
 
@@ -112,8 +113,7 @@ async def get_body_thumbnail(
     token: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    if not token or not decode_access_token(token):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    require_query_token(token)
     cluster = await db.get(BodyCluster, cluster_id)
     if not cluster or not cluster.sample_thumbnail_path:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
@@ -127,8 +127,7 @@ async def get_body_sample_thumbnail(
     token: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    if not token or not decode_access_token(token):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    require_query_token(token)
     sample = await db.get(BodyClusterSample, sample_id)
     if not sample or sample.cluster_id != cluster_id or not sample.thumbnail_path:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
@@ -220,9 +219,8 @@ async def ignore_body_cluster(
 # ----------------------------------------------------------------------
 
 def _serve_thumbnail(path: str) -> FileResponse:
-    abs_path = os.path.abspath(path)
-    allowed_dir = os.path.abspath(settings.thumbnails_path)
-    if not abs_path.startswith(allowed_dir + os.sep) and not abs_path.startswith(allowed_dir):
+    abs_path = resolve_inside(path, settings.thumbnails_path)
+    if abs_path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(abs_path):
         raise HTTPException(status_code=404, detail="Thumbnail file not found")

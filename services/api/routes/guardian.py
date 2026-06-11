@@ -38,6 +38,7 @@ from shared.models import (
     Person,
     User,
 )
+from shared.paths import escape_like, resolve_inside
 from shared.schemas import (
     ApprovedPickupCreate,
     ApprovedPickupResponse,
@@ -420,9 +421,8 @@ async def link_image(
     if img is None:
         raise HTTPException(status_code=404, detail="No recent image available")
 
-    path = os.path.abspath(img["thumbnail_path"])
-    allowed_dir = os.path.abspath(settings.thumbnails_path)
-    if not (path.startswith(allowed_dir + os.sep) or path == allowed_dir):
+    path = resolve_inside(img["thumbnail_path"], settings.thumbnails_path)
+    if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Image file not found on disk")
@@ -584,9 +584,8 @@ async def link_clip(
     )
     if clip is None:
         raise HTTPException(status_code=404, detail="No recent clip available")
-    path = os.path.abspath(clip["clip_path"])
-    allowed_dir = os.path.abspath(settings.recordings_path)
-    if not (path.startswith(allowed_dir + os.sep) or path == allowed_dir):
+    path = resolve_inside(clip["clip_path"], settings.recordings_path)
+    if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Clip file not found on disk")
@@ -674,7 +673,7 @@ async def link_search(
             rows = (await db.execute(q)).scalars().all()
             mode = "semantic"
         if not rows:
-            q = base.where(Observation.vlm_description.ilike(f"%{text}%"))
+            q = base.where(Observation.vlm_description.ilike(f"%{escape_like(text)}%", escape="\\"))
             rows = (
                 await db.execute(q.order_by(Observation.started_at.desc()).limit(body.limit))
             ).scalars().all()
@@ -774,10 +773,9 @@ async def link_photo(
     person = await db.get(Person, link.person_id)
     if person is None or not person.photo_path:
         raise HTTPException(status_code=404, detail="No photo")
-    path = os.path.abspath(person.photo_path)
     # Photos live under the thumbnails store in this deploy.
-    allowed = os.path.abspath(settings.thumbnails_path)
-    if not (path.startswith(allowed + os.sep) or path == allowed):
+    path = resolve_inside(person.photo_path, settings.thumbnails_path)
+    if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Photo not found on disk")

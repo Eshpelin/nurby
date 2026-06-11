@@ -6,24 +6,13 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.auth import decode_access_token, get_current_user, require_admin
+from shared.auth import get_current_user, require_admin, require_query_token
 from shared.database import get_db
 from shared.models import Camera, Recording, User
+from shared.paths import resolve_inside
 from shared.schemas import RecordingResponse
 
 router = APIRouter()
-
-
-def _require_token_query(token: str | None) -> None:
-    """Auth for media tags (<video>, <a download>) that cannot send an
-    Authorization header. Mirrors the thumbnail/photo endpoints. the JWT
-    rides as ?token=. Raises 401 when missing or invalid."""
-    if not token:
-        raise HTTPException(status_code=401, detail="Missing token")
-    try:
-        decode_access_token(token)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
 
 _RELATIVE_PREFIXES = ["./recordings/", "recordings/", "./"]
 
@@ -59,9 +48,8 @@ async def _get_recording_or_404(
 
 def _get_disk_path_or_404(recording: Recording) -> str:
     from shared.config import settings as _settings
-    path = _resolve_recording_path(recording)
-    allowed_dir = os.path.abspath(_settings.recordings_path)
-    if not path.startswith(allowed_dir + os.sep) and not path.startswith(allowed_dir):
+    path = resolve_inside(_resolve_recording_path(recording), _settings.recordings_path)
+    if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Recording file not found on disk")
@@ -91,7 +79,7 @@ async def get_recording(recording_id: uuid.UUID, _current_user: User = Depends(g
 async def stream_recording(recording_id: uuid.UUID, token: str | None = Query(None), db: AsyncSession = Depends(get_db)):
     # Played in a <video src>, which cannot send an auth header. accept the
     # JWT as ?token= instead (same as thumbnails).
-    _require_token_query(token)
+    require_query_token(token)
     recording = await _get_recording_or_404(recording_id, db)
     path = _get_disk_path_or_404(recording)
     return FileResponse(path, media_type="video/mp4", filename=os.path.basename(path))
@@ -107,7 +95,7 @@ async def get_recording_camera(recording_id: uuid.UUID, _current_user: User = De
 @router.get("/{recording_id}/download")
 async def download_recording(recording_id: uuid.UUID, token: str | None = Query(None), db: AsyncSession = Depends(get_db)):
     # Downloaded via <a href download>, which cannot send an auth header.
-    _require_token_query(token)
+    require_query_token(token)
     recording = await _get_recording_or_404(recording_id, db)
     path = _get_disk_path_or_404(recording)
     filename = os.path.basename(path)

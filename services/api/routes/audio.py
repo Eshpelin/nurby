@@ -9,17 +9,17 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.auth import decode_access_token, get_current_user
+from shared.auth import get_current_user, require_query_token
 from shared.config import settings
 from shared.database import get_db
 from shared.models import AudioAuditLog, AudioCapture, Camera, User
+from shared.paths import resolve_inside
 
 router = APIRouter()
 
@@ -30,14 +30,12 @@ async def stream_audio(
     token: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    if not token or not decode_access_token(token):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    require_query_token(token)
     cap = await db.get(AudioCapture, capture_id)
     if cap is None:
         raise HTTPException(status_code=404, detail="Audio capture not found")
-    path = os.path.abspath(cap.file_path)
-    allowed = os.path.abspath(settings.audio_storage_path)
-    if not (path.startswith(allowed + os.sep) or path == allowed):
+    path = resolve_inside(cap.file_path, settings.audio_storage_path)
+    if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Audio file missing on disk")

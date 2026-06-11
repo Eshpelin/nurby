@@ -4,10 +4,11 @@ import os
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel as PydanticBaseModel
-from sqlalchemy import and_, func as sa_func, or_, select
+from sqlalchemy import and_, or_, select
+from sqlalchemy import func as sa_func
 
 
 def sa_lower(col):
@@ -15,12 +16,25 @@ def sa_lower(col):
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.config import settings
-from shared.auth import decode_access_token, get_current_user, require_admin
-from shared.database import get_db
-from shared.models import Camera, Conversation, FaceCluster, FaceClusterSample, FaceEmbedding, Incident, Observation, Person, Recording, Transcript, User
-from shared.schemas import PersonCreate, PersonRecapResponse, PersonResponse, PersonUpdate
 from services.recap import generate_recap
+from shared.auth import get_current_user, require_admin, require_query_token
+from shared.config import settings
+from shared.database import get_db
+from shared.models import (
+    Camera,
+    Conversation,
+    FaceCluster,
+    FaceClusterSample,
+    FaceEmbedding,
+    Incident,
+    Observation,
+    Person,
+    Recording,
+    Transcript,
+    User,
+)
+from shared.paths import resolve_inside
+from shared.schemas import PersonCreate, PersonRecapResponse, PersonResponse, PersonUpdate
 
 router = APIRouter()
 
@@ -103,14 +117,12 @@ async def get_cluster_thumbnail(
     db: AsyncSession = Depends(get_db),
 ):
     """Thumbnail auth accepts `?token=` query param so <img> tags work."""
-    if not token or not decode_access_token(token):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    require_query_token(token)
     cluster = await db.get(FaceCluster, cluster_id)
     if not cluster or not cluster.sample_thumbnail_path:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    path = os.path.abspath(cluster.sample_thumbnail_path)
-    allowed_dir = os.path.abspath(settings.thumbnails_path)
-    if not path.startswith(allowed_dir + os.sep) and not path.startswith(allowed_dir):
+    path = resolve_inside(cluster.sample_thumbnail_path, settings.thumbnails_path)
+    if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Thumbnail file not found")
@@ -125,14 +137,12 @@ async def get_sample_thumbnail(
     db: AsyncSession = Depends(get_db),
 ):
     """Thumbnail auth accepts `?token=` query param so <img> tags work."""
-    if not token or not decode_access_token(token):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    require_query_token(token)
     sample = await db.get(FaceClusterSample, sample_id)
     if not sample or not sample.thumbnail_path or sample.cluster_id != cluster_id:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    path = os.path.abspath(sample.thumbnail_path)
-    allowed_dir = os.path.abspath(settings.thumbnails_path)
-    if not path.startswith(allowed_dir + os.sep) and not path.startswith(allowed_dir):
+    path = resolve_inside(sample.thumbnail_path, settings.thumbnails_path)
+    if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Thumbnail file not found")
@@ -440,7 +450,8 @@ async def cluster_activity_summary(
     rule as the named-person summary, so a single visit does not inflate
     numbers. Only returns clusters still pending (not named or ignored).
     """
-    from datetime import timedelta, timezone as tz
+    from datetime import timedelta
+    from datetime import timezone as tz
 
     clusters_result = await db.execute(
         select(FaceCluster)
@@ -638,7 +649,8 @@ async def _auto_star_top_persons(db: AsyncSession, limit: int = 3) -> list[Perso
     """Pick the most frequently detected persons over the last 7 days and mark
     them as starred. Returns the newly-starred persons. No-op if there are no
     persons at all in the DB."""
-    from datetime import timezone as _tz, timedelta as _td
+    from datetime import timedelta as _td
+    from datetime import timezone as _tz
 
     pres = await db.execute(select(Person))
     all_persons = list(pres.scalars().all())
@@ -815,16 +827,14 @@ async def get_person_photo(
     db: AsyncSession = Depends(get_db),
 ):
     """Photo auth accepts `?token=` query param so <img> tags work."""
-    if not token or not decode_access_token(token):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    require_query_token(token)
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
     if not person.photo_path:
         raise HTTPException(status_code=404, detail="No photo uploaded")
-    path = os.path.abspath(person.photo_path)
-    allowed_dir = os.path.abspath(settings.thumbnails_path)
-    if not path.startswith(allowed_dir + os.sep) and not path.startswith(allowed_dir):
+    path = resolve_inside(person.photo_path, settings.thumbnails_path)
+    if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Photo file not found")

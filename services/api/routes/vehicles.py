@@ -17,9 +17,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.auth import decode_access_token, get_current_user
+from shared.auth import get_current_user, require_query_token
+from shared.config import settings
 from shared.database import get_db
 from shared.models import Camera, Observation, User, Vehicle
+from shared.paths import resolve_inside
 
 router = APIRouter()
 
@@ -256,11 +258,7 @@ async def vehicle_photo(
     """Best available photo. the vehicle's stored photo, else the most
     recent sighting thumbnail. Accepts a token query param so <img> tags
     work without a header."""
-    if token:
-        try:
-            decode_access_token(token)
-        except Exception:
-            raise HTTPException(status_code=401, detail="Invalid token")
+    require_query_token(token)
 
     v = await db.get(Vehicle, vehicle_id)
     if v is None:
@@ -282,6 +280,7 @@ async def vehicle_photo(
             if target in _vehicle_ids_in(o) and o.thumbnail_path and os.path.exists(o.thumbnail_path):
                 path = o.thumbnail_path
                 break
+    path = resolve_inside(path, settings.thumbnails_path)
     if not path or not os.path.exists(path):
         raise HTTPException(status_code=404, detail="No photo available")
     return FileResponse(path, media_type="image/jpeg")

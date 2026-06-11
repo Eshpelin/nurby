@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.auth import get_current_user, require_admin
 from shared.database import get_db
 from shared.models import Event, EventNote, Observation, Person, User
+from shared.paths import escape_like
 from shared.schemas import EventNoteCreate, EventNoteResponse, EventResponse
 
 router = APIRouter()
@@ -84,11 +85,15 @@ async def event_history(
         if not name:
             return []
         query = query.where(
-            cast(Observation.person_detections, String).ilike(f'%"person_name": "{name}"%')
+            cast(Observation.person_detections, String).ilike(
+                f'%"person_name": "{escape_like(name)}"%', escape="\\"
+            )
         )
     if label:
         query = query.where(
-            cast(Observation.object_detections, String).ilike(f'%"label": "{label}"%')
+            cast(Observation.object_detections, String).ilike(
+                f'%"label": "{escape_like(label)}"%', escape="\\"
+            )
         )
 
     query = query.limit(limit).offset(offset)

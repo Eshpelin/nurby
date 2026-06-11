@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.auth import get_current_user
 from shared.database import get_db
 from shared.models import Transcript, User
+from shared.paths import escape_like
 
 router = APIRouter()
 
@@ -70,7 +71,7 @@ async def list_transcripts(
     if to:
         clauses.append(Transcript.started_at <= to)
     if search:
-        clauses.append(Transcript.text.ilike(f"%{search}%"))
+        clauses.append(Transcript.text.ilike(f"%{escape_like(search)}%", escape="\\"))
     if not include_filtered:
         clauses.append(Transcript.filtered.is_(False))
     if clauses:
