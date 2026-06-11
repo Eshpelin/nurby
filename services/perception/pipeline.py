@@ -59,6 +59,13 @@ class PerceptionPipeline:
         self._binders: dict[str, IdentityBinder] = {}
         self._IdentityBinder = IdentityBinder
 
+    @property
+    def rule_engine(self):
+        """Shared engine instance so sibling consumers (the camera status
+        watcher) reuse one rule cache, one invalidation listener, and the
+        Redis-backed cooldowns."""
+        return self._rule_engine
+
     async def _get_redis(self):
         if self._redis is None:
             self._redis = aioredis.from_url(settings.redis_url)

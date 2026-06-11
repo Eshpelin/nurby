@@ -33,6 +33,27 @@ MOTION_RECORD_COOLDOWN = 10.0  # Seconds to keep recording after last motion
 OBJECT_RECORD_COOLDOWN = 15.0  # Seconds to keep recording after object trigger
 REDIS_STREAM_KEY = "nurby:motion"  # Redis stream for motion keyframes
 REDIS_STREAM_MAXLEN = 1000  # Max entries in stream
+# Camera availability edges (offline / back online) for the rule engine.
+# A stream rather than pubsub so a transition that happens while the
+# perception process is restarting is delivered when it comes back, not
+# lost. Tamper alerting cannot ride a fire-and-forget channel.
+CAMERA_STATUS_STREAM_KEY = "nurby:camera_status"
+CAMERA_STATUS_STREAM_MAXLEN = 500
+
+
+def classify_status_transition(status: str, previous: str | None) -> str | None:
+    """Classify a camera status change as an availability edge.
+
+    Returns "offline" when the camera just became unreachable (including a
+    first-ever failed connect, so a dead camera alerts on stack startup),
+    "online" when it recovered from offline, and None for edges the rule
+    engine does not care about (live <-> recording, startup to live).
+    """
+    if status == "offline" and previous != "offline":
+        return "offline"
+    if status in ("live", "recording") and previous == "offline":
+        return "online"
+    return None
 
 # Stream types
 STREAM_TYPE_RTSP = "rtsp"
@@ -574,8 +595,41 @@ class StreamWorker:
                         self.camera_id, previous or "unknown", status,
                         f" ({reason})" if reason else "",
                     )
+                    await self._publish_status_transition(
+                        camera, status, previous, reason
+                    )
         except Exception:
             logger.exception("Failed to update camera status")
+
+    async def _publish_status_transition(
+        self, camera, status: str, previous: str | None, reason: str | None
+    ) -> None:
+        """Push offline/online edges onto the camera-status stream so the
+        rule engine (perception process) can fire camera_offline and
+        camera_online rules. Best-effort. a Redis hiccup must never take
+        down the status write itself."""
+        edge = classify_status_transition(status, previous)
+        if edge is None:
+            return
+        try:
+            r = await self._get_redis()
+            await r.xadd(
+                CAMERA_STATUS_STREAM_KEY,
+                {
+                    "camera_id": str(self.camera_id),
+                    "camera_name": (camera.name if camera else "") or "",
+                    "camera_status": edge,
+                    "previous_status": previous or "",
+                    "reason": reason or "",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+                maxlen=CAMERA_STATUS_STREAM_MAXLEN,
+                approximate=True,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to publish camera status transition for %s", self.camera_id
+            )
 
     async def _update_camera_properties(self, width: int, height: int, fps: float):
         try:

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import String, cast, select
@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Event, EventNote, Observation, Person, User
+from shared.models import Event, EventNote, Observation, Person, Rule, User
 from shared.paths import escape_like
 from shared.schemas import EventNoteCreate, EventNoteResponse, EventResponse
 
@@ -47,21 +47,20 @@ async def list_events(
     return result.scalars().all()
 
 
-@router.get("/history", response_model=list[EventResponse])
-async def event_history(
-    rule_id: uuid.UUID | None = Query(default=None),
-    camera_id: uuid.UUID | None = Query(default=None),
-    status: str | None = Query(default=None),
-    from_: datetime | None = Query(default=None, alias="from", description="Inclusive start (ISO 8601)"),
-    to: datetime | None = Query(default=None, description="Inclusive end (ISO 8601)"),
-    person_id: uuid.UUID | None = Query(default=None, description="Filter to events whose observation names this person"),
-    label: str | None = Query(default=None, description="Filter to events whose observation carries this label"),
-    limit: int = Query(default=50, le=200),
-    offset: int = Query(default=0, ge=0),
-    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+async def _filtered_events_query(
+    db: AsyncSession,
+    *,
+    rule_id: uuid.UUID | None = None,
+    camera_id: uuid.UUID | None = None,
+    status: str | None = None,
+    from_: datetime | None = None,
+    to: datetime | None = None,
+    person_id: uuid.UUID | None = None,
+    label: str | None = None,
+    acked: bool | None = None,
 ):
-    """List events with optional filters for rule, camera, action status,
-    time range, person, and label."""
+    """Shared filter builder for /history and /export.csv. Returns the
+    query, or None when a person filter resolves to nobody (no rows)."""
     query = select(Event).order_by(Event.fired_at.desc())
     if rule_id:
         query = query.where(Event.rule_id == rule_id)
@@ -71,6 +70,10 @@ async def event_history(
         query = query.where(Event.fired_at >= from_)
     if to:
         query = query.where(Event.fired_at <= to)
+    if acked is True:
+        query = query.where(Event.acked_at.is_not(None))
+    elif acked is False:
+        query = query.where(Event.acked_at.is_(None))
 
     # camera/person/label filters all reach through the linked Observation.
     needs_obs = bool(camera_id or person_id or label)
@@ -83,7 +86,7 @@ async def event_history(
             await db.execute(select(Person.display_name).where(Person.id == person_id))
         ).scalars().first()
         if not name:
-            return []
+            return None
         query = query.where(
             cast(Observation.person_detections, String).ilike(
                 f'%"person_name": "{escape_like(name)}"%', escape="\\"
@@ -95,10 +98,106 @@ async def event_history(
                 f'%"label": "{escape_like(label)}"%', escape="\\"
             )
         )
+    return query
 
+
+@router.get("/history", response_model=list[EventResponse])
+async def event_history(
+    rule_id: uuid.UUID | None = Query(default=None),
+    camera_id: uuid.UUID | None = Query(default=None),
+    status: str | None = Query(default=None),
+    from_: datetime | None = Query(default=None, alias="from", description="Inclusive start (ISO 8601)"),
+    to: datetime | None = Query(default=None, description="Inclusive end (ISO 8601)"),
+    person_id: uuid.UUID | None = Query(default=None, description="Filter to events whose observation names this person"),
+    label: str | None = Query(default=None, description="Filter to events whose observation carries this label"),
+    acked: bool | None = Query(default=None, description="true = acknowledged only, false = unreviewed only"),
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """List events with optional filters for rule, camera, action status,
+    time range, person, label, and acknowledged state."""
+    query = await _filtered_events_query(
+        db, rule_id=rule_id, camera_id=camera_id, status=status, from_=from_,
+        to=to, person_id=person_id, label=label, acked=acked,
+    )
+    if query is None:
+        return []
     query = query.limit(limit).offset(offset)
     result = await db.execute(query)
     return result.scalars().all()
+
+
+@router.get("/export.csv")
+async def export_events_csv(
+    rule_id: uuid.UUID | None = Query(default=None),
+    camera_id: uuid.UUID | None = Query(default=None),
+    status: str | None = Query(default=None),
+    from_: datetime | None = Query(default=None, alias="from"),
+    to: datetime | None = Query(default=None),
+    person_id: uuid.UUID | None = Query(default=None),
+    label: str | None = Query(default=None),
+    acked: bool | None = Query(default=None),
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Audit/archival export of fired events. Same filters as /history,
+    streamed as CSV (mirrors the transcripts export) so large histories
+    do not blow API memory."""
+    import csv
+    import io
+
+    from fastapi.responses import StreamingResponse
+
+    query = await _filtered_events_query(
+        db, rule_id=rule_id, camera_id=camera_id, status=status, from_=from_,
+        to=to, person_id=person_id, label=label, acked=acked,
+    )
+
+    columns = [
+        "id", "fired_at", "rule_id", "rule_name", "camera_id", "camera_name",
+        "action_status", "action_type", "action_error",
+        "acked_at", "acked_via", "observation_id", "recording_id", "description",
+    ]
+
+    async def _stream():
+        head = io.StringIO()
+        csv.writer(head).writerow(columns)
+        yield head.getvalue()
+        if query is None:
+            return
+        # Resolve rule names once. the rule table is tiny.
+        rules = {
+            r.id: r.name
+            for r in (await db.execute(select(Rule))).scalars().all()
+        }
+        result = await db.stream(query.order_by(None).order_by(Event.fired_at.asc()))
+        async for ev in result.scalars():
+            payload = ev.payload or {}
+            buf = io.StringIO()
+            csv.writer(buf).writerow([
+                str(ev.id),
+                ev.fired_at.isoformat() if ev.fired_at else "",
+                str(ev.rule_id) if ev.rule_id else "",
+                rules.get(ev.rule_id, ""),
+                str(payload.get("camera_id") or ""),
+                payload.get("camera_name") or "",
+                ev.action_status or "",
+                ev.action_type or "",
+                ev.action_error or "",
+                ev.acked_at.isoformat() if ev.acked_at else "",
+                ev.acked_via or "",
+                str(ev.observation_id) if ev.observation_id else "",
+                str(ev.recording_id) if ev.recording_id else "",
+                (payload.get("vlm_description") or payload.get("status_reason") or "")[:500],
+            ])
+            yield buf.getvalue()
+
+    return StreamingResponse(
+        _stream(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="events.csv"'},
+    )
 
 
 @router.get("/{event_id}")
@@ -240,4 +339,23 @@ async def ack_event(
             event.acknowledged_at = now
         await db.commit()
         await db.refresh(event)
+    return event
+
+
+@router.post("/{event_id}/mute", response_model=EventResponse)
+async def mute_event(
+    event_id: uuid.UUID,
+    duration_seconds: int = Query(default=600, ge=60, le=86400),
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Web counterpart to the Telegram 🔕 button. Sets ``muted_until`` so
+    notification channels skip re-sends for this event for the duration
+    (default 10 minutes, same as Telegram)."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    event.muted_until = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
+    await db.commit()
+    await db.refresh(event)
     return event

@@ -274,6 +274,24 @@ class RuleEngine:
         """Check if observation data matches trigger pattern."""
         trigger_type = pattern.get("type")
 
+        # Camera availability events are synthetic, observation-less
+        # payloads published by ingestion when a camera goes dark or
+        # recovers. They only ever match their own trigger types, and
+        # those types never match real observations, so the catch-all
+        # "any" stays scoped to actual footage.
+        if data.get("event_kind") == "camera_status":
+            if trigger_type not in ("camera_offline", "camera_online"):
+                return False
+            want = "offline" if trigger_type == "camera_offline" else "online"
+            if data.get("camera_status") != want:
+                return False
+            cam_filter = pattern.get("camera_id")
+            if cam_filter and str(cam_filter) != str(data.get("camera_id")):
+                return False
+            return True
+        if trigger_type in ("camera_offline", "camera_online"):
+            return False
+
         if trigger_type == "object_detected":
             label = pattern.get("label")
             detections = data.get("object_detections", {}).get("objects", [])

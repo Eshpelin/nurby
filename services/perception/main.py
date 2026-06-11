@@ -9,6 +9,7 @@ observations in the database.
 import asyncio
 import logging
 
+from services.perception.camera_status_watcher import CameraStatusWatcher
 from services.perception.conversation_finalizer import ConversationFinalizer
 from services.perception.incident_tracker import IncidentFinalizer
 from services.perception.daily_digest import DailyDigestScheduler
@@ -40,8 +41,12 @@ async def main():
     journey_finalizer = JourneyFinalizer()
     daily_digest = DailyDigestScheduler()
     enricher = EnrichmentManager()
+    # Shares the pipeline's rule engine so camera_offline/online rules use
+    # the same cache, invalidation listener, and cooldown state.
+    status_watcher = CameraStatusWatcher(pipeline.rule_engine)
     await asyncio.gather(
         pipeline.run(),
+        status_watcher.run(),
         live.run(),
         summarizer.run(),
         finalizer.run(),

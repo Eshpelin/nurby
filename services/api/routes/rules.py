@@ -94,6 +94,41 @@ async def update_rule(rule_id: uuid.UUID, body: RuleUpdate, _current_user: User 
     return rule
 
 
+@router.post("/{rule_id}/snooze", response_model=RuleResponse)
+async def snooze_rule(
+    rule_id: uuid.UUID,
+    duration_seconds: int = Query(default=3600, ge=60, le=604800),
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Web counterpart to the Telegram 💤 button. Sets ``snoozed_until``
+    (default 1 hour, same as Telegram); notification sends for this rule
+    are suppressed until then. Use /unsnooze to clear early."""
+    rule = await db.get(Rule, rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    rule.snoozed_until = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
+    await db.commit()
+    await db.refresh(rule)
+    return rule
+
+
+@router.post("/{rule_id}/unsnooze", response_model=RuleResponse)
+async def unsnooze_rule(
+    rule_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Clear a snooze before it expires."""
+    rule = await db.get(Rule, rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    rule.snoozed_until = None
+    await db.commit()
+    await db.refresh(rule)
+    return rule
+
+
 @router.delete("/{rule_id}", status_code=204)
 async def delete_rule(rule_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     rule = await db.get(Rule, rule_id)
@@ -215,6 +250,17 @@ def _synthesize_observation_for_trigger(
             "direction": direction,
             "zone_name": trigger_pattern.get("zone_name") or "test-line",
         }]
+
+    elif t in ("camera_offline", "camera_online"):
+        # Synthetic availability edge, matching what the ingestion worker
+        # publishes on a real transition (see CameraStatusWatcher).
+        pcam = trigger_pattern.get("camera_id") or cam
+        obs["camera_id"] = str(pcam)
+        obs["event_kind"] = "camera_status"
+        obs["camera_status"] = "offline" if t == "camera_offline" else "online"
+        obs["previous_status"] = "recording" if t == "camera_offline" else "offline"
+        obs["status_reason"] = "synthesized test transition"
+        obs["camera_name"] = "Test Camera"
 
     elif t == "any":
         pass
