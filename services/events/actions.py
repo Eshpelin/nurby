@@ -118,6 +118,12 @@ async def deliver_signed(
     on timeout, connection error, and 5xx with exponential backoff.
     Returns (ok, detail). 4xx is not retried (caller misconfig).
     """
+    from shared.netpolicy import webhook_target_rejection
+
+    rejection = await webhook_target_rejection(url)
+    if rejection:
+        return (False, f"target refused: {rejection}")
+
     headers = dict(headers or {})
     body = json.dumps(payload, separators=(",", ":"), default=str).encode("utf-8")
     headers.setdefault("Content-Type", "application/json")
@@ -407,6 +413,14 @@ async def _execute_api_call(action, observation_data, rule, event_id, ctx):
 
     if payload is None:
         # No body. fall back to a single plain request (nothing to sign).
+        from shared.netpolicy import webhook_target_rejection
+
+        rejection = await webhook_target_rejection(url)
+        if rejection:
+            await _update_event_status(
+                event_id, "api_call", "failed", f"target refused: {rejection}"
+            )
+            return
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.request(

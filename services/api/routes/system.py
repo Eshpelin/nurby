@@ -258,6 +258,7 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     "daily_digest_enabled",
     "daily_digest_hour",
     "nudity_blur",
+    "webhook_block_private_networks",
     "audio_events",
     "body_reid_tentative_decay_days",
     "cluster_naming_min_sightings",

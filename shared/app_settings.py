@@ -46,6 +46,10 @@ DEFAULTS: dict[str, Any] = {
     # notifications and Telegram webhook registration). Sourced from
     # env config by default; an explicit override stored here wins.
     "public_base_url": None,
+    # Outbound webhook hardening. Off by default: LAN webhooks (ESP32
+    # sirens, relays, n8n on the same host) are a first-class feature.
+    # Cloud metadata endpoints are always refused regardless of this flag.
+    "webhook_block_private_networks": False,
     # Rule cooldown backing store. "redis" persists per-rule last-fired
     # epoch across perception restarts and across multiple workers;
     # "memory" reverts to single-process in-RAM tracking (cooldowns
