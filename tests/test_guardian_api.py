@@ -129,8 +129,12 @@ async def test_revoke_sets_timestamp(monkeypatch):
 @pytest.mark.asyncio
 async def test_image_throttle_429(monkeypatch):
     owner = _user()
-    # free link that just served an image -> throttled
-    link = _link(owner.id, last_image_served_at=NOW - timedelta(minutes=5))
+    # free link that just served an image -> throttled. Anchored to the real
+    # clock because the route checks the throttle against datetime.now().
+    link = _link(
+        owner.id,
+        last_image_served_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+    )
     person = SimpleNamespace(id=link.person_id, display_name="Ahmed", nickname=None)
     db = FakeDB([link, person])
 
