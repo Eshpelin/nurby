@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from shared.config import settings
-from services.api.routes import admin_stats, agent, api_keys, audio, auth, body_clusters, cameras, conversations, daily_digest, detection_models, devices, digests, events, guardian, incidents, invites, journeys, notifications, observations, ollama_deploy, persons, privacy_zones, providers, recordings, rules, search, summaries, system, telegram, timeline, transcripts, users, vehicles, webhook_subscriptions
+from services.api.routes import admin_stats, agent, api_keys, audio, auth, body_clusters, cameras, conversations, daily_digest, detection_models, devices, digests, events, guardian, incidents, invites, journeys, notifications, observations, ollama_deploy, persons, privacy_zones, providers, recordings, reports, rules, search, summaries, system, telegram, timeline, transcripts, users, vehicles, webhook_subscriptions
 from services.digest.scheduler import run_digest_loop
 from services.api.ws import router as ws_router
 
@@ -56,7 +56,14 @@ async def lifespan(app: FastAPI):
     from services.notify.telegram import shutdown_client as _tg_shutdown
     tg_manager = TelegramPollerManager()
     tg_task = asyncio.create_task(tg_manager.run())
+    # Scheduled reports. Saved agent questions on a clock ("what was Simon
+    # doing all day, every night at 7 PM"), delivered to notify/email.
+    from services.api.report_scheduler import ReportScheduler
+    report_scheduler = ReportScheduler()
+    report_task = asyncio.create_task(report_scheduler.run())
     yield
+    report_scheduler.stop()
+    report_task.cancel()
     digest_task.cancel()
     reid_sweeper.stop()
     reid_task.cancel()
@@ -130,6 +137,7 @@ app.include_router(persons.router, prefix="/api/persons", tags=["persons"])
 app.include_router(vehicles.router, prefix="/api/vehicles", tags=["vehicles"])
 app.include_router(body_clusters.router, prefix="/api/body-clusters", tags=["body-clusters"])
 app.include_router(rules.router, prefix="/api/rules", tags=["rules"])
+app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(providers.router, prefix="/api/providers", tags=["providers"])

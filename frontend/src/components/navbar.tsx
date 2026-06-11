@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { label: "Guardian", href: "/guardian", roles: ["admin", "viewer", "guardian"] },
   { label: "Vehicles", href: "/vehicles", roles: OPERATOR },
   { label: "Alerts", href: "/events", roles: OPERATOR },
+  { label: "Reports", href: "/reports", roles: OPERATOR },
   { label: "Rules", href: "/rules", roles: OPERATOR },
   { label: "Settings", href: "/settings", roles: OPERATOR },
 ];

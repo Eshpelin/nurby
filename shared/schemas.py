@@ -633,6 +633,51 @@ class RuleResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ── Scheduled reports ──
+
+class ScheduledReportCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    prompt: str = Field(min_length=1)
+    person_id: uuid.UUID | None = None
+    hour: int = Field(default=19, ge=0, le=23)
+    minute: int = Field(default=0, ge=0, le=59)
+    days: list[str] | None = None
+    delivery: dict | None = None
+    provider_id: uuid.UUID | None = None
+    enabled: bool = True
+
+
+class ScheduledReportUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    prompt: str | None = Field(default=None, min_length=1)
+    person_id: uuid.UUID | None = None
+    hour: int | None = Field(default=None, ge=0, le=23)
+    minute: int | None = Field(default=None, ge=0, le=59)
+    days: list[str] | None = None
+    delivery: dict | None = None
+    provider_id: uuid.UUID | None = None
+    enabled: bool | None = None
+
+
+class ScheduledReportResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    prompt: str
+    person_id: uuid.UUID | None
+    hour: int
+    minute: int
+    days: list | None
+    delivery: dict | None
+    provider_id: uuid.UUID | None
+    enabled: bool
+    last_run_at: datetime | None
+    last_status: str | None
+    last_output: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # ── Rule test + replay schemas ──
 #
 # Both endpoints are pure dry-run. ``/rules/test`` never persists an

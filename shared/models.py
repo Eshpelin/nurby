@@ -1152,6 +1152,48 @@ class TelegramDialog(Base):
 # creation; see services/agent/budget.py for the daily-usage rollup.
 
 
+class ScheduledReport(Base):
+    """A saved, recurring agent question with a delivery schedule.
+
+    Distinct from the morning digest: the digest is one fixed household
+    recap; a scheduled report is any question, optionally scoped to one
+    person, on its own clock. "What was Simon doing all day, every night
+    at 7 PM" is one row here. The runner (services/api/report_scheduler)
+    feeds the prompt through the same agent pipeline as Ask Nurby and
+    delivers the grounded answer to the configured channels.
+    """
+
+    __tablename__ = "scheduled_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    # Optional person focus. The runner injects the person's name into the
+    # agent question so identity resolution starts grounded.
+    person_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("persons.id", ondelete="SET NULL"), nullable=True
+    )
+    # Local time-of-day in the household timezone (system_timezone setting).
+    hour: Mapped[int] = mapped_column(Integer, default=19)
+    minute: Mapped[int] = mapped_column(Integer, default=0)
+    # Days like ["mon","tue"]. Null = every day.
+    days: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Delivery channels: {"notify": bool, "email": str|null}. Telegram later.
+    delivery: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Budgets and run attribution use the creator's identity.
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    last_output: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class AgentRun(Base):
     """One agentic Q&A invocation.
 
