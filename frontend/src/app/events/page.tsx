@@ -40,6 +40,7 @@ export default function EventsPage() {
   const [cameraFilter, setCameraFilter] = useState("");
   const [ruleFilter, setRuleFilter] = useState("");
   const [ackedFilter, setAckedFilter] = useState<"" | "false" | "true">("");
+  const [severityFilter, setSeverityFilter] = useState<"" | "alert" | "detection">("alert");
   const [range, setRange] = useState<RangeValue>("7d");
 
   const ruleNames = useMemo(() => {
@@ -62,13 +63,14 @@ export default function EventsPage() {
       if (cameraFilter) params.set("camera_id", cameraFilter);
       if (ruleFilter) params.set("rule_id", ruleFilter);
       if (ackedFilter) params.set("acked", ackedFilter);
+      if (severityFilter) params.set("severity", severityFilter);
       const hours = RANGES.find((r) => r.value === range)?.hours ?? 0;
       if (hours > 0) {
         params.set("from", new Date(Date.now() - hours * 3600_000).toISOString());
       }
       return params;
     },
-    [cameraFilter, ruleFilter, ackedFilter, range]
+    [cameraFilter, ruleFilter, ackedFilter, severityFilter, range]
   );
 
   const fetchEvents = useCallback(
@@ -198,6 +200,30 @@ export default function EventsPage() {
         >
           Export CSV
         </button>
+      </div>
+
+      <div className="flex items-center gap-1 mb-3">
+        {([
+          { v: "alert", l: "Alerts" },
+          { v: "detection", l: "Detections" },
+          { v: "", l: "Everything" },
+        ] as const).map((t) => (
+          <button
+            key={t.v}
+            type="button"
+            onClick={() => setSeverityFilter(t.v)}
+            className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+              severityFilter === t.v
+                ? "border-foreground/40 bg-muted text-foreground font-medium"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.l}
+          </button>
+        ))}
+        <span className="ml-2 text-[11px] text-muted-foreground">
+          Alerts are the push-worthy tier; detections are kept for review.
+        </span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-4">

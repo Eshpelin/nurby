@@ -15,6 +15,14 @@ from dataclasses import dataclass, field
 
 IOU_MATCH_THRESHOLD = 0.2  # below this, detections are considered new tracks
 MAX_MISSED = 15             # expire track after N keyframes without a hit
+# Stationary detection. A track whose centroid shifts less than this
+# fraction of its own bbox diagonal between matched keyframes is counted
+# motionless; after STATIONARY_AFTER_TICKS consecutive motionless matches
+# it is "stationary" (the parked car). Any real movement resets the
+# counter immediately, so a parked car that pulls away flips back to
+# "moving" on the very next keyframe.
+MOTIONLESS_SHIFT_FRACTION = 0.05
+STATIONARY_AFTER_TICKS = 10
 
 
 def _iou(a: list[int], b: list[int]) -> float:
@@ -45,8 +53,16 @@ class Track:
     first_seen: float
     last_seen: float
     missed: int = 0
+    # Consecutive matched keyframes with sub-threshold movement.
+    motionless_ticks: int = 0
     # Per-zone entry timestamps. {zone_name: monotonic_seconds}
     zone_entries: dict[str, float] = field(default_factory=dict)
+
+    @property
+    def state(self) -> str:
+        """"stationary" once the object has held position for
+        STATIONARY_AFTER_TICKS matched keyframes, else "moving"."""
+        return "stationary" if self.motionless_ticks >= STATIONARY_AFTER_TICKS else "moving"
 
 
 class ObjectTracker:
@@ -83,6 +99,16 @@ class ObjectTracker:
                     best_id = tid
             if best_id != -1:
                 tr = self._tracks[best_id]
+                prev_c = _centroid(tr.bbox)
+                new_c = _centroid(det["bbox"])
+                shift = ((new_c[0] - prev_c[0]) ** 2 + (new_c[1] - prev_c[1]) ** 2) ** 0.5
+                w = max(1.0, det["bbox"][2] - det["bbox"][0])
+                h = max(1.0, det["bbox"][3] - det["bbox"][1])
+                diag = (w * w + h * h) ** 0.5
+                if shift < MOTIONLESS_SHIFT_FRACTION * diag:
+                    tr.motionless_ticks += 1
+                else:
+                    tr.motionless_ticks = 0
                 tr.prev_bbox = tr.bbox
                 tr.bbox = list(det["bbox"])
                 tr.last_seen = now

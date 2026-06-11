@@ -25,6 +25,7 @@ export interface Rule {
   conditions: Record<string, unknown> | null;
   actions: Record<string, unknown> | Record<string, unknown>[];
   cooldown_seconds: number;
+  severity?: string;
   snoozed_until?: string | null;
   created_at: string;
 }
@@ -169,6 +170,8 @@ export const TRIGGER_TYPES: TriggerType[] = [
   { value: "line_cross",      label: "Tripwire",        icon: Icon.tripwire,  desc: "A tracked object crosses a line.",                accent: "indigo", group: "spatial" },
   { value: "camera_offline",  label: "Camera offline",  icon: Icon.camOff,    desc: "A camera stops responding (tamper, power, network).", accent: "rose", group: "system" },
   { value: "camera_online",   label: "Camera recovered", icon: Icon.camOff,    desc: "A camera comes back after being offline.",        accent: "green",  group: "system" },
+  { value: "incident_started", label: "Incident begins", icon: Icon.clock,     desc: "A new cluster of repeat sightings opens (same person/vehicle keeps appearing).", accent: "amber", group: "system" },
+  { value: "incident_ended",  label: "Incident recap",  icon: Icon.clock,      desc: "An incident closes: fires once with duration, count, and an AI recap.", accent: "indigo", group: "system" },
   { value: "any",             label: "Any observation", icon: Icon.spark,     desc: "Fire on every processed keyframe.",               accent: "slate",  group: "any" },
 ];
 
@@ -413,6 +416,13 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
     }
     if (zone) return `When tripwire "${zone}" crossed${dirText}`;
     return `When any tripwire crossed${dirText}`;
+  }
+  if (t === "incident_started" || t === "incident_ended") {
+    const kind = pattern.signature_kind as string | undefined;
+    const what = kind ? `a ${kind} incident` : "an incident";
+    return t === "incident_started"
+      ? `When ${what} begins`
+      : `When ${what} ends (with recap)`;
   }
   if (t === "camera_offline" || t === "camera_online") {
     const cid = pattern.camera_id as string | undefined;

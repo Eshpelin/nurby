@@ -576,6 +576,7 @@ class RuleCreate(BaseModel):
     conditions: dict | None = None
     actions: dict | list
     cooldown_seconds: int = 300
+    severity: str = Field(default="alert", pattern="^(alert|detection)$")
 
     @field_validator("actions")
     @classmethod
@@ -602,6 +603,7 @@ class RuleUpdate(BaseModel):
     trigger_pattern: dict | None = None
     conditions: dict | None = None
     actions: dict | list | None = None
+    severity: str | None = Field(default=None, pattern="^(alert|detection)$")
     cooldown_seconds: int | None = None
 
     @field_validator("actions")
@@ -627,6 +629,7 @@ class RuleResponse(BaseModel):
     conditions: dict | None
     actions: dict | list
     cooldown_seconds: int
+    severity: str = "alert"
     snoozed_until: datetime | None = None
     created_at: datetime
 

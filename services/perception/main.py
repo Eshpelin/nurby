@@ -44,6 +44,10 @@ async def main():
     # Shares the pipeline's rule engine so camera_offline/online rules use
     # the same cache, invalidation listener, and cooldown state.
     status_watcher = CameraStatusWatcher(pipeline.rule_engine)
+    # Incident lifecycle edges (started/ended) feed the same engine so
+    # incident_started / incident_ended rules fire with recap payloads.
+    from services.perception import incident_tracker as _inc_mod
+    _inc_mod.set_rule_event_sink(pipeline.rule_engine.evaluate)
     await asyncio.gather(
         pipeline.run(),
         status_watcher.run(),

@@ -593,6 +593,11 @@ class Rule(Base):
     # the user from the rule builder. Mute and snooze are deliberately
     # separate. snooze is rule-wide, mute is per-event. Snooze wins.
     snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Triage taxonomy. "alert" rules are the front-page, push-worthy tier;
+    # "detection" rules are record-keeping that stays behind a tab. A
+    # verify action with on_fail="demote" can downgrade a single event
+    # from alert to detection at fire time.
+    severity: Mapped[str] = mapped_column(String(16), default="alert")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -610,6 +615,11 @@ class Event(Base):
         UUID(as_uuid=True), nullable=True, index=True
     )
     fired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    # Denormalized from the rule (and demotable by a failed verify) so the
+    # alerts UI can filter without joining; camera_id denormalized from the
+    # payload so per-camera triage does not parse JSON.
+    severity: Mapped[str] = mapped_column(String(16), default="alert")
+    camera_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     action_status: Mapped[str] = mapped_column(String(16), default="pending")

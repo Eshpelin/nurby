@@ -53,6 +53,61 @@ def _cross_direction(prev_c, cur_c, line_a, line_b) -> str:
     return "in" if cur_sign > prev_sign else "out"
 
 
+def _anchor(bbox: list[int]) -> tuple[float, float]:
+    """Bottom-center of a bbox: where the object touches the ground.
+
+    Frigate-style anchoring. A person's centroid floats into the
+    neighbor's yard when they stand at the fence; their feet do not.
+    """
+    return ((bbox[0] + bbox[2]) / 2.0, float(bbox[3]))
+
+
+def annotate_detection_zones(detections: list[dict], zones: list[dict] | None) -> None:
+    """Stamp each detection with the named areas its anchor sits in.
+
+    Named areas are zones of type "zone" (purely logical, non-destructive)
+    or "loiter" (also a meaningful area). Mutates each detection dict,
+    adding ``zones: [name, ...]``.
+    """
+    areas = [
+        (z.get("name") or "zone", z["points"])
+        for z in (zones or [])
+        if z.get("type") in ("zone", "loiter") and len(z.get("points") or []) >= 3
+    ]
+    for d in detections:
+        bbox = d.get("bbox")
+        if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+            d["zones"] = []
+            continue
+        pt = _anchor(list(bbox))
+        d["zones"] = [name for name, pts in areas if _point_in_polygon(pt, pts)]
+
+
+def veto_zone_triggered(detections: list[dict], zones: list[dict] | None) -> str | None:
+    """Name of the first veto zone containing any detection anchor, else None.
+
+    ZoneMinder preclusive semantics: while a veto zone is triggered, the
+    whole camera's rule evaluation is suppressed. The classic use is a
+    patch of wall that car headlights wash over at night.
+    """
+    vetoes = [
+        (z.get("name") or "veto", z["points"])
+        for z in (zones or [])
+        if z.get("type") == "veto" and len(z.get("points") or []) >= 3
+    ]
+    if not vetoes:
+        return None
+    for d in detections:
+        bbox = d.get("bbox")
+        if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+            continue
+        pt = _anchor(list(bbox))
+        for name, pts in vetoes:
+            if _point_in_polygon(pt, pts):
+                return name
+    return None
+
+
 def evaluate(tracker: ObjectTracker, zones: list[dict] | None) -> tuple[list[dict], list[dict]]:
     """Return (loitering_events, line_cross_events) for this tick."""
     loiter_events: list[dict] = []

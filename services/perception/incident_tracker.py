@@ -57,6 +57,27 @@ INTERESTING_INCIDENT_LABELS = {
 }
 
 
+# Rule-engine sink. The perception main wires this to the shared
+# RuleEngine so incident lifecycle edges can fire incident_started /
+# incident_ended rules. Kept as a loose hook so this module stays
+# importable without the engine (tests, API process).
+_rule_event_sink = None
+
+
+def set_rule_event_sink(sink) -> None:
+    global _rule_event_sink
+    _rule_event_sink = sink
+
+
+async def _emit_rule_event(payload: dict) -> None:
+    if _rule_event_sink is None:
+        return
+    try:
+        await _rule_event_sink(payload)
+    except Exception:
+        logger.exception("incident rule-event sink failed")
+
+
 def compute_signature(
     person_detections: dict | None,
     object_detections: dict | None,
@@ -212,6 +233,19 @@ async def assign_incident(
         asyncio.create_task(_broadcast_opened(new_inc))
     except RuntimeError:
         pass
+    await _emit_rule_event(
+        {
+            "event_kind": "incident",
+            "incident_event": "started",
+            "incident_id": str(new_inc.id),
+            "camera_id": str(cam.id) if cam else None,
+            "camera_name": cam.name if cam else "",
+            "signature_kind": new_inc.signature_kind,
+            "who_or_what": new_inc.signature_key,
+            "timestamp": new_inc.started_at.isoformat(),
+            "occurrence_count": new_inc.occurrence_count,
+        }
+    )
     return new_inc.id
 
 
@@ -344,6 +378,24 @@ class IncidentFinalizer:
             )
         except Exception:
             logger.debug("incident_finalized broadcast failed", exc_info=True)
+
+        duration = max(0.0, (ended_at - inc.started_at).total_seconds())
+        await _emit_rule_event(
+            {
+                "event_kind": "incident",
+                "incident_event": "ended",
+                "incident_id": str(inc_id),
+                "camera_id": str(cam.id),
+                "camera_name": cam.name,
+                "signature_kind": inc.signature_kind,
+                "who_or_what": inc.signature_key,
+                "timestamp": ended_at.isoformat(),
+                "started_at": inc.started_at.isoformat(),
+                "duration_seconds": duration,
+                "occurrence_count": inc.occurrence_count,
+                "summary": summary_text,
+            }
+        )
 
     async def _resolve_provider(self, cam: Camera) -> Provider | None:
         for pid in (cam.summary_provider_id, cam.vlm_provider_id):

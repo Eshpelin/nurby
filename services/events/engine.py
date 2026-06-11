@@ -105,8 +105,16 @@ class RuleEngine:
         # 06:00 schedule means LA-local, not perception-host-local.
         tz = await self._resolve_timezone()
 
+        # ZoneMinder-style veto. While a veto zone on this camera is
+        # triggered (headlight wash on a wall patch, a flapping flag), all
+        # rule evaluation for the frame is suppressed. A rule opts out with
+        # conditions.ignore_veto when it must fire regardless.
+        veto_active = bool(observation_data.get("veto_active"))
+
         for rule in self._rules:
             if not rule.enabled:
+                continue
+            if veto_active and not (rule.conditions or {}).get("ignore_veto"):
                 continue
 
             # Check cooldown. cooldown_seconds=0 means no cooldown and
@@ -140,6 +148,7 @@ class RuleEngine:
                 rule_id=rule.id,
                 observation_id=observation_data.get("observation_id"),
                 payload=observation_data,
+                severity=getattr(rule, "severity", None) or "alert",
             )
 
             # Execute actions. Thread a shared `vars` dict so later actions
@@ -300,6 +309,34 @@ class RuleEngine:
         if trigger_type in ("camera_offline", "camera_online"):
             return False
 
+        # Incident lifecycle events: synthetic payloads emitted when the
+        # incident tracker opens or finalizes a cluster of repeat
+        # sightings. The ended payload carries duration, occurrence count,
+        # and the VLM recap, so a webhook/notify consumer gets Frigate's
+        # review-item semantics plus a written summary.
+        if data.get("event_kind") == "incident":
+            if trigger_type not in ("incident_started", "incident_ended"):
+                return False
+            want = "started" if trigger_type == "incident_started" else "ended"
+            if data.get("incident_event") != want:
+                return False
+            cam_filter = pattern.get("camera_id")
+            if cam_filter and str(cam_filter) != str(data.get("camera_id")):
+                return False
+            kind = pattern.get("signature_kind")
+            if kind and kind != data.get("signature_kind"):
+                return False
+            if want == "ended":
+                min_dur = pattern.get("min_duration_seconds")
+                if min_dur is not None and float(data.get("duration_seconds") or 0) < float(min_dur):
+                    return False
+                min_occ = pattern.get("min_occurrences")
+                if min_occ is not None and int(data.get("occurrence_count") or 0) < int(min_occ):
+                    return False
+            return True
+        if trigger_type in ("incident_started", "incident_ended"):
+            return False
+
         if trigger_type == "object_detected":
             label = pattern.get("label")
             detections = data.get("object_detections", {}).get("objects", [])
@@ -307,6 +344,25 @@ class RuleEngine:
                 return False
             candidates = [d for d in detections if not label or d.get("label") == label]
             candidates = self._filter_detection_geometry(candidates, pattern, data)
+            want_zones = pattern.get("zones")
+            if want_zones:
+                wanted = {str(z) for z in want_zones}
+                candidates = [
+                    d for d in candidates
+                    if wanted & set(d.get("zones") or [])
+                ]
+            want_state = pattern.get("object_state")
+            if want_state in ("moving", "stationary"):
+                # The parked-car filter. A detection with no track yet is a
+                # fresh arrival and counts as moving.
+                states = {
+                    t.get("track_id"): t.get("state")
+                    for t in (data.get("tracks") or [])
+                }
+                candidates = [
+                    d for d in candidates
+                    if (states.get(d.get("tracker_id")) or "moving") == want_state
+                ]
             if not candidates:
                 return False
             # Surface the strongest matched detection's confidence so the
@@ -807,6 +863,7 @@ class RuleEngine:
         rule_id: uuid.UUID,
         observation_id: str | None,
         payload: dict,
+        severity: str = "alert",
     ) -> uuid.UUID:
         """Store fired event in DB."""
         try:
@@ -820,10 +877,18 @@ class RuleEngine:
         except (ValueError, TypeError):
             rec_uuid = None
 
+        cam_raw = payload.get("camera_id")
+        try:
+            cam_uuid = uuid.UUID(str(cam_raw)) if cam_raw else None
+        except (ValueError, TypeError):
+            cam_uuid = None
+
         event = Event(
             rule_id=rule_id,
             observation_id=obs_uuid,
             recording_id=rec_uuid,
+            severity=severity if severity in ("alert", "detection") else "alert",
+            camera_id=cam_uuid,
             payload=payload,
         )
         try:

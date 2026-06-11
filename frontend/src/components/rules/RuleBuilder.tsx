@@ -182,6 +182,8 @@ export function RuleBuilder({
     const p: Record<string, unknown> = { type: s.formTriggerType };
     if (s.formTriggerType === "object_detected" && s.formTriggerLabel) p.label = s.formTriggerLabel;
     if (s.formTriggerType === "object_detected" && parseInt(s.formTriggerMinFrames) > 1) p.min_frames = parseInt(s.formTriggerMinFrames);
+    if (s.formTriggerType === "object_detected" && s.formTriggerObjectState !== "any") p.object_state = s.formTriggerObjectState;
+    if (s.formTriggerType === "object_detected" && s.formTriggerZones.length > 0) p.zones = s.formTriggerZones;
     if (s.formTriggerType === "vehicle_detected" && s.formTriggerLabel.trim()) p.plate = s.formTriggerLabel.trim();
     if (s.formTriggerType === "face_recognized" && s.formTriggerPersonId) p.person_id = s.formTriggerPersonId;
     if (s.formTriggerType === "motion") p.min_score = 0.08;
@@ -201,7 +203,7 @@ export function RuleBuilder({
       if (s.formTriggerLineDirection !== "any") p.direction = s.formTriggerLineDirection;
       if (s.formTriggerObjectClass) p.label = s.formTriggerObjectClass;
     }
-    if (s.formTriggerType === "camera_offline" || s.formTriggerType === "camera_online") {
+    if (s.formTriggerType === "camera_offline" || s.formTriggerType === "camera_online" || s.formTriggerType === "incident_started" || s.formTriggerType === "incident_ended") {
       if (s.formTriggerGeomCamId) p.camera_id = s.formTriggerGeomCamId;
     }
     return p;
@@ -244,6 +246,8 @@ export function RuleBuilder({
     const trigger_pattern: Record<string, unknown> = { type: s.formTriggerType };
     if (s.formTriggerType === "object_detected" && s.formTriggerLabel) trigger_pattern.label = s.formTriggerLabel;
     if (s.formTriggerType === "object_detected" && parseInt(s.formTriggerMinFrames) > 1) trigger_pattern.min_frames = parseInt(s.formTriggerMinFrames);
+    if (s.formTriggerType === "object_detected" && s.formTriggerObjectState !== "any") trigger_pattern.object_state = s.formTriggerObjectState;
+    if (s.formTriggerType === "object_detected" && s.formTriggerZones.length > 0) trigger_pattern.zones = s.formTriggerZones;
     if (s.formTriggerType === "vehicle_detected" && s.formTriggerLabel.trim()) trigger_pattern.plate = s.formTriggerLabel.trim();
     if (s.formTriggerType === "face_recognized" && s.formTriggerPersonId) trigger_pattern.person_id = s.formTriggerPersonId;
     if (s.formTriggerType === "motion") {
@@ -271,7 +275,7 @@ export function RuleBuilder({
       if (s.formTriggerLineDirection !== "any") trigger_pattern.direction = s.formTriggerLineDirection;
       if (s.formTriggerObjectClass) trigger_pattern.label = s.formTriggerObjectClass;
     }
-    if (s.formTriggerType === "camera_offline" || s.formTriggerType === "camera_online") {
+    if (s.formTriggerType === "camera_offline" || s.formTriggerType === "camera_online" || s.formTriggerType === "incident_started" || s.formTriggerType === "incident_ended") {
       if (s.formTriggerGeomCamId) trigger_pattern.camera_id = s.formTriggerGeomCamId;
     }
 
@@ -295,6 +299,7 @@ export function RuleBuilder({
       conditions: Object.keys(conditions).length > 0 ? conditions : null,
       actions: actionDicts.length === 1 ? actionDicts[0] : actionDicts,
       cooldown_seconds: parseInt(s.formCooldown) || 300,
+      severity: s.formSeverity === "detection" ? "detection" : "alert",
     };
   };
 
@@ -423,6 +428,30 @@ export function RuleBuilder({
             <span className="text-sm">Enabled</span>
           </label>
 
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Tier</span>
+            {([
+              { v: "alert", l: "Alert", hint: "Front page + notifications. The push-worthy tier." },
+              { v: "detection", l: "Detection", hint: "Recorded and reviewable, but stays behind the Detections tab." },
+            ] as const).map((t) => (
+              <button
+                key={t.v}
+                type="button"
+                title={t.hint}
+                onClick={() => dispatch({ type: "setField", field: "formSeverity", value: t.v })}
+                className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                  state.formSeverity === t.v
+                    ? t.v === "alert"
+                      ? "border-red-500 bg-red-500/10 text-red-400"
+                      : "border-border bg-muted/40 text-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.l}
+              </button>
+            ))}
+          </div>
+
           <CollapsibleSection
             title="Trigger"
             summary={describeTrigger(triggerPattern)}
@@ -440,6 +469,10 @@ export function RuleBuilder({
               setFormTriggerLabel={setterFor("formTriggerLabel")}
               formTriggerMinFrames={state.formTriggerMinFrames}
               setFormTriggerMinFrames={setterFor("formTriggerMinFrames")}
+              formTriggerObjectState={state.formTriggerObjectState}
+              setFormTriggerObjectState={setterFor("formTriggerObjectState")}
+              formTriggerZones={state.formTriggerZones}
+              setFormTriggerZones={setterFor("formTriggerZones")}
               formTriggerPersonId={state.formTriggerPersonId}
               setFormTriggerPersonId={setterFor("formTriggerPersonId")}
               formTriggerSensitivity={state.formTriggerSensitivity}

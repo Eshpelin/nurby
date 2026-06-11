@@ -284,6 +284,20 @@ def _synthesize_observation_for_trigger(
         obs["status_reason"] = "synthesized test transition"
         obs["camera_name"] = "Test Camera"
 
+    elif t in ("incident_started", "incident_ended"):
+        pcam = trigger_pattern.get("camera_id") or cam
+        obs["camera_id"] = str(pcam)
+        obs["event_kind"] = "incident"
+        obs["incident_event"] = "started" if t == "incident_started" else "ended"
+        obs["incident_id"] = str(uuid.uuid4())
+        obs["camera_name"] = "Test Camera"
+        obs["signature_kind"] = trigger_pattern.get("signature_kind") or "person"
+        obs["who_or_what"] = "test-subject"
+        obs["occurrence_count"] = max(1, int(trigger_pattern.get("min_occurrences") or 1))
+        if t == "incident_ended":
+            obs["duration_seconds"] = float(trigger_pattern.get("min_duration_seconds") or 60) + 1
+            obs["summary"] = "Synthesized incident recap for testing."
+
     elif t == "any":
         pass
 

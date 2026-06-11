@@ -75,6 +75,7 @@ class FakeRule:
     conditions: dict | None = None
     cooldown_seconds: int = 0
     enabled: bool = True
+    severity: str = "alert"
     id: uuid.UUID = field(default_factory=uuid.uuid4)
     snoozed_until: object = None
 

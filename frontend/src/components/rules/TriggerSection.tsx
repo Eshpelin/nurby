@@ -25,6 +25,10 @@ export interface TriggerSectionProps {
   setFormTriggerLabel: (v: string) => void;
   formTriggerMinFrames: string;
   setFormTriggerMinFrames: (v: string) => void;
+  formTriggerObjectState: string;
+  setFormTriggerObjectState: (v: string) => void;
+  formTriggerZones: string[];
+  setFormTriggerZones: (v: string[]) => void;
   formTriggerPersonId: string;
   setFormTriggerPersonId: (v: string) => void;
   formTriggerSensitivity: string;
@@ -64,6 +68,10 @@ export function TriggerSection(props: TriggerSectionProps) {
     setFormTriggerLabel,
     formTriggerMinFrames,
     setFormTriggerMinFrames,
+    formTriggerObjectState,
+    setFormTriggerObjectState,
+    formTriggerZones,
+    setFormTriggerZones,
     formTriggerPersonId,
     setFormTriggerPersonId,
     formTriggerSensitivity,
@@ -160,6 +168,89 @@ export function TriggerSection(props: TriggerSectionProps) {
               positives like headlight flare or a leaf gusting past.
             </p>
           </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Movement</label>
+            <div className="flex gap-1.5">
+              {([
+                { v: "any", l: "Any" },
+                { v: "moving", l: "Moving only" },
+                { v: "stationary", l: "Parked & still only" },
+              ] as const).map((m) => (
+                <button
+                  key={m.v}
+                  type="button"
+                  onClick={() => setFormTriggerObjectState(m.v)}
+                  className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                    formTriggerObjectState === m.v
+                      ? "border-green-500 bg-green-500/10 text-green-300"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {m.l}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5">
+              &quot;Moving only&quot; is the parked-car fix: an object that has
+              held still stops re-alerting, but starts alerting again the
+              moment it moves.
+            </p>
+          </div>
+          {(() => {
+            const areaNames = [
+              ...new Set(
+                cameras.flatMap((c) =>
+                  ((c as { motion_zones?: { type?: string; name?: string }[] }).motion_zones || [])
+                    .filter((z) => z.type === "zone" || z.type === "loiter")
+                    .map((z) => z.name || "")
+                    .filter(Boolean)
+                )
+              ),
+            ];
+            if (areaNames.length === 0) return (
+              <p className="text-[11px] text-muted-foreground">
+                Tip: draw a <span className="font-medium">Named area</span> on a
+                camera (camera settings → Zones) and you can scope this rule to
+                it, e.g. only a person in the Driveway.
+              </p>
+            );
+            return (
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">
+                  Only in named areas (optional)
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {areaNames.map((name) => {
+                    const selected = formTriggerZones.includes(name);
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() =>
+                          setFormTriggerZones(
+                            selected
+                              ? formTriggerZones.filter((z) => z !== name)
+                              : [...formTriggerZones, name]
+                          )
+                        }
+                        className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                          selected
+                            ? "border-sky-500 bg-sky-500/10 text-sky-300"
+                            : "border-border text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  Fires only when the object&apos;s feet are inside one of the
+                  selected areas. No selection = anywhere in frame.
+                </p>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -360,7 +451,7 @@ export function TriggerSection(props: TriggerSectionProps) {
         </div>
       )}
 
-      {(formTriggerType === "camera_offline" || formTriggerType === "camera_online") && (
+      {(formTriggerType === "camera_offline" || formTriggerType === "camera_online" || formTriggerType === "incident_started" || formTriggerType === "incident_ended") && (
         <div className="space-y-2">
           <label className="text-xs text-muted-foreground block mb-1.5">
             Which camera (optional)
@@ -403,7 +494,11 @@ export function TriggerSection(props: TriggerSectionProps) {
           <p className="text-[11px] text-muted-foreground">
             {formTriggerType === "camera_offline"
               ? "Fires when the camera stops responding: power cut, network drop, or tampering. Pair with a cooldown so a flaky camera does not spam you."
-              : "Fires when a camera recovers after being offline. Useful to close the loop on an outage alert."}
+              : formTriggerType === "camera_online"
+              ? "Fires when a camera recovers after being offline. Useful to close the loop on an outage alert."
+              : formTriggerType === "incident_started"
+              ? "Fires the moment repeat sightings of the same person or vehicle cluster into a new incident."
+              : "Fires once when an incident closes, carrying its duration, sighting count, and an AI-written recap your webhook, email, or Telegram message can include."}
           </p>
         </div>
       )}

@@ -58,10 +58,13 @@ async def _filtered_events_query(
     person_id: uuid.UUID | None = None,
     label: str | None = None,
     acked: bool | None = None,
+    severity: str | None = None,
 ):
     """Shared filter builder for /history and /export.csv. Returns the
     query, or None when a person filter resolves to nobody (no rows)."""
     query = select(Event).order_by(Event.fired_at.desc())
+    if severity in ("alert", "detection"):
+        query = query.where(Event.severity == severity)
     if rule_id:
         query = query.where(Event.rule_id == rule_id)
     if status:
@@ -111,6 +114,7 @@ async def event_history(
     person_id: uuid.UUID | None = Query(default=None, description="Filter to events whose observation names this person"),
     label: str | None = Query(default=None, description="Filter to events whose observation carries this label"),
     acked: bool | None = Query(default=None, description="true = acknowledged only, false = unreviewed only"),
+    severity: str | None = Query(default=None, description="alert or detection"),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
@@ -119,7 +123,7 @@ async def event_history(
     time range, person, label, and acknowledged state."""
     query = await _filtered_events_query(
         db, rule_id=rule_id, camera_id=camera_id, status=status, from_=from_,
-        to=to, person_id=person_id, label=label, acked=acked,
+        to=to, person_id=person_id, label=label, acked=acked, severity=severity,
     )
     if query is None:
         return []
@@ -138,6 +142,7 @@ async def export_events_csv(
     person_id: uuid.UUID | None = Query(default=None),
     label: str | None = Query(default=None),
     acked: bool | None = Query(default=None),
+    severity: str | None = Query(default=None),
     _current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -151,7 +156,7 @@ async def export_events_csv(
 
     query = await _filtered_events_query(
         db, rule_id=rule_id, camera_id=camera_id, status=status, from_=from_,
-        to=to, person_id=person_id, label=label, acked=acked,
+        to=to, person_id=person_id, label=label, acked=acked, severity=severity,
     )
 
     columns = [
@@ -203,6 +208,7 @@ async def export_events_csv(
 @router.get("/count")
 async def events_count(
     acked: bool | None = Query(default=None),
+    severity: str | None = Query(default=None),
     rule_id: uuid.UUID | None = Query(default=None),
     from_: datetime | None = Query(default=None, alias="from"),
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
@@ -211,6 +217,8 @@ async def events_count(
     from sqlalchemy import func as sa_func
 
     query = select(sa_func.count(Event.id))
+    if severity in ("alert", "detection"):
+        query = query.where(Event.severity == severity)
     if rule_id:
         query = query.where(Event.rule_id == rule_id)
     if from_:

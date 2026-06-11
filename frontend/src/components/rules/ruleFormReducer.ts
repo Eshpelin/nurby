@@ -18,6 +18,9 @@ export interface RuleFormState {
   formTriggerType: string;
   formTriggerLabel: string;
   formTriggerMinFrames: string;
+  formTriggerObjectState: string;
+  formTriggerZones: string[];
+  formSeverity: string;
   formTriggerPersonId: string;
   formTriggerSensitivity: string;
   formTriggerAudioLabel: string;
@@ -55,6 +58,9 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
   formTriggerType: "object_detected",
   formTriggerLabel: "",
   formTriggerMinFrames: "1",
+  formTriggerObjectState: "any",
+  formTriggerZones: [],
+  formSeverity: "alert",
   formTriggerPersonId: "",
   formTriggerSensitivity: "medium",
   formTriggerAudioLabel: "baby_cry",
@@ -87,6 +93,8 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
 const TRIGGER_FIELDS_TO_RESET: (keyof RuleFormState)[] = [
   "formTriggerLabel",
   "formTriggerMinFrames",
+  "formTriggerObjectState",
+  "formTriggerZones",
   "formTriggerPersonId",
   "formTriggerSensitivity",
   "formTriggerAudioLabel",
@@ -141,6 +149,9 @@ export function hydrateFromRule(rule: Rule): RuleFormState {
 
   base.formTriggerType = (tp.type as string) || "any";
   base.formTriggerMinFrames = tp.min_frames != null ? String(tp.min_frames) : "1";
+  base.formTriggerObjectState = (tp.object_state as string) || "any";
+  base.formTriggerZones = Array.isArray(tp.zones) ? (tp.zones as string[]) : [];
+  base.formSeverity = (r as { severity?: string }).severity || "alert";
   // formTriggerLabel doubles as the object label and the vehicle plate text.
   base.formTriggerLabel = (tp.label as string) || (tp.plate as string) || "";
   base.formTriggerPersonId = (tp.person_id as string) || "";

@@ -895,10 +895,19 @@ class PerceptionPipeline:
 
         # Step 6b. Evaluate spatial events. The tracker was already
         # updated in Step 2a so body re-id could read tracker_id.
-        from services.perception.spatial_events import evaluate as eval_spatial
+        from services.perception.spatial_events import (
+            annotate_detection_zones,
+            evaluate as eval_spatial,
+            veto_zone_triggered,
+        )
         loitering_events, line_cross_events = eval_spatial(
             tracker, cam.motion_zones if cam else None
         )
+
+        # Named-area membership (bottom-center anchored) and veto state for
+        # the rule engine. Purely logical: nothing is masked or dropped.
+        annotate_detection_zones(detections, cam.motion_zones if cam else None)
+        veto_zone = veto_zone_triggered(detections, cam.motion_zones if cam else None)
 
         # Step 7. Evaluate rules against this observation
         rule_data = {
@@ -913,11 +922,17 @@ class PerceptionPipeline:
                         "confidence": d["confidence"],
                         "bbox": d["bbox"],
                         "tracker_id": d.get("tracker_id"),
+                        "zones": d.get("zones") or [],
                     }
                     for d in detections
                 ],
                 "count": len(detections),
             },
+            # ZoneMinder-style veto. While a veto zone is triggered, rule
+            # evaluation for this camera is suppressed (per-rule opt-out via
+            # conditions.ignore_veto).
+            "veto_active": bool(veto_zone),
+            "veto_zone": veto_zone,
             "person_detections": person_detections,
             "vehicle_detections": vehicle_detections,
             "loitering_events": loitering_events,
@@ -928,6 +943,7 @@ class PerceptionPipeline:
                     "label": tr.label,
                     "bbox": tr.bbox,
                     "prev_bbox": tr.prev_bbox,
+                    "state": tr.state,
                 }
                 for tr in tracker.tracks.values()
             ],

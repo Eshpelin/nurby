@@ -998,8 +998,27 @@ async def _apply_verify_outcome(
         return
 
     on_fail = action.get("on_fail", "stop")
-    if on_fail not in ("stop", "continue"):
+    if on_fail not in ("stop", "continue", "demote"):
         on_fail = "stop"
+
+    if on_fail == "demote":
+        # Keep the event as a record but downgrade it out of the alert
+        # tier, and stop the chain so notifications never fire for it.
+        # Strictly better than stop-or-nothing: the footage trail and the
+        # review-page entry survive, the 2am siren does not.
+        try:
+            async with async_session() as db:
+                ev = await db.get(Event, event_id)
+                if ev is not None:
+                    ev.severity = "detection"
+                    await db.commit()
+        except Exception:
+            logger.exception("verify demote failed to update event %s", event_id)
+        await _update_event_status(
+            event_id, "verify", "skipped",
+            f"verify failed. demoted to detection ({verdict} conf={confidence:.2f})",
+        )
+        raise RuntimeError(f"verify failed: demoted to detection ({verdict})")
 
     if on_fail == "stop":
         logger.info(
