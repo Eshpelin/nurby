@@ -25,6 +25,7 @@ export interface Rule {
   conditions: Record<string, unknown> | null;
   actions: Record<string, unknown> | Record<string, unknown>[];
   cooldown_seconds: number;
+  snoozed_until?: string | null;
   created_at: string;
 }
 
@@ -67,7 +68,7 @@ export interface TriggerType {
   icon: (props: { className?: string }) => React.ReactElement;
   desc: string;
   accent: string;
-  group: "vision" | "faces" | "motion" | "audio" | "spatial" | "any";
+  group: "vision" | "faces" | "motion" | "audio" | "spatial" | "system" | "any";
 }
 
 export interface SelectOption {
@@ -142,6 +143,11 @@ export const Icon = {
       <path d="M3 17 21 7" /><path d="m17 5 4 2-2 4" /><circle cx="6" cy="18" r="1.5" />
     </svg>
   ),
+  camOff: ({ className }: { className?: string }) => (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 2l20 20" /><path d="M9 5h6l2 3h3a1 1 0 0 1 1 1v8" /><path d="M4 8a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h13" /><circle cx="12" cy="13" r="3" />
+    </svg>
+  ),
   spark: ({ className }: { className?: string }) => (
     <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3v18" /><path d="M3 12h18" /><path d="m5.6 5.6 12.8 12.8" /><path d="m18.4 5.6-12.8 12.8" />
@@ -161,6 +167,8 @@ export const TRIGGER_TYPES: TriggerType[] = [
   { value: "speech_phrase",   label: "Spoken phrase",   icon: Icon.speaker,   desc: "Fire when a phrase is said near a camera.",       accent: "rose",   group: "audio" },
   { value: "loitering",       label: "Loitering",       icon: Icon.clock,     desc: "Someone stays inside a zone too long.",           accent: "amber",  group: "spatial" },
   { value: "line_cross",      label: "Tripwire",        icon: Icon.tripwire,  desc: "A tracked object crosses a line.",                accent: "indigo", group: "spatial" },
+  { value: "camera_offline",  label: "Camera offline",  icon: Icon.camOff,    desc: "A camera stops responding (tamper, power, network).", accent: "rose", group: "system" },
+  { value: "camera_online",   label: "Camera recovered", icon: Icon.camOff,    desc: "A camera comes back after being offline.",        accent: "green",  group: "system" },
   { value: "any",             label: "Any observation", icon: Icon.spark,     desc: "Fire on every processed keyframe.",               accent: "slate",  group: "any" },
 ];
 
@@ -403,6 +411,15 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
     }
     if (zone) return `When tripwire "${zone}" crossed${dirText}`;
     return `When any tripwire crossed${dirText}`;
+  }
+  if (t === "camera_offline" || t === "camera_online") {
+    const cid = pattern.camera_id as string | undefined;
+    const what = t === "camera_offline" ? "goes offline" : "comes back online";
+    if (cid) {
+      const camName = cameraLookup.get(cid) || cid.slice(0, 8);
+      return `When ${camName} ${what}`;
+    }
+    return `When any camera ${what}`;
   }
   if (t === "any") return "On every observation";
   return "Unknown trigger";

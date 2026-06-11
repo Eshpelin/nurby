@@ -627,6 +627,7 @@ class RuleResponse(BaseModel):
     conditions: dict | None
     actions: dict | list
     cooldown_seconds: int
+    snoozed_until: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

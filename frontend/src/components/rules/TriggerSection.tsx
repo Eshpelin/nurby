@@ -325,6 +325,54 @@ export function TriggerSection(props: TriggerSectionProps) {
         </div>
       )}
 
+      {(formTriggerType === "camera_offline" || formTriggerType === "camera_online") && (
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground block mb-1.5">
+            Which camera (optional)
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setFormTriggerGeomCamId("")}
+              className={`flex items-center gap-2 rounded-md border p-2 text-left transition-colors ${
+                !formTriggerGeomCamId
+                  ? "border-rose-500 bg-rose-500/10 ring-2 ring-rose-500/40"
+                  : "border-border bg-background hover:bg-muted/60"
+              }`}
+            >
+              <span className="text-sm font-medium">Any camera</span>
+            </button>
+            {cameras.map((cam) => {
+              const selected = formTriggerGeomCamId === cam.id;
+              return (
+                <button
+                  key={cam.id}
+                  type="button"
+                  onClick={() => setFormTriggerGeomCamId(cam.id)}
+                  className={`flex items-center gap-2 rounded-md border p-2 text-left transition-colors ${
+                    selected
+                      ? "border-rose-500 bg-rose-500/10 ring-2 ring-rose-500/40"
+                      : "border-border bg-background hover:bg-muted/60"
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    cam.status === "recording" ? "bg-green-500" :
+                    cam.status === "online" ? "bg-accent" :
+                    "bg-muted-foreground/40"
+                  }`} />
+                  <span className="text-sm font-medium truncate">{cam.name}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {formTriggerType === "camera_offline"
+              ? "Fires when the camera stops responding: power cut, network drop, or tampering. Pair with a cooldown so a flaky camera does not spam you."
+              : "Fires when a camera recovers after being offline. Useful to close the loop on an outage alert."}
+          </p>
+        </div>
+      )}
+
       {(formTriggerType === "loitering" || formTriggerType === "line_cross") && (
         <div className="space-y-3">
           <div>

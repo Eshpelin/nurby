@@ -200,6 +200,9 @@ export function RuleBuilder({
       if (s.formTriggerLineDirection !== "any") p.direction = s.formTriggerLineDirection;
       if (s.formTriggerObjectClass) p.label = s.formTriggerObjectClass;
     }
+    if (s.formTriggerType === "camera_offline" || s.formTriggerType === "camera_online") {
+      if (s.formTriggerGeomCamId) p.camera_id = s.formTriggerGeomCamId;
+    }
     return p;
   }, [state]);
 
@@ -265,6 +268,9 @@ export function RuleBuilder({
       if (s.formTriggerGeomPoints.length === 2) trigger_pattern.points = s.formTriggerGeomPoints;
       if (s.formTriggerLineDirection !== "any") trigger_pattern.direction = s.formTriggerLineDirection;
       if (s.formTriggerObjectClass) trigger_pattern.label = s.formTriggerObjectClass;
+    }
+    if (s.formTriggerType === "camera_offline" || s.formTriggerType === "camera_online") {
+      if (s.formTriggerGeomCamId) trigger_pattern.camera_id = s.formTriggerGeomCamId;
     }
 
     const conditions: Record<string, unknown> = {};

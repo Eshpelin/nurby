@@ -23,6 +23,9 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
   const [ruleEvents, setRuleEvents] = useState<EventEntry[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  // Local snooze state so the button reflects the action without a full
+  // rules refetch. Seeded from the rule when the selection changes.
+  const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);
 
   const fetchRuleEvents = useCallback(async (ruleId: string) => {
     setEventsLoading(true);
@@ -35,6 +38,49 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
       setEventsLoading(false);
     }
   }, [authFetch]);
+
+  const ackEvent = useCallback(async (eventId: string) => {
+    try {
+      const res = await authFetch(`/api/events/${eventId}/ack`, { method: "POST" });
+      if (res.ok) {
+        const updated: EventEntry = await res.json();
+        setRuleEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, ...updated } : e)));
+      }
+    } catch {
+      /* silent */
+    }
+  }, [authFetch]);
+
+  const muteEvent = useCallback(async (eventId: string) => {
+    try {
+      const res = await authFetch(`/api/events/${eventId}/mute?duration_seconds=600`, { method: "POST" });
+      if (res.ok) {
+        const updated: EventEntry = await res.json();
+        setRuleEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, ...updated } : e)));
+      }
+    } catch {
+      /* silent */
+    }
+  }, [authFetch]);
+
+  const toggleSnooze = useCallback(async (ruleId: string, currentlySnoozed: boolean) => {
+    try {
+      const path = currentlySnoozed
+        ? `/api/rules/${ruleId}/unsnooze`
+        : `/api/rules/${ruleId}/snooze?duration_seconds=3600`;
+      const res = await authFetch(path, { method: "POST" });
+      if (res.ok) {
+        const updated = await res.json();
+        setSnoozedUntil(updated.snoozed_until ?? null);
+      }
+    } catch {
+      /* silent */
+    }
+  }, [authFetch]);
+
+  useEffect(() => {
+    setSnoozedUntil(selectedRule?.snoozed_until ?? null);
+  }, [selectedRule]);
 
   useEffect(() => {
     if (!selectedRule) {
@@ -117,6 +163,29 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
               <span className="text-muted-foreground text-xs">Cooldown</span>
               <div>{selectedRule.cooldown_seconds}s between fires</div>
             </div>
+            {(() => {
+              const snoozed = !!snoozedUntil && new Date(snoozedUntil) > new Date();
+              return (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-muted-foreground text-xs">Notifications</span>
+                    <div className="text-xs">
+                      {snoozed
+                        ? `Snoozed until ${new Date(snoozedUntil!).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                        : "Active"}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSnooze(selectedRule.id, snoozed)}
+                    className="px-2 py-1 text-[11px] rounded-md border border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground transition-colors"
+                    title={snoozed ? "Resume notifications now" : "Pause notifications for 1 hour"}
+                  >
+                    {snoozed ? "Unsnooze" : "Snooze 1h"}
+                  </button>
+                </div>
+              );
+            })()}
             <div>
               <span className="text-muted-foreground text-xs">Created</span>
               <div>{new Date(selectedRule.created_at).toLocaleString()}</div>
@@ -195,6 +264,35 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                   )}
                   {expandedEventId === ev.id && (
                     <div className="mt-3 pt-3 border-t border-border">
+                      <div
+                        className="flex items-center gap-2 mb-3"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {!(ev.acked_at || ev.acknowledged_at) && (
+                          <button
+                            type="button"
+                            onClick={() => ackEvent(ev.id)}
+                            className="px-2 py-1 text-[11px] rounded-md bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors"
+                            title="Mark this alert as reviewed"
+                          >
+                            ✓ Acknowledge
+                          </button>
+                        )}
+                        {ev.muted_until && new Date(ev.muted_until) > new Date() ? (
+                          <span className="px-2 py-1 text-[11px] rounded-md bg-muted text-muted-foreground">
+                            🔕 Muted until {new Date(ev.muted_until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => muteEvent(ev.id)}
+                            className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors"
+                            title="Silence re-sends of this alert for 10 minutes"
+                          >
+                            🔕 Mute 10m
+                          </button>
+                        )}
+                      </div>
                       <div className="text-[10px] text-muted-foreground mb-1">Payload</div>
                       <pre className="text-[10px] font-mono bg-muted/50 rounded p-2 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
                         {ev.payload ? JSON.stringify(ev.payload, null, 2) : "No payload"}
