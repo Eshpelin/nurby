@@ -1,7 +1,7 @@
 """btree time indexes for the hot list queries
 
 Revision ID: a8b9c0d1e2f3
-Revises: d9e0f1a2b3c4
+Revises: c3f5e7a9b1d4
 Create Date: 2026-06-11 00:00:00.000000
 
 Every timeline surface (dashboard activity, observations list, recordings
@@ -25,7 +25,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "a8b9c0d1e2f3"
-down_revision: Union[str, None] = "d9e0f1a2b3c4"
+down_revision: Union[str, None] = "c3f5e7a9b1d4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
