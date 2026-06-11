@@ -14,6 +14,45 @@ router = APIRouter()
 # In-memory set of connected clients
 _connections: set[WebSocket] = set()
 
+# ── Cross-process relay ─────────────────────────────────────────────
+#
+# Browsers hold their WebSocket against the API process, but most live
+# pushes originate elsewhere: vlm_status and incidents in perception,
+# person_actions in ingestion, notify actions in whichever process runs
+# the rule engine. A process-local connection set silently no-ops for
+# all of those under Docker, which is exactly the "dashboard is static"
+# experience. broadcast() therefore also publishes every message to a
+# Redis channel, and the API process runs relay_loop() to fan messages
+# from other processes out to its local browsers. The src token stops
+# the API process re-delivering its own messages.
+
+WS_RELAY_CHANNEL = "nurby:ws:broadcast"
+_PROCESS_SRC = uuid.uuid4().hex
+_relay_redis = None
+
+
+async def _get_relay_redis():
+    global _relay_redis
+    if _relay_redis is None:
+        import redis.asyncio as aioredis
+
+        from shared.config import settings
+
+        _relay_redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+    return _relay_redis
+
+
+async def _deliver_local(payload: str) -> None:
+    dead = set()
+    for ws in list(_connections):
+        try:
+            await ws.send_text(payload)
+        except Exception:
+            dead.add(ws)
+    # In-place update. an augmented assignment (-=) would rebind the module
+    # global as a function local and raise UnboundLocalError on every call.
+    _connections.difference_update(dead)
+
 
 @router.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
@@ -30,20 +69,71 @@ async def websocket_endpoint(ws: WebSocket):
 
 
 async def broadcast(message: dict):
-    """Broadcast a message to all connected WebSocket clients."""
-    payload = json.dumps(message)
-    dead = set()
-    for ws in list(_connections):
+    """Broadcast a message to every connected browser, in every process.
+
+    Delivers to this process's own connections, then publishes to the
+    Redis relay channel so the API process forwards it to browsers when
+    the caller lives in another container. Redis being down degrades to
+    local-only delivery, never an exception for the caller.
+    """
+    payload = json.dumps(message, default=str)
+    await _deliver_local(payload)
+    try:
+        r = await _get_relay_redis()
+        await r.publish(
+            WS_RELAY_CHANNEL,
+            json.dumps({"src": _PROCESS_SRC, "msg": message}, default=str),
+        )
+    except Exception:
+        logger.debug("ws relay publish failed", exc_info=True)
+
+
+def relay_envelope_payload(raw: str, own_src: str = _PROCESS_SRC) -> str | None:
+    """Decode a relay envelope. Returns the JSON payload to deliver to
+    local connections, or None when the message originated here (already
+    delivered) or is malformed. Pure, for tests."""
+    try:
+        env = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(env, dict) or env.get("src") == own_src:
+        return None
+    msg = env.get("msg")
+    if not isinstance(msg, dict):
+        return None
+    return json.dumps(msg, default=str)
+
+
+async def relay_loop(stop_event: asyncio.Event | None = None) -> None:
+    """Run in the API process: forward other processes' broadcasts to the
+    browsers connected here. Reconnects on Redis hiccups."""
+    while stop_event is None or not stop_event.is_set():
         try:
-            await ws.send_text(payload)
+            r = await _get_relay_redis()
+            pubsub = r.pubsub()
+            await pubsub.subscribe(WS_RELAY_CHANNEL)
+            logger.info("WS relay listening on %s", WS_RELAY_CHANNEL)
+            while stop_event is None or not stop_event.is_set():
+                msg = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=1.0
+                )
+                if msg is None:
+                    continue
+                payload = relay_envelope_payload(msg.get("data"))
+                if payload is not None:
+                    await _deliver_local(payload)
+        except asyncio.CancelledError:
+            raise
         except Exception:
-            dead.add(ws)
-    # In-place update. an augmented assignment (-=) would rebind the module
-    # global as a function local and raise UnboundLocalError on every call.
-    _connections.difference_update(dead)
+            global _relay_redis
+            _relay_redis = None
+            logger.exception("ws relay loop error; reconnecting in 5s")
+            await asyncio.sleep(5)
 
 
-async def broadcast_person_actions(camera_id, people: list[dict]):
+async def broadcast_person_actions(
+    camera_id, people: list[dict], width: int | None = None, height: int | None = None
+):
     """Push current per-person actions for a camera (HAR live overlay).
 
     ``people`` is a list of ``{track_id, person_id?, person_name?, action, confidence}``.
@@ -54,7 +144,13 @@ async def broadcast_person_actions(camera_id, people: list[dict]):
     name; unknown/body tracks are sent without identity or omitted by the runner for
     guardian-facing cameras."""
     await broadcast(
-        {"type": "person_actions", "camera_id": str(camera_id), "people": people or []}
+        {
+            "type": "person_actions",
+            "camera_id": str(camera_id),
+            "people": people or [],
+            "width": width,
+            "height": height,
+        }
     )
 
 

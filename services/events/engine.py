@@ -151,6 +151,27 @@ class RuleEngine:
                 severity=getattr(rule, "severity", None) or "alert",
             )
 
+            # Tell every connected dashboard a rule just fired, regardless
+            # of the rule's own action chain, so the live timeline shows
+            # triggers as they happen.
+            try:
+                from services.api.ws import broadcast as _ws_broadcast
+
+                await _ws_broadcast({
+                    "type": "event_fired",
+                    "event_id": str(event_id),
+                    "rule_id": str(rule.id),
+                    "rule_name": rule.name,
+                    "severity": getattr(rule, "severity", None) or "alert",
+                    "camera_id": observation_data.get("camera_id"),
+                    "camera_name": observation_data.get("camera_name") or "",
+                    "observation_id": observation_data.get("observation_id"),
+                    "event_kind": observation_data.get("event_kind") or "observation",
+                    "timestamp": observation_data.get("timestamp"),
+                })
+            except Exception:
+                logger.debug("event_fired broadcast failed", exc_info=True)
+
             # Execute actions. Thread a shared `vars` dict so later actions
             # can reference outputs written by earlier ones.
             observation_data.setdefault("vars", {})

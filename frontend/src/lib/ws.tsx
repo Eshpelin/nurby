@@ -41,8 +41,16 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const explicit = process.env.NEXT_PUBLIC_WS_URL;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${protocol}//${window.location.host}/ws`;
+    // Next.js rewrites do not proxy WebSocket upgrades, so same-origin /ws
+    // only works when the API itself serves the page. Use the configured
+    // WS endpoint (compose passes NEXT_PUBLIC_WS_URL) and fall back to
+    // same-origin for setups that terminate WS at a real reverse proxy.
+    const WSURL_BASE = explicit
+      ? explicit.replace(/^http/, "ws").replace(/\/+$/, "")
+      : `${protocol}//${window.location.host}`;
+    const url = `${WSURL_BASE}/ws`;
 
     let cancelled = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;

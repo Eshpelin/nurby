@@ -897,8 +897,10 @@ class PerceptionPipeline:
         # updated in Step 2a so body re-id could read tracker_id.
         from services.perception.spatial_events import (
             annotate_detection_zones,
-            evaluate as eval_spatial,
             veto_zone_triggered,
+        )
+        from services.perception.spatial_events import (
+            evaluate as eval_spatial,
         )
         loitering_events, line_cross_events = eval_spatial(
             tracker, cam.motion_zones if cam else None

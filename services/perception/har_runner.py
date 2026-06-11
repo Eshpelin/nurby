@@ -109,6 +109,13 @@ class HARRunner:
                 "person_name": ident.get("person_name"),
                 "action": action,
                 "confidence": conf,
+                # Skeleton for the live overlay. COCO-17 (x, y, conf) in
+                # frame pixels, rounded to keep the WS payload small.
+                "bbox": [round(v) for v in (pose.get("bbox") or [])] or None,
+                "keypoints": [
+                    [round(x), round(y), round(float(c), 2)]
+                    for (x, y, c) in (pose.get("keypoints") or [])
+                ],
             })
 
         # 6. Flush tracks that disappeared (close their open segment).

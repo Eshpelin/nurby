@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useWSSubscribe } from "@/lib/ws";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useWebcamPublisher, listVideoDevices } from "@/lib/webcam-publisher";
@@ -488,6 +489,56 @@ interface OverlayDetection {
   borderColor: string;
 }
 
+// COCO-17 keypoint skeleton edges (nose/eyes/ears, shoulders-elbows-wrists,
+// hips-knees-ankles) for the live pose overlay.
+const COCO_EDGES: [number, number][] = [
+  [0, 1], [0, 2], [1, 3], [2, 4],
+  [5, 6], [5, 7], [7, 9], [6, 8], [8, 10],
+  [5, 11], [6, 12], [11, 12],
+  [11, 13], [13, 15], [12, 14], [14, 16],
+];
+
+function AnalyzingShimmer({ cameraId }: { cameraId: string }) {
+  // A slow light sweep over the video while a VLM call for this camera is
+  // queued or running, so "the AI is looking at this right now" is visible
+  // on the tile itself, not just in a badge.
+  const [active, setActive] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useWSSubscribe(
+    "vlm_status",
+    (data) => {
+      const status = (data as { vlm?: { status?: string } }).vlm?.status;
+      const busy = status === "queued" || status === "processing" || status === "refining";
+      setActive(busy);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (busy) {
+        // Safety: never shimmer forever if the idle message is lost.
+        timerRef.current = setTimeout(() => setActive(false), 60_000);
+      }
+    },
+    cameraId
+  );
+  if (!active) return null;
+  return (
+    <div className="absolute inset-0 z-[4] pointer-events-none overflow-hidden rounded-[inherit]">
+      <div
+        className="absolute inset-y-0 w-1/3"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, rgba(139,92,246,0.18), transparent)",
+          animation: "nurby-scan 2.2s linear infinite",
+        }}
+      />
+      <style jsx>{`
+        @keyframes nurby-scan {
+          from { left: -33%; }
+          to { left: 100%; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function DetectionOverlay({ cameraId, visible, frameWidth, frameHeight }: {
   cameraId: string;
   visible: boolean;
@@ -499,6 +550,32 @@ function DetectionOverlay({ cameraId, visible, frameWidth, frameHeight }: {
   const [lastUpdated, setLastUpdated] = useState(0);
   const [faded, setFaded] = useState(false);
   const lastObsIdRef = useRef<string | null>(null);
+  // Live pose skeletons from the HAR pipeline (person_actions WS).
+  const [skeletons, setSkeletons] = useState<{
+    people: { keypoints?: number[][]; bbox?: number[] | null; action?: string; person_name?: string | null }[];
+    width: number;
+    height: number;
+    ts: number;
+  } | null>(null);
+  useWSSubscribe(
+    "person_actions",
+    (data) => {
+      const msg = data as { people?: { keypoints?: number[][] }[]; width?: number; height?: number };
+      const withPose = (msg.people || []).filter((p) => (p.keypoints || []).length > 0);
+      setSkeletons(
+        withPose.length > 0
+          ? { people: withPose, width: msg.width || frameWidth, height: msg.height || frameHeight, ts: Date.now() }
+          : null
+      );
+    },
+    cameraId
+  );
+  useEffect(() => {
+    // Skeletons fade out when HAR stops sending updates (person left frame).
+    if (!skeletons) return;
+    const t = setTimeout(() => setSkeletons(null), 6000);
+    return () => clearTimeout(t);
+  }, [skeletons]);
 
   useEffect(() => {
     if (!visible) return;
@@ -587,7 +664,8 @@ function DetectionOverlay({ cameraId, visible, frameWidth, frameHeight }: {
     return () => clearTimeout(timer);
   }, [lastUpdated]);
 
-  if (!visible || detections.length === 0) return null;
+  const hasSkeletons = !!skeletons && skeletons.people.length > 0;
+  if (!visible || (detections.length === 0 && !hasSkeletons)) return null;
 
   // Overlay sits inside the feed container which is always 16:9. The video
   // itself is rendered `object-contain`, so it occupies a centered rect
@@ -649,6 +727,36 @@ function DetectionOverlay({ cameraId, visible, frameWidth, frameHeight }: {
           </div>
         );
       })}
+      {hasSkeletons && (
+        <svg
+          viewBox={`0 0 ${skeletons!.width} ${skeletons!.height}`}
+          preserveAspectRatio="none"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+        >
+          {skeletons!.people.map((p, pi) => {
+            const kp = p.keypoints || [];
+            const ok = (i: number) => kp[i] && (kp[i][2] ?? 1) > 0.3;
+            return (
+              <g key={pi} stroke="rgb(34,211,238)" strokeWidth={Math.max(2, skeletons!.width / 480)} fill="rgb(34,211,238)">
+                {COCO_EDGES.map(([a, b], ei) =>
+                  ok(a) && ok(b) ? (
+                    <line key={ei} x1={kp[a][0]} y1={kp[a][1]} x2={kp[b][0]} y2={kp[b][1]} opacity={0.85} />
+                  ) : null
+                )}
+                {kp.map((pt, ki) =>
+                  ok(ki) ? <circle key={ki} cx={pt[0]} cy={pt[1]} r={Math.max(3, skeletons!.width / 400)} opacity={0.9} /> : null
+                )}
+                {p.bbox && p.action && p.action !== "unknown" && (
+                  <text x={p.bbox[0]} y={Math.max(14, p.bbox[1] - 8)}
+                    fontSize={Math.max(12, skeletons!.width / 80)} fill="rgb(34,211,238)" stroke="none" fontWeight="600">
+                    {(p.person_name ? `${p.person_name} · ` : "") + p.action.replace(/_/g, " ")}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      )}
     </div>
   );
 }
@@ -921,6 +1029,9 @@ function CameraSidebarCard({
         {camera.status !== "offline" && !isRemoteFile && (
           <DetectionOverlay cameraId={camera.id} visible={overlayVisible} frameWidth={frameW} frameHeight={frameH} />
         )}
+
+        {/* AI-analyzing sweep while a VLM call is in flight for this camera */}
+        {camera.status !== "offline" && <AnalyzingShimmer cameraId={camera.id} />}
 
         {/* Live caption overlay. Only when transcription enabled */}
         {camera.status !== "offline" && camera.audio_transcribe_enabled && (
@@ -1357,6 +1468,29 @@ function DashboardContent() {
 
   // Live events
   const [liveEvents, setLiveEvents] = useState<{ type: string; rule_name?: string; camera_id?: string; timestamp?: string; message?: string }[]>([]);
+  // System-is-working strip: rule fires (event_fired) and in-flight VLM
+  // analysis (vlm_status), pushed over WS the moment they happen.
+  const [liveTriggers, setLiveTriggers] = useState<{
+    kind: "trigger" | "vlm";
+    id: string;
+    label: string;
+    camera: string;
+    severity: string;
+    ts: number;
+  }[]>([]);
+  useEffect(() => {
+    // Expire strip entries: VLM chips that never got an idle message after
+    // 90s, trigger chips after 5 minutes.
+    const t = setInterval(() => {
+      const now = Date.now();
+      setLiveTriggers((prev) =>
+        prev.filter((e) =>
+          e.kind === "vlm" ? now - e.ts < 90_000 : now - e.ts < 300_000
+        )
+      );
+    }, 15_000);
+    return () => clearInterval(t);
+  }, []);
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -1367,8 +1501,16 @@ function DashboardContent() {
 
   // WebSocket
   useEffect(() => {
+    const explicit = process.env.NEXT_PUBLIC_WS_URL;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    // Next.js rewrites do not proxy WebSocket upgrades, so same-origin /ws
+    // only works when the API itself serves the page. Use the configured
+    // WS endpoint (compose passes NEXT_PUBLIC_WS_URL) and fall back to
+    // same-origin for setups that terminate WS at a real reverse proxy.
+    const WSURL_BASE = explicit
+      ? explicit.replace(/^http/, "ws").replace(/\/+$/, "")
+      : `${protocol}//${window.location.host}`;
+    const wsUrl = `${WSURL_BASE}/ws`;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
     function connect() {
@@ -1383,6 +1525,31 @@ function DashboardContent() {
           if (data.type === "event" || data.type === "notification") {
             setLiveEvents((prev) => [data, ...prev].slice(0, 20));
             fetchTimeline();
+          }
+          if (data.type === "event_fired") {
+            // Every rule fire lands on the live strip instantly, without
+            // waiting for the 15s timeline poll.
+            setLiveTriggers((prev) => [
+              { kind: "trigger" as const, id: data.event_id, label: data.rule_name,
+                camera: data.camera_name || "", severity: data.severity || "alert",
+                ts: Date.now() },
+              ...prev.filter((t) => t.id !== data.event_id),
+            ].slice(0, 8));
+            fetchTimeline();
+          }
+          if (data.type === "vlm_status" && data.camera_id) {
+            const status = data.vlm?.status;
+            const active = status === "queued" || status === "processing" || status === "refining";
+            setLiveTriggers((prev) => {
+              const others = prev.filter((t) => !(t.kind === "vlm" && t.id === data.camera_id));
+              if (!active) return others;
+              return [
+                { kind: "vlm" as const, id: data.camera_id,
+                  label: status === "refining" ? "Refining description" : "AI describing scene",
+                  camera: "", severity: "info", ts: Date.now() },
+                ...others,
+              ].slice(0, 8);
+            });
           }
           if (data.type === "transcript_created") {
             fetchTimeline();
@@ -2502,14 +2669,41 @@ function DashboardContent() {
           )}
 
           {/* Live event toasts */}
-          {!searchActive && liveEvents.length > 0 && (
+          {!searchActive && (liveEvents.length > 0 || liveTriggers.length > 0) && (
             <div className="mb-3 space-y-1 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-medium text-accent uppercase tracking-wider flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-accent pulse-dot" /> Live
                 </span>
-                <button onClick={() => setLiveEvents([])} className="text-[10px] text-muted-foreground hover:text-foreground">clear</button>
+                <button onClick={() => { setLiveEvents([]); setLiveTriggers([]); }} className="text-[10px] text-muted-foreground hover:text-foreground">clear</button>
               </div>
+              {liveTriggers.filter((t) => t.kind === "vlm").slice(0, 2).map((t) => (
+                <div key={`vlm-${t.id}`} className="px-3 py-1.5 rounded-md border border-violet-500/30 bg-violet-500/5 text-xs flex items-center gap-2">
+                  <svg className="animate-spin h-3 w-3 text-violet-400 flex-shrink-0" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span className="text-violet-300">{t.label}</span>
+                  <span className="ml-auto text-[10px] text-muted-foreground">
+                    {cameras.find((c) => c.id === t.id)?.name || ""}
+                  </span>
+                </div>
+              ))}
+              {liveTriggers.filter((t) => t.kind === "trigger").slice(0, 3).map((t) => (
+                <Link href="/events" key={`trig-${t.id}`}
+                  className={`px-3 py-1.5 rounded-md border text-xs flex items-center gap-2 transition-colors ${
+                    t.severity === "alert"
+                      ? "border-red-500/30 bg-red-500/5 hover:bg-red-500/10"
+                      : "border-border bg-muted/20 hover:bg-muted/40"
+                  }`}>
+                  <span className={t.severity === "alert" ? "text-red-400" : "text-muted-foreground"}>⚡</span>
+                  <span>Rule fired · {t.label}</span>
+                  {t.camera && <span className="text-[10px] text-muted-foreground">{t.camera}</span>}
+                  <span className="ml-auto text-[10px] text-muted-foreground font-mono">
+                    {new Date(t.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                  </span>
+                </Link>
+              ))}
               {liveEvents.slice(0, 3).map((evt, i) => (
                 <div key={i} className="px-3 py-1.5 rounded-md border border-accent/30 bg-accent/5 text-xs flex items-center justify-between">
                   <span>{evt.message || `Rule "${evt.rule_name}" fired`}</span>

@@ -177,7 +177,8 @@ async def run_har(camera_id, frame, loop, executor, get_redis=None) -> None:
         try:
             from services.api.ws import broadcast_person_actions
 
-            await broadcast_person_actions(cam, live)
+            h, w = frame.shape[:2]
+            await broadcast_person_actions(cam, live, width=int(w), height=int(h))
         except Exception:
             logger.debug("HAR live broadcast failed", exc_info=True)
 

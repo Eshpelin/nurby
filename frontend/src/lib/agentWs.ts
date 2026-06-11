@@ -85,7 +85,10 @@ export function useAgentRunStream(
       const proto = window.location.protocol === "https." ? "wss." : "ws.";
       const scheme = window.location.protocol === "https:" ? "wss" : "ws";
       void proto;
-      const url = `${scheme}://${window.location.host}/ws/agent/${runId}?token=${encodeURIComponent(token)}&after_seq=${lastSeqRef.current}`;
+      const explicitWs = process.env.NEXT_PUBLIC_WS_URL;
+      // Next rewrites do not proxy WS upgrades; honor the configured endpoint.
+      const wsBase = explicitWs ? explicitWs.replace(/^http/, "ws").replace(/\/+$/, "") : `${scheme}://${window.location.host}`;
+      const url = `${wsBase}/ws/agent/${runId}?token=${encodeURIComponent(token)}&after_seq=${lastSeqRef.current}`;
       let ws: WebSocket;
       try {
         ws = new WebSocket(url);

@@ -107,7 +107,9 @@ export default function MicPage({
       analyserRef.current = analyser;
 
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const url = `${proto}//${window.location.host}/ws/mic/${id}?token=${encodeURIComponent(token)}`;
+      const explicitWs = process.env.NEXT_PUBLIC_WS_URL;
+      const wsBase = explicitWs ? explicitWs.replace(/^http/, "ws").replace(/\/+$/, "") : `${proto}//${window.location.host}`;
+      const url = `${wsBase}/ws/mic/${id}?token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(url);
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;

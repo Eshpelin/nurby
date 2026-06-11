@@ -103,7 +103,15 @@ async def lifespan(app: FastAPI):
     from services.api.report_scheduler import ReportScheduler
     report_scheduler = ReportScheduler()
     report_task = asyncio.create_task(report_scheduler.run())
+    # Cross-process WS relay: forwards perception/ingestion broadcasts
+    # (vlm_status, detections, incidents, notify) to browsers connected
+    # to this process. Without it the dashboard never updates live.
+    from services.api.ws import relay_loop
+    relay_stop = asyncio.Event()
+    relay_task = asyncio.create_task(relay_loop(relay_stop))
     yield
+    relay_stop.set()
+    relay_task.cancel()
     report_scheduler.stop()
     report_task.cancel()
     digest_task.cancel()
