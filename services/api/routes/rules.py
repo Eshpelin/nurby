@@ -31,15 +31,20 @@ async def _publish_invalidation(rule_id: uuid.UUID | str) -> None:
     re-loads the rule set on the next evaluate() tick. Failures here
     only mean the perception engine waits up to its 30s passive TTL
     instead of refreshing within ~1s.
+
+    Also drops the rule's Redis cooldown key so an edited rule starts
+    from a clean slate. without this, shortening a cooldown has no
+    effect until the old (longer) cooldown key expires.
     """
     try:
         import redis.asyncio as aioredis
 
-        from services.events.engine import RULES_INVALIDATE_CHANNEL
+        from services.events.engine import RULES_INVALIDATE_CHANNEL, RuleEngine
 
         client = aioredis.from_url(settings.redis_url, decode_responses=True)
         try:
             await client.publish(RULES_INVALIDATE_CHANNEL, str(rule_id))
+            await client.delete(RuleEngine.COOLDOWN_KEY_PREFIX + str(rule_id))
         finally:
             try:
                 await client.aclose()

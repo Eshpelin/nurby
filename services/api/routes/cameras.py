@@ -297,7 +297,10 @@ async def create_camera(body: CameraCreate, _current_user: User = Depends(requir
         from services.ingestion.mediamtx_mux import mux_manager
         await mux_manager.ensure(camera)
     except Exception:
-        pass
+        logger.warning(
+            "MediaMTX mux registration failed for camera %s; "
+            "periodic sync will retry", camera.id, exc_info=True,
+        )
     return _camera_to_response(camera)
 
 
@@ -348,7 +351,10 @@ async def create_demo_camera(_current_user: User = Depends(require_admin), db: A
         from services.ingestion.mediamtx_mux import mux_manager
         await mux_manager.ensure(camera)
     except Exception:
-        pass
+        logger.warning(
+            "MediaMTX mux registration failed for camera %s; "
+            "periodic sync will retry", camera.id, exc_info=True,
+        )
     return _camera_to_response(camera)
 
 

@@ -25,7 +25,8 @@ logger = logging.getLogger("nurby.ingestion.stream")
 
 SEGMENT_DURATION = 300  # 5-minute recording segments
 MOTION_FRAME_INTERVAL = 5  # Check motion every N frames
-RECONNECT_DELAY = 5  # Seconds between reconnection attempts
+RECONNECT_DELAY = 5  # Seconds before the first reconnection attempt
+RECONNECT_MAX_DELAY = 300  # Backoff cap. an unreachable camera retries every 5 min, not every 5 s
 MOTION_THRESHOLD = 0.01  # Minimum motion score to trigger event
 MOTION_COOLDOWN = 3.0  # Seconds between motion keyframe publishes
 MOTION_RECORD_COOLDOWN = 10.0  # Seconds to keep recording after last motion
@@ -89,6 +90,7 @@ class StreamWorker:
         self._prev_gray = None
         self._last_motion_publish = 0.0
         self._last_status: str | None = None
+        self._connected_this_cycle = False
         self._redis = None
         # Smart recording state
         self._frame_buffer: list[tuple[np.ndarray, datetime]] = []  # ring buffer for clip pre-buffer
@@ -114,8 +116,15 @@ class StreamWorker:
         return self._redis
 
     async def run(self):
-        """Main loop. Dispatches to correct handler by stream type."""
+        """Main loop. Dispatches to correct handler by stream type.
+
+        Reconnects with exponential backoff so an unreachable camera does not
+        hammer the network (and pile up OpenCV threads) every 5 seconds
+        forever. A successful connection resets the backoff.
+        """
+        delay = RECONNECT_DELAY
         while self._running:
+            self._connected_this_cycle = False
             try:
                 if self.stream_type == STREAM_TYPE_HTTP_SNAPSHOT:
                     await self._process_snapshot_stream()
@@ -123,9 +132,12 @@ class StreamWorker:
                     await self._process_stream()
             except Exception:
                 logger.exception("Stream error for camera %s", self.camera_id)
+            if self._connected_this_cycle:
+                delay = RECONNECT_DELAY
             if self._running:
-                logger.info("Reconnecting to camera %s in %ds", self.camera_id, RECONNECT_DELAY)
-                await asyncio.sleep(RECONNECT_DELAY)
+                logger.info("Reconnecting to camera %s in %ds", self.camera_id, delay)
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, RECONNECT_MAX_DELAY)
 
     async def _process_stream(self):
         loop = asyncio.get_event_loop()
@@ -535,6 +547,10 @@ class StreamWorker:
     async def _update_camera_status(self, status: str, reason: str | None = None):
         previous = self._last_status
         self._last_status = status
+        if status in ("live", "recording"):
+            # Signal run() that this cycle reached the camera, resetting the
+            # reconnect backoff.
+            self._connected_this_cycle = True
 
         try:
             async with async_session() as db:
