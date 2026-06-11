@@ -193,6 +193,67 @@ async def _deliver(report, answer: str) -> None:
         except Exception:
             logger.exception("report %s email delivery to %s failed", report.id, email_to)
 
+    tg_channel_raw = (str(delivery.get("telegram_channel_id") or "")).strip()
+    if tg_channel_raw:
+        try:
+            import html as _html
+
+            from services.notify.telegram import TelegramAPI
+            from shared.crypto import InvalidToken, decrypt_secret
+            from shared.models import TelegramChannel
+
+            async with async_session() as db:
+                ch = await db.get(TelegramChannel, uuid.UUID(tg_channel_raw))
+                usable = (
+                    ch is not None and ch.enabled and ch.paired_at is not None and ch.chat_id
+                )
+                token = None
+                chat_id = None
+                if usable:
+                    try:
+                        token = decrypt_secret(ch.bot_token_enc)
+                        chat_id = ch.chat_id
+                    except InvalidToken:
+                        logger.warning(
+                            "report %s telegram channel token unreadable (jwt_secret rotated?)",
+                            report.id,
+                        )
+            if token and chat_id:
+                text = (
+                    f"\U0001f4cb <b>{_html.escape(report.name)}</b>\n\n"
+                    f"{_html.escape(answer)}"
+                )[:4000]
+                await TelegramAPI.send_message(token, chat_id, text)
+            else:
+                logger.warning(
+                    "report %s telegram delivery skipped: channel missing or unpaired",
+                    report.id,
+                )
+        except Exception:
+            logger.exception("report %s telegram delivery failed", report.id)
+
+    webhook_url = (delivery.get("webhook") or "").strip()
+    if webhook_url:
+        try:
+            from services.events.actions import deliver_signed
+
+            ok, detail = await deliver_signed(
+                "POST",
+                webhook_url,
+                {
+                    "type": "scheduled_report",
+                    "report_id": str(report.id),
+                    "name": report.name,
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "output": answer,
+                },
+                secret=(delivery.get("webhook_secret") or None),
+            )
+            if not ok:
+                logger.warning("report %s webhook delivery failed: %s", report.id, detail)
+        except Exception:
+            logger.exception("report %s webhook delivery failed", report.id)
+
 
 async def _stamp(report_id: uuid.UUID, status: str, output: str | None) -> None:
     async with async_session() as db:

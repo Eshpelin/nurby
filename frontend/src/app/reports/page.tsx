@@ -17,6 +17,12 @@ interface PersonOption {
   nickname?: string | null;
 }
 
+interface TelegramChannelOption {
+  id: string;
+  label: string;
+  pairing_status: string;
+}
+
 interface ScheduledReport {
   id: string;
   name: string;
@@ -25,7 +31,7 @@ interface ScheduledReport {
   hour: number;
   minute: number;
   days: string[] | null;
-  delivery: { notify?: boolean; email?: string } | null;
+  delivery: { notify?: boolean; email?: string; telegram_channel_id?: string; webhook?: string } | null;
   enabled: boolean;
   last_run_at: string | null;
   last_status: string | null;
@@ -58,6 +64,9 @@ export default function ReportsPage() {
   const [time, setTime] = useState("19:00");
   const [days, setDays] = useState<string[]>([]);
   const [email, setEmail] = useState("");
+  const [tgChannels, setTgChannels] = useState<TelegramChannelOption[]>([]);
+  const [tgChannelId, setTgChannelId] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -81,6 +90,15 @@ export default function ReportsPage() {
       } catch {
         /* person picker degrades to none */
       }
+      try {
+        const res = await authFetch("/api/telegram/channels");
+        if (res.ok) {
+          const list: TelegramChannelOption[] = await res.json();
+          setTgChannels(list.filter((c) => c.pairing_status === "paired"));
+        }
+      } catch {
+        /* telegram picker degrades to none */
+      }
     })();
   }, [authFetch, load]);
 
@@ -100,7 +118,12 @@ export default function ReportsPage() {
           hour: h,
           minute: m,
           days: days.length > 0 && days.length < 7 ? days : null,
-          delivery: { notify: true, email: email.trim() || null },
+          delivery: {
+            notify: true,
+            email: email.trim() || null,
+            telegram_channel_id: tgChannelId || null,
+            webhook: webhookUrl.trim() || null,
+          },
         }),
       });
       if (!res.ok) {
@@ -111,6 +134,8 @@ export default function ReportsPage() {
       setPrompt("");
       setPersonId("");
       setEmail("");
+      setTgChannelId("");
+      setWebhookUrl("");
       setDays([]);
       setShowForm(false);
       await load();
@@ -119,7 +144,7 @@ export default function ReportsPage() {
     } finally {
       setSaving(false);
     }
-  }, [authFetch, name, prompt, personId, time, days, email, load]);
+  }, [authFetch, name, prompt, personId, time, days, email, tgChannelId, webhookUrl, load]);
 
   const runNow = useCallback(
     async (id: string) => {
@@ -265,7 +290,46 @@ export default function ReportsPage() {
               />
             </div>
           </div>
-          <div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                Also send to Telegram (optional)
+              </label>
+              <select
+                value={tgChannelId}
+                onChange={(e) => setTgChannelId(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">No Telegram</option>
+                {tgChannels.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              {tgChannels.length === 0 && (
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Pair a bot under Settings → Telegram to deliver reports there.
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                Also POST to a webhook (optional)
+              </label>
+              <input
+                type="url"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://n8n.local/webhook/nightly-report"
+                className={inputClass}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Receives JSON: report name, generated_at, and the full text.
+              </p>
+            </div>
+          </div>
+                    <div>
             <label className="text-xs text-muted-foreground block mb-1">
               Days (none selected = every day)
             </label>
@@ -334,6 +398,16 @@ export default function ReportsPage() {
                   {r.delivery?.email && (
                     <span className="px-1.5 py-0.5 text-[10px] rounded bg-muted text-muted-foreground">
                       ✉ {r.delivery.email}
+                    </span>
+                  )}
+                  {r.delivery?.telegram_channel_id && (
+                    <span className="px-1.5 py-0.5 text-[10px] rounded bg-muted text-muted-foreground">
+                      Telegram
+                    </span>
+                  )}
+                  {r.delivery?.webhook && (
+                    <span className="px-1.5 py-0.5 text-[10px] rounded bg-muted text-muted-foreground">
+                      Webhook
                     </span>
                   )}
                   {r.last_status === "failed" && (

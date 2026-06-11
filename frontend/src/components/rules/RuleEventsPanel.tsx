@@ -12,6 +12,7 @@ import {
 } from "./types";
 import { SummaryCard } from "./SummaryCard";
 import { EventNotesPanel } from "./EventNotesPanel";
+import { EventEvidence } from "@/components/EventEvidence";
 
 export interface RuleEventsPanelProps {
   selectedRule: Rule | null;
@@ -293,10 +294,11 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                           </button>
                         )}
                       </div>
-                      <div className="text-[10px] text-muted-foreground mb-1">Payload</div>
-                      <pre className="text-[10px] font-mono bg-muted/50 rounded p-2 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
-                        {ev.payload ? JSON.stringify(ev.payload, null, 2) : "No payload"}
-                      </pre>
+                      {ev.payload ? (
+                        <EventEvidence payload={ev.payload} />
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground">No payload recorded.</p>
+                      )}
                       {ev.action_error && (
                         <div className="mt-2">
                           <div className="text-[10px] text-muted-foreground mb-1">Error</div>

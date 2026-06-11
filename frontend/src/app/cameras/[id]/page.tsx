@@ -1947,24 +1947,31 @@ export default function CameraConfigPage() {
         {/* Cascade refiner */}
         <Section
           title="Refiner (cascade)"
-          description="Use a stronger second model only when triggers match. Cheap brain handles routine frames, smart brain handles the moments that matter."
+          description="Re-describes individual frames with a stronger second model the moment a trigger matches (a person appears, a keyword lands). Different from the AI Summarizer below, which periodically condenses many observations into a recap. The refiner upgrades single moments; the summarizer narrates stretches of time."
         >
-          <FieldRow label="Refiner Model" hint="Off when blank. Pick a different provider than AI Analysis.">
+          <FieldRow label="Refiner Model" hint="Off when blank. Needs a second provider entry, different from AI Analysis.">
             <select
               value={vlmRefinerProviderId || ""}
               onChange={(e) => setVlmRefinerProviderId(e.target.value || null)}
               className={inputClass}
             >
               <option value="">Off</option>
-              {providers
-                .filter((p) => p.id !== vlmProviderId)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.default_model ? ` · ${p.default_model}` : ""}
-                  </option>
-                ))}
+              {providers.map((p) => (
+                <option key={p.id} value={p.id} disabled={p.id === vlmProviderId}>
+                  {p.name}
+                  {p.default_model ? ` · ${p.default_model}` : ""}
+                  {p.id === vlmProviderId ? " (primary — pick a different one)" : ""}
+                </option>
+              ))}
             </select>
+            {providers.filter((p) => p.id !== vlmProviderId).length === 0 && (
+              <p className="text-[11px] text-muted-foreground mt-1.5">
+                Only one AI provider is configured, so there is nothing to
+                cascade to. Add a second provider under Settings → AI
+                Providers — for example another Ollama entry pointing at a
+                larger model (gemma3:27b) — and it will appear here.
+              </p>
+            )}
             {vlmRefinerProviderId && vlmRefinerProviderId === vlmProviderId && (
               <p className="text-[11px] text-warning mt-1">
                 Refiner must differ from the primary provider. Cascade

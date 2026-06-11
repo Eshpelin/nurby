@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { timeAgo } from "@/lib/time";
 import { EventNotesPanel } from "@/components/rules/EventNotesPanel";
+import { EventEvidence } from "@/components/EventEvidence";
 import type { Camera, EventEntry, Rule } from "@/components/rules/types";
 
 const PAGE_SIZE = 50;
@@ -315,10 +316,11 @@ export default function EventsPage() {
                         <span className="text-[11px] text-red-400 truncate">{ev.action_error}</span>
                       )}
                     </div>
-                    <div className="text-[10px] text-muted-foreground mb-1">Payload</div>
-                    <pre className="text-[10px] font-mono bg-muted/50 rounded p-2 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
-                      {ev.payload ? JSON.stringify(ev.payload, null, 2) : "No payload"}
-                    </pre>
+                    {ev.payload ? (
+                      <EventEvidence payload={ev.payload} />
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">No payload recorded.</p>
+                    )}
                     <EventNotesPanel eventId={ev.id} />
                   </div>
                 )}
