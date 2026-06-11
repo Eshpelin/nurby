@@ -6,17 +6,8 @@ import TelegramSection from "@/components/TelegramSection";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
 import { ALL_PROVIDERS, PROVIDER_KINDS } from "@/lib/provider-presets";
 import { ProviderFields } from "@/components/ProviderFields";
+import { timezoneOptions } from "@/lib/timezones";
 
-const COMMON_TIMEZONES = [
-  "America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York",
-  "America/Toronto", "America/Vancouver", "America/Mexico_City", "America/Sao_Paulo",
-  "Europe/London", "Europe/Berlin", "Europe/Paris", "Europe/Amsterdam",
-  "Europe/Madrid", "Europe/Athens", "Europe/Moscow",
-  "Africa/Cairo", "Africa/Johannesburg",
-  "Asia/Dubai", "Asia/Karachi", "Asia/Kolkata", "Asia/Dhaka",
-  "Asia/Bangkok", "Asia/Singapore", "Asia/Shanghai", "Asia/Tokyo", "Asia/Seoul",
-  "Australia/Sydney", "Australia/Melbourne", "Pacific/Auckland", "UTC",
-];
 
 interface Provider {
   id: string;
@@ -1105,7 +1096,7 @@ export default function SettingsPage() {
                   className="w-full px-2 py-1.5 text-xs rounded border border-border bg-background"
                 >
                   <option value="">(server local)</option>
-                  {COMMON_TIMEZONES.map((tz) => (
+                  {timezoneOptions().map((tz) => (
                     <option key={tz} value={tz}>
                       {tz}
                     </option>

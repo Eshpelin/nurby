@@ -50,8 +50,19 @@ export default function GuardianPage() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 30000);
-    return () => clearInterval(t);
+    // Poll only while the tab is visible. A backgrounded phone tab should
+    // not burn data every 30s; refresh immediately on return instead.
+    const t = setInterval(() => {
+      if (!document.hidden) load();
+    }, 30000);
+    const onVisible = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   if (loading) {

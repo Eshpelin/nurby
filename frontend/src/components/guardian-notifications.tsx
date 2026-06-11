@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { timeAgo } from "@/lib/time";
 
 interface GNotification {
   id: string;
@@ -17,14 +18,6 @@ function dotColor(sev: string): string {
   return "bg-emerald-500";
 }
 
-function timeAgo(iso: string | null): string {
-  if (!iso) return "";
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
 
 // The guardian's own notification inbox. A bell with an unread badge that opens
 // a private feed scoped to their dependant, not the household.

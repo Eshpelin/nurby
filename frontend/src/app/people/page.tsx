@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { timeAgo as timeAgoBase } from "@/lib/time";
 
 interface Person {
   id: string;
@@ -75,18 +76,7 @@ interface ClusterSample {
   captured_at: string | null;
 }
 
-function timeAgo(iso: string | null): string {
-  if (!iso) return "unknown";
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return `${Math.floor(days / 30)}mo ago`;
-}
+const timeAgo = (iso: string | null) => timeAgoBase(iso, { fallback: "unknown" });
 
 function formatTime(iso: string): string {
   const d = new Date(iso);

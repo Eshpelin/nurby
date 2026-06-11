@@ -7,6 +7,9 @@ import { STREAM_TYPES } from "@/lib/camera-types";
 import type { StreamType, DiscoveredDevice, DiscoveredOnvifDevice, ModalTab } from "@/lib/camera-types";
 import CameraBrandHelp from "@/components/CameraBrandHelp";
 
+// Network stream types we can probe via /api/cameras/test-connection before saving.
+const TESTABLE_STREAM_TYPES = ["rtsp", "http_mjpeg", "http_snapshot", "hls"];
+
 function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: DiscoveredOnvifDevice, username?: string, password?: string) => void }) {
   const { authFetch } = useAuth();
   const [devices, setDevices] = useState<DiscoveredOnvifDevice[]>([]);
@@ -174,6 +177,8 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
   const [authToken, setAuthToken] = useState("");
   const [snapshotInterval, setSnapshotInterval] = useState(2);
   const [submitting, setSubmitting] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const lastFailedTestUrl = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
@@ -222,6 +227,44 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
     setSubmitting(true);
     setError(null);
     try {
+      // Probe network streams before saving so an unreachable camera fails
+      // here, with a reason, instead of being created and sitting offline.
+      // A second submit of the same URL skips the probe (add anyway), for
+      // cameras that are temporarily off or only reachable later.
+      const testable =
+        TESTABLE_STREAM_TYPES.includes(String(payload.stream_type)) &&
+        !payload.audio_only;
+      const urlKey = `${payload.stream_type}:${payload.stream_url}`;
+      if (testable && lastFailedTestUrl.current !== urlKey) {
+        setTestingConnection(true);
+        try {
+          const tr = await authFetch(`/api/cameras/test-connection`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              stream_url: payload.stream_url,
+              stream_type: payload.stream_type,
+              username: payload.username ?? null,
+              password: payload.password ?? null,
+              auth_token: payload.auth_token ?? null,
+            }),
+          });
+          const tj = await tr.json().catch(() => ({}));
+          if (!(tr.ok && tj.ok)) {
+            lastFailedTestUrl.current = urlKey;
+            setError(
+              `Could not connect to the camera: ${tj.error || tj.detail || `status ${tr.status}`}. ` +
+                "Check the URL and credentials, or submit again to add it anyway.",
+            );
+            return;
+          }
+        } catch {
+          // The probe endpoint itself failed (not the camera). Do not block
+          // adding the camera on it.
+        } finally {
+          setTestingConnection(false);
+        }
+      }
       const res = await authFetch(`/api/cameras`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -608,7 +651,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
               <div className="flex gap-2">
                 <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">Cancel</button>
                 <button type="submit" disabled={submitting || !name.trim() || (streamType === "webcam" ? !webcamStream : streamType === "browser_mic" ? false : !streamUrl.trim())} className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
-                  {submitting ? "Adding..." : streamType === "webcam" ? "Start Streaming" : "Add Camera"}
+                  {submitting ? (testingConnection ? "Testing connection..." : "Adding...") : streamType === "webcam" ? "Start Streaming" : "Add Camera"}
                 </button>
               </div>
             </div>

@@ -10,40 +10,9 @@ import { SummaryCard } from "@/components/SummaryCard";
 import { PrivacyZonesSection } from "@/components/PrivacyZonesSection";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
 
-const COMMON_TIMEZONES = [
-  "America/Los_Angeles",
-  "America/Denver",
-  "America/Chicago",
-  "America/New_York",
-  "America/Toronto",
-  "America/Vancouver",
-  "America/Mexico_City",
-  "America/Sao_Paulo",
-  "Europe/London",
-  "Europe/Berlin",
-  "Europe/Paris",
-  "Europe/Amsterdam",
-  "Europe/Madrid",
-  "Europe/Athens",
-  "Europe/Moscow",
-  "Africa/Cairo",
-  "Africa/Johannesburg",
-  "Asia/Dubai",
-  "Asia/Karachi",
-  "Asia/Kolkata",
-  "Asia/Dhaka",
-  "Asia/Bangkok",
-  "Asia/Singapore",
-  "Asia/Shanghai",
-  "Asia/Tokyo",
-  "Asia/Seoul",
-  "Australia/Sydney",
-  "Australia/Melbourne",
-  "Pacific/Auckland",
-  "UTC",
-];
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { timezoneOptions } from "@/lib/timezones";
 
 interface Camera {
   id: string;
@@ -2817,7 +2786,7 @@ export default function CameraConfigPage() {
               className={inputClass}
             >
               <option value="">(use system default)</option>
-              {COMMON_TIMEZONES.map((tz) => (
+              {timezoneOptions().map((tz) => (
                 <option key={tz} value={tz}>
                   {tz}
                 </option>

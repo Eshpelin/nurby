@@ -13,6 +13,7 @@ import type {
   RuleTestActionPreview,
   RuleTestResponse,
 } from "./types";
+import { timeAgo as timeAgoBase } from "@/lib/time";
 
 const REPLAY_HOURS_OPTIONS = [
   { value: 1, label: "1h" },
@@ -30,20 +31,7 @@ const NON_REPLAYABLE_TRIGGERS = new Set([
   "speech_phrase",
 ]);
 
-function timeAgo(iso: string | null): string {
-  if (!iso) return "";
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return iso;
-  const diff = Math.max(0, Date.now() - then);
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
+const timeAgo = (iso: string | null) => timeAgoBase(iso, { seconds: true });
 
 function truncate(text: string | null, n: number): string {
   if (!text) return "";

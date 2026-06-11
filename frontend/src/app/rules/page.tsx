@@ -96,10 +96,12 @@ export default function RulesPage() {
   const fetchLastFired = useCallback(async (force = false) => {
     const now = Date.now();
     if (!force && now - lastFiredFetchedAt.current < LAST_FIRED_CACHE_MS) return;
-    lastFiredFetchedAt.current = now;
     try {
       const res = await authFetch("/api/events?limit=200");
       if (!res.ok) return;
+      // Stamp the cache only on success so a failed fetch retries on the
+      // next call instead of pinning stale timestamps for the TTL.
+      lastFiredFetchedAt.current = now;
       const list = (await res.json()) as EventEntry[];
       const map: Record<string, string | null> = {};
       for (const e of list) {
