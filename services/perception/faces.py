@@ -141,7 +141,7 @@ class FaceRecognizer:
                         Person.display_name,
                         FaceEmbedding.embedding,
                     ).join(Person, FaceEmbedding.person_id == Person.id)
-                    .where(Person.consent_given == True)
+                    .where(Person.consent_given.is_(True))
                 )
                 rows = result.all()
                 return [

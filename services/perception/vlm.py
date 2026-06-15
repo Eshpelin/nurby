@@ -42,7 +42,7 @@ async def get_active_provider() -> Provider | None:
     try:
         async with async_session() as db:
             result = await db.execute(
-                select(Provider).where(Provider.active == True).limit(1)
+                select(Provider).where(Provider.active.is_(True)).limit(1)
             )
             return result.scalar_one_or_none()
     except Exception:

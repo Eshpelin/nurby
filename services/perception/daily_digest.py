@@ -453,7 +453,7 @@ async def _collect_facts(
                 subj = _incident_phrase(inc.signature_kind, inc.signature_key)
                 text = f"{subj} at {cam}"
                 if (inc.occurrence_count or 0) > 3:
-                    text += f", repeatedly"
+                    text += ", repeatedly"
             events.append({"ts": iso, "when": _fmt_clock(iso, tz), "text": text})
 
         for lbl, ts, cam_id in ad_rows:

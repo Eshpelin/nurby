@@ -365,7 +365,6 @@ async def test_get_journeys_disambiguation(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_hours_too_large_clamped(monkeypatch):
-    captured: dict[str, Any] = {}
 
     async def fake_access(user, db):
         return set()  # short-circuit. we just want to confirm no raise

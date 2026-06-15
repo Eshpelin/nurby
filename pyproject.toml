@@ -53,7 +53,9 @@ dev = [
 
 [tool.ruff]
 target-version = "py311"
-line-length = 100
+# 120 matches the codebase's actual line style; 100 flagged ~450 lines of
+# pure cosmetics without anyone writing to it.
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]

@@ -331,7 +331,6 @@ class AgentDriver:
                 tools = all_tools_for_provider(provider.kind)
 
                 final_text = ""
-                forced = False
 
                 while state.turn_index < max_turns:
                     if self._stop_event.is_set():

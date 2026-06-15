@@ -350,7 +350,7 @@ async def list_agent_providers(
 ) -> list[dict]:
     """Providers that advertise tool-use. Drives the model selector."""
     rows = (await db.execute(
-        select(Provider).where(Provider.active == True).order_by(Provider.created_at)
+        select(Provider).where(Provider.active.is_(True)).order_by(Provider.created_at)
     )).scalars().all()
     out: list[dict] = []
     for p in rows:

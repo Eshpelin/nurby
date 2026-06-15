@@ -184,7 +184,6 @@ async def generate_digest(
     # Top objects and people
     top_objects = sorted(object_counts.items(), key=lambda x: x[1], reverse=True)[:5]
     top_people = sorted(person_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-    busiest_camera = max(camera_activity.items(), key=lambda x: x[1]) if camera_activity else None
 
     vlm_descriptions = [
         obs.vlm_description for obs in observations if obs.vlm_description
@@ -223,7 +222,7 @@ async def generate_digest(
             (o.get("label") or "").strip()
             for o in (obs.object_detections or {}).get("objects", [])
         ]
-        labels = [l for l in labels if l]
+        labels = [lb for lb in labels if lb]
         label_set = set(labels)
 
         resolved_names = [
@@ -255,8 +254,8 @@ async def generate_digest(
         who = " and ".join(who_parts) if who_parts else None
 
         notable_objects = [
-            l for l in label_set
-            if l not in {"person"} and l in {
+            lb for lb in label_set
+            if lb not in {"person"} and lb in {
                 "knife", "gun", "fire", "weapon", "cell phone", "laptop",
                 "backpack", "handbag", "suitcase", "umbrella", "bottle",
                 "wine glass", "dog", "cat", "car", "truck", "motorcycle",

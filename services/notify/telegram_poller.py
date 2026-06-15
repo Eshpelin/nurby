@@ -682,7 +682,6 @@ class TelegramPollerManager:
             )
             return True
 
-        from_user = message.get("from") or {}
         from_msg_id = int(message.get("message_id") or 0) or None
 
         async with async_session() as db:

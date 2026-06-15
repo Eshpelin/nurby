@@ -106,7 +106,8 @@ async def main():
                 name = "Unknown person" if unk == 1 else f"Unknown person {unk}"
                 rel = None
             else:
-                rel = REL[ri % len(REL)]; ri += 1
+                rel = REL[ri % len(REL)]
+                ri += 1
             p.display_name = name
             p.nickname = name.split()[0] if name != "Unknown person" else None
             p.relationship = rel

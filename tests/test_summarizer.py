@@ -210,7 +210,6 @@ async def test_map_raises_if_llm_called_during_map(monkeypatch, _patch_access):
     model call would blow up; the deterministic _chunk_facts +
     _mini_summary path must never touch it."""
     cam = _patch_access
-    now = datetime.now(timezone.utc)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -242,7 +241,6 @@ async def test_map_raises_if_llm_called_during_map(monkeypatch, _patch_access):
 @pytest.mark.asyncio
 async def test_reduce_records_usage(monkeypatch, _patch_access):
     cam = _patch_access
-    now = datetime.now(timezone.utc)
 
     def responder(stmt: str):
         s = stmt.lower()

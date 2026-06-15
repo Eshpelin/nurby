@@ -117,8 +117,10 @@ class AudioWorker:
         astreams = [s for s in container.streams if s.type == "audio"]
         if not astreams:
             logger.info("Camera %s has no audio track", self.camera_id)
-            try: container.close()
-            except Exception: pass
+            try:
+                container.close()
+            except Exception:
+                pass
             return
 
         astream = astreams[0]
@@ -157,8 +159,10 @@ class AudioWorker:
         except Exception:
             logger.exception("PyAV demux error for camera %s", self.camera_id)
         finally:
-            try: container.close()
-            except Exception: pass
+            try:
+                container.close()
+            except Exception:
+                pass
 
     def _handle_window(self, window: np.ndarray):
         """Classify a 1s window and emit events that pass cooldown."""

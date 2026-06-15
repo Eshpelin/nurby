@@ -286,16 +286,20 @@ async def process_recording(recording_id: uuid.UUID):
 
         if not ok:
             if os.path.exists(tmp_path):
-                try: os.remove(tmp_path)
-                except OSError: pass
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
             await _update_status(recording_id, "failed", err or "unknown blur failure")
             return
 
         if not any_matches:
             # No protected person ever appeared. Keep original, nothing to do.
             if os.path.exists(tmp_path):
-                try: os.remove(tmp_path)
-                except OSError: pass
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
             await _update_status(recording_id, "skipped")
             logger.info("Blur skipped for %s. no protected faces found", recording_id)
             return
@@ -319,8 +323,10 @@ async def process_recording(recording_id: uuid.UUID):
     except Exception as exc:
         logger.exception("Blur worker failed for %s", recording_id)
         if os.path.exists(tmp_path):
-            try: os.remove(tmp_path)
-            except OSError: pass
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
         await _update_status(recording_id, "failed", str(exc))
 
 

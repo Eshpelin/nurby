@@ -49,9 +49,9 @@ def _font(size: int):
 
 
 def _center(draw, box, text, font, fill):
-    l, t, r, b = draw.textbbox((0, 0), text, font=font)
-    w, h = r - l, b - t
-    x = box[0] + (box[2] - box[0] - w) / 2 - l
+    lx, t, r, b = draw.textbbox((0, 0), text, font=font)
+    w, h = r - lx, b - t
+    x = box[0] + (box[2] - box[0] - w) / 2 - lx
     y = box[1] + (box[3] - box[1] - h) / 2 - t
     draw.text((x, y), text, font=font, fill=fill)
 

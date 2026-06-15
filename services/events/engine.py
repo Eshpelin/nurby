@@ -292,7 +292,7 @@ class RuleEngine:
         try:
             async with async_session() as db:
                 result = await db.execute(
-                    select(Rule).where(Rule.enabled == True)
+                    select(Rule).where(Rule.enabled.is_(True))
                 )
                 self._rules = list(result.scalars().all())
                 # Detach from session

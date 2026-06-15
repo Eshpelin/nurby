@@ -393,11 +393,11 @@ def _mini_summary(t0: datetime, t1: datetime, facts: dict) -> str:
         bits.append(f"Rules. {rnames}")
     labels = facts.get("labels") or []
     notable = [
-        l for l in labels if l["label"] in _KNOWN_LABEL_HINT and l["label"] != "person"
+        lb for lb in labels if lb["label"] in _KNOWN_LABEL_HINT and lb["label"] != "person"
     ][:3]
     if notable:
         lnames = ", ".join(
-            f"{l['label']} x{l['observation_count']}" for l in notable
+            f"{lb['label']} x{lb['observation_count']}" for lb in notable
         )
         bits.append(f"Detections. {lnames}")
     cameras = facts.get("cameras") or []
@@ -583,7 +583,7 @@ async def summarize_window(
                         p["display_name"] for p in (facts["persons"] or [])[:3]
                     ],
                     "top_labels": [
-                        l["label"] for l in (facts["labels"] or [])[:3]
+                        lb["label"] for lb in (facts["labels"] or [])[:3]
                     ],
                 },
             }
@@ -695,7 +695,6 @@ async def _run_reduce(
         )
         if not ok:
             # Budget hit mid-way. fold what we have so far.
-            remaining = batch_summaries + mini_blocks[i:]
             return (
                 _deterministic_concat(chunk_records),
                 tokens_used,

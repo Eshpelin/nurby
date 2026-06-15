@@ -504,7 +504,6 @@ async def cluster_activity_summary(
                 sessions.append((t, cam))
             prev = t
 
-        total = len(sessions) or (c.sighting_count if not raw else 0)
         if not sessions:
             # No observations in window but cluster has historic sightings.
             # Still surface it with zeros rather than hide.

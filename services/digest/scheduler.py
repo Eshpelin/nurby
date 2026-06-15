@@ -36,7 +36,6 @@ async def _last_digest_time(db: AsyncSession, camera_id) -> datetime | None:
 
 
 async def _generate_camera_digest(db: AsyncSession, camera: Camera, since: datetime) -> None:
-    now = datetime.now(timezone.utc)
 
     # Count observations in the period
     obs_count_result = await db.execute(

@@ -135,7 +135,7 @@ def next_lens(existing: set[str], has_recording: bool, summary_stale: bool) -> s
             continue
         if lens not in existing:
             return lens
-    raw_done = any(l in existing for l in RAW_LENSES)
+    raw_done = any(lens in existing for lens in RAW_LENSES)
     if raw_done and summary_stale:
         return "summary"
     return None

@@ -54,7 +54,8 @@ class PoseEstimator:
                 keypoints, scores = model(frame)
                 for kp, sc in zip(keypoints, scores):
                     pts = [(float(x), float(y), float(c)) for (x, y), c in zip(kp, sc)]
-                    xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+                    xs = [p[0] for p in pts]
+                    ys = [p[1] for p in pts]
                     bbox = [min(xs), min(ys), max(xs), max(ys)] if pts else None
                     out.append({"bbox": bbox, "keypoints": pts})
             else:

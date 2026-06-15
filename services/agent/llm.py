@@ -19,7 +19,7 @@ four supported provider kinds map as follows.
 
 All four handle (a) text-only, (b) one tool_use, (c) multiple tool_uses
 in one response. Providers whose response indicates no tool-use support
-raise ``LLMProviderUnsupported``.
+raise ``LLMProviderUnsupportedError``.
 
 Streaming is implemented for text deltas only. Tool-use blocks are
 returned at the end of the call. The ``stream_callback`` (if provided)
@@ -41,7 +41,7 @@ from shared.models import Provider
 logger = logging.getLogger("nurby.agent.llm")
 
 
-class LLMProviderUnsupported(RuntimeError):
+class LLMProviderUnsupportedError(RuntimeError):
     """Raised when a Provider.kind cannot run tool-use."""
 
 
@@ -75,7 +75,7 @@ def _normalize_kind(kind: str) -> str:
         return "gemini"
     if k == "ollama":
         return "ollama"
-    raise LLMProviderUnsupported(f"provider kind {kind!r} does not support tool-use in agent driver")
+    raise LLMProviderUnsupportedError(f"provider kind {kind!r} does not support tool-use in agent driver")
 
 
 def _content_blocks(content: Any) -> list[dict]:
@@ -618,11 +618,11 @@ async def llm_call(
         return await _call_openai_like(provider, model, system_prompt, messages, tools, max_tokens, stream, stream_callback, is_ollama=True)
     if kind == "gemini":
         return await _call_gemini(provider, model, system_prompt, messages, tools, max_tokens, stream, stream_callback)
-    raise LLMProviderUnsupported(f"unhandled provider kind {kind!r}")
+    raise LLMProviderUnsupportedError(f"unhandled provider kind {kind!r}")
 
 
 __all__ = [
-    "LLMProviderUnsupported",
+    "LLMProviderUnsupportedError",
     "LLMResponse",
     "LLMToolUse",
     "llm_call",
