@@ -69,7 +69,7 @@ export default function CostMeter({ usage, loading }: CostMeterProps) {
       </button>
       {open && (
         <div className="absolute bottom-full mb-2 left-0 z-50 w-80 max-h-80 overflow-auto rounded-lg border border-border bg-card shadow-xl p-3 space-y-2">
-          <div className="text-xs font-semibold">Today's spend</div>
+          <div className="text-xs font-semibold">Today&apos;s spend</div>
           <div className="text-[11px] text-muted-foreground">
             {usage.runs} run{usage.runs !== 1 ? "s" : ""} ·{" "}
             {usage.tokens.toLocaleString()} tokens

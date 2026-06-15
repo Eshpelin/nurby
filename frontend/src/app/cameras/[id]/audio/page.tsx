@@ -102,8 +102,8 @@ export default function CameraAudioPage() {
         );
         const txList = await txResp.json();
         if (!cancelled) setTranscripts(Array.isArray(txList) ? txList : []);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Failed to load");
+      } catch (e: unknown) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
       }
     })();
     return () => {
@@ -126,8 +126,8 @@ export default function CameraAudioPage() {
       });
       if (!resp.ok) throw new Error(await resp.text());
       setSummarizeMsg("Summary generated. Check the dashboard timeline.");
-    } catch (e: any) {
-      setSummarizeMsg(e?.message || "Summarize failed");
+    } catch (e: unknown) {
+      setSummarizeMsg(e instanceof Error ? e.message : "Summarize failed");
     } finally {
       setSummarizing(false);
     }
@@ -149,8 +149,8 @@ export default function CameraAudioPage() {
       if (!resp.ok) throw new Error(await resp.text());
       const next = await resp.json();
       setConfig({ ...config, ...next });
-    } catch (e: any) {
-      setError(e?.message || "Save failed");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
     }

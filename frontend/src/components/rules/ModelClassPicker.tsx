@@ -1,6 +1,7 @@
 "use client";
 
 import { StyledSelect } from "./StyledSelect";
+import Link from "next/link";
 
 export function ModelClassPicker({
   value,
@@ -38,7 +39,7 @@ export function ModelClassPicker({
       {needsModel ? (
         <div className="rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 p-2.5 text-[11px] text-amber-300">
           No detection model configured on the selected camera(s). Add one on the{" "}
-          <a href="/cameras" className="underline hover:text-amber-200">camera settings</a> page first. Labels come from whichever model you pick.
+          <Link href="/cameras" className="underline hover:text-amber-200">camera settings</Link> page first. Labels come from whichever model you pick.
         </div>
       ) : loading ? (
         <p className="text-[11px] text-muted-foreground">Loading labels from model.</p>

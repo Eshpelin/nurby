@@ -553,7 +553,7 @@ function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
         </span>
       </div>
       <p className="text-xs text-muted-foreground">
-        Recording overlaps the subject's presence on this camera. Open the
+        Recording overlaps the subject&apos;s presence on this camera. Open the
         Recordings page for inline playback.
       </p>
     </div>

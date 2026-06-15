@@ -110,7 +110,7 @@ export function LLMErrorToasts() {
               {t.status === 429 && (
                 <div className="text-[11px] text-muted-foreground/80 mt-1">
                   Provider throttled. Calls will retry with backoff. Check
-                  the provider's rate limit or set a tighter token cap in
+                  the provider&apos;s rate limit or set a tighter token cap in
                   Settings.
                 </div>
               )}

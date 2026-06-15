@@ -343,7 +343,7 @@ export default function AgentResponseCard({
       <div className="p-4 space-y-3">
         {vm.budgetExhausted && (
           <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded p-2">
-            You've used your daily AI budget. Resets at midnight household time. Admins can raise your limit in Settings.
+            You&apos;ve used your daily AI budget. Resets at midnight household time. Admins can raise your limit in Settings.
           </div>
         )}
         {vm.cancelled && (

@@ -525,7 +525,7 @@ function ChannelRow({
                     </div>
                     <div className="text-[11px] text-muted-foreground mt-1">
                       Token + chat binding stay yours. Others can pick this channel for their
-                      rules. "Use and test" also lets them fire the Send test button.
+                      rules. &quot;Use and test&quot; also lets them fire the Send test button.
                     </div>
                   </div>
                 )}
@@ -757,7 +757,7 @@ function ChannelRow({
               className="w-full accent-green-500"
             />
             <div className="text-[11px] text-muted-foreground mt-1">
-              Suppresses identical messages within this window so a chatty rule doesn't spam.
+              Suppresses identical messages within this window so a chatty rule doesn&apos;t spam.
             </div>
           </div>
           </>

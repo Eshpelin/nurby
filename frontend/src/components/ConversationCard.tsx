@@ -208,10 +208,20 @@ export function ConversationCard(props: ConversationCardProps) {
           : "border-amber-700/40 bg-amber-950/15 hover:border-amber-600/60"
       }`}
     >
-      <button
-        type="button"
+      {/* div with button semantics: a real <button> here would nest the
+          expanded action buttons inside it, which is invalid HTML and
+          triggers a hydration error. */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={handleToggle}
-        className="w-full text-left px-3 py-2.5"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleToggle();
+          }
+        }}
+        className="w-full text-left px-3 py-2.5 cursor-pointer"
       >
         <div className="flex items-center gap-2 text-[11px] mb-1.5">
           {finalized && summaryText ? (
@@ -260,7 +270,7 @@ export function ConversationCard(props: ConversationCardProps) {
             recap by {summaryProviderName}
           </p>
         )}
-      </button>
+      </div>
 
       {expanded && (
         <div className="border-t border-border/50 bg-black/30">
