@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
+import { useWebSocket } from "@/lib/ws";
 import { NotificationItem, NotificationsDropdown } from "./notifications";
 import { SecureAccountModal } from "./SecureAccountModal";
 
@@ -82,6 +83,36 @@ function getInitials(name: string | null | undefined): string {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+}
+
+/**
+ * Live WebSocket status. Stays silent while connected (the healthy case is
+ * no chrome) and only surfaces a dot + label when the relay is connecting,
+ * reconnecting, or down, so a paused live feed reads as paused, not broken.
+ * Mirrors the AI-health badge dot pattern next to it.
+ */
+function LiveStatusBadge() {
+  const { status } = useWebSocket();
+  if (status === "connected") return null;
+
+  const reconnecting = status === "reconnecting" || status === "connecting";
+  const dot = reconnecting ? "bg-yellow-500 pulse-dot" : "bg-red-500 pulse-dot";
+  const label = reconnecting ? "reconnecting…" : "live offline";
+  const title = reconnecting
+    ? "Live feed paused. Reconnecting to the camera relay."
+    : "Live feed disconnected. No real-time updates right now.";
+
+  return (
+    <span
+      title={title}
+      role="status"
+      aria-live="polite"
+      className={`flex items-center gap-2 text-xs ${reconnecting ? "text-yellow-500" : "text-red-400"}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+      <span className="font-mono hidden md:inline">{label}</span>
+    </span>
+  );
 }
 
 export function Navbar() {
@@ -265,6 +296,11 @@ export function Navbar() {
               Secure account
             </button>
           )}
+
+          {/* Live relay status. Quiet when connected; shows reconnecting /
+              offline so a stale live view reads as paused, not broken. */}
+          <LiveStatusBadge />
+
           {(() => {
             const offline = vlmHealth ? (vlmHealth.configured && !vlmHealth.reachable) : false;
             const missing = vlmHealth ? !vlmHealth.configured : !provider;

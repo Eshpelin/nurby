@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useWSSubscribe } from "@/lib/ws";
+import { useWSSubscribe, useWebSocket } from "@/lib/ws";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useWebcamPublisher, listVideoDevices } from "@/lib/webcam-publisher";
@@ -608,6 +608,7 @@ const SEARCH_HINTS = [
 
 function DashboardContent() {
   const { authFetch, token } = useAuth();
+  const { status: wsStatus } = useWebSocket();
   const searchParams = useSearchParams();
   const initialCamera = searchParams.get("camera");
   const [searchHint, setSearchHint] = useState(() => SEARCH_HINTS[Math.floor(Math.random() * SEARCH_HINTS.length)]);
@@ -1979,7 +1980,23 @@ function DashboardContent() {
             <div className="mb-3 space-y-1 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-medium text-accent uppercase tracking-wider flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent pulse-dot" /> Live
+                  {/* Dot mirrors relay health so a paused strip doesn't keep
+                      pulsing "live" while the WS is actually down. */}
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full pulse-dot ${
+                      wsStatus === "connected"
+                        ? "bg-accent"
+                        : wsStatus === "disconnected"
+                          ? "bg-red-500"
+                          : "bg-yellow-500"
+                    }`}
+                  />
+                  Live
+                  {wsStatus !== "connected" && (
+                    <span className="text-muted-foreground normal-case font-normal tracking-normal">
+                      · {wsStatus === "disconnected" ? "paused" : "reconnecting…"}
+                    </span>
+                  )}
                 </span>
                 <button onClick={() => { setLiveEvents([]); setLiveTriggers([]); }} className="text-[10px] text-muted-foreground hover:text-foreground">clear</button>
               </div>

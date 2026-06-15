@@ -25,17 +25,31 @@ export type WSMessage = {
   [key: string]: unknown;
 };
 
+/**
+ * Connection lifecycle, surfaced to the UI so a dropped live feed reads
+ * as "paused, reconnecting" rather than silently going stale.
+ *
+ * - ``connecting``    first attempt, no socket has opened yet.
+ * - ``connected``     socket is open and live data is flowing.
+ * - ``reconnecting``  socket dropped after a prior success; backing off.
+ * - ``disconnected``  provider unmounted / closed for good.
+ */
+export type WSStatus = "connecting" | "connected" | "reconnecting" | "disconnected";
+
 type Handler = (msg: WSMessage) => void;
 
 interface WSContextValue {
+  /** Convenience: true only while the socket is open. */
   connected: boolean;
+  /** Full lifecycle state for status indicators. */
+  status: WSStatus;
   subscribe: (type: string, handler: Handler) => () => void;
 }
 
 const WSContext = createContext<WSContextValue | null>(null);
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
-  const [connected, setConnected] = useState(false);
+  const [status, setStatus] = useState<WSStatus>("connecting");
   const wsRef = useRef<WebSocket | null>(null);
   const handlersRef = useRef<Map<string, Set<Handler>>>(new Map());
 
@@ -58,7 +72,12 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
     const scheduleReconnect = () => {
       if (cancelled) return;
+      // Once we've ever connected, a drop is a "reconnecting" state; the
+      // initial pre-open failures stay as "connecting" so a never-up feed
+      // doesn't flash a misleading "reconnecting" badge.
+      setStatus((s) => (s === "connecting" ? "connecting" : "reconnecting"));
       attempt = Math.min(attempt + 1, 6);
+      // Capped exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (cap).
       const delay = Math.min(30000, 1000 * 2 ** (attempt - 1));
       reconnectTimer = setTimeout(connect, delay);
     };
@@ -70,7 +89,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         wsRef.current = ws;
         ws.onopen = () => {
           attempt = 0;
-          setConnected(true);
+          setStatus("connected");
         };
         ws.onmessage = (evt) => {
           let msg: WSMessage | null = null;
@@ -87,7 +106,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
           if (wild) wild.forEach((h) => safe(h, msg!));
         };
         ws.onclose = () => {
-          setConnected(false);
+          if (cancelled) return;
           scheduleReconnect();
         };
         ws.onerror = () => ws.close();
@@ -99,6 +118,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     connect();
     return () => {
       cancelled = true;
+      setStatus("disconnected");
       if (reconnectTimer) clearTimeout(reconnectTimer);
       try {
         wsRef.current?.close();
@@ -110,7 +130,8 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<WSContextValue>(
     () => ({
-      connected,
+      connected: status === "connected",
+      status,
       subscribe(type, handler) {
         const map = handlersRef.current;
         let bucket = map.get(type);
@@ -125,7 +146,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         };
       },
     }),
-    [connected]
+    [status]
   );
 
   return <WSContext.Provider value={value}>{children}</WSContext.Provider>;
@@ -138,6 +159,7 @@ export function useWebSocket(): WSContextValue {
     // outside the dashboard without crashing.
     return {
       connected: false,
+      status: "disconnected",
       subscribe: () => () => {},
     };
   }
