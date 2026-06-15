@@ -9,81 +9,19 @@ import { ProviderFields } from "@/components/ProviderFields";
 import { timezoneOptions } from "@/lib/timezones";
 
 
-interface Provider {
-  id: string;
-  name: string;
-  kind: string;
-  base_url: string;
-  default_model: string | null;
-  active: boolean;
-  max_input_tokens: number | null;
-  max_output_tokens: number | null;
-  created_at: string;
-}
-
-interface InviteKey {
-  id: string;
-  key: string;
-  role: string;
-  camera_ids: string[] | null;
-  max_uses: number;
-  use_count: number;
-  expires_at: string | null;
-  created_at: string;
-}
-
-interface Camera {
-  id: string;
-  name: string;
-}
-
-interface CameraStorage {
-  camera_id: string;
-  camera_name: string;
-  recording_count: number;
-  recording_bytes: number;
-  observation_count: number;
-  retention_mode: string;
-  retention_days: number;
-  retention_gb: number;
-}
-
-interface StorageStats {
-  cameras: CameraStorage[];
-  total_recording_bytes: number;
-  total_observations: number;
-}
-
-// PROVIDER_KINDS and ALL_PROVIDERS now live in @/lib/provider-presets so
-// the onboarding wizard and this screen share one catalog.
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
-}
-
-function retentionLabel(cam: CameraStorage): string {
-  if (cam.retention_mode === "time") return "Keep " + cam.retention_days + " days";
-  if (cam.retention_mode === "size") return "Max " + cam.retention_gb + " GB";
-  return "No limit";
-}
-
-function usagePercent(cam: CameraStorage): number | null {
-  if (cam.retention_mode === "size" && cam.retention_gb > 0) {
-    const limitBytes = cam.retention_gb * 1024 * 1024 * 1024;
-    return (cam.recording_bytes / limitBytes) * 100;
-  }
-  return null;
-}
-
-function barColor(percent: number | null): string {
-  if (percent === null) return "bg-blue-500";
-  if (percent >= 80) return "bg-red-500";
-  if (percent >= 50) return "bg-yellow-500";
-  return "bg-green-500";
-}
+import type {
+  Camera,
+  CameraStorage,
+  InviteKey,
+  Provider,
+  StorageStats,
+} from "./settings-helpers";
+import {
+  barColor,
+  formatBytes,
+  retentionLabel,
+  usagePercent,
+} from "./settings-helpers";
 
 export default function SettingsPage() {
   const { authFetch, token } = useAuth();
