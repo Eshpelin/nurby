@@ -305,6 +305,7 @@ export default function CameraConfigPage() {
   const [recordingClipPost, setRecordingClipPost] = useState(10);
   const [vlmProviderId, setVlmProviderId] = useState<string | null>(null);
   const [vlmPrompt, setVlmPrompt] = useState("");
+  const [showDefaultVlmPrompt, setShowDefaultVlmPrompt] = useState(false);
   const [vlmInterval, setVlmInterval] = useState(0);
   const [vlmMaxTokens, setVlmMaxTokens] = useState(200);
   const [vlmMaxInputTokens, setVlmMaxInputTokens] = useState<string>("");
@@ -1184,7 +1185,10 @@ export default function CameraConfigPage() {
             />
           </FieldRow>
 
-          <FieldRow label="Custom Prompt" hint="Override system prompt for this camera">
+          <FieldRow
+            label="Custom Prompt"
+            hint="System prompt sent to the VLM for every frame on this camera. It steers what the model focuses on and how it phrases descriptions. Leave blank to use the built-in default."
+          >
             <textarea
               value={vlmPrompt}
               onChange={(e) => setVlmPrompt(e.target.value)}
@@ -1192,14 +1196,33 @@ export default function CameraConfigPage() {
               rows={4}
               className={`${inputClass} resize-y`}
             />
-            {vlmPrompt.trim() && (
+            <div className="flex items-center gap-3 mt-1">
               <button
                 type="button"
-                onClick={() => setVlmPrompt("")}
-                className="text-[11px] text-muted-foreground hover:text-danger mt-1 transition-colors"
+                onClick={() => setShowDefaultVlmPrompt((v) => !v)}
+                className="text-[11px] text-muted-foreground hover:text-accent transition-colors"
               >
-                Reset to default
+                {showDefaultVlmPrompt ? "Hide default prompt" : "Show default prompt"}
               </button>
+              {vlmPrompt.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setVlmPrompt("")}
+                  className="text-[11px] text-muted-foreground hover:text-danger transition-colors"
+                >
+                  Reset to default
+                </button>
+              )}
+            </div>
+            {showDefaultVlmPrompt && (
+              <div className="mt-1.5 rounded-md border border-border bg-muted/40 p-2.5">
+                <p className="text-[11px] text-muted-foreground mb-1">
+                  Effective default when this field is blank:
+                </p>
+                <p className="text-xs text-foreground/80 leading-relaxed">
+                  {DEFAULT_VLM_PROMPT}
+                </p>
+              </div>
             )}
           </FieldRow>
         </Section>
