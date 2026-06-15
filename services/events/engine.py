@@ -51,6 +51,44 @@ RULES_INVALIDATE_CHANNEL = "nurby:rules:invalidate"
 def _centroid(b):
     return ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0)
 
+
+def _norm_plate(s) -> str:
+    """Uppercase, strip whitespace and punctuation. Mirrors the perception
+    plate normalizer so list matching is forgiving of spacing/casing."""
+    if not s:
+        return ""
+    return "".join(ch for ch in str(s).upper() if ch.isalnum())
+
+
+def _plate_in_list(plate: str, entries: list, substring: bool) -> bool:
+    """Is a normalized plate present in a list of plate patterns?"""
+    if not plate:
+        return False
+    for e in entries:
+        ne = _norm_plate(e)
+        if not ne:
+            continue
+        if (ne in plate) if substring else (ne == plate):
+            return True
+    return False
+
+
+def _iou(a, b) -> float:
+    """Intersection-over-union of two pixel bboxes [x1,y1,x2,y2]."""
+    if not (a and b and len(a) == 4 and len(b) == 4):
+        return 0.0
+    ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
+    ix2, iy2 = min(a[2], b[2]), min(a[3], b[3])
+    iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
+    inter = iw * ih
+    if inter <= 0:
+        return 0.0
+    area_a = max(0.0, a[2] - a[0]) * max(0.0, a[3] - a[1])
+    area_b = max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+    denom = area_a + area_b - inter
+    return inter / denom if denom > 0 else 0.0
+
+
 logger = logging.getLogger("nurby.events.engine")
 
 
@@ -579,6 +617,93 @@ class RuleEngine:
                 if want_dir != "any" and ev.get("direction") != want_dir:
                     continue
                 return True
+            return False
+
+        elif trigger_type == "plate_list":
+            # Garage / property access control. A blacklist fires on listed
+            # plates; a whitelist fires on anything NOT listed (an
+            # unauthorized vehicle). Plate match is normalized (case- and
+            # spacing-insensitive); ``substring`` allows partial plates.
+            vd = data.get("vehicle_detections") or {}
+            vehicles = vd.get("vehicles", []) if isinstance(vd, dict) else []
+            if not vehicles:
+                return False
+            mode = (pattern.get("mode") or "blacklist").lower()
+            plates = pattern.get("plates") or []
+            substring = bool(pattern.get("substring"))
+            require_plate = pattern.get("require_plate", True)
+            for v in vehicles:
+                plate = _norm_plate(v.get("plate_text"))
+                if mode == "blacklist":
+                    if plate and _plate_in_list(plate, plates, substring):
+                        return True
+                else:  # whitelist / unauthorized
+                    if not plate:
+                        # An unreadable plate is treated as unauthorized only
+                        # when the rule opts in (require_plate=False).
+                        if not require_plate:
+                            return True
+                        continue
+                    if not _plate_in_list(plate, plates, substring):
+                        return True
+            return False
+
+        elif trigger_type == "parking_violation":
+            # A vehicle parked in a reserved spot zone that is not on the
+            # reserved-plate list. Empty reserved list means "alert on any
+            # vehicle that parks here". Optionally require the vehicle to be
+            # stationary (matched to a stationary track by overlap).
+            spot = pattern.get("spot_zone")
+            if not spot:
+                return False
+            reserved = pattern.get("reserved_plates") or []
+            substring = bool(pattern.get("substring"))
+            require_stationary = bool(pattern.get("require_stationary"))
+            vd = data.get("vehicle_detections") or {}
+            vehicles = vd.get("vehicles", []) if isinstance(vd, dict) else []
+            stationary_boxes = [
+                t.get("bbox")
+                for t in (data.get("tracks") or [])
+                if t.get("state") == "stationary"
+            ]
+            for v in vehicles:
+                if spot not in (v.get("zones") or []):
+                    continue
+                plate = _norm_plate(v.get("plate_text"))
+                if reserved and plate and _plate_in_list(plate, reserved, substring):
+                    continue  # this is the authorized vehicle
+                if require_stationary and not any(
+                    _iou(v.get("bbox"), b) >= 0.3 for b in stationary_boxes
+                ):
+                    continue  # still moving through, not parked
+                return True
+            return False
+
+        elif trigger_type == "wrong_way":
+            # A tracked object crossing a directional line against the
+            # allowed flow (reverse / wrong-way driving). Like line_cross,
+            # but fires on the OPPOSITE of the allowed direction.
+            pts = pattern.get("points")
+            if not (pts and len(pts) == 2):
+                return False
+            pcam = pattern.get("camera_id")
+            if pcam and pcam != data.get("camera_id"):
+                return False
+            allowed = pattern.get("allowed_direction", "in")
+            want_label = pattern.get("label")
+            a, b = pts[0], pts[1]
+            for tr in data.get("tracks") or []:
+                if want_label and tr.get("label") != want_label:
+                    continue
+                prev = tr.get("prev_bbox")
+                if not prev:
+                    continue
+                prev_c = _centroid(prev)
+                cur_c = _centroid(tr["bbox"])
+                if not _segments_cross(prev_c, cur_c, a, b):
+                    continue
+                if _cross_direction(prev_c, cur_c, a, b) != allowed:
+                    return True
             return False
 
         elif trigger_type == "any":

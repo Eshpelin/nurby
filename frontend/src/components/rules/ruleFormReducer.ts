@@ -33,6 +33,13 @@ export interface RuleFormState {
   formTriggerClapCount: string;
   formTriggerPhrases: string[];
   formTriggerPhraseMatch: "any" | "all";
+  formTriggerPlateMode: "blacklist" | "whitelist";
+  formTriggerPlateList: string;
+  formTriggerSpotZone: string;
+  formTriggerReservedPlates: string;
+  formTriggerRequireStationary: boolean;
+  formTriggerAllowedDirection: "in" | "out";
+  formTriggerRequirePlate: boolean;
 
   // Conditions group
   formCondCameras: string[];
@@ -73,6 +80,13 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
   formTriggerClapCount: "2",
   formTriggerPhrases: [],
   formTriggerPhraseMatch: "any",
+  formTriggerPlateMode: "blacklist",
+  formTriggerPlateList: "",
+  formTriggerSpotZone: "",
+  formTriggerReservedPlates: "",
+  formTriggerRequireStationary: true,
+  formTriggerAllowedDirection: "in",
+  formTriggerRequirePlate: true,
 
   formCondCameras: [],
   formScheduleMode: "always",
@@ -107,6 +121,13 @@ const TRIGGER_FIELDS_TO_RESET: (keyof RuleFormState)[] = [
   "formTriggerClapCount",
   "formTriggerPhrases",
   "formTriggerPhraseMatch",
+  "formTriggerPlateMode",
+  "formTriggerPlateList",
+  "formTriggerSpotZone",
+  "formTriggerReservedPlates",
+  "formTriggerRequireStationary",
+  "formTriggerAllowedDirection",
+  "formTriggerRequirePlate",
 ];
 
 export type RuleFormAction =
@@ -171,6 +192,13 @@ export function hydrateFromRule(rule: Rule): RuleFormState {
     : [];
   base.formTriggerPhraseMatch =
     (tp.match as "any" | "all") === "all" ? "all" : "any";
+  base.formTriggerPlateMode = (tp.mode as "blacklist" | "whitelist") === "whitelist" ? "whitelist" : "blacklist";
+  base.formTriggerPlateList = Array.isArray(tp.plates) ? (tp.plates as string[]).join("\n") : "";
+  base.formTriggerSpotZone = (tp.spot_zone as string) || "";
+  base.formTriggerReservedPlates = Array.isArray(tp.reserved_plates) ? (tp.reserved_plates as string[]).join("\n") : "";
+  base.formTriggerRequireStationary = tp.require_stationary !== false;
+  base.formTriggerAllowedDirection = (tp.allowed_direction as "in" | "out") === "out" ? "out" : "in";
+  base.formTriggerRequirePlate = tp.require_plate !== false;
   const ms = tp.min_score as number | undefined;
   if (ms != null) {
     if (ms <= 0.02) base.formTriggerSensitivity = "very_high";

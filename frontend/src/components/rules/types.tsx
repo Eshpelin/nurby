@@ -69,7 +69,7 @@ export interface TriggerType {
   icon: (props: { className?: string }) => React.ReactElement;
   desc: string;
   accent: string;
-  group: "vision" | "faces" | "motion" | "audio" | "spatial" | "system" | "any";
+  group: "vision" | "faces" | "motion" | "audio" | "spatial" | "system" | "traffic" | "any";
 }
 
 export interface SelectOption {
@@ -154,6 +154,21 @@ export const Icon = {
       <path d="M12 3v18" /><path d="M3 12h18" /><path d="m5.6 5.6 12.8 12.8" /><path d="m18.4 5.6-12.8 12.8" />
     </svg>
   ),
+  car: ({ className }: { className?: string }) => (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 13l1.5-4.5A2 2 0 018.4 7h7.2a2 2 0 011.9 1.5L19 13m-14 0h14m-14 0v4m14-4v4M7 17v2m10-2v2" /><circle cx="7.5" cy="13.5" r="0.5" /><circle cx="16.5" cy="13.5" r="0.5" />
+    </svg>
+  ),
+  parking: ({ className }: { className?: string }) => (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 16V8h3.5a2.5 2.5 0 010 5H9" />
+    </svg>
+  ),
+  reverse: ({ className }: { className?: string }) => (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 14l-4-4 4-4" /><path d="M5 10h11a4 4 0 014 4v2" />
+    </svg>
+  ),
 };
 
 export const TRIGGER_TYPES: TriggerType[] = [
@@ -172,6 +187,9 @@ export const TRIGGER_TYPES: TriggerType[] = [
   { value: "camera_online",   label: "Camera recovered", icon: Icon.camOff,    desc: "A camera comes back after being offline.",        accent: "green",  group: "system" },
   { value: "incident_started", label: "Incident begins", icon: Icon.clock,     desc: "A new cluster of repeat sightings opens (same person/vehicle keeps appearing).", accent: "amber", group: "system" },
   { value: "incident_ended",  label: "Incident recap",  icon: Icon.clock,      desc: "An incident closes: fires once with duration, count, and an AI recap.", accent: "indigo", group: "system" },
+  { value: "plate_list",      label: "Plate list",      icon: Icon.car,       desc: "Allow-list (alert on strangers) or block-list (alert on banned plates). Garage access control.", accent: "amber", group: "traffic" },
+  { value: "parking_violation", label: "Parking spot",   icon: Icon.parking,   desc: "Reserve a spot for your plate. Alarm when anyone else parks there.", accent: "amber", group: "traffic" },
+  { value: "wrong_way",       label: "Wrong way",       icon: Icon.reverse,   desc: "A vehicle drives against the allowed direction over a lane line.", accent: "rose", group: "traffic" },
   { value: "any",             label: "Any observation", icon: Icon.spark,     desc: "Fire on every processed keyframe.",               accent: "slate",  group: "any" },
 ];
 
@@ -371,6 +389,30 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
     if (plate) return `When plate "${plate}" is seen`;
     if (pattern.identified_only) return "When a plate-identified vehicle is seen";
     return "When any vehicle is seen";
+  }
+  if (t === "plate_list") {
+    const mode = (pattern.mode as string) || "blacklist";
+    const plates = (pattern.plates as string[] | undefined) || [];
+    const n = plates.length;
+    if (mode === "whitelist") {
+      return n
+        ? `When a vehicle NOT on the allow-list (${n} plate${n === 1 ? "" : "s"}) is seen`
+        : "When any unlisted vehicle is seen";
+    }
+    return n
+      ? `When a blocked plate (${n} listed) is seen`
+      : "When a blocked plate is seen";
+  }
+  if (t === "parking_violation") {
+    const spot = (pattern.spot_zone as string) || "a reserved spot";
+    const reserved = (pattern.reserved_plates as string[] | undefined) || [];
+    return reserved.length
+      ? `When a vehicle other than ${reserved.join(", ")} parks in "${spot}"`
+      : `When any vehicle parks in "${spot}"`;
+  }
+  if (t === "wrong_way") {
+    const who = (pattern.label as string) || "a vehicle";
+    return `When ${who} drives the wrong way over the lane line`;
   }
   if (t === "face_detected") return "When any face detected";
   if (t === "face_recognized") {

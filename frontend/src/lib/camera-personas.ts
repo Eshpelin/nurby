@@ -224,6 +224,38 @@ export const CAMERA_PERSONAS: Persona[] = [
       conversation_summary_enabled: false,
     },
   },
+  {
+    id: "traffic",
+    label: "Traffic / parking",
+    hint: "Vehicles, plates, lanes, and parking spots. For monitoring a street, driveway, or garage. Outdoor.",
+    iconPath:
+      "M5 11l1.5-4.5A2 2 0 018.4 5h7.2a2 2 0 011.9 1.5L19 11m-14 0h14m-14 0v6m14-6v6M7 17v2m10-2v2M7 14h.01M17 14h.01",
+    patch: {
+      detect_objects: true,
+      detect_faces: false,
+      scene_mode: "outdoor",
+      object_confidence: 0.4,
+      detection_models: [
+        { model: "yolov8s.pt", confidence: 0.4, enabled: true, label_filter: [] },
+      ],
+      vlm_trigger: "on_object",
+      vlm_trigger_objects: ["car", "truck", "motorcycle", "bus", "van"],
+      vlm_max_tokens: 200,
+      recording_mode: "on_object",
+      recording_trigger_objects: ["car", "truck", "motorcycle", "bus", "van"],
+      recording_clip_pre: 4,
+      recording_clip_post: 20,
+      retention_mode: "time",
+      retention_days: 30,
+      summary_mode: "event",
+      summary_event_quiet_seconds: 90,
+      summary_event_trigger_objects: ["car", "truck", "motorcycle", "bus", "van"],
+      summary_event_min_duration_seconds: 4,
+      audio_capture_enabled: false,
+      audio_transcribe_enabled: false,
+      conversation_summary_enabled: false,
+    },
+  },
 ];
 
 export function findPersona(id: string): Persona | undefined {

@@ -278,6 +278,30 @@ export function RuleBuilder({
     if (s.formTriggerType === "camera_offline" || s.formTriggerType === "camera_online" || s.formTriggerType === "incident_started" || s.formTriggerType === "incident_ended") {
       if (s.formTriggerGeomCamId) trigger_pattern.camera_id = s.formTriggerGeomCamId;
     }
+    if (s.formTriggerType === "plate_list") {
+      trigger_pattern.mode = s.formTriggerPlateMode;
+      trigger_pattern.plates = s.formTriggerPlateList
+        .split(/[\n,]/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (s.formTriggerPlateMode === "whitelist") {
+        trigger_pattern.require_plate = s.formTriggerRequirePlate;
+      }
+    }
+    if (s.formTriggerType === "parking_violation") {
+      trigger_pattern.spot_zone = s.formTriggerSpotZone.trim();
+      trigger_pattern.reserved_plates = s.formTriggerReservedPlates
+        .split(/[\n,]/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+      trigger_pattern.require_stationary = s.formTriggerRequireStationary;
+    }
+    if (s.formTriggerType === "wrong_way") {
+      if (s.formTriggerGeomCamId) trigger_pattern.camera_id = s.formTriggerGeomCamId;
+      if (s.formTriggerGeomPoints.length === 2) trigger_pattern.points = s.formTriggerGeomPoints;
+      trigger_pattern.allowed_direction = s.formTriggerAllowedDirection;
+      if (s.formTriggerObjectClass) trigger_pattern.label = s.formTriggerObjectClass;
+    }
 
     const conditions: Record<string, unknown> = {};
     if (s.formCondCameras.length > 0) conditions.camera_ids = s.formCondCameras;
@@ -483,6 +507,20 @@ export function RuleBuilder({
               setFormTriggerAudioMinScore={setterFor("formTriggerAudioMinScore")}
               formTriggerLineDirection={state.formTriggerLineDirection}
               setFormTriggerLineDirection={setterFor("formTriggerLineDirection")}
+              formTriggerPlateMode={state.formTriggerPlateMode}
+              setFormTriggerPlateMode={setterFor("formTriggerPlateMode")}
+              formTriggerPlateList={state.formTriggerPlateList}
+              setFormTriggerPlateList={setterFor("formTriggerPlateList")}
+              formTriggerSpotZone={state.formTriggerSpotZone}
+              setFormTriggerSpotZone={setterFor("formTriggerSpotZone")}
+              formTriggerReservedPlates={state.formTriggerReservedPlates}
+              setFormTriggerReservedPlates={setterFor("formTriggerReservedPlates")}
+              formTriggerRequireStationary={state.formTriggerRequireStationary}
+              setFormTriggerRequireStationary={setterFor("formTriggerRequireStationary")}
+              formTriggerAllowedDirection={state.formTriggerAllowedDirection}
+              setFormTriggerAllowedDirection={setterFor("formTriggerAllowedDirection")}
+              formTriggerRequirePlate={state.formTriggerRequirePlate}
+              setFormTriggerRequirePlate={setterFor("formTriggerRequirePlate")}
               formTriggerGeomCamId={state.formTriggerGeomCamId}
               setFormTriggerGeomCamId={setterFor("formTriggerGeomCamId")}
               formTriggerGeomPoints={state.formTriggerGeomPoints}

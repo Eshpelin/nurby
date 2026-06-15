@@ -53,6 +53,20 @@ export interface TriggerSectionProps {
   setFormTriggerPhrases: (v: string[]) => void;
   formTriggerPhraseMatch: "any" | "all";
   setFormTriggerPhraseMatch: (v: "any" | "all") => void;
+  formTriggerPlateMode: "blacklist" | "whitelist";
+  setFormTriggerPlateMode: (v: "blacklist" | "whitelist") => void;
+  formTriggerPlateList: string;
+  setFormTriggerPlateList: (v: string) => void;
+  formTriggerSpotZone: string;
+  setFormTriggerSpotZone: (v: string) => void;
+  formTriggerReservedPlates: string;
+  setFormTriggerReservedPlates: (v: string) => void;
+  formTriggerRequireStationary: boolean;
+  setFormTriggerRequireStationary: (v: boolean) => void;
+  formTriggerAllowedDirection: "in" | "out";
+  setFormTriggerAllowedDirection: (v: "in" | "out") => void;
+  formTriggerRequirePlate: boolean;
+  setFormTriggerRequirePlate: (v: boolean) => void;
 }
 
 export function TriggerSection(props: TriggerSectionProps) {
@@ -96,6 +110,20 @@ export function TriggerSection(props: TriggerSectionProps) {
     setFormTriggerPhrases,
     formTriggerPhraseMatch,
     setFormTriggerPhraseMatch,
+    formTriggerPlateMode,
+    setFormTriggerPlateMode,
+    formTriggerPlateList,
+    setFormTriggerPlateList,
+    formTriggerSpotZone,
+    setFormTriggerSpotZone,
+    formTriggerReservedPlates,
+    setFormTriggerReservedPlates,
+    formTriggerRequireStationary,
+    setFormTriggerRequireStationary,
+    formTriggerAllowedDirection,
+    setFormTriggerAllowedDirection,
+    formTriggerRequirePlate,
+    setFormTriggerRequirePlate,
   } = props;
 
   return (
@@ -268,6 +296,107 @@ export function TriggerSection(props: TriggerSectionProps) {
             vehicle that has been read. Plate reading runs automatically on cars, trucks,
             buses, and vans.
           </p>
+        </div>
+      )}
+
+      {formTriggerType === "plate_list" && (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1.5">Mode</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setFormTriggerPlateMode("blacklist")}
+                className={`px-3 py-2 text-xs rounded-md border text-left transition-colors ${
+                  formTriggerPlateMode === "blacklist"
+                    ? "border-rose-500 bg-rose-500/10 text-rose-300"
+                    : "border-border hover:bg-muted"
+                }`}
+              >
+                <div className="font-medium">Block-list</div>
+                <div className="text-[10px] text-muted-foreground">Alert when a listed plate appears</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormTriggerPlateMode("whitelist")}
+                className={`px-3 py-2 text-xs rounded-md border text-left transition-colors ${
+                  formTriggerPlateMode === "whitelist"
+                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
+                    : "border-border hover:bg-muted"
+                }`}
+              >
+                <div className="font-medium">Allow-list</div>
+                <div className="text-[10px] text-muted-foreground">Alert on anyone NOT listed</div>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">
+              {formTriggerPlateMode === "blacklist" ? "Blocked plates" : "Allowed plates"} (one per line)
+            </label>
+            <textarea
+              value={formTriggerPlateList}
+              onChange={(e) => setFormTriggerPlateList(e.target.value.toUpperCase())}
+              rows={4}
+              placeholder={"ABC123\nXYZ789"}
+              className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {formTriggerPlateMode === "blacklist"
+                ? "Fires when any of these plates is read. Spacing and case are ignored."
+                : "Fires on any vehicle whose plate is NOT in this list, e.g. an unknown car entering your garage."}
+            </p>
+          </div>
+          {formTriggerPlateMode === "whitelist" && (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!formTriggerRequirePlate}
+                onChange={(e) => setFormTriggerRequirePlate(!e.target.checked)}
+              />
+              Also alert on vehicles whose plate cannot be read
+            </label>
+          )}
+        </div>
+      )}
+
+      {formTriggerType === "parking_violation" && (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Reserved spot (zone name)</label>
+            <input
+              value={formTriggerSpotZone}
+              onChange={(e) => setFormTriggerSpotZone(e.target.value)}
+              placeholder="Spot A"
+              className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Draw the parking spot as a named zone in the camera&apos;s
+              <span className="font-medium"> Zones &amp; Tripwires</span> settings, then type its exact name here.
+            </p>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Allowed plate(s) (one per line)</label>
+            <textarea
+              value={formTriggerReservedPlates}
+              onChange={(e) => setFormTriggerReservedPlates(e.target.value.toUpperCase())}
+              rows={3}
+              placeholder={"MYCAR1  (leave blank to alert on ANY vehicle)"}
+              className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              The rule fires when a vehicle that is not on this list parks in the spot.
+              Leave blank to alert whenever anything parks there.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formTriggerRequireStationary}
+              onChange={(e) => setFormTriggerRequireStationary(e.target.checked)}
+            />
+            Only alert once the vehicle is actually parked (not just passing through)
+          </label>
         </div>
       )}
 
@@ -503,7 +632,7 @@ export function TriggerSection(props: TriggerSectionProps) {
         </div>
       )}
 
-      {(formTriggerType === "loitering" || formTriggerType === "line_cross") && (
+      {(formTriggerType === "loitering" || formTriggerType === "line_cross" || formTriggerType === "wrong_way") && (
         <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground block mb-1.5">Pick a camera</label>
@@ -550,11 +679,13 @@ export function TriggerSection(props: TriggerSectionProps) {
                 <label className="text-xs text-muted-foreground block mb-1.5">
                   {formTriggerType === "line_cross"
                     ? "Draw tripwire. Click two points on the feed."
+                    : formTriggerType === "wrong_way"
+                    ? "Draw the lane line. Click two points across the lane."
                     : "Draw loiter zone. Click at least three points."}
                 </label>
                 <GeometryEditor
                   camera={cam}
-                  mode={formTriggerType === "line_cross" ? "line" : "polygon"}
+                  mode={formTriggerType === "line_cross" || formTriggerType === "wrong_way" ? "line" : "polygon"}
                   points={formTriggerGeomPoints}
                   onChange={setFormTriggerGeomPoints}
                 />
@@ -624,6 +755,33 @@ export function TriggerSection(props: TriggerSectionProps) {
                   >{d.l}</button>
                 ))}
               </div>
+            </div>
+          )}
+          {formTriggerType === "wrong_way" && (
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Allowed direction of travel</label>
+              <div className="grid grid-cols-2 gap-1">
+                {[
+                  { v: "in", l: "This way is OK" },
+                  { v: "out", l: "That way is OK" },
+                ].map((d) => (
+                  <button
+                    key={d.v}
+                    type="button"
+                    onClick={() => setFormTriggerAllowedDirection(d.v as "in" | "out")}
+                    className={`px-2 py-2 text-xs rounded border transition-colors ${
+                      formTriggerAllowedDirection === d.v
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-border hover:bg-muted"
+                    }`}
+                  >{d.l}</button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1.5">
+                Pick the legal direction across the line. The rule fires on a
+                vehicle crossing the OTHER way. Use &quot;Run test&quot; below to
+                confirm the side after drawing.
+              </p>
             </div>
           )}
         </div>

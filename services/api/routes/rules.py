@@ -298,6 +298,68 @@ def _synthesize_observation_for_trigger(
             obs["duration_seconds"] = float(trigger_pattern.get("min_duration_seconds") or 60) + 1
             obs["summary"] = "Synthesized incident recap for testing."
 
+    elif t == "plate_list":
+        mode = (trigger_pattern.get("mode") or "blacklist").lower()
+        plates = trigger_pattern.get("plates") or []
+        # Blacklist: synthesize a listed plate. Whitelist: an unlisted one.
+        if mode == "blacklist":
+            plate = (plates[0] if plates else "ABC123")
+        else:
+            plate = "NOTLISTED9"
+        obs["vehicle_detections"] = {
+            "vehicles": [{"bbox": [10, 10, 60, 50], "label": "car",
+                          "confidence": 0.9, "plate_text": plate,
+                          "zones": []}],
+            "count": 1,
+        }
+
+    elif t == "parking_violation":
+        spot = trigger_pattern.get("spot_zone") or "Reserved spot"
+        obs["vehicle_detections"] = {
+            "vehicles": [{"bbox": [10, 10, 60, 50], "label": "car",
+                          "confidence": 0.9, "plate_text": "INTRUDER1",
+                          "zones": [spot]}],
+            "count": 1,
+        }
+        obs["tracks"] = [{"track_id": 1, "label": "car",
+                          "bbox": [10, 10, 60, 50], "prev_bbox": [10, 10, 60, 50],
+                          "state": "stationary"}]
+
+    elif t == "wrong_way":
+        import math as _math
+        pts = trigger_pattern.get("points")
+        label = trigger_pattern.get("label") or "car"
+        allowed = trigger_pattern.get("allowed_direction", "in")
+        pcam = trigger_pattern.get("camera_id") or cam
+        obs["camera_id"] = str(pcam)
+        if pts and len(pts) == 2:
+            a, b = pts[0], pts[1]
+            mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            nlen = _math.hypot(dx, dy) or 1.0
+            nx, ny = -dy / nlen, dx / nlen
+            k = 25.0
+            p1 = (mx - nx * k, my - ny * k)
+            p2 = (mx + nx * k, my + ny * k)
+
+            def _side(pt):
+                return dx * (pt[1] - a[1]) - dy * (pt[0] - a[0])
+
+            dir12 = "in" if _side(p2) > _side(p1) else "out"
+            # Orient the synthetic crossing AGAINST the allowed direction so
+            # the tester confirms a wrong-way fire.
+            prev_c, cur_c = (p2, p1) if dir12 == allowed else (p1, p2)
+        else:
+            prev_c, cur_c = (100, 100), (100, 60)
+
+        def _box(c):
+            return [int(c[0] - 10), int(c[1] - 20), int(c[0] + 10), int(c[1] + 20)]
+
+        obs["tracks"] = [{
+            "track_id": 1, "label": label,
+            "bbox": _box(cur_c), "prev_bbox": _box(prev_c), "state": "moving",
+        }]
+
     elif t == "any":
         pass
 

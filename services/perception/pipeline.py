@@ -909,6 +909,12 @@ class PerceptionPipeline:
         # Named-area membership (bottom-center anchored) and veto state for
         # the rule engine. Purely logical: nothing is masked or dropped.
         annotate_detection_zones(detections, cam.motion_zones if cam else None)
+        # Vehicles get the same zone stamping so traffic rules (parking-spot
+        # reservation, lane occupancy) can ask which named area a car sits in.
+        if vehicle_detections and isinstance(vehicle_detections.get("vehicles"), list):
+            annotate_detection_zones(
+                vehicle_detections["vehicles"], cam.motion_zones if cam else None
+            )
         veto_zone = veto_zone_triggered(detections, cam.motion_zones if cam else None)
 
         # Step 7. Evaluate rules against this observation
