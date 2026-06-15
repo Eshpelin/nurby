@@ -31,6 +31,12 @@ const COCO_EDGES: [number, number][] = [
   [11, 13], [13, 15], [12, 14], [14, 16],
 ];
 
+// Hard cap on how long the shimmer may run without any further WS event.
+// The backend now emits an explicit "failed" status on error/timeout, but
+// if that message is ever lost the shimmer must still self-clear so the
+// tile never looks "stuck analyzing" during a demo.
+const ANALYZING_MAX_MS = 20_000;
+
 export function AnalyzingShimmer({ cameraId }: { cameraId: string }) {
   // A slow light sweep over the video while a VLM call for this camera is
   // queued or running, so "the AI is looking at this right now" is visible
@@ -42,15 +48,18 @@ export function AnalyzingShimmer({ cameraId }: { cameraId: string }) {
     (data) => {
       const status = (data as { vlm?: { status?: string } }).vlm?.status;
       const busy = status === "queued" || status === "processing" || status === "refining";
+      // Any terminal status (idle / slow / stalled / failed) clears the
+      // sweep. "failed" in particular must not leave it spinning.
       setActive(busy);
       if (timerRef.current) clearTimeout(timerRef.current);
       if (busy) {
-        // Safety: never shimmer forever if the idle message is lost.
-        timerRef.current = setTimeout(() => setActive(false), 60_000);
+        // Safety: never shimmer forever if the terminal message is lost.
+        timerRef.current = setTimeout(() => setActive(false), ANALYZING_MAX_MS);
       }
     },
     cameraId
   );
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
   if (!active) return null;
   return (
     <div className="absolute inset-0 z-[4] pointer-events-none overflow-hidden rounded-[inherit]">

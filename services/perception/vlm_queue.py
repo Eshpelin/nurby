@@ -32,6 +32,15 @@ from shared.models import Observation, Provider
 
 THUMBNAIL_DIR = os.path.join(settings.thumbnails_path, "observations")
 
+# Hard ceiling on a single VLM describe() call from the worker's point of
+# view. The HTTP client already has its own per-request timeouts (30s/60s)
+# plus retries, so this only fires when those somehow fail to return. It
+# guarantees the per-camera worker can never block forever on one frame,
+# which is what would otherwise leave the dashboard "Analyzing" shimmer
+# stuck. Kept above the provider retry budget so it never pre-empts a
+# legitimately slow call.
+VLM_CALL_TIMEOUT_SECONDS = float(os.getenv("NURBY_VLM_CALL_TIMEOUT", "120"))
+
 
 def _write_vlm_thumbnail(
     camera_id: str,
@@ -147,7 +156,8 @@ class CameraVLMStats:
     total_gated: int = 0           # frames dropped by CLIP "boring" gate
     last_call_at: float = 0.0      # monotonic timestamp
     last_result_at: float = 0.0    # monotonic timestamp
-    status: str = "idle"           # idle, processing, slow, stalled
+    status: str = "idle"           # idle, queued, processing, refining, slow, stalled, failed
+    last_reason: str = ""          # short human reason when status == "failed"
     # Backlog telemetry, populated by the worker each loop iteration.
     backlog_high: int = 0
     backlog_normal: int = 0
@@ -163,9 +173,11 @@ class CameraVLMStats:
         else:
             self.avg_latency = 0.3 * duration + 0.7 * self.avg_latency
 
-    def record_error(self):
+    def record_error(self, reason: str = ""):
         self.total_errors += 1
         self.last_result_at = time.monotonic()
+        self.status = "failed"
+        self.last_reason = reason
 
     def record_drop(self):
         self.total_dropped += 1
@@ -184,7 +196,10 @@ class CameraVLMStats:
 
     def update_status(self):
         now = time.monotonic()
-        if self.status == "idle":
+        # "failed" is an explicit one-shot signal set by the worker. Never
+        # let the latency heuristics below overwrite it before the frontend
+        # has seen it.
+        if self.status in ("idle", "failed"):
             return
         # Stalled if no result in 5 minutes while processing
         if self.last_call_at > 0 and (now - self.last_call_at) > 300:
@@ -209,6 +224,8 @@ class CameraVLMStats:
                 "eta_seconds": self.eta_seconds,
             },
             "status": self.status,
+            # Short, demo-safe reason. Only meaningful when status == "failed".
+            "reason": self.last_reason if self.status == "failed" else "",
         }
 
 
@@ -488,16 +505,24 @@ class VLMQueue:
             await self._broadcast_status(camera_id)
 
             start = time.monotonic()
+            # Tracks whether this job produced a usable description. When it
+            # didn't (timeout, provider error, or empty reply) we emit an
+            # explicit "failed" status so the dashboard can show "couldn't
+            # analyze" instead of silently dropping back to idle.
+            failed_reason: str | None = None
             try:
-                description = await self._vlm.describe(
-                    job.frame,
-                    job.detections,
-                    job.provider,
-                    system_prompt=job.system_prompt,
-                    max_tokens=job.max_tokens,
-                    heard_text=job.heard_text,
-                    extra_context=job.extra_context,
-                    max_input_tokens=job.max_input_tokens,
+                description = await asyncio.wait_for(
+                    self._vlm.describe(
+                        job.frame,
+                        job.detections,
+                        job.provider,
+                        system_prompt=job.system_prompt,
+                        max_tokens=job.max_tokens,
+                        heard_text=job.heard_text,
+                        extra_context=job.extra_context,
+                        max_input_tokens=job.max_input_tokens,
+                    ),
+                    timeout=VLM_CALL_TIMEOUT_SECONDS,
                 )
                 duration = time.monotonic() - start
                 stats.record_latency(duration)
@@ -548,14 +573,33 @@ class VLMQueue:
                             name=f"vlm-refiner-{camera_id[:8]}",
                         )
                 else:
+                    # describe() swallows provider errors and returns None,
+                    # so an empty reply is our main "the VLM failed" signal.
+                    failed_reason = "no description returned"
                     logger.warning("VLM returned empty for camera %s (%.1fs)", camera_id, duration)
 
+            except asyncio.TimeoutError:
+                duration = time.monotonic() - start
+                failed_reason = "analysis timed out"
+                logger.warning(
+                    "VLM call timed out for camera %s after %.0fs",
+                    camera_id, duration,
+                )
             except Exception:
                 duration = time.monotonic() - start
-                stats.record_error()
+                failed_reason = "analysis error"
                 logger.exception(
                     "VLM call failed for camera %s after %.1fs", camera_id, duration,
                 )
+
+            # Surface failures explicitly. record_error() flips status to
+            # "failed" and stashes the reason; we broadcast it right away so
+            # the affected tile shows "couldn't analyze" instead of the
+            # shimmer just vanishing. This is a one-shot signal: the latency
+            # block below resets status for the next frame.
+            if failed_reason is not None:
+                stats.record_error(failed_reason)
+                await self._broadcast_status(camera_id)
 
             # Refresh per-lane backlog counts for the tile.
             if self._backlog is not None:
@@ -565,7 +609,10 @@ class VLMQueue:
                 except Exception:
                     logger.debug("backlog size lookup failed", exc_info=True)
 
-            # Update status based on latency
+            # Update status for the next frame. Clearing last_reason here
+            # means the "failed" signal we just broadcast does not leak into
+            # the subsequent idle/processing/slow update.
+            stats.last_reason = ""
             if stats.avg_latency > 10:
                 stats.status = "slow"
             else:

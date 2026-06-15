@@ -729,18 +729,22 @@ function DashboardContent() {
     camera: string;
     severity: string;
     ts: number;
+    failed?: boolean;
   }[]>([]);
   useEffect(() => {
-    // Expire strip entries: VLM chips that never got an idle message after
-    // 90s, trigger chips after 5 minutes.
+    // Expire strip entries: in-flight VLM chips after 90s (never got an idle
+    // message), failed VLM chips after 8s (one-shot, non-alarming), trigger
+    // chips after 5 minutes.
     const t = setInterval(() => {
       const now = Date.now();
       setLiveTriggers((prev) =>
         prev.filter((e) =>
-          e.kind === "vlm" ? now - e.ts < 90_000 : now - e.ts < 300_000
+          e.kind === "vlm"
+            ? now - e.ts < (e.failed ? 8_000 : 90_000)
+            : now - e.ts < 300_000
         )
       );
-    }, 15_000);
+    }, 4_000);
     return () => clearInterval(t);
   }, []);
   const [wsConnected, setWsConnected] = useState(false);
@@ -792,8 +796,19 @@ function DashboardContent() {
           if (data.type === "vlm_status" && data.camera_id) {
             const status = data.vlm?.status;
             const active = status === "queued" || status === "processing" || status === "refining";
+            const failed = status === "failed";
             setLiveTriggers((prev) => {
               const others = prev.filter((t) => !(t.kind === "vlm" && t.id === data.camera_id));
+              if (failed) {
+                // Surface the failure briefly so it does not vanish silently.
+                const reason = (data.vlm?.reason as string) || "";
+                return [
+                  { kind: "vlm" as const, id: data.camera_id,
+                    label: reason ? `Couldn't analyze · ${reason}` : "Couldn't analyze",
+                    camera: "", severity: "warn", ts: Date.now(), failed: true },
+                  ...others,
+                ].slice(0, 8);
+              }
               if (!active) return others;
               return [
                 { kind: "vlm" as const, id: data.camera_id,
@@ -1969,12 +1984,26 @@ function DashboardContent() {
                 <button onClick={() => { setLiveEvents([]); setLiveTriggers([]); }} className="text-[10px] text-muted-foreground hover:text-foreground">clear</button>
               </div>
               {liveTriggers.filter((t) => t.kind === "vlm").slice(0, 2).map((t) => (
-                <div key={`vlm-${t.id}`} className="px-3 py-1.5 rounded-md border border-violet-500/30 bg-violet-500/5 text-xs flex items-center gap-2">
-                  <svg className="animate-spin h-3 w-3 text-violet-400 flex-shrink-0" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  <span className="text-violet-300">{t.label}</span>
+                <div key={`vlm-${t.id}`}
+                  className={`px-3 py-1.5 rounded-md border text-xs flex items-center gap-2 ${
+                    t.failed
+                      ? "border-rose-500/30 bg-rose-500/5"
+                      : "border-violet-500/30 bg-violet-500/5"
+                  }`}>
+                  {t.failed ? (
+                    <svg className="h-3 w-3 text-rose-400 flex-shrink-0" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                  ) : (
+                    <svg className="animate-spin h-3 w-3 text-violet-400 flex-shrink-0" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  )}
+                  <span className={t.failed ? "text-rose-300" : "text-violet-300"}>{t.label}</span>
                   <span className="ml-auto text-[10px] text-muted-foreground">
                     {cameras.find((c) => c.id === t.id)?.name || ""}
                   </span>
