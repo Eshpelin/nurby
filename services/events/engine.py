@@ -116,6 +116,13 @@ class RuleEngine:
         self._cache_ttl = 30  # reload rules every 30s
         # Per-(rule_id, track_id) entry timestamp for inline-geometry loiter rules.
         self._loiter_entry: dict[tuple[uuid.UUID, int], float] = {}
+        # Fire-once-per-visit dedup state. Maps rule_id ->
+        # {(camera_id, track_id): epoch} of subjects this rule has already
+        # alerted on while they remain on camera. A track leaving (no longer
+        # present this frame) ends its visit and is pruned, so the same id
+        # or a new subject alerts fresh next time. Keyed by camera too so a
+        # cross-camera rule does not confuse per-camera track ids.
+        self._visit_fired: dict[uuid.UUID, dict[tuple, float]] = {}
         # Multi-frame persistence state for min_frames triggers. Maps
         # (rule_id, track_key) -> (first_seen_epoch, hit_count). A rule with
         # min_frames=3 only fires once the same tracked object has matched
@@ -164,12 +171,29 @@ class RuleEngine:
                 if last_fired and (now - last_fired) < rule.cooldown_seconds:
                     continue
 
+            # Prune visit-dedup state every frame (even when the trigger
+            # will not match) so a subject leaving the camera ends its visit.
+            fire_once_per_visit = (rule.trigger_pattern or {}).get("fire_once_per") == "visit"
+            if fire_once_per_visit:
+                self._prune_visit_state(rule.id, observation_data)
+
             # Match trigger
             if not self._match_trigger(rule.trigger_pattern, observation_data, rule.id):
                 continue
 
             # Check conditions
             if rule.conditions and not self._check_conditions(rule.conditions, observation_data, tz):
+                continue
+
+            # Fire-once-per-visit dedup. A rule with fire_once_per="visit"
+            # alerts once per continuous presence of a subject, not on every
+            # keyframe, so "person on the porch" fires once no matter how
+            # long they linger. Pruning runs every frame (above, before the
+            # trigger match) so a subject leaving ends its visit even though
+            # the trigger then stops matching.
+            if fire_once_per_visit and self._visit_already_fired(
+                rule.id, observation_data
+            ):
                 continue
 
             # Rule matched. Fire actions.
@@ -710,6 +734,46 @@ class RuleEngine:
             return True
 
         return False
+
+    @staticmethod
+    def _present_visit_keys(data: dict) -> set:
+        cam = data.get("camera_id")
+        return {
+            (cam, t.get("track_id"))
+            for t in (data.get("tracks") or [])
+            if t.get("track_id") is not None
+        }
+
+    def _prune_visit_state(self, rule_id, data: dict) -> None:
+        """Drop dedup entries for subjects no longer on this camera, so a
+        track leaving ends its visit. Only touches the current camera's
+        keys, leaving other cameras' visits intact for cross-camera rules."""
+        fired = self._visit_fired.get(rule_id)
+        if not fired:
+            return
+        cam = data.get("camera_id")
+        present = self._present_visit_keys(data)
+        for key in list(fired):
+            if key[0] == cam and key not in present:
+                del fired[key]
+
+    def _visit_already_fired(self, rule_id, data: dict) -> bool:
+        """True when this rule has already alerted for every subject
+        currently on camera (the visit continues, so do not re-fire). A new
+        subject in frame returns False and is recorded. Falls back to "not
+        deduped" when there are no tracks to key on (e.g. audio triggers),
+        where cooldown is the right tool instead."""
+        present = self._present_visit_keys(data)
+        if not present:
+            return False
+        fired = self._visit_fired.setdefault(rule_id, {})
+        fresh = present - set(fired)
+        if fresh:
+            now = time.time()
+            for key in present:
+                fired[key] = now
+            return False
+        return True
 
     @staticmethod
     def _filter_detection_geometry(detections: list, pattern: dict, data: dict) -> list:

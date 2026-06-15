@@ -40,6 +40,7 @@ export interface RuleFormState {
   formTriggerRequireStationary: boolean;
   formTriggerAllowedDirection: "in" | "out";
   formTriggerRequirePlate: boolean;
+  formFireOncePerVisit: boolean;
 
   // Conditions group
   formCondCameras: string[];
@@ -87,6 +88,7 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
   formTriggerRequireStationary: true,
   formTriggerAllowedDirection: "in",
   formTriggerRequirePlate: true,
+  formFireOncePerVisit: false,
 
   formCondCameras: [],
   formScheduleMode: "always",
@@ -128,6 +130,7 @@ const TRIGGER_FIELDS_TO_RESET: (keyof RuleFormState)[] = [
   "formTriggerRequireStationary",
   "formTriggerAllowedDirection",
   "formTriggerRequirePlate",
+  "formFireOncePerVisit",
 ];
 
 export type RuleFormAction =
@@ -199,6 +202,7 @@ export function hydrateFromRule(rule: Rule): RuleFormState {
   base.formTriggerRequireStationary = tp.require_stationary !== false;
   base.formTriggerAllowedDirection = (tp.allowed_direction as "in" | "out") === "out" ? "out" : "in";
   base.formTriggerRequirePlate = tp.require_plate !== false;
+  base.formFireOncePerVisit = tp.fire_once_per === "visit";
   const ms = tp.min_score as number | undefined;
   if (ms != null) {
     if (ms <= 0.02) base.formTriggerSensitivity = "very_high";

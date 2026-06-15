@@ -302,6 +302,7 @@ export function RuleBuilder({
       trigger_pattern.allowed_direction = s.formTriggerAllowedDirection;
       if (s.formTriggerObjectClass) trigger_pattern.label = s.formTriggerObjectClass;
     }
+    if (s.formFireOncePerVisit) trigger_pattern.fire_once_per = "visit";
 
     const conditions: Record<string, unknown> = {};
     if (s.formCondCameras.length > 0) conditions.camera_ids = s.formCondCameras;
@@ -614,6 +615,22 @@ export function RuleBuilder({
                 This rule will fire on every keyframe. Consider raising the cooldown.
               </div>
             )}
+            <label className="mt-3 flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={state.formFireOncePerVisit}
+                onChange={(e) =>
+                  dispatch({ type: "setField", field: "formFireOncePerVisit", value: e.target.checked })
+                }
+              />
+              <span>
+                <span className="text-foreground">Fire once per visit</span> — alert once
+                while a subject stays on camera, not every frame. A person who lingers on
+                the porch triggers one alert; a new arrival triggers a fresh one. Works
+                alongside the cooldown above.
+              </span>
+            </label>
           </div>
         </div>
 
