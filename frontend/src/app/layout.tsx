@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { AuthShell } from "@/components/auth-shell";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -36,6 +37,25 @@ export default function RootLayout({
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {/* Google Analytics (GA4). Loaded once at the root so it covers every
+            route. Guarded to production so localhost dev traffic does not
+            pollute the real property. */}
+        {process.env.NODE_ENV === "production" && (
+          <>
+            <Script
+              src="https://www.googletagmanager.com/gtag/js?id=G-GQXBVMRY6Z"
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', 'G-GQXBVMRY6Z');
+              `}
+            </Script>
+          </>
+        )}
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>
