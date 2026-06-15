@@ -172,6 +172,51 @@ async def delete_rule(rule_id: uuid.UUID, _current_user: User = Depends(require_
 # update both _synthesize_observation_for_trigger and the engine in
 # lockstep.
 
+def _window_midpoint(after: str | None, before: str | None) -> tuple[int, int] | None:
+    """Midpoint (hour, minute) of an HH:MM window, for placing a test
+    timestamp inside a red-light window. None when no window is set."""
+    def _mins(s):
+        try:
+            h, m = s.split(":")
+            return int(h) * 60 + int(m)
+        except (ValueError, AttributeError):
+            return None
+
+    a = _mins(after) if after else None
+    b = _mins(before) if before else None
+    if a is None and b is None:
+        return None
+    if a is None:
+        mid = b // 2
+    elif b is None:
+        mid = (a + 24 * 60) // 2 % (24 * 60)
+    elif a <= b:
+        mid = (a + b) // 2
+    else:  # overnight window wraps midnight
+        mid = (a + (b + 24 * 60)) // 2 % (24 * 60)
+    return (mid // 60, mid % 60)
+
+
+def _straddle_boxes(a, b):
+    """Two bboxes whose centroids sit on opposite sides of segment a-b, so
+    a track moving prev->cur crosses the line. Used to synthesize tripwire
+    / speed-gate crossings for the rule tester."""
+    import math as _math
+
+    mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    nlen = _math.hypot(dx, dy) or 1.0
+    nx, ny = -dy / nlen, dx / nlen
+    k = 25.0
+    p1 = (mx - nx * k, my - ny * k)
+    p2 = (mx + nx * k, my + ny * k)
+
+    def _box(c):
+        return [int(c[0] - 10), int(c[1] - 20), int(c[0] + 10), int(c[1] + 20)]
+
+    return _box(p1), _box(p2)
+
+
 def _synthesize_observation_for_trigger(
     trigger_pattern: dict,
     camera_id: uuid.UUID | None,
@@ -360,6 +405,39 @@ def _synthesize_observation_for_trigger(
             "bbox": _box(cur_c), "prev_bbox": _box(prev_c), "state": "moving",
         }]
 
+    elif t == "red_light_cross":
+        pts = trigger_pattern.get("points")
+        label = trigger_pattern.get("label") or "car"
+        pcam = trigger_pattern.get("camera_id") or cam
+        obs["camera_id"] = str(pcam)
+        if pts and len(pts) == 2:
+            prev_box, cur_box = _straddle_boxes(pts[0], pts[1])
+        else:
+            prev_box, cur_box = [90, 90, 110, 130], [90, 50, 110, 90]
+        obs["tracks"] = [{
+            "track_id": 1, "label": label,
+            "bbox": cur_box, "prev_bbox": prev_box, "state": "moving",
+        }]
+        # The endpoint stamps a timestamp inside the red window so the
+        # window check passes; geometry here just crosses the line.
+
+    elif t == "speed_over":
+        # A single gate-A crossing frame. The /test endpoint builds the
+        # paired gate-B frame at a later timestamp so the engine can time
+        # the traversal; a single observation cannot measure speed.
+        la = trigger_pattern.get("line_a")
+        label = trigger_pattern.get("label") or "car"
+        pcam = trigger_pattern.get("camera_id") or cam
+        obs["camera_id"] = str(pcam)
+        if la and len(la) == 2:
+            prev_box, cur_box = _straddle_boxes(la[0], la[1])
+        else:
+            prev_box, cur_box = [90, 90, 110, 130], [90, 50, 110, 90]
+        obs["tracks"] = [{
+            "track_id": 1, "label": label,
+            "bbox": cur_box, "prev_bbox": prev_box, "state": "moving",
+        }]
+
     elif t == "any":
         pass
 
@@ -524,13 +602,60 @@ async def test_rule(
     engine = RuleEngine()
     tz = await engine._resolve_timezone()
 
-    # Persistence-aware dry run: a min_frames=N rule needs the same object
-    # to match on N keyframes, so feed the synthesized observation through
-    # N times (the fresh engine instance keeps the streak state in-memory).
-    eval_rounds = max(1, int(body.trigger_pattern.get("min_frames") or 1))
-    matched_trigger = False
-    for _ in range(eval_rounds):
-        matched_trigger = engine._match_trigger(body.trigger_pattern, observation, fake_rule.id)
+    ttype = body.trigger_pattern.get("type")
+    if ttype == "speed_over":
+        # Speed needs two crossings over time. Feed a gate-A frame then a
+        # gate-B frame spaced so the measured speed clearly beats the
+        # threshold, through the same engine instance.
+        la = body.trigger_pattern.get("line_a")
+        lb = body.trigger_pattern.get("line_b")
+        dist = float(body.trigger_pattern.get("distance_m") or 10)
+        min_kmh = float(body.trigger_pattern.get("min_speed_kmh") or 30)
+        label = body.trigger_pattern.get("label") or "car"
+        camv = str(body.camera_id) if body.camera_id else "test-camera"
+        matched_trigger = False
+        if la and len(la) == 2 and lb and len(lb) == 2:
+            target_kmh = max(min_kmh * 2, min_kmh + 10)
+            dt = dist / (target_kmh / 3.6)  # seconds to clear the gates
+            t0 = datetime.now(timezone.utc)
+            a_prev, a_cur = _straddle_boxes(la[0], la[1])
+            b_prev, b_cur = _straddle_boxes(lb[0], lb[1])
+            for stamp, prev_box, cur_box in (
+                (t0, a_prev, a_cur),
+                (t0 + timedelta(seconds=dt), b_prev, b_cur),
+            ):
+                frame = {
+                    "camera_id": camv,
+                    "timestamp": stamp.isoformat(),
+                    "tracks": [{"track_id": 1, "label": label,
+                                "bbox": cur_box, "prev_bbox": prev_box,
+                                "state": "moving"}],
+                }
+                matched_trigger = engine._match_trigger(
+                    body.trigger_pattern, frame, fake_rule.id, tz
+                )
+                observation = frame
+    else:
+        if ttype == "red_light_cross":
+            # Stamp a timestamp inside the configured red window so the
+            # window check passes during the test.
+            ra = body.trigger_pattern.get("red_after")
+            rb = body.trigger_pattern.get("red_before")
+            mid = _window_midpoint(ra, rb)
+            if mid is not None:
+                ref = datetime.now(tz).replace(
+                    hour=mid[0], minute=mid[1], second=0, microsecond=0
+                )
+                observation["timestamp"] = ref.astimezone(timezone.utc).isoformat()
+        # Persistence-aware dry run: a min_frames=N rule needs the same
+        # object to match on N keyframes, so feed the synthesized
+        # observation through N times (the engine keeps the streak in-memory).
+        eval_rounds = max(1, int(body.trigger_pattern.get("min_frames") or 1))
+        matched_trigger = False
+        for _ in range(eval_rounds):
+            matched_trigger = engine._match_trigger(
+                body.trigger_pattern, observation, fake_rule.id, tz
+            )
     matched_conditions = engine._check_conditions(body.conditions or {}, observation, tz)
     schedule_blocked = matched_trigger and not matched_conditions
     matched = matched_trigger and matched_conditions

@@ -52,6 +52,29 @@ def _centroid(b):
     return ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0)
 
 
+def _parse_epoch(ts) -> float | None:
+    """ISO-8601 timestamp string -> epoch seconds, or None."""
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(str(ts)).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def _within_window(ref: datetime, after: str | None, before: str | None) -> bool:
+    """Is ref's local HH:MM inside [after, before]? Overnight windows
+    (after > before) wrap midnight. Mirrors the schedule-condition logic."""
+    now_t = ref.strftime("%H:%M")
+    if after and before and after > before:
+        return now_t >= after or now_t <= before
+    if after and now_t < after:
+        return False
+    if before and now_t > before:
+        return False
+    return True
+
+
 def _norm_plate(s) -> str:
     """Uppercase, strip whitespace and punctuation. Mirrors the perception
     plate normalizer so list matching is forgiving of spacing/casing."""
@@ -116,6 +139,11 @@ class RuleEngine:
         self._cache_ttl = 30  # reload rules every 30s
         # Per-(rule_id, track_id) entry timestamp for inline-geometry loiter rules.
         self._loiter_entry: dict[tuple[uuid.UUID, int], float] = {}
+        # Speed-gate state for speed_over triggers. Maps rule_id ->
+        # {(camera_id, track_id): (gate_label, frame_epoch)} recording which
+        # gate line a vehicle crossed first and when, so the second crossing
+        # yields elapsed time -> average speed over the known gate distance.
+        self._speed_gate: dict[uuid.UUID, dict[tuple, tuple]] = {}
         # Fire-once-per-visit dedup state. Maps rule_id ->
         # {(camera_id, track_id): epoch} of subjects this rule has already
         # alerted on while they remain on camera. A track leaving (no longer
@@ -178,7 +206,7 @@ class RuleEngine:
                 self._prune_visit_state(rule.id, observation_data)
 
             # Match trigger
-            if not self._match_trigger(rule.trigger_pattern, observation_data, rule.id):
+            if not self._match_trigger(rule.trigger_pattern, observation_data, rule.id, tz):
                 continue
 
             # Check conditions
@@ -370,7 +398,7 @@ class RuleEngine:
         except Exception:
             logger.warning("cooldown redis SET failed for rule %s; degraded mode", rule_id)
 
-    def _match_trigger(self, pattern: dict, data: dict, rule_id: uuid.UUID | None = None) -> bool:
+    def _match_trigger(self, pattern: dict, data: dict, rule_id: uuid.UUID | None = None, tz=None) -> bool:
         """Check if observation data matches trigger pattern."""
         trigger_type = pattern.get("type")
 
@@ -728,6 +756,90 @@ class RuleEngine:
                     continue
                 if _cross_direction(prev_c, cur_c, a, b) != allowed:
                     return True
+            return False
+
+        elif trigger_type == "speed_over":
+            # Average speed between two user-drawn gate lines a known real
+            # distance apart. We time the vehicle from its first gate
+            # crossing to the other gate, then speed = distance / elapsed.
+            # No homography: accuracy is roughly +/-10-20%, fine for "someone
+            # is speeding down my street", not for citations.
+            la = pattern.get("line_a")
+            lb = pattern.get("line_b")
+            dist_m = pattern.get("distance_m")
+            if not (la and len(la) == 2 and lb and len(lb) == 2 and dist_m):
+                return False
+            min_kmh = float(pattern.get("min_speed_kmh") or 0)
+            want_label = pattern.get("label")
+            t_now = _parse_epoch(data.get("timestamp"))
+            if t_now is None:
+                return False
+            cam = data.get("camera_id")
+            state = self._speed_gate.setdefault(rule_id, {})
+            for tr in data.get("tracks") or []:
+                if want_label and tr.get("label") != want_label:
+                    continue
+                prev = tr.get("prev_bbox")
+                if not prev:
+                    continue
+                prev_c = _centroid(prev)
+                cur_c = _centroid(tr["bbox"])
+                crossed = (
+                    "a" if _segments_cross(prev_c, cur_c, la[0], la[1])
+                    else "b" if _segments_cross(prev_c, cur_c, lb[0], lb[1])
+                    else None
+                )
+                if crossed is None:
+                    continue
+                key = (cam, tr.get("track_id"))
+                prior = state.get(key)
+                if prior and prior[0] != crossed:
+                    elapsed = t_now - prior[1]
+                    del state[key]
+                    if elapsed > 0:
+                        kmh = (float(dist_m) / elapsed) * 3.6
+                        if kmh >= min_kmh:
+                            data["_measured_speed_kmh"] = round(kmh, 1)
+                            return True
+                else:
+                    state[key] = (crossed, t_now)
+            return False
+
+        elif trigger_type == "red_light_cross":
+            # A vehicle crossing a line during a configured red-light window
+            # (local time-of-day). The crossing detection is the tripwire
+            # math; the window is checked against the household timezone.
+            pts = pattern.get("points")
+            if not (pts and len(pts) == 2):
+                return False
+            red_after = pattern.get("red_after")
+            red_before = pattern.get("red_before")
+            if red_after or red_before:
+                zone = tz or timezone.utc
+                t_now = _parse_epoch(data.get("timestamp"))
+                ref = (
+                    datetime.fromtimestamp(t_now, zone)
+                    if t_now is not None
+                    else datetime.now(zone)
+                )
+                if not _within_window(ref, red_after, red_before):
+                    return False
+            want_dir = pattern.get("direction", "any")
+            want_label = pattern.get("label")
+            a, b = pts[0], pts[1]
+            for tr in data.get("tracks") or []:
+                if want_label and tr.get("label") != want_label:
+                    continue
+                prev = tr.get("prev_bbox")
+                if not prev:
+                    continue
+                prev_c = _centroid(prev)
+                cur_c = _centroid(tr["bbox"])
+                if not _segments_cross(prev_c, cur_c, a, b):
+                    continue
+                if want_dir != "any" and _cross_direction(prev_c, cur_c, a, b) != want_dir:
+                    continue
+                return True
             return False
 
         elif trigger_type == "any":

@@ -190,6 +190,8 @@ export const TRIGGER_TYPES: TriggerType[] = [
   { value: "plate_list",      label: "Plate list",      icon: Icon.car,       desc: "Allow-list (alert on strangers) or block-list (alert on banned plates). Garage access control.", accent: "amber", group: "traffic" },
   { value: "parking_violation", label: "Parking spot",   icon: Icon.parking,   desc: "Reserve a spot for your plate. Alarm when anyone else parks there.", accent: "amber", group: "traffic" },
   { value: "wrong_way",       label: "Wrong way",       icon: Icon.reverse,   desc: "A vehicle drives against the allowed direction over a lane line.", accent: "rose", group: "traffic" },
+  { value: "speed_over",      label: "Speeding",        icon: Icon.car,       desc: "Time a vehicle between two gate lines a known distance apart. Approximate, not for citations.", accent: "rose", group: "traffic" },
+  { value: "red_light_cross", label: "Crossed on red",  icon: Icon.tripwire,  desc: "A vehicle crosses a line during a red-light time window.", accent: "rose", group: "traffic" },
   { value: "any",             label: "Any observation", icon: Icon.spark,     desc: "Fire on every processed keyframe.",               accent: "slate",  group: "any" },
 ];
 
@@ -413,6 +415,17 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
   if (t === "wrong_way") {
     const who = (pattern.label as string) || "a vehicle";
     return `When ${who} drives the wrong way over the lane line`;
+  }
+  if (t === "speed_over") {
+    const min = pattern.min_speed_kmh as number | undefined;
+    const who = (pattern.label as string) || "a vehicle";
+    return min ? `When ${who} crosses the gates over ${min} km/h` : `When ${who} crosses the speed gates`;
+  }
+  if (t === "red_light_cross") {
+    const ra = pattern.red_after as string | undefined;
+    const rb = pattern.red_before as string | undefined;
+    const win = ra && rb ? ` between ${ra} and ${rb}` : "";
+    return `When a vehicle crosses the line during the red window${win}`;
   }
   if (t === "face_detected") return "When any face detected";
   if (t === "face_recognized") {

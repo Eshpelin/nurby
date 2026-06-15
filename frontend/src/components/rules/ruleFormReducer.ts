@@ -41,6 +41,11 @@ export interface RuleFormState {
   formTriggerAllowedDirection: "in" | "out";
   formTriggerRequirePlate: boolean;
   formFireOncePerVisit: boolean;
+  formTriggerGeomPointsB: number[][];
+  formTriggerDistanceM: string;
+  formTriggerMinSpeedKmh: string;
+  formTriggerRedAfter: string;
+  formTriggerRedBefore: string;
 
   // Conditions group
   formCondCameras: string[];
@@ -89,6 +94,11 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
   formTriggerAllowedDirection: "in",
   formTriggerRequirePlate: true,
   formFireOncePerVisit: false,
+  formTriggerGeomPointsB: [],
+  formTriggerDistanceM: "10",
+  formTriggerMinSpeedKmh: "30",
+  formTriggerRedAfter: "",
+  formTriggerRedBefore: "",
 
   formCondCameras: [],
   formScheduleMode: "always",
@@ -131,6 +141,11 @@ const TRIGGER_FIELDS_TO_RESET: (keyof RuleFormState)[] = [
   "formTriggerAllowedDirection",
   "formTriggerRequirePlate",
   "formFireOncePerVisit",
+  "formTriggerGeomPointsB",
+  "formTriggerDistanceM",
+  "formTriggerMinSpeedKmh",
+  "formTriggerRedAfter",
+  "formTriggerRedBefore",
 ];
 
 export type RuleFormAction =
@@ -203,6 +218,12 @@ export function hydrateFromRule(rule: Rule): RuleFormState {
   base.formTriggerAllowedDirection = (tp.allowed_direction as "in" | "out") === "out" ? "out" : "in";
   base.formTriggerRequirePlate = tp.require_plate !== false;
   base.formFireOncePerVisit = tp.fire_once_per === "visit";
+  base.formTriggerGeomPointsB = Array.isArray(tp.line_b) ? (tp.line_b as number[][]) : [];
+  base.formTriggerDistanceM = tp.distance_m != null ? String(tp.distance_m) : "10";
+  base.formTriggerMinSpeedKmh = tp.min_speed_kmh != null ? String(tp.min_speed_kmh) : "30";
+  base.formTriggerRedAfter = (tp.red_after as string) || "";
+  base.formTriggerRedBefore = (tp.red_before as string) || "";
+  if (tp.type === "speed_over" && Array.isArray(tp.line_a)) base.formTriggerGeomPoints = tp.line_a as number[][];
   const ms = tp.min_score as number | undefined;
   if (ms != null) {
     if (ms <= 0.02) base.formTriggerSensitivity = "very_high";

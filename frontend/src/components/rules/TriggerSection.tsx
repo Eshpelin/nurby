@@ -67,6 +67,16 @@ export interface TriggerSectionProps {
   setFormTriggerAllowedDirection: (v: "in" | "out") => void;
   formTriggerRequirePlate: boolean;
   setFormTriggerRequirePlate: (v: boolean) => void;
+  formTriggerGeomPointsB: number[][];
+  setFormTriggerGeomPointsB: (v: number[][]) => void;
+  formTriggerDistanceM: string;
+  setFormTriggerDistanceM: (v: string) => void;
+  formTriggerMinSpeedKmh: string;
+  setFormTriggerMinSpeedKmh: (v: string) => void;
+  formTriggerRedAfter: string;
+  setFormTriggerRedAfter: (v: string) => void;
+  formTriggerRedBefore: string;
+  setFormTriggerRedBefore: (v: string) => void;
 }
 
 export function TriggerSection(props: TriggerSectionProps) {
@@ -124,6 +134,16 @@ export function TriggerSection(props: TriggerSectionProps) {
     setFormTriggerAllowedDirection,
     formTriggerRequirePlate,
     setFormTriggerRequirePlate,
+    formTriggerGeomPointsB,
+    setFormTriggerGeomPointsB,
+    formTriggerDistanceM,
+    setFormTriggerDistanceM,
+    formTriggerMinSpeedKmh,
+    setFormTriggerMinSpeedKmh,
+    formTriggerRedAfter,
+    setFormTriggerRedAfter,
+    formTriggerRedBefore,
+    setFormTriggerRedBefore,
   } = props;
 
   return (
@@ -632,7 +652,7 @@ export function TriggerSection(props: TriggerSectionProps) {
         </div>
       )}
 
-      {(formTriggerType === "loitering" || formTriggerType === "line_cross" || formTriggerType === "wrong_way") && (
+      {(formTriggerType === "loitering" || formTriggerType === "line_cross" || formTriggerType === "wrong_way" || formTriggerType === "red_light_cross") && (
         <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground block mb-1.5">Pick a camera</label>
@@ -681,11 +701,13 @@ export function TriggerSection(props: TriggerSectionProps) {
                     ? "Draw tripwire. Click two points on the feed."
                     : formTriggerType === "wrong_way"
                     ? "Draw the lane line. Click two points across the lane."
+                    : formTriggerType === "red_light_cross"
+                    ? "Draw the stop line. Click two points across the lane."
                     : "Draw loiter zone. Click at least three points."}
                 </label>
                 <GeometryEditor
                   camera={cam}
-                  mode={formTriggerType === "line_cross" || formTriggerType === "wrong_way" ? "line" : "polygon"}
+                  mode={formTriggerType === "line_cross" || formTriggerType === "wrong_way" || formTriggerType === "red_light_cross" ? "line" : "polygon"}
                   points={formTriggerGeomPoints}
                   onChange={setFormTriggerGeomPoints}
                 />
@@ -784,6 +806,121 @@ export function TriggerSection(props: TriggerSectionProps) {
               </p>
             </div>
           )}
+
+          {formTriggerType === "red_light_cross" && (
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                Red-light window (local time)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="time"
+                  value={formTriggerRedAfter}
+                  onChange={(e) => setFormTriggerRedAfter(e.target.value)}
+                  className="px-2 py-1.5 rounded-md bg-background border border-border text-sm"
+                />
+                <span className="text-xs text-muted-foreground">to</span>
+                <input
+                  type="time"
+                  value={formTriggerRedBefore}
+                  onChange={(e) => setFormTriggerRedBefore(e.target.value)}
+                  className="px-2 py-1.5 rounded-md bg-background border border-border text-sm"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1.5">
+                Only crossings inside this window count. Leave both blank to
+                treat the light as always red. Overnight windows (e.g. 22:00
+                to 06:00) wrap midnight. Nurby cannot see the actual signal
+                yet, so you set the red hours.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {formTriggerType === "speed_over" && (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1.5">Pick a camera</label>
+            {cameras.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-2 py-3 rounded-md border border-dashed border-border">
+                No cameras yet. Add one on the Cameras page first.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {cameras.map((cam) => {
+                  const selected = formTriggerGeomCamId === cam.id;
+                  return (
+                    <button
+                      key={cam.id}
+                      type="button"
+                      onClick={() => {
+                        setFormTriggerGeomCamId(cam.id);
+                        setFormTriggerGeomPoints([]);
+                        setFormTriggerGeomPointsB([]);
+                      }}
+                      className={`flex items-center gap-2 rounded-md border p-2 text-left transition-colors ${
+                        selected
+                          ? "border-rose-500 bg-rose-500/10 ring-2 ring-rose-500/40"
+                          : "border-border bg-background hover:bg-muted/60"
+                      }`}
+                    >
+                      <span className="text-sm font-medium truncate">{cam.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          {formTriggerGeomCamId && (() => {
+            const cam = cameras.find((c) => c.id === formTriggerGeomCamId);
+            if (!cam) return null;
+            return (
+              <>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1.5">
+                    Gate 1. Click two points across the lane.
+                  </label>
+                  <GeometryEditor camera={cam} mode="line" points={formTriggerGeomPoints} onChange={setFormTriggerGeomPoints} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1.5">
+                    Gate 2. A second line further along the lane.
+                  </label>
+                  <GeometryEditor camera={cam} mode="line" points={formTriggerGeomPointsB} onChange={setFormTriggerGeomPointsB} />
+                </div>
+              </>
+            );
+          })()}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Real distance between gates (metres)</label>
+              <input
+                type="number"
+                min="1"
+                step="0.5"
+                value={formTriggerDistanceM}
+                onChange={(e) => setFormTriggerDistanceM(e.target.value)}
+                className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Alert above (km/h)</label>
+              <input
+                type="number"
+                min="1"
+                value={formTriggerMinSpeedKmh}
+                onChange={(e) => setFormTriggerMinSpeedKmh(e.target.value)}
+                className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-sm"
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Nurby times a vehicle between the two gates and divides by the
+            real distance you measured on the ground. This is approximate
+            (roughly within 10-20%), good for catching a speeder on your
+            street, not for legal citations.
+          </p>
         </div>
       )}
     </fieldset>

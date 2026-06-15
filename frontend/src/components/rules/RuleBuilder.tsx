@@ -303,6 +303,22 @@ export function RuleBuilder({
       if (s.formTriggerObjectClass) trigger_pattern.label = s.formTriggerObjectClass;
     }
     if (s.formFireOncePerVisit) trigger_pattern.fire_once_per = "visit";
+    if (s.formTriggerType === "speed_over") {
+      if (s.formTriggerGeomCamId) trigger_pattern.camera_id = s.formTriggerGeomCamId;
+      if (s.formTriggerGeomPoints.length === 2) trigger_pattern.line_a = s.formTriggerGeomPoints;
+      if (s.formTriggerGeomPointsB.length === 2) trigger_pattern.line_b = s.formTriggerGeomPointsB;
+      trigger_pattern.distance_m = parseFloat(s.formTriggerDistanceM) || 10;
+      trigger_pattern.min_speed_kmh = parseFloat(s.formTriggerMinSpeedKmh) || 30;
+      if (s.formTriggerObjectClass) trigger_pattern.label = s.formTriggerObjectClass;
+    }
+    if (s.formTriggerType === "red_light_cross") {
+      if (s.formTriggerGeomCamId) trigger_pattern.camera_id = s.formTriggerGeomCamId;
+      if (s.formTriggerGeomPoints.length === 2) trigger_pattern.points = s.formTriggerGeomPoints;
+      if (s.formTriggerLineDirection !== "any") trigger_pattern.direction = s.formTriggerLineDirection;
+      if (s.formTriggerRedAfter) trigger_pattern.red_after = s.formTriggerRedAfter;
+      if (s.formTriggerRedBefore) trigger_pattern.red_before = s.formTriggerRedBefore;
+      if (s.formTriggerObjectClass) trigger_pattern.label = s.formTriggerObjectClass;
+    }
 
     const conditions: Record<string, unknown> = {};
     if (s.formCondCameras.length > 0) conditions.camera_ids = s.formCondCameras;
@@ -522,6 +538,16 @@ export function RuleBuilder({
               setFormTriggerAllowedDirection={setterFor("formTriggerAllowedDirection")}
               formTriggerRequirePlate={state.formTriggerRequirePlate}
               setFormTriggerRequirePlate={setterFor("formTriggerRequirePlate")}
+              formTriggerGeomPointsB={state.formTriggerGeomPointsB}
+              setFormTriggerGeomPointsB={updaterFor("formTriggerGeomPointsB")}
+              formTriggerDistanceM={state.formTriggerDistanceM}
+              setFormTriggerDistanceM={setterFor("formTriggerDistanceM")}
+              formTriggerMinSpeedKmh={state.formTriggerMinSpeedKmh}
+              setFormTriggerMinSpeedKmh={setterFor("formTriggerMinSpeedKmh")}
+              formTriggerRedAfter={state.formTriggerRedAfter}
+              setFormTriggerRedAfter={setterFor("formTriggerRedAfter")}
+              formTriggerRedBefore={state.formTriggerRedBefore}
+              setFormTriggerRedBefore={setterFor("formTriggerRedBefore")}
               formTriggerGeomCamId={state.formTriggerGeomCamId}
               setFormTriggerGeomCamId={setterFor("formTriggerGeomCamId")}
               formTriggerGeomPoints={state.formTriggerGeomPoints}

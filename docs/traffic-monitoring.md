@@ -62,25 +62,27 @@ historical replay, compose with the existing condition/action chain (notify,
 email, Telegram, webhook, siren via ESP32, AI verify gate), and respect
 cooldowns and snooze.
 
-## Phase 2 — needs calibration (designed, not yet built)
+## Phase 2 — shipped (user calibration required)
 
 ### Speed estimation
 Pixel displacement alone is not speed; the camera has no sense of real-world
-distance. The honest, buildable approach is a **two-line speed gate**: the
+distance. Shipped as a **two-line speed gate** (`speed_over` trigger): the
 user draws two lines a known real distance apart and enters that distance.
 The engine times a tracked vehicle between the two crossings and computes
 average speed. Accuracy is roughly ±10–20% (camera angle, where the bbox
 anchor sits) — good enough for "someone is flooring it down my street," not
-for legal citations. Needs: per-track gate-crossing timing state in the
-engine (the engine already carries frame timestamps and per-track state), a
-`speed_over` trigger, and a calibration step in the camera UI.
+for legal citations.
+
+```json
+{ "type": "speed_over", "line_a": [[x,y],[x,y]], "line_b": [[x,y],[x,y]],
+  "distance_m": 10, "min_speed_kmh": 30, "label": "car" }
+```
 
 ### Red-light / signal running
-A camera cannot know a signal's state unless it sees the light. Phase 2a:
-gate a lane-crossing rule by a **manual red-window schedule** (you tell Nurby
-when the light is red). Phase 2b: detect the signal lamp's colour in a small
-user-drawn zone (HSV thresholding or a VLM check) and derive the state. The
-crossing detection itself already exists (tripwire/line-cross).
+Shipped as `red_light_cross`: a stop-line crossing gated by a manual
+red-window schedule (you set the red hours; overnight windows wrap
+midnight). Detecting the signal lamp's colour automatically (HSV in a
+user-drawn zone, or a VLM check) remains Phase 3.
 
 ## Phase 3 — research (new CV models)
 
