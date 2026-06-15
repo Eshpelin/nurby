@@ -443,6 +443,12 @@ class PerceptionPipeline:
             camera_id, motion_score,
         )
 
+        # Read traffic-signal colour from any "signal" zones BEFORE motion
+        # masking blacks out regions. Pure HSV sampling, no model; empty on
+        # cameras without signal zones so it costs nothing there.
+        from services.perception.traffic_signal import detect_signal_states
+        signal_states = detect_signal_states(frame, cam.motion_zones if cam else None)
+
         # Step 0. Apply motion zone masking before detection
         frame = self._apply_motion_zones(frame, cam)
 
@@ -941,6 +947,10 @@ class PerceptionPipeline:
             # conditions.ignore_veto).
             "veto_active": bool(veto_zone),
             "veto_zone": veto_zone,
+            # Detected traffic-light colour per signal zone, e.g.
+            # {"Signal North": "red"}. Drives red_light_cross with a
+            # signal_zone set. Empty when no signal zones are drawn.
+            "signal_states": signal_states,
             "person_detections": person_detections,
             "vehicle_detections": vehicle_detections,
             "loitering_events": loitering_events,

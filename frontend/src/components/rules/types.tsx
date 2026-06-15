@@ -191,7 +191,9 @@ export const TRIGGER_TYPES: TriggerType[] = [
   { value: "parking_violation", label: "Parking spot",   icon: Icon.parking,   desc: "Reserve a spot for your plate. Alarm when anyone else parks there.", accent: "amber", group: "traffic" },
   { value: "wrong_way",       label: "Wrong way",       icon: Icon.reverse,   desc: "A vehicle drives against the allowed direction over a lane line.", accent: "rose", group: "traffic" },
   { value: "speed_over",      label: "Speeding",        icon: Icon.car,       desc: "Time a vehicle between two gate lines a known distance apart. Approximate, not for citations.", accent: "rose", group: "traffic" },
-  { value: "red_light_cross", label: "Crossed on red",  icon: Icon.tripwire,  desc: "A vehicle crosses a line during a red-light time window.", accent: "rose", group: "traffic" },
+  { value: "red_light_cross", label: "Crossed on red",  icon: Icon.tripwire,  desc: "A vehicle crosses a line on red. Read the light from a signal zone, or set a red time window.", accent: "rose", group: "traffic" },
+  { value: "crosswalk_violation", label: "Crosswalk blocked", icon: Icon.tripwire, desc: "A vehicle sits in a crosswalk zone while a pedestrian is in it.", accent: "rose", group: "traffic" },
+  { value: "lane_occupancy", label: "Lane congestion", icon: Icon.car,       desc: "Alert when several vehicles back up in a lane zone (optionally only when stopped).", accent: "amber", group: "traffic" },
   { value: "any",             label: "Any observation", icon: Icon.spark,     desc: "Fire on every processed keyframe.",               accent: "slate",  group: "any" },
 ];
 
@@ -422,10 +424,22 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
     return min ? `When ${who} crosses the gates over ${min} km/h` : `When ${who} crosses the speed gates`;
   }
   if (t === "red_light_cross") {
+    const sig = pattern.signal_zone as string | undefined;
+    if (sig) return `When a vehicle crosses the line while "${sig}" reads red`;
     const ra = pattern.red_after as string | undefined;
     const rb = pattern.red_before as string | undefined;
     const win = ra && rb ? ` between ${ra} and ${rb}` : "";
     return `When a vehicle crosses the line during the red window${win}`;
+  }
+  if (t === "crosswalk_violation") {
+    const zone = (pattern.crosswalk_zone as string) || "the crosswalk";
+    return `When a vehicle sits in "${zone}" while a pedestrian is in it`;
+  }
+  if (t === "lane_occupancy") {
+    const zone = (pattern.lane_zone as string) || "a lane";
+    const n = (pattern.min_vehicles as number | undefined) || 3;
+    const stat = pattern.require_stationary ? " stopped" : "";
+    return `When ${n}+${stat} vehicles back up in "${zone}"`;
   }
   if (t === "face_detected") return "When any face detected";
   if (t === "face_recognized") {

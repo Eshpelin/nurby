@@ -806,15 +806,21 @@ class RuleEngine:
             return False
 
         elif trigger_type == "red_light_cross":
-            # A vehicle crossing a line during a configured red-light window
-            # (local time-of-day). The crossing detection is the tripwire
-            # math; the window is checked against the household timezone.
+            # A vehicle crossing a line while the light is red. "Red" comes
+            # from a drawn signal zone (signal_zone, the HSV sampler in
+            # perception) when configured, else from a manual time-of-day
+            # window. The crossing itself is the tripwire math.
             pts = pattern.get("points")
             if not (pts and len(pts) == 2):
                 return False
+            signal_zone = pattern.get("signal_zone")
             red_after = pattern.get("red_after")
             red_before = pattern.get("red_before")
-            if red_after or red_before:
+            if signal_zone:
+                # Detected colour wins when a signal zone is configured.
+                if (data.get("signal_states") or {}).get(signal_zone) != "red":
+                    return False
+            elif red_after or red_before:
                 zone = tz or timezone.utc
                 t_now = _parse_epoch(data.get("timestamp"))
                 ref = (
@@ -841,6 +847,63 @@ class RuleEngine:
                     continue
                 return True
             return False
+
+        elif trigger_type == "crosswalk_violation":
+            # A vehicle occupying a crosswalk zone WHILE a pedestrian is in
+            # it: the classic "car stopped on the zebra crossing with people
+            # crossing" hazard. Both must be present in the same named zone.
+            zone = pattern.get("crosswalk_zone")
+            if not zone:
+                return False
+            objs = data.get("object_detections", {}).get("objects", [])
+            persons = [
+                o for o in objs
+                if o.get("label") == "person" and zone in (o.get("zones") or [])
+            ]
+            if not persons:
+                return False
+            veh_label = pattern.get("vehicle_label")
+            vehicle_labels = (
+                {veh_label} if veh_label
+                else {"car", "truck", "bus", "motorcycle", "bicycle"}
+            )
+            for o in objs:
+                if o.get("label") in vehicle_labels and zone in (o.get("zones") or []):
+                    return True
+            # Plate-read vehicles get zone-stamped too; count them as well.
+            vd = data.get("vehicle_detections") or {}
+            for v in (vd.get("vehicles") or []):
+                if zone in (v.get("zones") or []):
+                    return True
+            return False
+
+        elif trigger_type == "lane_occupancy":
+            # Congestion / queue detection: at least ``min_vehicles`` vehicles
+            # sit in a lane zone. Optionally require them stationary (a true
+            # backup, not free-flowing traffic passing through the zone).
+            zone = pattern.get("lane_zone")
+            if not zone:
+                return False
+            min_vehicles = int(pattern.get("min_vehicles") or 3)
+            label = pattern.get("label")
+            vehicle_labels = (
+                {label} if label else {"car", "truck", "bus", "motorcycle"}
+            )
+            objs = data.get("object_detections", {}).get("objects", [])
+            in_lane = [
+                o for o in objs
+                if o.get("label") in vehicle_labels and zone in (o.get("zones") or [])
+            ]
+            if pattern.get("require_stationary"):
+                states = {
+                    t.get("track_id"): t.get("state")
+                    for t in (data.get("tracks") or [])
+                }
+                in_lane = [
+                    o for o in in_lane
+                    if states.get(o.get("tracker_id")) == "stationary"
+                ]
+            return len(in_lane) >= min_vehicles
 
         elif trigger_type == "any":
             return True

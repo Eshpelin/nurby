@@ -315,8 +315,24 @@ export function RuleBuilder({
       if (s.formTriggerGeomCamId) trigger_pattern.camera_id = s.formTriggerGeomCamId;
       if (s.formTriggerGeomPoints.length === 2) trigger_pattern.points = s.formTriggerGeomPoints;
       if (s.formTriggerLineDirection !== "any") trigger_pattern.direction = s.formTriggerLineDirection;
-      if (s.formTriggerRedAfter) trigger_pattern.red_after = s.formTriggerRedAfter;
-      if (s.formTriggerRedBefore) trigger_pattern.red_before = s.formTriggerRedBefore;
+      // A signal zone (detected colour) takes precedence; otherwise fall
+      // back to the manual red time window.
+      if (s.formTriggerSignalZone.trim()) {
+        trigger_pattern.signal_zone = s.formTriggerSignalZone.trim();
+      } else {
+        if (s.formTriggerRedAfter) trigger_pattern.red_after = s.formTriggerRedAfter;
+        if (s.formTriggerRedBefore) trigger_pattern.red_before = s.formTriggerRedBefore;
+      }
+      if (s.formTriggerObjectClass) trigger_pattern.label = s.formTriggerObjectClass;
+    }
+    if (s.formTriggerType === "crosswalk_violation") {
+      trigger_pattern.crosswalk_zone = s.formTriggerCrosswalkZone.trim();
+      if (s.formTriggerObjectClass) trigger_pattern.vehicle_label = s.formTriggerObjectClass;
+    }
+    if (s.formTriggerType === "lane_occupancy") {
+      trigger_pattern.lane_zone = s.formTriggerLaneZone.trim();
+      trigger_pattern.min_vehicles = parseInt(s.formTriggerMinVehicles) || 3;
+      trigger_pattern.require_stationary = s.formTriggerRequireStationary;
       if (s.formTriggerObjectClass) trigger_pattern.label = s.formTriggerObjectClass;
     }
 
@@ -548,6 +564,14 @@ export function RuleBuilder({
               setFormTriggerRedAfter={setterFor("formTriggerRedAfter")}
               formTriggerRedBefore={state.formTriggerRedBefore}
               setFormTriggerRedBefore={setterFor("formTriggerRedBefore")}
+              formTriggerSignalZone={state.formTriggerSignalZone}
+              setFormTriggerSignalZone={setterFor("formTriggerSignalZone")}
+              formTriggerCrosswalkZone={state.formTriggerCrosswalkZone}
+              setFormTriggerCrosswalkZone={setterFor("formTriggerCrosswalkZone")}
+              formTriggerLaneZone={state.formTriggerLaneZone}
+              setFormTriggerLaneZone={setterFor("formTriggerLaneZone")}
+              formTriggerMinVehicles={state.formTriggerMinVehicles}
+              setFormTriggerMinVehicles={setterFor("formTriggerMinVehicles")}
               formTriggerGeomCamId={state.formTriggerGeomCamId}
               setFormTriggerGeomCamId={setterFor("formTriggerGeomCamId")}
               formTriggerGeomPoints={state.formTriggerGeomPoints}

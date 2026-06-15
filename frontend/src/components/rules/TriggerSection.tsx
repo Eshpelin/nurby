@@ -77,6 +77,14 @@ export interface TriggerSectionProps {
   setFormTriggerRedAfter: (v: string) => void;
   formTriggerRedBefore: string;
   setFormTriggerRedBefore: (v: string) => void;
+  formTriggerSignalZone: string;
+  setFormTriggerSignalZone: (v: string) => void;
+  formTriggerCrosswalkZone: string;
+  setFormTriggerCrosswalkZone: (v: string) => void;
+  formTriggerLaneZone: string;
+  setFormTriggerLaneZone: (v: string) => void;
+  formTriggerMinVehicles: string;
+  setFormTriggerMinVehicles: (v: string) => void;
 }
 
 export function TriggerSection(props: TriggerSectionProps) {
@@ -144,6 +152,14 @@ export function TriggerSection(props: TriggerSectionProps) {
     setFormTriggerRedAfter,
     formTriggerRedBefore,
     setFormTriggerRedBefore,
+    formTriggerSignalZone,
+    setFormTriggerSignalZone,
+    formTriggerCrosswalkZone,
+    setFormTriggerCrosswalkZone,
+    formTriggerLaneZone,
+    setFormTriggerLaneZone,
+    formTriggerMinVehicles,
+    setFormTriggerMinVehicles,
   } = props;
 
   return (
@@ -808,6 +824,25 @@ export function TriggerSection(props: TriggerSectionProps) {
           )}
 
           {formTriggerType === "red_light_cross" && (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">
+                  Signal zone (auto-detected colour)
+                </label>
+                <input
+                  value={formTriggerSignalZone}
+                  onChange={(e) => setFormTriggerSignalZone(e.target.value)}
+                  placeholder="Signal North"
+                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Draw a <span className="font-medium">Traffic signal</span> zone over the light in the
+                  camera&apos;s <span className="font-medium">Zones &amp; Tripwires</span> settings, then type
+                  its exact name here. Nurby reads the lamp colour and fires only when it is red. Leave
+                  blank to use a manual time window instead.
+                </p>
+              </div>
+              {!formTriggerSignalZone.trim() && (
             <div>
               <label className="text-xs text-muted-foreground block mb-1">
                 Red-light window (local time)
@@ -830,9 +865,11 @@ export function TriggerSection(props: TriggerSectionProps) {
               <p className="text-[11px] text-muted-foreground mt-1.5">
                 Only crossings inside this window count. Leave both blank to
                 treat the light as always red. Overnight windows (e.g. 22:00
-                to 06:00) wrap midnight. Nurby cannot see the actual signal
-                yet, so you set the red hours.
+                to 06:00) wrap midnight. This manual window is the fallback
+                when no signal zone is set above.
               </p>
+            </div>
+              )}
             </div>
           )}
         </div>
@@ -921,6 +958,81 @@ export function TriggerSection(props: TriggerSectionProps) {
             (roughly within 10-20%), good for catching a speeder on your
             street, not for legal citations.
           </p>
+        </div>
+      )}
+
+      {formTriggerType === "crosswalk_violation" && (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Crosswalk (zone name)</label>
+            <input
+              value={formTriggerCrosswalkZone}
+              onChange={(e) => setFormTriggerCrosswalkZone(e.target.value)}
+              placeholder="Crosswalk"
+              className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Draw the crossing as a named zone in the camera&apos;s
+              <span className="font-medium"> Zones &amp; Tripwires</span> settings, then type its exact name
+              here. The rule fires when a vehicle and a pedestrian are in the zone at the same time.
+            </p>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Vehicle type (optional)</label>
+            <input
+              value={formTriggerObjectClass}
+              onChange={(e) => setFormTriggerObjectClass(e.target.value)}
+              placeholder="any vehicle (car, truck, bus, motorcycle)"
+              className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+            />
+          </div>
+        </div>
+      )}
+
+      {formTriggerType === "lane_occupancy" && (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Lane (zone name)</label>
+            <input
+              value={formTriggerLaneZone}
+              onChange={(e) => setFormTriggerLaneZone(e.target.value)}
+              placeholder="Lane 1"
+              className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Draw the lane as a named zone in the camera&apos;s
+              <span className="font-medium"> Zones &amp; Tripwires</span> settings, then type its exact name here.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Alert at (vehicles)</label>
+              <input
+                type="number"
+                min="1"
+                value={formTriggerMinVehicles}
+                onChange={(e) => setFormTriggerMinVehicles(e.target.value)}
+                className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Vehicle type (optional)</label>
+              <input
+                value={formTriggerObjectClass}
+                onChange={(e) => setFormTriggerObjectClass(e.target.value)}
+                placeholder="any vehicle"
+                className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-sm"
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formTriggerRequireStationary}
+              onChange={(e) => setFormTriggerRequireStationary(e.target.checked)}
+            />
+            Only count stopped vehicles (a real backup, not free-flowing traffic)
+          </label>
         </div>
       )}
     </fieldset>

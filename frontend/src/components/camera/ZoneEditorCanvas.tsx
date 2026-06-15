@@ -10,6 +10,7 @@ const ZONE_COLORS: Record<string, { fill: string; stroke: string; dot: string; u
   tripwire: { fill: "rgba(99,102,241,0.2)", stroke: "#6366f1", dot: "bg-indigo-500", ui: "border-indigo-500 bg-indigo-500/10 text-indigo-400" },
   zone:     { fill: "rgba(14,165,233,0.2)", stroke: "#0ea5e9", dot: "bg-sky-500",    ui: "border-sky-500 bg-sky-500/10 text-sky-400" },
   veto:     { fill: "rgba(168,85,247,0.2)", stroke: "#a855f7", dot: "bg-purple-500", ui: "border-purple-500 bg-purple-500/10 text-purple-400" },
+  signal:   { fill: "rgba(234,179,8,0.2)",  stroke: "#eab308", dot: "bg-yellow-500", ui: "border-yellow-500 bg-yellow-500/10 text-yellow-400" },
 };
 
 // Human labels + one-line explanations for the zone kind picker. Order is
@@ -27,6 +28,8 @@ const ZONE_KINDS: { value: MotionZone["type"]; label: string; desc: string }[] =
     desc: "Mask: blacks the area out of everything the AI sees. For the neighbor's yard or a TV screen." },
   { value: "veto", label: "Veto area",
     desc: "While something is detected in here, ALL alerts on this camera pause. Kills headlight-flare false alarms on a wall." },
+  { value: "signal", label: "Traffic signal",
+    desc: "Draw a box over a traffic-light head. Nurby reads its colour (red/amber/green) so a \"Crossed on red\" rule can fire on a real red." },
 ];
 
 export function ZoneEditorCanvas({
@@ -154,6 +157,7 @@ export function ZoneEditorCanvas({
         zoneType === "tripwire" ? "Tripwire"
         : zoneType === "loiter" ? "Loiter"
         : zoneType === "veto" ? "Veto"
+        : zoneType === "signal" ? "Signal"
         : zoneType === "zone" ? "Area"
         : "Mask"
       } ${zones.length + 1}`,

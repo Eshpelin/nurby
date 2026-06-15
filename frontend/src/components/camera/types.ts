@@ -9,7 +9,7 @@ export interface PTZPreset {
 export interface MotionZone {
   name: string;
   points: number[][];
-  type: "zone" | "include" | "exclude" | "loiter" | "tripwire" | "veto";
+  type: "zone" | "include" | "exclude" | "loiter" | "tripwire" | "veto" | "signal";
   // Seconds before a loiter zone fires. Ignored for other types.
   loiter_threshold_seconds?: number;
   // Direction filter for tripwires. "any" | "in" | "out".

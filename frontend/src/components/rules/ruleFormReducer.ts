@@ -46,6 +46,10 @@ export interface RuleFormState {
   formTriggerMinSpeedKmh: string;
   formTriggerRedAfter: string;
   formTriggerRedBefore: string;
+  formTriggerSignalZone: string;
+  formTriggerCrosswalkZone: string;
+  formTriggerLaneZone: string;
+  formTriggerMinVehicles: string;
 
   // Conditions group
   formCondCameras: string[];
@@ -99,6 +103,10 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
   formTriggerMinSpeedKmh: "30",
   formTriggerRedAfter: "",
   formTriggerRedBefore: "",
+  formTriggerSignalZone: "",
+  formTriggerCrosswalkZone: "",
+  formTriggerLaneZone: "",
+  formTriggerMinVehicles: "3",
 
   formCondCameras: [],
   formScheduleMode: "always",
@@ -146,6 +154,10 @@ const TRIGGER_FIELDS_TO_RESET: (keyof RuleFormState)[] = [
   "formTriggerMinSpeedKmh",
   "formTriggerRedAfter",
   "formTriggerRedBefore",
+  "formTriggerSignalZone",
+  "formTriggerCrosswalkZone",
+  "formTriggerLaneZone",
+  "formTriggerMinVehicles",
 ];
 
 export type RuleFormAction =
@@ -223,6 +235,10 @@ export function hydrateFromRule(rule: Rule): RuleFormState {
   base.formTriggerMinSpeedKmh = tp.min_speed_kmh != null ? String(tp.min_speed_kmh) : "30";
   base.formTriggerRedAfter = (tp.red_after as string) || "";
   base.formTriggerRedBefore = (tp.red_before as string) || "";
+  base.formTriggerSignalZone = (tp.signal_zone as string) || "";
+  base.formTriggerCrosswalkZone = (tp.crosswalk_zone as string) || "";
+  base.formTriggerLaneZone = (tp.lane_zone as string) || "";
+  base.formTriggerMinVehicles = tp.min_vehicles != null ? String(tp.min_vehicles) : "3";
   if (tp.type === "speed_over" && Array.isArray(tp.line_a)) base.formTriggerGeomPoints = tp.line_a as number[][];
   const ms = tp.min_score as number | undefined;
   if (ms != null) {

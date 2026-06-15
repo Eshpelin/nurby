@@ -79,19 +79,59 @@ for legal citations.
 ```
 
 ### Red-light / signal running
-Shipped as `red_light_cross`: a stop-line crossing gated by a manual
-red-window schedule (you set the red hours; overnight windows wrap
-midnight). Detecting the signal lamp's colour automatically (HSV in a
-user-drawn zone, or a VLM check) remains Phase 3.
+Shipped as `red_light_cross`. The "red" can now come from the camera
+itself (see Phase 3 below) or, as a fallback, a manual red-window schedule
+(you set the red hours; overnight windows wrap midnight).
 
-## Phase 3 — research (new CV models)
+## Phase 3 — shipped
+
+### Automatic traffic-signal colour
+Draw a zone of type **Traffic signal** over the light head. Each keyframe,
+the perception pipeline samples the pixels inside that polygon, converts to
+HSV, and classifies the lit lamp as red / amber / green (or unknown when
+nothing is clearly lit). The state is stamped onto the rule payload as
+`signal_states: {"Signal North": "red"}`. A `red_light_cross` rule with a
+`signal_zone` then fires only on a *detected* red, no manual schedule
+needed. Pure CV (a hue histogram in the ROI), no model, fully offline.
+Accuracy depends on framing the zone tightly on the lamp; glare, backlight,
+and night blur are the known failure modes, which is why ambiguous frames
+report `unknown` rather than guessing.
+
+```json
+{ "type": "red_light_cross", "points": [[x1,y1],[x2,y2]],
+  "signal_zone": "Signal North", "label": "car" }
+```
+
+### Crosswalk blocking
+Trigger type **Crosswalk blocked** (`crosswalk_violation`). Draw the
+crossing as a named zone; the rule fires when a vehicle and a pedestrian
+occupy that zone in the same frame (the "car stopped on the zebra while
+people are crossing" hazard).
+
+```json
+{ "type": "crosswalk_violation", "crosswalk_zone": "Crosswalk",
+  "vehicle_label": "car" }
+```
+
+### Lane congestion
+Trigger type **Lane congestion** (`lane_occupancy`). Counts vehicles inside
+a named lane zone and fires at a threshold. Optionally only counts
+stationary vehicles (a real backup, not free-flowing traffic).
+
+```json
+{ "type": "lane_occupancy", "lane_zone": "Lane 1",
+  "min_vehicles": 3, "require_stationary": true }
+```
+
+## Phase 4 — research (new CV models)
 
 - **Automatic lane & zebra-crossing recognition.** Today you draw these as
   zones. Auto-detection needs a lane/road-segmentation model, or a VLM that
   proposes zones you confirm. Planned as "suggest, you approve," never silent.
 - **Lane change without blinker.** Detecting a turn-signal lamp blinking is a
   hard, small-object CV problem; flagged as aspirational rather than faked.
-- **Full traffic-signal-state detection** across phases.
+- **Full traffic-signal-state detection** across phases (protected-turn
+  arrows, flashing reds), beyond the single red/amber/green sample above.
 
 ## Design notes for contributors
 
@@ -102,6 +142,10 @@ user-drawn zone, or a VLM check) remains Phase 3.
 - Vehicles are stamped with their named-zone membership in
   `services/perception/pipeline.py` via `annotate_detection_zones`, the same
   bottom-center anchoring used for object detections.
+- Traffic-signal colour is the one trigger input that needs pixels: it is
+  computed in `services/perception/traffic_signal.py` `detect_signal_states`
+  from the un-masked frame and stamped onto `rule_data["signal_states"]`.
+  Everything else the engine reads is already in `rule_data`.
 - Dry-run synthesis for the rule tester is in
   `services/api/routes/rules.py` `_synthesize_observation_for_trigger`.
 - The builder UI is in `frontend/src/components/rules/` (`types.tsx`,

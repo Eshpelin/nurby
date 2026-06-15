@@ -418,8 +418,12 @@ def _synthesize_observation_for_trigger(
             "track_id": 1, "label": label,
             "bbox": cur_box, "prev_bbox": prev_box, "state": "moving",
         }]
-        # The endpoint stamps a timestamp inside the red window so the
-        # window check passes; geometry here just crosses the line.
+        # If the rule gates on a detected signal zone, synthesize that zone
+        # as red so the dry run exercises the crossing. Otherwise the
+        # endpoint stamps a timestamp inside the manual red window instead.
+        signal_zone = trigger_pattern.get("signal_zone")
+        if signal_zone:
+            obs["signal_states"] = {signal_zone: "red"}
 
     elif t == "speed_over":
         # A single gate-A crossing frame. The /test endpoint builds the
@@ -437,6 +441,39 @@ def _synthesize_observation_for_trigger(
             "track_id": 1, "label": label,
             "bbox": cur_box, "prev_bbox": prev_box, "state": "moving",
         }]
+
+    elif t == "crosswalk_violation":
+        zone = trigger_pattern.get("crosswalk_zone") or "Crosswalk"
+        veh_label = trigger_pattern.get("vehicle_label") or "car"
+        # A pedestrian and a vehicle in the same crosswalk zone.
+        obs["object_detections"] = {
+            "objects": [
+                {"label": "person", "confidence": 0.9, "bbox": [20, 20, 50, 90],
+                 "tracker_id": 1, "zones": [zone]},
+                {"label": veh_label, "confidence": 0.9, "bbox": [60, 30, 140, 110],
+                 "tracker_id": 2, "zones": [zone]},
+            ],
+            "count": 2,
+        }
+
+    elif t == "lane_occupancy":
+        zone = trigger_pattern.get("lane_zone") or "Lane"
+        label = trigger_pattern.get("label") or "car"
+        n = max(1, int(trigger_pattern.get("min_vehicles") or 3))
+        stationary = bool(trigger_pattern.get("require_stationary"))
+        objs = [
+            {"label": label, "confidence": 0.9,
+             "bbox": [10 + i * 40, 30, 45 + i * 40, 110],
+             "tracker_id": i + 1, "zones": [zone]}
+            for i in range(n)
+        ]
+        obs["object_detections"] = {"objects": objs, "count": len(objs)}
+        if stationary:
+            obs["tracks"] = [
+                {"track_id": o["tracker_id"], "label": label,
+                 "bbox": o["bbox"], "prev_bbox": o["bbox"], "state": "stationary"}
+                for o in objs
+            ]
 
     elif t == "any":
         pass
