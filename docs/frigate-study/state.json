@@ -3,13 +3,24 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 23326,
+  "cursor_pr": 23304,
   "newest_pr_seen": 23488,
+  "batches_done": 1,
   "counts": {
-    "logged": 3,
-    "mapped_findings": 3,
-    "skipped_noise": 0,
-    "actions_open": 2
+    "logged": 40,
+    "mapped": 18,
+    "skipped_noise": 13,
+    "deferred": 9,
+    "findings_actionable": 11,
+    "fixes_shipped": 1,
+    "issues_filed": 4
   },
-  "notes": "Bootstrap batch: 3 PRs mapped as a demo of the pipeline (#23478, #23387, #23326). Full harvest not yet run. Next batch: PRs < 23326."
+  "fixes_shipped_detail": [
+    "#23352 stream-URL scheme allowlist (shared/schemas.py validate_stream_url) + tests"
+  ],
+  "next": "Continue at PR < 23304, newest-first. Re-run the harvest -> triage -> map -> issues -> fix loop per docs/frigate-study/README.md.",
+  "open_questions": [
+    "Confirm GitHub issues are the right tracking surface or switch to backlog-only.",
+    "Decide batch size per session (this batch = 40 triaged)."
+  ]
 }
