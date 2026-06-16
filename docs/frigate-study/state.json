@@ -3,12 +3,12 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 20206,
+  "cursor_pr": 20000,
   "newest_pr_seen": 23488,
-  "batches_done": 18,
+  "batches_done": 19,
   "counts": {
-    "logged": 720,
-    "pct_of_merged": "~18%",
+    "logged": 760,
+    "pct_of_merged": "~19%",
     "fixes_shipped": 5,
     "issues_open": 8,
     "issues_closed": 1
@@ -35,6 +35,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 20206, newest-first.",
-  "notes": "Batch 18: coverage only. #20237 watchdog HAVE (nurby stall-detect+reconnect stream.py:211, also clears #22557 note). #20296 customizable review prompt HAVE. Stationary work mostly N/A (nurby R2)."
+  "next": "Continue at PR < 20000, newest-first (sub-20k now).",
+  "notes": "Batch 19: coverage only. #20024 user-roles-camera-access = reference impl for issue #40 (commented). #20099 LPR-regex crash N/A (nurby has no user-regex). Backlog: small-object detection (#20190 P2), Prometheus metrics (#20119), speed estimation (#20101)."
 }
