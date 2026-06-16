@@ -598,3 +598,43 @@
 {"pr":20684,"title":"Unify list of objects under dedicated section","area":"web","type":"ui","decision":"skip"}
 {"pr":20682,"title":"Export improvements","area":"record","type":"feature","decision":"defer"}
 {"pr":20681,"title":"More detail pane tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20677,"title":"Classification fixes","area":"data_processing","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20676,"title":"Add ability to change source of images for review descriptions","area":"genai","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Choose which frames feed the VLM review description; compare to nurby VLM frame selection.","priority":"P3","effort":"M"}
+{"pr":20675,"title":"UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20674,"title":"Update coral docs / links","area":"docs","type":"docs","decision":"skip"}
+{"pr":20669,"title":"Fix History layout for mobile portrait cameras","area":"web","type":"bugfix","decision":"skip"}
+{"pr":20666,"title":"Various fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20665,"title":"Classification improvements","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20662,"title":"Review stream tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20656,"title":"Review stream tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20655,"title":"Various fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20649,"title":"UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20648,"title":"Review stream tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20643,"title":"Camera wizard tweaks","area":"web","type":"feature","decision":"defer"}
+{"pr":20641,"title":"Set correct nginx container value","area":"ops","type":"ops","nurby_status":"N/A","decision":"skip"}
+{"pr":20640,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20639,"title":"Fix missing i18n key","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20638,"title":"Always use fmp4 for HLS","area":"output","type":"feature","nurby_status":"N/A","decision":"skip","note":"HLS muxing; nurby uses MediaMTX."}
+{"pr":20637,"title":"Fix ffmpeg command for birdseye encoding","area":"output","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20636,"title":"Camera wizard improvements","area":"web","type":"feature","decision":"defer"}
+{"pr":20624,"title":"Actually set filter back to undefined","area":"web","type":"bugfix","decision":"skip"}
+{"pr":20622,"title":"Implement Wizard for Creating Classification Models","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20620,"title":"Improve camera wizard stream validation","area":"web","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Frontend stream-URL validation UX; backend covered by scheme allowlist (PR #34). Check wizard hints/reachability checks.","priority":"P3","effort":"S"}
+{"pr":20619,"title":"Add login page docs hint","area":"docs","type":"docs","decision":"skip"}
+{"pr":20613,"title":"Fix for gamma disable env var","area":"config","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20606,"title":"Set default values for Ollama performance","area":"genai","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Sensible Ollama perf defaults (num_ctx/keep_alive etc.); check nurby Ollama provider defaults.","priority":"P3","effort":"S"}
+{"pr":20605,"title":"Improve Reolink Camera Documentation","area":"docs","type":"docs","decision":"skip"}
+{"pr":20602,"title":"Classification Model UI Refactor","area":"data_processing","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":20593,"title":"Bump vite 6.2.0->6.4.1 in /web","area":"deps","type":"deps","decision":"skip"}
+{"pr":20586,"title":"Improve matching go2rtc stream names with cameras","area":"output","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20582,"title":"UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20562,"title":"Update PWA requirements and add usage section","area":"docs","type":"docs","decision":"skip"}
+{"pr":20561,"title":"Enforce at least one letter in zone names in the UI editor","area":"web","type":"bugfix","decision":"skip"}
+{"pr":20555,"title":"Fix timeline attribute assumption","area":"web","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"Object attributes; no nurby concept."}
+{"pr":20553,"title":"Detail Stream tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20549,"title":"Update Azure OpenAI genai docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":20542,"title":"Add support for Intel NPU stats","area":"stats","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20541,"title":"Improve Intel Model","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20540,"title":"Fix model exports","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20536,"title":"Add support for Intel NPU","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20533,"title":"Detail Stream tweaks","area":"web","type":"ui","decision":"skip"}
