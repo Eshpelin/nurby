@@ -20,6 +20,7 @@ import numpy as np
 from shared.config import settings
 from shared.database import async_session
 from shared.models import Camera, CameraStatusLog, Recording
+from shared.paths import safe_getsize
 
 logger = logging.getLogger("nurby.ingestion.stream")
 
@@ -645,7 +646,8 @@ class StreamWorker:
 
     async def _save_recording(self, file_path: str, started_at: datetime, ended_at: datetime):
         try:
-            file_size = os.path.getsize(file_path) if os.path.exists(file_path) else None
+            _sz = safe_getsize(file_path)
+            file_size = _sz if _sz else None
             duration = (ended_at - started_at).total_seconds()
 
             async with async_session() as db:

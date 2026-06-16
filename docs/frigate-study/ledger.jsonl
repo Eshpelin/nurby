@@ -38,3 +38,43 @@
 {"pr":23306,"title":"Profiles fixes","area":"config","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"Config profiles tied to YAML provisioning model."}
 {"pr":23305,"title":"UI tweak","area":"web","type":"ui","decision":"skip"}
 {"pr":23304,"title":"UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":23295,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23294,"title":"Filter motion review by allowed cameras","area":"review","type":"security","nurby_status":"VULNERABLE","decision":"map","insight":"Motion review results filtered by the requesting user's allowed cameras.","nurby_evidence":"Main list endpoints (events/recordings/observations/cameras) have NO per-user camera filtering; all authenticated users see all cameras. Guardian path IS scoped.","action":"See initiatives/camera-access-control.md (architectural; issue filed, not auto-fixed).","priority":"P1","effort":"L"}
+{"pr":23292,"title":"Tweaks","area":"?","type":"ui","decision":"skip"}
+{"pr":23287,"title":"Debug replay resolution","area":"debug","type":"tooling","nurby_status":"N/A","decision":"skip","note":"Frigate debug_replay tooling."}
+{"pr":23283,"title":"Fix GenAI Signature","area":"genai","type":"bugfix","decision":"defer","note":"GenAI provider signature fix; revisit if vlm bug emerges."}
+{"pr":23282,"title":"Docs update","area":"docs","type":"docs","decision":"skip"}
+{"pr":23281,"title":"Support Dynamic Thinking Models","area":"genai","type":"feature","nurby_status":"PARTIAL","decision":"map","insight":"Support reasoning/thinking models (dynamic thinking budget) in GenAI calls.","nurby_evidence":"vlm.py/agent use Claude+OpenAI which expose thinking; nurby does not set/handle thinking budgets or strip reasoning tokens.","action":"Support thinking/reasoning params + token handling for reasoning models in vlm + agent.","priority":"P2","effort":"M"}
+{"pr":23280,"title":"Docs update","area":"docs","type":"docs","decision":"skip"}
+{"pr":23279,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23276,"title":"Debug replay fixes","area":"debug","type":"tooling","nurby_status":"N/A","decision":"skip"}
+{"pr":23274,"title":"Improve language around prompt restrictions","area":"genai","type":"docs","decision":"skip"}
+{"pr":23272,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":23270,"title":"Debug replay fixes","area":"debug","type":"tooling","nurby_status":"N/A","decision":"skip"}
+{"pr":23265,"title":"Improve credential redaction handling","area":"api","type":"security","nurby_status":"SAFE","decision":"map","insight":"Strip passwords/api keys/proxy secret from config endpoint + improve redaction.","nurby_evidence":"Nurby stores camera creds separately (Fernet) from stream_url; build_auth_url result is not logged. Config/secrets not echoed. No creds in log path.","priority":"P3","effort":"-"}
+{"pr":23264,"title":"Refactor move_preview_frames function","area":"ptz","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":23261,"title":"Fix admin response cache leak to non-admin users via nginx proxy_cache","area":"api","type":"security","nurby_status":"SAFE","decision":"map","insight":"proxy_cache_key must include authenticated role/user so admin responses are not served to non-admins.","nurby_evidence":"No nginx proxy_cache / HTTP response caching in nurby. BUT the new dashboard widget_proxy cache (widget_proxy.py) is keyed by widget_id only, not user -> minor cross-user data reuse. Filed P3.","action":"Key widget_proxy cache by user (or auth scope).","priority":"P3","effort":"S"}
+{"pr":23258,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23256,"title":"Filter outbound websocket broadcasts by per-recipient camera access","area":"comms","type":"security","nurby_status":"VULNERABLE","decision":"map","insight":"Outbound WS messages filtered by each recipient's camera access (custom views).","nurby_evidence":"services/api/ws.py _deliver_local/broadcast/relay_loop push every event to every connected client; no per-user/per-camera filtering. Guardian alerts also broadcast to all.","action":"See initiatives/camera-access-control.md (issue filed; architectural, not auto-fixed).","priority":"P1","effort":"L"}
+{"pr":23253,"title":"GenAI Refactor","area":"genai","type":"refactor","decision":"defer"}
+{"pr":23251,"title":"Improve go2rtc pane in Settings","area":"output","type":"ui","nurby_status":"N/A","decision":"skip","note":"Nurby uses MediaMTX, not go2rtc."}
+{"pr":23250,"title":"Add attributes to UI filters list","area":"web","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Object attributes/sub-labels in filters; check nurby attribute support."}
+{"pr":23247,"title":"fix: fix chat request params miss runtime_options","area":"genai","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"Check agent passes runtime options through."}
+{"pr":23239,"title":"Add metadata for creation time in recordings / exports","area":"record","type":"feature","nurby_status":"MISSING","decision":"defer","note":"Embed creation-time metadata in mp4 recordings/exports.","priority":"P3","effort":"S"}
+{"pr":23238,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23237,"title":"Settings UI fixes","area":"web","type":"ui","decision":"skip"}
+{"pr":23235,"title":"Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23232,"title":"Settings UI tweak","area":"web","type":"ui","decision":"skip"}
+{"pr":23217,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23216,"title":"Merge detector and model in settings UI","area":"detectors","type":"feature","decision":"defer","note":"Detector+model config UX; revisit in detector parity pass."}
+{"pr":23206,"title":"Implement semantic query for chat","area":"embeddings","type":"feature","nurby_status":"HAVE","decision":"map","insight":"Chat answers backed by semantic (vector) search over events.","nurby_evidence":"Nurby agent already does pgvector semantic search (services/search) + tools.","priority":"P3","effort":"-"}
+{"pr":23201,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23195,"title":"Chat improvements","area":"genai","type":"feature","decision":"defer"}
+{"pr":23190,"title":"Improve Intel Stats","area":"stats","type":"feature","nurby_status":"N/A","decision":"skip","note":"Intel GPU stats; nurby CPU-only."}
+{"pr":23188,"title":"Fix multi-GPU OpenVINO detection for enrichments","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"OpenVINO multi-GPU; nurby has no OpenVINO path."}
+{"pr":23186,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23184,"title":"Fix ReviewTimeline ZoomIn/Out tooltip text","area":"web","type":"ui","decision":"skip"}
+{"pr":23183,"title":"API access improvements","area":"api","type":"security","nurby_status":"VERIFY","decision":"defer","note":"Check nurby scoped API tokens parity."}
+{"pr":23177,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23174,"title":"fix: fix i18n","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":23172,"title":"Gracefully handle transiently failing os.stat calls","area":"record","type":"reliability","nurby_status":"FIXED","decision":"map","insight":"os.path.exists()+getsize() idiom races and crashes on transient FS errors (Errno 121 Remote I/O) on network mounts.","nurby_evidence":"guardian/video.py:44,62 + conversation_clip.py:158 used unguarded exists()+getsize().","action":"DONE: added shared.paths.safe_getsize() + swapped 4 call sites (guardian/video.py, conversation_clip.py, ingestion/stream.py) + tests.","priority":"P1","effort":"S"}
