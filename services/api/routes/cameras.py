@@ -634,7 +634,7 @@ async def get_camera(camera_id: uuid.UUID, _current_user: User = Depends(get_cur
 
 @router.patch("/{camera_id}")
 async def update_camera(
-    camera_id: uuid.UUID, body: CameraUpdate, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    camera_id: uuid.UUID, body: CameraUpdate, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)
 ):
     camera = await db.get(Camera, camera_id)
     if not camera:

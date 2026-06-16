@@ -3,32 +3,35 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 22540,
+  "cursor_pr": 22438,
   "newest_pr_seen": 23488,
-  "batches_done": 6,
+  "batches_done": 7,
   "counts": {
-    "logged": 240,
-    "fixes_shipped": 3,
-    "issues_filed": 7
+    "logged": 280,
+    "fixes_shipped": 4,
+    "issues_open": 7,
+    "issues_closed": 1
   },
   "fixes_shipped_detail": [
     "#23352 stream-URL scheme allowlist (shared/schemas.py) -> nurby PR #34 (MERGED)",
     "#23172 safe_getsize() TOCTOU/transient-stat hardening (shared/paths.py + 4 sites) -> nurby PR #39 (MERGED)",
-    "#22984 asyncio.wait_for timeout + kill on async ffmpeg (analyzer.py, conversation_clip.py) -> nurby PR #43 (MERGED)"
+    "#22984 asyncio.wait_for timeout + kill on async ffmpeg (analyzer.py, conversation_clip.py) -> nurby PR #43 (MERGED)",
+    "#22523 admin-gate PATCH /cameras + PATCH /providers (privilege escalation) -> nurby batch-7 PR"
   ],
   "outputs": {
     "merged_prs": ["Eshpelin/nurby#34", "Eshpelin/nurby#39", "Eshpelin/nurby#43"],
     "issues": {
-      "Eshpelin/nurby#35": "P0 ffmpeg arg + URL SSRF hardening (frigate #23478/#22607)",
-      "Eshpelin/nurby#36": "P1 PTZ smart-track non-finite guard (frigate #23475)",
-      "Eshpelin/nurby#37": "P2 motion search + review items (frigate #23378 cluster)",
-      "Eshpelin/nurby#38": "P2 per-camera exclude-from-review flag (frigate #23387)",
-      "Eshpelin/nurby#40": "P1 per-user camera access control (frigate #23256/#23294/#23164/#22987/#22710)",
-      "Eshpelin/nurby#41": "P2 reasoning/thinking model support (frigate #23281)",
-      "Eshpelin/nurby#42": "P3 widget_proxy cache per-user key (frigate #23261-adjacent)"
+      "Eshpelin/nurby#35": "P0 ffmpeg arg + URL SSRF hardening (frigate #23478/#22607) - OPEN",
+      "Eshpelin/nurby#36": "P1 PTZ smart-track non-finite guard - CLOSED (verified safe, frigate #22470)",
+      "Eshpelin/nurby#37": "P2 motion search + review items - OPEN",
+      "Eshpelin/nurby#38": "P2 per-camera exclude-from-review flag - OPEN",
+      "Eshpelin/nurby#40": "P1 per-user camera access control (frigate #23256/#23294/#23164/#22987/#22710/#22522/#22530) - OPEN",
+      "Eshpelin/nurby#41": "P2 reasoning/thinking model support - OPEN",
+      "Eshpelin/nurby#42": "P3 widget_proxy cache per-user key - OPEN",
+      "Eshpelin/nurby#46": "P2 sweep all mutating endpoints for role gating (frigate #22523/#22522) - OPEN"
     }
   },
-  "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Do NOT force a fix when none is clearly safe (batches 4-6 were coverage-only). main is branch-protected; route through PRs.",
-  "next": "Continue at PR < 22540, newest-first.",
-  "notes": "Batches 4-6 (22980-22540) coverage-heavy (deps/docs/hwaccel/mypy/genai churn). #22607 reinforces issue #35; #22641 preexec_fn N/A; #22689 numpy-JSON HAVE. Backlog growing in findings.md."
+  "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audits before acting (batch 7 caught 2 false-positives: SQLi via ilike, PTZ div-by-zero). Do NOT force a fix when none is clearly safe.",
+  "next": "Continue at PR < 22438, newest-first.",
+  "notes": "Batch 7: FIXED admin-gating on PATCH /cameras + /providers. Rejected false-positives: ilike() is parameterized (no SQLi), ptz_tracker clamps (no div-by-zero) -> closed #36. Filed #46 (endpoint role-gating sweep)."
 }
