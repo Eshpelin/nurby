@@ -36,6 +36,9 @@ export function RecordingDetectionOverlay({
   camWidth,
   camHeight,
   videoRef,
+  draw = true,
+  seekLabel = null,
+  onTargets,
 }: {
   cameraId: string;
   startedAt: string;
@@ -44,6 +47,12 @@ export function RecordingDetectionOverlay({
   camWidth?: number | null;
   camHeight?: number | null;
   videoRef: RefObject<HTMLVideoElement | null>;
+  // Draw the boxes (off = data still loads so the seek targets stay live).
+  draw?: boolean;
+  // When set, seek targets are only frames containing this label; else any.
+  seekLabel?: string | null;
+  // Reports the sorted offsets (seconds) the "jump to next detection" controls seek to.
+  onTargets?: (offsets: number[]) => void;
 }) {
   const { authFetch } = useAuth();
   const [frames, setFrames] = useState<Frame[]>([]);
@@ -97,6 +106,20 @@ export function RecordingDetectionOverlay({
     };
   }, [videoRef]);
 
+  // Report the offsets the "jump to next detection" controls seek to: frames
+  // that contain the chosen object (or any detection when no object is set).
+  useEffect(() => {
+    if (!onTargets) return;
+    const want = (seekLabel || "").toLowerCase();
+    const targets = frames
+      .filter((f) =>
+        f.boxes.length > 0 &&
+        (want ? f.boxes.some((b) => b.label.toLowerCase() === want) : true)
+      )
+      .map((f) => f.offset);
+    onTargets(targets);
+  }, [frames, seekLabel, onTargets]);
+
   // The active observation is the most recent one at or before the playhead;
   // its boxes hold until the next observation.
   const active = useMemo(() => {
@@ -108,7 +131,7 @@ export function RecordingDetectionOverlay({
     return cur;
   }, [frames, t]);
 
-  if (!active || active.boxes.length === 0) return null;
+  if (!draw || !active || active.boxes.length === 0) return null;
 
   // The recording <video> renders at its intrinsic aspect with width:100% and
   // height:auto, so its box is the content (no letterbox): bbox% maps directly.

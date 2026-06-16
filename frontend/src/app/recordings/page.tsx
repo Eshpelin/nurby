@@ -69,7 +69,24 @@ export default function RecordingsPage() {
   const [dateTo, setDateTo] = useState("");
   const [objectFilter, setObjectFilter] = useState("");
   const [showBoxes, setShowBoxes] = useState(true);
+  const [seekTargets, setSeekTargets] = useState<number[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Jump the playhead to the next/previous detection (of the filtered object,
+  // or any). Reads currentTime from the element directly (event handler).
+  const seekToDetection = useCallback((dir: 1 | -1) => {
+    const v = videoRef.current;
+    if (!v || seekTargets.length === 0) return;
+    const cur = v.currentTime;
+    const eps = 0.4;
+    const target = dir > 0
+      ? seekTargets.find((o) => o > cur + eps)
+      : [...seekTargets].reverse().find((o) => o < cur - eps);
+    if (target != null) {
+      v.currentTime = target;
+      v.play?.().catch(() => undefined);
+    }
+  }, [seekTargets]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -428,19 +445,39 @@ export default function RecordingsPage() {
                   className="w-full max-h-[60vh] rounded bg-black"
                   src={`/api/recordings/${expandedRec.id}/stream${token ? `?token=${token}` : ""}`}
                 />
-                {showBoxes && (
-                  <RecordingDetectionOverlay
-                    cameraId={expandedRec.camera_id}
-                    startedAt={expandedRec.started_at}
-                    endedAt={expandedRec.ended_at}
-                    durationSeconds={expandedRec.duration_seconds}
-                    camWidth={cameraById[expandedRec.camera_id]?.width}
-                    camHeight={cameraById[expandedRec.camera_id]?.height}
-                    videoRef={videoRef}
-                  />
-                )}
+                <RecordingDetectionOverlay
+                  cameraId={expandedRec.camera_id}
+                  startedAt={expandedRec.started_at}
+                  endedAt={expandedRec.ended_at}
+                  durationSeconds={expandedRec.duration_seconds}
+                  camWidth={cameraById[expandedRec.camera_id]?.width}
+                  camHeight={cameraById[expandedRec.camera_id]?.height}
+                  videoRef={videoRef}
+                  draw={showBoxes}
+                  seekLabel={objectFilter || null}
+                  onTargets={setSeekTargets}
+                />
               </div>
-              <div className="flex items-center justify-end">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => seekToDetection(-1)}
+                    disabled={seekTargets.length === 0}
+                    className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
+                    title="Jump to the previous detection"
+                  >◀ Prev</button>
+                  <button
+                    onClick={() => seekToDetection(1)}
+                    disabled={seekTargets.length === 0}
+                    className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
+                    title="Jump to the next detection"
+                  >Next ▶</button>
+                  <span className="text-[11px] text-muted-foreground">
+                    {seekTargets.length > 0
+                      ? `${seekTargets.length} ${objectFilter || "detection"} moment${seekTargets.length === 1 ? "" : "s"}`
+                      : "no detections"}
+                  </span>
+                </div>
                 <button
                   onClick={() => setShowBoxes((v) => !v)}
                   className={`px-2.5 py-1 text-[11px] rounded-md border transition-colors ${
