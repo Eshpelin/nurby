@@ -1,0 +1,15 @@
+{
+  "updated": "2026-06-16",
+  "repo": "blakeblackshear/frigate",
+  "total_merged_prs": 4058,
+  "direction": "newest_to_oldest",
+  "cursor_pr": 23326,
+  "newest_pr_seen": 23488,
+  "counts": {
+    "logged": 3,
+    "mapped_findings": 3,
+    "skipped_noise": 0,
+    "actions_open": 2
+  },
+  "notes": "Bootstrap batch: 3 PRs mapped as a demo of the pipeline (#23478, #23387, #23326). Full harvest not yet run. Next batch: PRs < 23326."
+}

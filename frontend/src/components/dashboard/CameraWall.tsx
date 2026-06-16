@@ -8,7 +8,14 @@
 // owns only layout/interaction and never duplicates the feed plumbing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Camera } from "@/app/dashboard-types";
+
+// A tile in the wall, camera or widget. The parent supplies the rendered
+// node so the wall owns only layout/interaction, not the feed/data plumbing.
+export interface WallItem {
+  id: string;
+  name: string;
+  render: () => React.ReactNode;
+}
 
 const COLS_KEY = "nurby-wall-cols";
 const ORDER_KEY = "nurby-wall-order";
@@ -30,13 +37,13 @@ function loadJSON<T>(key: string, fallback: T): T {
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
 export function CameraWall({
-  cameras,
-  renderTile,
+  items,
   onExit,
+  toolbarExtra,
 }: {
-  cameras: Camera[];
-  renderTile: (camera: Camera) => React.ReactNode;
+  items: WallItem[];
   onExit: () => void;
+  toolbarExtra?: React.ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -86,23 +93,23 @@ export function CameraWall({
   // Reconcile the saved order with the live camera list: keep known ids in
   // their saved order, append any new cameras, drop any that vanished.
   const ordered = useMemo(() => {
-    const byId = new Map(cameras.map((c) => [c.id, c]));
+    const byId = new Map(items.map((it) => [it.id, it]));
     const seen = new Set<string>();
-    const out: Camera[] = [];
+    const out: WallItem[] = [];
     for (const id of order) {
-      const cam = byId.get(id);
-      if (cam && !seen.has(id)) { out.push(cam); seen.add(id); }
+      const it = byId.get(id);
+      if (it && !seen.has(id)) { out.push(it); seen.add(id); }
     }
-    for (const cam of cameras) {
-      if (!seen.has(cam.id)) { out.push(cam); seen.add(cam.id); }
+    for (const it of items) {
+      if (!seen.has(it.id)) { out.push(it); seen.add(it.id); }
     }
     return out;
-  }, [cameras, order]);
+  }, [items, order]);
 
   const reorder = useCallback((fromId: string, toId: string) => {
     if (fromId === toId) return;
     setOrder(() => {
-      const ids = ordered.map((c) => c.id);
+      const ids = ordered.map((it) => it.id);
       const from = ids.indexOf(fromId);
       const to = ids.indexOf(toId);
       if (from < 0 || to < 0) return ids;
@@ -124,12 +131,12 @@ export function CameraWall({
 
   const resetLayout = useCallback(() => {
     setSpans({});
-    setOrder(cameras.map((c) => c.id));
+    setOrder(items.map((it) => it.id));
     setCols(3);
-  }, [cameras]);
+  }, [items]);
 
   const cellW = gridW > 0 ? gridW / cols : 0;
-  const soloCam = solo ? cameras.find((c) => c.id === solo) : null;
+  const soloItem = solo ? items.find((it) => it.id === solo) : null;
 
   return (
     <div ref={rootRef} className="flex flex-col flex-1 min-h-0 bg-background">
@@ -142,6 +149,7 @@ export function CameraWall({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {toolbarExtra}
           <div className="flex items-center gap-0.5 p-0.5 rounded bg-muted/50 border border-border">
             {COL_CHOICES.map((c) => (
               <button
@@ -178,33 +186,33 @@ export function CameraWall({
           gap: "0.4rem",
         }}
       >
-        {ordered.map((cam) => (
+        {ordered.map((it) => (
           <WallCell
-            key={cam.id}
-            span={spans[cam.id] || { w: 1, h: 1 }}
+            key={it.id}
+            span={spans[it.id] || { w: 1, h: 1 }}
             cellW={cellW}
             rowH={rowH}
-            onReorderDragStart={() => { dragId.current = cam.id; }}
-            onReorderDrop={() => { if (dragId.current) reorder(dragId.current, cam.id); dragId.current = null; }}
-            onResize={(w, h) => setSpan(cam.id, w, h)}
-            onSolo={() => setSolo(cam.id)}
+            onReorderDragStart={() => { dragId.current = it.id; }}
+            onReorderDrop={() => { if (dragId.current) reorder(dragId.current, it.id); dragId.current = null; }}
+            onResize={(w, h) => setSpan(it.id, w, h)}
+            onSolo={() => setSolo(it.id)}
           >
-            {renderTile(cam)}
+            {it.render()}
           </WallCell>
         ))}
       </div>
 
       {/* Solo blow-up. Fills the viewport; Esc or the button closes it. */}
-      {soloCam && (
+      {soloItem && (
         <div className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-sm flex flex-col p-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-white">{soloCam.name}</span>
+            <span className="text-sm font-medium text-white">{soloItem.name}</span>
             <button onClick={() => setSolo(null)}
               className="text-xs px-2 py-1 rounded border border-white/20 text-white/80 hover:bg-white/10">
               Close (Esc)
             </button>
           </div>
-          <div className="flex-1 min-h-0">{renderTile(soloCam)}</div>
+          <div className="flex-1 min-h-0">{soloItem.render()}</div>
         </div>
       )}
     </div>

@@ -1601,3 +1601,37 @@ class GuardianAccessLog(Base):
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class DashboardWidget(Base):
+    """A user-defined dashboard tile that pulls data from an external HTTP
+    API and renders it, either via a built-in template (mapping fields onto
+    Nurby components) or sandboxed custom HTML/JS. The auth secret is sealed
+    at rest (shared.camera_secrets); the backend proxies the fetch so the key
+    never reaches the browser. Positioned in the camera wall like any tile.
+    """
+
+    __tablename__ = "dashboard_widgets"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # "template" | "custom"
+    render_kind: Mapped[str] = mapped_column(String(16), default="template", nullable=False)
+    # {method, url, query?, headers?, body?, auth_kind, auth_name?, refresh_seconds}
+    source: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Sealed (Fernet) API key/token. Never returned to the client.
+    auth_secret: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    # {type, bindings, options} for render_kind == "template"
+    template: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Sandboxed source for render_kind == "custom"
+    custom_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Default span hint {w, h}; per-browser position lives in the wall's localStorage.
+    layout: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    last_fetch_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

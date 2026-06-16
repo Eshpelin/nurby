@@ -18,6 +18,7 @@ from services.api.routes import (
     cameras,
     conversations,
     daily_digest,
+    dashboard_widgets,
     detection_models,
     devices,
     digests,
@@ -175,6 +176,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(api_keys.router, prefix="/api/api-keys", tags=["api-keys"])
 app.include_router(webhook_subscriptions.router, prefix="/api/webhook-subscriptions", tags=["webhooks"])
+app.include_router(dashboard_widgets.router, prefix="/api/widgets", tags=["widgets"])
 app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(invites.router, prefix="/api/invites", tags=["invites"])
 app.include_router(guardian.router, prefix="/api/guardian", tags=["guardian"])

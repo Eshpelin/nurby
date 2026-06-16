@@ -82,7 +82,11 @@ import {
 } from "./dashboard-helpers";
 
 import { AnalyzingShimmer, DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, DetectionOverlay, MiniPTZ, SignalBadge } from "@/components/dashboard/CameraOverlays";
-import { CameraWall } from "@/components/dashboard/CameraWall";
+import { CameraWall, type WallItem } from "@/components/dashboard/CameraWall";
+import { WidgetTile } from "@/components/dashboard/WidgetTile";
+import { WidgetBuilder } from "@/components/widgets/WidgetBuilder";
+import type { Widget } from "@/components/widgets/types";
+import { useConfirm } from "@/lib/feedback";
 
 type CameraLayout = "single" | "double" | "list";
 function CameraSidebarCard({
@@ -656,6 +660,20 @@ function DashboardContent() {
     setViewMode(mode);
     try { localStorage.setItem("nurby-view-mode", mode); } catch { /* ignore */ }
   }, []);
+  // Dashboard widgets (custom data tiles) shown alongside cameras in the wall.
+  const confirmDialog = useConfirm();
+  const [widgets, setWidgets] = useState<Widget[]>([]);
+  const fetchWidgets = useCallback(async () => {
+    try { const res = await authFetch("/api/widgets"); if (res.ok) setWidgets(await res.json()); }
+    catch { /* silent */ }
+  }, [authFetch]);
+  useEffect(() => { fetchWidgets(); }, [fetchWidgets]);
+  const [widgetBuilder, setWidgetBuilder] = useState<{ open: boolean; editing: Widget | null }>({ open: false, editing: null });
+  const deleteWidget = useCallback(async (w: Widget) => {
+    if (!(await confirmDialog({ title: "Delete widget?", body: `Remove "${w.name}" from your dashboard?`, confirmLabel: "Delete", danger: true }))) return;
+    try { await authFetch(`/api/widgets/${w.id}`, { method: "DELETE" }); } catch { /* ignore */ }
+    fetchWidgets();
+  }, [confirmDialog, fetchWidgets, authFetch]);
   // User-customised sidebar width. Null means fall back to preset for layout.
   const [sidebarWidth, setSidebarWidth] = useState<number | null>(() => {
     if (typeof window === "undefined") return null;
@@ -1565,7 +1583,38 @@ function DashboardContent() {
       )}
 
       {viewMode === "wall" && (
-        <CameraWall cameras={cameras} renderTile={renderWallTile} onExit={() => switchView("investigate")} />
+        <CameraWall
+          items={[
+            ...cameras.map((cam): WallItem => ({ id: cam.id, name: cam.name, render: () => renderWallTile(cam) })),
+            ...widgets.map((w): WallItem => ({
+              id: w.id,
+              name: w.name,
+              render: () => (
+                <WidgetTile
+                  widget={w}
+                  onEdit={(ww) => setWidgetBuilder({ open: true, editing: ww })}
+                  onDelete={deleteWidget}
+                />
+              ),
+            })),
+          ]}
+          onExit={() => switchView("investigate")}
+          toolbarExtra={
+            <button
+              onClick={() => setWidgetBuilder({ open: true, editing: null })}
+              className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
+              title="Add a custom data widget"
+            >+ Widget</button>
+          }
+        />
+      )}
+
+      {widgetBuilder.open && (
+        <WidgetBuilder
+          widget={widgetBuilder.editing}
+          onClose={() => setWidgetBuilder({ open: false, editing: null })}
+          onSaved={() => { setWidgetBuilder({ open: false, editing: null }); fetchWidgets(); }}
+        />
       )}
 
       <div className={`flex flex-col lg:flex-row gap-4 flex-1 min-h-0 ${viewMode === "wall" ? "hidden" : ""}`}>
