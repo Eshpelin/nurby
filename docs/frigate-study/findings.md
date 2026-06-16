@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 21003** triaged (520, ~13% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 20790** triaged (560, ~14% of 4058 merged), newest-first.
 
 ---
 
@@ -349,3 +349,16 @@ Security-relevant, all folded into existing issues / backlog:
 - **[#21110] User-namespaced IndexedDB keys** — reinforces per-user-namespacing (issue #42);
   verify nurby frontend persisted state is user-scoped · P3.
 - **[#21194] Authentication improvements** — generic auth hardening; compare to `shared/auth.py` · P3.
+
+---
+
+## Batch 14 (PRs 20989–20790) — coverage batch, no code change
+
+Deep 0.17-beta dev churn: classification/secondary-models (N/A), HLS *frontend* player fixes
+(nurby uses MediaMTX, N/A), camera-wizard UI, pluralization/i18n, hardware (MemryX/Jetson/hailo).
+No nurby-applicable backend fix.
+
+- **[#20828] Per-camera Review-Summary context** (PARTIAL) — let users add per-camera context to
+  GenAI review/digest summaries; nurby has summaries but maybe not per-camera summary context · P3.
+- Note: **[#20786] events-summary DST fix** lands at the next batch boundary; folds into the DST
+  backlog item (#22698 / digest time-window correctness).

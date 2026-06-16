@@ -3,12 +3,12 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 21003,
+  "cursor_pr": 20790,
   "newest_pr_seen": 23488,
-  "batches_done": 13,
+  "batches_done": 14,
   "counts": {
-    "logged": 520,
-    "pct_of_merged": "~13%",
+    "logged": 560,
+    "pct_of_merged": "~14%",
     "fixes_shipped": 5,
     "issues_open": 8,
     "issues_closed": 1
@@ -35,6 +35,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 21003, newest-first.",
-  "notes": "Batch 13: coverage only (ROCm/Jetson/Coral/MemryX = N/A). #21065+#21094 (default-admin API posture) strongly reinforce issue #46 (commented). Backlog: pin cryptography (#21126), user-namespaced idb keys (#21110 -> #42 theme), auth improvements (#21194)."
+  "next": "Continue at PR < 20790, newest-first.",
+  "notes": "Batch 14: coverage only (0.17-beta classification/HLS-frontend/wizard-UI/i18n/hardware = N/A). #20828 per-camera review-summary context PARTIAL (backlog). DST events-summary fix #20786 at next boundary -> DST backlog (#22698)."
 }

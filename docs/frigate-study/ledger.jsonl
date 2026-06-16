@@ -518,3 +518,43 @@
 {"pr":21019,"title":"clarify trademark and license interaction","area":"docs","type":"docs","decision":"skip"}
 {"pr":21005,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
 {"pr":21003,"title":"add comment about unifi g5 and newer cams","area":"docs","type":"docs","decision":"skip"}
+{"pr":20989,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20987,"title":"Bump actions/checkout 5->6","area":"deps","type":"ci","decision":"skip"}
+{"pr":20983,"title":"HLS adjustments","area":"output","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"Frigate HLS live player; nurby uses MediaMTX HLS/WebRTC."}
+{"pr":20982,"title":"Fix HLS jumping to end of timeChunk","area":"web","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"Frigate jsmpeg/HLS player seek bug."}
+{"pr":20980,"title":"[MemryX] Update YOLOv9 post-processing","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20973,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20969,"title":"Fixed a typo in reference.md","area":"docs","type":"docs","decision":"skip"}
+{"pr":20967,"title":"Chore/update yq to 4.48.2","area":"ci","type":"ci","decision":"skip"}
+{"pr":20963,"title":"Fix RF-DETR docs heading","area":"docs","type":"docs","decision":"skip"}
+{"pr":20951,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20922,"title":"fix: Always Show Camera Names label switch id wrong","area":"web","type":"bugfix","decision":"skip"}
+{"pr":20897,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20889,"title":"Add Camera Wizard tweaks","area":"web","type":"feature","decision":"defer","note":"Onboarding wizard; UI parity pass."}
+{"pr":20885,"title":"chore: i18n use cache key","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20878,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20876,"title":"Add Camera Wizard improvements","area":"web","type":"feature","decision":"defer"}
+{"pr":20875,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20866,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20863,"title":"Improve classification","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip","note":"Frigate secondary classification models."}
+{"pr":20857,"title":"Fix i18n","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20850,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20849,"title":"Tracked Object Details pane tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20848,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20847,"title":"Update hailo installation instructions","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":20841,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20838,"title":"fix: add pluralization (classification model)","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20833,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20830,"title":"Tracked Object Details pane tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20828,"title":"Add ability to define Review Summary camera context","area":"genai","type":"feature","nurby_status":"PARTIAL","decision":"map","insight":"Let users provide per-camera context to the GenAI review-period summary for better summaries.","nurby_evidence":"Nurby has VLM summaries (summary_mode/prompt) + daily digests; per-camera summary-context prompt may be partial.","action":"Backlog: per-camera context prompt for review/digest summaries.","priority":"P3","effort":"S"}
+{"pr":20827,"title":"fix: add pluralization for userRolesUpdated toast message","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20825,"title":"Bug Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20813,"title":"Review card refactor","area":"web","type":"refactor","decision":"defer"}
+{"pr":20812,"title":"Form validation tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20811,"title":"UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20808,"title":"Fix jetson build","area":"ci","type":"ci","nurby_status":"N/A","decision":"skip"}
+{"pr":20807,"title":"Classification Improvements","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20803,"title":"fix: add pluralization for deletedModel toast message","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20800,"title":"Various Tweaks","area":"?","type":"?","decision":"defer"}
+{"pr":20791,"title":"UI Tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20790,"title":"Form validation tweaks","area":"web","type":"ui","decision":"skip"}
