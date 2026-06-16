@@ -438,3 +438,43 @@
 {"pr":21474,"title":"Miscellaneous Fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
 {"pr":21462,"title":"[docs] fix topic for camera status","area":"docs","type":"docs","decision":"skip"}
 {"pr":21443,"title":"Miscellaneous fixes (0.17 Beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21439,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21434,"title":"fix: additional proxy headers for complete support of oauth2-proxy","area":"api","type":"feature","nurby_status":"N/A","decision":"skip","note":"oauth2-proxy reverse-auth; nurby uses JWT native auth."}
+{"pr":21431,"title":"Miscellaneous fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21396,"title":"Miscellaneous Fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21395,"title":"Refactor temperature reporting for detectors and implement Hailo temp","area":"stats","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":21387,"title":"fix: fix password setting overlay time i18n","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21386,"title":"Camera-specific hwaccel settings for timelapse exports","area":"record","type":"feature","nurby_status":"N/A","decision":"skip","note":"Hwaccel export; nurby CPU-only."}
+{"pr":21373,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21366,"title":"fix: fix system enrichments view classification i18n","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21365,"title":"Add Scrypted - Frigate bridge plugin information","area":"docs","type":"docs","decision":"skip"}
+{"pr":21355,"title":"Miscellaneous Fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21350,"title":"Miscellaneous fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21348,"title":"Add object classification attributes to Tracked Object Details","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip","note":"Object attributes; no nurby concept."}
+{"pr":21344,"title":"fix: temp directory is only created when there are review_items","area":"record","type":"reliability","nurby_status":"N/A","decision":"skip"}
+{"pr":21336,"title":"Miscellaneous Fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21335,"title":"consider anonymous user authenticated","area":"api","type":"security","nurby_status":"N/A","decision":"map","insight":"When auth is disabled, anonymous requests are treated as authenticated (auth-mode footgun).","nurby_evidence":"Nurby has no anonymous/auth-disabled mode; all requests need a JWT. Not applicable.","priority":"P3","effort":"-"}
+{"pr":21331,"title":"classification i18n fix","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21322,"title":"Export filter UI","area":"record","type":"feature","decision":"defer","note":"Export filtering UI; export parity pass."}
+{"pr":21320,"title":"Miscellaneous Fixes (0.17 Beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21302,"title":"Align node versions used in GHA workflow","area":"ci","type":"ci","decision":"skip"}
+{"pr":21301,"title":"Miscellaneous Fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21300,"title":"Settings page layout shift - follow up","area":"web","type":"ui","decision":"skip"}
+{"pr":21299,"title":"Case management UI","area":"review","type":"feature","nurby_status":"PARTIAL","decision":"map","insight":"Group related events into a 'case' for organized review, export, and sharing as evidence.","nurby_evidence":"Nurby has incidents + evidence-first alert cards + reports (Telegram/webhook delivery) but no explicit case container that bundles multiple incidents/clips for export/sharing.","action":"Backlog/initiative: case management (bundle incidents + clips into a shareable evidence case).","priority":"P3","effort":"L"}
+{"pr":21298,"title":"Fix layout shift on settings page","area":"web","type":"ui","decision":"skip"}
+{"pr":21297,"title":"Camera connection quality indicator","area":"web","type":"feature","nurby_status":"MISSING","decision":"map","insight":"Surface per-camera connection quality (drops/bitrate/reconnects) in the UI.","nurby_evidence":"Nurby tracks camera online/offline status but not a connection-quality/health metric.","action":"Backlog: per-camera connection-quality/health indicator.","priority":"P3","effort":"M"}
+{"pr":21296,"title":"Refactor vainfo endpoint to search for first GPU","area":"stats","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":21295,"title":"Wire up case management to exports APIs","area":"review","type":"feature","nurby_status":"PARTIAL","decision":"map","note":"Case management theme (#21299).","priority":"P3","effort":"M"}
+{"pr":21294,"title":"feat: add train classification download weights file endpoint","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":21293,"title":"Create scaffolding for case management","area":"review","type":"feature","nurby_status":"PARTIAL","decision":"map","note":"Case management theme (#21299).","priority":"P3","effort":"L"}
+{"pr":21289,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21280,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21279,"title":"Miscellaneous Fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21278,"title":"Fix yolov9 coral docs labelmap path","area":"docs","type":"docs","decision":"skip"}
+{"pr":21264,"title":"Fix trigger sync","area":"events","type":"bugfix","nurby_status":"N/A","decision":"defer","note":"Frigate 0.17 semantic-trigger sync; nurby rule-triggers are a different model."}
+{"pr":21261,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21256,"title":"Update Hikvision camera link in hardware documentation","area":"docs","type":"docs","decision":"skip"}
+{"pr":21252,"title":"fix: attribute error in embedding maintainer","area":"embeddings","type":"bugfix","nurby_status":"N/A","decision":"defer","note":"Frigate embedding-maintainer internal; nurby embeddings pipeline differs."}
+{"pr":21250,"title":"Improve handling of backchannel audio in camera wizard","area":"ingestion","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Two-way/backchannel audio; check nurby two-way audio support.","priority":"P3","effort":"M"}
+{"pr":21247,"title":"Replace stringy paths with constants","area":"util","type":"refactor","decision":"skip"}
+{"pr":21243,"title":"Update peewee-migrate to 0.14.x","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip","note":"Frigate uses peewee ORM; nurby uses SQLAlchemy + alembic."}
