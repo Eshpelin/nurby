@@ -937,6 +937,7 @@ class SystemSettingsResponse(BaseModel):
     daily_digest_enabled: bool = True
     daily_digest_hour: int = 7
     nudity_blur: bool = True
+    detect_classes: list[str] | None = None
     audio_events: bool = True
     body_reid_tentative_decay_days: int = 14
     cluster_naming_min_sightings: int = 3
@@ -969,6 +970,7 @@ class SystemSettingsUpdate(BaseModel):
     daily_digest_enabled: bool | None = None
     daily_digest_hour: int | None = Field(default=None, ge=0, le=23)
     nudity_blur: bool | None = None
+    detect_classes: list[str] | None = None
     audio_events: bool | None = None
     body_reid_tentative_decay_days: int | None = Field(default=None, ge=0, le=3650)
     cluster_naming_min_sightings: int | None = Field(default=None, ge=0, le=1000)

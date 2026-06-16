@@ -78,6 +78,11 @@ export default function SettingsPage() {
   const [nudityMinScore, setNudityMinScore] = useState<number>(0.5);
   const [nudityLoading, setNudityLoading] = useState<boolean>(true);
   const [nuditySaving, setNuditySaving] = useState<boolean>(false);
+  // Global object-detection allowlist. Empty = detect everything.
+  const [detectClasses, setDetectClasses] = useState<string[]>([]);
+  const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+  const [detectSaving, setDetectSaving] = useState<boolean>(false);
+  const [classSearch, setClassSearch] = useState<string>("");
   const [journeyIdleSeconds, setJourneyIdleSeconds] = useState<number>(300);
   const [dailyDigestEnabled, setDailyDigestEnabled] = useState<boolean>(true);
   const [dailyDigestHour, setDailyDigestHour] = useState<number>(7);
@@ -251,9 +256,33 @@ export default function SettingsPage() {
         if (typeof data.daily_digest_hour === "number") setDailyDigestHour(data.daily_digest_hour);
         if (typeof data.daily_digest_provider_id === "string") setDailyDigestProviderId(data.daily_digest_provider_id);
         if (typeof data.system_timezone === "string") setSystemTimezone(data.system_timezone);
+        setDetectClasses(Array.isArray(data.detect_classes) ? data.detect_classes : []);
       }
     } catch { /* silent */ }
     finally { setNudityLoading(false); }
+  }, [authFetch]);
+
+  const fetchClasses = useCallback(async () => {
+    try {
+      const res = await authFetch("/api/detection-models/classes");
+      if (res.ok) {
+        const d = await res.json();
+        if (Array.isArray(d.classes)) setAvailableClasses(d.classes);
+      }
+    } catch { /* silent */ }
+  }, [authFetch]);
+
+  const saveDetectClasses = useCallback(async (next: string[]) => {
+    setDetectSaving(true);
+    try {
+      const res = await authFetch("/api/system/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ detect_classes: next.length ? next : null }),
+      });
+      if (res.ok) setDetectClasses(next);
+    } catch { /* silent */ }
+    finally { setDetectSaving(false); }
   }, [authFetch]);
 
   const saveExtra = useCallback(async (patch: Record<string, unknown>) => {
@@ -294,8 +323,9 @@ export default function SettingsPage() {
     fetchSmtp();
     fetchBlurPersons();
     fetchAppSettings();
+    fetchClasses();
     checkOllama();
-  }, [fetchProviders, fetchInviteKeys, fetchCameras, fetchStorage, fetchSmtp, fetchBlurPersons, fetchAppSettings, checkOllama]);
+  }, [fetchProviders, fetchInviteKeys, fetchCameras, fetchStorage, fetchSmtp, fetchBlurPersons, fetchAppSettings, fetchClasses, checkOllama]);
 
   // Poll for Ollama installation every 5s while not installed
   useEffect(() => {
@@ -947,6 +977,59 @@ export default function SettingsPage() {
           >
             <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${nudityBlur ? "left-[1.375rem]" : "left-0.5"}`} />
           </button>
+        </div>
+
+        {/* Objects to detect (global allowlist) */}
+        <div className="rounded-lg border border-border bg-card px-4 py-3.5">
+          <div className="text-sm font-medium mb-1">Objects to detect</div>
+          <p className="text-xs text-muted-foreground mb-3">
+            {detectClasses.length === 0
+              ? "Detecting everything the models can. Pick specific classes to ignore all others — nothing else gets a box, an event, or a rule, on any camera."
+              : `Only these ${detectClasses.length} class${detectClasses.length === 1 ? "" : "es"} are detected on every camera. Everything else is ignored.`}
+          </p>
+          <input
+            value={classSearch}
+            onChange={(e) => setClassSearch(e.target.value)}
+            placeholder="Filter classes…"
+            className="w-full mb-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto scrollbar-thin">
+            {(availableClasses.length ? availableClasses : detectClasses)
+              .filter((c) => c.toLowerCase().includes(classSearch.toLowerCase()))
+              .map((c) => {
+                const on = detectClasses.includes(c);
+                return (
+                  <button
+                    key={c}
+                    disabled={detectSaving}
+                    onClick={() =>
+                      saveDetectClasses(on ? detectClasses.filter((x) => x !== c) : [...detectClasses, c])
+                    }
+                    className={`px-2 py-0.5 text-[11px] rounded border capitalize transition-colors disabled:opacity-50 ${
+                      on
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                );
+              })}
+            {availableClasses.length === 0 && detectClasses.length === 0 && (
+              <span className="text-[11px] text-muted-foreground">
+                Loading the detector&apos;s class list…
+              </span>
+            )}
+          </div>
+          {detectClasses.length > 0 && (
+            <button
+              onClick={() => saveDetectClasses([])}
+              disabled={detectSaving}
+              className="mt-2 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              Detect everything again
+            </button>
+          )}
         </div>
 
         {/* Cross-camera journey idle */}

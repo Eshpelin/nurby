@@ -50,6 +50,11 @@ DEFAULTS: dict[str, Any] = {
     # sirens, relays, n8n on the same host) are a first-class feature.
     # Cloud metadata endpoints are always refused regardless of this flag.
     "webhook_block_private_networks": False,
+    # Global object-detection allowlist. None / empty = detect everything
+    # (the detector's full class set). A non-empty list of YOLO labels means
+    # only those classes survive detection on every camera: nothing else gets
+    # a box, an observation entry, or a rule trigger.
+    "detect_classes": None,
     # Rule cooldown backing store. "redis" persists per-rule last-fired
     # epoch across perception restarts and across multiple workers;
     # "memory" reverts to single-process in-RAM tracking (cooldowns
@@ -229,6 +234,17 @@ async def set_setting(key: str, value: Any) -> None:
         else:
             row.value = {"value": value}
         await db.commit()
+
+
+def normalize_class_allowlist(value: Any) -> set[str] | None:
+    """Parse a ``detect_classes`` value into a lowercase label set, or None
+    when there is no restriction (None / empty -> detect everything)."""
+    if not value:
+        return None
+    if isinstance(value, str):
+        value = [value]
+    out = {str(v).strip().lower() for v in value if str(v).strip()}
+    return out or None
 
 
 async def get_all_settings(db: AsyncSession) -> dict[str, Any]:

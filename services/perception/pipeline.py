@@ -53,6 +53,10 @@ class PerceptionPipeline:
         self._camera_cache: dict[str, Camera] = {}
         self._camera_cache_time: float = 0
         self._camera_cache_lock = asyncio.Lock()
+        # Global detection allowlist (lowercase labels) or None for "all".
+        # Cached with a short TTL so the hot path never hits the DB per frame.
+        self._detect_classes: set[str] | None = None
+        self._detect_classes_time: float = 0
         self._vlm_last_call: dict[str, float] = {}  # camera_id -> last VLM call timestamp
         # Per-camera object trackers for loitering / line-cross.
         from services.perception.tracker import ObjectTracker
@@ -168,6 +172,20 @@ class PerceptionPipeline:
                     except Exception:
                         logger.exception("Failed to load camera configs")
         return self._camera_cache.get(camera_id)
+
+    async def _get_detect_classes(self) -> set[str] | None:
+        """Global object-detection allowlist (lowercase labels), or None for
+        'detect everything'. Cached 30s so the per-frame path never hits the DB."""
+        import time as _time
+        now = _time.monotonic()
+        if now - self._detect_classes_time > 30:
+            try:
+                from shared.app_settings import get_setting, normalize_class_allowlist
+                self._detect_classes = normalize_class_allowlist(await get_setting("detect_classes"))
+            except Exception:
+                logger.exception("Failed to load detect_classes allowlist")
+            self._detect_classes_time = now
+        return self._detect_classes
 
     async def _get_provider_for_camera(self, cam: Camera | None) -> Provider | None:
         """Get VLM provider. Per-camera override if set, else system default."""
@@ -487,6 +505,13 @@ class PerceptionPipeline:
                 # Single model fallback
                 confidence_threshold = cam.object_confidence if cam else 0.35
                 detections = await self._detector.detect(frame, confidence=confidence_threshold)
+
+            # Global allowlist: when set, drop every detection whose label is
+            # not chosen, so nothing else downstream (boxes, observations,
+            # rules, recording annotations) ever sees it. Empty/None = all.
+            allowed = await self._get_detect_classes()
+            if allowed and detections:
+                detections = [d for d in detections if str(d.get("label", "")).lower() in allowed]
 
             detection_summary = self._detector.summarize(detections)
             logger.info("Detections for camera %s. %s", camera_id, detection_summary)
