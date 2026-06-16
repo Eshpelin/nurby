@@ -584,3 +584,32 @@ Coverage-only batch. No issues, no merges. Highest N/A density yet: this stretch
 **N/A:** #17712 async object detector and #17671 object tracking are Frigate's hardware inference loop / norfair tracker internals; Nurby uses a separate perception+VLM architecture. #17816 frame-time fix is `tracked_object.py` timing internals.
 
 No backend auth/API/ingest signal in this batch. Region remains a hwaccel+i18n desert; keep scanning.
+
+## Batch 29 (PRs 17639-17424)
+
+Coverage-only batch. No issues, no merges. Dominated by LPR, Face Library UI, i18n/translations, and docs.
+
+**HAVE (verified):** #17572 "Catch OpenAI compatible endpoint crash". Frigate's `genai/openai.py._send` only caught `TimeoutException` and dereferenced `result.choices` unguarded, so a connection error or malformed response crashed the call. Nurby is already defensive here: `services/agent/llm.py` delegates per-provider, and every call site wraps `llm_call`/VLM enrichment in a broad `except Exception` (`services/perception/vlm_enrichment_worker.py` lines 174/188/198/299/377/388/498/513, `services/agent/driver.py`, `services/recap.py`). An endpoint crash degrades to a logged failure, not a propagated exception.
+
+**N/A worth noting (Frigate-internal, no Nurby analog):**
+- #17629 search sort (confirmed batch-28: Nurby sorts in SQL `order_by`, not Frigate's in-memory dict-key sort).
+- #17437 embedding eps (`metric.value =` shared-memory assignment), #17436 enrichments-eps graph — Frigate metrics internals.
+- #17444 ceil-vs-round and #17438 frame-time-between-end-and-rounded-start — Frigate recording-segment timestamp edge cases tied to its segment cache; Nurby's snapshot/recording path differs.
+- #17547 enabled-config cleanup — Frigate runtime config; Nurby DB-backed (see batch-25/26).
+
+Rest: LPR (#17631/17592/17588/17549/17536/17453/17428), Face Library UI (#17630/17618/17530/17525/17521/17493/17472/17424), birdseye (#17502), i18n/docs. No backend auth/API/ingest signal.
+
+## Batch 30 (PRs 17420-17305)
+
+Coverage-only batch. No issues, no merges. Densest N/A region so far: face recognition / LPR / classification ML, hwaccel (tensorrt/nvidia/OpenVINO/RF-DETR/igpu), nginx/devcontainer infra, i18n, docs, and frontend UI.
+
+**HAVE (verified):** #17339 "Ensure thumb camera directory exists before saving" added `os.makedirs(exist_ok=True)` before `cv2.imwrite` of an event thumbnail (Frigate previously wrote into a possibly-missing `THUMB_DIR/<camera>` dir, crashing on first event for a new camera). Nurby already does this at every image-write site: `services/perception/pipeline.py:_save_thumbnail` (makedirs THUMBNAIL_DIR), `services/perception/reid.py:_save_body_crop` (makedirs bodies dir), `services/perception/faces.py:218` (makedirs face_dir), and `services/agent/analyzer.py:990` (`root.mkdir(parents=True, exist_ok=True)` before imwrite at :996). Recording-segment writes also makedirs (`stream.py:268/301`). No missing-dir write crash exists in Nurby.
+
+**N/A worth noting:**
+- #17418 dynamic embeddings reindexing — Frigate re-embeds tracked objects when the user swaps the classification/embedding model from the UI. Nurby's embedding/reindex story is a known backlog item, not a defect; logged for the search initiative, no issue filed.
+- #17307 onvif/norfair "bugfixes" — ONVIF/PTZ already verified fully async in batch-26; norfair tracker timing is Frigate-internal (Nurby uses separate perception+ReID).
+- #17331/#17305/#17355 camera-enabled-state — all frontend (`CameraStreamingDialog.tsx`/`LiveCameraView.tsx`) gating of go2rtc metadata fetch; no backend analog.
+
+Rest: face/LPR/classification ML (#17420/17412/17402/17401/17390/17387/17384/17373/17368/17337/17325/17308), hwaccel (#17411/17388/17321), nginx/devcontainer (#17419/17415/17400/17342/17341/17310), i18n/docs/UI. No backend auth/API/ingest correctness signal.
+
+Region note: state.json had silently fallen 3 batches behind the ledger (cursor said 18017 while ledger/findings already covered batches 27-29 down to 17424, incl. issue #69). Reconciled this run. ledger/findings remain the source of truth; state cursor now corrected.

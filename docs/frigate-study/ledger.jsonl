@@ -1150,3 +1150,93 @@
 {"pr":17651,"title":"Small tweaks","area":"misc","type":"chore","decision":"skip"}
 {"pr":17649,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
 {"pr":17640,"title":"Update tensorrt model config to use coco-80","area":"hwaccel","type":"chore","decision":"na"}
+{"pr":17639,"title":"Quick fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":17631,"title":"Edit license plate in Tracked Object Details","area":"lpr","type":"feat","decision":"na"}
+{"pr":17630,"title":"More face fixes","area":"face","type":"fix","decision":"na"}
+{"pr":17629,"title":"Fix search sort when using score or estimated speed","area":"search","type":"fix","decision":"na","note":"frigate in-python dict-key sort bug; nurby sorts in SQL order_by, not affected"}
+{"pr":17618,"title":"Face fixes","area":"face","type":"fix","decision":"na"}
+{"pr":17615,"title":"UI tweaks","area":"frontend","type":"chore","decision":"na"}
+{"pr":17614,"title":"Small tweaks and fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":17609,"title":"update recommended hardware links","area":"docs","type":"docs","decision":"na"}
+{"pr":17606,"title":"Add languages to Language menu","area":"i18n","type":"feat","decision":"na"}
+{"pr":17601,"title":"Add detail icon to indicate when a car has a recognized plate","area":"frontend","type":"feat","decision":"na"}
+{"pr":17594,"title":"Catch OpenVINO exception","area":"hwaccel","type":"fix","decision":"na"}
+{"pr":17592,"title":"LPR device selection","area":"lpr","type":"feat","decision":"na"}
+{"pr":17588,"title":"LPR fixes","area":"lpr","type":"fix","decision":"na"}
+{"pr":17585,"title":"Fix websocket enabled state","area":"frontend","type":"fix","decision":"na"}
+{"pr":17581,"title":"Update README_CN","area":"docs","type":"docs","decision":"na"}
+{"pr":17579,"title":"Update translation docs for weblate","area":"docs","type":"docs","decision":"na"}
+{"pr":17572,"title":"Catch OpenAI compatible endpoint crash","area":"genai","type":"fix","decision":"have","note":"frigate only caught TimeoutException + unguarded result.choices. nurby wraps all LLM/VLM calls in broad except Exception at worker boundaries (vlm_enrichment_worker.py, agent/driver.py, recap.py)"}
+{"pr":17563,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
+{"pr":17560,"title":"mention weblate in readme","area":"docs","type":"docs","decision":"na"}
+{"pr":17549,"title":"LPR improvements","area":"lpr","type":"feat","decision":"na"}
+{"pr":17547,"title":"Clean up enabled config updates","area":"camera-config","type":"chore","decision":"na","note":"frigate runtime enabled-flag config"}
+{"pr":17542,"title":"Update chinese i18n","area":"i18n","type":"chore","decision":"skip"}
+{"pr":17539,"title":"Trim group name before length validation","area":"frontend","type":"fix","decision":"na","note":"frigate camera-group name trim; nurby group validation differs"}
+{"pr":17536,"title":"LPR tweaks","area":"lpr","type":"chore","decision":"na"}
+{"pr":17530,"title":"Face fixes","area":"face","type":"fix","decision":"na"}
+{"pr":17525,"title":"Face Library UI tweaks","area":"frontend","type":"chore","decision":"na"}
+{"pr":17521,"title":"Use dropdown for collection selection in Face Library","area":"frontend","type":"feat","decision":"na"}
+{"pr":17502,"title":"Catch birdseye websocket error","area":"comms","type":"fix","decision":"na","note":"birdseye not in nurby"}
+{"pr":17495,"title":"Provide default value for dashboard audio support","area":"frontend","type":"fix","decision":"na"}
+{"pr":17493,"title":"Face Library: Only handle click on card when selection mode is ongoing","area":"frontend","type":"fix","decision":"na"}
+{"pr":17491,"title":"Docs update","area":"docs","type":"docs","decision":"na"}
+{"pr":17478,"title":"Docs updates","area":"docs","type":"docs","decision":"na"}
+{"pr":17472,"title":"Face UI cleanup","area":"frontend","type":"chore","decision":"na"}
+{"pr":17469,"title":"Update nvidia inference time docs","area":"docs","type":"docs","decision":"na"}
+{"pr":17454,"title":"Clean up and clarify face docs","area":"docs","type":"docs","decision":"na"}
+{"pr":17453,"title":"Dedicated LPR improvements","area":"lpr","type":"feat","decision":"na"}
+{"pr":17452,"title":"Mobile Live dashboard bugfix","area":"frontend","type":"fix","decision":"na"}
+{"pr":17450,"title":"update chinese i18n","area":"i18n","type":"chore","decision":"skip"}
+{"pr":17444,"title":"Use ceil instead of round for recording snapshot","area":"recordings","type":"fix","decision":"na","note":"frigate snapshot-from-recording timestamp rounding; nurby snapshot path differs"}
+{"pr":17443,"title":"Misc fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":17438,"title":"Catch case where frame time is between end and rounded start","area":"perception","type":"fix","decision":"na","note":"frigate recording segment frame-time edge case"}
+{"pr":17437,"title":"Fix embedding eps","area":"metrics","type":"fix","decision":"na","note":"frigate shared-memory metric .value assignment internals"}
+{"pr":17436,"title":"Implement enrichments events per second graph","area":"metrics","type":"feat","decision":"na"}
+{"pr":17428,"title":"LPR tweaks","area":"lpr","type":"chore","decision":"na"}
+{"pr":17424,"title":"Refactor face library page","area":"frontend","type":"refactor","decision":"na"}
+{"pr": 17420, "title": "Ensure landmark detector has a default value", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 17419, "title": "Upgrade bundled nginx to 1.27.4", "area": "infra", "type": "chore", "decision": "na"}
+{"pr": 17418, "title": "Dynamic embeddings reindexing", "area": "search", "type": "feat", "decision": "na", "note": "reindex-on-model-change; Nurby search/embeddings backlog, not a defect"}
+{"pr": 17415, "title": "Devcontainer: update Mosquitto 1.6->2.0", "area": "infra", "type": "chore", "decision": "na"}
+{"pr": 17414, "title": "update YOLO_NAS notebook for python 3.11", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 17413, "title": "Tweak face recognition docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 17412, "title": "Remove LPR denoising", "area": "lpr", "type": "chore", "decision": "na"}
+{"pr": 17411, "title": "Various fixes (tensorrt/face)", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 17406, "title": "Miscellaneous fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 17402, "title": "Implement facenet tflite for small face recognition model", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 17401, "title": "Face recognition bug fixes", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 17400, "title": "nginx: don't gzip png, gif, jpeg or jpg", "area": "infra", "type": "chore", "decision": "na"}
+{"pr": 17398, "title": "i18n Settings fixes", "area": "i18n", "type": "chore", "decision": "na"}
+{"pr": 17397, "title": "Fix missing restart notification in Classification settings", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17390, "title": "Face model loading improvements", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 17388, "title": "Fix nvidia model generation", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 17387, "title": "Face recognition improvements", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 17384, "title": "LPR bugfix", "area": "lpr", "type": "fix", "decision": "na"}
+{"pr": 17383, "title": "Fix wrong value displayed in facerec settings", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17379, "title": "add model settings chinese i18n keys", "area": "i18n", "type": "chore", "decision": "na"}
+{"pr": 17375, "title": "Add explanation of group_add for igpu", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 17373, "title": "LPR: reduce expansion of license_plate box for frigate+ models", "area": "lpr", "type": "chore", "decision": "na"}
+{"pr": 17369, "title": "Bird classification docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 17368, "title": "Refactor face recognition", "area": "ml", "type": "refactor", "decision": "na"}
+{"pr": 17367, "title": "Make all object path points clickable", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 17363, "title": "Live and go2rtc docs updates", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 17359, "title": "Increase the initial stall timeout of the MSE player", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17355, "title": "Revert go2rtc call checks for enabled camera state", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17349, "title": "Update face recognition docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 17343, "title": "Docs update for contributing", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 17342, "title": "Various fixes (docker/motion)", "area": "infra", "type": "fix", "decision": "na"}
+{"pr": 17341, "title": "Devcontainers - don't require /dev/bus/usb to be present", "area": "infra", "type": "chore", "decision": "na"}
+{"pr": 17339, "title": "Ensure thumb camera directory exists before saving", "area": "perception", "type": "fix", "decision": "have", "note": "Nurby makedirs(exist_ok=True) before every cv2.imwrite: pipeline _save_thumbnail, reid _save_body_crop, faces _save_face_crop, analyzer.py:990"}
+{"pr": 17337, "title": "Classification fixes", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 17334, "title": "Fixes (frontend/docs)", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17331, "title": "Fix camera enabled check", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17325, "title": "Dedicated LPR fixes", "area": "lpr", "type": "fix", "decision": "na"}
+{"pr": 17324, "title": "Add ability to update Frigate+ model to latest from UI", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 17322, "title": "Fix missing key in example LPR config", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 17321, "title": "Support RF-DETR models with OpenVINO", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 17319, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 17310, "title": "Update nginx webmanifest to use /BASE_PATH/", "area": "infra", "type": "fix", "decision": "na"}
+{"pr": 17308, "title": "Various fixes & tweaks (face)", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 17307, "title": "Bugfixes and docs tweaks (onvif/norfair)", "area": "ptz", "type": "fix", "decision": "na", "note": "ONVIF already async-verified batch-26; norfair tracker internals N/A"}
+{"pr": 17305, "title": "Fix webUI generating HTTP500s when camera disabled", "area": "frontend", "type": "fix", "decision": "na"}
