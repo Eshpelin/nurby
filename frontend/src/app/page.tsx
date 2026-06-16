@@ -82,6 +82,7 @@ import {
 } from "./dashboard-helpers";
 
 import { AnalyzingShimmer, DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, DetectionOverlay, MiniPTZ, SignalBadge } from "@/components/dashboard/CameraOverlays";
+import { CameraWall } from "@/components/dashboard/CameraWall";
 
 type CameraLayout = "single" | "double" | "list";
 function CameraSidebarCard({
@@ -90,12 +91,16 @@ function CameraSidebarCard({
   onClick,
   activityEvents,
   layout,
+  fill = false,
 }: {
   camera: Camera;
   selected: boolean;
   onClick: () => void;
   activityEvents: ActivityEvent[];
   layout: CameraLayout;
+  // Wall mode: the tile fills its grid cell (no fixed 16:9, no footer) so
+  // the wall can size each camera independently in width AND height.
+  fill?: boolean;
 }) {
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [ptzOpen, setPtzOpen] = useState(false);
@@ -187,16 +192,20 @@ function CameraSidebarCard({
     );
   }
 
-  // Card layout (single or double column)
+  // Card layout (single or double column). With fill=true (wall mode) the
+  // tile stretches to its container and the feed fills it instead of locking
+  // to 16:9, so the wall grid controls each camera's width and height.
   return (
     <div
       onClick={onClick}
       className={`rounded-lg border overflow-hidden cursor-pointer transition-colors group ${
+        fill ? "h-full flex flex-col" : ""
+      } ${
         selected ? "border-accent bg-card" : "border-border bg-card hover:border-muted-foreground/30"
       }`}
     >
       {/* Feed preview */}
-      <div className="relative aspect-video bg-black">
+      <div className={`relative bg-black ${fill ? "flex-1 min-h-0" : "aspect-video"}`}>
         {camera.audio_only ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-emerald-950/40 via-zinc-950 to-zinc-900">
             <div className="relative">
@@ -397,8 +406,8 @@ function CameraSidebarCard({
         </div>
       </div>
 
-      {/* Latest activity line */}
-      {latestEvent && (
+      {/* Latest activity line (hidden in wall mode to keep tiles all-feed) */}
+      {!fill && latestEvent && (
         <div className="px-2.5 py-1.5 border-t border-border/50 flex items-center gap-1.5">
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
             latestEvent.icon === "person" ? "bg-green-500" : latestEvent.icon === "object" ? "bg-blue-400" : "bg-muted-foreground"
@@ -637,6 +646,16 @@ function DashboardContent() {
     }
     return "single";
   });
+  // Dashboard view mode: the timeline-centric "investigate" layout, or the
+  // customizable camera "wall". Persisted so the user lands where they left.
+  const [viewMode, setViewMode] = useState<"investigate" | "wall">(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("nurby-view-mode") === "wall") return "wall";
+    return "investigate";
+  });
+  const switchView = useCallback((mode: "investigate" | "wall") => {
+    setViewMode(mode);
+    try { localStorage.setItem("nurby-view-mode", mode); } catch { /* ignore */ }
+  }, []);
   // User-customised sidebar width. Null means fall back to preset for layout.
   const [sidebarWidth, setSidebarWidth] = useState<number | null>(() => {
     if (typeof window === "undefined") return null;
@@ -1468,11 +1487,25 @@ function DashboardContent() {
   // only while cameras exist, nothing has been detected, and the user has
   // not dismissed it; it disappears on its own once the first entry lands.
   const showLearningBanner =
+    viewMode !== "wall" &&
     !camerasLoading &&
     cameras.length > 0 &&
     entries.length === 0 &&
     !searchActive &&
     !learningDismissed;
+
+  // The feed tile used inside the wall: the same card the sidebar uses, in
+  // fill mode so it stretches to its grid cell.
+  const renderWallTile = (cam: Camera) => (
+    <CameraSidebarCard
+      camera={cam}
+      fill
+      layout="single"
+      selected={false}
+      onClick={() => { /* wall tiles don't drive the detail panel */ }}
+      activityEvents={activityEvents[cam.id] || []}
+    />
+  );
 
   return (
     <div className="px-4 py-4 h-[calc(100vh-3.5rem)] flex flex-col">
@@ -1504,13 +1537,38 @@ function DashboardContent() {
         </div>
       )}
 
-      <div className="mb-3">
-        <DailyDigestCard />
+      {/* View switch: timeline-centric investigate vs the camera wall. */}
+      <div className="flex items-center justify-end mb-2 flex-shrink-0">
+        {cameras.length > 0 && (
+          <div className="flex items-center gap-0.5 p-0.5 rounded bg-muted/50 border border-border">
+            <button onClick={() => switchView("investigate")}
+              className={`px-2.5 py-1 text-[11px] rounded transition-colors ${viewMode === "investigate" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              title="Timeline + camera list">
+              Timeline
+            </button>
+            <button onClick={() => switchView("wall")}
+              className={`px-2.5 py-1 text-[11px] rounded transition-colors ${viewMode === "wall" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              title="Customizable full-screen camera wall">
+              Wall
+            </button>
+          </div>
+        )}
       </div>
 
-      <StarredStatusRow />
+      {viewMode !== "wall" && (
+        <>
+          <div className="mb-3">
+            <DailyDigestCard />
+          </div>
+          <StarredStatusRow />
+        </>
+      )}
 
-      <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
+      {viewMode === "wall" && (
+        <CameraWall cameras={cameras} renderTile={renderWallTile} onExit={() => switchView("investigate")} />
+      )}
+
+      <div className={`flex flex-col lg:flex-row gap-4 flex-1 min-h-0 ${viewMode === "wall" ? "hidden" : ""}`}>
         {/* LEFT. Camera feeds */}
         <aside
           ref={sidebarRef}
