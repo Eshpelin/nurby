@@ -638,3 +638,43 @@
 {"pr":20540,"title":"Fix model exports","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
 {"pr":20536,"title":"Add support for Intel NPU","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
 {"pr":20533,"title":"Detail Stream tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20527,"title":"Add GenAI info to detail stream","area":"web","type":"ui","decision":"skip"}
+{"pr":20525,"title":"Add Detail stream in History view","area":"web","type":"feature","decision":"defer"}
+{"pr":20514,"title":"Fix YOLOv9 export script","area":"tooling","type":"tooling","nurby_status":"N/A","decision":"skip"}
+{"pr":20513,"title":"Store and show boxes for attributes in timeline","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip","note":"Object attributes; no nurby concept."}
+{"pr":20509,"title":"Add languages","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20508,"title":"Fix I18n audio labels","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20506,"title":"Improve recording retention logic","area":"record","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Retention edge cases; nurby retention.py is DB-driven. Compare logic.","priority":"P3","effort":"M"}
+{"pr":20501,"title":"version bump in docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":20498,"title":"UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20491,"title":"Ensure that a user must provide an image in an expected location","area":"api","type":"security","nurby_status":"VERIFY","decision":"defer","note":"Validate uploaded-image path/location; check persons.upload_face + any image upload uses shared.paths containment.","priority":"P3","effort":"S"}
+{"pr":20489,"title":"Fix Intel ffmpeg presets","area":"video","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20488,"title":"Add ability to download on demand snapshots","area":"api","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"On-demand snapshot download endpoint; check nurby snapshot/thumbnail download.","priority":"P3","effort":"S"}
+{"pr":20485,"title":"Improve rf-detr export","area":"tooling","type":"tooling","nurby_status":"N/A","decision":"skip"}
+{"pr":20484,"title":"Change clean snapshots from png to webp format","area":"images","type":"performance","nurby_status":"VERIFY","decision":"map","insight":"webp snapshots are ~25-35% smaller than png/jpeg at similar quality -> storage + bandwidth savings.","nurby_evidence":"Nurby encodes thumbnails as JPEG (cv2.imencode '.jpg'). webp would cut thumbnail storage; behavior change (extension/content-type/frontend) across write+serve+UI.","action":"Backlog (storage efficiency): consider webp thumbnails.","priority":"P3","effort":"M"}
+{"pr":20483,"title":"Ensure that a negative face score can not be sent","area":"api","type":"security","nurby_status":"VERIFY","decision":"defer","note":"Validate face-score range on input; nurby face scores are internal (InsightFace det_score), check any user-submitted score path.","priority":"P3","effort":"S"}
+{"pr":20482,"title":"Add warning for recommending users to use better sub streams","area":"web","type":"ui","decision":"skip"}
+{"pr":20470,"title":"Refresh recordings when data is stale","area":"web","type":"bugfix","decision":"skip"}
+{"pr":20469,"title":"Add dynamic Reolink stream configuration for stream URL","area":"ingestion","type":"feature","decision":"defer","note":"Reolink-specific stream URL templating; nurby has brand guide hints."}
+{"pr":20468,"title":"Change camera_activity effect to run only when config updates","area":"web","type":"performance","decision":"skip"}
+{"pr":20466,"title":"Fix ffmpeg arg","area":"video","type":"bugfix","nurby_status":"N/A","decision":"defer","note":"Frigate ffmpeg preset arg; nurby builds args differently."}
+{"pr":20465,"title":"Clarify autotracking docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":20462,"title":"Update GenAI docs for Gemini model deprecation","area":"docs","type":"docs","decision":"skip"}
+{"pr":20461,"title":"Add Camera Wizard","area":"web","type":"feature","decision":"defer"}
+{"pr":20455,"title":"Add ability to select GPU for ffmpeg","area":"video","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20453,"title":"Add optional idle heartbeat for Birdseye","area":"output","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20450,"title":"UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20446,"title":"Add ability to mark review items as unreviewed","area":"review","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Toggle a reviewed/alert item back to unreviewed; check nurby alert ack/unack.","priority":"P3","effort":"S"}
+{"pr":20445,"title":"Update review topic description","area":"docs","type":"docs","decision":"skip"}
+{"pr":20444,"title":"Add stationary scan for LPR","area":"data_processing","type":"feature","decision":"defer","note":"Re-scan stationary vehicles for plates; compare to nurby plates.py."}
+{"pr":20435,"title":"Add docs for HomeKit","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":20434,"title":"Empty cameras view","area":"web","type":"ui","decision":"skip"}
+{"pr":20433,"title":"Update ROCm to 7.0.2","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":20426,"title":"Add keyboard shortcut for switching to previous label","area":"web","type":"ui","decision":"skip"}
+{"pr":20413,"title":"Map verified objects to their sub label directly","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20403,"title":"UI Tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20401,"title":"UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20395,"title":"Fix audio transcription","area":"data_processing","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"Audio STT bugfix; nurby has faster-whisper STT. Body empty; compare if a theme emerges.","priority":"P3","effort":"M"}
+{"pr":20394,"title":"Sidebar i18n fixes","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20393,"title":"Tweaks","area":"?","type":"ui","decision":"skip"}
+{"pr":20392,"title":"Refactor Settings UI","area":"web","type":"refactor","decision":"skip"}
