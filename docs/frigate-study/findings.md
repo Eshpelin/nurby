@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 19777** triaged (800, ~20% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 19615** triaged (840, ~21% of 4058 merged), newest-first.
 
 ---
 
@@ -456,3 +456,18 @@ Pattern so far: the high-value security/reliability fixes clustered in the recen
 (23488–22400). The 0.17/0.18 dev region (22xxx–19xxx) is dominated by hardware-accel (Coral/
 OpenVINO/ROCm/Hailo/MemryX/Intel/CUDA), classification/secondary-models, go2rtc, i18n, and UI —
 nearly all N/A for nurby's CPU + MediaMTX + VLM architecture. 5 fixes shipped, 8 issues open.
+
+---
+
+## Batch 21 (PRs 19776–19615) — coverage batch, no code change
+
+RKNN/Synaptics/AMD/MemryX hardware (N/A), weblate/i18n/docs, HLS frontend. Two verified:
+
+- **[#19657] Catch invalid genai prompt key** — N/A. Nurby passes user prompts verbatim to the
+  model (no `str.format` on them) and renders notification templates via regex-sub
+  (`events/templates.py`), so unknown tokens don't `KeyError`. No crash surface.
+- **[#19709] Camera Health Status** — MISSING (folds into #21297 connection-quality backlog): nurby
+  has online/offline + status logs but no detailed per-camera health (fps / frames-received /
+  last-frame-time).
+- Backlog/VERIFY: **[#19672]** record-on-motion config edge case, **[#19640]** per-viewer
+  notification settings (relates to roles/#40) · P3.

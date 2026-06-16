@@ -798,3 +798,43 @@
 {"pr":19782,"title":"Rename nickname to friendly_name","area":"config","type":"refactor","nurby_status":"N/A","decision":"skip"}
 {"pr":19780,"title":"docs: rk ffmpeg preset is outdated","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
 {"pr":19777,"title":"Update openapi schema","area":"api","type":"docs","decision":"skip"}
+{"pr":19776,"title":"Fix autotracking calibration crash when zooming is disabled","area":"ptz","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"Crash path when zoom disabled; nurby ptz_tracker sets vz=0.0 (verified robust). Low risk."}
+{"pr":19768,"title":"Support all audio type in MQTT","area":"comms","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":19767,"title":"Improve LPR regex support","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"defer","note":"User plate-format regex; nurby has no user-regex plate format."}
+{"pr":19762,"title":"docs: hwaccel nvidia docker compose image","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":19758,"title":"Add role map support for proxy auth","area":"api","type":"feature","nurby_status":"N/A","decision":"skip","note":"Proxy-auth role mapping; nurby uses JWT."}
+{"pr":19753,"title":"Improve audio detection debugging","area":"data_processing","type":"feature","decision":"defer","note":"Audio-event debug logging; nurby has PANNs audio events."}
+{"pr":19747,"title":"Unload HLS on unmount","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19745,"title":"Add experimental support for AMD AMF decode/encode","area":"video","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":19742,"title":"Don't mention 9.0.0 GFX version","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":19740,"title":"Add PTZ recommendations + 2-way audio docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":19737,"title":"Only try to import memryx SDK when memry detector is used","area":"detectors","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":19736,"title":"Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":19717,"title":"Fix Weblate (again)","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19715,"title":"Fix weblate merge conflict","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19714,"title":"Consolidate documentation i18n keys","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19712,"title":"Display warning in frontend if shm size is too low","area":"web","type":"feature","nurby_status":"N/A","decision":"skip","note":"Frigate /dev/shm cache; nurby writes to disk."}
+{"pr":19710,"title":"Fix tls config check","area":"config","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":19709,"title":"Camera Health Status","area":"ingestion","type":"feature","nurby_status":"MISSING","decision":"map","insight":"Per-camera health status (fps, frames received, last-frame time, detect fps) surfaced in UI/MQTT.","nurby_evidence":"Nurby has online/offline + status logs but no detailed health metrics. Relates to connection-quality backlog (#21297).","action":"Backlog (folds into #21297 camera health/quality indicator).","priority":"P3","effort":"M"}
+{"pr":19708,"title":"Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":19703,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19698,"title":"Don't print when not using rknn","area":"detectors","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":19688,"title":"docs: Remove h264 reference for webrtc","area":"docs","type":"docs","decision":"skip"}
+{"pr":19687,"title":"Support face recognition via RKNN","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":19683,"title":"Clarify webrtc docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":19680,"title":"[Init] Initial commit for Synaptics SL1680 NPU","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":19676,"title":"Add automatic RKNN conversion and support for semantic search model","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":19674,"title":"Auto convert ONNX models to RKNN format","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":19672,"title":"Fix record motion config","area":"record","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"record-on-motion config bug; check nurby recording_mode=on_motion path.","priority":"P3","effort":"S"}
+{"pr":19671,"title":"Remove incorrect newlines from pipeline flowchart","area":"docs","type":"docs","decision":"skip"}
+{"pr":19670,"title":"Update bug report discussion template","area":"docs","type":"docs","decision":"skip"}
+{"pr":19669,"title":"Update YOLO_NAS export notebook for Colab 3.12","area":"tooling","type":"tooling","nurby_status":"N/A","decision":"skip"}
+{"pr":19664,"title":"Update bug report template","area":"docs","type":"docs","decision":"skip"}
+{"pr":19659,"title":"UI improvements","area":"web","type":"ui","decision":"skip"}
+{"pr":19657,"title":"Catch invalid key in genai prompt","area":"genai","type":"reliability","nurby_status":"N/A","decision":"map","insight":"A user GenAI prompt with an invalid template key raised KeyError and crashed the request.","nurby_evidence":"Verified: nurby passes user prompts (vlm_prompt/digest_prompt) verbatim to the model (no str.format on them); notification templates use regex-sub (events/templates.py) not .format, so unknown tokens don't KeyError. No crash surface.","priority":"P3","effort":"-"}
+{"pr":19640,"title":"Added Notifications settings for viewers","area":"events","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Per-viewer notification settings; relates to roles/#40.","priority":"P3","effort":"M"}
+{"pr":19636,"title":"Revert video dimension layout fix for chrome","area":"web","type":"ui","decision":"skip"}
+{"pr":19634,"title":"Fix build","area":"ci","type":"ci","decision":"skip"}
+{"pr":19625,"title":"Fix hls not loading video in explore","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19617,"title":"Update deps","area":"deps","type":"deps","decision":"skip"}
+{"pr":19615,"title":"Various Fixes","area":"?","type":"?","decision":"defer"}
