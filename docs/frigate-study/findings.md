@@ -544,3 +544,21 @@ Coverage-only batch. No issues filed, no fixes merged. ~90% N/A (Frigate multipr
 - #18398 / #18540 Audio transcription (speech-to-text on audio events). Nurby audio is sound classification, not STT. Large separate feature.
 
 Region remains ~90% N/A: forkserver/spawn arch (#18682, #18704), go2rtc restream (#18708), frame-cache debug (#18741/#18697), classification-model training+UI+metrics (#18595/#18583/#18571/#18475/#18474), TensorRT/Rockchip/Intel hwaccel (#18643/#18535/#18493), LPR OCR (#18505/#18390), birdseye/config-editor UI (#18628/#18383), docs and "Fixes" chores.
+
+## Batch 26 (PRs 18380-18017)
+
+Coverage-only batch. No issues filed, no fixes merged. Deep in Frigate's ML/hwaccel/multiprocess region, very high N/A density (many bare "Fixes"/"Translations" chores).
+
+**HAVE (verified):**
+- #18093 Refactor async ONVIF. Nurby's ONVIF/PTZ layer is already fully async: `services/discovery/onvif.py` uses `httpx.AsyncClient` (`_soap_request`), and `ptz_continuous_move/stop/get_presets/goto_preset` are all `async`; the only blocking work (device stream probes) is dispatched via `run_in_executor`. No blocking-in-event-loop problem to fix.
+- #18353 Dynamic Config Updates / #18359 dynamic masks & zones. Same as batch-25 #18671 — Nurby zones/rules are DB-backed and flush perception caches via the rule-invalidation pubsub listener; no monolithic restart. N/A.
+
+**N/A — feature/path absent in Nurby:**
+- #18336 proxy-header separator (no `header_map`/`remote-role` proxy auth in Nurby).
+- #18036 HF_ENDPOINT override (no hardcoded huggingface.co URLs in Nurby python; model download path differs).
+- #18257 timezone handling (web/ display only; backend stores UTC).
+
+**Backlog (gap-minor, no issue):**
+- #18284 Min face configuration option — a minimum detected-face area threshold before running recognition, to skip tiny/low-quality faces. Nurby's face-embeddings pipeline has no equivalent min-face gate. Cheap future quality win.
+
+Region outlook: PRs are now mostly ML classification config (#18380/#18362/#18475), hwaccel (ROCm/Jetson/Intel/Mesa/onnxruntime), i18n/docs, and unlabeled "Fixes" chores. Expect continued low hit-rate; watch for backend auth/API/security only.
