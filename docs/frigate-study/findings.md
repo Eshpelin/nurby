@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 23304** triaged (40), newest of 4058 merged.
+Coverage so far: PRs **23488 → 23172** triaged (80), newest of 4058 merged.
 
 ---
 
@@ -74,3 +74,50 @@ hide; recording continues. Nurby's camera-wall hide (commit `b870614`) only cove
 - **[#23445] ZMQ subscription narrowing** — N/A. Nurby uses Redis streams + DB poll, not ZMQ.
 - **[#23306] Profiles fixes**, **[#23404] reference config** — N/A. Tied to YAML provisioning.
 - **[#23324] classifier trainset script**, **[#23476] API auth docs spec** — N/A / HAVE.
+
+---
+
+## Batch 2 (PRs 23295–23172)
+
+### P1 — Security (architectural — issue filed, NOT auto-fixed)
+
+#### [#23256, #23294] Per-user camera access control · `comms`/`review` · VULNERABLE → issue
+Frigate filters **outbound WebSocket broadcasts** and **review/list results** by each recipient's
+camera access. Nurby does neither on the main app surface:
+- `services/api/ws.py` (`_deliver_local`/`broadcast`/`relay_loop`) pushes every event/detection to
+  every connected client. Guardian alerts also broadcast to all.
+- List endpoints (`events.py`, `recordings.py`, `observations.py`, `cameras.py`) return **all**
+  cameras' data to any authenticated user. Only the Guardian surface is scoped.
+This is likely **by design for the single-owner V1**, but it blocks any multi-user/restricted-view
+feature and is a data-leak the moment a non-admin account exists. **Deliberately not auto-fixed**:
+it needs a user→camera ACL model; merging a half-baked one unsupervised could break the app. See
+`initiatives/camera-access-control.md`. **P1 · L.**
+
+### P1 — Reliability
+
+#### [#23172] Filesystem TOCTOU / transient-stat crashes · `record` · ✅ FIXED this batch
+Frigate hardened `os.stat`/`exists`+`getsize` flows that crash on transient FS errors
+(`Errno 121 Remote I/O`) on network mounts. Nurby had the same unguarded idiom in
+`guardian/video.py:44,62` and `conversation_clip.py:158`. **Shipped:** `shared.paths.safe_getsize()`
+(guarded, TOCTOU-free) + swapped 4 call sites (also `ingestion/stream.py` recording save now
+persists even if the size stat hiccups). Tests: `tests/test_safe_getsize.py`. **P1 · S.**
+
+### P2 — Feature
+
+#### [#23281] Support reasoning / "thinking" models · `genai` · PARTIAL → issue
+Frigate added dynamic-thinking-model support. Nurby's `vlm.py`/agent call Claude + OpenAI (which
+expose thinking budgets) but don't set thinking params or strip reasoning tokens from outputs.
+**Action:** handle thinking/reasoning params + token accounting for reasoning models. **P2 · M.**
+
+### P3 / HAVE / N/A (checked, recorded)
+
+- **[#23261] nginx admin cache leak** — SAFE (no nginx proxy_cache). But the **new** dashboard
+  `widget_proxy.py` cache is keyed by `widget_id` only, not user → minor cross-user reuse. Filed P3.
+- **[#23265] Credential redaction** — SAFE. Camera creds are Fernet-stored, separate from
+  `stream_url`; the authed URL is never logged.
+- **[#23206] Semantic chat query** — HAVE. Agent already does pgvector semantic search.
+- **[#23188] OpenVINO multi-GPU**, **[#23190] Intel stats**, **[#23251] go2rtc pane**,
+  **[#23287/76/70] debug replay**, **[#23264] move_preview_frames** — N/A (no OpenVINO/Intel/go2rtc;
+  Nurby uses MediaMTX).
+- Deferred (opaque "Misc fixes"/UI tweaks, revisit if a theme needs them): #23295, #23279, #23258,
+  #23238, #23235, #23217, #23201, #23186, #23177, plus settings/UI tweaks.
