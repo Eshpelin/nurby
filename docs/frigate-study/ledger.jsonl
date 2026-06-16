@@ -678,3 +678,43 @@
 {"pr":20394,"title":"Sidebar i18n fixes","area":"i18n","type":"i18n","decision":"skip"}
 {"pr":20393,"title":"Tweaks","area":"?","type":"ui","decision":"skip"}
 {"pr":20392,"title":"Refactor Settings UI","area":"web","type":"refactor","decision":"skip"}
+{"pr":20388,"title":"Api docs updates","area":"docs","type":"docs","decision":"skip"}
+{"pr":20387,"title":"Review genai improvements","area":"genai","type":"feature","decision":"defer"}
+{"pr":20383,"title":"Review summary popup","area":"web","type":"ui","decision":"skip"}
+{"pr":20380,"title":"RKNN Fixes","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20379,"title":"Generic classification card","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20344,"title":"Only show recordings summary for main camera in history view","area":"web","type":"ui","decision":"skip"}
+{"pr":20343,"title":"docs: 2-way audio example for Reolink","area":"docs","type":"docs","decision":"skip"}
+{"pr":20340,"title":"Improve live view console errors","area":"web","type":"bugfix","decision":"skip"}
+{"pr":20339,"title":"Triggers tweaks","area":"events","type":"feature","nurby_status":"N/A","decision":"defer","note":"Frigate semantic triggers."}
+{"pr":20331,"title":"Refactor object genai to be a post-processor","area":"genai","type":"refactor","nurby_status":"VERIFY","decision":"defer","note":"Run object VLM description as a post-processing stage; compare to nurby vlm_enrichment_worker.","priority":"P3","effort":"M"}
+{"pr":20329,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20328,"title":"Improve review summary performance","area":"genai","type":"performance","decision":"defer"}
+{"pr":20326,"title":"Make keyboard shortcuts consistent","area":"web","type":"ui","decision":"skip"}
+{"pr":20325,"title":"Add input focused boolean to face library keyboard listener","area":"web","type":"bugfix","decision":"skip"}
+{"pr":20322,"title":"Fix object genai prompt access","area":"genai","type":"bugfix","decision":"defer"}
+{"pr":20312,"title":"Don't use rknn if device is CPU","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20310,"title":"Add ability to paste in image dropzone","area":"web","type":"ui","decision":"skip"}
+{"pr":20309,"title":"fix stationary runtime error","area":"track","type":"bugfix","nurby_status":"N/A","decision":"defer","note":"Frigate stationary-tracking internal; nurby R2 stationary differs."}
+{"pr":20307,"title":"Add request_time and upstream_response_time to nginx log","area":"ops","type":"ops","nurby_status":"N/A","decision":"skip"}
+{"pr":20306,"title":"Update license_plate_recognition.md","area":"docs","type":"docs","decision":"skip"}
+{"pr":20303,"title":"Improve stationary classification","area":"track","type":"feature","nurby_status":"N/A","decision":"skip","note":"Stationary classifier (Frigate+); nurby has R2 stationary suppression."}
+{"pr":20301,"title":"Add script to generate english config translation file","area":"tooling","type":"tooling","decision":"skip"}
+{"pr":20296,"title":"Customizable GenAI Review prompt","area":"genai","type":"feature","nurby_status":"HAVE","decision":"map","note":"Nurby has per-camera vlm_prompt / summary_prompt / digest_prompt.","priority":"P3","effort":"-"}
+{"pr":20295,"title":"Camera group url fixes","area":"web","type":"bugfix","decision":"skip"}
+{"pr":20292,"title":"Add shadcn sidebar component","area":"web","type":"feature","nurby_status":"HAVE","decision":"skip","note":"Nurby uses shadcn already."}
+{"pr":20291,"title":"Use key to correctly reload live view when camera changes","area":"web","type":"bugfix","decision":"skip"}
+{"pr":20289,"title":"Improve Review Summary Prompt","area":"genai","type":"feature","decision":"defer"}
+{"pr":20276,"title":"Go2rtc homekit config quick fix","area":"output","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20275,"title":"Implement automatic go2rtc homekit config","area":"output","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20270,"title":"Implement debug live view as part of live","area":"web","type":"feature","decision":"skip"}
+{"pr":20257,"title":"Handle case when no classification model exists","area":"data_processing","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20256,"title":"Update face rec docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":20254,"title":"Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20239,"title":"Refactor AMD GPU support","area":"detectors","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":20237,"title":"Watchdog enhancements","area":"ingestion","type":"reliability","nurby_status":"HAVE","decision":"map","insight":"Watchdog detects hung/no-frame camera processes and restarts them.","nurby_evidence":"Verified nurby self-heals: stream.py:211 detects frame-read stall -> forced reconnect; :143 exponential backoff; manager.py restarts workers on config change; webcam_bridge supervisor restarts ffmpeg. Covers the main hang mode (also addresses earlier backlog note #22557).","priority":"P2","effort":"-"}
+{"pr":20229,"title":"More stationary cleanup","area":"track","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":20225,"title":"Stationary bug fixes","area":"track","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"Compare to nurby R2 stationary suppression (motionless ticks)."}
+{"pr":20216,"title":"Improve review summary","area":"genai","type":"feature","decision":"defer"}
+{"pr":20212,"title":"Use devcontainer build to run tests","area":"ci","type":"ci","decision":"skip"}
+{"pr":20206,"title":"Implement stationary car classifier to improve parked car management","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip","note":"Frigate+ classifier."}

@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 20392** triaged (680, ~17% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 20206** triaged (720, ~18% of 4058 merged), newest-first.
 
 ---
 
@@ -409,3 +409,17 @@ Mostly UI/genai/Intel/docs. A few backlog items worth noting (no clean unattende
 - **[#20491/#20483]** input validation: uploaded-image location + face-score range · P3.
 - VERIFY: **[#20395]** audio-transcription fix (nurby has faster-whisper STT) — body empty, revisit
   if a theme emerges.
+
+---
+
+## Batch 18 (PRs 20388–20206) — coverage batch, no code change
+
+GenAI review-summary tuning, stationary-object work, RKNN/AMD-GPU (N/A). Two verified HAVE:
+
+- **[#20237] Watchdog enhancements** — HAVE. Verified nurby self-heals stalled streams:
+  `stream.py:211` detects frame-read stall and forces reconnect, `:143` exponential backoff,
+  `manager.py` restarts workers on config change, `webcam_bridge` supervises ffmpeg. (Also clears
+  the earlier #22557 backlog note.)
+- **[#20296] Customizable GenAI review prompt** — HAVE (per-camera vlm/summary/digest prompts).
+- Backlog/VERIFY: **[#20331]** run object-VLM as a post-processor (compare to `vlm_enrichment_worker`),
+  **[#20225]** stationary-tracking edge cases (vs R2 suppression) · P3.
