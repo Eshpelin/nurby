@@ -358,3 +358,43 @@
 {"pr":22127,"title":"Remove redundant tensorflow import in BirdRealTimeProcessor","area":"data_processing","type":"refactor","nurby_status":"N/A","decision":"skip","note":"Bird classifier; nurby has no bird classifier."}
 {"pr":22107,"title":"Docs: fix YOLOv9 onnx export","area":"docs","type":"docs","decision":"skip"}
 {"pr":22103,"title":"docs: add shm calculator","area":"docs","type":"docs","decision":"skip"}
+{"pr":22098,"title":"Update HA docs with MQTT example","area":"docs","type":"docs","decision":"skip"}
+{"pr":22097,"title":"Fix go2rtc stream alias auth","area":"output","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"go2rtc; nurby uses MediaMTX."}
+{"pr":22089,"title":"Clean up trailing whitespaces in cpu stats process cmdline","area":"stats","type":"refactor","decision":"skip"}
+{"pr":22083,"title":"Fix script for downloading RF-DETR","area":"tooling","type":"tooling","nurby_status":"N/A","decision":"skip"}
+{"pr":22067,"title":"docs: fix image address","area":"docs","type":"docs","decision":"skip"}
+{"pr":22066,"title":"docs: fix hailo setup numbering error","area":"docs","type":"docs","decision":"skip"}
+{"pr":22035,"title":"Improve attributes handling","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip","note":"Object attributes/sub-labels from secondary models; nurby has no object-attributes concept."}
+{"pr":22025,"title":"Update docs for macOS installation with 0.17","area":"docs","type":"docs","decision":"skip"}
+{"pr":22018,"title":"Update hardware.md TensorRT link","area":"docs","type":"docs","decision":"skip"}
+{"pr":22002,"title":"Improve attribute filtering","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip","note":"Object attributes filtering; N/A."}
+{"pr":22000,"title":"Fix saving attributes for object to DB","area":"data_processing","type":"bugfix","nurby_status":"N/A","decision":"map","insight":"Object attributes were not persisted to DB.","nurby_evidence":"Nurby has no object-attributes concept (YOLO labels only; no secondary attribute model). Not applicable.","priority":"P3","effort":"-"}
+{"pr":21996,"title":"ffmpeg Preview Segment Optimization for high/very_high","area":"record","type":"performance","nurby_status":"N/A","decision":"skip","note":"Frigate preview-segment quality presets; nurby has no preview-segment pipeline."}
+{"pr":21989,"title":"Fix tooltips","area":"web","type":"ui","decision":"skip"}
+{"pr":21982,"title":"fix: fix object classification model not reload","area":"data_processing","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"Frigate secondary classification model reload; nurby reloads detection_models via DB poll, no secondary classifier."}
+{"pr":21964,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21946,"title":"docs: snapshots frame selection","area":"docs","type":"docs","decision":"skip"}
+{"pr":21943,"title":"Improve jsmpeg player websocket handling","area":"web","type":"bugfix","decision":"skip","note":"jsmpeg live player; nurby uses MediaMTX WebRTC/HLS."}
+{"pr":21942,"title":"docs: face recognition MQTT update","area":"docs","type":"docs","decision":"skip"}
+{"pr":21936,"title":"Increase maximum stream timeout to 15s","area":"video","type":"reliability","nurby_status":"VERIFY","decision":"map","insight":"Some cameras are slow to connect; a too-short stream timeout drops them and causes reconnect churn.","nurby_evidence":"Nurby uses 5s RTSP timeout (stream.py:394-395 stimeout/timeout;5000000). Raising to ~15s could help slow cameras but delays offline detection - a tuning tradeoff, not a clear bug. Not changed unattended.","action":"Backlog: consider raising/making configurable the RTSP open/read timeout for slow cameras.","priority":"P3","effort":"S"}
+{"pr":21932,"title":"Add X-Frame-Time HTTP header to the snapshot API response","area":"api","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Expose frame timestamp as a response header on snapshot endpoint.","priority":"P3","effort":"S"}
+{"pr":21923,"title":"Allow API Events to be Detections or Alerts depending on the Event Label","area":"events","type":"feature","nurby_status":"HAVE","decision":"defer","note":"Nurby has severity taxonomy (rule/event severity, Alerts/Detections tabs - R5)."}
+{"pr":21919,"title":"Update line breaks in video_pipeline.md diagram","area":"docs","type":"docs","decision":"skip"}
+{"pr":21912,"title":"Miscellaneous Fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21898,"title":"Set log to debug","area":"util","type":"refactor","decision":"skip"}
+{"pr":21894,"title":"fix: fix delete zone type i18n","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21893,"title":"Fix event getting stuck due to only checking current clip / snapshot","area":"events","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"Event lifecycle stuck when only current clip/snapshot checked; compare to nurby incident/event finalization.","priority":"P3","effort":"M"}
+{"pr":21887,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21882,"title":"Update hailo installation instructions and script","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":21876,"title":"Fallback from tflite-runtime to ai-edge-litert","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":21870,"title":"Add languages","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21867,"title":"Miscellaneous fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21826,"title":"Miscellaneous fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21825,"title":"Revert Miscellaneous fixes (0.17 beta)","area":"?","type":"?","decision":"skip"}
+{"pr":21814,"title":"Fix i18n keys","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21808,"title":"Port go2rtc check","area":"output","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":21779,"title":"Add networking options for configuring listening ports","area":"config","type":"feature","nurby_status":"N/A","decision":"defer","note":"Configurable listen ports; nurby ports set via docker-compose/env."}
+{"pr":21764,"title":"Miscellaneous fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21754,"title":"Add live context tool to LLM","area":"genai","type":"feature","nurby_status":"PARTIAL","decision":"map","insight":"Give the chat LLM a tool to pull live camera context (current snapshot/state) on demand.","nurby_evidence":"Nurby agent has read-only tools (journeys/observations/people/events) but maybe no 'get live snapshot/state now' tool.","action":"Backlog: add a live-snapshot/live-state agent tool.","priority":"P3","effort":"M"}
+{"pr":21753,"title":"Update to ROCm 7.2.0","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":21752,"title":"Offline preview image","area":"web","type":"feature","decision":"defer","note":"Placeholder image when camera offline; minor UI."}

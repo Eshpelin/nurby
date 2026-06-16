@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 22103** triaged (360), newest of 4058 merged.
+Coverage so far: PRs **23488 → 21752** triaged (400, ~10% of 4058 merged), newest-first.
 
 ---
 
@@ -282,3 +282,20 @@ birdseye N/A, many dep bumps). Reinforces two existing themes, no new fix:
   nurby already has these.
 - Backlog/VERIFY: **[#22254]** auth/login audit logging (nurby has no anonymous login, but an
   auth audit trail is worth considering) · P3.
+
+---
+
+## Batch 10 (PRs 22098–21752) — coverage batch, no code change
+
+0.17-beta era: attributes/secondary-model features (N/A — nurby has no object-attributes or
+secondary-classifier concept), Hailo/ROCm/RF-DETR deps (N/A), lots of i18n/docs/misc.
+
+Backlog / VERIFY worth a later look:
+- **[#21936] RTSP stream timeout** — nurby uses **5s** (`stream.py:394-395` `stimeout/timeout;5000000`);
+  Frigate raised theirs to 15s for slow cameras. A tuning tradeoff (longer = slower offline
+  detection), so not changed blind — consider making it configurable · P3.
+- **[#21893]** event/incident getting stuck (only checking current clip/snapshot) — compare to
+  nurby incident finalization · P3.
+- **[#21754]** add a live-snapshot/live-state tool to the chat agent · P3.
+- **[#21932]** X-Frame-Time header on snapshot API, **[#21752]** offline-camera placeholder image · P3.
+- HAVE: API events as Detections/Alerts by label (#21923 — nurby severity taxonomy R5).
