@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 20681** triaged (600, ~15% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 20533** triaged (640, ~16% of 4058 merged), newest-first.
 
 ---
 
@@ -383,3 +383,14 @@ A DST bug cluster in Frigate (events/recordings/review summaries) prompted a car
 - HAVE: named zones (#20761 — nurby R3 named areas).
 - Backlog/VERIFY: **[#20736]** tag delivery/package detections for the VLM, **[#20715]** show
   no-recording gaps on the timeline, **[#20690/#20704/#20723]** review-summary prompt structure · P3.
+
+---
+
+## Batch 16 (PRs 20677–20533) — coverage batch, no code change
+
+Heavy UI / classification / Intel-NPU / HLS-format / camera-wizard churn (N/A or frontend).
+No nurby-applicable backend fix. Backlog/VERIFY:
+
+- **[#20676]** choose which frames feed the VLM review description (frame selection) · P3.
+- **[#20620]** camera-wizard stream-validation UX (backend already covered by PR #34 allowlist) · P3.
+- **[#20606]** sensible Ollama performance defaults (num_ctx/keep_alive) · P3.
