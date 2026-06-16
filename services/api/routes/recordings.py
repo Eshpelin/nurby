@@ -1,20 +1,29 @@
 import asyncio
 import logging
 import os
+import tempfile
 import uuid
-from datetime import timedelta
+import zipfile
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import String, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTask
 
 from services.api.recording_annotate import render_annotated
 from shared.auth import get_current_user, require_admin, require_query_token
+from shared.config import settings
 from shared.database import get_db
 from shared.models import Camera, Observation, Recording, User
-from shared.paths import resolve_inside
+from shared.paths import escape_like, resolve_inside
 from shared.schemas import RecordingResponse
+
+# A bundle download is capped so a too-broad range can't build an enormous
+# zip / temp file. Over either limit returns 413 asking to narrow the window.
+_BUNDLE_MAX_FILES = 200
+_BUNDLE_MAX_BYTES = 5 * 1024**3  # 5 GB
 
 logger = logging.getLogger(__name__)
 
@@ -62,18 +71,120 @@ def _get_disk_path_or_404(recording: Recording) -> str:
     return path
 
 
+def _filtered_recordings_query(
+    camera_id: uuid.UUID | None,
+    from_: datetime | None,
+    to: datetime | None,
+    object_label: str | None,
+):
+    """Base SELECT for recordings, with optional camera / time-window / object
+    filters. The object filter keeps recordings whose window overlaps an
+    observation carrying that label (reuses the observations.py label match)."""
+    query = select(Recording)
+    if camera_id:
+        query = query.where(Recording.camera_id == camera_id)
+    if from_:
+        query = query.where(Recording.started_at >= from_)
+    if to:
+        query = query.where(Recording.started_at <= to)
+    if object_label:
+        # An observation belongs to a recording if it falls within the
+        # recording's window: [started_at, ended_at or started_at+duration].
+        window_end = func.coalesce(
+            Recording.ended_at,
+            Recording.started_at
+            + func.make_interval(0, 0, 0, 0, 0, 0, func.coalesce(Recording.duration_seconds, 3600)),
+        )
+        obs_exists = (
+            select(Observation.id)
+            .where(Observation.camera_id == Recording.camera_id)
+            .where(Observation.started_at >= Recording.started_at)
+            .where(Observation.started_at <= window_end)
+            .where(
+                cast(Observation.object_detections, String).ilike(
+                    f'%"label": "{escape_like(object_label)}"%', escape="\\"
+                )
+            )
+            .correlate(Recording)
+            .exists()
+        )
+        query = query.where(obs_exists)
+    return query
+
+
 @router.get("", response_model=list[RecordingResponse])
 async def list_recordings(
     camera_id: uuid.UUID | None = Query(default=None),
+    from_: datetime | None = Query(default=None, alias="from", description="Inclusive start (ISO 8601)"),
+    to: datetime | None = Query(default=None, description="Inclusive end (ISO 8601)"),
+    object: str | None = Query(default=None, description="Only recordings containing this object label"),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    query = select(Recording).order_by(Recording.started_at.desc()).limit(limit).offset(offset)
-    if camera_id:
-        query = query.where(Recording.camera_id == camera_id)
+    query = (
+        _filtered_recordings_query(camera_id, from_, to, object)
+        .order_by(Recording.started_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     result = await db.execute(query)
     return result.scalars().all()
+
+
+def _build_zip(entries: list[tuple[str, str]], zip_path: str) -> None:
+    """Write a stored (uncompressed) zip of (arcname, src_path) pairs. Sync;
+    run in an executor. mp4 is already compressed, so ZIP_STORED just bundles."""
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED, allowZip64=True) as zf:
+        for arcname, src in entries:
+            zf.write(src, arcname)
+
+
+@router.get("/download-bundle")
+async def download_bundle(
+    token: str | None = Query(None),
+    camera_id: uuid.UUID | None = Query(default=None),
+    from_: datetime | None = Query(default=None, alias="from"),
+    to: datetime | None = Query(default=None, description="Inclusive end (ISO 8601)"),
+    object: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download every recording matching the filters as a single zip. Bundles
+    the original files (non-destructive); capped by file count + total size."""
+    require_query_token(token)
+    query = _filtered_recordings_query(camera_id, from_, to, object).order_by(
+        Recording.started_at.asc()
+    )
+    recs = (await db.execute(query)).scalars().all()
+
+    entries: list[tuple[str, str]] = []
+    total = 0
+    for r in recs:
+        path = resolve_inside(_resolve_recording_path(r), settings.recordings_path)
+        if path is None or not os.path.exists(path):
+            continue
+        total += os.path.getsize(path)
+        if len(entries) >= _BUNDLE_MAX_FILES or total > _BUNDLE_MAX_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail="Selected range is too large to bundle. Narrow the time window or camera.",
+            )
+        arcname = f"{r.started_at:%Y%m%d-%H%M%S}-{os.path.basename(path)}"
+        entries.append((arcname, path))
+
+    if not entries:
+        raise HTTPException(status_code=404, detail="No recordings match those filters")
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    tmp.close()
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _build_zip, entries, tmp.name)
+    return FileResponse(
+        tmp.name,
+        media_type="application/zip",
+        filename="nurby-recordings.zip",
+        background=BackgroundTask(os.remove, tmp.name),
+    )
 
 
 @router.get("/{recording_id}", response_model=RecordingResponse)

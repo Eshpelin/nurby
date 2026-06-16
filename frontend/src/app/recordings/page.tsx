@@ -1,8 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { EmptyState, CameraGlyph } from "@/components/EmptyState";
+import { RecordingDetectionOverlay } from "@/components/RecordingDetectionOverlay";
+
+// Objects people most often scrub for. Free of a fixed list otherwise.
+const COMMON_OBJECTS = ["person", "cat", "dog", "car", "truck", "bus", "bicycle", "motorcycle"];
+
+// datetime-local <input> value (local time, no seconds) for a Date.
+function toLocalInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 interface Recording {
   id: string;
@@ -18,6 +28,8 @@ interface Recording {
 interface Camera {
   id: string;
   name: string;
+  width?: number | null;
+  height?: number | null;
 }
 
 function formatDuration(seconds: number | null): string {
@@ -55,6 +67,9 @@ export default function RecordingsPage() {
   const [cameraFilter, setCameraFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [objectFilter, setObjectFilter] = useState("");
+  const [showBoxes, setShowBoxes] = useState(true);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -63,6 +78,11 @@ export default function RecordingsPage() {
   const cameraNames = useMemo(() => {
     const map: Record<string, string> = {};
     for (const c of cameras) map[c.id] = c.name;
+    return map;
+  }, [cameras]);
+  const cameraById = useMemo(() => {
+    const map: Record<string, Camera> = {};
+    for (const c of cameras) map[c.id] = c;
     return map;
   }, [cameras]);
 
@@ -75,39 +95,41 @@ export default function RecordingsPage() {
     }
   }, []);
 
+  // Shared query params for the list and the range-download bundle. The
+  // datetime-local inputs are local time; send ISO. `paginate` adds the page
+  // window (the bundle wants the whole range, not one page).
+  const buildParams = useCallback((paginate: boolean) => {
+    const params = new URLSearchParams();
+    if (paginate) {
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(page * PAGE_SIZE));
+    }
+    if (cameraFilter) params.set("camera_id", cameraFilter);
+    if (objectFilter) params.set("object", objectFilter);
+    if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
+    if (dateTo) params.set("to", new Date(dateTo).toISOString());
+    return params;
+  }, [page, cameraFilter, objectFilter, dateFrom, dateTo]);
+
   const fetchRecordings = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      params.set("limit", String(PAGE_SIZE));
-      params.set("offset", String(page * PAGE_SIZE));
-      if (cameraFilter) params.set("camera_id", cameraFilter);
-
-      const res = await authFetch(`/api/recordings?${params.toString()}`);
+      const res = await authFetch(`/api/recordings?${buildParams(true).toString()}`);
       if (res.ok) {
-        let list: Recording[] = await res.json();
-
-        if (dateFrom) {
-          const fromTs = new Date(dateFrom).getTime();
-          list = list.filter(
-            (r) => new Date(r.started_at).getTime() >= fromTs
-          );
-        }
-        if (dateTo) {
-          const toTs = new Date(dateTo).getTime() + 86400000;
-          list = list.filter(
-            (r) => new Date(r.started_at).getTime() < toTs
-          );
-        }
-
-        setRecordings(list);
+        setRecordings(await res.json());
       }
     } catch {
       /* silent */
     } finally {
       setLoading(false);
     }
-  }, [page, cameraFilter, dateFrom, dateTo]);
+  }, [buildParams, authFetch]);
+
+  const downloadRange = () => {
+    const params = buildParams(false);
+    if (token) params.set("token", token);
+    window.open(`/api/recordings/download-bundle?${params.toString()}`, "_blank");
+  };
 
   useEffect(() => {
     fetchCameras();
@@ -163,6 +185,14 @@ export default function RecordingsPage() {
     setCameraFilter("");
     setDateFrom("");
     setDateTo("");
+    setObjectFilter("");
+    setPage(0);
+  };
+
+  const applyPreset = (hours: number) => {
+    const now = new Date();
+    setDateTo(toLocalInput(now));
+    setDateFrom(toLocalInput(new Date(now.getTime() - hours * 3600 * 1000)));
     setPage(0);
   };
 
@@ -198,33 +228,61 @@ export default function RecordingsPage() {
           ))}
         </select>
 
+        <select
+          value={objectFilter}
+          onChange={(e) => { setObjectFilter(e.target.value); setPage(0); }}
+          className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+          title="Only show clips that contain this object"
+        >
+          <option value="">Any object</option>
+          {COMMON_OBJECTS.map((o) => (
+            <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</option>
+          ))}
+        </select>
+
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted-foreground">From</label>
           <input
-            type="date"
+            type="datetime-local"
             value={dateFrom}
-            onChange={(e) => {
-              setDateFrom(e.target.value);
-              setPage(0);
-            }}
+            onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
             className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
           />
         </div>
-
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted-foreground">To</label>
           <input
-            type="date"
+            type="datetime-local"
             value={dateTo}
-            onChange={(e) => {
-              setDateTo(e.target.value);
-              setPage(0);
-            }}
+            onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
             className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
           />
         </div>
 
-        {(cameraFilter || dateFrom || dateTo) && (
+        <div className="flex items-center gap-1">
+          {[
+            { label: "Last night", hours: 14 },
+            { label: "24h", hours: 24 },
+            { label: "7d", hours: 168 },
+          ].map((p) => (
+            <button
+              key={p.label}
+              onClick={() => applyPreset(p.hours)}
+              className="px-2 py-1.5 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >{p.label}</button>
+          ))}
+        </div>
+
+        <button
+          onClick={downloadRange}
+          disabled={recordings.length === 0}
+          title="Download every clip matching these filters as a single zip"
+          className="px-3 py-2 text-xs rounded-md border border-accent bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40"
+        >
+          Download range
+        </button>
+
+        {(cameraFilter || dateFrom || dateTo || objectFilter) && (
           <button
             onClick={resetFiltersAndPage}
             className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -361,13 +419,40 @@ export default function RecordingsPage() {
               </button>
             </div>
             <div className="p-4 space-y-3">
-              <video
-                key={expandedRec.id}
-                controls
-                autoPlay
-                className="w-full max-h-[60vh] rounded bg-black"
-                src={`/api/recordings/${expandedRec.id}/stream${token ? `?token=${token}` : ""}`}
-              />
+              <div className="relative w-full">
+                <video
+                  key={expandedRec.id}
+                  ref={videoRef}
+                  controls
+                  autoPlay
+                  className="w-full max-h-[60vh] rounded bg-black"
+                  src={`/api/recordings/${expandedRec.id}/stream${token ? `?token=${token}` : ""}`}
+                />
+                {showBoxes && (
+                  <RecordingDetectionOverlay
+                    cameraId={expandedRec.camera_id}
+                    startedAt={expandedRec.started_at}
+                    endedAt={expandedRec.ended_at}
+                    durationSeconds={expandedRec.duration_seconds}
+                    camWidth={cameraById[expandedRec.camera_id]?.width}
+                    camHeight={cameraById[expandedRec.camera_id]?.height}
+                    videoRef={videoRef}
+                  />
+                )}
+              </div>
+              <div className="flex items-center justify-end">
+                <button
+                  onClick={() => setShowBoxes((v) => !v)}
+                  className={`px-2.5 py-1 text-[11px] rounded-md border transition-colors ${
+                    showBoxes
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="Overlay detection boxes on playback"
+                >
+                  Detections {showBoxes ? "on" : "off"}
+                </button>
+              </div>
               {confirmDeleteId === expandedRec.id ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2">
                   <span className="text-xs text-red-300 flex-1 min-w-[180px]">
