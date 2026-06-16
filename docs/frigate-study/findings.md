@@ -574,3 +574,13 @@ Two GAPs surfaced (1 new issue, 1 added to an existing issue). Rest is heavy i18
 **N/A highlights:** PTZ autotrack motion estimation (#17955 — Frigate-specific), inter-process zmq/queue tuning (#17971/#17970/#17944 — Frigate multiprocess), RKNN/OpenVINO/Rockchip hwaccel, and a very large i18n/locale wave (#17979/17969/17953/17952/17942/17864/17861/17860/17858 etc.) plus docs/theme/UI. Frontend object-mask attributes (#18003) and face-library rename (#17879) are UI.
 
 Region note: we have entered Frigate's big i18n/locale rollout and ML-classification era; backend signal is thinning. Keep scanning for auth/API/ingest correctness only.
+
+## Batch 28 (PRs 17820-17640)
+
+Coverage-only batch. No issues, no merges. Highest N/A density yet: this stretch is almost entirely hwaccel detector work (RKNN/hailo/MemryX/yolox/yolov9/onnx/tensorrt), the i18n/locale rollout (Polish/Russian/plurals/username keys), docs, UI, and LPR/face.
+
+**Checked, N/A:** #17629 (search sort by score/speed) fixed a Frigate bug where in-Python sort used the wrong dict key (`x["score"]` vs `x["data"]["score"]`). Nurby does not have this bug class: search sorting is done in SQL via `order_by` (`services/search/query.py:172/208/249` cosine_distance + started_at), never an in-memory dict-key sort over a Frigate-style event blob. (#17629 is just below the cursor; will log in batch 29.)
+
+**N/A:** #17712 async object detector and #17671 object tracking are Frigate's hardware inference loop / norfair tracker internals; Nurby uses a separate perception+VLM architecture. #17816 frame-time fix is `tracked_object.py` timing internals.
+
+No backend auth/API/ingest signal in this batch. Region remains a hwaccel+i18n desert; keep scanning.
