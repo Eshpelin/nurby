@@ -644,21 +644,19 @@ function DashboardContent() {
   const [modalInitialType, setModalInitialType] = useState<StreamType | undefined>(undefined);
   const [activityEvents, setActivityEvents] = useState<Record<string, ActivityEvent[]>>({});
   const [selectedCamera, setSelectedCamera] = useState<string | null>(initialCamera);
-  const [cameraLayout, setCameraLayout] = useState<CameraLayout>(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("nurby-camera-layout") as CameraLayout) || "single";
-    }
-    return "single";
+  // The customizable camera wall is always the main area. The timeline /
+  // activity / digest lives in a collapsible right-hand panel. Persisted so
+  // the user lands with the panel where they left it.
+  const [timelineOpen, setTimelineOpen] = useState<boolean>(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("nurby-timeline-open") === "false") return false;
+    return true;
   });
-  // Dashboard view mode: the timeline-centric "investigate" layout, or the
-  // customizable camera "wall". Persisted so the user lands where they left.
-  const [viewMode, setViewMode] = useState<"investigate" | "wall">(() => {
-    if (typeof window !== "undefined" && localStorage.getItem("nurby-view-mode") === "wall") return "wall";
-    return "investigate";
-  });
-  const switchView = useCallback((mode: "investigate" | "wall") => {
-    setViewMode(mode);
-    try { localStorage.setItem("nurby-view-mode", mode); } catch { /* ignore */ }
+  const toggleTimeline = useCallback(() => {
+    setTimelineOpen((open) => {
+      const next = !open;
+      try { localStorage.setItem("nurby-timeline-open", String(next)); } catch { /* ignore */ }
+      return next;
+    });
   }, []);
   // Dashboard widgets (custom data tiles) shown alongside cameras in the wall.
   const confirmDialog = useConfirm();
@@ -674,18 +672,6 @@ function DashboardContent() {
     try { await authFetch(`/api/widgets/${w.id}`, { method: "DELETE" }); } catch { /* ignore */ }
     fetchWidgets();
   }, [confirmDialog, fetchWidgets, authFetch]);
-  // User-customised sidebar width. Null means fall back to preset for layout.
-  const [sidebarWidth, setSidebarWidth] = useState<number | null>(() => {
-    if (typeof window === "undefined") return null;
-    const raw = localStorage.getItem("nurby-sidebar-width");
-    const n = raw ? parseInt(raw, 10) : NaN;
-    return Number.isFinite(n) && n >= 220 && n <= 900 ? n : null;
-  });
-  const [resizing, setResizing] = useState(false);
-  const sidebarRef = useRef<HTMLElement | null>(null);
-  // Drag-and-drop reorder state
-  const [dragCameraId, setDragCameraId] = useState<string | null>(null);
-  const [dragOverCameraId, setDragOverCameraId] = useState<string | null>(null);
 
   // Timeline state
   const [recordings, setRecordings] = useState<Recording[]>([]);
@@ -907,54 +893,6 @@ function DashboardContent() {
     } catch { /* silent */ }
     finally { setCamerasLoading(false); }
   }, []);
-
-  // Persist a new camera order locally + on the server.
-  const reorderCameras = useCallback(async (sourceId: string, targetId: string) => {
-    if (sourceId === targetId) return;
-    setCameras((prev) => {
-      const next = [...prev];
-      const srcIdx = next.findIndex((c) => c.id === sourceId);
-      const tgtIdx = next.findIndex((c) => c.id === targetId);
-      if (srcIdx < 0 || tgtIdx < 0) return prev;
-      const [moved] = next.splice(srcIdx, 1);
-      next.splice(tgtIdx, 0, moved);
-      const payload = next.map((c, i) => ({ id: c.id, display_order: i }));
-      authFetch("/api/cameras/reorder", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }).catch(() => { /* best-effort */ });
-      return next.map((c, i) => ({ ...c, display_order: i }));
-    });
-  }, [authFetch]);
-
-  // Resizable sidebar. Attach global mousemove while resizing.
-  useEffect(() => {
-    if (!resizing) return;
-    const onMove = (e: MouseEvent) => {
-      if (!sidebarRef.current) return;
-      const rect = sidebarRef.current.getBoundingClientRect();
-      const w = Math.min(900, Math.max(220, e.clientX - rect.left));
-      setSidebarWidth(w);
-    };
-    const onUp = () => {
-      setResizing(false);
-      setSidebarWidth((w) => {
-        if (w != null) localStorage.setItem("nurby-sidebar-width", String(w));
-        return w;
-      });
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-  }, [resizing]);
 
   const fetchActivity = useCallback(async (cameraId: string) => {
     try {
@@ -1505,7 +1443,7 @@ function DashboardContent() {
   // only while cameras exist, nothing has been detected, and the user has
   // not dismissed it; it disappears on its own once the first entry lands.
   const showLearningBanner =
-    viewMode !== "wall" &&
+    timelineOpen &&
     !camerasLoading &&
     cameras.length > 0 &&
     entries.length === 0 &&
@@ -1555,58 +1493,13 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* View switch: timeline-centric investigate vs the camera wall. */}
-      <div className="flex items-center justify-end mb-2 flex-shrink-0">
-        {cameras.length > 0 && (
-          <div className="flex items-center gap-0.5 p-0.5 rounded bg-muted/50 border border-border">
-            <button onClick={() => switchView("investigate")}
-              className={`px-2.5 py-1 text-[11px] rounded transition-colors ${viewMode === "investigate" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-              title="Timeline + camera list">
-              Timeline
-            </button>
-            <button onClick={() => switchView("wall")}
-              className={`px-2.5 py-1 text-[11px] rounded transition-colors ${viewMode === "wall" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-              title="Customizable full-screen camera wall">
-              Wall
-            </button>
-          </div>
-        )}
-      </div>
-
-      {viewMode !== "wall" && (
+      {timelineOpen && (
         <>
           <div className="mb-3">
             <DailyDigestCard />
           </div>
           <StarredStatusRow />
         </>
-      )}
-
-      {viewMode === "wall" && (
-        <CameraWall
-          items={[
-            ...cameras.map((cam): WallItem => ({ id: cam.id, name: cam.name, render: () => renderWallTile(cam) })),
-            ...widgets.map((w): WallItem => ({
-              id: w.id,
-              name: w.name,
-              render: () => (
-                <WidgetTile
-                  widget={w}
-                  onEdit={(ww) => setWidgetBuilder({ open: true, editing: ww })}
-                  onDelete={deleteWidget}
-                />
-              ),
-            })),
-          ]}
-          onExit={() => switchView("investigate")}
-          toolbarExtra={
-            <button
-              onClick={() => setWidgetBuilder({ open: true, editing: null })}
-              className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
-              title="Add a custom data widget"
-            >+ Widget</button>
-          }
-        />
       )}
 
       {widgetBuilder.open && (
@@ -1617,152 +1510,48 @@ function DashboardContent() {
         />
       )}
 
-      <div className={`flex flex-col lg:flex-row gap-4 flex-1 min-h-0 ${viewMode === "wall" ? "hidden" : ""}`}>
-        {/* LEFT. Camera feeds */}
-        <aside
-          ref={sidebarRef}
-          style={sidebarWidth ? { width: sidebarWidth } : undefined}
-          className={`relative flex-shrink-0 flex flex-col min-h-0 w-full lg:w-auto ${resizing ? "" : "transition-[width]"} ${
-            sidebarWidth ? "" : cameraLayout === "double" ? "lg:w-[480px]" : cameraLayout === "list" ? "lg:w-80" : "lg:w-72"
-          }`}
-        >
-          {/* Camera list header with layout toggle */}
-          <div className="flex items-center justify-between mb-2 flex-shrink-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Cameras</span>
-              {cameras.length > 0 && (
-                <>
-                  <button onClick={() => { setModalInitialType(undefined); setModalOpen(true); }}
-                    className="w-4 h-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                    title="Add camera">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <path d="M12 5v14" /><path d="M5 12h14" />
-                    </svg>
-                  </button>
-                  <button onClick={() => { setModalInitialType("usb"); setModalOpen(true); }}
-                    className="text-[9px] uppercase tracking-wider text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-muted/50 transition-colors"
-                    title="Add a USB webcam. Auto-detects and bridges the device.">
-                    Webcam
-                  </button>
-                </>
-              )}
-            </div>
-            <div className="flex items-center gap-0.5 p-0.5 rounded bg-muted/50 border border-border">
-              {/* Single column */}
-              <button onClick={() => { setCameraLayout("single"); localStorage.setItem("nurby-camera-layout", "single"); }}
-                className={`p-1 rounded transition-colors ${cameraLayout === "single" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                title="Single column">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="1" y="7" width="10" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/></svg>
-              </button>
-              {/* Double column */}
-              <button onClick={() => { setCameraLayout("double"); localStorage.setItem("nurby-camera-layout", "double"); }}
-                className={`p-1 rounded transition-colors ${cameraLayout === "double" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                title="Two columns">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="4" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="7" y="1" width="4" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="1" y="7" width="4" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="7" y="7" width="4" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/></svg>
-              </button>
-              {/* List */}
-              <button onClick={() => { setCameraLayout("list"); localStorage.setItem("nurby-camera-layout", "list"); }}
-                className={`p-1 rounded transition-colors ${cameraLayout === "list" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                title="List view">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1.5" width="10" height="2.5" rx="0.5" stroke="currentColor" strokeWidth="1.2"/><rect x="1" y="5" width="10" height="2.5" rx="0.5" stroke="currentColor" strokeWidth="1.2"/><rect x="1" y="8.5" width="10" height="2.5" rx="0.5" stroke="currentColor" strokeWidth="1.2"/></svg>
-              </button>
-            </div>
-          </div>
-
-          {/* All cameras button */}
-          <button onClick={() => setSelectedCamera(null)}
-            className={`w-full text-left px-2.5 py-1.5 text-xs rounded-md mb-2 transition-colors flex-shrink-0 ${
-              !selectedCamera ? "bg-muted text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}>
-            All cameras
-          </button>
-
-          {/* Scrollable camera list */}
-          <div className={`flex-1 overflow-y-auto scrollbar-thin pr-1 ${
-            cameraLayout === "double" ? "grid grid-cols-2 gap-2 auto-rows-min content-start" : "space-y-2"
-          }`}>
-            {cameras.map((cam) => (
-              <div
-                key={cam.id}
-                draggable
-                onDragStart={(e) => {
-                  setDragCameraId(cam.id);
-                  e.dataTransfer.effectAllowed = "move";
-                  try { e.dataTransfer.setData("text/plain", cam.id); } catch { /* noop */ }
-                }}
-                onDragOver={(e) => {
-                  if (!dragCameraId || dragCameraId === cam.id) return;
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  if (dragOverCameraId !== cam.id) setDragOverCameraId(cam.id);
-                }}
-                onDragLeave={() => {
-                  if (dragOverCameraId === cam.id) setDragOverCameraId(null);
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const src = dragCameraId;
-                  setDragCameraId(null);
-                  setDragOverCameraId(null);
-                  if (src) reorderCameras(src, cam.id);
-                }}
-                onDragEnd={() => { setDragCameraId(null); setDragOverCameraId(null); }}
-                className={`${dragCameraId === cam.id ? "opacity-40" : ""} ${dragOverCameraId === cam.id ? "ring-1 ring-accent rounded-md" : ""}`}
-              >
-                <CameraSidebarCard
-                  camera={cam}
-                  selected={selectedCamera === cam.id}
-                  onClick={() => setSelectedCamera(selectedCamera === cam.id ? null : cam.id)}
-                  activityEvents={activityEvents[cam.id] || []}
-                  layout={cameraLayout}
-                />
-              </div>
-            ))}
-
-            {cameras.length === 0 && !camerasLoading && (
-              <div className={`rounded-lg border border-dashed border-border bg-card/30 p-4 ${cameraLayout === "double" ? "col-span-2" : ""}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-full bg-accent/10 border border-accent/30 flex items-center justify-center text-accent">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                    </svg>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold">No cameras yet</div>
-                    <div className="text-[11px] text-muted-foreground leading-tight">Connect a feed to start capturing activity.</div>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <button onClick={() => { setModalInitialType(undefined); setModalOpen(true); }}
-                    className="w-full px-2.5 py-2 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90 transition-opacity">
-                    Add a camera
-                  </button>
-                </div>
-                <div className="mt-3 pt-3 border-t border-border/50 text-[10px] text-muted-foreground leading-relaxed">
-                  <div className="font-medium text-foreground/70 mb-1">Options</div>
-                  <ul className="space-y-0.5">
-                    <li>RTSP/HTTP from IP cameras and NVRs</li>
-                    <li>ONVIF network auto-discovery</li>
-                    <li>USB or local device testing</li>
-                  </ul>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Drag handle to resize sidebar */}
-          <div
-            onMouseDown={(e) => { e.preventDefault(); setResizing(true); }}
-            onDoubleClick={() => {
-              setSidebarWidth(null);
-              localStorage.removeItem("nurby-sidebar-width");
-            }}
-            title="Drag to resize. Double-click to reset."
-            className={`absolute top-0 right-0 h-full w-1.5 -mr-1 cursor-col-resize group/resize ${resizing ? "bg-accent/40" : "hover:bg-accent/30"}`}
-          >
-            <div className={`mx-auto mt-1/2 h-full w-px ${resizing ? "bg-accent" : "bg-border group-hover/resize:bg-accent"}`} />
-          </div>
-        </aside>
+      <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
+        {/* LEFT. Customizable camera wall (the main area). */}
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+          <CameraWall
+            items={[
+              ...cameras.map((cam): WallItem => ({ id: cam.id, name: cam.name, render: () => renderWallTile(cam) })),
+              ...widgets.map((w): WallItem => ({
+                id: w.id,
+                name: w.name,
+                render: () => (
+                  <WidgetTile
+                    widget={w}
+                    onEdit={(ww) => setWidgetBuilder({ open: true, editing: ww })}
+                    onDelete={deleteWidget}
+                  />
+                ),
+              })),
+            ]}
+            toolbarExtra={
+              <>
+                <button
+                  onClick={() => setWidgetBuilder({ open: true, editing: null })}
+                  className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
+                  title="Add a custom data widget"
+                >+ Widget</button>
+                <button
+                  onClick={toggleTimeline}
+                  className={`text-[11px] px-2 py-1 rounded border transition-colors flex items-center gap-1.5 ${
+                    timelineOpen
+                      ? "border-accent/40 bg-accent/10 text-accent-foreground"
+                      : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+                  title={timelineOpen ? "Hide the timeline panel" : "Show the timeline panel"}
+                  aria-pressed={timelineOpen}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${timelineOpen ? "bg-accent" : "bg-muted-foreground/40"}`} />
+                  Timeline
+                </button>
+              </>
+            }
+          />
+        </div>
 
         {/* Filter modal */}
         {filterModalOpen && (
@@ -1886,8 +1675,8 @@ function DashboardContent() {
           </div>
         )}
 
-        {/* RIGHT. Timeline + Search */}
-        <main className="flex-1 flex flex-col min-h-0 min-w-0">
+        {/* RIGHT. Timeline + Search. Collapsible side panel. */}
+        <main className={`flex flex-col min-h-0 min-w-0 ${timelineOpen ? "lg:w-[420px] flex-shrink-0" : "hidden"}`}>
           {/* Search bar */}
           <div className="flex-shrink-0 mb-3">
             <div className="flex gap-2">

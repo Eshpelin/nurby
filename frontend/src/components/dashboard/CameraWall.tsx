@@ -42,7 +42,7 @@ export function CameraWall({
   toolbarExtra,
 }: {
   items: WallItem[];
-  onExit: () => void;
+  onExit?: () => void;
   toolbarExtra?: React.ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -168,9 +168,11 @@ export function CameraWall({
           <button onClick={toggleFullscreen}
             className="text-[11px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             title="Toggle fullscreen">{isFs ? "Exit fullscreen" : "Fullscreen"}</button>
-          <button onClick={onExit}
-            className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
-            title="Back to the timeline dashboard">Exit wall</button>
+          {onExit && (
+            <button onClick={onExit}
+              className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
+              title="Back to the timeline dashboard">Exit wall</button>
+          )}
         </div>
       </div>
 
