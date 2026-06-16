@@ -108,7 +108,7 @@ async def get_provider(provider_id: uuid.UUID, _current_user: User = Depends(get
 async def update_provider(
     provider_id: uuid.UUID,
     body: ProviderCreate,
-    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
 ):
     provider = await db.get(Provider, provider_id)
     if not provider:
