@@ -558,3 +558,43 @@
 {"pr":20800,"title":"Various Tweaks","area":"?","type":"?","decision":"defer"}
 {"pr":20791,"title":"UI Tweaks","area":"web","type":"ui","decision":"skip"}
 {"pr":20790,"title":"Form validation tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20789,"title":"Review tweaks","area":"web","type":"ui","decision":"defer"}
+{"pr":20786,"title":"Fix events summary endpoint for DST","area":"events","type":"bugfix","nurby_status":"HAVE","decision":"map","insight":"Summary/aggregation endpoints miscomputed time windows across DST transitions.","nurby_evidence":"Audited + EMPIRICALLY TESTED nurby daily_digest window math: window_end - timedelta(hours=24) (==days=1) on a tz-aware datetime keeps local wall-clock (07:00) and astimezone(utc) yields correct boundary (real elapsed 23/24/25h across spring/fall). DST-safe. report_scheduler.py also textbook-correct.","priority":"P3","effort":"-"}
+{"pr":20785,"title":"Various fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20784,"title":"Fix recordings summary for DST","area":"record","type":"bugfix","nurby_status":"HAVE","decision":"map","note":"Same DST class as #20786; nurby time-window math verified DST-safe.","priority":"P3","effort":"-"}
+{"pr":20781,"title":"MemryX: Update installation code to hold SDK 2.1 version","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":20780,"title":"Adjust LPR packages","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":20777,"title":"Update recommended hardware to list more models","area":"docs","type":"docs","decision":"skip"}
+{"pr":20774,"title":"Various fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20773,"title":"Camera Wizard tweaks","area":"web","type":"feature","decision":"defer"}
+{"pr":20772,"title":"Correctly remove classification model from config","area":"data_processing","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20771,"title":"Classification fixes","area":"data_processing","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20770,"title":"Fix review summary for DST","area":"review","type":"bugfix","nurby_status":"HAVE","decision":"map","note":"DST class; nurby verified DST-safe (see #20786). NB: low-confidence VERIFY items remain - daily_digest uses datetime.now(tz).astimezone() (system-local, not configured tz) and persons.py hour-buckets by UTC hour; both behavior-affecting, left for review.","priority":"P3","effort":"-"}
+{"pr":20769,"title":"docs: remove webrtc not support H.265 tips","area":"docs","type":"docs","decision":"skip"}
+{"pr":20762,"title":"Tracked Object Details pane tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20761,"title":"Add zones friend name","area":"review","type":"feature","nurby_status":"HAVE","decision":"map","note":"Nurby has named zones (R3 named areas).","priority":"P3","effort":"-"}
+{"pr":20760,"title":"feat: add search filter group audio i18n","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20749,"title":"Create i18n key for list separator","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20748,"title":"Refactor Tracked Object Details dialog","area":"web","type":"refactor","decision":"skip"}
+{"pr":20747,"title":"Add ability to delete classification models","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20743,"title":"Don't remove tensorflow on trt","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":20742,"title":"Various Tweaks","area":"?","type":"?","decision":"defer"}
+{"pr":20736,"title":"Mark delivery objects so LLM knows what is happening","area":"genai","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Tag package/delivery detections so the VLM has that context; nurby VLM prompt context.","priority":"P3","effort":"S"}
+{"pr":20723,"title":"Review description updates","area":"genai","type":"feature","decision":"defer"}
+{"pr":20722,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20720,"title":"Add Qwen3-VL to recommended models","area":"genai","type":"docs","decision":"skip","note":"Model recommendation; nurby is model-agnostic."}
+{"pr":20718,"title":"Improve Details Settings","area":"web","type":"ui","decision":"skip"}
+{"pr":20717,"title":"Add zoom icons to timeline","area":"web","type":"ui","decision":"skip"}
+{"pr":20715,"title":"No recordings indicator on History timeline","area":"web","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Show gaps (no-recording spans) on the timeline; check nurby timeline shows recording coverage.","priority":"P3","effort":"S"}
+{"pr":20713,"title":"Various Tweaks","area":"?","type":"?","decision":"defer"}
+{"pr":20709,"title":"Trigger actions","area":"events","type":"feature","nurby_status":"N/A","decision":"defer","note":"Frigate 0.17 semantic triggers; nurby rule-triggers differ."}
+{"pr":20706,"title":"install python3-h2","area":"deps","type":"deps","decision":"skip"}
+{"pr":20705,"title":"feat(player): always show camera names + add UI config toggle","area":"web","type":"ui","decision":"skip"}
+{"pr":20704,"title":"Review prompt adjustments","area":"genai","type":"feature","decision":"defer"}
+{"pr":20696,"title":"Improve i18n for lists of text/labels","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20691,"title":"Trigger Wizard","area":"events","type":"feature","nurby_status":"N/A","decision":"defer"}
+{"pr":20690,"title":"Improve default genai review prompt structure","area":"genai","type":"feature","decision":"defer","note":"Prompt engineering for review summaries; compare to nurby vlm/summary prompts."}
+{"pr":20687,"title":"UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20684,"title":"Unify list of objects under dedicated section","area":"web","type":"ui","decision":"skip"}
+{"pr":20682,"title":"Export improvements","area":"record","type":"feature","decision":"defer"}
+{"pr":20681,"title":"More detail pane tweaks","area":"web","type":"ui","decision":"skip"}

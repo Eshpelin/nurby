@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 20790** triaged (560, ~14% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 20681** triaged (600, ~15% of 4058 merged), newest-first.
 
 ---
 
@@ -362,3 +362,24 @@ No nurby-applicable backend fix.
   GenAI review/digest summaries; nurby has summaries but maybe not per-camera summary context · P3.
 - Note: **[#20786] events-summary DST fix** lands at the next batch boundary; folds into the DST
   backlog item (#22698 / digest time-window correctness).
+
+---
+
+## Batch 15 (PRs 20789–20681) — coverage batch, no code change
+
+A DST bug cluster in Frigate (events/recordings/review summaries) prompted a careful nurby audit.
+
+- **[#20786/#20784/#20770] DST in summary windows** — **HAVE (verified, not assumed)**. A sub-agent
+  flagged `daily_digest.py:126` (`window_end - timedelta(hours=24)`) as a "critical DST bug." I
+  **empirically tested** it in the API image: `timedelta(hours=24) == timedelta(days=1)`, and
+  tz-aware datetime arithmetic is wall-clock, so the subtraction keeps local 07:00 and
+  `astimezone(utc)` produces the correct boundary (real elapsed 23/24/25h exactly as DST requires).
+  `report_scheduler.py` is also textbook-correct. **No fix** — changing it would have been churn and
+  a likely regression.
+  - Low-confidence VERIFY (behavior-affecting, left for review, not auto-fixed): `daily_digest`
+    uses `datetime.now(tz).astimezone()` (system-local tz, not the configured `system_timezone`)
+    for its hour check; `persons.py` buckets activity by **UTC** hour (`strftime("%H")`) which may
+    want local-hour conversion depending on UI intent.
+- HAVE: named zones (#20761 — nurby R3 named areas).
+- Backlog/VERIFY: **[#20736]** tag delivery/package detections for the VLM, **[#20715]** show
+  no-recording gaps on the timeline, **[#20690/#20704/#20723]** review-summary prompt structure · P3.
