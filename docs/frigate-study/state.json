@@ -3,12 +3,12 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 20392,
+  "cursor_pr": 20206,
   "newest_pr_seen": 23488,
-  "batches_done": 17,
+  "batches_done": 18,
   "counts": {
-    "logged": 680,
-    "pct_of_merged": "~17%",
+    "logged": 720,
+    "pct_of_merged": "~18%",
     "fixes_shipped": 5,
     "issues_open": 8,
     "issues_closed": 1
@@ -35,6 +35,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 20392, newest-first.",
-  "notes": "Batch 17: coverage only. Notable backlog: webp thumbnails for storage savings (#20484), mark-unreviewed (#20446), on-demand snapshot download (#20488), retention logic (#20506), input validation (#20491/#20483)."
+  "next": "Continue at PR < 20206, newest-first.",
+  "notes": "Batch 18: coverage only. #20237 watchdog HAVE (nurby stall-detect+reconnect stream.py:211, also clears #22557 note). #20296 customizable review prompt HAVE. Stationary work mostly N/A (nurby R2)."
 }
