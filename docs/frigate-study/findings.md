@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 22984** triaged (120), newest of 4058 merged.
+Coverage so far: PRs **23488 → 22814** triaged (160), newest of 4058 merged.
 
 ---
 
@@ -156,3 +156,22 @@ No change — verified rather than assumed.
 - **[#23052, #23310] MP4 export chapter markers**, **[#23034] download incident as evidence zip**
   (VERIFY nurby evidence export), **[#22993] face-recognition perf** — revisit in topical passes.
 - N/A: #23118/#23040 ROCm, #23108 Intel stats, #23099 debug-replay jobs.
+
+---
+
+## Batch 4 (PRs 22980–22814) — coverage batch, no code change
+
+Low yield: dominated by Intel/OpenVINO/ROCm, dependency bumps, docs, i18n, and frontend tweaks
+(all N/A or skip for nurby). **No fix forced** — none of the substantive items was a clean,
+high-confidence change safe to merge unattended. Worth a later look (backlog / VERIFY):
+
+- **[#22887] Manual events caught by motion config** · `record` · P3/S — ensure manually- or
+  API-triggered events bypass `recording_mode=on_motion` gating.
+- **[#22971] Stream probe fallback** · `video` · P3/M — graceful fallback/reconnect when the
+  primary stream probe fails.
+- **[#22818] UTF-8 ONVIF preset names** · `ptz` · P3/S — verify `discovery/onvif.py` decodes
+  non-ASCII preset names correctly.
+- **[#22880] Deferred enrichment processor** · `data_processing` · P3/M — move expensive
+  enrichment off the hot path (compare to nurby `vlm_queue`/enrichment workers).
+- **[#22915/#22867] Export progress + improvements**, **[#22963] camera-wizard polish** — UI passes.
+- **[#22894] python-multipart bump** — check nurby's pinned version for the same CVE separately.

@@ -118,3 +118,43 @@
 {"pr":22993,"title":"Optimize face recognition","area":"data_processing","type":"performance","nurby_status":"VERIFY","decision":"defer","note":"Face-rec perf; check nurby InsightFace batching/caching.","priority":"P3","effort":"M"}
 {"pr":22987,"title":"Camera access fixes","area":"api","type":"security","nurby_status":"VULNERABLE","decision":"map","insight":"Bug fixes in per-camera access enforcement.","nurby_evidence":"Reinforces camera-ACL gap (issue #40).","action":"Folded into initiatives/camera-access-control.md.","priority":"P1","effort":"L"}
 {"pr":22984,"title":"Enforce python-level timeout on ffprobe subprocesses","area":"util","type":"reliability","nurby_status":"FIXED","decision":"map","insight":"A probe/ffmpeg subprocess with no python-level timeout can hang a worker forever on a stalled stream.","nurby_evidence":"agent/analyzer.py and conversation_clip._run_ffmpeg awaited communicate() with NO timeout. (ffprobe itself not used by nurby.)","action":"DONE: wrapped both in asyncio.wait_for + kill-on-timeout (analyzer 20s, clip 120s) + tests. webcam_bridge left long-lived (has restart supervision).","priority":"P1","effort":"S"}
+{"pr":22980,"title":"WebUI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":22973,"title":"Update third_party_extensions.md","area":"docs","type":"docs","decision":"skip"}
+{"pr":22971,"title":"Stream probe fallback","area":"video","type":"reliability","nurby_status":"VERIFY","decision":"map","insight":"Fall back to an alternate probe method when the primary stream probe fails.","nurby_evidence":"Check nurby stream open/probe (stream.py) for graceful fallback vs hard fail.","action":"Backlog: probe fallback / reconnect robustness review.","priority":"P3","effort":"M"}
+{"pr":22968,"title":"GenAI Tweaks","area":"genai","type":"refactor","decision":"defer"}
+{"pr":22966,"title":"Update Intel VPL deps","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":22965,"title":"Tweaks","area":"?","type":"ui","decision":"skip"}
+{"pr":22963,"title":"Add camera wizard improvements","area":"web","type":"feature","decision":"defer","note":"Onboarding wizard polish; UI parity pass."}
+{"pr":22958,"title":"Improve frontend e2e tests","area":"web","type":"ci","decision":"skip"}
+{"pr":22957,"title":"Update Radix deps","area":"deps","type":"deps","decision":"skip"}
+{"pr":22956,"title":"docs: add docker compose generator","area":"docs","type":"docs","decision":"skip"}
+{"pr":22950,"title":"remove temporary DB cleanup check","area":"db","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":22943,"title":"Update intel runtimes to support Battlemage","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":22936,"title":"Fix yolonas colab notebook","area":"tooling","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":22934,"title":"Improve readability by removing trailing digits from float conversion","area":"web","type":"ui","decision":"skip","note":"Float formatting display tidy-up."}
+{"pr":22930,"title":"docs: add cctvQL to third-party extensions","area":"docs","type":"docs","decision":"skip"}
+{"pr":22925,"title":"Fix broken docs links with hash fragments","area":"docs","type":"docs","decision":"skip"}
+{"pr":22924,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22915,"title":"Add step + percent progress for exports","area":"record","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Export progress UX; check nurby export feedback.","priority":"P3","effort":"S"}
+{"pr":22913,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22894,"title":"Bump python-multipart 0.0.20->0.0.26","area":"deps","type":"deps","decision":"skip","note":"python-multipart had CVEs; verify nurby's pinned version separately."}
+{"pr":22890,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22889,"title":"fix mypy","area":"ci","type":"ci","decision":"skip"}
+{"pr":22888,"title":"Use Frigate amd64 cache image for devcontainer build","area":"ci","type":"ci","nurby_status":"N/A","decision":"skip"}
+{"pr":22887,"title":"Fix manual event getting caught by global motion config","area":"record","type":"bugfix","nurby_status":"VERIFY","decision":"map","insight":"A manually-triggered event was incorrectly subjected to the global motion-based recording filter.","nurby_evidence":"Check nurby manual/API-triggered events vs recording_mode=on_motion filtering.","action":"Backlog: ensure manual/API events bypass motion gating.","priority":"P3","effort":"S"}
+{"pr":22886,"title":"Fix review page spinner not clearing when review item ends","area":"web","type":"ui","decision":"skip"}
+{"pr":22881,"title":"Manually build intel driver","area":"ci","type":"ci","nurby_status":"N/A","decision":"skip"}
+{"pr":22880,"title":"Add deferred real-time processor for enrichments","area":"data_processing","type":"performance","nurby_status":"VERIFY","decision":"defer","note":"Defer expensive enrichment processing off the hot path; compare to nurby enrichment workers/vlm_queue.","priority":"P3","effort":"M"}
+{"pr":22879,"title":"docs: ROCm /dev/kfd and /dev/accel mounts","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":22877,"title":"i18n fix","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":22874,"title":"Add network requirements docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":22867,"title":"Export improvements","area":"record","type":"feature","decision":"defer","note":"Export UX; export parity pass."}
+{"pr":22864,"title":"Docs update","area":"docs","type":"docs","decision":"skip"}
+{"pr":22860,"title":"Update restream.md docs and clarify output config","area":"docs","type":"docs","decision":"skip"}
+{"pr":22859,"title":"fix: bump OpenVINO to 2025.4.x for LXC detector crash","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":22830,"title":"Bump actions/github-script 7->9","area":"deps","type":"ci","decision":"skip"}
+{"pr":22828,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22824,"title":"Improve frontend test framework","area":"web","type":"ci","decision":"skip"}
+{"pr":22823,"title":"Chat improvements","area":"genai","type":"feature","decision":"defer"}
+{"pr":22818,"title":"Fix UTF-8 ONVIF preset names","area":"ptz","type":"bugfix","nurby_status":"VERIFY","decision":"map","insight":"ONVIF preset names with non-ASCII chars were mis-decoded.","nurby_evidence":"Check services/discovery/onvif.py preset-name decoding for UTF-8 handling.","action":"Backlog: verify ONVIF preset/name UTF-8 decoding.","priority":"P3","effort":"S"}
+{"pr":22814,"title":"UI fixes","area":"web","type":"ui","decision":"skip"}

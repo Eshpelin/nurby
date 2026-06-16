@@ -3,31 +3,32 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 22984,
+  "cursor_pr": 22814,
   "newest_pr_seen": 23488,
-  "batches_done": 3,
+  "batches_done": 4,
   "counts": {
-    "logged": 120,
+    "logged": 160,
     "fixes_shipped": 3,
     "issues_filed": 7
   },
   "fixes_shipped_detail": [
     "#23352 stream-URL scheme allowlist (shared/schemas.py) -> nurby PR #34 (MERGED)",
     "#23172 safe_getsize() TOCTOU/transient-stat hardening (shared/paths.py + 4 sites) -> nurby PR #39 (MERGED)",
-    "#22984 asyncio.wait_for timeout + kill on async ffmpeg (analyzer.py, conversation_clip.py) -> nurby batch-3 PR (MERGED)"
+    "#22984 asyncio.wait_for timeout + kill on async ffmpeg (analyzer.py, conversation_clip.py) -> nurby PR #43 (MERGED)"
   ],
   "outputs": {
-    "merged_prs": ["Eshpelin/nurby#34", "Eshpelin/nurby#39", "batch-3 PR"],
+    "merged_prs": ["Eshpelin/nurby#34", "Eshpelin/nurby#39", "Eshpelin/nurby#43"],
     "issues": {
       "Eshpelin/nurby#35": "P0 ffmpeg arg + URL SSRF hardening (frigate #23478)",
       "Eshpelin/nurby#36": "P1 PTZ smart-track non-finite guard (frigate #23475)",
       "Eshpelin/nurby#37": "P2 motion search + review items (frigate #23378 cluster)",
       "Eshpelin/nurby#38": "P2 per-camera exclude-from-review flag (frigate #23387)",
-      "Eshpelin/nurby#40": "P1 per-user camera access control - WS + list endpoints (frigate #23256/#23294/#23164/#22987)",
-      "Eshpelin/nurby#41": "P2 reasoning/thinking model support in VLM+agent (frigate #23281)",
+      "Eshpelin/nurby#40": "P1 per-user camera access control (frigate #23256/#23294/#23164/#22987)",
+      "Eshpelin/nurby#41": "P2 reasoning/thinking model support (frigate #23281)",
       "Eshpelin/nurby#42": "P3 widget_proxy cache per-user key (frigate #23261-adjacent)"
     }
   },
-  "next": "Continue at PR < 22984, newest-first. Re-run harvest -> triage -> map -> issues -> fix per docs/frigate-study/README.md.",
-  "notes": "Batch 3 (23164-22984): shipped async-ffmpeg timeouts. Verified BGR/RGB channel order correct (no bug). camera-ACL reinforced (#23164/#22987) under existing issue #40. P3 minor items kept in findings backlog, not separately filed."
+  "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main, file issues for substantive gaps, log everything. Do NOT force a fix when none is clearly safe (batch 4 was coverage-only).",
+  "next": "Continue at PR < 22814, newest-first.",
+  "notes": "Batch 4 (22980-22814): coverage only, no clean fix to merge unattended. Backlog/VERIFY items recorded in findings.md (manual-event motion gating #22887, stream probe fallback #22971, ONVIF UTF-8 #22818, deferred enrichment #22880, python-multipart CVE check #22894)."
 }
