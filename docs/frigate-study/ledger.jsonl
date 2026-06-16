@@ -758,3 +758,43 @@
 {"pr":20020,"title":"Improve d-fine model export docs","area":"docs","type":"docs","decision":"skip"}
 {"pr":20007,"title":"feat: add github mirror download endpoint","area":"tooling","type":"feature","nurby_status":"N/A","decision":"defer","note":"Model-download mirror; nurby model handling differs."}
 {"pr":20000,"title":"Provide model type in header for ZMQ detector","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":19998,"title":"Improve live loading by not blocking UI","area":"web","type":"performance","decision":"skip"}
+{"pr":19984,"title":"Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":19974,"title":"More inference speed updates","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":19971,"title":"Add specific notes for frigate+ models in object detector docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":19952,"title":"Fix model selection type in Frigate+ settings pane","area":"web","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":19951,"title":"Update object_detectors.md image size YOLO9","area":"docs","type":"docs","decision":"skip"}
+{"pr":19947,"title":"More inference speed updates","area":"docs","type":"docs","decision":"skip"}
+{"pr":19946,"title":"Update inference times for yolov9","area":"docs","type":"docs","decision":"skip"}
+{"pr":19944,"title":"Add note to Plus docs about Apple Silicon support","area":"docs","type":"docs","decision":"skip"}
+{"pr":19938,"title":"update docs for Frigate+ yolov9","area":"docs","type":"docs","decision":"skip"}
+{"pr":19930,"title":"Fix best thumbnail endpoint","area":"api","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"Best-thumbnail selection bug; check nurby thumbnail/best-frame selection.","priority":"P3","effort":"S"}
+{"pr":19926,"title":"docs: fix reolink camera table display","area":"docs","type":"docs","decision":"skip"}
+{"pr":19919,"title":"Fix markdown table in camera_specific.md","area":"docs","type":"docs","decision":"skip"}
+{"pr":19908,"title":"Constrain width of export preview dialog","area":"web","type":"ui","decision":"skip"}
+{"pr":19907,"title":"Update live FAQ for camera distortion","area":"docs","type":"docs","decision":"skip"}
+{"pr":19896,"title":"Optimize cuda execution to run in single stream","area":"detectors","type":"performance","nurby_status":"N/A","decision":"skip"}
+{"pr":19890,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19887,"title":"Update Reolink support docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":19883,"title":"Set lower bound on retry interval","area":"ingestion","type":"reliability","nurby_status":"HAVE","decision":"map","insight":"Floor the reconnect retry interval so a flapping camera isn't retried in a tight loop.","nurby_evidence":"Nurby reconnect starts at RECONNECT_DELAY (the floor) and doubles to RECONNECT_MAX_DELAY (stream.py:147/162). Has a lower bound.","priority":"P3","effort":"-"}
+{"pr":19879,"title":"Autotracking tweak","area":"ptz","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"PTZ autotracking; nurby ptz_tracker verified robust (clamping)."}
+{"pr":19874,"title":"Fix stream stats display","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19873,"title":"Autotracking improvements","area":"ptz","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Compare to nurby ptz_smart_track features."}
+{"pr":19869,"title":"Ensure proxy group claim uses the configured separator character","area":"api","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"Proxy-auth header claims; nurby uses JWT."}
+{"pr":19866,"title":"Fix more weblate merge conflicts","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19864,"title":"Fix weblate merge conflicts","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19854,"title":"Fix typo in Apple Silicon detector","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":19850,"title":"Improve review segmentation behavior","area":"review","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"How raw events group into review items; compare to nurby incident grouping (incident_idle_seconds).","priority":"P3","effort":"M"}
+{"pr":19848,"title":"update legacy intel-compute packages","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":19825,"title":"Add an icon and tooltip to explain detector CPU usage metric","area":"web","type":"ui","decision":"skip"}
+{"pr":19824,"title":"Add low shm warning to bottom bar","area":"ops","type":"feature","nurby_status":"N/A","decision":"skip","note":"Frigate caches recordings in /dev/shm; nurby writes segments to disk."}
+{"pr":19816,"title":"Replace hardcoded path with constant","area":"util","type":"refactor","decision":"skip"}
+{"pr":19813,"title":"Cleanup vod clip handling and add padding arg","area":"record","type":"feature","nurby_status":"HAVE","decision":"defer","note":"Clip export with pre/post padding; nurby has recording_clip_pre/post."}
+{"pr":19805,"title":"Fix HLS video initial aspect on Chrome","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19802,"title":"Only import degirum module if using degirum detector","area":"detectors","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":19799,"title":"Support Plus input dtype","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":19797,"title":"Fix menu scrolling","area":"web","type":"ui","decision":"skip"}
+{"pr":19787,"title":"0.17 Release","area":"?","type":"release","decision":"skip"}
+{"pr":19782,"title":"Rename nickname to friendly_name","area":"config","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":19780,"title":"docs: rk ffmpeg preset is outdated","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":19777,"title":"Update openapi schema","area":"api","type":"docs","decision":"skip"}

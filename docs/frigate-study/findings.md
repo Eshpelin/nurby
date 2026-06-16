@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 20000** triaged (760, ~19% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 19777** triaged (800, ~20% of 4058 merged), newest-first.
 
 ---
 
@@ -438,3 +438,21 @@ OpenVINO/CUDA/ROCm/ZMQ-detector/LPR churn (mostly N/A). Notable:
 - Backlog: **[#20190]** small-object detection via region re-detection (accuracy, P2),
   **[#20119]** Prometheus metrics (observability, P3), **[#20101]** per-object speed estimation
   (could complement nurby's traffic features, P3).
+
+---
+
+## Batch 20 (PRs 19998–19777) — coverage batch, no code change (0.17 release window)
+
+Inference-speed/docs updates, Frigate+ model config, CUDA/Intel/degirum (N/A), autotracking
+tweaks (our PTZ verified robust), weblate/i18n. One reliability item already HAVE:
+
+- **[#19883] Lower bound on reconnect retry** — HAVE. Nurby reconnect starts at `RECONNECT_DELAY`
+  (the floor) and doubles to `RECONNECT_MAX_DELAY` (`stream.py:147/162`).
+- Backlog/VERIFY: **[#19930]** best-thumbnail selection, **[#19850]** review/event segmentation
+  (vs nurby `incident_idle_seconds` grouping), **[#19873/#19879]** autotracking refinements · P3.
+
+### Milestone: 20% of Frigate's 4058 merged PRs triaged (800 logged).
+Pattern so far: the high-value security/reliability fixes clustered in the recent ~8 batches
+(23488–22400). The 0.17/0.18 dev region (22xxx–19xxx) is dominated by hardware-accel (Coral/
+OpenVINO/ROCm/Hailo/MemryX/Intel/CUDA), classification/secondary-models, go2rtc, i18n, and UI —
+nearly all N/A for nurby's CPU + MediaMTX + VLM architecture. 5 fixes shipped, 8 issues open.
