@@ -278,3 +278,43 @@
 {"pr":22442,"title":"Review fixes","area":"review","type":"bugfix","decision":"defer"}
 {"pr":22439,"title":"Hide set password menu option when native auth is disabled","area":"web","type":"ui","decision":"skip"}
 {"pr":22438,"title":"Disable pip for animated event cards","area":"web","type":"ui","decision":"skip"}
+{"pr":22426,"title":"fix: run Frigate+ API calls in thread pool to prevent event loop blocking","area":"api","type":"performance","nurby_status":"FIXED","decision":"map","insight":"Sync (requests/subprocess/file) calls in async route handlers block the uvicorn event loop, stalling ALL requests.","nurby_evidence":"ollama_deploy.py get_ollama_status awaited a sync _get_system_ram_gb() that shells out to sysctl (up to 5s). Also blocking file I/O in persons.upload_face, system.trigger_update, devices receiver read.","action":"DONE: wrapped _get_system_ram_gb in asyncio.to_thread. Remaining blocking file I/O -> issue.","priority":"P2","effort":"S"}
+{"pr":22423,"title":"Update inference times for RTX 5060 Ti","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":22420,"title":"UI tweak","area":"web","type":"ui","decision":"skip"}
+{"pr":22419,"title":"Update dev contrib docs with Python checks","area":"docs","type":"docs","decision":"skip"}
+{"pr":22416,"title":"Add handler for license plate which is not expected to be stationary","area":"data_processing","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"LPR for moving vehicles; compare to nurby plates.py stationary assumptions."}
+{"pr":22415,"title":"Consistently sort class names","area":"detectors","type":"refactor","decision":"skip"}
+{"pr":22405,"title":"UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":22393,"title":"fix(record): replace asyncio.SubprocessError with sp.SubprocessError","area":"record","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"Wrong exception class caught. Check nurby subprocess except clauses catch the right type.","priority":"P3","effort":"S"}
+{"pr":22386,"title":"Replace react-tracked and react-use-websocket with useSyncExternalStore","area":"web","type":"refactor","decision":"skip"}
+{"pr":22385,"title":"Filter push notifications by user role camera access","area":"events","type":"security","nurby_status":"VULNERABLE","decision":"map","insight":"Push notifications must be filtered by each recipient's camera access.","nurby_evidence":"Nurby notifications/alerts not per-user camera scoped -> issue #40.","action":"Folded into issue #40.","priority":"P1","effort":"M"}
+{"pr":22384,"title":"Keep Tracked Object Details nav buttons visible","area":"web","type":"ui","decision":"skip"}
+{"pr":22379,"title":"Enable http/2 support in nginx","area":"ops","type":"performance","nurby_status":"N/A","decision":"skip","note":"No nginx in nurby stack."}
+{"pr":22376,"title":"Various Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22375,"title":"Enable event snapshot API to honour query params after event ends","area":"api","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"Snapshot/thumbnail query params (crop/quality) after event end; check nurby thumbnail endpoint params.","priority":"P3","effort":"S"}
+{"pr":22370,"title":"Fix GenAI score handling","area":"genai","type":"bugfix","decision":"defer"}
+{"pr":22367,"title":"docs: add highlight magic comments","area":"docs","type":"docs","decision":"skip"}
+{"pr":22363,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":22353,"title":"Refactor Review GenAI Prompt","area":"genai","type":"refactor","decision":"defer"}
+{"pr":22352,"title":"Recordings API and calendar UI performance improvements","area":"api","type":"performance","nurby_status":"VERIFY","decision":"defer","note":"Recordings list/calendar query perf; check nurby recordings endpoint indexing/pagination.","priority":"P3","effort":"M"}
+{"pr":22351,"title":"Update Intel Deps","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":22349,"title":"Save detect dimensions to config on add camera wizard save","area":"config","type":"feature","decision":"defer"}
+{"pr":22347,"title":"Add motion previews filter","area":"review","type":"feature","nurby_status":"MISSING","decision":"map","note":"Filter review/timeline by motion previews; part of motion-search theme (issue #37).","priority":"P2","effort":"M"}
+{"pr":22346,"title":"Fix go2rtc config handling","area":"output","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":22337,"title":"Publish license plate box coordinates","area":"data_processing","type":"feature","decision":"defer","note":"Expose plate bbox to clients/overlay; minor."}
+{"pr":22336,"title":"Add ability to delete cameras","area":"api","type":"feature","nurby_status":"HAVE","decision":"map","note":"Nurby has DELETE /cameras/{id} (admin-gated).","priority":"P3","effort":"-"}
+{"pr":22335,"title":"Environment variable fixes","area":"config","type":"bugfix","decision":"defer"}
+{"pr":22331,"title":"Fix preview retrieval to handle missing previews gracefully","area":"api","type":"reliability","nurby_status":"HAVE","decision":"map","insight":"Missing preview file should 404 gracefully, not 500.","nurby_evidence":"Audited nurby media endpoints (recordings/thumbnails/photos/clips): all use shared.paths.resolve_inside + os.path.exists -> clean 404 (HTTPException). Graceful.","priority":"P3","effort":"-"}
+{"pr":22329,"title":"Fix thumbnail encoding logic","area":"images","type":"bugfix","nurby_status":"PARTIAL","decision":"map","insight":"cv2.imencode can fail; must check the ok return before using the buffer.","nurby_evidence":"analyzer.py + vlm_backlog.py check ok; stream.py:531 and vlm.py:91/186 do NOT (but are in bg workers with outer try/except).","action":"Backlog: add `if not ok` checks (folded into blocking/robustness issue).","priority":"P3","effort":"S"}
+{"pr":22327,"title":"Frontend updates","area":"web","type":"ui","decision":"skip"}
+{"pr":22325,"title":"Refactor enrichment config updater","area":"config","type":"refactor","decision":"skip"}
+{"pr":22324,"title":"Update onnx deps to support 50 series GPUs","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":22323,"title":"Support using GenAI for embeddings / semantic search","area":"embeddings","type":"feature","nurby_status":"HAVE","decision":"map","note":"Nurby already does CLIP embeddings + pgvector semantic search.","priority":"P3","effort":"-"}
+{"pr":22320,"title":"Fix broken link to Home Assistant apps page","area":"docs","type":"docs","decision":"skip"}
+{"pr":22319,"title":"Fix/rknn arcface input format master","area":"data_processing","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"RKNN (Rockchip NPU) arcface input; nurby uses InsightFace ArcFace on CPU (BGR verified correct)."}
+{"pr":22310,"title":"Improve annotation offset UX","area":"web","type":"ui","decision":"skip"}
+{"pr":22309,"title":"Frontend fixes","area":"web","type":"ui","decision":"skip"}
+{"pr":22308,"title":"LPR: apply filters after clustering","area":"data_processing","type":"bugfix","decision":"defer","note":"Plate filter ordering; compare to nurby plates pipeline."}
+{"pr":22305,"title":"Update docs for AVX2 CPU requirement","area":"docs","type":"docs","decision":"skip"}
+{"pr":22301,"title":"Improve playback of videos in Tracking Details","area":"web","type":"ui","decision":"skip"}
+{"pr":22295,"title":"Add dynamic configuration for more fields","area":"config","type":"feature","decision":"defer"}

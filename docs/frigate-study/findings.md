@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 22438** triaged (280), newest of 4058 merged.
+Coverage so far: PRs **23488 → 22295** triaged (320), newest of 4058 merged.
 
 ---
 
@@ -243,3 +243,26 @@ endpoint sweep tracked as issue #46. Cross-camera media/timeline auth (#22522/#2
   always-true, **[#22474]** return-vs-raise, **[#22475]** parse-before-status, **[#22473]** WS leak
   on WebRTC cleanup — generic bug patterns to grep for in nurby · P3 each.
 - **[#22537]** shareable timestamped footage deep-link · P3.
+
+---
+
+## Batch 8 (PRs 22426–22295) — one perf fix
+
+### P2 — Performance · ✅ FIXED this batch
+**[#22426] Blocking calls stall the async event loop** · `api`. `ollama_deploy.get_ollama_status`
+awaited a sync `_get_system_ram_gb()` that shells out to `sysctl` (up to 5s) directly in the
+handler — stalling **all** API requests meanwhile. **Shipped:** wrapped in `asyncio.to_thread`.
+Remaining blocking file I/O (`persons.upload_face`, `system.trigger_update`, `devices` read) and
+unchecked `cv2.imencode` in background workers → issue #48.
+
+### Verified HAVE (checked, no change)
+- **[#22331] Missing-preview graceful 404** — nurby media endpoints all use `resolve_inside` +
+  `exists` → clean 404. **[#22336] delete cameras**, **[#22323] GenAI embeddings/semantic search** —
+  already present.
+- **[#22385] Push notifications by camera access**, **[#22347] motion-previews filter** → folded
+  into issues #40 and #37 respectively.
+
+### Backlog/VERIFY
+- **[#22352]** recordings/calendar API perf (indexing/pagination), **[#22393]** wrong exception
+  class in subprocess except, **[#22375]** snapshot query params after event end, **[#22416/#22308]**
+  LPR moving-vehicle handling + filter ordering · P3 each. N/A: nginx http/2, go2rtc, RKNN, Intel/GPU deps.

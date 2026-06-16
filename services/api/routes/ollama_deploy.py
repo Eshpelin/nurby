@@ -233,7 +233,9 @@ async def get_ollama_status(_current_user: User = Depends(require_admin)):
     reachable_url, models = await _detect_running()
     running = reachable_url is not None
     installed = ollama_path is not None or running
-    ram_gb = _get_system_ram_gb()
+    # _get_system_ram_gb() shells out to `sysctl` on macOS (up to 5s); keep it
+    # off the event loop so a slow probe doesn't stall all other requests.
+    ram_gb = await asyncio.to_thread(_get_system_ram_gb)
     recommended = _recommend_model(ram_gb)
 
     return OllamaStatus(

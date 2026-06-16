@@ -3,35 +3,37 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 22438,
+  "cursor_pr": 22295,
   "newest_pr_seen": 23488,
-  "batches_done": 7,
+  "batches_done": 8,
   "counts": {
-    "logged": 280,
-    "fixes_shipped": 4,
-    "issues_open": 7,
+    "logged": 320,
+    "fixes_shipped": 5,
+    "issues_open": 8,
     "issues_closed": 1
   },
   "fixes_shipped_detail": [
-    "#23352 stream-URL scheme allowlist (shared/schemas.py) -> nurby PR #34 (MERGED)",
-    "#23172 safe_getsize() TOCTOU/transient-stat hardening (shared/paths.py + 4 sites) -> nurby PR #39 (MERGED)",
-    "#22984 asyncio.wait_for timeout + kill on async ffmpeg (analyzer.py, conversation_clip.py) -> nurby PR #43 (MERGED)",
-    "#22523 admin-gate PATCH /cameras + PATCH /providers (privilege escalation) -> nurby batch-7 PR"
+    "#23352 stream-URL scheme allowlist (shared/schemas.py) -> PR #34 (MERGED)",
+    "#23172 safe_getsize() TOCTOU hardening (shared/paths.py + 4 sites) -> PR #39 (MERGED)",
+    "#22984 async-ffmpeg timeouts (analyzer.py, conversation_clip.py) -> PR #43 (MERGED)",
+    "#22523 admin-gate PATCH /cameras + /providers (privilege escalation) -> PR #47 (MERGED)",
+    "#22426 asyncio.to_thread for blocking sysctl in async ollama status -> batch-8 PR"
   ],
   "outputs": {
-    "merged_prs": ["Eshpelin/nurby#34", "Eshpelin/nurby#39", "Eshpelin/nurby#43"],
+    "merged_prs": ["Eshpelin/nurby#34", "Eshpelin/nurby#39", "Eshpelin/nurby#43", "Eshpelin/nurby#47"],
     "issues": {
-      "Eshpelin/nurby#35": "P0 ffmpeg arg + URL SSRF hardening (frigate #23478/#22607) - OPEN",
-      "Eshpelin/nurby#36": "P1 PTZ smart-track non-finite guard - CLOSED (verified safe, frigate #22470)",
-      "Eshpelin/nurby#37": "P2 motion search + review items - OPEN",
-      "Eshpelin/nurby#38": "P2 per-camera exclude-from-review flag - OPEN",
-      "Eshpelin/nurby#40": "P1 per-user camera access control (frigate #23256/#23294/#23164/#22987/#22710/#22522/#22530) - OPEN",
+      "Eshpelin/nurby#35": "P0 ffmpeg arg + URL SSRF hardening - OPEN",
+      "Eshpelin/nurby#36": "P1 PTZ non-finite guard - CLOSED (verified safe)",
+      "Eshpelin/nurby#37": "P2 motion search + review items (incl #22347) - OPEN",
+      "Eshpelin/nurby#38": "P2 per-camera exclude-from-review - OPEN",
+      "Eshpelin/nurby#40": "P1 per-user camera access control (incl WS/notifications/media #22385/#22522/#22530) - OPEN",
       "Eshpelin/nurby#41": "P2 reasoning/thinking model support - OPEN",
       "Eshpelin/nurby#42": "P3 widget_proxy cache per-user key - OPEN",
-      "Eshpelin/nurby#46": "P2 sweep all mutating endpoints for role gating (frigate #22523/#22522) - OPEN"
+      "Eshpelin/nurby#46": "P2 mutation-endpoint role-gating sweep - OPEN",
+      "Eshpelin/nurby#48": "P3 offload remaining blocking I/O + cv2.imencode ok-checks - OPEN"
     }
   },
-  "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audits before acting (batch 7 caught 2 false-positives: SQLi via ilike, PTZ div-by-zero). Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 22438, newest-first.",
-  "notes": "Batch 7: FIXED admin-gating on PATCH /cameras + /providers. Rejected false-positives: ilike() is parameterized (no SQLi), ptz_tracker clamps (no div-by-zero) -> closed #36. Filed #46 (endpoint role-gating sweep)."
+  "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
+  "next": "Continue at PR < 22295, newest-first.",
+  "notes": "Batch 8: FIXED event-loop blocking in ollama status (to_thread). Verified HAVE: missing-file 404 (#22331), delete cameras (#22336), semantic search (#22323). Filed #48 (remaining blocking I/O)."
 }
