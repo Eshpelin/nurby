@@ -263,13 +263,19 @@ def _file_ok(path: str) -> bool:
     return safe_getsize(path) > 1024
 
 
-async def _run_ffmpeg(cmd: list[str]) -> int:
+async def _run_ffmpeg(cmd: list[str], timeout: float = 120.0) -> int:
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr = await proc.communicate()
+    try:
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        logger.warning("ffmpeg timed out after %.0fs: %s", timeout, " ".join(cmd[:3]))
+        return 124
     if proc.returncode != 0 and stderr:
         logger.debug("ffmpeg stderr: %s", stderr.decode("utf-8", errors="ignore")[:500])
     return proc.returncode or 0

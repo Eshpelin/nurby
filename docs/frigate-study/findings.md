@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 23172** triaged (80), newest of 4058 merged.
+Coverage so far: PRs **23488 → 22984** triaged (120), newest of 4058 merged.
 
 ---
 
@@ -121,3 +121,38 @@ expose thinking budgets) but don't set thinking params or strip reasoning tokens
   Nurby uses MediaMTX).
 - Deferred (opaque "Misc fixes"/UI tweaks, revisit if a theme needs them): #23295, #23279, #23258,
   #23238, #23235, #23217, #23201, #23186, #23177, plus settings/UI tweaks.
+
+---
+
+## Batch 3 (PRs 23164–22984)
+
+### P1 — Reliability
+
+#### [#22984] No timeout on async ffmpeg subprocesses · `util` · ✅ FIXED this batch
+Frigate enforced a python-level timeout on probe subprocesses (a stalled stream hangs the worker
+forever). Nurby's `agent/analyzer.py` (frame extract) and `conversation_clip._run_ffmpeg` awaited
+`communicate()` with **no timeout**. **Shipped:** wrapped both in `asyncio.wait_for` + kill-and-reap
+on timeout (analyzer 20s, clip 120s); clip returns sentinel `124`. `webcam_bridge` left long-lived
+(it's a supervised restart loop). Tests: `tests/test_ffmpeg_timeout.py`. (ffprobe itself is unused.)
+
+### P1 — Security (reinforces existing issue #40)
+
+#### [#23164, #22987] Cross-camera media safety / camera access fixes · `api` · VULNERABLE
+More evidence for the per-user camera ACL gap: media-serving + access enforcement are not
+per-user scoped. Folded into `initiatives/camera-access-control.md` (issue #40). No new issue.
+
+### Accuracy — verified clean (important non-finding)
+
+#### [#23123] BGR vs RGB to the face detector · `data_processing` · HAVE
+Frigate was silently feeding RGB to a BGR-trained detector (degraded confidence). **Audited
+nurby and it is correct**: InsightFace gets BGR (`faces.py:74`), CLIP converts BGR→RGB
+(`vlm_gate.py:145`), EasyOCR uses grayscale (`plates.py:79`), YOLO gets BGR (ultralytics handles).
+No change — verified rather than assumed.
+
+### P3 backlog (not separately filed)
+
+- **[#23096] Ollama Cloud `api_key` auth** — add optional bearer key to the Ollama VLM provider.
+- **[#22996] Min-length nudge for VLM scene captions** — push the VLM toward detailed descriptions.
+- **[#23052, #23310] MP4 export chapter markers**, **[#23034] download incident as evidence zip**
+  (VERIFY nurby evidence export), **[#22993] face-recognition perf** — revisit in topical passes.
+- N/A: #23118/#23040 ROCm, #23108 Intel stats, #23099 debug-replay jobs.
