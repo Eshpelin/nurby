@@ -1,10 +1,50 @@
 import re
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ── Camera schemas ──
+
+# Stream URL scheme allowlist, per stream_type. Path-based types (usb, file) use
+# stream_url as a device index / local file path rather than a network URL, so they
+# are intentionally not scheme-checked here. Mirrors Frigate's camera URL validation
+# (PR #23352) and removes the file://, gopher://, dict:// … injection/SSRF surface
+# for network camera types.
+_STREAM_URL_SCHEMES: dict[str, set[str]] = {
+    "rtsp": {"rtsp", "rtsps"},
+    "webcam": {"rtsp", "rtsps"},
+    "http_mjpeg": {"http", "https"},
+    "http_snapshot": {"http", "https"},
+    "hls": {"http", "https"},
+}
+_PATH_STREAM_TYPES = {"usb", "file"}
+_NETWORK_SCHEMES = {"rtsp", "rtsps", "http", "https"}
+
+
+def validate_stream_url(url: str, stream_type: str | None) -> str:
+    """Reject stream URLs whose scheme is not allowed for the given stream type.
+
+    Path-based types (usb, file) are passed through. For an unknown / forward-compat
+    type we do not block. On a partial update where the type is omitted we tolerate
+    bare paths and known network schemes but still reject dangerous schemes.
+    """
+    if stream_type in _PATH_STREAM_TYPES:
+        return url
+    scheme = urlparse(url).scheme.lower()
+    if stream_type is None:
+        if scheme == "" or scheme in _NETWORK_SCHEMES:
+            return url
+        allowed: set[str] = _NETWORK_SCHEMES
+    else:
+        allowed = _STREAM_URL_SCHEMES.get(stream_type, set())
+        if not allowed or scheme in allowed:
+            return url
+    raise ValueError(
+        f"stream_url scheme {scheme or '(none)'!r} is not allowed for stream_type "
+        f"{stream_type or 'unspecified'!r}; allowed schemes: {sorted(allowed)}"
+    )
 
 class CameraCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
@@ -70,6 +110,11 @@ class CameraCreate(BaseModel):
     conversation_min_messages_for_summary: int = Field(default=2, ge=1, le=20)
     incident_tracking_enabled: bool = True
     incident_idle_seconds: int = Field(default=600, ge=30, le=86400)
+
+    @model_validator(mode="after")
+    def _validate_stream_url(self):
+        validate_stream_url(self.stream_url, self.stream_type)
+        return self
 
 
 class CameraUpdate(BaseModel):
@@ -153,6 +198,12 @@ class CameraUpdate(BaseModel):
     ptz_smart_track_require_face: list[uuid.UUID] | None = None
     ptz_smart_track_move_budget_per_minute: int | None = Field(default=None, ge=1, le=600)
     ptz_profile_token: str | None = Field(default=None, max_length=64)
+
+    @model_validator(mode="after")
+    def _validate_stream_url(self):
+        if self.stream_url is not None:
+            validate_stream_url(self.stream_url, self.stream_type)
+        return self
 
 
 class CameraReorderItem(BaseModel):
