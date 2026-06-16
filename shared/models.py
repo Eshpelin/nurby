@@ -118,8 +118,11 @@ class Camera(Base):
     # timezone setting. Drives timestamp rendering + daily digest
     # anchor selection.
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    # Audio transcription config (Phase 1)
-    audio_capture_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Audio transcription config. On by default for new cameras (a "basic"),
+    # but only captures when the stream actually carries audio. Existing
+    # cameras keep their stored value; users can toggle it on the camera's
+    # Audio page. Audio capture is privacy/consent-sensitive.
+    audio_capture_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     audio_transcribe_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     audio_store_raw: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     transcript_store: Mapped[str] = mapped_column(String(16), default="full", nullable=False)  # full, redacted, summary_only
