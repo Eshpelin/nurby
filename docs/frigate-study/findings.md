@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 20206** triaged (720, ~18% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 20000** triaged (760, ~19% of 4058 merged), newest-first.
 
 ---
 
@@ -423,3 +423,18 @@ GenAI review-summary tuning, stationary-object work, RKNN/AMD-GPU (N/A). Two ver
 - **[#20296] Customizable GenAI review prompt** — HAVE (per-camera vlm/summary/digest prompts).
 - Backlog/VERIFY: **[#20331]** run object-VLM as a post-processor (compare to `vlm_enrichment_worker`),
   **[#20225]** stationary-tracking edge cases (vs R2 suppression) · P3.
+
+---
+
+## Batch 19 (PRs 20204–20000) — coverage batch, no code change
+
+OpenVINO/CUDA/ROCm/ZMQ-detector/LPR churn (mostly N/A). Notable:
+
+- **[#20024] User roles to limit camera access** — the **reference implementation** for issue #40.
+  Roles + allowed-camera set applied across event/export/media/preview/review endpoints + a
+  `use-allowed-cameras` frontend hook. Commented on #40 as the build template.
+- **[#20099] Invalid LPR-regex crash** — N/A. Verified nurby compiles no user-supplied regex
+  (all patterns are constants or `re.escape(user)`); no crash surface.
+- Backlog: **[#20190]** small-object detection via region re-detection (accuracy, P2),
+  **[#20119]** Prometheus metrics (observability, P3), **[#20101]** per-object speed estimation
+  (could complement nurby's traffic features, P3).

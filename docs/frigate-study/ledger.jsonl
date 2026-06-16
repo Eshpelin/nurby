@@ -718,3 +718,43 @@
 {"pr":20216,"title":"Improve review summary","area":"genai","type":"feature","decision":"defer"}
 {"pr":20212,"title":"Use devcontainer build to run tests","area":"ci","type":"ci","decision":"skip"}
 {"pr":20206,"title":"Implement stationary car classifier to improve parked car management","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip","note":"Frigate+ classifier."}
+{"pr":20204,"title":"Update apple silicon docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":20202,"title":"Update go2rtc to 1.9.10","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":20201,"title":"Update Ollama docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":20190,"title":"Improve 640x640 model detection of small objects","area":"object_detection","type":"accuracy","nurby_status":"VERIFY","decision":"map","insight":"Improve small-object detection at fixed 640x640 input (e.g. region cropping / tiling on motion areas before detect).","nurby_evidence":"Nurby runs YOLO at model resolution; small/distant objects are a known weakness. Check pipeline for ROI/region re-detection.","action":"Backlog (accuracy): region-based re-detection for small objects.","priority":"P2","effort":"L"}
+{"pr":20188,"title":"Add docs for classification models","area":"docs","type":"docs","decision":"skip"}
+{"pr":20186,"title":"Update model explanation for genai","area":"docs","type":"docs","decision":"skip"}
+{"pr":20177,"title":"Live view improvements","area":"web","type":"ui","decision":"skip"}
+{"pr":20168,"title":"UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":20161,"title":"Add ability to transfer model via ZMQ Detector","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":20160,"title":"Tune OV for latency","area":"detectors","type":"performance","nurby_status":"N/A","decision":"skip"}
+{"pr":20159,"title":"YOLOv9 LPR model is not compatible with CUDA Graphs","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20149,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":20146,"title":"Update triggers docs (text-to-image unsupported)","area":"docs","type":"docs","decision":"skip"}
+{"pr":20141,"title":"Update Nvidia model stats for CUDA Graphs","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":20135,"title":"Fix CUDA graph config","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20133,"title":"Deps updates","area":"deps","type":"deps","decision":"skip"}
+{"pr":20129,"title":"LPR improvements","area":"data_processing","type":"feature","decision":"defer","note":"Compare to nurby plates.py (EasyOCR)."}
+{"pr":20128,"title":"Cleanup onnx detector","area":"detectors","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":20119,"title":"Pull count of detection events by label into prometheus metrics","area":"stats","type":"feature","nurby_status":"MISSING","decision":"map","insight":"Expose per-label detection counts (and other internal stats) as Prometheus metrics for monitoring.","nurby_evidence":"Nurby has minimal observability/metrics (noted gap). No Prometheus endpoint.","action":"Backlog (observability): Prometheus /metrics with detection/inference/queue stats.","priority":"P3","effort":"M"}
+{"pr":20118,"title":"Update ROCm to not hang on complex RNN models","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20117,"title":"Fix ov for LPR","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20102,"title":"Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":20101,"title":"Add average_estimated_speed to mqtt docs","area":"docs","type":"docs","nurby_status":"MISSING","decision":"map","insight":"Frigate estimates tracked-object speed (average_estimated_speed).","nurby_evidence":"Nurby has no object speed estimation; could complement traffic features (signal/lane work).","action":"Backlog (feature): per-object speed estimation.","priority":"P3","effort":"M"}
+{"pr":20099,"title":"Catch exception when regex in LPR format field is invalid","area":"data_processing","type":"reliability","nurby_status":"N/A","decision":"map","insight":"A user-supplied plate-format regex that is invalid crashes LPR (re.error unguarded).","nurby_evidence":"Verified: nurby compiles NO user-supplied regex (grep: all re.compile/search use constant patterns or re.escape(user)). No user-regex crash surface. N/A.","priority":"P3","effort":"-"}
+{"pr":20093,"title":"add robots.txt","area":"ops","type":"ops","decision":"skip"}
+{"pr":20079,"title":"Dynamically adjust to configured attribute map for lpr","area":"data_processing","type":"feature","decision":"defer"}
+{"pr":20071,"title":"OpenVINO Hardware Improvements","area":"detectors","type":"performance","nurby_status":"N/A","decision":"skip"}
+{"pr":20069,"title":"Fix submitting false positives","area":"data_processing","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"Frigate+ FP submission."}
+{"pr":20066,"title":"Correctly calculate input data type for OV","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20064,"title":"fix(web): handle undefined screen.orientation","area":"web","type":"bugfix","decision":"skip"}
+{"pr":20063,"title":"Optimize OpenVINO and ONNX Model Runners","area":"detectors","type":"performance","nurby_status":"N/A","decision":"skip"}
+{"pr":20048,"title":"Fix recordings summary endpoint","area":"record","type":"bugfix","nurby_status":"HAVE","decision":"defer","note":"DST/summary follow-up; nurby summary math verified DST-safe (batch 15)."}
+{"pr":20039,"title":"Fix cuda graph fallback","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20031,"title":"Correctly cast to enum when loading plus config","area":"config","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20030,"title":"memryx: fix model download bug with multiple detectors","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":20027,"title":"Use CUDA graphs for object detection on Nvidia GPUs","area":"detectors","type":"performance","nurby_status":"N/A","decision":"skip"}
+{"pr":20024,"title":"Enhance user roles to limit camera access","area":"api","type":"security","nurby_status":"VULNERABLE","decision":"map","insight":"Roles with per-camera access; allowed-cameras applied across event/export/media/preview/review endpoints + UI (use-allowed-cameras hook, role dialogs).","nurby_evidence":"This is the reference implementation for issue #40 (per-user camera ACL). Nurby lacks it on the main app surface.","action":"Folded into issue #40 (commented as build template).","priority":"P1","effort":"L"}
+{"pr":20020,"title":"Improve d-fine model export docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":20007,"title":"feat: add github mirror download endpoint","area":"tooling","type":"feature","nurby_status":"N/A","decision":"defer","note":"Model-download mirror; nurby model handling differs."}
+{"pr":20000,"title":"Provide model type in header for ZMQ detector","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
