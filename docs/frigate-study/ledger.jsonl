@@ -78,3 +78,43 @@
 {"pr":23177,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
 {"pr":23174,"title":"fix: fix i18n","area":"i18n","type":"i18n","decision":"skip"}
 {"pr":23172,"title":"Gracefully handle transiently failing os.stat calls","area":"record","type":"reliability","nurby_status":"FIXED","decision":"map","insight":"os.path.exists()+getsize() idiom races and crashes on transient FS errors (Errno 121 Remote I/O) on network mounts.","nurby_evidence":"guardian/video.py:44,62 + conversation_clip.py:158 used unguarded exists()+getsize().","action":"DONE: added shared.paths.safe_getsize() + swapped 4 call sites (guardian/video.py, conversation_clip.py, ingestion/stream.py) + tests.","priority":"P1","effort":"S"}
+{"pr":23164,"title":"Implement cross-camera safety for indexed media folders","area":"api","type":"security","nurby_status":"VULNERABLE","decision":"map","insight":"Prevent one camera's indexed media from being accessed under another camera's scope.","nurby_evidence":"Same root gap as camera-ACL initiative; media-serving endpoints not per-user scoped.","action":"Folded into initiatives/camera-access-control.md (issue #40).","priority":"P1","effort":"L"}
+{"pr":23159,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":23156,"title":"log(masks): include camera name in invalid-coordinates error","area":"motion","type":"logging","decision":"skip","note":"Minor log-context improvement."}
+{"pr":23155,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23147,"title":"fix: format placeholder in remove_empty_directories debug log","area":"record","type":"logging","decision":"skip"}
+{"pr":23144,"title":"fix: fix i18n","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":23139,"title":"Bump fast-uri 3.1.0->3.1.2 in /docs","area":"deps","type":"deps","decision":"skip"}
+{"pr":23137,"title":"Bump fast-uri 3.1.0->3.1.2 in /web","area":"deps","type":"deps","decision":"skip"}
+{"pr":23130,"title":"Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23127,"title":"UI fixes","area":"web","type":"ui","decision":"skip"}
+{"pr":23124,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23123,"title":"fix(face_recognition): feed BGR (not RGB) to FaceDetectorYN","area":"data_processing","type":"accuracy","nurby_status":"HAVE","decision":"map","insight":"Feeding RGB to a BGR-trained face detector silently degrades detection confidence.","nurby_evidence":"Verified nurby channel order is correct: InsightFace gets BGR (faces.py:74), CLIP converts BGR->RGB (vlm_gate.py:145), EasyOCR uses grayscale (plates.py:79), YOLO gets BGR (ultralytics handles). No bug.","priority":"P3","effort":"-"}
+{"pr":23118,"title":"ROCm Optimizations","area":"detectors","type":"performance","nurby_status":"N/A","decision":"skip","note":"AMD ROCm; nurby has no ROCm path."}
+{"pr":23111,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23109,"title":"Settings UI improvements","area":"web","type":"ui","decision":"skip"}
+{"pr":23108,"title":"Rewrite intel stats","area":"stats","type":"refactor","nurby_status":"N/A","decision":"skip","note":"Intel GPU stats."}
+{"pr":23102,"title":"Fix docs build","area":"ci","type":"ci","decision":"skip"}
+{"pr":23100,"title":"Export fixes","area":"record","type":"bugfix","decision":"defer","note":"Recording export bugfixes; revisit in export parity pass."}
+{"pr":23099,"title":"Use Job infrastructure for Debug Replay","area":"debug","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":23096,"title":"bugfix(genai): add api_key auth support for Ollama Cloud","area":"genai","type":"feature","nurby_status":"VERIFY","decision":"map","insight":"Ollama Cloud needs api_key bearer auth, not just a base URL.","nurby_evidence":"Check vlm.py Ollama provider supports an api_key header for hosted Ollama.","action":"Backlog: add optional api_key for Ollama provider.","priority":"P3","effort":"S"}
+{"pr":23092,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23089,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":23082,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23053,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23052,"title":"Include chapters for review items in exports","area":"record","type":"feature","nurby_status":"MISSING","decision":"defer","note":"MP4 chapter markers per review item on export; minor (cluster w/ #23310).","priority":"P3","effort":"S"}
+{"pr":23044,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23040,"title":"Fix ROCm build","area":"detectors","type":"ci","nurby_status":"N/A","decision":"skip"}
+{"pr":23034,"title":"Add ability to download case as zip file","area":"review","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Export an incident/case (clips+metadata) as an evidence zip. Check nurby evidence export.","priority":"P3","effort":"M"}
+{"pr":23032,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23017,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23009,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":23006,"title":"GenAI Optimizations","area":"genai","type":"performance","decision":"defer","note":"VLM perf tuning; revisit in vlm pass."}
+{"pr":23001,"title":"Revert modal changes","area":"web","type":"ui","decision":"skip"}
+{"pr":23000,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22996,"title":"Set min length for GenAI scene to encourage details","area":"genai","type":"accuracy","nurby_status":"PARTIAL","decision":"map","insight":"Enforce a minimum description length to push the VLM toward detailed scene captions.","nurby_evidence":"Nurby vlm prompt does not enforce a min length / retry-on-too-short.","action":"Backlog: add min-length nudge / retry for short VLM captions.","priority":"P3","effort":"S"}
+{"pr":22995,"title":"Fix dismissable layer regression","area":"web","type":"ui","decision":"skip"}
+{"pr":22994,"title":"Add analyze keyframes testing script","area":"tooling","type":"tooling","decision":"skip"}
+{"pr":22993,"title":"Optimize face recognition","area":"data_processing","type":"performance","nurby_status":"VERIFY","decision":"defer","note":"Face-rec perf; check nurby InsightFace batching/caching.","priority":"P3","effort":"M"}
+{"pr":22987,"title":"Camera access fixes","area":"api","type":"security","nurby_status":"VULNERABLE","decision":"map","insight":"Bug fixes in per-camera access enforcement.","nurby_evidence":"Reinforces camera-ACL gap (issue #40).","action":"Folded into initiatives/camera-access-control.md.","priority":"P1","effort":"L"}
+{"pr":22984,"title":"Enforce python-level timeout on ffprobe subprocesses","area":"util","type":"reliability","nurby_status":"FIXED","decision":"map","insight":"A probe/ffmpeg subprocess with no python-level timeout can hang a worker forever on a stalled stream.","nurby_evidence":"agent/analyzer.py and conversation_clip._run_ffmpeg awaited communicate() with NO timeout. (ffprobe itself not used by nurby.)","action":"DONE: wrapped both in asyncio.wait_for + kill-on-timeout (analyzer 20s, clip 120s) + tests. webcam_bridge left long-lived (has restart supervision).","priority":"P1","effort":"S"}
