@@ -485,3 +485,29 @@ GenAI review-summaries feature wave (nurby HAVE VLM summaries + digest), Apple-S
 - Backlog/VERIFY: **[#19433]** per-object-type loitering thresholds (nurby has loitering trigger),
   **[#19484]** extra Ollama args (with #20606), **[#19469]** aggregate fps stat (with #20119) · P3.
 - Lead for next batch: **[#19426]** "search crashes if query is a number" — will verify nurby search.
+
+---
+
+## Batch 23 (PRs 19426–19134) — coverage batch, no code change
+
+Deep 19xxx dev region: ~90% N/A (hwaccel ROCm/RKNN/Rockchip/Intel/tensorrt, ML
+classification/training, weblate i18n, docs, dep bumps, frontend UI/timezone churn).
+Three backend bugfixes verified against nurby, all SAFE/N-A:
+
+- **[#19134] IPv6 with IPv4 trusted proxies** (`ipv4_mapped` can be None → `None in network`
+  raises) — **N/A**. Nurby has no `get_remote_addr` / trusted-proxy / X-Forwarded-For parsing.
+  `ipaddress` only used in `shared/netpolicy.py` for webhook SSRF classification (no membership
+  test that can hit None).
+- **[#19323] Catch json decode exception** (corrupt `.search_stats.json` crashed embeddings init) —
+  **SAFE**. All nurby `json.loads` sites wrap `JSONDecodeError`/`ValueError`
+  (`agent/analyzer.py`, `agent/llm.py`, `api/widget_proxy.py`, `api/ws.py`,
+  `perception/har_idmap.py`); no persisted stats/cache JSON read at startup.
+- **[#19371] Fix not deleting thumbnails** (frigate passed an id where an Event object was
+  expected) — **SAFE**. Nurby `ingestion/retention.py` deletes thumbnails by string path
+  (`_remove_file(_resolve_path(rec.thumbnail_path))`, lines 346 & 409), no id/object confusion.
+- **[#19426] search crashes if query is a number** — **N/A** (frontend TS cast `as string`).
+  Nurby `search/query.py:127` coalesces `(query or "").lower().strip()`, FastAPI types the param.
+- Backlog/VERIFY (P3, minor): **[#19327]** systemd `CREDENTIALS_DIRECTORY` secrets,
+  **[#19207]** ionice for heavy procs, **[#19139]** runtime per-camera GenAI enable/disable.
+- Lead for next batch: **[#19110]** "Improve ffmpeg frame handling" — nurby ffmpeg pipeline is a
+  known-behind area; verify against `services/ingestion` ffmpeg handling.

@@ -878,3 +878,48 @@
 {"pr":19432,"title":"Ensure alertVideos persistence is loaded before displaying thumb or preview","area":"web","type":"bugfix","decision":"skip"}
 {"pr":19430,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
 {"pr":19428,"title":"Ensure arrayKeys remains a stable array reference","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19426,"title":"Fix if search word is number will be crash","area":"web","type":"bugfix","decision":"skip","note":"frontend TS cast; nurby backend search/query.py coalesces query to str, safe"}
+{"pr":19424,"title":"Don't use memo on subscribable","area":"web","type":"refactor","decision":"skip"}
+{"pr":19420,"title":"Fixes","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19414,"title":"Fixes","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19408,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19406,"title":"Fixes","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19405,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19399,"title":"Add note for Gemini base url","area":"docs","type":"docs","decision":"skip"}
+{"pr":19387,"title":"Bump docker/login-action from 3.3.0 to 3.5.0","area":"ci","type":"deps","decision":"skip"}
+{"pr":19372,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19371,"title":"Fix not deleting thumbnails","area":"events/cleanup","type":"bugfix","decision":"skip","note":"id-vs-Event confusion in frigate cleanup; nurby retention.py deletes by rec.thumbnail_path string, safe"}
+{"pr":19352,"title":"Implement start for review item description processor","area":"genai/review","type":"feature","decision":"skip","note":"nurby HAVE VLM summaries + digest"}
+{"pr":19347,"title":"Remove deprecated 'version' attribute","area":"compose","type":"chore","decision":"skip"}
+{"pr":19342,"title":"Enrichments: Allow targeting a specific GPU ID","area":"hwaccel","type":"feature","decision":"skip","note":"N/A"}
+{"pr":19341,"title":"Revamp RF-DETR Export Docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":19338,"title":"Update tensorrt inference time docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":19328,"title":"Docs: update object_detectors.md","area":"docs","type":"docs","decision":"skip"}
+{"pr":19327,"title":"Read secrets dir from CREDENTIALS_DIRECTORY","area":"config/secrets","type":"feature","decision":"skip","note":"systemd LoadCredential; nurby uses env + docker secrets, backlog-minor"}
+{"pr":19326,"title":"Add docs for planning a setup","area":"docs","type":"docs","decision":"skip"}
+{"pr":19323,"title":"Catch json decode exception","area":"embeddings","type":"bugfix","decision":"skip","note":"corrupt .search_stats.json guard; nurby json.loads sites all wrap JSONDecodeError/ValueError, no startup stats file, safe"}
+{"pr":19320,"title":"Improve the tablet layout","area":"web","type":"ui","decision":"skip"}
+{"pr":19319,"title":"Center camera in layout when only one camera is filtered","area":"web","type":"ui","decision":"skip"}
+{"pr":19312,"title":"Rocm 9070 mesa upgrade","area":"hwaccel","type":"deps","decision":"skip"}
+{"pr":19293,"title":"Timezone fix","area":"web","type":"bugfix","decision":"skip","note":"frontend TZDate"}
+{"pr":19290,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19282,"title":"Update intel supported hardware docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":19252,"title":"Fixes","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19242,"title":"Bump form-data from 4.0.0 to 4.0.4 in /web","area":"ci","type":"deps","decision":"skip"}
+{"pr":19230,"title":"Fixes","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19227,"title":"Rockchip: add FFmpeg 7.1 to image","area":"build/hwaccel","type":"build","decision":"skip"}
+{"pr":19225,"title":"Fix typo in image annotating doc","area":"docs","type":"docs","decision":"skip"}
+{"pr":19224,"title":"Revamp YOLOv9 export guide","area":"docs","type":"docs","decision":"skip"}
+{"pr":19218,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19207,"title":"Implement IO Nice Priority for FrigateProcess","area":"process","type":"feature","decision":"skip","note":"ionice for recording/detect procs; N/A to nurby async arch, backlog-minor"}
+{"pr":19206,"title":"Fixes","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19205,"title":"Object attribute classification","area":"ml/classification","type":"feature","decision":"skip","note":"N/A"}
+{"pr":19189,"title":"RKNN: Fix broken models for Toolkit v2.3.2","area":"hwaccel","type":"bugfix","decision":"skip"}
+{"pr":19185,"title":"Fix motion timeline for offset timezones","area":"web","type":"bugfix","decision":"skip","note":"frontend timelineUtil"}
+{"pr":19173,"title":"Classification train updates","area":"ml/classification","type":"feature","decision":"skip","note":"N/A"}
+{"pr":19159,"title":"update supported labels","area":"model/labels","type":"chore","decision":"skip"}
+{"pr":19156,"title":"Update API schema to latest","area":"api","type":"chore","decision":"skip"}
+{"pr":19150,"title":"Move tensorrt onnxruntime in line with other build variants","area":"build","type":"build","decision":"skip"}
+{"pr":19139,"title":"Dynamically enable/disable GenAI","area":"genai/config","type":"feature","decision":"skip","note":"per-camera genai toggle at runtime; nurby has provider config, backlog-minor"}
+{"pr":19136,"title":"Replaces sriov flag with explicit path to the Intel GPU device","area":"hwaccel","type":"chore","decision":"skip"}
+{"pr":19134,"title":"Fix IPv6 addresses with IPv4 trusted proxies","area":"api/auth","type":"bugfix","decision":"skip","note":"ipv4_mapped None guard; nurby has no get_remote_addr/trusted-proxy logic, N/A"}

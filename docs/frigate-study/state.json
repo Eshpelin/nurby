@@ -3,12 +3,12 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 19428,
+  "cursor_pr": 19134,
   "newest_pr_seen": 23488,
-  "batches_done": 22,
+  "batches_done": 23,
   "counts": {
-    "logged": 880,
-    "pct_of_merged": "~22%",
+    "logged": 925,
+    "pct_of_merged": "~23%",
     "fixes_shipped": 5,
     "issues_open": 8,
     "issues_closed": 1
@@ -35,6 +35,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 19428, newest-first. NEXT-BATCH LEAD: #19426 search-crash-on-numeric-query -> verify nurby search/query.py.",
-  "notes": "Batch 22: coverage only. #19555 image content-type HAVE (nurby sets media_type). #19567 camera nickname HAVE. GenAI review-summary feature wave = HAVE (nurby VLM summaries+digest). Backlog: per-object loitering (#19433), Ollama args (#19484), fps stat (#19469)."
+  "next": "Continue at PR < 19134, newest-first. NEXT-BATCH LEAD: #19110 improve-ffmpeg-frame-handling -> verify nurby services/ingestion ffmpeg pipeline (known-behind area).",
+  "notes": "Batch 23: coverage only (PRs 19426-19134). Three backend bugfixes verified vs nurby, all SAFE/N-A: #19134 trusted-proxy ipv4_mapped (nurby has no proxy/X-Forwarded-For logic), #19323 corrupt .search_stats.json JSONDecodeError (nurby json.loads sites all guarded, no startup stats file), #19371 thumbnail cleanup id-vs-object (nurby retention.py deletes by path). #19426 search-numeric-crash = frontend cast, nurby backend coalesces query to str. Deep 19xxx region ~90% N/A (hwaccel/ML/i18n/docs/UI). Backlog-minor P3: #19327 systemd creds, #19207 ionice, #19139 runtime genai toggle."
 }
