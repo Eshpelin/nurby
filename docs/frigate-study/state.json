@@ -3,12 +3,12 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 17640,
+  "cursor_pr": 17305,
   "newest_pr_seen": 23488,
-  "batches_done": 28,
+  "batches_done": 30,
   "counts": {
-    "logged": 1152,
-    "pct_of_merged": "~28%",
+    "logged": 1242,
+    "pct_of_merged": "~31%",
     "fixes_shipped": 5,
     "issues_open": 10,
     "issues_closed": 1
@@ -37,6 +37,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 17640, newest-first. NEXT-BATCH triage-ahead: #17629 search-sort = N/A (nurby sorts in SQL order_by, not in-Python dict keys). Region is a hwaccel+i18n desert (~97% N/A). Watch for backend auth/API/ingest correctness only.",
-  "notes": "Batch 28: coverage only (PRs 17820-17640), no issues, no merges. Highest N/A density yet (RKNN/hailo/MemryX/yolo hwaccel + i18n rollout + docs/UI/LPR/face). Checked N/A: #17629 search sort (nurby SQL order_by), #17712 async detector, #17671 tracking, #17816 frame-time (all frigate perception/hwaccel internals). Batch 27: 2 GAPs. #17831 RTSP timeout 5s->10s -> NEW issue Eshpelin/nurby#69 (P3 tuning; nurby stimeout=5s at audio_worker.py:110, stream.py:394, audio/capture.py:98). #17835 review-summary 30d cap removed -> ADDED to #65 (nurby summaries.py:61-64 filters from/to on started_at only, same overlap-miss class as recordings; fix both with started_at<=to AND ended_at>=from). Batch 26 HAVE: #18093 async ONVIF, #18353/#18359 dynamic config. Batch 25 HAVE: #18671 dynamic cameras. Backlog gap-minor (no issue): #18284 min-face gate, #18616 force-regenerate genai, #18492 tiered recordings, #18398 audio STT."
+  "next": "Continue at PR < 17305, newest-first (cursor date 2025-03-27). Region is a face/LPR/classification-ML + hwaccel + i18n/docs/UI desert (~97% N/A). Watch for backend auth/API/ingest/genai correctness only.",
+  "notes": "Batch 30: coverage only (PRs 17420-17305), no issues, no merges. HAVE verified: #17339 thumb-dir makedirs (nurby makedirs(exist_ok=True) before every cv2.imwrite: pipeline _save_thumbnail, reid _save_body_crop, faces.py:218, analyzer.py:990). N/A: #17418 dynamic embeddings reindex (nurby search-initiative backlog, not defect), #17307 onvif/norfair (ONVIF already async batch-26), #17331/17305/17355 camera-enabled (frontend). Dominated by face-rec/LPR/classification ML, hwaccel, nginx/devcontainer, i18n, docs, UI. Batch 29: coverage only (PRs 17639-17424), no issues, no merges. HAVE verified: #17572 OpenAI-endpoint-crash robustness (nurby wraps all LLM/VLM calls in broad except Exception at worker boundaries: vlm_enrichment_worker.py, agent/driver.py, recap.py). N/A frigate-internal: #17629 search sort (nurby SQL order_by), #17437/#17436 metrics, #17444/#17438 recording-segment timestamp edge cases, #17547 runtime config. Batch 28: highest N/A density (hwaccel+i18n). Batch 27: 2 GAPs. #17831 RTSP timeout 5s->10s -> NEW issue Eshpelin/nurby#69 (P3 tuning; nurby stimeout=5s at audio_worker.py:110, stream.py:394, audio/capture.py:98). #17835 review-summary 30d cap removed -> ADDED to #65 (nurby summaries.py:61-64 filters from/to on started_at only, same overlap-miss class as recordings; fix both with started_at<=to AND ended_at>=from). Batch 26 HAVE: #18093 async ONVIF, #18353/#18359 dynamic config. Batch 25 HAVE: #18671 dynamic cameras. Backlog gap-minor (no issue): #18284 min-face gate, #18616 force-regenerate genai, #18492 tiered recordings, #18398 audio STT."
 }
