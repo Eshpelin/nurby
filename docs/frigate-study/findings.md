@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 21752** triaged (400, ~10% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 21443** triaged (440, ~11% of 4058 merged), newest-first.
 
 ---
 
@@ -299,3 +299,20 @@ Backlog / VERIFY worth a later look:
 - **[#21754]** add a live-snapshot/live-state tool to the chat agent · P3.
 - **[#21932]** X-Frame-Time header on snapshot API, **[#21752]** offline-camera placeholder image · P3.
 - HAVE: API events as Detections/Alerts by label (#21923 — nurby severity taxonomy R5).
+
+---
+
+## Batch 11 (PRs 21749–21443) — coverage batch, no code change
+
+0.17-beta era: media-sync (N/A), cache-dir cleanup (N/A, nurby is DB-driven), llama.cpp provider
+(N/A), GPU/NPU temps (N/A), deps/i18n/docs. Two verified-clean items:
+
+- **[#21676] Cache maintainer crash on stray filename** — N/A. Frigate scans a cache dir and
+  `rsplit("@")`-parses `camera@timestamp.mp4`. Nurby has no cache-dir scanner / filename parsing
+  (verified: no `listdir`/`scandir`/`glob`/`split("@")` in ingestion/perception); recordings are
+  DB-driven. Bug class absent.
+- **[#21543] Restrict go2rtc `exec:` sources** — HAVE. The stream-URL scheme allowlist (PR #34)
+  already rejects `exec:`/`file:`/non-network schemes for network camera types.
+
+Backlog/VERIFY: **[#21520]** delete-recordings API, **[#21600]** "reviewed" filter correctness,
+**[#21668]** time-lapse export · P3. HAVE: LLM chat tool-calling (#21731).

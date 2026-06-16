@@ -3,12 +3,12 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 21752,
+  "cursor_pr": 21443,
   "newest_pr_seen": 23488,
-  "batches_done": 10,
+  "batches_done": 11,
   "counts": {
-    "logged": 400,
-    "pct_of_merged": "~10%",
+    "logged": 440,
+    "pct_of_merged": "~11%",
     "fixes_shipped": 5,
     "issues_open": 8,
     "issues_closed": 1
@@ -35,6 +35,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 21752, newest-first.",
-  "notes": "Batch 10: coverage only (0.17-beta era; attributes/secondary-model/Hailo/ROCm = N/A). Backlog: RTSP stream timeout 5s->configurable (#21936), event-stuck (#21893), live-snapshot agent tool (#21754)."
+  "next": "Continue at PR < 21443, newest-first.",
+  "notes": "Batch 11: coverage only (0.17-beta media-sync/cache-cleanup/llama.cpp/GPU-temps = N/A). #21676 cache-filename crash N/A (nurby DB-driven, no cache scanner). #21543 exec-source restriction HAVE (scheme allowlist PR #34). Backlog: delete-recordings API (#21520), reviewed-filter (#21600)."
 }

@@ -398,3 +398,43 @@
 {"pr":21754,"title":"Add live context tool to LLM","area":"genai","type":"feature","nurby_status":"PARTIAL","decision":"map","insight":"Give the chat LLM a tool to pull live camera context (current snapshot/state) on demand.","nurby_evidence":"Nurby agent has read-only tools (journeys/observations/people/events) but maybe no 'get live snapshot/state now' tool.","action":"Backlog: add a live-snapshot/live-state agent tool.","priority":"P3","effort":"M"}
 {"pr":21753,"title":"Update to ROCm 7.2.0","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
 {"pr":21752,"title":"Offline preview image","area":"web","type":"feature","decision":"defer","note":"Placeholder image when camera offline; minor UI."}
+{"pr":21749,"title":"Bump lodash 4.17.21->4.17.23 in /web","area":"deps","type":"deps","decision":"skip"}
+{"pr":21737,"title":"Miscellaneous fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21731,"title":"Implement LLM Chat API with tool calling support","area":"genai","type":"feature","nurby_status":"HAVE","decision":"map","note":"Nurby agent already has tool-calling chat (driver.py).","priority":"P3","effort":"-"}
+{"pr":21726,"title":"Remove parents in remove_empty_directories","area":"record","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"Frigate cache dir cleanup; nurby retention is DB-driven, no empty-dir tree pruning."}
+{"pr":21699,"title":"Miscellaneous fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21695,"title":"Improve directory cleanup performance","area":"record","type":"performance","nurby_status":"N/A","decision":"skip","note":"Cache dir cleanup; nurby retention deletes by DB rows."}
+{"pr":21690,"title":"Implement llama.cpp GenAI Provider","area":"genai","type":"feature","nurby_status":"N/A","decision":"skip","note":"Nurby uses Ollama + OpenAI-compatible providers."}
+{"pr":21683,"title":"Miscellaneous fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21676,"title":"fix(recording): handle unexpected filenames in cache maintainer to prevent crash","area":"record","type":"reliability","nurby_status":"N/A","decision":"map","insight":"Cache scanner used rsplit('@') on camera@timestamp.mp4 and crashed the maintainer thread on a stray file.","nurby_evidence":"Verified: nurby has NO cache-dir scanner / filename-convention parsing (grep found no listdir/scandir/glob or split('@') in ingestion/perception). Recordings are DB-driven (file_path stored in Recording rows). Bug class N/A.","priority":"P3","effort":"-"}
+{"pr":21668,"title":"Refactor Time-Lapse Export","area":"record","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Time-lapse export; check nurby export options.","priority":"P3","effort":"M"}
+{"pr":21661,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21655,"title":"Miscellaneous fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21648,"title":"Update go2rtc to v1.9.13","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":21626,"title":"Fix incorrect counting in sync_recordings","area":"record","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"Media-sync feature; nurby has no media import sync."}
+{"pr":21625,"title":"Media sync tweak","area":"record","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":21614,"title":"i18n miscellaneous fixes","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21607,"title":"Miscellaneous fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21606,"title":"ensure cloudflare pages are not indexed by google","area":"ops","type":"ops","decision":"skip"}
+{"pr":21600,"title":"fix: Correctly apply API filter for reviewed","area":"api","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"Reviewed/acknowledged filter; check nurby alerts 'reviewed/ack' filter applies correctly.","priority":"P3","effort":"S"}
+{"pr":21594,"title":"Reduce gif size for docs assets","area":"docs","type":"docs","decision":"skip"}
+{"pr":21591,"title":"add synaptics to release","area":"ci","type":"ci","nurby_status":"N/A","decision":"skip"}
+{"pr":21580,"title":"Bump @remix-run/router and react-router-dom in /web","area":"deps","type":"deps","decision":"skip"}
+{"pr":21575,"title":"Miscellaneous Fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21573,"title":"I18N Miscellaneous Fixes","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21558,"title":"Miscellaneous Fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21551,"title":"docs: fix alt text and capitalization","area":"docs","type":"docs","decision":"skip"}
+{"pr":21543,"title":"Restrict go2rtc exec sources by default","area":"output","type":"security","nurby_status":"HAVE","decision":"map","insight":"go2rtc `exec:` stream sources run arbitrary commands; restrict by default.","nurby_evidence":"Nurby's stream-URL scheme allowlist (PR #34) rejects non-network schemes (exec:/file:/gopher:) for rtsp/http camera types; usb/file types are device/path, not commands. Covered.","priority":"P2","effort":"-"}
+{"pr":21542,"title":"Media sync API refactor and UI","area":"record","type":"feature","nurby_status":"N/A","decision":"defer","note":"Import/sync external media; not a nurby concept."}
+{"pr":21526,"title":"Add media sync API endpoint","area":"record","type":"feature","nurby_status":"N/A","decision":"defer"}
+{"pr":21521,"title":"Exports Improvements","area":"record","type":"feature","decision":"defer","note":"Export UX; export parity pass."}
+{"pr":21520,"title":"Add API to handle deleting recordings","area":"api","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Check nurby has a delete-recordings API (vs only retention-based deletion).","priority":"P3","effort":"S"}
+{"pr":21504,"title":"Bump qs 6.14.0->6.14.1 in /docs","area":"deps","type":"deps","decision":"skip"}
+{"pr":21495,"title":"Add support for GPU and NPU temperatures","area":"stats","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":21489,"title":"Miscellaneous fixes (0.17 Beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21488,"title":"Refactor hardware acceleration docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":21485,"title":"update copyright","area":"docs","type":"docs","decision":"skip"}
+{"pr":21484,"title":"llc to inc and 2025 to 2026","area":"docs","type":"docs","decision":"skip"}
+{"pr":21474,"title":"Miscellaneous Fixes (0.17 beta)","area":"?","type":"?","decision":"defer"}
+{"pr":21462,"title":"[docs] fix topic for camera status","area":"docs","type":"docs","decision":"skip"}
+{"pr":21443,"title":"Miscellaneous fixes (0.17 Beta)","area":"?","type":"?","decision":"defer"}
