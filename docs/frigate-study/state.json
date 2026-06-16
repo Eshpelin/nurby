@@ -3,12 +3,12 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 20533,
+  "cursor_pr": 20392,
   "newest_pr_seen": 23488,
-  "batches_done": 16,
+  "batches_done": 17,
   "counts": {
-    "logged": 640,
-    "pct_of_merged": "~16%",
+    "logged": 680,
+    "pct_of_merged": "~17%",
     "fixes_shipped": 5,
     "issues_open": 8,
     "issues_closed": 1
@@ -35,6 +35,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 20533, newest-first.",
-  "notes": "Batch 16: coverage only (UI/classification/Intel-NPU/HLS-format/camera-wizard = N/A or frontend). Backlog: VLM review-description frame source (#20676), camera-wizard validation UX (#20620), Ollama perf defaults (#20606)."
+  "next": "Continue at PR < 20392, newest-first.",
+  "notes": "Batch 17: coverage only. Notable backlog: webp thumbnails for storage savings (#20484), mark-unreviewed (#20446), on-demand snapshot download (#20488), retention logic (#20506), input validation (#20491/#20483)."
 }

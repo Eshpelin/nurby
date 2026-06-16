@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 20533** triaged (640, ~16% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 20392** triaged (680, ~17% of 4058 merged), newest-first.
 
 ---
 
@@ -394,3 +394,18 @@ No nurby-applicable backend fix. Backlog/VERIFY:
 - **[#20676]** choose which frames feed the VLM review description (frame selection) · P3.
 - **[#20620]** camera-wizard stream-validation UX (backend already covered by PR #34 allowlist) · P3.
 - **[#20606]** sensible Ollama performance defaults (num_ctx/keep_alive) · P3.
+
+---
+
+## Batch 17 (PRs 20527–20392) — coverage batch, no code change
+
+Mostly UI/genai/Intel/docs. A few backlog items worth noting (no clean unattended-safe backend fix):
+
+- **[#20484] webp snapshots** (storage efficiency) — nurby encodes JPEG thumbnails; webp is ~25-35%
+  smaller. Worthwhile storage/bandwidth win but a multi-surface behavior change (write+serve+UI) · P3.
+- **[#20446]** mark review/alert items back to unreviewed (toggle ack state) · P3.
+- **[#20488]** on-demand snapshot download endpoint · P3.
+- **[#20506]** retention-logic edge cases (compare to nurby DB-driven retention) · P3.
+- **[#20491/#20483]** input validation: uploaded-image location + face-score range · P3.
+- VERIFY: **[#20395]** audio-transcription fix (nurby has faster-whisper STT) — body empty, revisit
+  if a theme emerges.
