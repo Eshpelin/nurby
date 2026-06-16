@@ -1013,3 +1013,48 @@
 {"pr":18390,"title":"Fix lpr running when it shouldn't","area":"lpr","type":"fix","decision":"na"}
 {"pr":18383,"title":"Add basic config editor when Frigate can't startup","area":"frontend","type":"feat","decision":"na","note":"frigate yaml-config recovery UI; nurby config is DB-backed"}
 {"pr":18381,"title":"Improve documentation for YOLO-NAS notebook","area":"docs","type":"docs","decision":"na"}
+{"pr":18380,"title":"Add ability to configure when custom classification models run","area":"ml","type":"feat","decision":"na"}
+{"pr":18379,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18372,"title":"Cleanup builds","area":"build","type":"chore","decision":"na"}
+{"pr":18370,"title":"Fix Jetson ONNXRuntime","area":"hwaccel","type":"fix","decision":"na"}
+{"pr":18364,"title":"Update ROCm to 6.4.1","area":"hwaccel","type":"chore","decision":"na"}
+{"pr":18363,"title":"Implement support for no recordings indicator on timeline","area":"frontend","type":"feat","decision":"na"}
+{"pr":18362,"title":"Initial custom classification model config support","area":"ml","type":"feat","decision":"na"}
+{"pr":18359,"title":"Dynamically update masks and zones for cameras","area":"camera-config","type":"feat","decision":"na","note":"frigate runtime mask/zone reload; nurby zones are DB-backed w/ rule-invalidation pubsub reload"}
+{"pr":18354,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18353,"title":"Dynamic Config Updates","area":"camera-config","type":"feat","decision":"na","note":"frigate runtime config; nurby already reloads via pubsub + 30s passive reload"}
+{"pr":18338,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18336,"title":"Add ability to specify separator used in proxy headers","area":"auth","type":"feat","decision":"na","note":"nurby has no proxy header_map/remote-role auth path"}
+{"pr":18333,"title":"Disable autoCorrect, autoCapitalize and spellCheck on username input in auth form","area":"frontend","type":"fix","decision":"na"}
+{"pr":18319,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18310,"title":"Add Mesa Teflon as a TFLite detector","area":"hwaccel","type":"feat","decision":"na"}
+{"pr":18309,"title":"i18n fixes","area":"i18n","type":"fix","decision":"na"}
+{"pr":18304,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18289,"title":"Misc fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18284,"title":"Min face configuration option","area":"face","type":"feat","decision":"gap-minor","note":"min-area threshold before running face recognition; nurby face-embeddings pipeline has no equivalent min-face gate. backlog"}
+{"pr":18279,"title":"Fix dead link in frigate+ settings page","area":"docs","type":"docs","decision":"na"}
+{"pr":18276,"title":"Update s6-overlay from 3.1.5.0 to 3.2.1.0","area":"deps","type":"chore","decision":"na"}
+{"pr":18275,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18264,"title":"Update ROCm to 6.4.0","area":"hwaccel","type":"chore","decision":"na"}
+{"pr":18262,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18257,"title":"Improve timezone handling","area":"frontend","type":"fix","decision":"na","note":"web/ calendar+export timezone display; backend stores UTC"}
+{"pr":18247,"title":"Update react-day-picker to 9.x","area":"frontend","type":"chore","decision":"na"}
+{"pr":18245,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18236,"title":"Remove hardcoded usage of /dev/dri/card0 in call to intel_gpu_top","area":"hwaccel","type":"fix","decision":"na"}
+{"pr":18235,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18223,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
+{"pr":18220,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18187,"title":"Fix various typing issues","area":"misc","type":"chore","decision":"na"}
+{"pr":18176,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18139,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18117,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18093,"title":"Refactor async ONVIF","area":"onvif-ptz","type":"refactor","decision":"have","note":"frigate moved blocking ONVIF/PTZ calls async. nurby ONVIF already fully async: httpx.AsyncClient _soap_request, async ptz_continuous_move/stop/presets/goto, blocking probes via run_in_executor"}
+{"pr":18077,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18074,"title":"revert onnx runtime update","area":"hwaccel","type":"chore","decision":"na"}
+{"pr":18055,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18036,"title":"Use HF_ENDPOINT env instead of hardcoding https://huggingface.co","area":"ml","type":"feat","decision":"na","note":"mirror/air-gap model download override; nurby has no hardcoded huggingface.co URLs in py"}
+{"pr":18035,"title":"Various Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18025,"title":"Docs tweaks","area":"docs","type":"docs","decision":"na"}
+{"pr":18024,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
+{"pr":18021,"title":"Avoid unhealthy container when Frigate is stopping","area":"ops","type":"fix","decision":"na","note":"healthcheck during shutdown"}
+{"pr":18017,"title":"Fix go2rtc homeassistant config dir","area":"restream","type":"fix","decision":"na"}

@@ -3,12 +3,12 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 18381,
+  "cursor_pr": 18017,
   "newest_pr_seen": 23488,
-  "batches_done": 25,
+  "batches_done": 26,
   "counts": {
-    "logged": 1015,
-    "pct_of_merged": "~25%",
+    "logged": 1060,
+    "pct_of_merged": "~26%",
     "fixes_shipped": 5,
     "issues_open": 9,
     "issues_closed": 1
@@ -36,6 +36,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 18381, newest-first. No strong lead pending. Region is deep in Frigate multiprocess/ML/hwaccel territory (~90% N/A). Watch for backend API/auth/security PRs only.",
-  "notes": "Batch 25: coverage only (PRs 18757-18381), no issues, no merges. LEAD RESOLVED: #18671 Dynamic Management of Cameras = HAVE (nurby reloads via rule-invalidation pubsub + camera_status_watcher + 30s passive reload; DB-backed cameras, no monolithic restart). Companions #18353/#18359 also N/A. #18336 proxy-header separator N/A (nurby has no proxy header_map auth). Backlog gap-minor (no issue): #18616 force-regenerate genai when camera disabled, #18492 tiered recordings retention, #18398/#18540 audio speech-to-text. Prior notes: Batch 24 GAP #18897 review time-range overlap -> issue Eshpelin/nurby#65."
+  "next": "Continue at PR < 18017, newest-first. No strong lead pending. Region is deep in Frigate ML/hwaccel/multiprocess territory (~95% N/A, many bare 'Fixes'/'Translations'). Watch for backend API/auth/security PRs only.",
+  "notes": "Batch 26: coverage only (PRs 18380-18017), no issues, no merges. HAVE verified: #18093 async ONVIF (nurby ONVIF/PTZ already fully async via httpx.AsyncClient + run_in_executor for probes); #18353/#18359 dynamic config/masks (nurby DB-backed + pubsub reload). N/A: #18336 proxy separator, #18036 HF_ENDPOINT (no hardcoded HF urls), #18257 timezone (frontend). Backlog gap-minor: #18284 min-face area gate before recognition. Batch 25: #18671 dynamic cameras = HAVE; backlog #18616/#18492/#18398. Batch 24 GAP #18897 -> issue Eshpelin/nurby#65."
 }
