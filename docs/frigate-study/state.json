@@ -3,12 +3,12 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 21443,
+  "cursor_pr": 21243,
   "newest_pr_seen": 23488,
-  "batches_done": 11,
+  "batches_done": 12,
   "counts": {
-    "logged": 440,
-    "pct_of_merged": "~11%",
+    "logged": 480,
+    "pct_of_merged": "~12%",
     "fixes_shipped": 5,
     "issues_open": 8,
     "issues_closed": 1
@@ -35,6 +35,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 21443, newest-first.",
-  "notes": "Batch 11: coverage only (0.17-beta media-sync/cache-cleanup/llama.cpp/GPU-temps = N/A). #21676 cache-filename crash N/A (nurby DB-driven, no cache scanner). #21543 exec-source restriction HAVE (scheme allowlist PR #34). Backlog: delete-recordings API (#21520), reviewed-filter (#21600)."
+  "next": "Continue at PR < 21243, newest-first.",
+  "notes": "Batch 12: coverage only (0.17-beta attributes/Hailo/oauth2-proxy/peewee = N/A). New themes: case-management (#21299/#21293/#21295, PARTIAL - nurby has incidents+evidence cards but no shareable case bundles), camera connection-quality indicator (#21297, MISSING). #21335 anonymous-auth N/A (nurby JWT-only)."
 }

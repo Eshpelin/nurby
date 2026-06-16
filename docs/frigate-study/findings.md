@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 21443** triaged (440, ~11% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 21243** triaged (480, ~12% of 4058 merged), newest-first.
 
 ---
 
@@ -316,3 +316,20 @@ Backlog / VERIFY worth a later look:
 
 Backlog/VERIFY: **[#21520]** delete-recordings API, **[#21600]** "reviewed" filter correctness,
 **[#21668]** time-lapse export · P3. HAVE: LLM chat tool-calling (#21731).
+
+---
+
+## Batch 12 (PRs 21439–21243) — coverage batch, no code change
+
+0.17-beta: object-attributes (N/A), Hailo/vainfo/GPU (N/A), oauth2-proxy/peewee (N/A), i18n/misc.
+Two feature themes worth tracking + one verified N/A:
+
+- **[#21299/#21293/#21295] Case management** (PARTIAL) — Frigate groups related events into a
+  shareable "case" (bundle clips + metadata, export as evidence). Nurby has incidents + evidence
+  cards + reports, but no case container bundling multiple incidents/clips for export/sharing.
+  Backlog initiative candidate · P3/L.
+- **[#21297] Camera connection-quality indicator** (MISSING) — nurby has online/offline status but
+  no per-camera health/quality (drops/bitrate/reconnects) metric · P3/M.
+- **[#21335] "consider anonymous user authenticated"** — N/A. Nurby has no auth-disabled/anonymous
+  mode; every request needs a JWT.
+- Backlog/VERIFY: **[#21250]** two-way/backchannel audio, **[#21322]** export filter UI · P3.
