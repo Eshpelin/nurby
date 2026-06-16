@@ -1105,3 +1105,48 @@
 {"pr":17842,"title":"Don't set pattern for unused rockchip models","area":"hwaccel","type":"fix","decision":"na"}
 {"pr":17835,"title":"Don't limit review summary query","area":"review","type":"fix","decision":"gap","note":"frigate removed hardcoded 30-day cap that silently dropped older review summaries. nurby summaries.py:61-64 filters from/to on started_at only (same overlap-miss class as recordings) -> added to issue Eshpelin/nurby#65"}
 {"pr":17831,"title":"Increase ffmpeg timeout to 10 seconds","area":"ingestion","type":"fix","decision":"gap","note":"frigate RTSP read timeout 5s->10s to avoid spurious disconnects. nurby stimeout=5s at audio_worker.py:110, stream.py:394, audio/capture.py:98 -> issue Eshpelin/nurby#69 (P3 tuning)"}
+{"pr":17820,"title":"Move another username to i18n key","area":"i18n","type":"chore","decision":"na"}
+{"pr":17819,"title":"Fix hailo detection","area":"hwaccel","type":"fix","decision":"na"}
+{"pr":17818,"title":"Move username to i18n key","area":"i18n","type":"chore","decision":"na"}
+{"pr":17816,"title":"Frame time fix","area":"perception","type":"fix","decision":"na","note":"frigate tracked_object.py frame timing"}
+{"pr":17814,"title":"Link fixed in restream docs","area":"docs","type":"docs","decision":"na"}
+{"pr":17812,"title":"Add support for rockchip GPU stats","area":"hwaccel","type":"feat","decision":"na"}
+{"pr":17806,"title":"Add support for NPU statistics in metrics page","area":"hwaccel","type":"feat","decision":"na"}
+{"pr":17791,"title":"Add YOLOv9 support to RKNN","area":"hwaccel","type":"feat","decision":"na"}
+{"pr":17789,"title":"Fix yolox docs","area":"docs","type":"docs","decision":"na"}
+{"pr":17788,"title":"Implement YOLOx for RKNN","area":"hwaccel","type":"feat","decision":"na"}
+{"pr":17785,"title":"Cleanup detection","area":"perception","type":"chore","decision":"na"}
+{"pr":17783,"title":"LPR tweaks","area":"lpr","type":"chore","decision":"na"}
+{"pr":17773,"title":"Add support for yolox models to onnx detector","area":"hwaccel","type":"feat","decision":"na"}
+{"pr":17763,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
+{"pr":17762,"title":"UI Fixes","area":"frontend","type":"fix","decision":"na"}
+{"pr":17758,"title":"Fix link to keyframe article in docs","area":"docs","type":"docs","decision":"na"}
+{"pr":17747,"title":"Update tls.md instructions for letsencrypt archive dir","area":"docs","type":"docs","decision":"na"}
+{"pr":17744,"title":"Fix yolov9 export script","area":"hwaccel","type":"fix","decision":"na"}
+{"pr":17738,"title":"Plus Settings: add base model and name","area":"frontend","type":"feat","decision":"na"}
+{"pr":17736,"title":"Update yolonas docs","area":"docs","type":"docs","decision":"na"}
+{"pr":17733,"title":"Update hardware inference speeds","area":"docs","type":"docs","decision":"na"}
+{"pr":17732,"title":"plus docs updates","area":"docs","type":"docs","decision":"na"}
+{"pr":17725,"title":"i18n fixes","area":"i18n","type":"fix","decision":"na"}
+{"pr":17723,"title":"MemryX MX3 detector integration","area":"hwaccel","type":"feat","decision":"na"}
+{"pr":17719,"title":"Add steps for face step indicator","area":"frontend","type":"feat","decision":"na"}
+{"pr":17717,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
+{"pr":17716,"title":"LPR improvements","area":"lpr","type":"feat","decision":"na"}
+{"pr":17713,"title":"Add snapshot score to explore details","area":"frontend","type":"feat","decision":"na"}
+{"pr":17712,"title":"Improve async object detector support","area":"hwaccel","type":"feat","decision":"na","note":"frigate hardware detector inference loop; nurby uses separate perception/VLM arch"}
+{"pr":17711,"title":"i18n - add Polish and Russian","area":"i18n","type":"feat","decision":"na"}
+{"pr":17710,"title":"Quick UI fix","area":"frontend","type":"fix","decision":"na"}
+{"pr":17699,"title":"I18n fixes","area":"i18n","type":"fix","decision":"na"}
+{"pr":17697,"title":"Refactor yolov9 detector to support v3, v4, v7 as well","area":"hwaccel","type":"refactor","decision":"na"}
+{"pr":17685,"title":"UI tweaks","area":"frontend","type":"chore","decision":"na"}
+{"pr":17684,"title":"UI improvements","area":"frontend","type":"chore","decision":"na"}
+{"pr":17682,"title":"Fix some page i18n wrong","area":"i18n","type":"fix","decision":"na"}
+{"pr":17672,"title":"Add missing plural versions of some i18n keys","area":"i18n","type":"fix","decision":"na"}
+{"pr":17671,"title":"Improve object tracking","area":"perception","type":"feat","decision":"na","note":"frigate norfair tracker tuning"}
+{"pr":17667,"title":"Include arch in url for hailort","area":"hwaccel","type":"fix","decision":"na"}
+{"pr":17662,"title":"Add languages","area":"i18n","type":"feat","decision":"na"}
+{"pr":17661,"title":"Fix trt model prepare script","area":"hwaccel","type":"fix","decision":"na"}
+{"pr":17652,"title":"Small Tweaks","area":"misc","type":"chore","decision":"skip"}
+{"pr":17651,"title":"Small tweaks","area":"misc","type":"chore","decision":"skip"}
+{"pr":17649,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
+{"pr":17640,"title":"Update tensorrt model config to use coco-80","area":"hwaccel","type":"chore","decision":"na"}
