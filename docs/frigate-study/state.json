@@ -3,14 +3,14 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 19134,
+  "cursor_pr": 18774,
   "newest_pr_seen": 23488,
-  "batches_done": 23,
+  "batches_done": 24,
   "counts": {
-    "logged": 925,
-    "pct_of_merged": "~23%",
+    "logged": 970,
+    "pct_of_merged": "~24%",
     "fixes_shipped": 5,
-    "issues_open": 8,
+    "issues_open": 9,
     "issues_closed": 1
   },
   "fixes_shipped_detail": [
@@ -31,10 +31,11 @@
       "Eshpelin/nurby#41": "P2 reasoning/thinking model support - OPEN",
       "Eshpelin/nurby#42": "P3 widget_proxy cache per-user key - OPEN",
       "Eshpelin/nurby#46": "P2 mutation-endpoint role-gating sweep - OPEN",
-      "Eshpelin/nurby#48": "P3 offload remaining blocking I/O + cv2.imencode ok-checks - OPEN"
+      "Eshpelin/nurby#48": "P3 offload remaining blocking I/O + cv2.imencode ok-checks - OPEN",
+      "Eshpelin/nurby#65": "P2 recordings time-window overlap miss (from/to on started_at only) - OPEN"
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 19134, newest-first. NEXT-BATCH LEAD: #19110 improve-ffmpeg-frame-handling -> verify nurby services/ingestion ffmpeg pipeline (known-behind area).",
-  "notes": "Batch 23: coverage only (PRs 19426-19134). Three backend bugfixes verified vs nurby, all SAFE/N-A: #19134 trusted-proxy ipv4_mapped (nurby has no proxy/X-Forwarded-For logic), #19323 corrupt .search_stats.json JSONDecodeError (nurby json.loads sites all guarded, no startup stats file), #19371 thumbnail cleanup id-vs-object (nurby retention.py deletes by path). #19426 search-numeric-crash = frontend cast, nurby backend coalesces query to str. Deep 19xxx region ~90% N/A (hwaccel/ML/i18n/docs/UI). Backlog-minor P3: #19327 systemd creds, #19207 ionice, #19139 runtime genai toggle."
+  "next": "Continue at PR < 18774, newest-first. NEXT-BATCH LEAD: #18671 Dynamic Management of Cameras (runtime add/remove cameras without restart) + #18690 basic camera settings UI -> check nurby camera CRUD vs runtime reconfig.",
+  "notes": "Batch 24: coverage only (PRs 19125-18774), one issue filed. GAP: #18897 review time-range overlap bug -> nurby recordings.py from/to filters started_at only, misses overlapping clips -> issue Eshpelin/nurby#65. Feature backlog: #18969 semantic-search triggers (no issue, large future). Region ~90% N/A: Frigate multiprocess arch (#19110 capture-thread restart, #18860 forkserver SIGINT, #18866 queue close, #19105 ulimit), hwaccel/ML/LPR/i18n/docs/UI, birdseye (#18821), thumbnail reindex (#18885/#19125 = nurby face-embeddings only). Minor: #18883 ONVIF focus."
 }

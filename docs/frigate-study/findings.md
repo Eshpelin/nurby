@@ -511,3 +511,21 @@ Three backend bugfixes verified against nurby, all SAFE/N-A:
   **[#19207]** ionice for heavy procs, **[#19139]** runtime per-camera GenAI enable/disable.
 - Lead for next batch: **[#19110]** "Improve ffmpeg frame handling" — nurby ffmpeg pipeline is a
   known-behind area; verify against `services/ingestion` ffmpeg handling.
+
+## Batch 24 (PRs 19125-18774)
+
+Coverage-only batch, one issue filed. Region remains ~90% N/A (hwaccel, ML classification/LPR, i18n, docs, Frigate multiprocess architecture).
+
+**GAP -> Issue Eshpelin/nurby#65: recordings time-window overlap miss.**
+Frigate PR #18897 fixed a review-query overlap bug (old `start_time > after` dropped segments that started before but overlapped the window; fixed to `start_time < before AND (end_time IS NULL OR end_time > after)`). Nurby `services/api/routes/recordings.py` `_filtered_recordings_query()` filters the time window on `started_at` only (`started_at >= from_`), so a clip that started before `from_` but is still running/overlapping is excluded. The same function's *object* sub-filter already uses correct overlap semantics, making the top-level from/to inconsistent. Fix proposed: lower bound on computed `window_end` (coalesce ended_at / started_at+duration). User-facing semantics change (more rows, pagination impact) -> filed as issue, not blind merge.
+
+**Feature backlog (no issue): #18969 Semantic Search Triggers.** Per-camera triggers that fire a notification when a tracked object's thumbnail/description matches reference data above a similarity threshold, managed in UI Settings > Triggers. Nurby has no semantic-search trigger automation. Large future feature tied to the notifications/semantic-search roadmap; noted here for when that subsystem lands.
+
+**Verified N/A (substantive but no nurby analog):**
+- #18897 viewer in proxy `VALID_ROLES` header mapping: nurby has no reverse-proxy header auth (#19121 doc tweak X-Forwarded-Groups same area).
+- #19110 ffmpeg capture-thread restart refactor (`reset_capture_thread`): Frigate per-camera multiprocess capture loop in `frigate/video.py`; nurby ingestion has no `capture_thread`/`ffmpeg_detect_process`.
+- #18885 PIL `verify()` corrupt-thumbnail skip in vision reindex / #19125 reindex tidy: nurby embeds face vectors from recordings, no thumbnail reindex batch.
+- #18866 `empty_and_close_queue` manager-proxy guard, #18860 forkserver SIGINT/stop_event, #19105/#19086 ulimit-to-Python: Frigate multiprocess/container infra, nurby is async API.
+- #18821 birdseye dynamic add_camera: nurby has no birdseye mosaic.
+
+Minor optional: #18883 ONVIF focus (nurby PTZ has no focus control).

@@ -923,3 +923,48 @@
 {"pr":19139,"title":"Dynamically enable/disable GenAI","area":"genai/config","type":"feature","decision":"skip","note":"per-camera genai toggle at runtime; nurby has provider config, backlog-minor"}
 {"pr":19136,"title":"Replaces sriov flag with explicit path to the Intel GPU device","area":"hwaccel","type":"chore","decision":"skip"}
 {"pr":19134,"title":"Fix IPv6 addresses with IPv4 trusted proxies","area":"api/auth","type":"bugfix","decision":"skip","note":"ipv4_mapped None guard; nurby has no get_remote_addr/trusted-proxy logic, N/A"}
+{"pr":19125,"title":"Fixes","area":"embeddings","type":"refactor","decision":"skip","note":"thumbnail reindex batch tidy + new package labels; nurby has no vision-thumbnail reindex (only face embeddings), N/A"}
+{"pr":19121,"title":"Use X-Forwarded-Groups instead of -Role in example","area":"api/auth","type":"docs","decision":"skip","note":"proxy header_map doc example; nurby has no reverse-proxy header auth"}
+{"pr":19111,"title":"DeGirum Detector for Frigate","area":"detector","type":"feat","decision":"skip","note":"hardware detector backend, N/A"}
+{"pr":19110,"title":"Improve ffmpeg frame handling","area":"ingestion/ffmpeg","type":"refactor","decision":"skip","note":"refactors capture-thread restart (reset_capture_thread) in frigate/video.py multiprocess loop; nurby has no per-camera capture_thread/ffmpeg_detect_process, different ingestion model, N/A"}
+{"pr":19105,"title":"Set ulimit with Python","area":"infra/container","type":"chore","decision":"skip","note":"moves nofile-limit raising from bash to set_file_limit() in app start; nurby API container infra differs, N/A"}
+{"pr":19095,"title":"Fix ulimit script","area":"infra/container","type":"chore","decision":"skip"}
+{"pr":19089,"title":"Misc fixes","area":"misc","type":"chore","decision":"skip","note":"grab-bag, no backend-security relevance"}
+{"pr":19087,"title":"Fix ulimit setting","area":"infra/container","type":"chore","decision":"skip"}
+{"pr":19086,"title":"Set ulimit","area":"infra/container","type":"chore","decision":"skip"}
+{"pr":19070,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":19067,"title":"Update edgetpu.md","area":"docs","type":"docs","decision":"skip"}
+{"pr":19047,"title":"fix(docs): preset-record-generic-audio-aac is now default output args","area":"docs","type":"docs","decision":"skip"}
+{"pr":19038,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":19031,"title":"Move trt error","area":"hwaccel","type":"chore","decision":"skip"}
+{"pr":19030,"title":"Remove TensorRT Detector from AMD64 Build","area":"hwaccel","type":"chore","decision":"skip"}
+{"pr":19029,"title":"Fix build caching","area":"infra/ci","type":"chore","decision":"skip"}
+{"pr":19025,"title":"Optionally show tracked object paths in Debug view","area":"frontend","type":"feat","decision":"skip","note":"UI debug overlay, N/A"}
+{"pr":19020,"title":"Classification improvements","area":"ml/classification","type":"feat","decision":"skip"}
+{"pr":19009,"title":"Improve bird classification","area":"ml/classification","type":"feat","decision":"skip"}
+{"pr":18969,"title":"Semantic Search Triggers","area":"semantic-search","type":"feat","decision":"gap","note":"per-camera triggers automating notification when tracked-object thumbnail/description matches reference via similarity threshold; nurby has no semantic-search trigger automation. Large future feature, noted in findings, no issue (roadmap)"}
+{"pr":18945,"title":"Add README_CN Chinese community sponsors","area":"docs","type":"docs","decision":"skip"}
+{"pr":18935,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18910,"title":"Improve classification UI","area":"frontend","type":"feat","decision":"skip"}
+{"pr":18908,"title":"Improve object classification","area":"ml/classification","type":"feat","decision":"skip"}
+{"pr":18897,"title":"Fixes","area":"api/review","type":"bugfix","decision":"gap","note":"FIXED review time-range overlap bug: clips starting before window but overlapping were dropped; nurby recordings.py from/to filters on started_at only = same overlap miss -> issue Eshpelin/nurby#65. Also adds viewer to proxy VALID_ROLES (N/A, no proxy auth in nurby)"}
+{"pr":18893,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18892,"title":"0.17 tweaks","area":"misc","type":"chore","decision":"skip"}
+{"pr":18888,"title":"chore: fix exploreMore objects label i18n","area":"i18n","type":"chore","decision":"skip"}
+{"pr":18885,"title":"Verify images before adding to batch for embedding","area":"embeddings","type":"bugfix","decision":"skip","note":"PIL verify() to skip corrupt thumbnails in vision reindex batch; nurby has no thumbnail reindex batch (face embeddings only), N/A"}
+{"pr":18884,"title":"remove incorrect apostrophe","area":"docs","type":"docs","decision":"skip"}
+{"pr":18883,"title":"Add ONVIF focus support","area":"ptz","type":"feat","decision":"skip","note":"ONVIF camera focus control; nurby PTZ has no focus, minor optional feature"}
+{"pr":18877,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18867,"title":"Improve logging","area":"logging","type":"chore","decision":"skip"}
+{"pr":18866,"title":"Fix close queue","area":"util","type":"bugfix","decision":"skip","note":"empty_and_close_queue handles manager-proxy queues without close(); nurby has no mp.Queue cleanup util, N/A"}
+{"pr":18865,"title":"chore: add annke cz504 to working PTZ cameras list","area":"docs","type":"docs","decision":"skip"}
+{"pr":18860,"title":"Handle SIGINT with forkserver","area":"infra/process","type":"chore","decision":"skip","note":"forkserver preload + SIGINT stop_event threading; Frigate multiprocess arch, nurby async API, N/A"}
+{"pr":18859,"title":"Bump HailoRT to 4.21.0 for HAOS 16 compatibility","area":"hwaccel","type":"chore","decision":"skip"}
+{"pr":18843,"title":"Classification model cover images","area":"ml/classification","type":"feat","decision":"skip"}
+{"pr":18833,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18825,"title":"LPR fix","area":"ml/lpr","type":"bugfix","decision":"skip","note":"license-plate recognition, N/A"}
+{"pr":18821,"title":"Fix birdseye crash","area":"output/birdseye","type":"bugfix","decision":"skip","note":"birdseye dynamic add_camera; nurby has no birdseye mosaic, N/A"}
+{"pr":18799,"title":"OpenVINO: Don't force hard-coded input tensor shapes","area":"hwaccel","type":"bugfix","decision":"skip"}
+{"pr":18795,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18777,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18774,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
