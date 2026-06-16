@@ -3,11 +3,11 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 22814,
+  "cursor_pr": 22673,
   "newest_pr_seen": 23488,
-  "batches_done": 4,
+  "batches_done": 5,
   "counts": {
-    "logged": 160,
+    "logged": 200,
     "fixes_shipped": 3,
     "issues_filed": 7
   },
@@ -23,12 +23,12 @@
       "Eshpelin/nurby#36": "P1 PTZ smart-track non-finite guard (frigate #23475)",
       "Eshpelin/nurby#37": "P2 motion search + review items (frigate #23378 cluster)",
       "Eshpelin/nurby#38": "P2 per-camera exclude-from-review flag (frigate #23387)",
-      "Eshpelin/nurby#40": "P1 per-user camera access control (frigate #23256/#23294/#23164/#22987)",
+      "Eshpelin/nurby#40": "P1 per-user camera access control (frigate #23256/#23294/#23164/#22987/#22710)",
       "Eshpelin/nurby#41": "P2 reasoning/thinking model support (frigate #23281)",
       "Eshpelin/nurby#42": "P3 widget_proxy cache per-user key (frigate #23261-adjacent)"
     }
   },
-  "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main, file issues for substantive gaps, log everything. Do NOT force a fix when none is clearly safe (batch 4 was coverage-only).",
-  "next": "Continue at PR < 22814, newest-first.",
-  "notes": "Batch 4 (22980-22814): coverage only, no clean fix to merge unattended. Backlog/VERIFY items recorded in findings.md (manual-event motion gating #22887, stream probe fallback #22971, ONVIF UTF-8 #22818, deferred enrichment #22880, python-multipart CVE check #22894)."
+  "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main, file issues for substantive gaps, log everything. Do NOT force a fix when none is clearly safe (batches 4-5 were coverage-only).",
+  "next": "Continue at PR < 22673, newest-first.",
+  "notes": "Batches 4-5 (22980-22673): coverage only. #22689 numpy-JSON verified HAVE (nurby casts at vision boundary). #22710 WS role auth -> issue #40. Backlog in findings.md: DST time windows (#22698), manual-event motion gating (#22887), ONVIF UTF-8 (#22818), stream probe fallback (#22971), frontend dep CVE audit, python-multipart CVE check (#22894)."
 }

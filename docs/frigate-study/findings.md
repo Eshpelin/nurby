@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 22814** triaged (160), newest of 4058 merged.
+Coverage so far: PRs **23488 → 22673** triaged (200), newest of 4058 merged.
 
 ---
 
@@ -175,3 +175,22 @@ high-confidence change safe to merge unattended. Worth a later look (backlog / V
   enrichment off the hot path (compare to nurby `vlm_queue`/enrichment workers).
 - **[#22915/#22867] Export progress + improvements**, **[#22963] camera-wizard polish** — UI passes.
 - **[#22894] python-multipart bump** — check nurby's pinned version for the same CVE separately.
+
+---
+
+## Batch 5 (PRs 22799–22673) — coverage batch, no code change
+
+Yield still low (genai refactors, Intel/MemryX/go2rtc/llama.cpp, dep bumps, docs, UI tweaks).
+Two checks worth recording:
+
+- **[#22689] numpy box coords not JSON-serializable** · `data_processing` · **HAVE** — audited
+  and nurby is clean: every numpy value is cast to native python at the vision boundary
+  (`detector.py:235-256`, `plates.py:171-181`, `faces.py:86-90`), and `ws.py` uses
+  `json.dumps(default=str)` as a net. Verified, not assumed.
+- **[#22710] Role-based auth on WS message handler** · `comms` · VULNERABLE — reinforces the
+  per-user camera ACL gap; folded into issue #40 (no new issue).
+
+Backlog / VERIFY: **[#22698]** DST-safe time windows (digest/preview tz math), **[#22732]**
+zone/mask editor UX, **[#22787/#22733/#22683]** frontend dep CVE audit (lodash/path-to-regexp),
+**[#22673]** secondary-pipeline cadence, **[#22685]** ONNX warm-up (only matters once GPU lands).
+N/A: MemryX, go2rtc, llama.cpp, MQTT, Intel stats.

@@ -158,3 +158,43 @@
 {"pr":22823,"title":"Chat improvements","area":"genai","type":"feature","decision":"defer"}
 {"pr":22818,"title":"Fix UTF-8 ONVIF preset names","area":"ptz","type":"bugfix","nurby_status":"VERIFY","decision":"map","insight":"ONVIF preset names with non-ASCII chars were mis-decoded.","nurby_evidence":"Check services/discovery/onvif.py preset-name decoding for UTF-8 handling.","action":"Backlog: verify ONVIF preset/name UTF-8 decoding.","priority":"P3","effort":"S"}
 {"pr":22814,"title":"UI fixes","area":"web","type":"ui","decision":"skip"}
+{"pr":22799,"title":"Display more scores in Tracking Details","area":"web","type":"ui","decision":"defer"}
+{"pr":22796,"title":"Improve environment var handling","area":"config","type":"refactor","decision":"defer"}
+{"pr":22795,"title":"Bump actions/upload-artifact 4->7","area":"deps","type":"ci","decision":"skip"}
+{"pr":22788,"title":"Bump vite 6.4.1->6.4.2 in /web","area":"deps","type":"deps","decision":"skip"}
+{"pr":22787,"title":"Bump lodash 4.17.23->4.18.1 in /web","area":"deps","type":"deps","nurby_status":"VERIFY","decision":"skip","note":"Frontend dep bump (lodash). Backlog: audit nurby frontend deps for same CVEs."}
+{"pr":22783,"title":"Add frontend tests","area":"web","type":"ci","decision":"skip"}
+{"pr":22780,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22779,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22773,"title":"GenAI tweak","area":"genai","type":"refactor","decision":"defer"}
+{"pr":22770,"title":"Tweaks","area":"?","type":"ui","decision":"skip"}
+{"pr":22768,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":22762,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22756,"title":"GenAI tweaks","area":"genai","type":"refactor","decision":"defer"}
+{"pr":22752,"title":"Refactor genai","area":"genai","type":"refactor","decision":"defer"}
+{"pr":22750,"title":"Settings tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":22746,"title":"Memryx docs update","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip","note":"MemryX accelerator; nurby has no MemryX path."}
+{"pr":22737,"title":"Auto llama.cpp context","area":"genai","type":"feature","nurby_status":"N/A","decision":"skip","note":"llama.cpp-specific; nurby uses Ollama/OpenAI-compatible."}
+{"pr":22735,"title":"Remove direct go2rtc API proxy in favor of frigate API endpoints","area":"output","type":"refactor","nurby_status":"N/A","decision":"skip","note":"go2rtc; nurby uses MediaMTX."}
+{"pr":22733,"title":"Bump lodash-es 4.17.23->4.18.1 in /web","area":"deps","type":"deps","decision":"skip"}
+{"pr":22732,"title":"Mask/zone editor fixes","area":"web","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"Zone/mask editor; nurby has its own zones editor (rebuilt in June). Check for same UX bugs."}
+{"pr":22723,"title":"Fix go2rtc env var substitution for streams added via UI","area":"output","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":22722,"title":"Settings UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":22715,"title":"Improve profile state management and add recap tool","area":"config","type":"feature","nurby_status":"N/A","decision":"defer","note":"Config profiles (YAML provisioning); nurby is DB-driven."}
+{"pr":22714,"title":"Miscellaneous improvements","area":"?","type":"?","decision":"defer"}
+{"pr":22712,"title":"Update MemryX section documentation","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":22710,"title":"Add role-based auth to websocket message handler","area":"comms","type":"security","nurby_status":"VULNERABLE","decision":"map","insight":"Inbound WS messages/commands gated by user role.","nurby_evidence":"Reinforces camera-ACL gap (issue #40); nurby WS handler lacks role-based authz on inbound + outbound.","action":"Folded into initiatives/camera-access-control.md (issue #40).","priority":"P1","effort":"M"}
+{"pr":22707,"title":"Await config refresh before clearing pending form data","area":"web","type":"bugfix","decision":"skip"}
+{"pr":22704,"title":"Add config validators","area":"config","type":"feature","nurby_status":"HAVE","decision":"defer","note":"Nurby validates config via pydantic schemas already; check coverage parity."}
+{"pr":22703,"title":"Docs refactor","area":"docs","type":"docs","decision":"skip"}
+{"pr":22698,"title":"Fix Preview Generation EU DST bug","area":"record","type":"bugfix","nurby_status":"VERIFY","decision":"map","insight":"DST transition produced wrong preview time ranges.","nurby_evidence":"Check nurby digest/preview/time-window code for DST-safe tz math (system_timezone, per-camera tz).","action":"Backlog: DST-safe time windows audit.","priority":"P3","effort":"M"}
+{"pr":22694,"title":"Fix browser time format handling","area":"web","type":"bugfix","decision":"skip"}
+{"pr":22692,"title":"Add UI config messages framework","area":"web","type":"feature","decision":"skip"}
+{"pr":22691,"title":"Improve metrics UI performance","area":"web","type":"performance","decision":"skip"}
+{"pr":22690,"title":"fix MQTT snapshot race condition","area":"comms","type":"bugfix","nurby_status":"N/A","decision":"skip","note":"Nurby has no MQTT."}
+{"pr":22689,"title":"Fix json serialization error for license plate box coordinates","area":"data_processing","type":"bugfix","nurby_status":"HAVE","decision":"map","insight":"numpy box coords/scores are not JSON-serializable -> TypeError when stored/broadcast.","nurby_evidence":"Verified nurby casts all numpy to native at the vision boundary (detector.py:235-256, plates.py:171-181, faces.py:86-90); ws.py uses json.dumps(default=str) as a net. No bug.","priority":"P3","effort":"-"}
+{"pr":22685,"title":"Add warm-up to onnx as some GPUs require kernel compilation","area":"embeddings","type":"performance","nurby_status":"N/A","decision":"map","insight":"Warm up ONNX session to avoid first-inference kernel-compile stall on GPU.","nurby_evidence":"Nurby runs ONNX (InsightFace) on CPU (CPUExecutionProvider); no GPU kernel compile. Low value until GPU support.","priority":"P3","effort":"S"}
+{"pr":22683,"title":"Bump path-to-regexp 0.1.12->0.1.13 in /docs","area":"deps","type":"deps","decision":"skip"}
+{"pr":22680,"title":"fix: fix classification none label i18n issue","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":22674,"title":"Refactor Intel Stats","area":"stats","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":22673,"title":"Increase frequency of secondary pipeline updates","area":"object_detection","type":"performance","nurby_status":"VERIFY","decision":"defer","note":"Secondary (enrichment) pipeline update cadence; compare to nurby vlm_queue/enrichment pacing.","priority":"P3","effort":"S"}
