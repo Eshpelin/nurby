@@ -35,6 +35,7 @@ from sqlalchemy import select
 from shared.config import settings
 from shared.database import async_session
 from shared.models import Conversation, Recording
+from shared.paths import safe_getsize
 
 logger = logging.getLogger("nurby.perception.conversation_clip")
 
@@ -155,7 +156,7 @@ async def build_clip_for_conversation(
     logger.info(
         "conversation clip built. conv=%s file=%s segs=%d dur_ms=%d size=%dB",
         conversation_id, out_path, len(overlaps), duration_ms,
-        os.path.getsize(out_path) if os.path.exists(out_path) else 0,
+        safe_getsize(out_path),
     )
     return out_path, duration_ms
 
@@ -259,10 +260,7 @@ def _resolve_path(stored: str | None) -> str | None:
 
 
 def _file_ok(path: str) -> bool:
-    try:
-        return os.path.exists(path) and os.path.getsize(path) > 1024
-    except OSError:
-        return False
+    return safe_getsize(path) > 1024
 
 
 async def _run_ffmpeg(cmd: list[str]) -> int:

@@ -9,7 +9,23 @@ the media directories.
 
 import os
 
-__all__ = ["resolve_inside", "escape_like"]
+__all__ = ["resolve_inside", "escape_like", "safe_getsize"]
+
+
+def safe_getsize(path: str | os.PathLike | None) -> int:
+    """File size in bytes, or ``0`` if the file is missing or ``stat`` fails.
+
+    Replaces the ``os.path.exists(p) and os.path.getsize(p)`` idiom, which has a
+    TOCTOU race (the file can vanish between the two calls) and, on network
+    mounts, can raise transient ``OSError`` (e.g. ``Errno 121 Remote I/O``) that
+    crashes the worker. A single guarded ``getsize`` degrades to ``0`` instead.
+    """
+    if not path:
+        return 0
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
 
 
 def resolve_inside(path: str | None, allowed_dir: str) -> str | None:

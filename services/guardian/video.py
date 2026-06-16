@@ -20,6 +20,7 @@ import os
 import subprocess
 
 from shared.config import settings
+from shared.paths import safe_getsize
 
 DEFAULT_SIGMA = 20
 CACHE_DIR = os.path.join(settings.recordings_path, "guardian_blurred")
@@ -41,7 +42,7 @@ def blur_clip(src_path: str, sigma: int = DEFAULT_SIGMA) -> str:
     sigma = max(1, int(sigma))
     os.makedirs(CACHE_DIR, exist_ok=True)
     dest = os.path.join(CACHE_DIR, f"{_cache_key(src_path, sigma)}.mp4")
-    if os.path.exists(dest) and os.path.getsize(dest) > 0:
+    if safe_getsize(dest) > 0:
         return dest
     tmp = f"{dest}.{os.getpid()}.tmp.mp4"
     cmd = [
@@ -59,7 +60,7 @@ def blur_clip(src_path: str, sigma: int = DEFAULT_SIGMA) -> str:
     except (subprocess.TimeoutExpired, OSError) as exc:
         _unlink(tmp)
         raise RuntimeError(f"clip blur failed: {exc}") from exc
-    if proc.returncode != 0 or not (os.path.exists(tmp) and os.path.getsize(tmp) > 0):
+    if proc.returncode != 0 or safe_getsize(tmp) == 0:
         _unlink(tmp)
         raise RuntimeError(
             f"ffmpeg gblur failed rc={proc.returncode}: {proc.stderr.decode()[:300]}"
