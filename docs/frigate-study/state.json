@@ -3,11 +3,11 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 22295,
+  "cursor_pr": 22103,
   "newest_pr_seen": 23488,
-  "batches_done": 8,
+  "batches_done": 9,
   "counts": {
-    "logged": 320,
+    "logged": 360,
     "fixes_shipped": 5,
     "issues_open": 8,
     "issues_closed": 1
@@ -34,6 +34,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 22295, newest-first.",
-  "notes": "Batch 8: FIXED event-loop blocking in ollama status (to_thread). Verified HAVE: missing-file 404 (#22331), delete cameras (#22336), semantic search (#22323). Filed #48 (remaining blocking I/O)."
+  "next": "Continue at PR < 22103, newest-first.",
+  "notes": "Batch 9: coverage only (0.18-era feature/deps/version churn). Motion-search PRs (#22253/#22277/#22255) reinforce issue #37; hide-hidden-camera-alerts (#22226) reinforces #38. HAVE: React 19, multi-GenAI providers, GenAI streaming."
 }

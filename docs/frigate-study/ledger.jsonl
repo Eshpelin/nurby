@@ -318,3 +318,43 @@
 {"pr":22305,"title":"Update docs for AVX2 CPU requirement","area":"docs","type":"docs","decision":"skip"}
 {"pr":22301,"title":"Improve playback of videos in Tracking Details","area":"web","type":"ui","decision":"skip"}
 {"pr":22295,"title":"Add dynamic configuration for more fields","area":"config","type":"feature","decision":"defer"}
+{"pr":22294,"title":"Frontend fixes","area":"web","type":"ui","decision":"skip"}
+{"pr":22292,"title":"Bump docker/build-push-action 5->7","area":"deps","type":"ci","decision":"skip"}
+{"pr":22291,"title":"Bump docker/bake-action 6->7","area":"deps","type":"ci","decision":"skip"}
+{"pr":22280,"title":"Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22277,"title":"Add ability to clear region grids from the frontend","area":"motion","type":"feature","nurby_status":"N/A","decision":"defer","note":"Frigate region-grid (motion learning) reset; nurby uses motion zones, not region grids."}
+{"pr":22275,"title":"Update frontend to React 19","area":"web","type":"deps","nurby_status":"HAVE","decision":"map","note":"Nurby frontend is already Next.js 16 / React 19.","priority":"P3","effort":"-"}
+{"pr":22264,"title":"Bump immutable 5.1.4->5.1.5 in /docs","area":"deps","type":"deps","decision":"skip"}
+{"pr":22263,"title":"Various Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22258,"title":"Update docs for new HA language","area":"docs","type":"docs","decision":"skip"}
+{"pr":22255,"title":"Skip motion threshold configuration","area":"motion","type":"feature","decision":"defer","note":"Motion config option; motion-tuning pass."}
+{"pr":22254,"title":"Show log when anonymous users log in","area":"api","type":"security","nurby_status":"VERIFY","decision":"defer","note":"Auth audit logging. Nurby has no anonymous-login mode, but a login/auth audit log is a backlog idea.","priority":"P3","effort":"S"}
+{"pr":22253,"title":"Improve motion review and add motion search","area":"review","type":"feature","nurby_status":"MISSING","decision":"map","insight":"The motion-search + motion-review implementation.","action":"Folded into issue #37 / initiatives/motion-search-and-review.md.","priority":"P2","effort":"L"}
+{"pr":22252,"title":"Add fullscreen controls to tracking details videos","area":"web","type":"ui","decision":"skip"}
+{"pr":22251,"title":"Docs update","area":"docs","type":"docs","decision":"skip"}
+{"pr":22241,"title":"docs: updated the guides detectors section","area":"docs","type":"docs","decision":"skip"}
+{"pr":22237,"title":"Fix menu display conditions","area":"web","type":"ui","decision":"skip"}
+{"pr":22226,"title":"Hide hidden camera alerts","area":"review","type":"feature","nurby_status":"PARTIAL","decision":"map","insight":"A camera hidden from the dashboard should not generate review alerts either.","nurby_evidence":"Ties to per-camera exclude-from-review (issue #38).","action":"Folded into issue #38.","priority":"P2","effort":"S"}
+{"pr":22222,"title":"Docs updates","area":"docs","type":"docs","decision":"skip"}
+{"pr":22212,"title":"Debug replay","area":"debug","type":"tooling","nurby_status":"N/A","decision":"skip"}
+{"pr":22206,"title":"Initial commit for AXERA AI accelerators","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":22203,"title":"Fix genai","area":"genai","type":"bugfix","decision":"defer"}
+{"pr":22181,"title":"Fix mask and zone UI layout issues at high browser zoom levels","area":"web","type":"bugfix","decision":"defer","note":"Zone editor zoom; nurby has its own zones editor."}
+{"pr":22175,"title":"Genai docs refactor & fixes","area":"docs","type":"docs","decision":"skip"}
+{"pr":22166,"title":"Birdseye fixes","area":"output","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":22164,"title":"Fix link to Coral YOLOv9 Frigate+ models","area":"docs","type":"docs","decision":"skip"}
+{"pr":22163,"title":"Masks and zones improvements","area":"web","type":"feature","decision":"defer","note":"Zone editor UX; compare to nurby zones editor."}
+{"pr":22152,"title":"Add GenAI Backend Streaming and Chat","area":"genai","type":"feature","nurby_status":"HAVE","decision":"defer","note":"Nurby agent already streams (WS token budget); compare chat surface."}
+{"pr":22151,"title":"Full UI configuration","area":"config","type":"feature","nurby_status":"N/A","decision":"defer","note":"Web UI to edit YAML config; nurby is DB-driven with its own settings UI."}
+{"pr":22144,"title":"Add support for multiple GenAI Providers","area":"genai","type":"feature","nurby_status":"HAVE","decision":"map","note":"Nurby supports per-camera multi-provider (OpenAI/Anthropic/Google/Ollama) already.","priority":"P3","effort":"-"}
+{"pr":22143,"title":"0.18 Early Work","area":"?","type":"refactor","decision":"skip","note":"Version milestone churn."}
+{"pr":22142,"title":"Revert Early 0.18 work","area":"?","type":"refactor","decision":"skip"}
+{"pr":22141,"title":"Bump minimatch in /web","area":"deps","type":"deps","decision":"skip"}
+{"pr":22139,"title":"Bump rollup 4.34.9->4.59.0 in /web","area":"deps","type":"deps","decision":"skip"}
+{"pr":22138,"title":"Early 0.18 work","area":"?","type":"refactor","decision":"skip"}
+{"pr":22136,"title":"updates for yolov9 coral support","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":22131,"title":"Docs updates","area":"docs","type":"docs","decision":"skip"}
+{"pr":22129,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":22127,"title":"Remove redundant tensorflow import in BirdRealTimeProcessor","area":"data_processing","type":"refactor","nurby_status":"N/A","decision":"skip","note":"Bird classifier; nurby has no bird classifier."}
+{"pr":22107,"title":"Docs: fix YOLOv9 onnx export","area":"docs","type":"docs","decision":"skip"}
+{"pr":22103,"title":"docs: add shm calculator","area":"docs","type":"docs","decision":"skip"}

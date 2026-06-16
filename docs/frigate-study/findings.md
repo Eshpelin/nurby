@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 22295** triaged (320), newest of 4058 merged.
+Coverage so far: PRs **23488 → 22103** triaged (360), newest of 4058 merged.
 
 ---
 
@@ -266,3 +266,19 @@ unchecked `cv2.imencode` in background workers → issue #48.
 - **[#22352]** recordings/calendar API perf (indexing/pagination), **[#22393]** wrong exception
   class in subprocess except, **[#22375]** snapshot query params after event end, **[#22416/#22308]**
   LPR moving-vehicle handling + filter ordering · P3 each. N/A: nginx http/2, go2rtc, RKNN, Intel/GPU deps.
+
+---
+
+## Batch 9 (PRs 22294–22103) — coverage batch, no code change
+
+Feature/deps/version-churn region (0.18 early work, GenAI refactors, zone-editor UX, AXERA/Coral/
+birdseye N/A, many dep bumps). Reinforces two existing themes, no new fix:
+
+- **[#22253] Improve motion review + add motion search** → the implementation of issue **#37**
+  (motion search initiative). **[#22277/#22255]** motion region/threshold config also there.
+- **[#22226] Hide hidden camera alerts** → confirms issue **#38** (a dashboard-hidden camera
+  should also drop out of alerts/review).
+- **HAVE:** React 19 (#22275), multiple GenAI providers (#22144), GenAI streaming/chat (#22152) —
+  nurby already has these.
+- Backlog/VERIFY: **[#22254]** auth/login audit logging (nurby has no anonymous login, but an
+  auth audit trail is worth considering) · P3.
