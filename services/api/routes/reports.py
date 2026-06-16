@@ -33,13 +33,28 @@ def _validate_days(days: list[str] | None) -> list[str] | None:
     return cleaned or None
 
 
+async def _owned_report(
+    report_id: uuid.UUID, user: User, db: AsyncSession
+) -> ScheduledReport:
+    """Fetch a report the caller may manage: its owner, or an admin. Returns
+    the same 404 whether the report is absent or owned by someone else, so
+    ownership is not probeable."""
+    report = await db.get(ScheduledReport, report_id)
+    if report is None or (
+        report.created_by_user_id != user.id and user.role != "admin"
+    ):
+        raise HTTPException(status_code=404, detail="Report not found")
+    return report
+
+
 @router.get("", response_model=list[ScheduledReportResponse])
 async def list_reports(
-    _user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    rows = (
-        await db.execute(select(ScheduledReport).order_by(ScheduledReport.created_at))
-    ).scalars().all()
+    q = select(ScheduledReport).order_by(ScheduledReport.created_at)
+    if user.role != "admin":
+        q = q.where(ScheduledReport.created_by_user_id == user.id)
+    rows = (await db.execute(q)).scalars().all()
     return rows
 
 
@@ -62,25 +77,20 @@ async def create_report(
 @router.get("/{report_id}", response_model=ScheduledReportResponse)
 async def get_report(
     report_id: uuid.UUID,
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    report = await db.get(ScheduledReport, report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-    return report
+    return await _owned_report(report_id, user, db)
 
 
 @router.patch("/{report_id}", response_model=ScheduledReportResponse)
 async def update_report(
     report_id: uuid.UUID,
     body: ScheduledReportUpdate,
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    report = await db.get(ScheduledReport, report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    report = await _owned_report(report_id, user, db)
     updates = body.model_dump(exclude_unset=True)
     if "days" in updates:
         updates["days"] = _validate_days(updates["days"])
@@ -94,12 +104,10 @@ async def update_report(
 @router.delete("/{report_id}", status_code=204)
 async def delete_report(
     report_id: uuid.UUID,
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    report = await db.get(ScheduledReport, report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    report = await _owned_report(report_id, user, db)
     await db.delete(report)
     await db.commit()
 
@@ -107,15 +115,13 @@ async def delete_report(
 @router.post("/{report_id}/run", response_model=ScheduledReportResponse)
 async def run_report_now(
     report_id: uuid.UUID,
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Run the report inline (agent run + delivery) and return the
     refreshed row. Lets a user preview the output while building it.
     Can take tens of seconds with a slow local model."""
-    report = await db.get(ScheduledReport, report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    report = await _owned_report(report_id, user, db)
 
     from services.api.report_scheduler import run_and_deliver
 
