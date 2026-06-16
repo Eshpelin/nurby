@@ -529,3 +529,18 @@ Frigate PR #18897 fixed a review-query overlap bug (old `start_time > after` dro
 - #18821 birdseye dynamic add_camera: nurby has no birdseye mosaic.
 
 Minor optional: #18883 ONVIF focus (nurby PTZ has no focus control).
+
+## Batch 25 (PRs 18757-18381)
+
+Coverage-only batch. No issues filed, no fixes merged. ~90% N/A (Frigate multiprocess/hwaccel/ML/LPR/i18n/docs/UI).
+
+**Lead resolved (HAVE):** #18671 Dynamic Management of Cameras (runtime add/remove cameras without restart). Nurby already supports this: cameras are DB-backed, rule edits flush perception caches within ~1s via the rule-invalidation pubsub listener (`services/perception/pipeline.py`), camera availability is tracked by `camera_status_watcher.py`, and there is a 30s passive reload fallback. Frigate's PR exists to solve its monolithic multiprocess restart problem, which Nurby's architecture does not have. Same applies to companion PRs #18353 (Dynamic Config Updates) and #18359 (dynamic masks/zones) — N/A to Nurby's reload model.
+
+**N/A — no proxy-header auth in Nurby:** #18336 (custom header separator for proxy role mapping). Nurby has no `header_map`/`remote-role`/`x-forwarded-role` proxy-auth path, so the comma-vs-pipe separator config is irrelevant.
+
+**Backlog (gap-minor, no issue):**
+- #18616 GenAI description generation via API for non-enabled cameras (a `force=true` flag on the regenerate endpoint that bypasses the per-camera genai-enabled check). Nurby's VLM regenerate has no equivalent override. Low value alone.
+- #18492 Tiered recordings (per-tier retention: alerts vs detections vs motion drive separate cleanup windows). Nurby recording retention is flat. Reasonable future feature; not urgent.
+- #18398 / #18540 Audio transcription (speech-to-text on audio events). Nurby audio is sound classification, not STT. Large separate feature.
+
+Region remains ~90% N/A: forkserver/spawn arch (#18682, #18704), go2rtc restream (#18708), frame-cache debug (#18741/#18697), classification-model training+UI+metrics (#18595/#18583/#18571/#18475/#18474), TensorRT/Rockchip/Intel hwaccel (#18643/#18535/#18493), LPR OCR (#18505/#18390), birdseye/config-editor UI (#18628/#18383), docs and "Fixes" chores.
