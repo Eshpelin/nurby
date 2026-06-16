@@ -562,3 +562,15 @@ Coverage-only batch. No issues filed, no fixes merged. Deep in Frigate's ML/hwac
 - #18284 Min face configuration option — a minimum detected-face area threshold before running recognition, to skip tiny/low-quality faces. Nurby's face-embeddings pipeline has no equivalent min-face gate. Cheap future quality win.
 
 Region outlook: PRs are now mostly ML classification config (#18380/#18362/#18475), hwaccel (ROCm/Jetson/Intel/Mesa/onnxruntime), i18n/docs, and unlabeled "Fixes" chores. Expect continued low hit-rate; watch for backend auth/API/security only.
+
+## Batch 27 (PRs 18015-17831)
+
+Two GAPs surfaced (1 new issue, 1 added to an existing issue). Rest is heavy i18n/docs/hwaccel/frontend N/A.
+
+**GAP -> issue Eshpelin/nurby#69 (new, P3):** #17831 raised Frigate's RTSP read timeout 5s->10s to stop spurious disconnect/reconnect cycles on slow cameras. Nurby hardcodes `stimeout=5000000` (5s) at three ingest sites (`audio_worker.py:110`, `stream.py:394-395`, `audio/capture.py:98`). Filed as a tuning decision (not a blind bump) since the right value depends on Nurby's reconnect/backoff.
+
+**GAP -> added to issue Eshpelin/nurby#65:** #17835 removed a hardcoded 30-day cap on Frigate's review-summary query that silently dropped older summaries. Nurby's `summaries.py:61-64` has the same class of defect as the recordings overlap bug #65 already tracks: `from`/`to` are filtered on `Summary.started_at` only, so a summary spanning the window boundary (started before `from`, ended inside) is dropped. Recommended fixing `recordings.py` and `summaries.py` together with interval-overlap predicates (`started_at <= to AND ended_at >= from`).
+
+**N/A highlights:** PTZ autotrack motion estimation (#17955 — Frigate-specific), inter-process zmq/queue tuning (#17971/#17970/#17944 — Frigate multiprocess), RKNN/OpenVINO/Rockchip hwaccel, and a very large i18n/locale wave (#17979/17969/17953/17952/17942/17864/17861/17860/17858 etc.) plus docs/theme/UI. Frontend object-mask attributes (#18003) and face-library rename (#17879) are UI.
+
+Region note: we have entered Frigate's big i18n/locale rollout and ML-classification era; backend signal is thinning. Keep scanning for auth/API/ingest correctness only.
