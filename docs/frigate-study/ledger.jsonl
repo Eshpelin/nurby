@@ -838,3 +838,43 @@
 {"pr":19625,"title":"Fix hls not loading video in explore","area":"web","type":"bugfix","decision":"skip"}
 {"pr":19617,"title":"Update deps","area":"deps","type":"deps","decision":"skip"}
 {"pr":19615,"title":"Various Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":19614,"title":"Run autotracking setup method in asyncio coroutine","area":"ptz","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":19602,"title":"Enable Optional IPv6 Support for Nginx","area":"ops","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":19601,"title":"Remind users to restart after enabling face recognition","area":"web","type":"ui","decision":"skip"}
+{"pr":19595,"title":"Fix typo in Apple Silicon detector","area":"detectors","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":19592,"title":"Apple Silicon / ZMQ Detector","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":19590,"title":"Fix i965 driver","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":19584,"title":"Deprecate API field include_thumbnails","area":"api","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":19576,"title":"Embeddings maintainer should start if bird classification is enabled","area":"data_processing","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":19573,"title":"Ensure birdseye is enabled before trying to grab a frame from it","area":"output","type":"bugfix","nurby_status":"N/A","decision":"skip"}
+{"pr":19571,"title":"Install non-free i965 driver","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":19567,"title":"feat: Add camera nickname","area":"config","type":"feature","nurby_status":"HAVE","decision":"map","note":"Nurby cameras have name + location_label.","priority":"P3","effort":"-"}
+{"pr":19555,"title":"Fix content type for latest image API endpoint","area":"api","type":"bugfix","nurby_status":"HAVE","decision":"map","insight":"Image endpoint returned wrong/missing Content-Type.","nurby_evidence":"Verified nurby sets media_type explicitly: cameras.py:859 Response(media_type='image/jpeg'), body_clusters.py:227 FileResponse(media_type='image/jpeg'), audio.py:42 audio/ogg, conversations.py:106 video/mp4. Correct.","priority":"P3","effort":"-"}
+{"pr":19540,"title":"Pull sqlite3 from mirror","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip","note":"Frigate uses sqlite; nurby Postgres."}
+{"pr":19539,"title":"Bump makefile version","area":"ci","type":"ci","decision":"skip"}
+{"pr":19538,"title":"Bump version in docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":19537,"title":"0.17 Early Work","area":"?","type":"refactor","decision":"skip"}
+{"pr":19529,"title":"Enable mypy for track and fix typing errors","area":"track","type":"refactor","decision":"skip"}
+{"pr":19525,"title":"Fix percentage in recording cleanup log","area":"record","type":"logging","decision":"skip"}
+{"pr":19520,"title":"add model config parameter to full reference config","area":"docs","type":"docs","decision":"skip"}
+{"pr":19515,"title":"Improve natural language of prompt","area":"genai","type":"feature","decision":"skip","note":"Prompt wording tweak."}
+{"pr":19503,"title":"HLS Playback Startup Time Optimization","area":"web","type":"performance","decision":"skip","note":"Frontend HLS player; nurby uses MediaMTX."}
+{"pr":19501,"title":"Remove score sorting constraint","area":"search","type":"bugfix","decision":"defer"}
+{"pr":19493,"title":"Update GenAI docs for new review summaries feature","area":"docs","type":"docs","decision":"skip"}
+{"pr":19491,"title":"Improve recognized license plate filter","area":"data_processing","type":"feature","decision":"defer","note":"Compare to nurby plates filtering."}
+{"pr":19484,"title":"Add ability to pass additional args to Ollama","area":"genai","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Extra Ollama options passthrough; relates to #20606 (Ollama defaults).","priority":"P3","effort":"S"}
+{"pr":19473,"title":"Genai review summaries","area":"genai","type":"feature","nurby_status":"HAVE","decision":"defer","note":"Period review summaries; nurby has VLM summaries + daily digest."}
+{"pr":19472,"title":"Bump actions/checkout 4->5","area":"deps","type":"ci","decision":"skip"}
+{"pr":19469,"title":"Stats overall fps","area":"stats","type":"feature","nurby_status":"MISSING","decision":"defer","note":"Aggregate fps stat; observability backlog (with #20119 prometheus).","priority":"P3","effort":"S"}
+{"pr":19463,"title":"Add config for users to define additional concerns GenAI should note in review summary","area":"genai","type":"feature","nurby_status":"HAVE","decision":"defer","note":"Custom summary guidance; nurby has per-camera summary_prompt."}
+{"pr":19458,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19450,"title":"Use preview frames for Review Descriptions","area":"genai","type":"feature","decision":"defer","note":"VLM frame source (#20676-adjacent)."}
+{"pr":19448,"title":"Review genai updates","area":"genai","type":"feature","decision":"defer"}
+{"pr":19447,"title":"Add languages","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19442,"title":"Review Item GenAI metadata","area":"genai","type":"feature","decision":"defer"}
+{"pr":19437,"title":"Migrate object genai configuration","area":"config","type":"refactor","decision":"skip"}
+{"pr":19434,"title":"Enable mypy for DB and fix types","area":"db","type":"refactor","decision":"skip"}
+{"pr":19433,"title":"Adjust loitering behavior based on object type","area":"events","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Per-object-type loitering thresholds; nurby has loitering trigger (zone+threshold_seconds).","priority":"P3","effort":"S"}
+{"pr":19432,"title":"Ensure alertVideos persistence is loaded before displaying thumb or preview","area":"web","type":"bugfix","decision":"skip"}
+{"pr":19430,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":19428,"title":"Ensure arrayKeys remains a stable array reference","area":"web","type":"bugfix","decision":"skip"}
