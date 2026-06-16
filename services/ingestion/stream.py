@@ -391,8 +391,8 @@ class StreamWorker:
                 # whichever version OpenCV's bundled ffmpeg understands.
                 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
                     "rtsp_transport;tcp"
-                    "|stimeout;5000000"
-                    "|timeout;5000000"
+                    "|stimeout;10000000"
+                    "|timeout;10000000"
                     "|max_delay;500000"
                 )
             cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)

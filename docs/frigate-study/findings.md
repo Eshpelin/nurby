@@ -584,3 +584,17 @@ Coverage-only batch. No issues, no merges. Highest N/A density yet: this stretch
 **N/A:** #17712 async object detector and #17671 object tracking are Frigate's hardware inference loop / norfair tracker internals; Nurby uses a separate perception+VLM architecture. #17816 frame-time fix is `tracked_object.py` timing internals.
 
 No backend auth/API/ingest signal in this batch. Region remains a hwaccel+i18n desert; keep scanning.
+
+## Batch 29 (PRs 17639-17424)
+
+Coverage-only batch. No issues, no merges. Dominated by LPR, Face Library UI, i18n/translations, and docs.
+
+**HAVE (verified):** #17572 "Catch OpenAI compatible endpoint crash". Frigate's `genai/openai.py._send` only caught `TimeoutException` and dereferenced `result.choices` unguarded, so a connection error or malformed response crashed the call. Nurby is already defensive here: `services/agent/llm.py` delegates per-provider, and every call site wraps `llm_call`/VLM enrichment in a broad `except Exception` (`services/perception/vlm_enrichment_worker.py` lines 174/188/198/299/377/388/498/513, `services/agent/driver.py`, `services/recap.py`). An endpoint crash degrades to a logged failure, not a propagated exception.
+
+**N/A worth noting (Frigate-internal, no Nurby analog):**
+- #17629 search sort (confirmed batch-28: Nurby sorts in SQL `order_by`, not Frigate's in-memory dict-key sort).
+- #17437 embedding eps (`metric.value =` shared-memory assignment), #17436 enrichments-eps graph — Frigate metrics internals.
+- #17444 ceil-vs-round and #17438 frame-time-between-end-and-rounded-start — Frigate recording-segment timestamp edge cases tied to its segment cache; Nurby's snapshot/recording path differs.
+- #17547 enabled-config cleanup — Frigate runtime config; Nurby DB-backed (see batch-25/26).
+
+Rest: LPR (#17631/17592/17588/17549/17536/17453/17428), Face Library UI (#17630/17618/17530/17525/17521/17493/17472/17424), birdseye (#17502), i18n/docs. No backend auth/API/ingest signal.

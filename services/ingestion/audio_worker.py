@@ -107,7 +107,7 @@ class AudioWorker:
         try:
             container = av.open(
                 self.stream_url,
-                options={"rtsp_transport": "tcp", "stimeout": "5000000"},
+                options={"rtsp_transport": "tcp", "stimeout": "10000000"},
                 timeout=10,
             )
         except Exception as exc:

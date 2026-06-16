@@ -95,7 +95,7 @@ class AudioCapture:
     def _open_and_pump(self, av) -> None:
         container = av.open(
             self.stream_url,
-            options={"rtsp_transport": "tcp", "stimeout": "5000000"},
+            options={"rtsp_transport": "tcp", "stimeout": "10000000"},
             timeout=10,
         )
         try:
