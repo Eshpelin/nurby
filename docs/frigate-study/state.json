@@ -16,8 +16,17 @@
     "issues_filed": 4
   },
   "fixes_shipped_detail": [
-    "#23352 stream-URL scheme allowlist (shared/schemas.py validate_stream_url) + tests"
+    "#23352 stream-URL scheme allowlist (shared/schemas.py validate_stream_url) + tests -> nurby PR #34"
   ],
+  "outputs": {
+    "pr": "Eshpelin/nurby#34 (draft)",
+    "issues": {
+      "Eshpelin/nurby#35": "P0 ffmpeg arg + URL SSRF hardening (frigate #23478)",
+      "Eshpelin/nurby#36": "P1 PTZ smart-track non-finite guard (frigate #23475)",
+      "Eshpelin/nurby#37": "P2 motion search + review items (frigate #23378 cluster)",
+      "Eshpelin/nurby#38": "P2 per-camera exclude-from-review flag (frigate #23387)"
+    }
+  },
   "next": "Continue at PR < 23304, newest-first. Re-run the harvest -> triage -> map -> issues -> fix loop per docs/frigate-study/README.md.",
   "open_questions": [
     "Confirm GitHub issues are the right tracking surface or switch to backlog-only.",
