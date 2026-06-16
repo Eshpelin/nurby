@@ -3,12 +3,12 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 19615,
+  "cursor_pr": 19428,
   "newest_pr_seen": 23488,
-  "batches_done": 21,
+  "batches_done": 22,
   "counts": {
-    "logged": 840,
-    "pct_of_merged": "~21%",
+    "logged": 880,
+    "pct_of_merged": "~22%",
     "fixes_shipped": 5,
     "issues_open": 8,
     "issues_closed": 1
@@ -35,6 +35,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 19615, newest-first.",
-  "notes": "Batch 21: coverage only (RKNN/Synaptics/AMD/MemryX = N/A). #19657 genai-prompt KeyError N/A (nurby passes prompts verbatim; regex-sub templates). #19709 camera health -> #21297 backlog. Pattern holds: dev region mostly N/A for nurby."
+  "next": "Continue at PR < 19428, newest-first. NEXT-BATCH LEAD: #19426 search-crash-on-numeric-query -> verify nurby search/query.py.",
+  "notes": "Batch 22: coverage only. #19555 image content-type HAVE (nurby sets media_type). #19567 camera nickname HAVE. GenAI review-summary feature wave = HAVE (nurby VLM summaries+digest). Backlog: per-object loitering (#19433), Ollama args (#19484), fps stat (#19469)."
 }

@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 19615** triaged (840, ~21% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 19428** triaged (880, ~22% of 4058 merged), newest-first.
 
 ---
 
@@ -471,3 +471,17 @@ RKNN/Synaptics/AMD/MemryX hardware (N/A), weblate/i18n/docs, HLS frontend. Two v
   last-frame-time).
 - Backlog/VERIFY: **[#19672]** record-on-motion config edge case, **[#19640]** per-viewer
   notification settings (relates to roles/#40) · P3.
+
+---
+
+## Batch 22 (PRs 19614–19428) — coverage batch, no code change
+
+GenAI review-summaries feature wave (nurby HAVE VLM summaries + digest), Apple-Silicon/ZMQ/i965
+(N/A), mypy/i18n/docs. Two verified HAVE:
+
+- **[#19555] Content-type for image endpoint** — HAVE. Nurby sets `media_type` explicitly
+  (`cameras.py:859` image/jpeg, `body_clusters.py:227` image/jpeg, audio/ogg, video/mp4).
+- **[#19567] Camera nickname** — HAVE (name + location_label).
+- Backlog/VERIFY: **[#19433]** per-object-type loitering thresholds (nurby has loitering trigger),
+  **[#19484]** extra Ollama args (with #20606), **[#19469]** aggregate fps stat (with #20119) · P3.
+- Lead for next batch: **[#19426]** "search crashes if query is a number" — will verify nurby search.
