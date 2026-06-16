@@ -968,3 +968,48 @@
 {"pr":18795,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
 {"pr":18777,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
 {"pr":18774,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
+{"pr":18757,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
+{"pr":18751,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18741,"title":"Improve frame cache debugging","area":"perception","type":"chore","decision":"na","note":"frame cache debug logging, internal"}
+{"pr":18740,"title":"Use default ffmpeg to export webp image","area":"export","type":"fix","decision":"na","note":"frigate export pipeline"}
+{"pr":18719,"title":"Fix bird link in EnrichmentsSettingsView.tsx","area":"frontend","type":"fix","decision":"na"}
+{"pr":18708,"title":"Fix go2rtc init","area":"restream","type":"fix","decision":"na","note":"go2rtc not used by nurby"}
+{"pr":18705,"title":"Cleanup","area":"misc","type":"chore","decision":"skip"}
+{"pr":18704,"title":"Ensure logging config is propagated to forked processes","area":"multiprocess","type":"fix","decision":"na","note":"frigate forkserver arch"}
+{"pr":18697,"title":"Add frame cache debug logging","area":"perception","type":"chore","decision":"na"}
+{"pr":18690,"title":"Add basic camera settings to UI for testing","area":"frontend","type":"feat","decision":"na"}
+{"pr":18682,"title":"Use Fork-Server As Spawn Method","area":"multiprocess","type":"chore","decision":"na","note":"frigate spawn arch"}
+{"pr":18671,"title":"Dynamic Management of Cameras","area":"camera-config","type":"feat","decision":"have","note":"runtime add/remove cameras w/o restart. nurby already reloads via rule-invalidation pubsub + camera_status_watcher + 30s passive reload; DB-backed cameras, no monolithic restart problem"}
+{"pr":18644,"title":"add docs for troubleshooting GPUs","area":"docs","type":"docs","decision":"na"}
+{"pr":18643,"title":"Refactor TensorRT","area":"hwaccel","type":"refactor","decision":"na"}
+{"pr":18628,"title":"Make Birdseye clickable","area":"frontend","type":"feat","decision":"na"}
+{"pr":18626,"title":"Docs - Snap-Sync extension","area":"docs","type":"docs","decision":"na"}
+{"pr":18625,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18623,"title":"Always Instantiate GenAI Client if GenAI is enabled in config","area":"genai","type":"fix","decision":"na","note":"frigate lazy-loads provider only if a camera enables genai; nurby genai/VLM client always available"}
+{"pr":18616,"title":"Enable GenAI Description Generation via API for Non-Enabled Cameras","area":"genai","type":"feat","decision":"gap-minor","note":"force=true on regenerate endpoint to gen description even when genai disabled for camera; nurby has no equivalent force flag on VLM regenerate. backlog, not issue-worthy alone"}
+{"pr":18599,"title":"Improve comms typing","area":"comms","type":"chore","decision":"na"}
+{"pr":18595,"title":"Classification Model Metrics","area":"ml","type":"feat","decision":"na"}
+{"pr":18583,"title":"Live classification model training","area":"ml","type":"feat","decision":"na"}
+{"pr":18571,"title":"Classification Model UI","area":"ml","type":"feat","decision":"na"}
+{"pr":18568,"title":"Update pwa.md - add installation instructions for Firefox for Android","area":"docs","type":"docs","decision":"na"}
+{"pr":18552,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18540,"title":"Audio transcription tweaks","area":"audio","type":"chore","decision":"na","note":"follow-up to 18398 speech transcription; nurby audio is event detection not STT"}
+{"pr":18535,"title":"Update FFmpeg for Rockchip releases","area":"hwaccel","type":"chore","decision":"na"}
+{"pr":18510,"title":"Update OS recommendation for Rockchip boards","area":"docs","type":"docs","decision":"na"}
+{"pr":18505,"title":"Improve LPR OCR models","area":"lpr","type":"feat","decision":"na"}
+{"pr":18500,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18493,"title":"Intel updates","area":"hwaccel","type":"chore","decision":"na"}
+{"pr":18492,"title":"Tiered recordings","area":"recordings","type":"feat","decision":"gap-minor","note":"per-tier retention (alerts/detections/motion) for recording cleanup; nurby recordings retention is flat. backlog feature"}
+{"pr":18485,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":18480,"title":"Add Periscope to third party extensions","area":"docs","type":"docs","decision":"na"}
+{"pr":18476,"title":"Fix healthcheck on stopping","area":"ops","type":"fix","decision":"na","note":"frigate container healthcheck during shutdown"}
+{"pr":18475,"title":"Implement API to train classification models","area":"ml","type":"feat","decision":"na"}
+{"pr":18474,"title":"Don't run bird classification if model is not downloaded yet","area":"ml","type":"fix","decision":"na"}
+{"pr":18465,"title":"Logging bugfix","area":"misc","type":"fix","decision":"na"}
+{"pr":18462,"title":"refresh the plus documentation","area":"docs","type":"docs","decision":"na"}
+{"pr":18409,"title":"feat: document locale url","area":"docs","type":"docs","decision":"na"}
+{"pr":18398,"title":"Audio transcription support","area":"audio","type":"feat","decision":"na","note":"speech-to-text on audio events; nurby audio = sound classification, STT is large separate feature, backlog"}
+{"pr":18392,"title":"docs: firefox h.265 support","area":"docs","type":"docs","decision":"na"}
+{"pr":18390,"title":"Fix lpr running when it shouldn't","area":"lpr","type":"fix","decision":"na"}
+{"pr":18383,"title":"Add basic config editor when Frigate can't startup","area":"frontend","type":"feat","decision":"na","note":"frigate yaml-config recovery UI; nurby config is DB-backed"}
+{"pr":18381,"title":"Improve documentation for YOLO-NAS notebook","area":"docs","type":"docs","decision":"na"}
