@@ -83,18 +83,23 @@ def _filtered_recordings_query(
     query = select(Recording)
     if camera_id:
         query = query.where(Recording.camera_id == camera_id)
+    # A recording occupies the window [started_at, window_end]; window_end falls
+    # back to started_at + duration (default 1h) when ended_at is NULL (still
+    # recording). The from/to range must match on window OVERLAP, not just on
+    # started_at, otherwise a recording that began before `from` but is still
+    # running (or ended inside the window) is wrongly dropped.
+    window_end = func.coalesce(
+        Recording.ended_at,
+        Recording.started_at
+        + func.make_interval(0, 0, 0, 0, 0, 0, func.coalesce(Recording.duration_seconds, 3600)),
+    )
     if from_:
-        query = query.where(Recording.started_at >= from_)
+        query = query.where(window_end >= from_)
     if to:
         query = query.where(Recording.started_at <= to)
     if object_label:
         # An observation belongs to a recording if it falls within the
         # recording's window: [started_at, ended_at or started_at+duration].
-        window_end = func.coalesce(
-            Recording.ended_at,
-            Recording.started_at
-            + func.make_interval(0, 0, 0, 0, 0, 0, func.coalesce(Recording.duration_seconds, 3600)),
-        )
         obs_exists = (
             select(Observation.id)
             .where(Observation.camera_id == Recording.camera_id)

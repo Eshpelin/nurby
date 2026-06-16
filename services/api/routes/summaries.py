@@ -58,8 +58,11 @@ async def list_summaries(
         q = q.where(Summary.camera_id == camera_id)
     if kind:
         q = q.where(Summary.kind == kind)
+    # Match on window OVERLAP, not just started_at: a summary that began before
+    # `from` but ended inside the window must still be returned. ended_at is
+    # non-null for summaries.
     if from_:
-        q = q.where(Summary.started_at >= from_)
+        q = q.where(Summary.ended_at >= from_)
     if to:
         q = q.where(Summary.started_at <= to)
     rows = (await db.execute(q.offset(offset).limit(limit))).scalars().all()
