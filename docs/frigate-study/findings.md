@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 22540** triaged (240), newest of 4058 merged.
+Coverage so far: PRs **23488 → 22438** triaged (280), newest of 4058 merged.
 
 ---
 
@@ -214,3 +214,32 @@ Backlog/VERIFY: **[#22631]** split nurby's large `stream.py` (maintainability), 
 process watchdog/restart-on-hang, **[#22556]** continuous GenAI camera-monitor loop vs nurby
 summary/interval, **[#22599]** notification edge cases, **[#22548/#23393]** ffmpeg version in
 nurby images.
+
+---
+
+## Batch 7 (PRs 22538–22438) — a real fix + two scrutinized false-positives
+
+A bug-bash region in Frigate. Most of the 22462–22468 cluster is birdseye/GPU (N/A for nurby).
+
+### P1 — Security · ✅ FIXED this batch
+**[#22523] Mutating endpoints not admin-gated** · `api`. Found `PATCH /cameras/{id}` (edits
+`stream_url`/`username`/`password`/`auth_token`) and `PATCH /providers/{id}` (edits `api_key`)
+using `get_current_user`, while their **create/delete siblings already require admin** — a
+non-admin could rewrite camera credentials / provider API keys (privilege escalation). **Shipped:**
+both PATCH endpoints now `require_admin`; verified via FastAPI route introspection. Remaining
+endpoint sweep tracked as issue #46. Cross-camera media/timeline auth (#22522/#22530) → issue #40.
+
+### Scrutinized and rejected (the audit over-flagged; I verified before acting)
+- **[#22500] SQL injection** — **HAVE/SAFE**. The flagged `column.ilike(f"%{x}%")` calls bind the
+  pattern as a **parameter** (the f-string builds a python string, not SQL). The lone `text(f"…")`
+  (`analyzer.py`) uses a hardcoded `WHERE` + bound params. No injection. I did **not** "fix" these
+  (would be churn / could break search). LIKE-wildcard widening is handled by `escape_like`.
+- **[#22470] PTZ div-by-zero** — **HAVE/SAFE**. `ptz_tracker.py` clamps velocity and guards with
+  `max(1, w/h)`; no norm division. This verifies the old issue #36 as a non-issue → **#36 closed**.
+
+### Backlog / VERIFY
+- **[#22469]** orphaned snapshot/thumbnail cleanup on camera/event delete · P3.
+- **[#22472]** variable-shadowing dropping track updates, **[#22471]** operator-precedence
+  always-true, **[#22474]** return-vs-raise, **[#22475]** parse-before-status, **[#22473]** WS leak
+  on WebRTC cleanup — generic bug patterns to grep for in nurby · P3 each.
+- **[#22537]** shareable timestamped footage deep-link · P3.
