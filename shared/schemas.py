@@ -74,6 +74,8 @@ class CameraCreate(BaseModel):
     vlm_refiner_max_input_tokens: int | None = Field(default=None, ge=64, le=2_000_000)
     detect_objects: bool = True
     detect_faces: bool = True
+    detect_plates: bool = True
+    detect_classes: list[str] | None = None  # per-camera override; None = inherit global
     scene_mode: str = Field(default="indoor", max_length=16)  # indoor, outdoor
     plateless_reid_enabled: bool | None = None  # None = auto (off outdoors)
     object_confidence: float = Field(default=0.35, ge=0.05, le=1.0)
@@ -145,6 +147,8 @@ class CameraUpdate(BaseModel):
     vlm_refiner_max_input_tokens: int | None = Field(default=None, ge=64, le=2_000_000)
     detect_objects: bool | None = None
     detect_faces: bool | None = None
+    detect_plates: bool | None = None
+    detect_classes: list[str] | None = None
     scene_mode: str | None = Field(default=None, max_length=16)
     plateless_reid_enabled: bool | None = None  # null = auto
     object_confidence: float | None = Field(default=None, ge=0.05, le=1.0)
@@ -238,6 +242,8 @@ class CameraResponse(BaseModel):
     vlm_refiner_max_input_tokens: int | None = None
     detect_objects: bool
     detect_faces: bool
+    detect_plates: bool = True
+    detect_classes: list[str] | None = None
     scene_mode: str
     plateless_reid_enabled: bool | None = None
     object_confidence: float

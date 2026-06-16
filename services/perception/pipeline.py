@@ -506,18 +506,23 @@ class PerceptionPipeline:
                 confidence_threshold = cam.object_confidence if cam else 0.35
                 detections = await self._detector.detect(frame, confidence=confidence_threshold)
 
-            # Global allowlist: when set, drop every detection whose label is
-            # not chosen, so nothing else downstream (boxes, observations,
-            # rules, recording annotations) ever sees it. Empty/None = all.
-            allowed = await self._get_detect_classes()
+            # Allowlist: when set, drop every detection whose label is not
+            # chosen, so nothing else downstream (boxes, observations, rules,
+            # recording annotations) ever sees it. A per-camera override wins
+            # over the global; empty/None = detect everything.
+            from shared.app_settings import resolve_camera_allowlist
+            allowed = resolve_camera_allowlist(
+                cam.detect_classes if cam else None, await self._get_detect_classes()
+            )
             if allowed and detections:
                 detections = [d for d in detections if str(d.get("label", "")).lower() in allowed]
 
             detection_summary = self._detector.summarize(detections)
             logger.info("Detections for camera %s. %s", camera_id, detection_summary)
 
-        # Step 1b. Run license plate detection on vehicle crops
-        if detections:
+        # Step 1b. Run license plate detection on vehicle crops (basic; can
+        # be turned off per camera via detect_plates).
+        if detections and (cam is None or cam.detect_plates):
             has_vehicle = any(d["label"] in ("car", "truck", "bus", "motorcycle", "van") for d in detections)
             if has_vehicle:
                 try:

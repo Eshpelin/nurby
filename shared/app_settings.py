@@ -247,6 +247,15 @@ def normalize_class_allowlist(value: Any) -> set[str] | None:
     return out or None
 
 
+def resolve_camera_allowlist(camera_value: Any, global_allowed: set[str] | None) -> set[str] | None:
+    """Effective object-detection allowlist for one camera. A per-camera
+    override wins when set (``None`` = inherit the global; ``[]`` = detect
+    everything on this camera; a list = only those labels here)."""
+    if camera_value is not None:
+        return normalize_class_allowlist(camera_value)
+    return global_allowed
+
+
 async def get_all_settings(db: AsyncSession) -> dict[str, Any]:
     result = await db.execute(select(AppSetting))
     stored: dict[str, Any] = {}

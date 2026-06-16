@@ -2,7 +2,7 @@
 detect_classes setting into a label set, and the filter semantics applied in
 the perception pipeline."""
 
-from shared.app_settings import normalize_class_allowlist
+from shared.app_settings import normalize_class_allowlist, resolve_camera_allowlist
 
 
 def test_none_and_empty_mean_detect_everything():
@@ -40,3 +40,22 @@ def test_no_allowlist_keeps_all():
     # The pipeline only filters when `allowed` is truthy; None -> everything.
     kept = dets if not allowed else [d for d in dets if d["label"] in allowed]
     assert kept == dets
+
+
+# ── per-camera override resolution ──
+
+def test_camera_none_inherits_global():
+    g = {"person", "cat"}
+    assert resolve_camera_allowlist(None, g) == g
+    assert resolve_camera_allowlist(None, None) is None
+
+
+def test_camera_list_overrides_global():
+    g = {"person"}
+    assert resolve_camera_allowlist(["dog", "Cat"], g) == {"dog", "cat"}
+
+
+def test_camera_empty_list_means_everything_here():
+    # [] is an explicit "detect everything on this camera", ignoring the
+    # global restriction (distinct from None = inherit).
+    assert resolve_camera_allowlist([], {"person"}) is None

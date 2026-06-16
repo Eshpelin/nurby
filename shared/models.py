@@ -67,6 +67,12 @@ class Camera(Base):
     vlm_refiner_max_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     detect_objects: Mapped[bool] = mapped_column(Boolean, default=True)
     detect_faces: Mapped[bool] = mapped_column(Boolean, default=True)
+    # License-plate OCR on detected vehicles. A "basic" that is on by default.
+    detect_plates: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Per-camera object-class allowlist override. None = inherit the global
+    # detect_classes setting; [] = detect everything on this camera; a list =
+    # only those labels here.
+    detect_classes: Mapped[list | None] = mapped_column(JSON, nullable=True)
     scene_mode: Mapped[str] = mapped_column(String(16), default="indoor")  # indoor, outdoor
     # Per-camera plateless vehicle grouping (CLIP appearance re-id). Tri-state.
     # None = auto (on unless the camera is outdoor, where a busy street would

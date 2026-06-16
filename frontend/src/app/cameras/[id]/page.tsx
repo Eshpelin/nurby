@@ -48,6 +48,8 @@ interface Camera {
   vlm_refiner_max_input_tokens: number | null;
   detect_objects: boolean;
   detect_faces: boolean;
+  detect_plates: boolean;
+  detect_classes: string[] | null;
   scene_mode: string;
   plateless_reid_enabled: boolean | null;
   object_confidence: number;
@@ -318,6 +320,8 @@ export default function CameraConfigPage() {
   const [vlmTriggerObjects, setVlmTriggerObjects] = useState<string[]>([]);
   const [detectObjects, setDetectObjects] = useState(true);
   const [detectFaces, setDetectFaces] = useState(true);
+  const [detectPlates, setDetectPlates] = useState(true);
+  const [detectClasses, setDetectClasses] = useState<string[] | null>(null);
   const [sceneMode, setSceneMode] = useState("indoor");
   const [platelessReid, setPlatelessReid] = useState<boolean | null>(null);
   const [objectConfidence, setObjectConfidence] = useState(0.35);
@@ -413,6 +417,8 @@ export default function CameraConfigPage() {
       setVlmTriggerObjects(cam.vlm_trigger_objects ?? []);
       setDetectObjects(cam.detect_objects ?? true);
       setDetectFaces(cam.detect_faces ?? true);
+      setDetectPlates(cam.detect_plates ?? true);
+      setDetectClasses(cam.detect_classes ?? null);
       setSceneMode(cam.scene_mode ?? "indoor");
       setPlatelessReid(cam.plateless_reid_enabled ?? null);
       setObjectConfidence(cam.object_confidence ?? 0.35);
@@ -566,6 +572,8 @@ export default function CameraConfigPage() {
         vlm_trigger_objects: vlmTriggerObjects.length > 0 ? vlmTriggerObjects : null,
         detect_objects: detectObjects,
         detect_faces: detectFaces,
+        detect_plates: detectPlates,
+        detect_classes: detectClasses,
         scene_mode: sceneMode,
         plateless_reid_enabled: platelessReid,
         object_confidence: objectConfidence,
@@ -659,7 +667,7 @@ export default function CameraConfigPage() {
     vlmTrigger, vlmTriggerObjects,
     vlmRefinerProviderId, vlmRefinerTriggerObjects, vlmRefinerKeywords,
     vlmRefinerMaxTokens, vlmRefinerMaxInputTokens,
-    detectObjects, detectFaces, sceneMode, platelessReid, objectConfidence,
+    detectObjects, detectFaces, detectPlates, detectClasses, sceneMode, platelessReid, objectConfidence,
     detectionModels, detectionMerge, detectionConsensusMin,
     digestEnabled, digestPeriod, digestProviderId, digestPrompt,
     retentionMode, retentionDays, retentionGb,
@@ -1378,6 +1386,36 @@ export default function CameraConfigPage() {
 
           {detectObjects && (
             <>
+              {/* Per-camera object-class override */}
+              <FieldRow label="Objects on this camera" hint="Override the global 'objects to detect' list, just for this camera.">
+                <div className="space-y-2">
+                  <Toggle
+                    checked={detectClasses !== null}
+                    onChange={(v) => setDetectClasses(v ? [] : null)}
+                    label={detectClasses !== null ? "Custom for this camera" : "Using global default"}
+                  />
+                  {detectClasses !== null && (
+                    <LabelPicker
+                      selected={detectClasses}
+                      available={modelClasses}
+                      loading={modelClassesLoading}
+                      onChange={setDetectClasses}
+                      placeholder="Pick classes (leave empty to detect everything here)"
+                      activeModels={detectionModels.map((m) => m.model)}
+                    />
+                  )}
+                </div>
+              </FieldRow>
+
+              {/* License plate reading (basic, on by default) */}
+              <FieldRow label="License Plates" hint="Read plates on detected vehicles.">
+                <Toggle
+                  checked={detectPlates}
+                  onChange={setDetectPlates}
+                  label={detectPlates ? "Enabled" : "Disabled"}
+                />
+              </FieldRow>
+
               {/* Model list */}
               <FieldRow label="Detection Models" hint="Run multiple models for better accuracy">
                 <div className="space-y-2">
