@@ -198,3 +198,43 @@
 {"pr":22680,"title":"fix: fix classification none label i18n issue","area":"i18n","type":"i18n","decision":"skip"}
 {"pr":22674,"title":"Refactor Intel Stats","area":"stats","type":"refactor","nurby_status":"N/A","decision":"skip"}
 {"pr":22673,"title":"Increase frequency of secondary pipeline updates","area":"object_detection","type":"performance","nurby_status":"VERIFY","decision":"defer","note":"Secondary (enrichment) pipeline update cadence; compare to nurby vlm_queue/enrichment pacing.","priority":"P3","effort":"S"}
+{"pr":22664,"title":"Review labels widget","area":"web","type":"ui","decision":"defer"}
+{"pr":22663,"title":"Improve chat features","area":"genai","type":"feature","decision":"defer"}
+{"pr":22662,"title":"feat: add axera npu load","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip","note":"Axera NPU accelerator."}
+{"pr":22658,"title":"More mypy cleanup","area":"util","type":"refactor","decision":"skip"}
+{"pr":22656,"title":"Tweaks","area":"?","type":"ui","decision":"skip"}
+{"pr":22645,"title":"Inverse mypy and more mypy fixes","area":"util","type":"refactor","decision":"skip"}
+{"pr":22641,"title":"Fix export deadlock by replacing preexec_fn with nice command","area":"record","type":"reliability","nurby_status":"N/A","decision":"map","insight":"subprocess preexec_fn forces fork() in a multithreaded process -> child can deadlock on inherited locked mutexes before exec.","nurby_evidence":"grep: nurby has NO preexec_fn anywhere; uses asyncio.create_subprocess_exec / subprocess.run without preexec_fn. Not exposed to this deadlock.","priority":"P3","effort":"-"}
+{"pr":22637,"title":"Optimize more mypy classes","area":"util","type":"refactor","decision":"skip"}
+{"pr":22632,"title":"Increase mypy coverage and fixes","area":"util","type":"refactor","decision":"skip"}
+{"pr":22631,"title":"Split apart video.py","area":"video","type":"refactor","nurby_status":"VERIFY","decision":"skip","note":"Frigate split a large video.py; nurby's stream.py is also very large (>650 lines). Maintainability backlog, not a behavior gap."}
+{"pr":22630,"title":"Tweaks","area":"?","type":"ui","decision":"skip"}
+{"pr":22629,"title":"ONVIF refactor","area":"ptz","type":"refactor","decision":"defer","note":"ONVIF cleanup; revisit with ONVIF UTF-8 (#22818) in a discovery pass."}
+{"pr":22628,"title":"Update PR template and add check workflow","area":"ci","type":"ci","decision":"skip"}
+{"pr":22609,"title":"Various Tweaks","area":"?","type":"?","decision":"defer"}
+{"pr":22607,"title":"Ensure that arbitrary reads / writes can't be executed from ffmpeg","area":"record","type":"security","nurby_status":"PARTIAL","decision":"map","insight":"Constrain ffmpeg export so a crafted path/protocol cannot read/write arbitrary files (path containment + protocol restriction).","nurby_evidence":"Same class as issue #35. Nurby PR #34 closed the stream-URL scheme hole; remaining: enforce shared.paths containment on Recording.file_path before ffmpeg, and restrict ffmpeg input protocols. Risky to merge unattended (could break clip/frame gen); kept under #35.","action":"Reinforces issue #35 (P0). Needs careful testing against real recordings.","priority":"P0","effort":"M"}
+{"pr":22604,"title":"Add ability to regenerate examples in classification wizard","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip","note":"Frigate+ classification wizard."}
+{"pr":22603,"title":"Reclassification","area":"data_processing","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":22600,"title":"fix system stats i18n","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":22599,"title":"Notification Fixes","area":"events","type":"bugfix","nurby_status":"VERIFY","decision":"defer","note":"Check nurby notification delivery edge cases (Telegram/web push)."}
+{"pr":22598,"title":"Update docs for DEIMv2 support","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip","note":"DEIMv2 detector."}
+{"pr":22597,"title":"Various Improvements","area":"?","type":"?","decision":"defer"}
+{"pr":22594,"title":"Various Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":22592,"title":"Add verbose mode to Media Sync","area":"record","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":22590,"title":"Improve hwaccel UI config","area":"video","type":"feature","nurby_status":"N/A","decision":"skip","note":"Hardware accel config; nurby is CPU-only."}
+{"pr":22589,"title":"Slightly downgrade CUDA version to fix overaggressive BFC","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":22587,"title":"Bump ajv 6.12.6->6.14.0 in /web","area":"deps","type":"deps","decision":"skip"}
+{"pr":22586,"title":"i18n workflow improvements and tweaks","area":"ci","type":"i18n","decision":"skip"}
+{"pr":22585,"title":"Add support for RDNA4 AMD GPUs ROCm","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":22584,"title":"Update web deps","area":"deps","type":"deps","decision":"skip"}
+{"pr":22571,"title":"Settings i18n improvements","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":22560,"title":"docs: fix axear model config","area":"docs","type":"docs","decision":"skip"}
+{"pr":22557,"title":"Improve process watchdog","area":"service_manager","type":"reliability","nurby_status":"VERIFY","decision":"defer","note":"Check nurby service/process supervision + restart on hang.","priority":"P3","effort":"M"}
+{"pr":22556,"title":"Add support a looping GenAI process to monitor a camera","area":"genai","type":"feature","nurby_status":"PARTIAL","decision":"map","insight":"A continuous GenAI loop that periodically describes/monitors a camera.","nurby_evidence":"Nurby has vlm_interval + summary modes; a dedicated always-on monitor loop with state may be partial.","action":"Backlog: compare nurby summary/interval to a continuous-monitor mode.","priority":"P3","effort":"M"}
+{"pr":22554,"title":"Various Tweaks","area":"?","type":"?","decision":"defer"}
+{"pr":22552,"title":"Tweaks","area":"?","type":"ui","decision":"skip"}
+{"pr":22551,"title":"Dynamic vision chat","area":"genai","type":"feature","decision":"defer"}
+{"pr":22550,"title":"Fix splintered language keys","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":22548,"title":"Update ffmpeg","area":"deps","type":"deps","nurby_status":"VERIFY","decision":"defer","note":"Check ffmpeg version baked into nurby images (cluster w/ #23393 ffmpeg 8)."}
+{"pr":22547,"title":"Settings UI tweaks","area":"web","type":"ui","decision":"skip"}
+{"pr":22540,"title":"Bump flatted 3.3.1->3.4.2 in /web","area":"deps","type":"deps","decision":"skip"}

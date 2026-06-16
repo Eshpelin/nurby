@@ -3,11 +3,11 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 22673,
+  "cursor_pr": 22540,
   "newest_pr_seen": 23488,
-  "batches_done": 5,
+  "batches_done": 6,
   "counts": {
-    "logged": 200,
+    "logged": 240,
     "fixes_shipped": 3,
     "issues_filed": 7
   },
@@ -19,7 +19,7 @@
   "outputs": {
     "merged_prs": ["Eshpelin/nurby#34", "Eshpelin/nurby#39", "Eshpelin/nurby#43"],
     "issues": {
-      "Eshpelin/nurby#35": "P0 ffmpeg arg + URL SSRF hardening (frigate #23478)",
+      "Eshpelin/nurby#35": "P0 ffmpeg arg + URL SSRF hardening (frigate #23478/#22607)",
       "Eshpelin/nurby#36": "P1 PTZ smart-track non-finite guard (frigate #23475)",
       "Eshpelin/nurby#37": "P2 motion search + review items (frigate #23378 cluster)",
       "Eshpelin/nurby#38": "P2 per-camera exclude-from-review flag (frigate #23387)",
@@ -28,7 +28,7 @@
       "Eshpelin/nurby#42": "P3 widget_proxy cache per-user key (frigate #23261-adjacent)"
     }
   },
-  "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main, file issues for substantive gaps, log everything. Do NOT force a fix when none is clearly safe (batches 4-5 were coverage-only).",
-  "next": "Continue at PR < 22673, newest-first.",
-  "notes": "Batches 4-5 (22980-22673): coverage only. #22689 numpy-JSON verified HAVE (nurby casts at vision boundary). #22710 WS role auth -> issue #40. Backlog in findings.md: DST time windows (#22698), manual-event motion gating (#22887), ONVIF UTF-8 (#22818), stream probe fallback (#22971), frontend dep CVE audit, python-multipart CVE check (#22894)."
+  "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Do NOT force a fix when none is clearly safe (batches 4-6 were coverage-only). main is branch-protected; route through PRs.",
+  "next": "Continue at PR < 22540, newest-first.",
+  "notes": "Batches 4-6 (22980-22540) coverage-heavy (deps/docs/hwaccel/mypy/genai churn). #22607 reinforces issue #35; #22641 preexec_fn N/A; #22689 numpy-JSON HAVE. Backlog growing in findings.md."
 }

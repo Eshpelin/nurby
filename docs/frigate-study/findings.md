@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 22673** triaged (200), newest of 4058 merged.
+Coverage so far: PRs **23488 → 22540** triaged (240), newest of 4058 merged.
 
 ---
 
@@ -194,3 +194,23 @@ Backlog / VERIFY: **[#22698]** DST-safe time windows (digest/preview tz math), *
 zone/mask editor UX, **[#22787/#22733/#22683]** frontend dep CVE audit (lodash/path-to-regexp),
 **[#22673]** secondary-pipeline cadence, **[#22685]** ONNX warm-up (only matters once GPU lands).
 N/A: MemryX, go2rtc, llama.cpp, MQTT, Intel stats.
+
+---
+
+## Batch 6 (PRs 22664–22540) — coverage batch, no code change
+
+Region heavy with mypy/typing, hardware-accel (Axera/ROCm/CUDA/DEIMv2/MemryX), deps, i18n, and
+genai/UI churn. Two security/reliability items checked:
+
+- **[#22607] Arbitrary ffmpeg read/write** · `record` · PARTIAL → reinforces **issue #35** (P0).
+  Same class as #23478. Added a comment to #35 with the concrete approach (path containment +
+  `-protocol_whitelist file` on local-file ffmpeg inputs). Not merged unattended — risky without
+  testing against real recordings.
+- **[#22641] Export deadlock from `preexec_fn`** · `record` · **N/A** — nurby has no `preexec_fn`
+  anywhere; it uses `asyncio.create_subprocess_exec`, so it is not exposed to the fork-in-threaded
+  -process mutex deadlock.
+
+Backlog/VERIFY: **[#22631]** split nurby's large `stream.py` (maintainability), **[#22557]**
+process watchdog/restart-on-hang, **[#22556]** continuous GenAI camera-monitor loop vs nurby
+summary/interval, **[#22599]** notification edge cases, **[#22548/#23393]** ffmpeg version in
+nurby images.
