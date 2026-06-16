@@ -3,14 +3,14 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 18017,
+  "cursor_pr": 17831,
   "newest_pr_seen": 23488,
-  "batches_done": 26,
+  "batches_done": 27,
   "counts": {
-    "logged": 1060,
-    "pct_of_merged": "~26%",
+    "logged": 1107,
+    "pct_of_merged": "~27%",
     "fixes_shipped": 5,
-    "issues_open": 9,
+    "issues_open": 10,
     "issues_closed": 1
   },
   "fixes_shipped_detail": [
@@ -32,10 +32,11 @@
       "Eshpelin/nurby#42": "P3 widget_proxy cache per-user key - OPEN",
       "Eshpelin/nurby#46": "P2 mutation-endpoint role-gating sweep - OPEN",
       "Eshpelin/nurby#48": "P3 offload remaining blocking I/O + cv2.imencode ok-checks - OPEN",
-      "Eshpelin/nurby#65": "P2 recordings time-window overlap miss (from/to on started_at only) - OPEN"
+      "Eshpelin/nurby#65": "P2 recordings + summaries time-window overlap miss (from/to on started_at only) - OPEN",
+      "Eshpelin/nurby#69": "P3 RTSP stimeout 5s->10s tuning (3 ingest sites) - OPEN"
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 18017, newest-first. No strong lead pending. Region is deep in Frigate ML/hwaccel/multiprocess territory (~95% N/A, many bare 'Fixes'/'Translations'). Watch for backend API/auth/security PRs only.",
-  "notes": "Batch 26: coverage only (PRs 18380-18017), no issues, no merges. HAVE verified: #18093 async ONVIF (nurby ONVIF/PTZ already fully async via httpx.AsyncClient + run_in_executor for probes); #18353/#18359 dynamic config/masks (nurby DB-backed + pubsub reload). N/A: #18336 proxy separator, #18036 HF_ENDPOINT (no hardcoded HF urls), #18257 timezone (frontend). Backlog gap-minor: #18284 min-face area gate before recognition. Batch 25: #18671 dynamic cameras = HAVE; backlog #18616/#18492/#18398. Batch 24 GAP #18897 -> issue Eshpelin/nurby#65."
+  "next": "Continue at PR < 17831, newest-first. No strong lead pending. Deep in Frigate's i18n/locale rollout + ML-classification + hwaccel era (~95% N/A). Watch for backend auth/API/ingest correctness only.",
+  "notes": "Batch 27: 2 GAPs. #17831 RTSP timeout 5s->10s -> NEW issue Eshpelin/nurby#69 (P3 tuning; nurby stimeout=5s at audio_worker.py:110, stream.py:394, audio/capture.py:98). #17835 review-summary 30d cap removed -> ADDED to #65 (nurby summaries.py:61-64 filters from/to on started_at only, same overlap-miss class as recordings; fix both with started_at<=to AND ended_at>=from). Batch 26 HAVE: #18093 async ONVIF, #18353/#18359 dynamic config. Batch 25 HAVE: #18671 dynamic cameras. Backlog gap-minor (no issue): #18284 min-face gate, #18616 force-regenerate genai, #18492 tiered recordings, #18398 audio STT."
 }

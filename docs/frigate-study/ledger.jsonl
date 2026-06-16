@@ -1058,3 +1058,50 @@
 {"pr":18024,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
 {"pr":18021,"title":"Avoid unhealthy container when Frigate is stopping","area":"ops","type":"fix","decision":"na","note":"healthcheck during shutdown"}
 {"pr":18017,"title":"Fix go2rtc homeassistant config dir","area":"restream","type":"fix","decision":"na"}
+{"pr":18015,"title":"Opt out of OpenVINO telemetry","area":"hwaccel","type":"chore","decision":"na"}
+{"pr":18010,"title":"cleanup variants","area":"build","type":"chore","decision":"na"}
+{"pr":18006,"title":"Listen on timeline ref instead of window","area":"frontend","type":"fix","decision":"na"}
+{"pr":18005,"title":"Fix camera label translation from cameraCapture to cameraDetect","area":"i18n","type":"fix","decision":"na"}
+{"pr":18003,"title":"Attributes for object masks","area":"frontend","type":"feat","decision":"na","note":"object-mask UI + LPR docs"}
+{"pr":18000,"title":"Face UI fixes","area":"frontend","type":"fix","decision":"na"}
+{"pr":17990,"title":"Update docs dependencies","area":"docs","type":"chore","decision":"na"}
+{"pr":17989,"title":"UI fixes","area":"frontend","type":"fix","decision":"na"}
+{"pr":17986,"title":"Docs updates","area":"docs","type":"docs","decision":"na"}
+{"pr":17984,"title":"Clarify loitering behavior","area":"docs","type":"docs","decision":"na"}
+{"pr":17979,"title":"Add i18n support to LogInfoDialog labels","area":"i18n","type":"feat","decision":"na"}
+{"pr":17978,"title":"Various tweaks","area":"misc","type":"chore","decision":"skip"}
+{"pr":17971,"title":"Change default zmq timeout","area":"comms","type":"chore","decision":"na","note":"frigate zmq inter-process socket"}
+{"pr":17970,"title":"Lower timeout in object processing","area":"perception","type":"chore","decision":"na","note":"FAST_QUEUE_TIMEOUT mp queue tuning"}
+{"pr":17969,"title":"Extend i18n","area":"i18n","type":"feat","decision":"na"}
+{"pr":17961,"title":"Fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":17955,"title":"Autotracking improvements","area":"onvif-ptz","type":"feat","decision":"na","note":"frigate PTZ autotrack motion estimation; nurby smart_track is separate"}
+{"pr":17954,"title":"Add chinese docs","area":"docs","type":"docs","decision":"na"}
+{"pr":17953,"title":"Support automatic language selection based on system language","area":"frontend","type":"feat","decision":"na"}
+{"pr":17952,"title":"Fix missing i18n keys","area":"i18n","type":"fix","decision":"na"}
+{"pr":17946,"title":"Translations update from Hosted Weblate","area":"i18n","type":"chore","decision":"skip"}
+{"pr":17944,"title":"Assign requestor correctly","area":"perception","type":"fix","decision":"na","note":"frigate inter-process requestor wiring"}
+{"pr":17942,"title":"i18n updates","area":"i18n","type":"chore","decision":"skip"}
+{"pr":17940,"title":"Add face and lpr to tracked object update topic","area":"comms","type":"feat","decision":"na"}
+{"pr":17932,"title":"Dialog and sheet improvements","area":"frontend","type":"feat","decision":"na"}
+{"pr":17927,"title":"Update reverse_proxy.md","area":"docs","type":"docs","decision":"na"}
+{"pr":17896,"title":"Simplify openvino hardware inference times","area":"hwaccel","type":"chore","decision":"na"}
+{"pr":17892,"title":"Classification config changes","area":"ml","type":"feat","decision":"na"}
+{"pr":17880,"title":"Fix video MP typing","area":"multiprocess","type":"chore","decision":"na"}
+{"pr":17879,"title":"Add ability to rename faces in the Face Library","area":"frontend","type":"feat","decision":"na"}
+{"pr":17878,"title":"Docs / typing updates","area":"docs","type":"chore","decision":"na"}
+{"pr":17877,"title":"Update RKNN toolkit","area":"hwaccel","type":"chore","decision":"na"}
+{"pr":17875,"title":"implement RKNN downloads for yolov9 and yolox models","area":"hwaccel","type":"feat","decision":"na"}
+{"pr":17871,"title":"Misc fixes","area":"misc","type":"chore","decision":"skip"}
+{"pr":17865,"title":"i18n tweaks","area":"i18n","type":"chore","decision":"skip"}
+{"pr":17864,"title":"Fix i18n plural for selected review count","area":"i18n","type":"fix","decision":"na"}
+{"pr":17861,"title":"Add missing i18n keys","area":"i18n","type":"fix","decision":"na"}
+{"pr":17860,"title":"Implement smart capitalization based on locale","area":"frontend","type":"feat","decision":"na"}
+{"pr":17858,"title":"Proper i18n date/time handling","area":"frontend","type":"feat","decision":"na"}
+{"pr":17848,"title":"Fix deprecated listen...http2 documentation in nginx reverse proxy","area":"docs","type":"docs","decision":"na"}
+{"pr":17847,"title":"Docs update","area":"docs","type":"docs","decision":"na"}
+{"pr":17846,"title":"Dark mode theme tweaks","area":"frontend","type":"feat","decision":"na"}
+{"pr":17845,"title":"Add N100 to OpenVINO examples","area":"docs","type":"docs","decision":"na"}
+{"pr":17844,"title":"Update camera recommendation","area":"docs","type":"docs","decision":"na"}
+{"pr":17842,"title":"Don't set pattern for unused rockchip models","area":"hwaccel","type":"fix","decision":"na"}
+{"pr":17835,"title":"Don't limit review summary query","area":"review","type":"fix","decision":"gap","note":"frigate removed hardcoded 30-day cap that silently dropped older review summaries. nurby summaries.py:61-64 filters from/to on started_at only (same overlap-miss class as recordings) -> added to issue Eshpelin/nurby#65"}
+{"pr":17831,"title":"Increase ffmpeg timeout to 10 seconds","area":"ingestion","type":"fix","decision":"gap","note":"frigate RTSP read timeout 5s->10s to avoid spurious disconnects. nurby stimeout=5s at audio_worker.py:110, stream.py:394, audio/capture.py:98 -> issue Eshpelin/nurby#69 (P3 tuning)"}
