@@ -2223,6 +2223,7 @@ export default function CameraConfigPage() {
             onChange={setMotionZones}
             width={camera.width || 1920}
             height={camera.height || 1080}
+            cameraId={cameraId}
           />
         </Section>
 

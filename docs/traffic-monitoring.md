@@ -97,12 +97,28 @@ Accuracy depends on framing the zone tightly on the lamp; glare, backlight,
 and night blur are the known failure modes, which is why ambiguous frames
 report `unknown` rather than guessing.
 
-The detected colour is also broadcast live to the dashboard: each camera
-tile shows a small dot + label (red / amber / green / unknown) for every
-signal zone, and the tooltip reports the per-colour lit fraction. That is
-the calibration tool. Frame the zone, watch the readout against the real
-light, and adjust the HSV thresholds in `services/perception/traffic_signal.py`
-(`_MIN_SAT`, `_MIN_VAL`, `_MIN_FRACTION`) if a lamp reads `unknown` when lit.
+The detected colour is broadcast live to the dashboard: each camera tile
+shows a dot + label (red / amber / green / unknown) per signal zone, tooltip
+with the underlying scores.
+
+**Calibration (recommended).** Lamp lenses are coloured glass that read their
+colour even when off, so a raw hue histogram is unreliable. Instead, mark the
+lamp positions and teach Nurby what each state looks like:
+
+1. Draw the signal box over the whole lamp head and pick its orientation
+   (vertical / horizontal). The three lamp sample points are derived from the
+   box automatically, so there is no pixel-precise clicking.
+2. Save. The camera's *Zones & Tripwires* panel then shows the live
+   brightness of each lamp.
+3. While the real light is red, click **Capture red**; repeat for amber and
+   green.
+
+Detection then compares each lamp's live brightness to its own captured
+off-baseline and picks the most-lit lamp (`classify_calibrated`). Until all
+three states are captured it uses a brightest-lamp heuristic; with no lamps
+marked at all it falls back to the legacy whole-zone hue. The config lives on
+the signal zone (`lamps`, `orientation`, `calibration`) inside `motion_zones`,
+so no schema change.
 
 ```json
 { "type": "red_light_cross", "points": [[x1,y1],[x2,y2]],

@@ -14,4 +14,10 @@ export interface MotionZone {
   loiter_threshold_seconds?: number;
   // Direction filter for tripwires. "any" | "in" | "out".
   direction?: string;
+  // Signal zones only. Lamp sample points (auto-derived from the box +
+  // orientation), and the captured per-state brightness calibration.
+  orientation?: "vertical" | "horizontal";
+  lamps?: { color: "red" | "amber" | "green"; point: number[]; r?: number }[];
+  // calibration[state][lampColor] = that lamp's brightness when state was lit.
+  calibration?: Record<string, Record<string, number>>;
 }

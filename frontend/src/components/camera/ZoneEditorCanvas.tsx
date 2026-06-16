@@ -1,7 +1,40 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useWSSubscribe } from "@/lib/ws";
 import type { MotionZone } from "./types";
+
+const SIGNAL_COLORS = ["red", "amber", "green"] as const;
+const SIGNAL_DOT: Record<string, string> = {
+  red: "bg-red-500", amber: "bg-amber-400", green: "bg-green-500", unknown: "bg-zinc-500",
+};
+
+// Derive the three lamp sample points from a signal box + orientation. The
+// user draws a box over the whole signal head; we place a point at the
+// top/middle/bottom third (vertical) or left/middle/right third (horizontal),
+// so they never have to click tiny lamps on a blind canvas.
+function deriveLamps(
+  points: number[][],
+  orientation: "vertical" | "horizontal",
+): MotionZone["lamps"] {
+  if (!points || points.length < 3) return [];
+  const xs = points.map((p) => p[0]);
+  const ys = points.map((p) => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const w = maxX - minX, h = maxY - minY;
+  const cx = Math.round((minX + maxX) / 2), cy = Math.round((minY + maxY) / 2);
+  const r = Math.max(3, Math.round(Math.min(w, h) / 6));
+  const at = (frac: number) =>
+    orientation === "vertical"
+      ? [cx, Math.round(minY + h * frac)]
+      : [Math.round(minX + w * frac), cy];
+  return [
+    { color: "red", point: at(1 / 6), r },
+    { color: "amber", point: at(0.5), r },
+    { color: "green", point: at(5 / 6), r },
+  ];
+}
 
 const ZONE_COLORS: Record<string, { fill: string; stroke: string; dot: string; ui: string }> = {
   include:  { fill: "rgba(34,197,94,0.2)",  stroke: "#22c55e", dot: "bg-green-500",  ui: "border-green-500 bg-green-500/10 text-green-400" },
@@ -37,16 +70,31 @@ export function ZoneEditorCanvas({
   onChange,
   width,
   height,
+  cameraId,
 }: {
   zones: MotionZone[];
   onChange: (zones: MotionZone[]) => void;
   width: number;
   height: number;
+  cameraId?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drawing, setDrawing] = useState(false);
   const [currentPoints, setCurrentPoints] = useState<number[][]>([]);
   const [zoneType, setZoneType] = useState<MotionZone["type"]>("zone");
+  // Live per-signal-zone readings from the perception broadcast, keyed by
+  // zone name, so the calibration panel can show + capture current state.
+  const [signalDetail, setSignalDetail] = useState<
+    Record<string, { state: string; calibrated?: boolean; lamps?: Record<string, { v: number }> }>
+  >({});
+  useWSSubscribe(
+    "signal_states",
+    (data) => {
+      const detail = (data as { detail?: Record<string, { state: string }> }).detail;
+      if (detail) setSignalDetail(detail as typeof signalDetail);
+    },
+    cameraId
+  );
 
   const canvasWidth = 480;
   const canvasHeight = Math.round((canvasWidth * height) / width) || 270;
@@ -166,6 +214,10 @@ export function ZoneEditorCanvas({
     };
     if (zoneType === "loiter") newZone.loiter_threshold_seconds = 30;
     if (zoneType === "tripwire") newZone.direction = "any";
+    if (zoneType === "signal") {
+      newZone.orientation = "vertical";
+      newZone.lamps = deriveLamps(scaledPoints, "vertical");
+    }
     onChange([...zones, newZone]);
     setDrawing(false);
     setCurrentPoints([]);
@@ -323,6 +375,84 @@ export function ZoneEditorCanvas({
                   </div>
                 </div>
               )}
+              {zone.type === "signal" && (() => {
+                const det = signalDetail[zone.name];
+                const lamps = det?.lamps;
+                const captured = zone.calibration || {};
+                const allCaptured = SIGNAL_COLORS.every((c) => captured[c]);
+                return (
+                  <div className="pl-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-muted-foreground">Orientation</label>
+                      <div className="flex gap-1">
+                        {(["vertical", "horizontal"] as const).map((o) => (
+                          <button
+                            key={o}
+                            type="button"
+                            onClick={() => updateZone(i, { orientation: o, lamps: deriveLamps(zone.points, o) })}
+                            className={`px-2 py-0.5 text-[11px] rounded border capitalize ${
+                              (zone.orientation || "vertical") === o
+                                ? "border-yellow-500 bg-yellow-500/10 text-yellow-400"
+                                : "border-border text-muted-foreground hover:bg-muted"
+                            }`}
+                          >{o}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="text-muted-foreground">Live:</span>
+                      {det ? (
+                        <>
+                          <span className={`w-2 h-2 rounded-full ${SIGNAL_DOT[det.state] || SIGNAL_DOT.unknown}`} />
+                          <span className="capitalize">{det.state}</span>
+                          {!det.calibrated && <span className="text-amber-400">uncalibrated</span>}
+                          {lamps && (
+                            <span className="text-muted-foreground font-mono">
+                              {SIGNAL_COLORS.map((c) => `${c[0].toUpperCase()}:${Math.round(lamps[c]?.v ?? 0)}`).join("  ")}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">waiting for live frames…</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-muted-foreground text-[11px]">Capture:</span>
+                      {SIGNAL_COLORS.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          disabled={!lamps}
+                          onClick={() => {
+                            const sample: Record<string, number> = {};
+                            SIGNAL_COLORS.forEach((k) => { if (lamps?.[k]) sample[k] = lamps[k].v; });
+                            updateZone(i, { calibration: { ...(zone.calibration || {}), [c]: sample } });
+                          }}
+                          className={`px-2 py-0.5 text-[11px] rounded border capitalize disabled:opacity-40 ${
+                            captured[c]
+                              ? "border-green-500 bg-green-500/10 text-green-400"
+                              : "border-border text-muted-foreground hover:bg-muted"
+                          }`}
+                        >{captured[c] ? `${c} ✓` : c}</button>
+                      ))}
+                      {Object.keys(captured).length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => updateZone(i, { calibration: {} })}
+                          className="text-[11px] text-muted-foreground hover:text-red-400 px-1"
+                        >clear</button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground leading-snug">
+                      Draw this box over the signal head, pick orientation, and <strong>Save</strong>.
+                      Live brightness then appears above. Capture each colour while the real light
+                      shows it, then Save again. {allCaptured
+                        ? "Calibrated: detection now uses per-lamp brightness."
+                        : "Capture all three to switch from the rough fallback to calibrated detection."}
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>
