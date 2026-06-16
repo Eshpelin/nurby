@@ -3,7 +3,7 @@
 Curated view of mapped Frigate PRs. Newest batch first. Raw rows: `ledger.jsonl`.
 Status: HAVE · PARTIAL · MISSING · VERIFY · FIXED · N/A. Priority P0–P3. Effort S/M/L/XL.
 
-Coverage so far: PRs **23488 → 21243** triaged (480, ~12% of 4058 merged), newest-first.
+Coverage so far: PRs **23488 → 21003** triaged (520, ~13% of 4058 merged), newest-first.
 
 ---
 
@@ -333,3 +333,19 @@ Two feature themes worth tracking + one verified N/A:
 - **[#21335] "consider anonymous user authenticated"** — N/A. Nurby has no auth-disabled/anonymous
   mode; every request needs a JWT.
 - Backlog/VERIFY: **[#21250]** two-way/backchannel audio, **[#21322]** export filter UI · P3.
+
+---
+
+## Batch 13 (PRs 21241–21003) — coverage batch, no code change
+
+Heavy 0.17-beta misc + hardware (ROCm/Jetson/Coral/MemryX/OpenVINO = N/A) + docs/i18n.
+Security-relevant, all folded into existing issues / backlog:
+
+- **[#21065] Enforce default-admin on API endpoints** + **[#21094] admin exemptions / route
+  guards** — strong reinforcement of issue **#46**. Frigate moved to admin-by-default with explicit
+  public exemptions (a more robust model than per-endpoint opt-in). Commented on #46.
+- **[#21126] Pin cryptography version** — VERIFY nurby's `cryptography` pin (used for Fernet
+  camera-secret sealing) is recent/non-vulnerable · P3.
+- **[#21110] User-namespaced IndexedDB keys** — reinforces per-user-namespacing (issue #42);
+  verify nurby frontend persisted state is user-scoped · P3.
+- **[#21194] Authentication improvements** — generic auth hardening; compare to `shared/auth.py` · P3.

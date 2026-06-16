@@ -478,3 +478,43 @@
 {"pr":21250,"title":"Improve handling of backchannel audio in camera wizard","area":"ingestion","type":"feature","nurby_status":"VERIFY","decision":"defer","note":"Two-way/backchannel audio; check nurby two-way audio support.","priority":"P3","effort":"M"}
 {"pr":21247,"title":"Replace stringy paths with constants","area":"util","type":"refactor","decision":"skip"}
 {"pr":21243,"title":"Update peewee-migrate to 0.14.x","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip","note":"Frigate uses peewee ORM; nurby uses SQLAlchemy + alembic."}
+{"pr":21241,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21239,"title":"Beta discussion template","area":"docs","type":"docs","decision":"skip"}
+{"pr":21231,"title":"docs: update OpenVINO D-FINE configuration default device","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":21221,"title":"Update camera_specific.md for Wyze Cameras (Thingino)","area":"docs","type":"docs","decision":"skip"}
+{"pr":21208,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21195,"title":"Dialog refactor","area":"web","type":"refactor","decision":"skip"}
+{"pr":21194,"title":"Authentication improvements","area":"api","type":"security","nurby_status":"VERIFY","decision":"defer","note":"Generic auth hardening; compare to nurby JWT/auth (shared/auth.py).","priority":"P3","effort":"M"}
+{"pr":21193,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21185,"title":"Fix intermittent hangs in Tracking Details videos","area":"web","type":"bugfix","decision":"skip"}
+{"pr":21179,"title":"fix: fix classification missing i18n","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21178,"title":"docs: fix missing quotes in Reolink example","area":"docs","type":"docs","decision":"skip"}
+{"pr":21173,"title":"Fix jetson build","area":"ci","type":"ci","nurby_status":"N/A","decision":"skip"}
+{"pr":21166,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21141,"title":"Miscellaneous fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21132,"title":"Refactor ROCm Support","area":"detectors","type":"refactor","nurby_status":"N/A","decision":"skip"}
+{"pr":21127,"title":"Pin onnx in rfdetr model generation command","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":21126,"title":"Pin cryptography package version","area":"deps","type":"security","nurby_status":"VERIFY","decision":"map","insight":"Pin cryptography to a known-good version (CVE / ABI stability).","nurby_evidence":"Nurby uses cryptography (Fernet camera-secret sealing). Check pyproject pin is recent/non-vulnerable.","action":"Backlog: verify nurby cryptography version pin.","priority":"P3","effort":"S"}
+{"pr":21124,"title":"Adds support for YOLO v9 models running on Google Coral","area":"detectors","type":"feature","nurby_status":"N/A","decision":"skip"}
+{"pr":21113,"title":"Update ROCm to 7.1.1","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":21111,"title":"Version bump in docs","area":"docs","type":"docs","decision":"skip"}
+{"pr":21110,"title":"Use user-namespaced keys for idb persistence","area":"web","type":"security","nurby_status":"VERIFY","decision":"map","insight":"Namespace client-side persisted state (IndexedDB) by user so a shared browser doesn't leak one user's cached state to another.","nurby_evidence":"Reinforces per-user-namespacing theme (cf. widget_proxy cache issue #42). Check nurby frontend localStorage/idb keys are user-scoped.","action":"Backlog (relates to #42).","priority":"P3","effort":"S"}
+{"pr":21105,"title":"Add Axis Q-6155E camera configuration details","area":"docs","type":"docs","decision":"skip"}
+{"pr":21102,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21094,"title":"API admin exemptions and route guard updates","area":"api","type":"security","nurby_status":"VULNERABLE","decision":"map","insight":"Route guards default to admin with explicit public-route exemptions (default-deny).","nurby_evidence":"Reinforces issue #46 (mutation-endpoint role-gating sweep). Batch 7 fixed camera/provider PATCH; full default-admin sweep still pending.","action":"Folded into issue #46.","priority":"P2","effort":"M"}
+{"pr":21090,"title":"Add yolov9 inference speeds for UHD 730 GPU","area":"docs","type":"docs","nurby_status":"N/A","decision":"skip"}
+{"pr":21072,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21065,"title":"Enforce default admin role requirement for API endpoints","area":"api","type":"security","nurby_status":"VULNERABLE","decision":"map","insight":"Make API endpoints admin-by-default; opt specific routes into public/user access explicitly.","nurby_evidence":"Strong reinforcement of issue #46. Nurby currently gates per-endpoint ad hoc (get_current_user vs require_admin), no default-admin posture.","action":"Folded into issue #46 (commented).","priority":"P2","effort":"M"}
+{"pr":21063,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21061,"title":"Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21057,"title":"Add built in support for memray memory debugging","area":"util","type":"tooling","decision":"skip"}
+{"pr":21054,"title":"Translations update from Hosted Weblate","area":"i18n","type":"i18n","decision":"skip"}
+{"pr":21050,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21048,"title":"Revise the README_CN","area":"docs","type":"docs","decision":"skip"}
+{"pr":21035,"title":"[MemryX] Clean shutdown of detector process","area":"detectors","type":"reliability","nurby_status":"N/A","decision":"skip"}
+{"pr":21033,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21032,"title":"Update ROCm to 7.1.0","area":"deps","type":"deps","nurby_status":"N/A","decision":"skip"}
+{"pr":21024,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21019,"title":"clarify trademark and license interaction","area":"docs","type":"docs","decision":"skip"}
+{"pr":21005,"title":"Miscellaneous Fixes","area":"?","type":"?","decision":"defer"}
+{"pr":21003,"title":"add comment about unifi g5 and newer cams","area":"docs","type":"docs","decision":"skip"}

@@ -3,12 +3,12 @@
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
-  "cursor_pr": 21243,
+  "cursor_pr": 21003,
   "newest_pr_seen": 23488,
-  "batches_done": 12,
+  "batches_done": 13,
   "counts": {
-    "logged": 480,
-    "pct_of_merged": "~12%",
+    "logged": 520,
+    "pct_of_merged": "~13%",
     "fixes_shipped": 5,
     "issues_open": 8,
     "issues_closed": 1
@@ -35,6 +35,6 @@
     }
   },
   "mode": "autonomous: in-session batches newest-first, implement+verify+merge safe fixes to main via PR, file issues for substantive gaps, log everything. Scrutinize sub-agent audit claims before acting. Do NOT force a fix when none is clearly safe.",
-  "next": "Continue at PR < 21243, newest-first.",
-  "notes": "Batch 12: coverage only (0.17-beta attributes/Hailo/oauth2-proxy/peewee = N/A). New themes: case-management (#21299/#21293/#21295, PARTIAL - nurby has incidents+evidence cards but no shareable case bundles), camera connection-quality indicator (#21297, MISSING). #21335 anonymous-auth N/A (nurby JWT-only)."
+  "next": "Continue at PR < 21003, newest-first.",
+  "notes": "Batch 13: coverage only (ROCm/Jetson/Coral/MemryX = N/A). #21065+#21094 (default-admin API posture) strongly reinforce issue #46 (commented). Backlog: pin cryptography (#21126), user-namespaced idb keys (#21110 -> #42 theme), auth improvements (#21194)."
 }
