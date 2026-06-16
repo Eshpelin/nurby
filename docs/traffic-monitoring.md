@@ -97,6 +97,13 @@ Accuracy depends on framing the zone tightly on the lamp; glare, backlight,
 and night blur are the known failure modes, which is why ambiguous frames
 report `unknown` rather than guessing.
 
+The detected colour is also broadcast live to the dashboard: each camera
+tile shows a small dot + label (red / amber / green / unknown) for every
+signal zone, and the tooltip reports the per-colour lit fraction. That is
+the calibration tool. Frame the zone, watch the readout against the real
+light, and adjust the HSV thresholds in `services/perception/traffic_signal.py`
+(`_MIN_SAT`, `_MIN_VAL`, `_MIN_FRACTION`) if a lamp reads `unknown` when lit.
+
 ```json
 { "type": "red_light_cross", "points": [[x1,y1],[x2,y2]],
   "signal_zone": "Signal North", "label": "car" }
@@ -116,11 +123,14 @@ people are crossing" hazard).
 ### Lane congestion
 Trigger type **Lane congestion** (`lane_occupancy`). Counts vehicles inside
 a named lane zone and fires at a threshold. Optionally only counts
-stationary vehicles (a real backup, not free-flowing traffic).
+stationary vehicles (a real backup, not free-flowing traffic), and
+`sustain_seconds` requires the lane to hold over the threshold that long
+before firing (frame-clock based) so a brief cluster passing through does
+not trip it. `sustain_seconds: 0` (the default) fires on the first frame.
 
 ```json
 { "type": "lane_occupancy", "lane_zone": "Lane 1",
-  "min_vehicles": 3, "require_stationary": true }
+  "min_vehicles": 3, "require_stationary": true, "sustain_seconds": 5 }
 ```
 
 ## Phase 4 — research (new CV models)

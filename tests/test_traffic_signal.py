@@ -10,7 +10,10 @@ import pytest
 
 cv2 = pytest.importorskip("cv2")
 
-from services.perception.traffic_signal import detect_signal_states
+from services.perception.traffic_signal import (
+    detect_signal_states,
+    detect_signal_states_detailed,
+)
 
 # A square zone covering the top-left 60x60 of a 200x200 frame.
 ZONE = {"type": "signal", "name": "Signal", "points": [[10, 10], [70, 10], [70, 70], [10, 70]]}
@@ -51,6 +54,16 @@ def test_no_zones_or_frame():
     assert detect_signal_states(None, [ZONE]) == {}
     assert detect_signal_states(_frame_with_patch((0, 0, 255)), None) == {}
     assert detect_signal_states(_frame_with_patch((0, 0, 255)), []) == {}
+
+
+def test_detailed_exposes_scores():
+    # The dashboard/calibration path keeps per-colour lit fractions.
+    detail = detect_signal_states_detailed(_frame_with_patch((0, 0, 255)), [ZONE])
+    assert detail["Signal"]["state"] == "red"
+    scores = detail["Signal"]["scores"]
+    assert scores["red"] > 0.5
+    assert scores["green"] == 0.0
+    assert set(scores) == {"red", "amber", "green"}
 
 
 def test_multiple_signal_zones():

@@ -37,10 +37,16 @@ _MIN_FRACTION = 0.02
 SignalState = str  # "red" | "amber" | "green" | "unknown"
 
 
-def _classify_hsv(hsv: np.ndarray, total: int) -> SignalState:
-    """Pick the dominant lit colour in a flat (N, 3) HSV pixel array."""
+def _classify_hsv(hsv: np.ndarray, total: int) -> tuple[SignalState, dict[str, float]]:
+    """Classify the dominant lit colour in a flat (N, 3) HSV pixel array.
+
+    Returns ``(state, scores)`` where scores is the lit fraction of the zone
+    in each colour band. The scores are what the dashboard tooltip shows so a
+    user can see why a frame was classified the way it was and tune framing.
+    """
+    zero = {"red": 0.0, "amber": 0.0, "green": 0.0}
     if total <= 0 or hsv.size == 0:
-        return "unknown"
+        return "unknown", zero
     h = hsv[:, 0]
     s = hsv[:, 1]
     v = hsv[:, 2]
@@ -52,21 +58,17 @@ def _classify_hsv(hsv: np.ndarray, total: int) -> SignalState:
         "amber": int(np.count_nonzero(lit & (h >= 11) & (h <= 33))),
         "green": int(np.count_nonzero(lit & (h >= 40) & (h <= 90))),
     }
+    scores = {k: round(c / total, 4) for k, c in counts.items()}
     best = max(counts, key=counts.get)
-    if counts[best] / total < _MIN_FRACTION:
-        return "unknown"
-    return best
+    state = best if counts[best] / total >= _MIN_FRACTION else "unknown"
+    return state, scores
 
 
-def detect_signal_states(
-    frame: np.ndarray | None, zones: list[dict] | None
-) -> dict[str, SignalState]:
-    """Map each ``type == "signal"`` zone name to its detected colour.
-
-    ``frame`` must be the original (un-masked) BGR keyframe so motion-zone
-    masking has not blacked out the lamp. Returns an empty dict when there
-    are no signal zones, so callers pay nothing on non-traffic cameras.
-    """
+def _sample(frame: np.ndarray | None, zones: list[dict] | None) -> dict[str, dict]:
+    """Sample every ``type == "signal"`` zone, returning per-zone
+    ``{"state": ..., "scores": {...}}``. ``frame`` must be the original
+    (un-masked) BGR keyframe. Empty dict when there are no signal zones, so
+    non-traffic cameras pay nothing."""
     if frame is None or cv2 is None or not zones:
         return {}
     signal_zones = [
@@ -78,7 +80,7 @@ def detect_signal_states(
 
     h_img, w_img = frame.shape[:2]
     hsv_full: np.ndarray | None = None
-    out: dict[str, SignalState] = {}
+    out: dict[str, dict] = {}
     for z in signal_zones:
         name = z.get("name") or "signal"
         mask = np.zeros((h_img, w_img), dtype=np.uint8)
@@ -87,9 +89,26 @@ def detect_signal_states(
         sel = mask.astype(bool)
         total = int(np.count_nonzero(sel))
         if total <= 0:
-            out[name] = "unknown"
+            out[name] = {"state": "unknown", "scores": {"red": 0.0, "amber": 0.0, "green": 0.0}}
             continue
         if hsv_full is None:
             hsv_full = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        out[name] = _classify_hsv(hsv_full[sel], total)
+        state, scores = _classify_hsv(hsv_full[sel], total)
+        out[name] = {"state": state, "scores": scores}
     return out
+
+
+def detect_signal_states(
+    frame: np.ndarray | None, zones: list[dict] | None
+) -> dict[str, SignalState]:
+    """Map each signal zone name to its detected colour. This is what the
+    rule engine consumes via ``rule_data["signal_states"]``."""
+    return {name: d["state"] for name, d in _sample(frame, zones).items()}
+
+
+def detect_signal_states_detailed(
+    frame: np.ndarray | None, zones: list[dict] | None
+) -> dict[str, dict]:
+    """Like ``detect_signal_states`` but keeps the per-colour scores, for the
+    live dashboard readout / threshold calibration."""
+    return _sample(frame, zones)

@@ -151,6 +151,12 @@ class RuleEngine:
         # or a new subject alerts fresh next time. Keyed by camera too so a
         # cross-camera rule does not confuse per-camera track ids.
         self._visit_fired: dict[uuid.UUID, dict[tuple, float]] = {}
+        # Lane-occupancy sustain state. Maps (rule_id, lane_zone) -> the
+        # frame epoch the lane first went over its vehicle threshold, so a
+        # sustain_seconds rule only fires once congestion has held that long
+        # (a brief cluster passing through does not trip it). Cleared the
+        # moment the count drops back under the threshold.
+        self._lane_over: dict[tuple[uuid.UUID, str], float] = {}
         # Multi-frame persistence state for min_frames triggers. Maps
         # (rule_id, track_key) -> (first_seen_epoch, hit_count). A rule with
         # min_frames=3 only fires once the same tracked object has matched
@@ -903,7 +909,24 @@ class RuleEngine:
                     o for o in in_lane
                     if states.get(o.get("tracker_id")) == "stationary"
                 ]
-            return len(in_lane) >= min_vehicles
+            over = len(in_lane) >= min_vehicles
+            # Optional sustain: only fire once the lane has held over the
+            # threshold for sustain_seconds (frame-clock based, so a brief
+            # cluster passing through does not trip it). Default 0 fires
+            # immediately, the original behaviour.
+            sustain = float(pattern.get("sustain_seconds") or 0)
+            if sustain <= 0:
+                return over
+            key = (rule_id, zone)
+            t_now = _parse_epoch(data.get("timestamp"))
+            if not over or t_now is None:
+                self._lane_over.pop(key, None)
+                return False
+            started = self._lane_over.get(key)
+            if started is None:
+                self._lane_over[key] = t_now
+                return False
+            return (t_now - started) >= sustain
 
         elif trigger_type == "any":
             return True

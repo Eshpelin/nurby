@@ -81,7 +81,7 @@ import {
   summarizeDetections,
 } from "./dashboard-helpers";
 
-import { AnalyzingShimmer, DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, DetectionOverlay, MiniPTZ } from "@/components/dashboard/CameraOverlays";
+import { AnalyzingShimmer, DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, DetectionOverlay, MiniPTZ, SignalBadge } from "@/components/dashboard/CameraOverlays";
 
 type CameraLayout = "single" | "double" | "list";
 function CameraSidebarCard({
@@ -277,6 +277,9 @@ function CameraSidebarCard({
 
         {/* AI-analyzing sweep while a VLM call is in flight for this camera */}
         {camera.status !== "offline" && <AnalyzingShimmer cameraId={camera.id} />}
+
+        {/* Live traffic-signal colour readout for any "signal" zones */}
+        {camera.status !== "offline" && <SignalBadge cameraId={camera.id} />}
 
         {/* Live caption overlay. Only when transcription enabled */}
         {camera.status !== "offline" && camera.audio_transcribe_enabled && (

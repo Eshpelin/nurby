@@ -85,6 +85,8 @@ export interface TriggerSectionProps {
   setFormTriggerLaneZone: (v: string) => void;
   formTriggerMinVehicles: string;
   setFormTriggerMinVehicles: (v: string) => void;
+  formTriggerSustainSeconds: string;
+  setFormTriggerSustainSeconds: (v: string) => void;
 }
 
 export function TriggerSection(props: TriggerSectionProps) {
@@ -160,6 +162,8 @@ export function TriggerSection(props: TriggerSectionProps) {
     setFormTriggerLaneZone,
     formTriggerMinVehicles,
     setFormTriggerMinVehicles,
+    formTriggerSustainSeconds,
+    setFormTriggerSustainSeconds,
   } = props;
 
   return (
@@ -1033,6 +1037,20 @@ export function TriggerSection(props: TriggerSectionProps) {
             />
             Only count stopped vehicles (a real backup, not free-flowing traffic)
           </label>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Must hold for (seconds)</label>
+            <input
+              type="number"
+              min="0"
+              value={formTriggerSustainSeconds}
+              onChange={(e) => setFormTriggerSustainSeconds(e.target.value)}
+              className="w-24 px-2 py-1.5 rounded-md bg-background border border-border text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              The lane must stay over the threshold this long before firing. 0 fires on the
+              first frame; a few seconds avoids a brief cluster passing through.
+            </p>
+          </div>
         </div>
       )}
     </fieldset>

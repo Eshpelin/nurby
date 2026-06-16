@@ -446,8 +446,22 @@ class PerceptionPipeline:
         # Read traffic-signal colour from any "signal" zones BEFORE motion
         # masking blacks out regions. Pure HSV sampling, no model; empty on
         # cameras without signal zones so it costs nothing there.
-        from services.perception.traffic_signal import detect_signal_states
-        signal_states = detect_signal_states(frame, cam.motion_zones if cam else None)
+        from services.perception.traffic_signal import detect_signal_states_detailed
+        signal_detail = detect_signal_states_detailed(frame, cam.motion_zones if cam else None)
+        signal_states = {name: d["state"] for name, d in signal_detail.items()}
+        if signal_detail:
+            # Live readout for the dashboard (per-colour scores let the user
+            # calibrate the HSV thresholds against a real feed).
+            try:
+                from services.api.ws import broadcast as _ws_broadcast
+                await _ws_broadcast({
+                    "type": "signal_states",
+                    "camera_id": camera_id,
+                    "states": signal_states,
+                    "detail": signal_detail,
+                })
+            except Exception:
+                logger.debug("signal_states broadcast failed", exc_info=True)
 
         # Step 0. Apply motion zone masking before detection
         frame = self._apply_motion_zones(frame, cam)

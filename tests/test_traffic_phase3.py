@@ -111,3 +111,44 @@ def test_lane_requires_stationary(monkeypatch):
     assert _lane(monkeypatch, p, objs, tracks=moving) is False
     parked = [{**t, "state": "stationary"} for t in moving]
     assert _lane(monkeypatch, p, objs, tracks=parked) is True
+
+
+def test_lane_sustain_window(monkeypatch):
+    # sustain_seconds: the lane must hold over threshold across frames before
+    # firing. First over-threshold frame arms; a frame past the window fires.
+    from datetime import timedelta
+    p = {"type": "lane_occupancy", "lane_zone": "Lane", "min_vehicles": 3,
+         "sustain_seconds": 5}
+    eng, rule = _engine(monkeypatch, p)
+    objs = [_obj("car", ["Lane"], i) for i in range(3)]
+    t0 = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
+
+    def frame_at(ts):
+        return {"camera_id": "cam-1", "timestamp": ts.isoformat(),
+                "object_detections": {"objects": objs, "count": len(objs)}}
+
+    assert eng._match_trigger(p, frame_at(t0), rule.id, None) is False  # arms
+    assert eng._match_trigger(p, frame_at(t0 + timedelta(seconds=2)), rule.id, None) is False
+    assert eng._match_trigger(p, frame_at(t0 + timedelta(seconds=6)), rule.id, None) is True
+
+
+def test_lane_sustain_resets_when_clear(monkeypatch):
+    # Dropping under threshold clears the arm, so a later cluster must wait
+    # out the full window again rather than firing immediately.
+    from datetime import timedelta
+    p = {"type": "lane_occupancy", "lane_zone": "Lane", "min_vehicles": 3,
+         "sustain_seconds": 5}
+    eng, rule = _engine(monkeypatch, p)
+    full = [_obj("car", ["Lane"], i) for i in range(3)]
+    one = [_obj("car", ["Lane"], 0)]
+    t0 = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
+
+    def frame_at(ts, objs):
+        return {"camera_id": "cam-1", "timestamp": ts.isoformat(),
+                "object_detections": {"objects": objs, "count": len(objs)}}
+
+    assert eng._match_trigger(p, frame_at(t0, full), rule.id, None) is False  # arms
+    # Lane clears, which must reset the arm.
+    assert eng._match_trigger(p, frame_at(t0 + timedelta(seconds=2), one), rule.id, None) is False
+    # Re-congests at t+6: had the arm persisted it would fire, but it reset.
+    assert eng._match_trigger(p, frame_at(t0 + timedelta(seconds=6), full), rule.id, None) is False

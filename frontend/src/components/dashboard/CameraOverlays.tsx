@@ -81,6 +81,69 @@ export function AnalyzingShimmer({ cameraId }: { cameraId: string }) {
   );
 }
 
+// ── Traffic-signal readout ──
+
+const SIGNAL_DOT: Record<string, string> = {
+  red: "bg-red-500",
+  amber: "bg-amber-400",
+  green: "bg-green-500",
+  unknown: "bg-zinc-500",
+};
+
+// Drop a stale reading if the feed goes quiet (a signal camera with no
+// motion stops producing keyframes), so the badge never lies about "now".
+const SIGNAL_STALE_MS = 30_000;
+
+interface SignalZoneReading {
+  state: string;
+  scores?: Record<string, number>;
+}
+
+export function SignalBadge({ cameraId }: { cameraId: string }) {
+  // Live traffic-light colour per "signal" zone on this camera, straight
+  // from the perception HSV sampler. The tooltip exposes the per-colour lit
+  // fraction so the thresholds can be calibrated against a real feed.
+  const [zones, setZones] = useState<Record<string, SignalZoneReading>>({});
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useWSSubscribe(
+    "signal_states",
+    (data) => {
+      const detail =
+        (data as { detail?: Record<string, SignalZoneReading> }).detail || {};
+      setZones(detail);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setZones({}), SIGNAL_STALE_MS);
+    },
+    cameraId
+  );
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  const names = Object.keys(zones);
+  if (names.length === 0) return null;
+  return (
+    <div className="absolute top-1.5 left-1.5 z-[6] flex flex-col gap-1">
+      {names.map((name) => {
+        const z = zones[name];
+        const sc = z.scores || {};
+        const pct = (k: string) => Math.round((sc[k] || 0) * 100);
+        const tip = z.scores
+          ? `${name}: ${z.state}  (red ${pct("red")}% · amber ${pct("amber")}% · green ${pct("green")}%)`
+          : `${name}: ${z.state}`;
+        return (
+          <div
+            key={name}
+            title={tip}
+            className="flex items-center gap-1.5 rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 border border-white/10"
+          >
+            <span className={`w-2 h-2 rounded-full ${SIGNAL_DOT[z.state] || SIGNAL_DOT.unknown}`} />
+            <span className="text-[10px] font-mono text-white/90 capitalize">{z.state}</span>
+            <span className="text-[10px] font-mono text-white/40">{name}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function DetectionOverlay({ cameraId, visible, frameWidth, frameHeight }: {
   cameraId: string;
   visible: boolean;

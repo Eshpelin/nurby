@@ -50,6 +50,7 @@ export interface RuleFormState {
   formTriggerCrosswalkZone: string;
   formTriggerLaneZone: string;
   formTriggerMinVehicles: string;
+  formTriggerSustainSeconds: string;
 
   // Conditions group
   formCondCameras: string[];
@@ -107,6 +108,7 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
   formTriggerCrosswalkZone: "",
   formTriggerLaneZone: "",
   formTriggerMinVehicles: "3",
+  formTriggerSustainSeconds: "0",
 
   formCondCameras: [],
   formScheduleMode: "always",
@@ -158,6 +160,7 @@ const TRIGGER_FIELDS_TO_RESET: (keyof RuleFormState)[] = [
   "formTriggerCrosswalkZone",
   "formTriggerLaneZone",
   "formTriggerMinVehicles",
+  "formTriggerSustainSeconds",
 ];
 
 export type RuleFormAction =
@@ -239,6 +242,7 @@ export function hydrateFromRule(rule: Rule): RuleFormState {
   base.formTriggerCrosswalkZone = (tp.crosswalk_zone as string) || "";
   base.formTriggerLaneZone = (tp.lane_zone as string) || "";
   base.formTriggerMinVehicles = tp.min_vehicles != null ? String(tp.min_vehicles) : "3";
+  base.formTriggerSustainSeconds = tp.sustain_seconds != null ? String(tp.sustain_seconds) : "0";
   if (tp.type === "speed_over" && Array.isArray(tp.line_a)) base.formTriggerGeomPoints = tp.line_a as number[][];
   const ms = tp.min_score as number | undefined;
   if (ms != null) {

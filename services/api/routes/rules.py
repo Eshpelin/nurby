@@ -672,6 +672,20 @@ async def test_rule(
                     body.trigger_pattern, frame, fake_rule.id, tz
                 )
                 observation = frame
+    elif ttype == "lane_occupancy" and float(body.trigger_pattern.get("sustain_seconds") or 0) > 0:
+        # Sustained congestion needs the lane to stay over threshold across
+        # time. Feed the synthesized over-threshold frame twice, spaced past
+        # the sustain window, so the dry run confirms it would fire.
+        sustain = float(body.trigger_pattern.get("sustain_seconds"))
+        t0 = datetime.now(timezone.utc)
+        matched_trigger = False
+        for stamp in (t0, t0 + timedelta(seconds=sustain + 1)):
+            frame = dict(observation)
+            frame["timestamp"] = stamp.isoformat()
+            matched_trigger = engine._match_trigger(
+                body.trigger_pattern, frame, fake_rule.id, tz
+            )
+            observation = frame
     else:
         if ttype == "red_light_cross":
             # Stamp a timestamp inside the configured red window so the

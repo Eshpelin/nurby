@@ -333,6 +333,8 @@ export function RuleBuilder({
       trigger_pattern.lane_zone = s.formTriggerLaneZone.trim();
       trigger_pattern.min_vehicles = parseInt(s.formTriggerMinVehicles) || 3;
       trigger_pattern.require_stationary = s.formTriggerRequireStationary;
+      const sustain = parseInt(s.formTriggerSustainSeconds) || 0;
+      if (sustain > 0) trigger_pattern.sustain_seconds = sustain;
       if (s.formTriggerObjectClass) trigger_pattern.label = s.formTriggerObjectClass;
     }
 
@@ -572,6 +574,8 @@ export function RuleBuilder({
               setFormTriggerLaneZone={setterFor("formTriggerLaneZone")}
               formTriggerMinVehicles={state.formTriggerMinVehicles}
               setFormTriggerMinVehicles={setterFor("formTriggerMinVehicles")}
+              formTriggerSustainSeconds={state.formTriggerSustainSeconds}
+              setFormTriggerSustainSeconds={setterFor("formTriggerSustainSeconds")}
               formTriggerGeomCamId={state.formTriggerGeomCamId}
               setFormTriggerGeomCamId={setterFor("formTriggerGeomCamId")}
               formTriggerGeomPoints={state.formTriggerGeomPoints}
