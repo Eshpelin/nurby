@@ -316,7 +316,13 @@ async def _ffmpeg_extract_one(file_path: Path, ts: float) -> np.ndarray | None:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _stderr = await proc.communicate()
+        try:
+            stdout, _stderr = await asyncio.wait_for(proc.communicate(), timeout=20)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            logger.error("ffmpeg frame extract timed out for %s", file_path)
+            return None
     except FileNotFoundError:
         logger.error("ffmpeg binary not found on PATH")
         return None
