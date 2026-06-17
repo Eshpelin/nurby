@@ -65,9 +65,39 @@ def func_greatest(a, b):
     return func.greatest(a, b)
 
 
+# Runtime feature flag (shared.app_settings) that admits any write at all.
+# Default OFF: this writer emits ~1 row/camera/second and motion_samples has no
+# retention/pruning yet, so leaving it on would grow the table without bound.
+# Existing deployments must see ZERO new writes until an admin opts in.
+# PREREQUISITE before enabling in production: add a retention/pruning sweep for
+# motion_samples (mirror har_segment_retention_days).
+MOTION_SERIES_FLAG = "motion_series_enabled"
+
+
+async def record_motion_sample_if_enabled(
+    camera_id: str | uuid.UUID, timestamp: datetime, score: float
+) -> bool:
+    """Gate + persist. Returns True iff a write was attempted.
+
+    A complete no-op when ``motion_series_enabled`` is off (the default), so
+    existing deployments write nothing until an admin opts in. This is the
+    only entry point the pipeline should call.
+    """
+    from shared.app_settings import get_setting
+
+    if not bool(await get_setting(MOTION_SERIES_FLAG, False)):
+        return False
+    await record_motion_sample(camera_id, timestamp, score)
+    return True
+
+
 async def record_motion_sample(camera_id: str | uuid.UUID, timestamp: datetime, score: float) -> None:
     """Persist one motion observation. Best-effort: never raise into the
-    keyframe path. Coalesces to a 1-second bucket keeping the peak score."""
+    keyframe path. Coalesces to a 1-second bucket keeping the peak score.
+
+    NOTE: callers in the hot path must go through ``record_motion_sample_if_enabled``
+    so the default-off feature flag is honored. This writer itself is unconditional.
+    """
     try:
         cam_uuid = camera_id if isinstance(camera_id, uuid.UUID) else uuid.UUID(str(camera_id))
     except (ValueError, AttributeError):

@@ -312,7 +312,7 @@ async def camera_motion_activity(
     from_: datetime = Query(..., alias="from"),
     to: datetime = Query(...),
     bucket_seconds: int = Query(default=DEFAULT_BUCKET_SECONDS, ge=1, le=3600),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Bucketed motion-activity series for a camera over [from, to].
@@ -327,6 +327,11 @@ async def camera_motion_activity(
         clamp_bucket_seconds,
         motion_buckets_query,
     )
+
+    # Per-user camera ACL (issue #40): a restricted user gets 404 for a
+    # camera outside their allowed set, exactly like the other single-camera
+    # reads. Owner/admin (ALL) unaffected.
+    await _require_camera_in_scope(camera_id, current_user, db)
 
     cam = await db.get(Camera, camera_id)
     if cam is None:

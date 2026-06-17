@@ -1,7 +1,7 @@
 """add motion_samples (downsampled per-camera motion-score series)
 
 Revision ID: a4e6c8f0b2d5
-Revises: f3a4b5c6d7e8
+Revises: e7f9a1c3b5d7
 Create Date: 2026-06-17 00:00:00.000000
 
 Persists a downsampled per-camera motion-score time series written from the
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a4e6c8f0b2d5"
-down_revision: Union[str, None] = "f3a4b5c6d7e8"
+down_revision: Union[str, None] = "e7f9a1c3b5d7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

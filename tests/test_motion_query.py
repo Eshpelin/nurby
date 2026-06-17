@@ -9,10 +9,13 @@ the PR. The bucket math and clamping are pure and tested directly.
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy.dialects import postgresql
 
+import shared.app_settings as app_settings
 from services.api.motion_query import (
     DEFAULT_BUCKET_SECONDS,
     MAX_BUCKET_SECONDS,
@@ -21,8 +24,10 @@ from services.api.motion_query import (
     clamp_bucket_seconds,
     motion_buckets_query,
 )
+from services.perception import motion_series
 from services.perception.motion_series import (
     floor_to_bucket,
+    record_motion_sample_if_enabled,
     upsert_motion_sample_stmt,
 )
 
@@ -168,3 +173,147 @@ def test_supported_buckets_compile(bucket_seconds):
     t1 = t0 + timedelta(hours=2)
     # Must compile for every supported width without error.
     assert "date_bin" in _sql(motion_buckets_query(cid, t0, t1, bucket_seconds))
+
+
+# --- writer gate: default-OFF feature flag ----------------------------------
+#
+# The pipeline calls record_motion_sample_if_enabled, which must be a COMPLETE
+# no-op (never touch the DB) until an admin flips motion_series_enabled on. The
+# gate reads the flag via shared.app_settings.get_setting (resolved lazily), so
+# we patch it there. record_motion_sample is stubbed so the test needs no DB.
+
+
+def test_motion_series_enabled_defaults_off():
+    # Existing deployments must see zero new writes until an admin opts in.
+    assert app_settings.DEFAULTS["motion_series_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_writer_is_noop_when_flag_off(monkeypatch):
+    async def _flag_off(key, default=None):
+        assert key == "motion_series_enabled"
+        return False
+
+    calls: list = []
+
+    async def _spy(*args, **kwargs):
+        calls.append((args, kwargs))
+
+    monkeypatch.setattr(app_settings, "get_setting", _flag_off)
+    monkeypatch.setattr(motion_series, "record_motion_sample", _spy)
+
+    wrote = await record_motion_sample_if_enabled(
+        uuid.uuid4(), datetime(2026, 6, 1, tzinfo=timezone.utc), 0.5
+    )
+    assert wrote is False
+    assert calls == []  # writer never invoked
+
+
+@pytest.mark.asyncio
+async def test_writer_runs_when_flag_on(monkeypatch):
+    async def _flag_on(key, default=None):
+        return True
+
+    calls: list = []
+
+    async def _spy(camera_id, ts, score):
+        calls.append((camera_id, ts, score))
+
+    monkeypatch.setattr(app_settings, "get_setting", _flag_on)
+    monkeypatch.setattr(motion_series, "record_motion_sample", _spy)
+
+    cid = uuid.uuid4()
+    ts = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    wrote = await record_motion_sample_if_enabled(cid, ts, 0.5)
+    assert wrote is True
+    assert calls == [(cid, ts, 0.5)]
+
+
+# --- endpoint ACL scoping (issue #40) ---------------------------------------
+#
+# GET /cameras/{id}/motion must 404 for a camera outside the caller's allowlist,
+# exactly like the other single-camera reads PR #83 added. Drives the real
+# handler-internal scoping seam (_require_camera_in_scope) so the check is the
+# same one production runs. Mirrors test_camera_access.py's FakeDB style.
+
+
+def _user(role: str = "viewer") -> SimpleNamespace:
+    return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True)
+
+
+class _FakeResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def all(self):
+        return list(self._rows)
+
+
+class _FakeDB:
+    """Stub AsyncSession: ``execute`` returns canned grant rows; ``get`` would
+    only be reached if scoping passed (it must not, for a foreign camera)."""
+
+    def __init__(self, responder):
+        self._responder = responder
+
+    async def execute(self, stmt):
+        return _FakeResult(self._responder(str(stmt)))
+
+    async def get(self, model, ident):  # pragma: no cover - must not be reached
+        raise AssertionError("scoping should reject before any camera lookup")
+
+
+@pytest.mark.asyncio
+async def test_motion_endpoint_404s_for_cross_user_camera():
+    import services.api.routes.cameras as cameras_mod
+
+    owned = uuid.uuid4()
+    foreign = uuid.uuid4()
+    t0 = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    t1 = t0 + timedelta(hours=1)
+
+    # Restricted user granted only `owned`; asking for `foreign` -> 404.
+    db = _FakeDB(lambda stmt: [(owned,)])
+    with pytest.raises(HTTPException) as exc:
+        await cameras_mod.camera_motion_activity(
+            camera_id=foreign,
+            from_=t0,
+            to=t1,
+            bucket_seconds=DEFAULT_BUCKET_SECONDS,
+            current_user=_user("viewer"),
+            db=db,
+        )
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_motion_endpoint_scope_passes_for_owned_camera(monkeypatch):
+    import services.api.routes.cameras as cameras_mod
+
+    owned = uuid.uuid4()
+    t0 = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    t1 = t0 + timedelta(hours=1)
+
+    # The owned camera clears scoping; stub the camera lookup + aggregation so
+    # the test needs no DB and asserts scoping does NOT block an allowed camera.
+    class _OwnedDB(_FakeDB):
+        async def get(self, model, ident):
+            return SimpleNamespace(id=owned)
+
+        async def execute(self, stmt):
+            s = str(stmt)
+            if "user_camera_access" in s.lower():
+                return _FakeResult([(owned,)])
+            return _FakeResult([])  # no motion rows
+
+    got = await cameras_mod.camera_motion_activity(
+        camera_id=owned,
+        from_=t0,
+        to=t1,
+        bucket_seconds=DEFAULT_BUCKET_SECONDS,
+        current_user=_user("viewer"),
+        db=_OwnedDB(lambda stmt: [(owned,)]),
+    )
+    assert got["camera_id"] == str(owned)
+    assert got["buckets"] == []
+    assert got["count"] == 0

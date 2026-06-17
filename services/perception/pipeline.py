@@ -463,12 +463,16 @@ class PerceptionPipeline:
 
         # Persist the downsampled motion-score series (#37). Reuses the motion
         # score the ingestion stream already computed. no second detector.
-        # Best-effort: record_motion_sample swallows its own errors so it can
-        # never affect detection/recording.
+        # Gated default-OFF behind motion_series_enabled (shared/app_settings.py):
+        # the writer emits ~1 row/camera/second and motion_samples has no
+        # retention/pruning yet, so it is a complete no-op until an admin opts
+        # in. Retention/pruning is still a prerequisite before enabling in
+        # production. record_motion_sample_if_enabled checks the flag and
+        # swallows its own write errors, so this can never affect detection.
         try:
-            from services.perception.motion_series import record_motion_sample
+            from services.perception.motion_series import record_motion_sample_if_enabled
 
-            await record_motion_sample(camera_id, timestamp, motion_score)
+            await record_motion_sample_if_enabled(camera_id, timestamp, motion_score)
         except Exception:
             logger.debug("motion series record skipped", exc_info=True)
 
