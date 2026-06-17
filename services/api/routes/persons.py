@@ -776,9 +776,13 @@ async def upload_face(
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    # Save photo
+    # Save photo. The extension is derived from the client-supplied filename,
+    # which is untrusted: a value like "x./../../etc/foo" would otherwise let
+    # the join escape PHOTOS_DIR (path traversal / arbitrary write). Keep only
+    # a short alphanumeric suffix and fall back to a safe default.
     os.makedirs(PHOTOS_DIR, exist_ok=True)
-    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
+    raw_ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
+    ext = "".join(c for c in raw_ext if c.isalnum()).lower()[:8] or "jpg"
     photo_filename = f"{person_id}.{ext}"
     photo_path = os.path.join(PHOTOS_DIR, photo_filename)
 
