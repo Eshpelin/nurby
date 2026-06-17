@@ -864,6 +864,11 @@ class ProviderCreate(BaseModel):
     # NULL = no cap, defer to the provider's model default.
     max_input_tokens: int | None = Field(default=None, ge=64, le=2_000_000)
     max_output_tokens: int | None = Field(default=None, ge=16, le=200_000)
+    # ── Optional reasoning / "thinking" controls (issue #41) ───────────
+    # All NULL by default → behavior unchanged. See shared.reasoning.
+    anthropic_thinking: str | None = Field(default=None, pattern=r"^(adaptive|enabled|off)$")
+    anthropic_thinking_budget_tokens: int | None = Field(default=None, ge=1024, le=200_000)
+    openai_reasoning_effort: str | None = Field(default=None, pattern=r"^(minimal|low|medium|high)$")
 
 
 class ProviderResponse(BaseModel):
@@ -875,6 +880,9 @@ class ProviderResponse(BaseModel):
     active: bool
     max_input_tokens: int | None = None
     max_output_tokens: int | None = None
+    anthropic_thinking: str | None = None
+    anthropic_thinking_budget_tokens: int | None = None
+    openai_reasoning_effort: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

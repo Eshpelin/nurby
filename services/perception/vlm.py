@@ -26,6 +26,11 @@ from services.perception.token_budget import (
 )
 from shared.database import async_session
 from shared.models import Provider
+from shared.reasoning import (
+    anthropic_thinking_params,
+    anthropic_visible_text,
+    openai_reasoning_params,
+)
 
 logger = logging.getLogger("nurby.perception.vlm")
 
@@ -239,6 +244,8 @@ class VLMClient:
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        # Opt-in reasoning effort (off by default). Ignored by chat models.
+        payload.update(openai_reasoning_params(provider))
 
         async def _do():
             response = await http.post(
@@ -284,6 +291,8 @@ class VLMClient:
                 },
             ],
         }
+        # Opt-in extended/adaptive thinking (off by default).
+        body.update(anthropic_thinking_params(provider, anthropic_cap))
 
         async def _do():
             response = await http.post(
@@ -296,7 +305,10 @@ class VLMClient:
                 json=body,
             )
             response.raise_for_status()
-            return response.json()["content"][0]["text"]
+            # Join only visible text blocks. When thinking is enabled the
+            # response leads with a thinking block; indexing content[0]
+            # would surface reasoning (or crash on a non-text block).
+            return anthropic_visible_text(response.json().get("content"))
 
         return await call_with_retry(
             _do,

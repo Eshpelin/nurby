@@ -37,6 +37,12 @@ from typing import Any, Awaitable, Callable
 import httpx
 
 from shared.models import Provider
+from shared.reasoning import (
+    anthropic_thinking_params,
+    is_thinking_block,
+    openai_reasoning_params,
+    openai_reasoning_tokens,
+)
 
 logger = logging.getLogger("nurby.agent.llm")
 
@@ -131,6 +137,10 @@ async def _call_anthropic(
     }
     if tools:
         body["tools"] = tools
+    # Opt-in extended/adaptive thinking (off by default). Reasoning
+    # tokens land in usage.output_tokens, so budget accounting downstream
+    # already counts them — see record_usage in the driver.
+    body.update(anthropic_thinking_params(provider, max_tokens))
     if stream:
         body["stream"] = True
 
@@ -143,6 +153,10 @@ async def _call_anthropic(
             tool_uses: list[LLMToolUse] = []
             for blk in data.get("content", []):
                 t = blk.get("type")
+                if is_thinking_block(t):
+                    # Reasoning content. Billed in output_tokens but never
+                    # part of the user-facing answer. Drop it.
+                    continue
                 if t == "text":
                     text_parts.append(blk.get("text", ""))
                 elif t == "tool_use":
@@ -189,6 +203,13 @@ async def _call_anthropic(
                     idx = evt.get("index", 0)
                     d = evt.get("delta") or {}
                     pb = partial_blocks.setdefault(idx, {"type": "text", "text": "", "input_json": ""})
+                    # Never stream or accumulate reasoning. thinking blocks
+                    # arrive as thinking_delta/signature_delta; guard the
+                    # text path on the block type too, so reasoning can
+                    # never leak to the synthesis stream even if the
+                    # provider tags a thinking block's body as text.
+                    if is_thinking_block(pb.get("type")):
+                        continue
                     if d.get("type") == "text_delta":
                         chunk = d.get("text", "")
                         pb["text"] += chunk
@@ -203,6 +224,9 @@ async def _call_anthropic(
                     idx = evt.get("index", 0)
                     pb = partial_blocks.get(idx)
                     if not pb:
+                        continue
+                    if is_thinking_block(pb.get("type")):
+                        # Reasoning block finished; nothing user-facing.
                         continue
                     if pb.get("type") == "text":
                         text_parts2.append(pb.get("text", ""))
@@ -343,6 +367,10 @@ async def _call_openai_like(
         body["tools"] = tools
         if not is_ollama:
             body["tool_choice"] = "auto"
+    # Opt-in reasoning effort (off by default). Only for OpenAI-compatible
+    # reasoning models; Ollama has no equivalent and chat models ignore it.
+    if not is_ollama:
+        body.update(openai_reasoning_params(provider))
     if is_ollama:
         body["stream"] = bool(stream)
     elif stream:
@@ -412,12 +440,18 @@ async def _call_openai_like(
             finish = choices[0].get("finish_reason") or "stop"
             stop_reason = "tool_use" if tool_uses else ("max_tokens" if finish == "length" else "end_turn")
             usage = data.get("usage") or {}
+            # completion_tokens already includes reasoning tokens on
+            # OpenAI reasoning models. Floor tokens_out at the reported
+            # reasoning count so a malformed/partial usage block can never
+            # cause us to undercount reasoning against the user's budget.
+            completion = int(usage.get("completion_tokens") or 0)
+            reasoning = openai_reasoning_tokens(usage)
             return LLMResponse(
                 stop_reason=stop_reason,
                 text=text,
                 tool_uses=tool_uses,
                 tokens_in=int(usage.get("prompt_tokens") or 0),
-                tokens_out=int(usage.get("completion_tokens") or 0),
+                tokens_out=max(completion, reasoning),
                 provider_request_id=data.get("id"),
             )
         # OpenAI streaming
