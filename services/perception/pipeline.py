@@ -461,6 +461,17 @@ class PerceptionPipeline:
             camera_id, motion_score,
         )
 
+        # Persist the downsampled motion-score series (#37). Reuses the motion
+        # score the ingestion stream already computed. no second detector.
+        # Best-effort: record_motion_sample swallows its own errors so it can
+        # never affect detection/recording.
+        try:
+            from services.perception.motion_series import record_motion_sample
+
+            await record_motion_sample(camera_id, timestamp, motion_score)
+        except Exception:
+            logger.debug("motion series record skipped", exc_info=True)
+
         # Read traffic-signal colour from any "signal" zones BEFORE motion
         # masking blacks out regions. Pure HSV sampling, no model; empty on
         # cameras without signal zones so it costs nothing there.
