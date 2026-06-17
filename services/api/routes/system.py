@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -493,10 +494,13 @@ async def trigger_update(_current_user: User = Depends(require_admin)):
             "self_update_enabled": False,
             "message": "One-click update is not enabled. On the host run. ./scripts/update.sh",
         }
-    try:
+    def _write_trigger() -> None:
         os.makedirs(os.path.dirname(_UPDATE_TRIGGER), exist_ok=True)
         with open(_UPDATE_TRIGGER, "w", encoding="utf-8") as f:
             f.write(str(time.time()))
+
+    try:
+        await asyncio.to_thread(_write_trigger)
     except OSError as exc:
         return {"started": False, "self_update_enabled": True, "message": f"Could not signal the updater. {exc}"}
     return {
