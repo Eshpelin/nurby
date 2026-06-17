@@ -934,6 +934,7 @@ class PerceptionPipeline:
                     detections=detections,
                     provider=provider,
                     system_prompt=cam.vlm_prompt if cam else None,
+                    object_prompts=getattr(cam, "vlm_object_prompts", None) if cam else None,
                     max_tokens=cam.vlm_max_tokens if cam else 200,
                     max_input_tokens=getattr(cam, "vlm_max_input_tokens", None) if cam else None,
                     timestamp=timestamp,

@@ -72,6 +72,7 @@ class CameraCreate(BaseModel):
     vlm_refiner_keywords: list[str] | None = None
     vlm_refiner_max_tokens: int | None = Field(default=None, ge=50, le=2000)
     vlm_refiner_max_input_tokens: int | None = Field(default=None, ge=64, le=2_000_000)
+    vlm_object_prompts: dict[str, str] | None = None
     detect_objects: bool = True
     detect_faces: bool = True
     detect_plates: bool = True
@@ -146,6 +147,7 @@ class CameraUpdate(BaseModel):
     vlm_refiner_keywords: list[str] | None = None
     vlm_refiner_max_tokens: int | None = Field(default=None, ge=50, le=2000)
     vlm_refiner_max_input_tokens: int | None = Field(default=None, ge=64, le=2_000_000)
+    vlm_object_prompts: dict[str, str] | None = None
     detect_objects: bool | None = None
     detect_faces: bool | None = None
     detect_plates: bool | None = None
@@ -242,6 +244,7 @@ class CameraResponse(BaseModel):
     vlm_refiner_keywords: list[str] | None = None
     vlm_refiner_max_tokens: int | None = None
     vlm_refiner_max_input_tokens: int | None = None
+    vlm_object_prompts: dict[str, str] | None = None
     detect_objects: bool
     detect_faces: bool
     detect_plates: bool = True
