@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.auth import get_current_user, require_admin, require_query_token
+from shared.auth import get_current_user, require_query_token
 from shared.config import settings
 from shared.database import get_db
 from shared.models import AudioAuditLog, AudioCapture, Camera, User
@@ -75,7 +75,7 @@ async def patch_camera_audio(
     camera_id: uuid.UUID,
     body: CameraAudioPatch,
     request: Request,
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     cam = await db.get(Camera, camera_id)

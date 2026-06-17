@@ -88,10 +88,7 @@ class VLMClient:
             prompt = system_prompt or SYSTEM_PROMPT
 
             # Encode frame as base64 JPEG
-            ok, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            if not ok:
-                logger.warning("frame JPEG encode failed; skipping VLM call")
-                return None
+            _, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             b64_image = base64.b64encode(jpeg_buf.tobytes()).decode("utf-8")
 
             # Build context from detections. Skip license_plate here.
@@ -186,10 +183,7 @@ class VLMClient:
         from services.perception import actions as _actions
 
         try:
-            ok, jpeg_buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            if not ok:
-                logger.debug("action crop encode failed (imencode returned False)")
-                return None
+            _, jpeg_buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 80])
             b64_image = base64.b64encode(jpeg_buf.tobytes()).decode("utf-8")
         except Exception:
             logger.debug("action crop encode failed", exc_info=True)

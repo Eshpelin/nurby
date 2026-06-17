@@ -528,10 +528,7 @@ class StreamWorker:
         """Encode frame as JPEG and publish to Redis stream for perception."""
         try:
             # Encode frame as JPEG (quality 85 for good balance of size and quality)
-            ok, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-            if not ok:
-                logger.warning("keyframe JPEG encode failed; skipping publish")
-                return
+            _, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
             jpeg_bytes = jpeg_buf.tobytes()
 
             # Carry the HAR runner's current track boxes so perception can bind faces to

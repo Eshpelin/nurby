@@ -92,12 +92,6 @@ async def fetch_widget_data(source: dict, secret: str | None) -> dict:
     return {"ok": resp.status_code < 400, "status": resp.status_code, "data": data}
 
 
-# NOTE: the cache is keyed by widget_id ALONE. This is safe only because a
-# widget is single-owner: dashboard_widgets._owned() rejects any user who is
-# not created_by_user_id before get_widget_data ever touches the cache, so a
-# widget_id is never served to a second user. If widgets ever become shareable
-# across users, this key MUST include the requesting user / auth scope, or one
-# user's fetched data will be served to another (see issue #42).
 def cache_get(widget_id: str) -> dict | None:
     """Cached result for a widget, or None if absent/expired."""
     entry = _cache.get(widget_id)
