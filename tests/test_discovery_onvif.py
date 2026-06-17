@@ -17,6 +17,7 @@ genuine namespace-stripping finder logic.
 import hashlib
 import xml.etree.ElementTree as ET
 from base64 import b64decode, b64encode
+from datetime import datetime, timezone
 
 import pytest
 
@@ -345,3 +346,133 @@ def test_ws_security_password_type_is_digest():
     header = onvif._ws_security_header("u", "p")
     assert "#PasswordDigest" in header
     assert "Created" in header and "Nonce" in header
+
+
+# ── clock-skew workaround (onvif_ignore_time_mismatch) ─────────────
+
+# GetSystemDateAndTime response with the camera clock pinned far in the
+# future, so the offset path is unambiguous regardless of the real wall
+# clock at test time.
+_SYSTEM_DATE_TIME_XML = """<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:tds="http://www.onvif.org/ver10/device/wsdl"
+  xmlns:tt="http://www.onvif.org/ver10/schema">
+ <s:Body><tds:GetSystemDateAndTimeResponse>
+  <tds:SystemDateAndTime>
+   <tt:DateTimeType>NTP</tt:DateTimeType>
+   <tt:UTCDateTime>
+     <tt:Time><tt:Hour>4</tt:Hour><tt:Minute>30</tt:Minute><tt:Second>15</tt:Second></tt:Time>
+     <tt:Date><tt:Year>2035</tt:Year><tt:Month>6</tt:Month><tt:Day>9</tt:Day></tt:Date>
+   </tt:UTCDateTime>
+  </tds:SystemDateAndTime>
+ </tds:GetSystemDateAndTimeResponse></s:Body></s:Envelope>"""
+
+
+def _local(header_or_envelope: str, name: str):
+    text = header_or_envelope.strip()
+    if text.startswith("<?xml") or text.startswith("<s:Envelope"):
+        root = ET.fromstring(text)
+    else:
+        # A bare header fragment using the s: prefix. Wrap so it resolves.
+        wrapped = (
+            '<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">'
+            f"{text}</s:Envelope>"
+        )
+        root = ET.fromstring(wrapped)
+    for el in root.iter():
+        if el.tag.endswith("}" + name) or el.tag == name:
+            return el
+    return None
+
+
+def test_ws_security_header_applies_positive_offset():
+    """A large positive offset moves Created forward by ~that many seconds."""
+    base = onvif._ws_security_header("u", "p", time_offset=0.0)
+    shifted = onvif._ws_security_header("u", "p", time_offset=3600.0)
+    t0 = datetime.strptime(_local(base, "Created").text, "%Y-%m-%dT%H:%M:%SZ")
+    t1 = datetime.strptime(_local(shifted, "Created").text, "%Y-%m-%dT%H:%M:%SZ")
+    delta = (t1 - t0).total_seconds()
+    # Allow a second of slack for the two now() reads straddling a tick.
+    assert 3599 <= delta <= 3601
+
+
+def test_parse_onvif_datetime_reads_utc_fields():
+    utc = onvif._find_recursive(ET.fromstring(_SYSTEM_DATE_TIME_XML), "UTCDateTime")
+    dt = onvif._parse_onvif_datetime(utc)
+    assert dt == datetime(2035, 6, 9, 4, 30, 15, tzinfo=timezone.utc)
+
+
+def test_parse_onvif_datetime_returns_none_on_missing_field():
+    utc = ET.fromstring(
+        '<UTCDateTime xmlns="x"><Time><Hour>4</Hour></Time>'
+        "<Date><Year>2035</Year></Date></UTCDateTime>"
+    )
+    assert onvif._parse_onvif_datetime(utc) is None
+
+
+@pytest.mark.asyncio
+async def test_camera_time_offset_matches_camera_clock(monkeypatch):
+    async def _fake_soap(client, url, envelope, timeout=3.0):
+        assert "GetSystemDateAndTime" in envelope
+        assert url.endswith("/onvif/device_service")
+        return ET.fromstring(_SYSTEM_DATE_TIME_XML)
+
+    monkeypatch.setattr(onvif, "_soap_request", _fake_soap)
+    offset = await onvif._camera_time_offset(None, "10.0.0.5", 80)
+    expected = (
+        datetime(2035, 6, 9, 4, 30, 15, tzinfo=timezone.utc)
+        - datetime.now(timezone.utc)
+    ).total_seconds()
+    assert abs(offset - expected) < 2.0
+
+
+@pytest.mark.asyncio
+async def test_camera_time_offset_zero_on_unreachable(monkeypatch):
+    async def _none(client, url, envelope, timeout=3.0):
+        return None
+
+    monkeypatch.setattr(onvif, "_soap_request", _none)
+    assert await onvif._camera_time_offset(None, "10.0.0.5", 80) == 0.0
+
+
+@pytest.mark.asyncio
+async def test_ptz_command_offsets_created_when_ignore_time_mismatch(monkeypatch):
+    """With the flag on, the PTZ envelope's Created reflects the camera clock."""
+    captured = {}
+
+    async def _fake_soap(client, url, envelope, timeout=3.0):
+        if "GetSystemDateAndTime" in envelope:
+            return ET.fromstring(_SYSTEM_DATE_TIME_XML)
+        captured["envelope"] = envelope
+        return ET.fromstring("<ok/>")
+
+    monkeypatch.setattr(onvif, "_soap_request", _fake_soap)
+
+    await onvif._ptz_command(
+        "10.0.0.5", 80, "admin", "secret",
+        onvif._PTZ_STOP_ENVELOPE, ignore_time_mismatch=True, profile_token="P1",
+    )
+    created = _local(captured["envelope"], "Created").text
+    # Camera clock is in 2035, so the offset Created must land in that year.
+    assert created.startswith("2035-06-09T04:30:")
+
+
+@pytest.mark.asyncio
+async def test_ptz_command_skips_time_query_when_flag_off(monkeypatch):
+    """Default behavior: no GetSystemDateAndTime, Created stays on local clock."""
+    seen_envelopes = []
+
+    async def _fake_soap(client, url, envelope, timeout=3.0):
+        seen_envelopes.append(envelope)
+        return ET.fromstring("<ok/>")
+
+    monkeypatch.setattr(onvif, "_soap_request", _fake_soap)
+    monkeypatch.setattr(onvif.settings, "onvif_ignore_time_mismatch", False)
+
+    await onvif._ptz_command(
+        "10.0.0.5", 80, "admin", "secret",
+        onvif._PTZ_STOP_ENVELOPE, profile_token="P1",
+    )
+    assert not any("GetSystemDateAndTime" in e for e in seen_envelopes)
+    created = _local(seen_envelopes[0], "Created").text
+    # Local clock, so within a couple years of now (not the 2035 camera clock).
+    assert created.startswith(str(datetime.now(timezone.utc).year))
