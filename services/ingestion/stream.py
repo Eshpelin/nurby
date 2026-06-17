@@ -12,7 +12,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import quote, urlparse, urlunparse
 
 import cv2
 import numpy as np
@@ -72,9 +72,14 @@ def build_auth_url(stream_url: str, username: str | None, password: str | None) 
     if not username:
         return stream_url
     parsed = urlparse(stream_url)
-    credentials = username
+    # Percent-encode credentials before embedding in the netloc. Passwords
+    # routinely contain @ : / # ? % which otherwise corrupt URL parsing
+    # (ffmpeg/urlparse would split the netloc at the wrong character and
+    # resolve the wrong host). safe="" encodes everything reserved; simple
+    # alphanumeric credentials are unchanged.
+    credentials = quote(username, safe="")
     if password:
-        credentials = f"{username}:{password}"
+        credentials = f"{credentials}:{quote(password, safe='')}"
     authed = parsed._replace(netloc=f"{credentials}@{parsed.hostname}" + (f":{parsed.port}" if parsed.port else ""))
     return urlunparse(authed)
 
