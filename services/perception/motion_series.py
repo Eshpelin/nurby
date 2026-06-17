@@ -66,11 +66,11 @@ def func_greatest(a, b):
 
 
 # Runtime feature flag (shared.app_settings) that admits any write at all.
-# Default OFF: this writer emits ~1 row/camera/second and motion_samples has no
-# retention/pruning yet, so leaving it on would grow the table without bound.
-# Existing deployments must see ZERO new writes until an admin opts in.
-# PREREQUISITE before enabling in production: add a retention/pruning sweep for
-# motion_samples (mirror har_segment_retention_days).
+# Default OFF: this writer emits ~1 row/camera/second, so leaving it on adds
+# load and storage growth that existing deployments did not opt into. Existing
+# deployments must see ZERO new writes until an admin opts in. The table is kept
+# bounded by the hourly motion_samples retention sweep
+# (RetentionManager._enforce_motion_sample_retention, motion_series_retention_days).
 MOTION_SERIES_FLAG = "motion_series_enabled"
 
 

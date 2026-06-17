@@ -10,7 +10,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, delete, func, select
 
 from shared.config import settings
 from shared.database import async_session
@@ -77,6 +77,21 @@ def _remove_file(path: str | None) -> tuple[int, bool]:
     except OSError:
         logger.warning("Could not delete file %s", path)
         return 0, False
+
+
+def prune_motion_samples_stmt(cutoff: datetime):
+    """Build the bulk DELETE for motion_samples older than ``cutoff``.
+
+    Pure builder (no DB), so the SQL can be compiled/asserted in tests the same
+    way ``upsert_motion_sample_stmt`` is (cf. tests/test_motion_query.py). A
+    single set-based DELETE with a timestamp predicate, NOT a row-by-row load +
+    delete: the writer emits ~1 row/camera/second so the table is large and the
+    per-row pattern the other retention sweeps use would not scale here. Safe
+    no-op when the table is empty (the DELETE simply affects zero rows).
+    """
+    from shared.models import MotionSample
+
+    return delete(MotionSample).where(MotionSample.bucket < cutoff)
 
 
 class RetentionManager:
@@ -151,6 +166,39 @@ class RetentionManager:
             await self._enforce_har_segment_retention()
         except Exception:
             logger.exception("HAR segment retention failed")
+
+        # Motion-score samples (#37). System-wide window (one setting), like HAR
+        # segments. The motion-series writer emits ~1 row/camera/second once
+        # enabled, so without this sweep motion_samples would grow without bound.
+        # Best-effort; failure never blocks the loop.
+        try:
+            await self._enforce_motion_sample_retention()
+        except Exception:
+            logger.exception("Motion sample retention failed")
+
+    async def _enforce_motion_sample_retention(self) -> None:
+        """Delete motion_samples rows older than ``motion_series_retention_days``.
+
+        Single bulk DELETE with a timestamp predicate (no row-by-row load), since
+        the writer produces ~1 row/camera/second. A no-op when the window is
+        disabled (days <= 0) and a harmless zero-row DELETE when the table is
+        empty.
+        """
+        from shared.app_settings import get_setting
+
+        days = int(await get_setting("motion_series_retention_days", 7) or 0)
+        if days <= 0:
+            return
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        async with async_session() as db:
+            result = await db.execute(prune_motion_samples_stmt(cutoff))
+            await db.commit()
+            deleted = result.rowcount or 0
+            if deleted:
+                logger.info(
+                    "Motion sample retention. deleted %d rows (cutoff %s, %d days)",
+                    deleted, cutoff.isoformat(), days,
+                )
 
     async def _enforce_har_segment_retention(self) -> None:
         """Delete person_action_segments older than ``har_segment_retention_days``."""

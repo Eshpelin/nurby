@@ -225,8 +225,10 @@ class MotionSample(Base):
     coarser caller-chosen buckets server-side (see services.api.motion_query),
     mirroring Frigate's optimized motion-activity endpoint (#23383).
 
-    Retention: prune alongside recordings (same window). A scheduled cleanup is
-    out of scope for this foundation PR and tracked as next-step work.
+    Retention: an age-based sweep in the hourly ingestion retention loop
+    (RetentionManager._enforce_motion_sample_retention) bulk-deletes buckets
+    older than ``motion_series_retention_days`` (#37), so the table stays bounded
+    once the writer is enabled.
     """
 
     __tablename__ = "motion_samples"

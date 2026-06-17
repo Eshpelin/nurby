@@ -214,12 +214,18 @@ DEFAULTS: dict[str, Any] = {
     # ── Motion-score time series (#37) ───────────────────────────────
     # Master switch for persisting the downsampled per-camera motion-score
     # series into motion_samples (backs GET /cameras/{id}/motion). Defaults
-    # OFF: the writer runs on every keyframe (~1 row/camera/second) and the
-    # table has NO retention/pruning yet, so leaving it on would grow the
-    # table without bound. Existing deployments see zero new writes until an
-    # admin opts in. PREREQUISITE before enabling in production: add a
-    # retention/pruning sweep for motion_samples (mirror har_segment_retention_days).
+    # OFF: the writer runs on every keyframe (~1 row/camera/second), so enabling
+    # it adds load and storage growth existing deployments did not opt into. They
+    # see zero new writes until an admin opts in. The table is bounded by the
+    # motion_samples retention sweep below (motion_series_retention_days), which
+    # mirrors har_segment_retention_days.
     "motion_series_enabled": False,
+    # Age-based retention for motion_samples. The writer above emits ~1 row/
+    # camera/second once enabled, so the table needs a pruning sweep (mirrors
+    # har_segment_retention_days) or it grows without bound. The hourly ingestion
+    # retention loop deletes buckets older than this window. Set 0 to disable
+    # pruning (not recommended while motion_series_enabled is on).
+    "motion_series_retention_days": 7,
 }
 
 
