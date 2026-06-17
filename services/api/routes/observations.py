@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.auth import get_current_user, require_query_token
 from shared.config import settings
 from shared.database import get_db
-from shared.models import Observation, ObservationVlmPass, Person, User
+from shared.models import Camera, Observation, ObservationVlmPass, Person, User
 from shared.paths import escape_like, resolve_inside
 from shared.schemas import ObservationResponse
 
@@ -67,6 +67,13 @@ async def list_observations(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     query = select(Observation).order_by(Observation.started_at.desc())
+    # Drop observations from cameras hidden from the review feed (they keep
+    # recording; this list is a review surface).
+    query = query.where(
+        Observation.camera_id.not_in(
+            select(Camera.id).where(Camera.exclude_from_review.is_(True))
+        )
+    )
     if camera_id:
         query = query.where(Observation.camera_id == camera_id)
     if from_:
