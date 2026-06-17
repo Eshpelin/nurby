@@ -671,6 +671,22 @@ class Provider(Base):
     # the output cap when set.
     max_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # ── Optional reasoning / "thinking" model controls (issue #41) ──────
+    # All NULL by default so behavior is unchanged unless an admin opts
+    # in. These are read by services.perception.vlm and services.agent.llm
+    # via shared.reasoning.resolve_reasoning_params; see that module for
+    # the per-provider wire shape.
+    #
+    # anthropic_thinking: one of "adaptive" | "enabled" | "off" (or NULL,
+    #   treated as off). "adaptive" lets Claude decide depth (Opus 4.6+);
+    #   "enabled" uses a fixed budget (older models, needs
+    #   anthropic_thinking_budget_tokens < max_output_tokens).
+    anthropic_thinking: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    anthropic_thinking_budget_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # openai_reasoning_effort: one of "minimal" | "low" | "medium" | "high"
+    #   (or NULL = off). Sent as reasoning_effort to OpenAI reasoning models
+    #   (o-series / gpt-5-class). Ignored by non-reasoning chat models.
+    openai_reasoning_effort: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
