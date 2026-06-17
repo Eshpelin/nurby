@@ -117,8 +117,11 @@ export function StarredStatusRow() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // The /ws socket is token-authenticated (issue #40); skip until a token
+    // exists, reconnect (effect re-run) when it appears.
+    if (!token) return;
     const apiBase = process.env.NEXT_PUBLIC_API_BASE || window.location.origin;
-    const url = apiBase.replace(/^http/, "ws") + "/ws";
+    const url = `${apiBase.replace(/^http/, "ws")}/ws?token=${encodeURIComponent(token)}`;
     try {
       const ws = new WebSocket(url);
       wsRef.current = ws;
@@ -139,7 +142,7 @@ export function StarredStatusRow() {
     return () => {
       try { wsRef.current?.close(); } catch { /* ignore */ }
     };
-  }, [fetchStatus]);
+  }, [fetchStatus, token]);
 
   const refreshOne = useCallback(async (id: string) => {
     setRefreshingId(id);

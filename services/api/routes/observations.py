@@ -8,6 +8,12 @@ from sqlalchemy import String, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_query_token
+from shared.camera_access import (
+    ALL,
+    AllowedCameras,
+    allowed_camera_ids,
+    apply_camera_filter,
+)
 from shared.config import settings
 from shared.database import get_db
 from shared.models import Camera, Observation, ObservationVlmPass, Person, User
@@ -15,6 +21,25 @@ from shared.paths import escape_like, resolve_inside
 from shared.schemas import ObservationResponse
 
 router = APIRouter()
+
+
+def _camera_in_scope(allowed: AllowedCameras, camera_id: uuid.UUID | None) -> bool:
+    """True when ``camera_id`` is visible under the ``allowed`` ACL (issue
+    #40). ``ALL`` sees everything; a concrete allowlist excludes rows with no
+    camera."""
+    if allowed is ALL:
+        return True
+    return camera_id is not None and camera_id in allowed
+
+
+async def _user_from_query_token(token: str | None, db: AsyncSession) -> User:
+    """Resolve a ``?token=`` media-route caller to a live User (401 on a
+    missing/invalid token or a deactivated/unknown user)."""
+    user_id = require_query_token(token)
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or deactivated")
+    return user
 
 
 @router.get("/{observation_id}/vlm-passes")
@@ -64,9 +89,14 @@ async def list_observations(
     label: str | None = Query(default=None, description="Filter to observations with this YOLO label"),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    query = select(Observation).order_by(Observation.started_at.desc())
+    allowed = await allowed_camera_ids(current_user, db)
+    query = apply_camera_filter(
+        select(Observation).order_by(Observation.started_at.desc()),
+        allowed,
+        Observation.camera_id,
+    )
     # Drop observations from cameras hidden from the review feed (they keep
     # recording; this list is a review surface).
     query = query.where(
@@ -105,9 +135,11 @@ async def list_observations(
 
 
 @router.get("/{observation_id}", response_model=ObservationResponse)
-async def get_observation(observation_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_observation(observation_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     observation = await db.get(Observation, observation_id)
-    if not observation:
+    allowed = await allowed_camera_ids(current_user, db)
+    # 404 (not 403) when out of the caller's camera ACL, to avoid id probing.
+    if not observation or not _camera_in_scope(allowed, observation.camera_id):
         raise HTTPException(status_code=404, detail="Observation not found")
     return observation
 
@@ -120,9 +152,11 @@ async def get_observation_thumbnail(
 ):
     """Thumbnail auth accepts either Bearer header or a `?token=` query
     param so <img> tags can load without JS."""
-    require_query_token(token)
+    user = await _user_from_query_token(token, db)
     observation = await db.get(Observation, observation_id)
-    if not observation:
+    allowed = await allowed_camera_ids(user, db)
+    # 404 (not 403) when out of the caller's camera ACL, to avoid id probing.
+    if not observation or not _camera_in_scope(allowed, observation.camera_id):
         raise HTTPException(status_code=404, detail="Observation not found")
     if not observation.thumbnail_path:
         raise HTTPException(status_code=404, detail="Thumbnail not found")

@@ -6,6 +6,7 @@ from sqlalchemy import String, cast, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_admin
+from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids, apply_camera_filter
 from shared.database import get_db
 from shared.models import Camera, Event, EventNote, Observation, Person, Rule, User
 from shared.paths import escape_like
@@ -46,15 +47,16 @@ async def list_events(
     rule_id: uuid.UUID | None = Query(default=None),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    query = (
+    allowed = await allowed_camera_ids(current_user, db)
+    query = apply_camera_filter(
         select(Event)
         .where(_not_review_excluded(Event.camera_id))
-        .order_by(Event.fired_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+        .order_by(Event.fired_at.desc()),
+        allowed,
+        Event.camera_id,
+    ).limit(limit).offset(offset)
     if rule_id:
         query = query.where(Event.rule_id == rule_id)
     result = await db.execute(query)
@@ -73,11 +75,19 @@ async def _filtered_events_query(
     label: str | None = None,
     acked: bool | None = None,
     severity: str | None = None,
+    allowed: AllowedCameras = ALL,
 ):
     """Shared filter builder for /history and /export.csv. Returns the
-    query, or None when a person filter resolves to nobody (no rows)."""
-    query = select(Event).where(_not_review_excluded(Event.camera_id)).order_by(
-        Event.fired_at.desc()
+    query, or None when a person filter resolves to nobody (no rows).
+
+    ``allowed`` is the per-user camera ACL (issue #40); it defaults to
+    ``ALL`` (no filter) so existing callers and tests are unaffected."""
+    query = apply_camera_filter(
+        select(Event)
+        .where(_not_review_excluded(Event.camera_id))
+        .order_by(Event.fired_at.desc()),
+        allowed,
+        Event.camera_id,
     )
     if severity in ("alert", "detection"):
         query = query.where(Event.severity == severity)
@@ -133,13 +143,15 @@ async def event_history(
     severity: str | None = Query(default=None, description="alert or detection"),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """List events with optional filters for rule, camera, action status,
     time range, person, label, and acknowledged state."""
+    allowed = await allowed_camera_ids(current_user, db)
     query = await _filtered_events_query(
         db, rule_id=rule_id, camera_id=camera_id, status=status, from_=from_,
         to=to, person_id=person_id, label=label, acked=acked, severity=severity,
+        allowed=allowed,
     )
     if query is None:
         return []
@@ -159,7 +171,7 @@ async def export_events_csv(
     label: str | None = Query(default=None),
     acked: bool | None = Query(default=None),
     severity: str | None = Query(default=None),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Audit/archival export of fired events. Same filters as /history,
@@ -170,9 +182,11 @@ async def export_events_csv(
 
     from fastapi.responses import StreamingResponse
 
+    allowed = await allowed_camera_ids(current_user, db)
     query = await _filtered_events_query(
         db, rule_id=rule_id, camera_id=camera_id, status=status, from_=from_,
         to=to, person_id=person_id, label=label, acked=acked, severity=severity,
+        allowed=allowed,
     )
 
     columns = [
