@@ -3452,3 +3452,605 @@
 {"pr": 5450, "title": "Add option to have cameras sorted inside the Birdseye stream", "decision": "na", "batch": "46-50"}
 {"pr": 5440, "title": "Bump go2rtc from 1.1.1 to 1.1.2", "decision": "na", "batch": "46-50"}
 {"pr": 5433, "title": "Add vaapi birdseye encoding back in", "decision": "na", "batch": "46-50"}
+{"pr": 5430, "title": "add note about go2rtc webui access", "decision": "na", "batch": "51-55"}
+{"pr": 5417, "title": "Fix logging IP instead of WebRTC port", "decision": "na", "batch": "51-55"}
+{"pr": 5406, "title": "Auto select gpu for hwaccel presets", "decision": "na", "batch": "51-55"}
+{"pr": 5398, "title": "Update docs for H265", "decision": "na", "batch": "51-55"}
+{"pr": 5386, "title": "update presets docs", "decision": "na", "batch": "51-55"}
+{"pr": 5383, "title": "Scrollbar juddering", "decision": "na", "batch": "51-55"}
+{"pr": 5380, "title": "additional shutdown optimizations", "decision": "na", "batch": "51-55"}
+{"pr": 5379, "title": "Docs tweaks", "decision": "na", "batch": "51-55"}
+{"pr": 5378, "title": "Fast restart", "decision": "na", "batch": "51-55"}
+{"pr": 5373, "title": "Fix copying logs", "decision": "na", "batch": "51-55"}
+{"pr": 5367, "title": "Add Low latency preset", "decision": "na", "batch": "51-55"}
+{"pr": 5356, "title": "Try to limit nvidia GPU queries to included GPUs", "decision": "na", "batch": "51-55"}
+{"pr": 5340, "title": "Name capture processes", "decision": "na", "batch": "51-55"}
+{"pr": 5333, "title": "Update go2rtc to 1.1.1", "decision": "na", "batch": "51-55"}
+{"pr": 5332, "title": "Add examples of intel inference times from survey answers", "decision": "na", "batch": "51-55"}
+{"pr": 5320, "title": "Upgrade go2rtc from v1.0.1 to v1.1.0", "decision": "na", "batch": "51-55"}
+{"pr": 5319, "title": "Bump docker/build-push-action from 3 to 4", "decision": "na", "batch": "51-55"}
+{"pr": 5312, "title": "Add warning for below suggested SHM calculation", "decision": "na", "batch": "51-55"}
+{"pr": 5308, "title": "Bump ASzc/change-string-case-action from 1 to 5", "decision": "na", "batch": "51-55"}
+{"pr": 5294, "title": "Docs updates, fix recording warnings, default log level for ws4py", "decision": "na", "batch": "51-55"}
+{"pr": 5292, "title": "Add \"\" to go2rtc docs examples", "decision": "na", "batch": "51-55"}
+{"pr": 5291, "title": "Rework Timeago component", "decision": "na", "batch": "51-55"}
+{"pr": 5289, "title": "Add docs for adding authentication to rtsp restream", "decision": "na", "batch": "51-55"}
+{"pr": 5285, "title": "YOLOX support for OpenVINO Detector", "decision": "na", "batch": "51-55"}
+{"pr": 5281, "title": "Replace hardcoded package name in CI workflow", "decision": "na", "batch": "51-55"}
+{"pr": 5280, "title": "Restart ffmpeg if process exceeds detect fps by 10", "decision": "na", "batch": "51-55"}
+{"pr": 5265, "title": "Set jsmpeg manually when restream is disabled after previously being enabled", "decision": "na", "batch": "51-55"}
+{"pr": 5264, "title": "warn if unable to keep up with moving segments", "decision": "na", "batch": "51-55"}
+{"pr": 5259, "title": "Fix tmpfs filling up due to nginx file descriptors", "decision": "na", "batch": "51-55"}
+{"pr": 5254, "title": "Correct Live HTTP cam example", "decision": "na", "batch": "51-55"}
+{"pr": 5239, "title": "Upgrade s6-overlay from 3.1.2.1 to 3.1.3.0", "decision": "na", "batch": "51-55"}
+{"pr": 5238, "title": "Update flv docs", "decision": "na", "batch": "51-55"}
+{"pr": 5235, "title": "Upgrade go2rtc from 1.0.0 to 1.0.1", "decision": "na", "batch": "51-55"}
+{"pr": 5231, "title": "Add low delay args to restream input args", "decision": "na", "batch": "51-55"}
+{"pr": 5230, "title": "Add exec docs for `{{output}}`", "decision": "na", "batch": "51-55"}
+{"pr": 5227, "title": "Print webrtc info to stderr", "decision": "na", "batch": "51-55"}
+{"pr": 5219, "title": "Migrate default database path from `/media/frigate` to `/config`", "decision": "na", "batch": "51-55"}
+{"pr": 5216, "title": "Fix Frigate stuck at finishing when restarting from UI", "decision": "na", "batch": "51-55"}
+{"pr": 5210, "title": "Set hard frame rate limit", "decision": "na", "batch": "51-55"}
+{"pr": 5209, "title": "Fix HA IP address and WebRTC port inferring", "decision": "na", "batch": "51-55"}
+{"pr": 5208, "title": "Add config option to disable version check", "decision": "na", "batch": "51-55"}
+{"pr": 5195, "title": "System page: add last updated time ago", "decision": "na", "batch": "51-55"}
+{"pr": 5183, "title": "[Feature] Add timepicker to calendar", "decision": "na", "batch": "51-55"}
+{"pr": 5182, "title": "Update NVIDIA hwdecode docs", "decision": "na", "batch": "51-55"}
+{"pr": 5173, "title": "Update go2rtc to 1.0.0", "decision": "na", "batch": "51-55"}
+{"pr": 5172, "title": "Update Nvidia Hwaccel Docs", "decision": "na", "batch": "51-55"}
+{"pr": 5171, "title": "Fix birdseye snapshot", "decision": "na", "batch": "51-55"}
+{"pr": 5165, "title": "Fix reolink docs and add example of manual ffmpeg restream", "decision": "na", "batch": "51-55"}
+{"pr": 5155, "title": "System page: fix 0 FPS for disabled camera", "decision": "na", "batch": "51-55"}
+{"pr": 5154, "title": "only run the latest commit to avoid cache overwrites", "decision": "na", "batch": "51-55"}
+{"pr": 5153, "title": "Use frigate env var substitution in go2rtc config", "decision": "na", "batch": "51-55"}
+{"pr": 5150, "title": "Catch case where go2rtc streams is not defined", "decision": "na", "batch": "51-55"}
+{"pr": 5149, "title": "Do not wait forever for services to exit", "decision": "na", "batch": "51-55"}
+{"pr": 5147, "title": "Auto approve dependabot PRs", "decision": "na", "batch": "51-55"}
+{"pr": 5145, "title": "Remove rpi warning about not working hwaccel", "decision": "na", "batch": "51-55"}
+{"pr": 5135, "title": "Refactor s6 scripts to the new format", "decision": "na", "batch": "51-55"}
+{"pr": 5134, "title": "Fix not using custom set stream name", "decision": "na", "batch": "51-55"}
+{"pr": 5133, "title": "Fix go2rtc error when not set, fix ffmpeg command when running on arm64", "decision": "na", "batch": "51-55"}
+{"pr": 5132, "title": "Optimize restream docs", "decision": "na", "batch": "51-55"}
+{"pr": 5123, "title": "Fix shm size calculation", "decision": "na", "batch": "51-55"}
+{"pr": 5117, "title": "Pre clear retained messages", "decision": "na", "batch": "51-55"}
+{"pr": 5115, "title": "handle timezones with partial hour offsets", "decision": "na", "batch": "51-55"}
+{"pr": 5114, "title": "Patch nginx-vod-module to ignore RBSP trailing bits", "decision": "na", "batch": "51-55"}
+{"pr": 5106, "title": "Rewrite restream", "decision": "na", "batch": "51-55"}
+{"pr": 5105, "title": "Add dependabot auto merge workflow", "decision": "na", "batch": "51-55"}
+{"pr": 5104, "title": "Upgrade go2rtc from v0.1-rc.8 to v0.1-rc.9", "decision": "na", "batch": "51-55"}
+{"pr": 5097, "title": "Rework events page to include timeago ", "decision": "na", "batch": "51-55"}
+{"pr": 5095, "title": "Fix qsv h265", "decision": "na", "batch": "51-55"}
+{"pr": 5094, "title": "Add specific presets for restream and record with audio", "decision": "na", "batch": "51-55"}
+{"pr": 5093, "title": "Rework storage page to show sizes with relevant units", "decision": "na", "batch": "51-55"}
+{"pr": 5092, "title": "Rework audio encoding for restream", "decision": "na", "batch": "51-55"}
+{"pr": 5090, "title": "Add Save Only button to config editor", "decision": "na", "batch": "51-55"}
+{"pr": 5089, "title": "Auto discover internal WebRTC candidate for add-on", "decision": "na", "batch": "51-55"}
+{"pr": 5087, "title": "Update library loading for tensorrt", "decision": "na", "batch": "51-55"}
+{"pr": 5086, "title": "Fix timezone settings", "decision": "na", "batch": "51-55"}
+{"pr": 5084, "title": "Revisit FAQs", "decision": "na", "batch": "51-55"}
+{"pr": 5083, "title": "Update live view documentation to match newest go2rtc", "decision": "na", "batch": "51-55"}
+{"pr": 5079, "title": "Add option for live mode & timezone config, fix MSE check for iPad", "decision": "na", "batch": "51-55"}
+{"pr": 5078, "title": "Update to Go2rtc rc8", "decision": "na", "batch": "51-55"}
+{"pr": 5075, "title": "System page: make clear if detect disabled", "decision": "na", "batch": "51-55"}
+{"pr": 5072, "title": "Show recording and snapshot storage separately if different sizes", "decision": "na", "batch": "51-55"}
+{"pr": 5070, "title": "Replace localhost with explicit address", "decision": "na", "batch": "51-55"}
+{"pr": 5064, "title": "Bump actions/setup-python from 4.4.0 to 4.5.0", "decision": "na", "batch": "51-55"}
+{"pr": 5056, "title": "Catch FileNotFoundError when getting file system stats", "decision": "have", "batch": "51-55", "note": "system stats guards isdir + falls back to / before psutil.disk_usage (system.py:129)"}
+{"pr": 5054, "title": "Simplify hwaccel filter args and fix qsv bugs", "decision": "na", "batch": "51-55"}
+{"pr": 5053, "title": "Update docs to point to ghcr", "decision": "na", "batch": "51-55"}
+{"pr": 5052, "title": "Clarify docs about rtmp", "decision": "na", "batch": "51-55"}
+{"pr": 5050, "title": "Make live docs more clear", "decision": "na", "batch": "51-55"}
+{"pr": 5044, "title": "Capitalize the Frigate word", "decision": "na", "batch": "51-55"}
+{"pr": 5031, "title": "Fix recordings storage", "decision": "na", "batch": "51-55"}
+{"pr": 5028, "title": "System page: add detector process mem%", "decision": "na", "batch": "51-55"}
+{"pr": 5027, "title": "Clean up go2rtc logs to not show color text unicode", "decision": "na", "batch": "51-55"}
+{"pr": 5021, "title": "Disable backchannel audio since it is not used", "decision": "na", "batch": "51-55"}
+{"pr": 5013, "title": "Add in_progress parameter to /api/events to filter the results.", "decision": "have", "batch": "51-55", "note": "events endpoint exposes richer 'status' filter (events.py:137), covers in_progress"}
+{"pr": 5011, "title": "Fix mem usage reporting when using docker limits", "decision": "na", "batch": "51-55"}
+{"pr": 5010, "title": "Camera WebUI fixes", "decision": "na", "batch": "51-55"}
+{"pr": 4997, "title": "Use scale_qsv and don't apply deinterlacing", "decision": "na", "batch": "51-55"}
+{"pr": 4989, "title": "Use library to handle copying to clipboard", "decision": "na", "batch": "51-55"}
+{"pr": 4985, "title": "System page: various minor UI tweaks", "decision": "na", "batch": "51-55"}
+{"pr": 4981, "title": "Fix None filter for sub labels", "decision": "na", "batch": "51-55"}
+{"pr": 4968, "title": "Fix RPi preset", "decision": "na", "batch": "51-55"}
+{"pr": 4966, "title": "update before install", "decision": "na", "batch": "51-55"}
+{"pr": 4965, "title": "Update go2rtc to rc7", "decision": "na", "batch": "51-55"}
+{"pr": 4964, "title": "Quick fix and clarification for docs", "decision": "na", "batch": "51-55"}
+{"pr": 4962, "title": "Make error messages for gpu stats more clear", "decision": "na", "batch": "51-55"}
+{"pr": 4961, "title": "Fix btbn pulling wrong build", "decision": "na", "batch": "51-55"}
+{"pr": 4956, "title": "Support for dynamic MQTT user configuration #4883", "decision": "na", "batch": "51-55"}
+{"pr": 4955, "title": "Fix raspberry pi hwaccel", "decision": "na", "batch": "51-55"}
+{"pr": 4951, "title": "Make label colors consistent", "decision": "na", "batch": "51-55"}
+{"pr": 4947, "title": "try and further improve caching", "decision": "na", "batch": "51-55"}
+{"pr": 4946, "title": "fix: preset-http-jpeg-generic reference", "decision": "na", "batch": "51-55"}
+{"pr": 4942, "title": "try and avoid caching extra large tensorrt layers", "decision": "na", "batch": "51-55"}
+{"pr": 4937, "title": "Fix integration link in the installation docs", "decision": "na", "batch": "51-55"}
+{"pr": 4936, "title": "Only set colors for enabled objects", "decision": "na", "batch": "51-55"}
+{"pr": 4935, "title": "Don't recheck erroring hwaccel in http either", "decision": "na", "batch": "51-55"}
+{"pr": 4933, "title": "Build nginx with tmpfs", "decision": "na", "batch": "51-55"}
+{"pr": 4932, "title": "Cleanup Detector labelmap", "decision": "na", "batch": "51-55"}
+{"pr": 4928, "title": "Add ffmpeg presets docs and update nvidia-smi docs", "decision": "na", "batch": "51-55"}
+{"pr": 4920, "title": "Update TensorRT Docs", "decision": "na", "batch": "51-55"}
+{"pr": 4919, "title": "add information about frigate plus to docs", "decision": "na", "batch": "51-55"}
+{"pr": 4917, "title": "Fix Other Stats Access Too", "decision": "na", "batch": "51-55"}
+{"pr": 4915, "title": "Change the RTMP restream to RTSP on introduction", "decision": "na", "batch": "51-55"}
+{"pr": 4912, "title": "Send blank hwaccel-error cache so logs will show when loading the sta…", "decision": "na", "batch": "51-55"}
+{"pr": 4904, "title": "Don't keep attempting gpu usage stats after failure", "decision": "na", "batch": "51-55"}
+{"pr": 4903, "title": "Docs updates", "decision": "na", "batch": "51-55"}
+{"pr": 4898, "title": "Rewrite encoding logic and cleanup vaapi presets", "decision": "na", "batch": "51-55"}
+{"pr": 4886, "title": "Add None option to zones & sub labels", "decision": "na", "batch": "51-55"}
+{"pr": 4884, "title": "Only replace topic for mqtt command", "decision": "na", "batch": "51-55"}
+{"pr": 4882, "title": "docs: adds note about dynamic config", "decision": "na", "batch": "51-55"}
+{"pr": 4880, "title": "Set host as blank by default", "decision": "na", "batch": "51-55"}
+{"pr": 4877, "title": "Don't fail to load all stats when cameras stats are not available", "decision": "na", "batch": "51-55"}
+{"pr": 4876, "title": "Ability to set different codec for restream and use go2rtc hardware", "decision": "na", "batch": "51-55"}
+{"pr": 4875, "title": "Fix href for cameras direct link", "decision": "na", "batch": "51-55"}
+{"pr": 4871, "title": "Update Docker Compose Installation to Not Mount Config File as Read Only", "decision": "na", "batch": "51-55"}
+{"pr": 4869, "title": "check stream specific hwaccel_args for gpu stats", "decision": "na", "batch": "51-55"}
+{"pr": 4864, "title": "Catch case where args are a string but not preset", "decision": "na", "batch": "51-55"}
+{"pr": 4863, "title": "only return stderr if return code is not 0", "decision": "na", "batch": "51-55"}
+{"pr": 4860, "title": "Upgrade go2rtc from v0.1-rc.5 to v0.1-rc.6", "decision": "na", "batch": "51-55"}
+{"pr": 4855, "title": "Fix schema url", "decision": "na", "batch": "51-55"}
+{"pr": 4843, "title": "Remove vaapi interlace which caused fps to be higher than specified", "decision": "na", "batch": "51-55"}
+{"pr": 4837, "title": "set env vars needed for nvidia support", "decision": "na", "batch": "51-55"}
+{"pr": 4836, "title": "Remove duplicate in docs", "decision": "na", "batch": "51-55"}
+{"pr": 4831, "title": "Fix handling of timezones", "decision": "na", "batch": "51-55"}
+{"pr": 4828, "title": "Update max operations for stalebot", "decision": "na", "batch": "51-55"}
+{"pr": 4827, "title": "easier python deps", "decision": "na", "batch": "51-55"}
+{"pr": 4826, "title": "Bump json5 from 2.2.1 to 2.2.2 in /docs", "decision": "na", "batch": "51-55"}
+{"pr": 4825, "title": "Fix config missing after leaving and coming back", "decision": "na", "batch": "51-55"}
+{"pr": 4824, "title": "Frontend deps", "decision": "na", "batch": "51-55"}
+{"pr": 4816, "title": "Handle multi-word time zones", "decision": "na", "batch": "51-55"}
+{"pr": 4804, "title": "Add hardware accelerated scaling when using ffmpeg hwaccel presets", "decision": "na", "batch": "51-55"}
+{"pr": 4786, "title": "Bump actions/setup-python from 4.3.0 to 4.4.0", "decision": "na", "batch": "51-55"}
+{"pr": 4780, "title": "Fix error when saving the config unsuccessfully", "decision": "na", "batch": "51-55"}
+{"pr": 4778, "title": "Frontend Player Fixes", "decision": "na", "batch": "51-55"}
+{"pr": 4761, "title": "Add ability to restream birdseye", "decision": "na", "batch": "51-55"}
+{"pr": 4757, "title": "Update Reolink docs", "decision": "na", "batch": "51-55"}
+{"pr": 4746, "title": "Update recommended hardware page to reflect multiple detectors", "decision": "na", "batch": "51-55"}
+{"pr": 4737, "title": "[API] filter for favorite events", "decision": "na", "batch": "51-55"}
+{"pr": 4729, "title": "Update certs", "decision": "na", "batch": "51-55"}
+{"pr": 4728, "title": "force upgrade certs", "decision": "na", "batch": "51-55"}
+{"pr": 4727, "title": "update contributing docs", "decision": "na", "batch": "51-55"}
+{"pr": 4726, "title": "Add note to docs about rpi kernel issue.", "decision": "na", "batch": "51-55"}
+{"pr": 4725, "title": "Fix MSE Issues", "decision": "na", "batch": "51-55"}
+{"pr": 4724, "title": "Fix monaco editor issues", "decision": "na", "batch": "51-55"}
+{"pr": 4723, "title": "Show All and Solo selection buttons for MultiSelect.", "decision": "na", "batch": "51-55"}
+{"pr": 4718, "title": "Nvidia TensorRT detector", "decision": "na", "batch": "51-55"}
+{"pr": 4715, "title": "Support Controlling PTZ Cameras Via WebUI", "decision": "na", "batch": "51-55"}
+{"pr": 4707, "title": "System page improvements", "decision": "na", "batch": "51-55"}
+{"pr": 4688, "title": "Optimize nginx & recordings", "decision": "na", "batch": "51-55"}
+{"pr": 4673, "title": "UI Cleanup & Optimization", "decision": "na", "batch": "51-55"}
+{"pr": 4656, "title": "Use UTC for recordings", "decision": "na", "batch": "51-55"}
+{"pr": 4653, "title": "Don't catch presets with segment check", "decision": "na", "batch": "51-55"}
+{"pr": 4649, "title": "Update method of acquiring signing keys", "decision": "na", "batch": "51-55"}
+{"pr": 4647, "title": "Fix end events for mqtt", "decision": "na", "batch": "51-55"}
+{"pr": 4646, "title": "Fix ffprobe with special characters", "decision": "have", "batch": "51-55", "note": "same cred-encoding bug class as #4259, fixed by Nurby PR #104"}
+{"pr": 4635, "title": "Convert detectors to factory pattern, ability to set different model for each detector", "decision": "na", "batch": "51-55"}
+{"pr": 4634, "title": "Add example of environment_vars", "decision": "na", "batch": "51-55"}
+{"pr": 4616, "title": "Update go2rtc version", "decision": "na", "batch": "51-55"}
+{"pr": 4608, "title": "Add config editor to webUI", "decision": "na", "batch": "51-55"}
+{"pr": 4607, "title": "Cleanup names in webUI", "decision": "na", "batch": "51-55"}
+{"pr": 4604, "title": "Restart record process if segments stop being written.", "decision": "na", "batch": "51-55"}
+{"pr": 4598, "title": "Set max height so vainfo doesn't overflow", "decision": "na", "batch": "51-55"}
+{"pr": 4597, "title": "Use presets by default", "decision": "na", "batch": "51-55"}
+{"pr": 4596, "title": "Do not apply `-user_agent` for `rtmp` streams", "decision": "na", "batch": "51-55"}
+{"pr": 4587, "title": "Log all services to memory", "decision": "na", "batch": "51-55"}
+{"pr": 4584, "title": "Upgrade s6-overlay from 2.2.0.3 to 3.1.2.1", "decision": "na", "batch": "51-55"}
+{"pr": 4581, "title": "Fix intel gpu stats", "decision": "na", "batch": "51-55"}
+{"pr": 4562, "title": "Logs in UI", "decision": "na", "batch": "51-55"}
+{"pr": 4555, "title": "Set User Agent for FFmpeg calls", "decision": "na", "batch": "51-55"}
+{"pr": 4554, "title": "Fix gpu stats for ffmpeg presets", "decision": "na", "batch": "51-55"}
+{"pr": 4544, "title": "Replace green screen with error message and force camera_fps to 0", "decision": "na", "batch": "51-55"}
+{"pr": 4543, "title": "Fix recordings set name", "decision": "na", "batch": "51-55"}
+{"pr": 4523, "title": "fix support for yuv models", "decision": "na", "batch": "51-55"}
+{"pr": 4519, "title": "Clean http password, clean path in debug config as well", "decision": "na", "batch": "51-55"}
+{"pr": 4515, "title": "Remove topic prefix", "decision": "na", "batch": "51-55"}
+{"pr": 4514, "title": "Folderize Docs: Each topic gets a folder", "decision": "na", "batch": "51-55"}
+{"pr": 4505, "title": "Fix stats prefix", "decision": "na", "batch": "51-55"}
+{"pr": 4504, "title": "Add docs about additions", "decision": "na", "batch": "51-55"}
+{"pr": 4503, "title": "fix image build", "decision": "na", "batch": "51-55"}
+{"pr": 4502, "title": "Add apache2 reverse proxy documentation", "decision": "na", "batch": "51-55"}
+{"pr": 4500, "title": "low risk updatea", "decision": "na", "batch": "51-55"}
+{"pr": 4498, "title": "update web deps", "decision": "na", "batch": "51-55"}
+{"pr": 4491, "title": "Fix makefile", "decision": "na", "batch": "51-55"}
+{"pr": 4462, "title": "Abstract MQTT from communication and make mqtt optional", "decision": "na", "batch": "51-55"}
+{"pr": 4449, "title": "Remove ffplay from docker image", "decision": "na", "batch": "51-55"}
+{"pr": 4448, "title": "Reduce amount layers of the docker image", "decision": "na", "batch": "51-55"}
+{"pr": 4447, "title": "rename debug to system", "decision": "na", "batch": "51-55"}
+{"pr": 4440, "title": "Refactor mqtt to handle reconnects and not cause frigate to stop.", "decision": "na", "batch": "51-55"}
+{"pr": 4436, "title": "Update cuvid docs with count param", "decision": "na", "batch": "51-55"}
+{"pr": 4432, "title": "Fix mixed params for CPU / MEM debug", "decision": "na", "batch": "51-55"}
+{"pr": 4431, "title": "Fix internal restream error and add docs for reducing camera connections", "decision": "na", "batch": "51-55"}
+{"pr": 4424, "title": "Easy Python Updates", "decision": "na", "batch": "51-55"}
+{"pr": 4411, "title": "Frontend fixes", "decision": "na", "batch": "51-55"}
+{"pr": 4395, "title": "Remove wheels from final container", "decision": "na", "batch": "51-55"}
+{"pr": 4391, "title": "Update go2rtc, simplify manual stream, and support audio for MSE & WebRTC", "decision": "na", "batch": "51-55"}
+{"pr": 4383, "title": "Update web deps", "decision": "na", "batch": "51-55"}
+{"pr": 4371, "title": "Fix new lines for instructions", "decision": "na", "batch": "51-55"}
+{"pr": 4368, "title": "Use testing repo for hwaccel dependencies", "decision": "na", "batch": "51-55"}
+{"pr": 4349, "title": "Revamped debug UI and add camera / process info, ffprobe copying", "decision": "na", "batch": "51-55"}
+{"pr": 4324, "title": "Update mask editor to have instructions", "decision": "na", "batch": "51-55"}
+{"pr": 4321, "title": "Update web", "decision": "na", "batch": "51-55"}
+{"pr": 4310, "title": "More config checks", "decision": "na", "batch": "51-55"}
+{"pr": 4309, "title": "Go2rtc update and MSE improvements", "decision": "na", "batch": "51-55"}
+{"pr": 4303, "title": "Upgrade to latest docusaurus", "decision": "na", "batch": "51-55"}
+{"pr": 4302, "title": "actions updates", "decision": "na", "batch": "51-55"}
+{"pr": 4271, "title": "Configure Dependabot", "decision": "na", "batch": "51-55"}
+{"pr": 4260, "title": "try a different approach for build_web", "decision": "na", "batch": "51-55"}
+{"pr": 4259, "title": "Support more special chars in camera passwords", "decision": "fix", "batch": "51-55", "note": "camera creds not URL-encoded in build_auth_url (stream.py:70); raw @:/#?% corrupt netloc -> wrong host -> FIXED PR #104 percent-encode quote(safe='')"}
+{"pr": 4258, "title": "Update funding list and fix demo link", "decision": "na", "batch": "51-55"}
+{"pr": 4252, "title": "Update go2rtc to rc1", "decision": "na", "batch": "51-55"}
+{"pr": 4230, "title": "Bump @xmldom/xmldom from 0.7.5 to 0.7.8 in /web", "decision": "na", "batch": "51-55"}
+{"pr": 4228, "title": "Catch case where segment is bad length", "decision": "na", "batch": "51-55"}
+{"pr": 4171, "title": "Docs update: Update camera specific input_agrs for ESP32-cam using ESPHome", "decision": "na", "batch": "51-55"}
+{"pr": 4162, "title": "Add option enabled for each camera in config", "decision": "na", "batch": "51-55"}
+{"pr": 4133, "title": "Adding clip duration to Events View", "decision": "na", "batch": "51-55"}
+{"pr": 4082, "title": "Add go2rtc and add restream role / live source", "decision": "na", "batch": "51-55"}
+{"pr": 4069, "title": "Catch case where recording is not enabled", "decision": "na", "batch": "51-55"}
+{"pr": 4065, "title": "Update docs to reflect recommended custom birdseye icon size", "decision": "na", "batch": "51-55"}
+{"pr": 4057, "title": "Support special characters in passwords, redacted logs & debug config", "decision": "have", "batch": "51-55", "note": "same cred-encoding bug class as #4259, fixed by Nurby PR #104"}
+{"pr": 4055, "title": "0.12.0 Release", "decision": "na", "batch": "51-55"}
+{"pr": 4039, "title": "Remove snapshot requirement for thumbnail event query", "decision": "na", "batch": "51-55"}
+{"pr": 4032, "title": "Link to env var option", "decision": "na", "batch": "51-55"}
+{"pr": 4020, "title": "Fix some typos in docs", "decision": "na", "batch": "51-55"}
+{"pr": 4016, "title": "Catch ffprobe empty stdout", "decision": "have", "batch": "51-55", "note": "analyzer ffmpeg extract guards returncode!=0 or not stdout + wait_for timeout (analyzer.py:357,345)"}
+{"pr": 4015, "title": "Fix sub label access", "decision": "na", "batch": "51-55"}
+{"pr": 4005, "title": "Restructured camera specific documentation", "decision": "na", "batch": "51-55"}
+{"pr": 3995, "title": "don't overwrite segments that already exist", "decision": "na", "batch": "51-55"}
+{"pr": 3969, "title": "Set a timeout on github release check", "decision": "have", "batch": "51-55", "note": "all outbound httpx calls have explicit timeouts (telegram/stream/mux/llm/search/widget)"}
+{"pr": 3942, "title": "Storage Based Retention", "decision": "na", "batch": "51-55"}
+{"pr": 3931, "title": "Add GPU stats to the /stats API and debug screen", "decision": "na", "batch": "51-55"}
+{"pr": 3922, "title": "Add an example for birdseye override at camera level", "decision": "na", "batch": "51-55"}
+{"pr": 3921, "title": "identation, device Id", "decision": "na", "batch": "51-55"}
+{"pr": 3899, "title": "Mqtt sub labels", "decision": "na", "batch": "51-55"}
+{"pr": 3898, "title": "Update motion topic when enabling due to detect topic", "decision": "na", "batch": "51-55"}
+{"pr": 3885, "title": "Bump vite from 2.8.6 to 2.9.13 in /web", "decision": "na", "batch": "51-55"}
+{"pr": 3879, "title": "BUG: Fixes and cleanup around region / bounding box calculation", "decision": "na", "batch": "51-55"}
+{"pr": 3869, "title": "Recording: Fix z-index issue with recording playlist (#3762)", "decision": "na", "batch": "51-55"}
+{"pr": 3855, "title": "Remove `JELLYFIN` from intel-driver-name hwaccel docs", "decision": "na", "batch": "51-55"}
+{"pr": 3840, "title": "FEAT: Support for ffmpeg presets", "decision": "na", "batch": "51-55"}
+{"pr": 3830, "title": "BUG: Fix edge of frame after region adjustments", "decision": "na", "batch": "51-55"}
+{"pr": 3793, "title": "BUG: Fix edge case where browser sends multiple requests to download file", "decision": "na", "batch": "51-55"}
+{"pr": 3782, "title": "update recommended hardware links", "decision": "na", "batch": "51-55"}
+{"pr": 3771, "title": "Add documentation for custom ffmpeg builds", "decision": "na", "batch": "51-55"}
+{"pr": 3768, "title": "Add OpenVino Detector", "decision": "na", "batch": "51-55"}
+{"pr": 3763, "title": "Show snapshots on events page", "decision": "na", "batch": "51-55"}
+{"pr": 3762, "title": "Recording: Bring playlist in front of video.js modals", "decision": "na", "batch": "51-55"}
+{"pr": 3731, "title": "Fix stalebot", "decision": "na", "batch": "51-55"}
+{"pr": 3723, "title": "New templates for coral and hwaccel", "decision": "na", "batch": "51-55"}
+{"pr": 3720, "title": "Add camera specific args for unify protect cameras", "decision": "na", "batch": "51-55"}
+{"pr": 3719, "title": "Add note about special characters in passwords", "decision": "na", "batch": "51-55"}
+{"pr": 3710, "title": "Set vod_ignore_edit_list option", "decision": "na", "batch": "51-55"}
+{"pr": 3708, "title": "Cleanup names of cameras, zones, & labels in the UI", "decision": "na", "batch": "51-55"}
+{"pr": 3703, "title": "DOCS: Remove outdated section on events", "decision": "na", "batch": "51-55"}
+{"pr": 3702, "title": "Ensure bounding box is within camera frame", "decision": "na", "batch": "51-55"}
+{"pr": 3695, "title": "Use BtBn ffmpeg build", "decision": "na", "batch": "51-55"}
+{"pr": 3679, "title": "Handle spaces in labels", "decision": "na", "batch": "51-55"}
+{"pr": 3671, "title": "Fix VOD issues with longer keyframe intervals", "decision": "na", "batch": "51-55"}
+{"pr": 3666, "title": "Use master playlist for videojs for H.265 playback", "decision": "na", "batch": "51-55"}
+{"pr": 3656, "title": "Object Detector Abstraction", "decision": "na", "batch": "51-55"}
+{"pr": 3595, "title": "Add link to supported encoding for each Nvidia GPU", "decision": "na", "batch": "51-55"}
+{"pr": 3589, "title": "Adding configuration example for retain modes", "decision": "na", "batch": "51-55"}
+{"pr": 3570, "title": "Update docs to reflect new image multiarch tag", "decision": "na", "batch": "51-55"}
+{"pr": 3558, "title": "Wait for recordingSummary and recordings to be valid before playing", "decision": "na", "batch": "51-55"}
+{"pr": 3545, "title": "Add clean_copy to configuration docs", "decision": "na", "batch": "51-55"}
+{"pr": 3501, "title": "docker: Add VAAPI to arm64", "decision": "na", "batch": "51-55"}
+{"pr": 3492, "title": "Improve the devcontainer experience", "decision": "na", "batch": "51-55"}
+{"pr": 3489, "title": "Use relative path without .. for rtmp documentation to fix #3481", "decision": "na", "batch": "51-55"}
+{"pr": 3479, "title": "Update hardware_acceleration.md", "decision": "na", "batch": "51-55"}
+{"pr": 3474, "title": "BUG: camera motion topic not reset on startup", "decision": "na", "batch": "51-55"}
+{"pr": 3456, "title": "Add FAQ about database locked error", "decision": "na", "batch": "51-55"}
+{"pr": 3439, "title": "Add log message when discarding recording segments in cache", "decision": "na", "batch": "51-55"}
+{"pr": 3409, "title": "FEAT: Storage API &  Frontend", "decision": "na", "batch": "51-55"}
+{"pr": 3367, "title": "FEAT: Filter Multi Select", "decision": "na", "batch": "51-55"}
+{"pr": 3352, "title": "Typing Part 3: events.py", "decision": "na", "batch": "51-55"}
+{"pr": 3350, "title": "Http tests", "decision": "na", "batch": "51-55"}
+{"pr": 3298, "title": "improvement: Experimental UI", "decision": "na", "batch": "51-55"}
+{"pr": 3292, "title": "Update camera_specific.md", "decision": "na", "batch": "51-55"}
+{"pr": 3288, "title": "Limit size of player in events view", "decision": "na", "batch": "51-55"}
+{"pr": 3267, "title": "Update docs with instructions for adding the JSON config schema", "decision": "na", "batch": "51-55"}
+{"pr": 3246, "title": "Catch crash on no internet for github stats", "decision": "have", "batch": "51-55", "note": "outbound github/stats calls timeout-bounded; no unbounded request"}
+{"pr": 3233, "title": "Fix hwaccel docs for nvidia docker-compose", "decision": "na", "batch": "51-55"}
+{"pr": 3226, "title": "Fix Firefox oversized delete icon", "decision": "na", "batch": "51-55"}
+{"pr": 3225, "title": "Favorite events delete button warning", "decision": "na", "batch": "51-55"}
+{"pr": 3207, "title": "Recordings overhaul and db performance improvements", "decision": "na", "batch": "51-55"}
+{"pr": 3194, "title": "Update event filters naming and add sub label filter", "decision": "na", "batch": "51-55"}
+{"pr": 3184, "title": "Ability to manually create events through the API", "decision": "na", "batch": "51-55"}
+{"pr": 3179, "title": "Add 16x Playback rate to VideoPlayer.jsx", "decision": "na", "batch": "51-55"}
+{"pr": 3177, "title": "Add docs about casting with hass integration", "decision": "na", "batch": "51-55"}
+{"pr": 3164, "title": "Events setup docs", "decision": "na", "batch": "51-55"}
+{"pr": 3154, "title": "Adjust camera motion threshold and contour area with mqtt", "decision": "na", "batch": "51-55"}
+{"pr": 3152, "title": "Send mqtt message when motion is detected", "decision": "na", "batch": "51-55"}
+{"pr": 3150, "title": "Set event thumbnail cache timeout to 30 days", "decision": "na", "batch": "51-55"}
+{"pr": 3149, "title": "Mqtt set motion switch on init", "decision": "na", "batch": "51-55"}
+{"pr": 3147, "title": "Fixes", "decision": "na", "batch": "51-55"}
+{"pr": 3143, "title": "optimize caching of image data from api", "decision": "na", "batch": "51-55"}
+{"pr": 3141, "title": "retain the set topic for switches", "decision": "na", "batch": "51-55"}
+{"pr": 3134, "title": "Docker revamp Nvidia decode support", "decision": "na", "batch": "51-55"}
+{"pr": 3117, "title": "Ability to enable / disable motion detection via MQTT", "decision": "na", "batch": "51-55"}
+{"pr": 3109, "title": "Armv7 + fixes", "decision": "na", "batch": "51-55"}
+{"pr": 3096, "title": "Typing Part 2: Type multiple files", "decision": "na", "batch": "51-55"}
+{"pr": 3095, "title": "Add more issue templates", "decision": "na", "batch": "51-55"}
+{"pr": 3092, "title": "Typing Part 1: Fix Makefile and add mypy", "decision": "na", "batch": "51-55"}
+{"pr": 3090, "title": "Dockerfile: Use requirement file for pip installs", "decision": "na", "batch": "51-55"}
+{"pr": 3086, "title": "docker-compose: Changes group type from int to str", "decision": "na", "batch": "51-55"}
+{"pr": 3083, "title": "Allow birdseye to be overridden at the camera level", "decision": "na", "batch": "51-55"}
+{"pr": 3080, "title": "limit send to plus where appropriate", "decision": "na", "batch": "51-55"}
+{"pr": 3077, "title": "DOCS: Add stationary tracking config section to elaborate more on stationary tracking", "decision": "na", "batch": "51-55"}
+{"pr": 3052, "title": "Add plus", "decision": "na", "batch": "51-55"}
+{"pr": 3045, "title": "Update docs to include warnings about needing record enabled in the config", "decision": "na", "batch": "51-55"}
+{"pr": 3038, "title": "Add latest frigate version to stats endpoints", "decision": "na", "batch": "51-55"}
+{"pr": 3023, "title": "BUG: Event stuck if recording & snapshot disabled while in-progress", "decision": "na", "batch": "51-55"}
+{"pr": 3011, "title": "Allow improve_contrast to be toggled via mqtt", "decision": "na", "batch": "51-55"}
+{"pr": 2994, "title": "Fix tiny timing bug", "decision": "na", "batch": "51-55"}
+{"pr": 2981, "title": "FEAT: Ability to reorder & ability to hide Cameras in UI", "decision": "na", "batch": "51-55"}
+{"pr": 2979, "title": "FEAT: Ability to set custom birdseye icon and birdseye docs", "decision": "na", "batch": "51-55"}
+{"pr": 2952, "title": "Add object filter ratio", "decision": "na", "batch": "51-55"}
+{"pr": 2949, "title": "FEAT: Ability to set sub labels for specific events", "decision": "na", "batch": "51-55"}
+{"pr": 2944, "title": "FEAT: Replace best jpg endpoint", "decision": "na", "batch": "51-55"}
+{"pr": 2942, "title": "Dynamic contrast configuration", "decision": "na", "batch": "51-55"}
+{"pr": 2941, "title": "Frontend Revamp", "decision": "na", "batch": "51-55"}
+{"pr": 2914, "title": "Docs: Update recording docs to include examples of retain modes.", "decision": "na", "batch": "51-55"}
+{"pr": 2908, "title": "FEAT: MQTT support for `all` objects for each camera & zone", "decision": "na", "batch": "51-55"}
+{"pr": 2892, "title": "Fix \"expired: #\" log spam", "decision": "na", "batch": "51-55"}
+{"pr": 2851, "title": "Consolidate dockerfile for multiarch builds", "decision": "na", "batch": "51-55"}
+{"pr": 2846, "title": "Always show camera recordings in sidebar regardless of state", "decision": "na", "batch": "51-55"}
+{"pr": 2831, "title": "FEAT: Ability to retain specific clips / events indefinitely", "decision": "na", "batch": "51-55"}
+{"pr": 2830, "title": "feat: Timeline UI — First Iteration", "decision": "na", "batch": "51-55"}
+{"pr": 2829, "title": "Release 0.11.0", "decision": "na", "batch": "51-55"}
+{"pr": 2803, "title": "Another missing slash", "decision": "na", "batch": "51-55"}
+{"pr": 2797, "title": "Missing slash in url", "decision": "na", "batch": "51-55"}
+{"pr": 2794, "title": "Update advanced.md", "decision": "na", "batch": "51-55"}
+{"pr": 2787, "title": "Always show recording link even if recordings are currently disabled", "decision": "na", "batch": "51-55"}
+{"pr": 2779, "title": "Allow download of in progress clips", "decision": "na", "batch": "51-55"}
+{"pr": 2778, "title": "Fix stationary threshold event", "decision": "na", "batch": "51-55"}
+{"pr": 2777, "title": "Duration and Playback Rate Fixes", "decision": "na", "batch": "51-55"}
+{"pr": 2775, "title": "Fix playback rate resetting to 1 on source change", "decision": "na", "batch": "51-55"}
+{"pr": 2772, "title": "Add in progress events to recordings view", "decision": "na", "batch": "51-55"}
+{"pr": 2747, "title": "Improve stationary", "decision": "na", "batch": "51-55"}
+{"pr": 2589, "title": "Run python unit tests in a github actions", "decision": "na", "batch": "51-55"}
+{"pr": 2586, "title": "Document JPEG streams", "decision": "na", "batch": "51-55"}
+{"pr": 2552, "title": "Allow arbitrary model size + safe refactoring", "decision": "na", "batch": "51-55"}
+{"pr": 2543, "title": "Change JPEG `Content-Type` from `image/jpg` to `image/jpeg`", "decision": "have", "batch": "51-55", "note": "image/jpeg used uniformly, never image/jpg (guardian.py:478, cameras.py:958)"}
+{"pr": 2429, "title": "Motion data", "decision": "na", "batch": "51-55"}
+{"pr": 2428, "title": "Event Datepicker", "decision": "na", "batch": "51-55"}
+{"pr": 2341, "title": "Add temperature of coral tpu to telemetry mqtt message", "decision": "na", "batch": "51-55"}
+{"pr": 2339, "title": "Update objects.mdx", "decision": "na", "batch": "51-55"}
+{"pr": 2244, "title": "Allow for \".yaml\"", "decision": "na", "batch": "51-55"}
+{"pr": 2212, "title": " #2117 change entered_zones from set to list so that they are not automatically alphabetically ordered", "decision": "na", "batch": "51-55"}
+{"pr": 2201, "title": "Motion improvements", "decision": "na", "batch": "51-55"}
+{"pr": 2200, "title": "Add passthrough information for PCIe Coral TPU", "decision": "na", "batch": "51-55"}
+{"pr": 2155, "title": "Stationary objects", "decision": "na", "batch": "51-55"}
+{"pr": 2140, "title": "Improve audio conversion tip", "decision": "na", "batch": "51-55"}
+{"pr": 2104, "title": "Fix rtmp again", "decision": "na", "batch": "51-55"}
+{"pr": 2095, "title": "only save recordings when an event is in progress", "decision": "na", "batch": "51-55"}
+{"pr": 2089, "title": "Clarify environment variables", "decision": "na", "batch": "51-55"}
+{"pr": 2079, "title": "Release 0.9.3", "decision": "na", "batch": "51-55"}
+{"pr": 2026, "title": "0.9.2", "decision": "na", "batch": "51-55"}
+{"pr": 1975, "title": "update hassos warning", "decision": "na", "batch": "51-55"}
+{"pr": 1968, "title": "warning for dev board incompatibility post-0.9.x", "decision": "na", "batch": "51-55"}
+{"pr": 1927, "title": "Release 0.10.0", "decision": "na", "batch": "51-55"}
+{"pr": 1922, "title": "fix logo used for birdseye", "decision": "na", "batch": "51-55"}
+{"pr": 1915, "title": "Added White Background to apple-touch-icon.png", "decision": "na", "batch": "51-55"}
+{"pr": 1831, "title": "Change 'theme-color' From Red", "decision": "na", "batch": "51-55"}
+{"pr": 1763, "title": "Allow Custom Model via config", "decision": "na", "batch": "51-55"}
+{"pr": 1709, "title": "Refresh the HA installation instructions", "decision": "na", "batch": "51-55"}
+{"pr": 1674, "title": "Add RTMP and timestamp style to global config", "decision": "na", "batch": "51-55"}
+{"pr": 1670, "title": "Update optimizing.md", "decision": "na", "batch": "51-55"}
+{"pr": 1655, "title": "Hide birdseye if not enabled", "decision": "na", "batch": "51-55"}
+{"pr": 1645, "title": "Events performance", "decision": "na", "batch": "51-55"}
+{"pr": 1596, "title": "Move event-view to events table.", "decision": "na", "batch": "51-55"}
+{"pr": 1587, "title": "reduce navbar padding / height", "decision": "na", "batch": "51-55"}
+{"pr": 1586, "title": "Remove misplaced comma in Header", "decision": "na", "batch": "51-55"}
+{"pr": 1578, "title": "fix(logging): consistent error messages on MQTT connection issues", "decision": "na", "batch": "51-55"}
+{"pr": 1523, "title": "Fix logger invocation", "decision": "na", "batch": "51-55"}
+{"pr": 1468, "title": "Include timestamps for notification examples", "decision": "na", "batch": "51-55"}
+{"pr": 1459, "title": "Add FAQ section", "decision": "na", "batch": "51-55"}
+{"pr": 1441, "title": "Include details about stream passthrough", "decision": "na", "batch": "51-55"}
+{"pr": 1386, "title": "Add tabbed buttons component", "decision": "na", "batch": "51-55"}
+{"pr": 1380, "title": "fix motion mask overlay", "decision": "na", "batch": "51-55"}
+{"pr": 1355, "title": "Builds", "decision": "na", "batch": "51-55"}
+{"pr": 1352, "title": "Use Recordings for Clips", "decision": "na", "batch": "51-55"}
+{"pr": 1342, "title": "Labelmap", "decision": "na", "batch": "51-55"}
+{"pr": 1340, "title": "Zone objects", "decision": "na", "batch": "51-55"}
+{"pr": 1338, "title": "publish on zone change (fixes #1310)", "decision": "na", "batch": "51-55"}
+{"pr": 1328, "title": "Set modal top postion to window_padding", "decision": "na", "batch": "51-55"}
+{"pr": 1324, "title": "Delete event", "decision": "na", "batch": "51-55"}
+{"pr": 1323, "title": "Ffmpeg changes", "decision": "na", "batch": "51-55"}
+{"pr": 1317, "title": "Jpeg quality", "decision": "na", "batch": "51-55"}
+{"pr": 1314, "title": "Motion defaults", "decision": "na", "batch": "51-55"}
+{"pr": 1309, "title": "fix cache cleanup (fixes #1231)", "decision": "na", "batch": "51-55"}
+{"pr": 1293, "title": "Prevent uncaught errors in event snapshot API requests", "decision": "have", "batch": "51-55", "note": "media serve 404s on missing file/row (recordings.py:96,78,212)"}
+{"pr": 1291, "title": "Refresh the HA integration documentation.", "decision": "na", "batch": "51-55"}
+{"pr": 1290, "title": "make max_disappeared optional with default value", "decision": "na", "batch": "51-55"}
+{"pr": 1287, "title": "identity check is correct way to check for None", "decision": "na", "batch": "51-55"}
+{"pr": 1281, "title": "Fix FFmpeg config", "decision": "na", "batch": "51-55"}
+{"pr": 1274, "title": "Convert config to Pydantic", "decision": "na", "batch": "51-55"}
+{"pr": 1257, "title": "Frigate restart", "decision": "na", "batch": "51-55"}
+{"pr": 1251, "title": "Birdseye fixes", "decision": "na", "batch": "51-55"}
+{"pr": 1250, "title": "Clean snapshot", "decision": "na", "batch": "51-55"}
+{"pr": 1239, "title": "Do apt update before upgrade", "decision": "na", "batch": "51-55"}
+{"pr": 1225, "title": "send clip_ready mqtt to event topic", "decision": "na", "batch": "51-55"}
+{"pr": 1224, "title": "Detectors with native edgetpu (Coral Dev Board)", "decision": "na", "batch": "51-55"}
+{"pr": 1220, "title": "remove gevent fixes #920", "decision": "na", "batch": "51-55"}
+{"pr": 1218, "title": "switch camera view to jsmpeg", "decision": "na", "batch": "51-55"}
+{"pr": 1212, "title": "Birdseye frontend", "decision": "na", "batch": "51-55"}
+{"pr": 1203, "title": "Cleanup Video Player", "decision": "na", "batch": "51-55"}
+{"pr": 1198, "title": "Update http.py", "decision": "na", "batch": "51-55"}
+{"pr": 1185, "title": "Recordings Table", "decision": "na", "batch": "51-55"}
+{"pr": 1182, "title": "Fix Recording Page", "decision": "na", "batch": "51-55"}
+{"pr": 1181, "title": "mqtt: support TLS with client cert", "decision": "na", "batch": "51-55"}
+{"pr": 1172, "title": "Documentation Update-CPU Fall back corrected.", "decision": "na", "batch": "51-55"}
+{"pr": 1160, "title": "build(deps): bump ws from 7.4.3 to 7.4.6 in /web", "decision": "na", "batch": "51-55"}
+{"pr": 1159, "title": "Birdseye view and jsmpeg support", "decision": "na", "batch": "51-55"}
+{"pr": 1155, "title": "Initial Recordings UI", "decision": "na", "batch": "51-55"}
+{"pr": 1149, "title": "build(deps): bump browserslist from 4.16.1 to 4.16.6 in /web", "decision": "na", "batch": "51-55"}
+{"pr": 1148, "title": "docs(typo): fix configuration typo", "decision": "na", "batch": "51-55"}
+{"pr": 1145, "title": "Updates to object processing", "decision": "na", "batch": "51-55"}
+{"pr": 1144, "title": "fixes", "decision": "na", "batch": "51-55"}
+{"pr": 1142, "title": "Use dataclasses for config handling", "decision": "na", "batch": "51-55"}
+{"pr": 1136, "title": "Improve ffprobe executions", "decision": "have", "batch": "51-55", "note": "all ffmpeg/ffprobe via argv-list create_subprocess_exec, never shell=True"}
+{"pr": 1135, "title": "Improve handling of object matching", "decision": "na", "batch": "51-55"}
+{"pr": 1134, "title": "Wait on stop event when possible", "decision": "na", "batch": "51-55"}
+{"pr": 1124, "title": "Removed duplicate guide link and alphabetized", "decision": "na", "batch": "51-55"}
+{"pr": 1121, "title": "Update Home Assistant brand identity", "decision": "na", "batch": "51-55"}
+{"pr": 1120, "title": "Add `record` to configuration docs", "decision": "na", "batch": "51-55"}
+{"pr": 1116, "title": "Add support for NGINX VOD Module", "decision": "na", "batch": "51-55"}
+{"pr": 1101, "title": "Update advanced.md to move `type:` to its own line", "decision": "na", "batch": "51-55"}
+{"pr": 1088, "title": "build(deps-dev): bump postcss from 8.2.2 to 8.2.10 in /web", "decision": "na", "batch": "51-55"}
+{"pr": 1087, "title": "build(deps): bump lodash from 4.17.20 to 4.17.21 in /web", "decision": "na", "batch": "51-55"}
+{"pr": 1086, "title": "build(deps): bump hosted-git-info from 2.8.8 to 2.8.9 in /web", "decision": "na", "batch": "51-55"}
+{"pr": 1077, "title": "Mjpeg doco", "decision": "na", "batch": "51-55"}
+{"pr": 1064, "title": "Update installation.md", "decision": "na", "batch": "51-55"}
+{"pr": 1060, "title": "Fix Logger during shutdown", "decision": "na", "batch": "51-55"}
+{"pr": 1055, "title": "Devcontainer Setup", "decision": "na", "batch": "51-55"}
+{"pr": 1042, "title": "Correct spelling Home Assistant", "decision": "na", "batch": "51-55"}
+{"pr": 1036, "title": "Timestamp Mods", "decision": "na", "batch": "51-55"}
+{"pr": 1026, "title": "Fix EventCleanup media type", "decision": "na", "batch": "51-55"}
+{"pr": 1016, "title": "Create howtos.md", "decision": "na", "batch": "51-55"}
+{"pr": 1009, "title": "Update detectors.md", "decision": "na", "batch": "51-55"}
+{"pr": 1002, "title": "Update nvdec.md", "decision": "na", "batch": "51-55"}
+{"pr": 991, "title": "Delete events v2", "decision": "na", "batch": "51-55"}
+{"pr": 974, "title": "Update index.md", "decision": "na", "batch": "51-55"}
+{"pr": 973, "title": "Update installation.md", "decision": "na", "batch": "51-55"}
+{"pr": 945, "title": "Fix 'FileExistsError' shared memory exception", "decision": "na", "batch": "51-55"}
+{"pr": 914, "title": "Update api.md", "decision": "na", "batch": "51-55"}
+{"pr": 890, "title": "docs: include available objects in documentation", "decision": "na", "batch": "51-55"}
+{"pr": 861, "title": "Update Unraid Install Instructions", "decision": "na", "batch": "51-55"}
+{"pr": 843, "title": "Add paularmstrong to funding.yml", "decision": "na", "batch": "51-55"}
+{"pr": 842, "title": "use gevent sleep to prevent mjpeg from blocking", "decision": "na", "batch": "51-55"}
+{"pr": 840, "title": "Release 0.8.4", "decision": "na", "batch": "51-55"}
+{"pr": 837, "title": "fix(web): set events api limit to 25", "decision": "na", "batch": "51-55"}
+{"pr": 836, "title": "fix(web): ensure tooltips and menus don't cause scrollbar reflow", "decision": "na", "batch": "51-55"}
+{"pr": 832, "title": "remove thumbnail attribute if null", "decision": "na", "batch": "51-55"}
+{"pr": 825, "title": "Release 0.9.0", "decision": "na", "batch": "51-55"}
+{"pr": 824, "title": "Dev setup", "decision": "na", "batch": "51-55"}
+{"pr": 819, "title": "Addon fix", "decision": "na", "batch": "51-55"}
+{"pr": 806, "title": "feat(web): use new websockets endpoint as mqtt bridge", "decision": "na", "batch": "51-55"}
+{"pr": 796, "title": "mqtt over websockets", "decision": "na", "batch": "51-55"}
+{"pr": 793, "title": "docs: add contributing docs", "decision": "na", "batch": "51-55"}
+{"pr": 785, "title": "test(web): add unit tests", "decision": "na", "batch": "51-55"}
+{"pr": 778, "title": "Added Unraid and M2 coral edge tpu", "decision": "na", "batch": "51-55"}
+{"pr": 777, "title": "Added the base urls for image and video", "decision": "na", "batch": "51-55"}
+{"pr": 764, "title": "test(web): add unit test framework", "decision": "na", "batch": "51-55"}
+{"pr": 757, "title": "test(web): add eslint and PR lint validation", "decision": "na", "batch": "51-55"}
+{"pr": 751, "title": "Avoid stationary objects", "decision": "na", "batch": "51-55"}
+{"pr": 749, "title": "fix(web): fix CameraMap.jsx import of api after move to routes/", "decision": "na", "batch": "51-55"}
+{"pr": 747, "title": "fix(web): svgs may need explicit height/width in rare cases on linux", "decision": "na", "batch": "51-55"}
+{"pr": 746, "title": "refactor(web): async routing", "decision": "na", "batch": "51-55"}
+{"pr": 742, "title": "Add nginx sub_filter to fix resources from /dist with HA ingress", "decision": "na", "batch": "51-55"}
+{"pr": 733, "title": "Cleanup dups", "decision": "na", "batch": "51-55"}
+{"pr": 730, "title": "add global object mask", "decision": "na", "batch": "51-55"}
+{"pr": 725, "title": "refactor(web): use snowpack-plugin-hash", "decision": "na", "batch": "51-55"}
+{"pr": 724, "title": "Fixes", "decision": "na", "batch": "51-55"}
+{"pr": 721, "title": "allow defining required zones for snapshots/clips/mqtt", "decision": "na", "batch": "51-55"}
+{"pr": 720, "title": "refactor(web): Adhere to Material Design guidelines", "decision": "na", "batch": "51-55"}
+{"pr": 709, "title": "proactively clean up cache when above 90% use", "decision": "na", "batch": "51-55"}
+{"pr": 708, "title": "No motion", "decision": "na", "batch": "51-55"}
+{"pr": 702, "title": "add disk usage to stats", "decision": "na", "batch": "51-55"}
+{"pr": 686, "title": "Release 0.8.2", "decision": "na", "batch": "51-55"}
+{"pr": 681, "title": "refactor(web): render CameraImage to a canvas", "decision": "na", "batch": "51-55"}
+{"pr": 680, "title": "fix(app): reduce JPEG quality to drastically improve size", "decision": "na", "batch": "51-55"}
+{"pr": 673, "title": "feat(web): activity indicator while loading", "decision": "na", "batch": "51-55"}
+{"pr": 672, "title": "update docs to reflect new chart home", "decision": "na", "batch": "51-55"}
+{"pr": 671, "title": "Improve ffmpeg logging", "decision": "na", "batch": "51-55"}
+{"pr": 670, "title": "Release 0.8.1", "decision": "na", "batch": "51-55"}
+{"pr": 669, "title": "add param to reduce response sizes by excluding thumbnails in api response", "decision": "na", "batch": "51-55"}
+{"pr": 661, "title": "feat(web): auto-paginate events page", "decision": "na", "batch": "51-55"}
+{"pr": 660, "title": "feat(nginx): enable gzip compression and cache control for static files", "decision": "na", "batch": "51-55"}
+{"pr": 655, "title": "fix(web): reduce transferred/unused assets on html load", "decision": "na", "batch": "51-55"}
+{"pr": 641, "title": "Fix camera.md links", "decision": "na", "batch": "51-55"}
+{"pr": 628, "title": "fix(web): image loading for firefox", "decision": "na", "batch": "51-55"}
+{"pr": 618, "title": "refactor(web): responsive images on content size, throttle AutoUpdatingCameraImage", "decision": "na", "batch": "51-55"}
+{"pr": 614, "title": "feat(web): make it possible to add to object masks", "decision": "na", "batch": "51-55"}
+{"pr": 613, "title": "fix(web): object mask editing not showing points", "decision": "na", "batch": "51-55"}
+{"pr": 604, "title": "fix(web): ensure all links on events page include pathname", "decision": "na", "batch": "51-55"}
+{"pr": 603, "title": "fix(web): make camera latest.jpg responsive", "decision": "na", "batch": "51-55"}
+{"pr": 587, "title": "Update documentation link in sidebar to new docs", "decision": "na", "batch": "51-55"}
+{"pr": 569, "title": "docs: move docs to docusaurus", "decision": "na", "batch": "51-55"}
+{"pr": 565, "title": "feat(web): AutoUpdatingCameraImage to replace MJPEG feed", "decision": "na", "batch": "51-55"}
+{"pr": 552, "title": "fix(web): set default path to cameras view", "decision": "na", "batch": "51-55"}
+{"pr": 549, "title": "fix(web): dark mode text color fixes", "decision": "na", "batch": "51-55"}
+{"pr": 540, "title": "feat(web): layout & auto-update debug page", "decision": "na", "batch": "51-55"}
+{"pr": 537, "title": "fix(web): ensure button bg colors show in prod builds", "decision": "na", "batch": "51-55"}
+{"pr": 527, "title": "feat(web): hash build files to avoid cache issues", "decision": "na", "batch": "51-55"}
+{"pr": 526, "title": "fix(web): ensure mask editing works in firefox", "decision": "na", "batch": "51-55"}
+{"pr": 524, "title": "fix(web): mask zone editor to handle object filter masks", "decision": "na", "batch": "51-55"}
+{"pr": 520, "title": "Fix Makefile to ignore gpg signatures in commits", "decision": "na", "batch": "51-55"}
+{"pr": 519, "title": "docker images are missing migration files", "decision": "na", "batch": "51-55"}
+{"pr": 518, "title": "fix(web): ensure postcss and postcss-cli are marked as deps", "decision": "na", "batch": "51-55"}
+{"pr": 506, "title": "fix: ensure timestamp is drawn above mask", "decision": "na", "batch": "51-55"}
+{"pr": 496, "title": "feat!: web user interface", "decision": "na", "batch": "51-55"}
+{"pr": 470, "title": "New stats module and MQTT /stats topic", "decision": "na", "batch": "51-55"}
+{"pr": 468, "title": "Set titles for forked processes", "decision": "na", "batch": "51-55"}
+{"pr": 446, "title": "Update README.md", "decision": "na", "batch": "51-55"}
+{"pr": 435, "title": "add notes for Blue Iris RTSP support", "decision": "na", "batch": "51-55"}
+{"pr": 431, "title": "beta 4", "decision": "na", "batch": "51-55"}
+{"pr": 429, "title": "Beta3", "decision": "na", "batch": "51-55"}
+{"pr": 427, "title": "Recordings - fix expire_file", "decision": "have", "batch": "51-55", "note": "retention deletes by DB camera_id+timestamp not name-keyed path dict; resolves abs path, deletes row only if unlink ok (retention.py:365,389)"}
+{"pr": 412, "title": "Tmpfs support", "decision": "na", "batch": "51-55"}
+{"pr": 408, "title": "0.8.0 beta2", "decision": "na", "batch": "51-55"}
+{"pr": 374, "title": "Updated file", "decision": "na", "batch": "51-55"}
+{"pr": 347, "title": "Allow specifying model size", "decision": "na", "batch": "51-55"}
+{"pr": 336, "title": "Updated docker command line...", "decision": "na", "batch": "51-55"}
+{"pr": 335, "title": "Document beta addon host", "decision": "na", "batch": "51-55"}
+{"pr": 329, "title": "Release 0.8.0", "decision": "na", "batch": "51-55"}
+{"pr": 327, "title": "Beta fixes", "decision": "na", "batch": "51-55"}
+{"pr": 326, "title": "Cleanup events", "decision": "na", "batch": "51-55"}
+{"pr": 315, "title": "Performance: Use cv2.bitwise_and instead of numpy.where", "decision": "na", "batch": "51-55"}
+{"pr": 313, "title": "Add support for AMD Ryzen iGPU (fixes #311)", "decision": "na", "batch": "51-55"}
+{"pr": 303, "title": "Fix errors when using amd64nvidia Dockerfiles", "decision": "na", "batch": "51-55"}
+{"pr": 292, "title": "nvidia ffmpeg support", "decision": "na", "batch": "51-55"}
+{"pr": 290, "title": "lock libedgetpu1 to 15.0, update tflite_runtime", "decision": "na", "batch": "51-55"}
+{"pr": 275, "title": "0.7.3", "decision": "na", "batch": "51-55"}
+{"pr": 274, "title": "Update on where to find the draw_zones", "decision": "na", "batch": "51-55"}
+{"pr": 270, "title": "0.7.2 Release", "decision": "na", "batch": "51-55"}
+{"pr": 266, "title": "poly example image", "decision": "na", "batch": "51-55"}
+{"pr": 265, "title": "Updated information on poly mask", "decision": "na", "batch": "51-55"}
+{"pr": 257, "title": "Update README.md", "decision": "na", "batch": "51-55"}
+{"pr": 253, "title": "fix clips path and check for symlinks", "decision": "na", "batch": "51-55"}
+{"pr": 233, "title": "only draw during debug", "decision": "na", "batch": "51-55"}
+{"pr": 232, "title": "0.6.1 Release", "decision": "na", "batch": "51-55"}
+{"pr": 231, "title": "0.7.0 Release", "decision": "na", "batch": "51-55"}
+{"pr": 229, "title": "Only convert yuv420p pixel format when actually necessary", "decision": "na", "batch": "51-55"}
+{"pr": 227, "title": "support multiple coral devices (fixes #100)", "decision": "na", "batch": "51-55"}
+{"pr": 225, "title": "Fix error in the docker run command", "decision": "na", "batch": "51-55"}
+{"pr": 221, "title": "Raspberry Pi support", "decision": "na", "batch": "51-55"}
+{"pr": 220, "title": "Added Healthcheck to Docker Compose", "decision": "na", "batch": "51-55"}
+{"pr": 216, "title": "Switch to shared memory", "decision": "na", "batch": "51-55"}
+{"pr": 210, "title": "proper handling of crop param (fixes #208)", "decision": "na", "batch": "51-55"}
+{"pr": 206, "title": "allow the best image timeout to be configurable", "decision": "na", "batch": "51-55"}
+{"pr": 190, "title": "Reduce false positives", "decision": "na", "batch": "51-55"}
+{"pr": 188, "title": "Added support for PCIe TPU, as well as USB", "decision": "na", "batch": "51-55"}
+{"pr": 186, "title": "Fix zone filters", "decision": "na", "batch": "51-55"}
+{"pr": 168, "title": "Fix model path", "decision": "na", "batch": "51-55"}
+{"pr": 167, "title": "fix box merging", "decision": "na", "batch": "51-55"}
+{"pr": 166, "title": "Zones", "decision": "na", "batch": "51-55"}
+{"pr": 161, "title": "Adds the ability for frigate to save clips of each tracked object", "decision": "na", "batch": "51-55"}
+{"pr": 154, "title": "Update CPU model to Mobilenet v2", "decision": "na", "batch": "51-55"}
+{"pr": 126, "title": "Update documentation", "decision": "na", "batch": "51-55"}
+{"pr": 115, "title": "Wyze fixes", "decision": "na", "batch": "51-55"}
+{"pr": 102, "title": "Distributed processing", "decision": "na", "batch": "51-55"}
+{"pr": 92, "title": "Dynamic regions and tracking", "decision": "na", "batch": "51-55"}
+{"pr": 82, "title": "track and report all detected object types", "decision": "na", "batch": "51-55"}
+{"pr": 80, "title": "Filename updated but not the reference", "decision": "na", "batch": "51-55"}
+{"pr": 79, "title": "Issue cleanup", "decision": "na", "batch": "51-55"}
+{"pr": 78, "title": "print the frame time on the image", "decision": "na", "batch": "51-55"}
+{"pr": 77, "title": "add max person area", "decision": "na", "batch": "51-55"}
+{"pr": 76, "title": "Allow flexibility in input", "decision": "na", "batch": "51-55"}
+{"pr": 55, "title": "0.2.1 Release", "decision": "na", "batch": "51-55"}
+{"pr": 52, "title": "Fix comparison of object x-coord against mask", "decision": "na", "batch": "51-55"}
+{"pr": 51, "title": "0.2.0 Release", "decision": "na", "batch": "51-55"}
+{"pr": 47, "title": "Add `area` labels to bounding boxes", "decision": "na", "batch": "51-55"}
+{"pr": 36, "title": "Add MQTT connection error handling", "decision": "na", "batch": "51-55"}
+{"pr": 34, "title": "0.1.2", "decision": "na", "batch": "51-55"}
+{"pr": 33, "title": "Update of the home assistant integration example", "decision": "na", "batch": "51-55"}
+{"pr": 32, "title": "Clarification on username and password for MQTT", "decision": "na", "batch": "51-55"}
+{"pr": 26, "title": "add the ability to mask the standing location of a person", "decision": "na", "batch": "51-55"}
+{"pr": 20, "title": "edgetpu", "decision": "na", "batch": "51-55"}
+{"pr": 5, "title": "Motion masking", "decision": "na", "batch": "51-55"}
+{"pr": 4, "title": "Thread signals", "decision": "na", "batch": "51-55"}
+{"pr": 3, "title": "Mqtt", "decision": "na", "batch": "51-55"}
+{"pr": 2, "title": "Motion detection", "decision": "na", "batch": "51-55"}
+{"pr": 1, "title": "Regions", "decision": "na", "batch": "51-55"}
