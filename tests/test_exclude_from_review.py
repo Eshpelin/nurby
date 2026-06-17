@@ -33,8 +33,9 @@ def _sql(query) -> str:
 def test_model_has_column_default_false():
     col = Camera.__table__.columns["exclude_from_review"]
     assert col.nullable is False
-    # server_default renders the SQL false literal
-    assert "false" in str(col.server_default.arg).lower()
+    # Python-side default False, mirroring audio_only. The SQL server_default
+    # is set in the migration, not the model.
+    assert col.default is not None and col.default.arg is False
 
 
 def test_create_schema_defaults_false():
