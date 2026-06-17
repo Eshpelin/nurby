@@ -627,3 +627,19 @@ Coverage-only batch. No issues, no merges. Same desert: face recognition / LPR /
 - #17273 disabled-cameras fix — Frigate ZMQ config-subscriber + frontend ws state.
 
 Rest: face library UI/wizard (#17296/17245/17233/17213/17208/17203/17155/17152), face/LPR ML (#17290/17289/17244/17225/17202/17171/17146), hwaccel (#17298/17238), i18n/locale wave (#17258/17256/17239/17218/17198/17190/17184), nginx/ingress (#17248/17223), docs, frontend caching/filter (#17148/17147). No backend auth/API/ingest correctness signal.
+
+## Batch 32 (PRs 17145-16926)
+
+Coverage-only batch. No issues, no merges. Deep in the predicted desert: face recognition / LPR / classification ML, hwaccel (Hailo), go2rtc/ONVIF ingest plumbing Nurby does not bundle, i18n, docs, deps, and a large frontend wave. Two clean HAVE verifications.
+
+**HAVE (verified):**
+- #17044 "Ensure admin is default role". Frigate's auto-created bootstrap `admin` user was being inserted without an explicit role, and the `User.role` column defaulted to `viewer`, so the first/only admin came up with no admin rights. Nurby is already correct and stricter: both first-admin creation paths set `role="admin"` explicitly (`services/api/routes/auth.py:56` `/setup`, `auth.py:111` `/bootstrap`), while the ordinary `User.role` default stays the safe `viewer` (`shared/models.py:679`). Nurby also guards the first-run race that Frigate ignores: concurrent bootstrap requests are serialized with a transaction-scoped Postgres advisory lock (`auth.py:85`, `SELECT pg_advisory_xact_lock(481566)`), so two tabs cannot each create an owner. Admin gating downstream is consistent (`shared/auth.py:175-176` `require_admin`).
+- #16939 "Ensure GenAI thumbnails are always jpegs". Frigate added `ensure_jpeg_bytes()` because raw event thumbnails could be non-jpeg (e.g. webp) and some GenAI providers reject non-jpeg input. Nurby never has this problem: the VLM layer always re-encodes the source frame/crop to JPEG itself via `cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])` before base64 (`services/perception/vlm.py:91` full frame, `:186` action crop), and every provider payload is hardcoded `image/jpeg` (`vlm.py:226` data-URL, `:272` Anthropic base64, `:315` Gemini mimeType). The model never receives non-jpeg bytes.
+
+**N/A worth noting:**
+- #17138 / #17067 / #17066 "auth check / role fixes" — all operate on Frigate's reverse-proxy header-trust model (`get_current_user` reading `remote-user`/`remote-role` headers, `proxy_config.header_map.role`, `/profile` role resolution). Nurby uses JWT bearer auth (`shared/auth.py`), not upstream proxy headers, so the entire surface is inapplicable. No Nurby change warranted.
+- #16993 divide-by-zero in `frigate/util/services.py` GPU-stats text parser (`video["global"]` empty). Nurby has no equivalent intel_gpu_top-style stats text parser; GPU stats are not parsed this way.
+- #17105 "manual event api to ZMQ" / #16979 "enabled camera listeners" / #16961 / #17045 — Frigate inter-process ZMQ + AudioEventMaintainer ffmpeg lifecycle. Nurby's ingest uses async DB + queue, a different IPC model; no analog.
+- #17144 ONVIF retry / #17119 go2rtc bump — Nurby ingests RTSP directly via ffmpeg and bundles neither ONVIF PTZ stack nor go2rtc.
+
+Rest: face/LPR/classification ML (#17145/17128/17123/17099/17079/17068/17046/17137/17123), Hailo hwaccel (#17094), config/detector defaults (#17136/17125/17091/16980), docs (#17111/17093/17007/16989/16949), python+web deps (#17006/16983), and a frontend wave (#17132/17129/17112/17035/17030/17024/16995/16978/16962/16947/16929/16926/16931). No backend auth/API/ingest correctness gap.
