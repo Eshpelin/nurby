@@ -784,6 +784,9 @@ function DashboardContent() {
 
   // WebSocket
   useEffect(() => {
+    // The /ws socket is token-authenticated (issue #40). Skip connecting
+    // until a token exists; the effect re-runs when it appears.
+    if (!token) return;
     const explicit = process.env.NEXT_PUBLIC_WS_URL;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     // Next.js rewrites do not proxy WebSocket upgrades, so same-origin /ws
@@ -793,7 +796,7 @@ function DashboardContent() {
     const WSURL_BASE = explicit
       ? explicit.replace(/^http/, "ws").replace(/\/+$/, "")
       : `${protocol}//${window.location.host}`;
-    const wsUrl = `${WSURL_BASE}/ws`;
+    const wsUrl = `${WSURL_BASE}/ws?token=${encodeURIComponent(token)}`;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
     function connect() {
@@ -883,7 +886,7 @@ function DashboardContent() {
 
     connect();
     return () => { clearTimeout(reconnectTimer); wsRef.current?.close(); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch cameras
   const fetchCameras = useCallback(async () => {

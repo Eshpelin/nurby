@@ -9,6 +9,8 @@ import {
   useState,
 } from "react";
 
+import { useAuth } from "@/lib/auth";
+
 /**
  * Shared /ws subscription. Mounted once at the dashboard root, fans
  * out events to subscribers via a small pub/sub. Replaces N tile-
@@ -49,12 +51,22 @@ interface WSContextValue {
 const WSContext = createContext<WSContextValue | null>(null);
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
+  const { token } = useAuth();
   const [status, setStatus] = useState<WSStatus>("connecting");
   const wsRef = useRef<WebSocket | null>(null);
   const handlersRef = useRef<Map<string, Set<Handler>>>(new Map());
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // The /ws socket is now token-authenticated (issue #40). Don't open it
+    // until we have a token; the effect re-runs when one appears (login /
+    // bootstrap) and tears down the old socket if the token changes or
+    // clears (logout). Stay in "connecting" while unauthenticated so the
+    // UI reads as "waiting" rather than a hard failure.
+    if (!token) {
+      setStatus("connecting");
+      return;
+    }
     const explicit = process.env.NEXT_PUBLIC_WS_URL;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     // Next.js rewrites do not proxy WebSocket upgrades, so same-origin /ws
@@ -64,7 +76,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const WSURL_BASE = explicit
       ? explicit.replace(/^http/, "ws").replace(/\/+$/, "")
       : `${protocol}//${window.location.host}`;
-    const url = `${WSURL_BASE}/ws`;
+    const url = `${WSURL_BASE}/ws?token=${encodeURIComponent(token)}`;
 
     let cancelled = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -126,7 +138,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         /* ignore */
       }
     };
-  }, []);
+  }, [token]);
 
   const value = useMemo<WSContextValue>(
     () => ({
