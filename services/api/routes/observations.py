@@ -8,6 +8,7 @@ from sqlalchemy import String, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_query_token
+from shared.camera_access import allowed_camera_ids, apply_camera_filter
 from shared.config import settings
 from shared.database import get_db
 from shared.models import Camera, Observation, ObservationVlmPass, Person, User
@@ -64,9 +65,14 @@ async def list_observations(
     label: str | None = Query(default=None, description="Filter to observations with this YOLO label"),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    query = select(Observation).order_by(Observation.started_at.desc())
+    allowed = await allowed_camera_ids(current_user, db)
+    query = apply_camera_filter(
+        select(Observation).order_by(Observation.started_at.desc()),
+        allowed,
+        Observation.camera_id,
+    )
     # Drop observations from cameras hidden from the review feed (they keep
     # recording; this list is a review surface).
     query = query.where(

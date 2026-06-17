@@ -22,6 +22,7 @@ from services.discovery.onvif import (
     ptz_stop,
 )
 from shared.auth import get_current_user, require_admin
+from shared.camera_access import allowed_camera_ids, apply_camera_filter
 from shared.camera_secrets import seal, unseal
 from shared.config import settings
 from shared.database import get_db
@@ -248,10 +249,14 @@ async def list_status_logs(
 
 
 @router.get("")
-async def list_cameras(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(Camera).order_by(Camera.display_order, Camera.created_at)
+async def list_cameras(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    allowed = await allowed_camera_ids(current_user, db)
+    query = apply_camera_filter(
+        select(Camera).order_by(Camera.display_order, Camera.created_at),
+        allowed,
+        Camera.id,
     )
+    result = await db.execute(query)
     return [_camera_to_response(c) for c in result.scalars().all()]
 
 

@@ -14,6 +14,7 @@ from starlette.background import BackgroundTask
 
 from services.api.recording_annotate import render_annotated
 from shared.auth import get_current_user, require_admin, require_query_token
+from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids, apply_camera_filter
 from shared.config import settings
 from shared.database import get_db
 from shared.models import Camera, Observation, Recording, User
@@ -76,11 +77,15 @@ def _filtered_recordings_query(
     from_: datetime | None,
     to: datetime | None,
     object_label: str | None,
+    allowed: AllowedCameras = ALL,
 ):
     """Base SELECT for recordings, with optional camera / time-window / object
     filters. The object filter keeps recordings whose window overlaps an
-    observation carrying that label (reuses the observations.py label match)."""
-    query = select(Recording)
+    observation carrying that label (reuses the observations.py label match).
+
+    ``allowed`` is the per-user camera ACL (issue #40); it defaults to
+    ``ALL`` (no filter) so existing callers and tests are unaffected."""
+    query = apply_camera_filter(select(Recording), allowed, Recording.camera_id)
     if camera_id:
         query = query.where(Recording.camera_id == camera_id)
     # A recording occupies the window [started_at, window_end]; window_end falls
@@ -125,10 +130,11 @@ async def list_recordings(
     object: str | None = Query(default=None, description="Only recordings containing this object label"),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    allowed = await allowed_camera_ids(current_user, db)
     query = (
-        _filtered_recordings_query(camera_id, from_, to, object)
+        _filtered_recordings_query(camera_id, from_, to, object, allowed)
         .order_by(Recording.started_at.desc())
         .limit(limit)
         .offset(offset)
@@ -156,8 +162,14 @@ async def download_bundle(
 ):
     """Download every recording matching the filters as a single zip. Bundles
     the original files (non-destructive); capped by file count + total size."""
-    require_query_token(token)
-    query = _filtered_recordings_query(camera_id, from_, to, object).order_by(
+    user_id = require_query_token(token)
+    # Scope the bundle to the caller's allowed cameras (issue #40). The
+    # token only carries a user id, so load the user to resolve the ACL.
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or deactivated")
+    allowed = await allowed_camera_ids(user, db)
+    query = _filtered_recordings_query(camera_id, from_, to, object, allowed).order_by(
         Recording.started_at.asc()
     )
     recs = (await db.execute(query)).scalars().all()
