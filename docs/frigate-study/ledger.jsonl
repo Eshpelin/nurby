@@ -1330,3 +1330,183 @@
 {"pr": 16931, "title": "Fixed the issue where internal context copy occurs frequently.", "area": "perception", "type": "fix", "decision": "na", "note": "C/embedding internal buffer copy optimization"}
 {"pr": 16929, "title": "Add camera enable switch to mobile drawer", "area": "frontend", "type": "feat", "decision": "na"}
 {"pr": 16926, "title": "Quick fix", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16920, "title": "Disabled camera output", "area": "camera-enable", "type": "feat", "decision": "gap", "note": "Pairs with #16894/issue#88. Nurby has no master camera enable/disable; processing always runs for every camera (manager.py:171 select(Camera) unfiltered)."}
+{"pr": 16919, "title": "GenAI: configurable send trigger after_significant_updates + event_end", "area": "genai", "type": "feat", "decision": "have", "note": "Nurby vlm_trigger always/on_object + vlm_interval (models.py:73) and incident_started/ended rule triggers (events/engine.py:435)."}
+{"pr": 16916, "title": "GenAI minor refactor", "area": "genai", "type": "refactor", "decision": "na"}
+{"pr": 16913, "title": "Remove rocm detector", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 16906, "title": "Hailo Official integration", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 16903, "title": "Adapt openai.py to work with xAI", "area": "llm-provider", "type": "fix", "decision": "have", "note": "Nurby honors provider.base_url for any OpenAI-compat host incl xAI (llm.py:299; vlm.py:224 image_url content)."}
+{"pr": 16900, "title": "Upgrade RocM to 6.3.3", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 16894, "title": "Dynamically enable/disable cameras", "area": "camera-enable", "type": "feat", "decision": "gap", "note": "No master enabled flag on Camera (models.py:27); _sync_cameras runs all cameras. Filed issue Eshpelin/nurby#88."}
+{"pr": 16889, "title": "Fix docs reference to yolonas", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16888, "title": "Disable hailort log", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 16881, "title": "Update d-fine documentation", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16877, "title": "feat: add i18n (translation/localization)", "area": "i18n", "type": "feat", "decision": "na"}
+{"pr": 16874, "title": "Reuse constants", "area": "refactor", "type": "refactor", "decision": "na"}
+{"pr": 16869, "title": "Fix cuda targetarch", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 16864, "title": "Embeddings tweaks", "area": "ml-embeddings", "type": "refactor", "decision": "na"}
+{"pr": 16854, "title": "Fix jetson", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 16852, "title": "Quality of life documentation updates", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16851, "title": "Fix incorrect storage usage per camera", "area": "storage", "type": "fix", "decision": "na", "note": "Frigate float-rounding precision bug; Nurby measures bytes via os.path.getsize, no lossy rounding (retention.py:74,424)."}
+{"pr": 16849, "title": "Add docs for updating to latest version", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16846, "title": "Fix ffmpeg cannot start because of loading shared lib", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 16835, "title": "Simplify tensorrt", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 16827, "title": "LPR metrics fix and improvements", "area": "ml-lpr", "type": "fix", "decision": "na"}
+{"pr": 16826, "title": "Add ability to use Jina CLIP V2 for semantic search", "area": "ml-embeddings", "type": "feat", "decision": "na"}
+{"pr": 16813, "title": "UI tweaks", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 16804, "title": "Use native arm runner for arm docker builds", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 16803, "title": "Update mqtt event structure", "area": "mqtt", "type": "docs", "decision": "na", "note": "MQTT-specific; Nurby uses notify/pubsub."}
+{"pr": 16791, "title": "Add link to advanced camera card in docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16786, "title": "Docs: Fix ptz camera chart", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16779, "title": "Ensure sub label is null when submitting an empty string", "area": "api-labels", "type": "fix", "decision": "na", "note": "Nurby has no sub_label concept (uses person_alias/identity)."}
+{"pr": 16772, "title": "Initial implementation of D-FINE model via ONNX", "area": "ml-detector", "type": "feat", "decision": "na"}
+{"pr": 16767, "title": "Add cameras to ptz list", "area": "ptz", "type": "feat", "decision": "na"}
+{"pr": 16764, "title": "Edit sub labels from the UI", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16762, "title": "Bugfix: check websocket correctly when no cameras enabled/defined", "area": "websocket", "type": "fix", "decision": "na", "note": "Frontend ws.tsx guard; Nurby ws guards are server-side (api/ws.py)."}
+{"pr": 16759, "title": "Bugfix: ensure proper frigate log de-duplication", "area": "logging", "type": "fix", "decision": "na"}
+{"pr": 16758, "title": "Docs: Clarify review labels and objects to track", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16755, "title": "Docs: Fix broken shm calculation", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16744, "title": "Docs: Add note for notifications on iOS devices", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16741, "title": "Fix preview fetch", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16729, "title": "Add USB Camera guidance to camera_specific.md", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16728, "title": "Don't require model_runner for realtime processors", "area": "ml-processors", "type": "refactor", "decision": "na"}
+{"pr": 16722, "title": "Refactor processors and add LPR postprocessing", "area": "ml-lpr", "type": "refactor", "decision": "na"}
+{"pr": 16713, "title": "Fix coral dep", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 16712, "title": "No longer fallback to look for a ffmpeg binary in PATH", "area": "ffmpeg", "type": "fix", "decision": "na", "note": "Frigate-image-specific (bundles multiple ffmpeg); Nurby uses system ffmpeg via shutil.which (analyzer.py:289)."}
+{"pr": 16706, "title": "Fix nullable thumbnail", "area": "api-events", "type": "fix", "decision": "na", "note": "Nurby event/incident schemas treat thumbnail paths as optional already."}
+{"pr": 16705, "title": "Fix rockchip docker build", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 16704, "title": "Only match on exact config name in some cases", "area": "config-ipc", "type": "fix", "decision": "na", "note": "Frigate ZMQ topic-prefix collision; Nurby has no ZMQ config bus."}
+{"pr": 16703, "title": "Refactor ONNX embedding class", "area": "ml-embeddings", "type": "refactor", "decision": "na"}
+{"pr": 16701, "title": "JetPack 6: fix BASE_HOOK", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 16686, "title": "Activity manager fails to publish object counts in some circumstances", "area": "perception", "type": "fix", "decision": "na", "note": "Nurby has no activity_manager aggregation; zone counts per-observation."}
+{"pr": 16685, "title": "Improve LPR and speed zone docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16683, "title": "Fix build", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 16679, "title": "fix trt-model-prepare script on JetPack 6", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 16676, "title": "Object path plotter", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16673, "title": "History view UI fix", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16670, "title": "Remove jp4 build and add notes for jp6", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 16669, "title": "Update pull request template", "area": "repo", "type": "docs", "decision": "na"}
+{"pr": 16668, "title": "Quick fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16664, "title": "Add metadata to exports", "area": "record-export", "type": "feat", "decision": "na", "note": "Nurby recording export is FileResponse of stored mp4."}
+{"pr": 16663, "title": "Reorganize Lifecycle components", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 16648, "title": "Object Lifecycle tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16647, "title": "Remove thumb from database field", "area": "db-storage", "type": "refactor", "decision": "have", "note": "Nurby stores thumbnails as filesystem paths not DB blobs (models.py:211,266,289,340,414)."}
+{"pr": 16645, "title": "Tracking fixes", "area": "ml-tracking", "type": "fix", "decision": "na"}
+{"pr": 16641, "title": "Update contributing.md", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16635, "title": "Improve Object Lifecycle pane", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16632, "title": "Improve notifications", "area": "notify", "type": "feat", "decision": "na", "note": "Frigate webpush; Nurby uses Telegram/email."}
+{"pr": 16630, "title": "Update coral deps and remove unused pycoral", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 16629, "title": "Update info for face recognition docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16620, "title": "Fix prometheus client exporter", "area": "observability", "type": "fix", "decision": "na", "note": "Nurby has no prometheus_client; only a stdlib metrics shim (audio/metrics.py)."}
+{"pr": 16618, "title": "Remove internal docker container IP from WebRTC candidates", "area": "streaming-security", "type": "fix", "decision": "na", "note": "Frigate go2rtc SDP candidate filter; Nurby backend emits no WebRTC SDP/ICE (services/streaming is a stub). No info-leak surface."}
+{"pr": 16613, "title": "Add more hardware stats", "area": "observability", "type": "feat", "decision": "na"}
+{"pr": 16606, "title": "Missing link to go2rtc logging doc", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16595, "title": "Small fixes and docs tweaks", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16594, "title": "Bugfix: use np.copy for current frame in object processing", "area": "perception-concurrency", "type": "fix", "decision": "have", "note": "Nurby decodes frames fresh (pipeline.py:448) and copies before VLM enqueue (:918) and annotation (:1077). No shared-frame race."}
+{"pr": 16591, "title": "Bugfix: use np.copy for current frame in object processing", "area": "perception-concurrency", "type": "fix", "decision": "have", "note": "Dup of #16594; same evidence (pipeline.py:448,918,1077)."}
+{"pr": 16588, "title": "Fix renaming exports bug", "area": "record-export", "type": "fix", "decision": "na"}
+{"pr": 16587, "title": "More LPR improvements", "area": "ml-lpr", "type": "feat", "decision": "na"}
+{"pr": 16586, "title": "Return 404 for non-existent vod module media", "area": "api-media", "type": "fix", "decision": "have", "note": "Nurby recordings route returns 404 for missing row/file (recordings.py:55-70,164), not 500."}
+{"pr": 16571, "title": "Add support for JetPack 6", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 16560, "title": "Update nvidia driver req", "area": "hwaccel", "type": "docs", "decision": "na"}
+{"pr": 16559, "title": "LPR improvements", "area": "ml-lpr", "type": "feat", "decision": "na"}
+{"pr": 16548, "title": "Update docs for pcie coral driver", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16518, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16511, "title": "Ensure all streaming settings are saved correctly on mobile", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16510, "title": "Enable search for inkeep", "area": "docs", "type": "chore", "decision": "na"}
+{"pr": 16504, "title": "Remove obsolete event clip logic", "area": "api-media", "type": "refactor", "decision": "na", "note": "Frigate legacy CLIPS_DIR fallback; Nurby serves stored mp4 via FileResponse."}
+{"pr": 16499, "title": "Small fix and docs update", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16497, "title": "Refactor LPR into real time data processor", "area": "ml-lpr", "type": "refactor", "decision": "na"}
+{"pr": 16495, "title": "Add support for YoloV9 to OpenVINO", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 16488, "title": "Masks/zones improvements", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16487, "title": "Consolidate HailoRT into the main Docker Image", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 16484, "title": "Tracking improvements", "area": "perception-tracking", "type": "feat", "decision": "na"}
+{"pr": 16482, "title": "Toggle review alerts and detections", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16481, "title": "Use persistence for HLS player muting", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16469, "title": "Fix non-awaited onvif calls", "area": "concurrency-onvif", "type": "fix", "decision": "have", "note": "Nurby ONVIF already fully async (discovery/onvif.py:197 async _soap_request, :208 await client.post). No PTZ autotrack to regress."}
+{"pr": 16468, "title": "Remove extraneous print from recordings summary code", "area": "recordings", "type": "chore", "decision": "na"}
+{"pr": 16467, "title": "fix(auth): trim jwt secret read from .jwt_secret", "area": "auth", "type": "fix", "decision": "na", "note": "Nurby loads jwt_secret via pydantic env (config.py:46), no file read, no trailing-newline surface."}
+{"pr": 16466, "title": "Fix notifications crash", "area": "notify", "type": "fix", "decision": "na", "note": "Frigate webpush; Nurby uses Telegram/email."}
+{"pr": 16459, "title": "Implement support for YOLOv9 via ONNX", "area": "ml-detector", "type": "feat", "decision": "na"}
+{"pr": 16453, "title": "Improve Notifications", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16452, "title": "Estimated object speed for zones", "area": "perception", "type": "feat", "decision": "na"}
+{"pr": 16447, "title": "Improve live streaming", "area": "streaming", "type": "feat", "decision": "na"}
+{"pr": 16446, "title": "Refactor export filenames to include start and end date/time", "area": "record-export", "type": "feat", "decision": "na", "note": "Nurby export filenames are server-generated."}
+{"pr": 16436, "title": "Improve display of recordings data", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16435, "title": "Add ability to set MQTT QoS in config", "area": "mqtt", "type": "feat", "decision": "na", "note": "Nurby has no MQTT."}
+{"pr": 16434, "title": "Improve UI logs", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16433, "title": "Fix sanitized api causing issues", "area": "security-sanitize", "type": "fix", "decision": "na", "note": "Frigate sanitize_filename before path join. Nurby paths are UUID-built; this batch surfaced & fixed an analogous latent ext-traversal in persons.py photo upload (see PR)."}
+{"pr": 16432, "title": "Object area debugging and improvements", "area": "perception", "type": "feat", "decision": "na"}
+{"pr": 16431, "title": "Add autotracking calibration message", "area": "ptz", "type": "feat", "decision": "na"}
+{"pr": 16429, "title": "Timeline improvements", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16425, "title": "Use /api/metrics instead of /metrics", "area": "api-metrics", "type": "chore", "decision": "na", "note": "Nurby exposes metrics via admin-only stats endpoint (admin_stats.py); no public /metrics."}
+{"pr": 16422, "title": "Face recognition UI improvements", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16421, "title": "Move camera specific options from custom prompts to config settings", "area": "genai-config", "type": "feat", "decision": "na"}
+{"pr": 16415, "title": "Fix missing prometheus commit", "area": "observability", "type": "fix", "decision": "na"}
+{"pr": 16413, "title": "add tip about disabling TLS to use auth with HA integration", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16406, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16405, "title": "Add Inkeep chatbot to docs", "area": "docs", "type": "chore", "decision": "na"}
+{"pr": 16396, "title": "Disable jetson builds", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 16393, "title": "Fix build", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 16390, "title": "0.16 Release", "area": "release", "type": "chore", "decision": "na"}
+{"pr": 16378, "title": "Update Frigate+ docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16370, "title": "Update docs sidebar name", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16369, "title": "0.16 Mergeback", "area": "release", "type": "chore", "decision": "na"}
+{"pr": 16368, "title": "Update openvino hardware inference times", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16351, "title": "Point to latest version of hailo script", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 16337, "title": "Move database and config from homeassistant /config to addon /config", "area": "ha-addon", "type": "chore", "decision": "na"}
+{"pr": 16333, "title": "Clarify occupancy sensor usage in HA integration", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16332, "title": "Update cudnn and onnxruntime to latest", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 16292, "title": "Detector docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16273, "title": "Docs: Fix genai note", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16267, "title": "Docs: clarify single GenAI provider and OpenAI compatible endpoints", "area": "docs", "type": "docs", "decision": "na", "note": "Nurby supports multi-provider via recap_default_provider (config.py:53)."}
+{"pr": 16254, "title": "Add endpoint for batch fetching review items", "area": "api-review", "type": "feat", "decision": "na", "note": "Nurby has no Frigate-style review-segment model; events/reports analog not a comma-id batch fetch."}
+{"pr": 16232, "title": "update docs re audio support and go2rtc requirements", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16230, "title": "Fix csrf", "area": "security-auth", "type": "fix", "decision": "na", "note": "Nurby is pure Bearer-token auth (auth.py:17 HTTPBearer, :135 header-only), structurally CSRF-immune; no cookie/session path."}
+{"pr": 16226, "title": "Quick fix for face rec", "area": "ml-face", "type": "fix", "decision": "na"}
+{"pr": 16218, "title": "Sub label sensors", "area": "ha-sensors", "type": "feat", "decision": "na"}
+{"pr": 16212, "title": "Face recognition reprocess", "area": "ml-face", "type": "feat", "decision": "na"}
+{"pr": 16211, "title": "Fix interpolation for autotracking cameras - 0.15", "area": "ptz-autotrack", "type": "fix", "decision": "na"}
+{"pr": 16199, "title": "Update Frigate+ submission docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16195, "title": "Document OPENAI_BASE_URL env var", "area": "genai", "type": "docs", "decision": "have", "note": "Nurby has per-provider base_url with OpenAI default (llm.py:299; analyzer.py:747, vlm.py:239)."}
+{"pr": 16191, "title": "Fix interpolation for autotracking cameras", "area": "ptz-autotrack", "type": "fix", "decision": "na"}
+{"pr": 16190, "title": "Add frigate notify to third party extensions", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16184, "title": "Bump actions/setup-python from 5.3.0 to 5.4.0", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 16169, "title": "Add face training recommendations to docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16168, "title": "Don't show sub labels in main label filter list", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16158, "title": "Fix h265 encoding presets", "area": "hwaccel-ffmpeg", "type": "fix", "decision": "na"}
+{"pr": 16153, "title": "Fix selection of tracked objects in Explore on desktop Safari", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16119, "title": "Fix build", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 16098, "title": "Downgrade to bake-action v5", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 16096, "title": "Consider pre and post capture when cleaning up recordings based on retention", "area": "ingest-retention", "type": "fix", "decision": "na", "note": "Nurby retention is flat time/size (retention.py:317,364); no review/event-linked keep-window, so no pre/post-capture buffer to account for."}
+{"pr": 16077, "title": "Update docs for /api/config/save", "area": "docs", "type": "docs", "decision": "na", "note": "Nurby has no runtime YAML config-save API."}
+{"pr": 16064, "title": "Tracked object details pane bugfix", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16045, "title": "Use correct path for script", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 16043, "title": "Fix env variable exporting", "area": "docker", "type": "fix", "decision": "na", "note": "s6 env export; Nurby uses pydantic settings."}
+{"pr": 16041, "title": "Correctly calculate ffmpeg version based on ffmpeg path", "area": "hwaccel-ffmpeg", "type": "fix", "decision": "na", "note": "Nurby doesn't branch ffmpeg flags on libav version."}
+{"pr": 16034, "title": "Face recognition improvements", "area": "ml-face", "type": "feat", "decision": "na"}
+{"pr": 16027, "title": "update FFmpeg to ensure compatibility with newer kernels", "area": "docker", "type": "chore", "decision": "na"}
+{"pr": 16013, "title": "Update docs to make note of go2rtc port requirement", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15967, "title": "Update integration docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15966, "title": "Bird classification", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 15964, "title": "Fix API latest image quality and API MIME types", "area": "api-media", "type": "fix", "decision": "have", "note": "Nurby always serves explicit media_type=image/jpeg (persons.py:129, observations.py:127, guardian.py:478/782, cameras.py:859); no extension-driven MIME mismatch."}
+{"pr": 15958, "title": "Update hailo to 4.20", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 15956, "title": "Clean up handling of ffmpeg specific params", "area": "hwaccel-ffmpeg", "type": "refactor", "decision": "na"}
+{"pr": 15955, "title": "Finish unit tests for review controller and started for event controller", "area": "tests", "type": "test", "decision": "na"}
+{"pr": 15954, "title": "fix syntax error: missing space", "area": "docs", "type": "fix", "decision": "na"}
+{"pr": 15946, "title": "Fix display of save button in tracked object details pane", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 15943, "title": "Handle case where user has multiple manual events on same camera", "area": "review", "type": "fix", "decision": "na", "note": "Nurby has no manual-event/review-segment concept."}
+{"pr": 15941, "title": "Simplify plus submit", "area": "ml", "type": "refactor", "decision": "na"}
+{"pr": 15935, "title": "Processing refactor", "area": "ml", "type": "refactor", "decision": "na"}
+{"pr": 15931, "title": "Generalize postprocessing", "area": "ml", "type": "refactor", "decision": "na"}
+{"pr": 15917, "title": "Clarify motion recording", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15915, "title": "Clarify reolink doorbell two way talk requirements", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15906, "title": "Fix onvif packages", "area": "onvif", "type": "fix", "decision": "na", "note": "Nurby ONVIF is raw httpx SOAP, no onvif-zeep dep."}
+{"pr": 15904, "title": "Update proxmox docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15903, "title": "Catch case where user has multiple of the same kind of GPU", "area": "hwaccel-stats", "type": "fix", "decision": "na", "note": "Nurby has no NVML GPU stats endpoint."}
+{"pr": 15897, "title": "Simplify config validation messages", "area": "config", "type": "refactor", "decision": "na"}
+{"pr": 15894, "title": "Upgrade onvif-zeep dependency to use onvif-zeep-async", "area": "onvif", "type": "chore", "decision": "na", "note": "Nurby uses raw async httpx SOAP."}
+{"pr": 15892, "title": "Bump docker/bake-action from 3 to 6", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 15882, "title": "Update for correct audio requirements", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15881, "title": "Simplify model config", "area": "config", "type": "refactor", "decision": "na"}
+{"pr": 15865, "title": "Remove extra data except from keypackets when using qsv", "area": "hwaccel-ffmpeg", "type": "fix", "decision": "na"}

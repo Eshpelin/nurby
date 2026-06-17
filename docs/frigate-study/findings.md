@@ -643,3 +643,50 @@ Coverage-only batch. No issues, no merges. Deep in the predicted desert: face re
 - #17144 ONVIF retry / #17119 go2rtc bump — Nurby ingests RTSP directly via ffmpeg and bundles neither ONVIF PTZ stack nor go2rtc.
 
 Rest: face/LPR/classification ML (#17145/17128/17123/17099/17079/17068/17046/17137/17123), Hailo hwaccel (#17094), config/detector defaults (#17136/17125/17091/16980), docs (#17111/17093/17007/16989/16949), python+web deps (#17006/16983), and a frontend wave (#17132/17129/17112/17035/17030/17024/16995/16978/16962/16947/16929/16926/16931). No backend auth/API/ingest correctness gap.
+
+## Batch 33 (PRs 16920-16705)
+
+Fanned-out batch (one of 4 parallel agents, worktree-isolated). HAVE 2 / N/A 41 / GAP 2.
+
+**GAP -> issue Eshpelin/nurby#88:** #16894 (dynamically enable/disable cameras) + #16920 (disabled camera output). Nurby's `Camera` model (shared/models.py:27) has granular flags (`recording_mode`, `detect_objects/faces/plates`) but no master `enabled` toggle, and `IngestionManager._sync_cameras` runs `select(Camera)` unfiltered (services/ingestion/manager.py:171). An operator cannot keep a camera configured while halting all processing without deleting it. Modest usability/parity gap (no security impact).
+
+**HAVE:** #16919 GenAI send-triggers (Nurby has `vlm_trigger`/`vlm_interval` per-keyframe + incident lifecycle rule triggers, models.py:73 / events/engine.py:435). #16903 xAI/OpenAI-compat (Nurby honors `provider.base_url`, llm.py:299; standard image_url vision blocks, vlm.py:224).
+
+**N/A highlights (verified, not assumed):** #16851 per-camera storage (Frigate float-rounding bug; Nurby uses os.path.getsize, retention.py:74), #16712 no-ffmpeg-PATH-fallback (Frigate bundles multiple ffmpeg; Nurby uses system ffmpeg via shutil.which), #16779/#16764 sub-labels (Nurby has no sub_label concept), #16762 websocket-no-cameras (frontend guard), #16706 nullable thumbnail (Nurby schemas already optional), #16803 mqtt (Nurby pubsub). Rest: hwaccel (ROCm/Hailo/Jetson/CUDA/TensorRT/Coral/D-FINE/ONNX), ML embeddings/LPR, i18n, docs/CI.
+
+## Batch 34 (PRs 16704-16487)
+
+Fanned-out batch (worktree-isolated). HAVE 4 / N/A 41 / GAP 0.
+
+**HAVE:** #16594/#16591 np.copy current-frame race — Nurby has no shared frame buffer: each frame decoded fresh (pipeline.py:448) and copied before VLM enqueue (:918) and annotation (:1077). #16586 404-for-missing-media — recordings route returns 404 for missing row/file (recordings.py:55-70,164), not 500. #16647 remove-thumb-from-DB — Nurby stores thumbnails as filesystem path strings, never DB base64 blobs (models.py:211,266,289,340,414).
+
+**Security check, N/A:** #16618 "remove internal docker IP from WebRTC candidates" — investigated for info-leak. Fix is in Frigate's go2rtc create_config.py; Nurby's `services/streaming/` is an empty stub, no SDP/ICE/candidate emission, no internal-IP handling anywhere in services/shared. No leak surface.
+
+**N/A:** #16620 prometheus (Nurby has no prometheus_client), #16686 activity-manager (no aggregation layer), #16704 exact-config-name (no ZMQ config bus), #16504 obsolete-clip-logic (no legacy CLIPS_DIR). Rest: JetPack6/Coral/NVIDIA/OpenVINO/Hailo/ONNX hwaccel, LPR x4, tracking/lifecycle UI, export internals, docs.
+
+## Batch 35 (PRs 16484-16218)
+
+Fanned-out batch (worktree-isolated), security-heavy region. HAVE 1 / N/A 44 / GAP 0. All four flagged security PRs resolve to N/A.
+
+**#16230 Fix csrf — N/A (confirmed not a gap):** Frigate ships CSRF middleware because it supports cookie/session auth. Nurby is pure Bearer-token (shared/auth.py:17 HTTPBearer, :135 reads token only from the Authorization header; no cookie/session path), which is structurally CSRF-immune. CSRF tokens would be dead code.
+
+**#16467 jwt-secret trim — N/A:** Frigate reads its secret from a `.jwt_secret` file and strips the newline. Nurby loads `jwt_secret` from env via pydantic-settings (shared/config.py:46) with an auto-generate guard (:76); no file read, no trailing-newline surface.
+
+**#16433 sanitized-api — N/A, but surfaced an analogous LATENT bug (fixed this run):** Frigate sanitizes a face name before a path join. Nurby's server paths are UUID-built, but the agent flagged `services/api/routes/persons.py` photo upload deriving the file extension from the untrusted client filename via `rsplit(".",1)[-1]`. Verified exploitable: a filename like `x./../../etc/foo` yields an `ext` containing `/` and `..`, escaping `PHOTOS_DIR` (authenticated path-traversal / arbitrary write). Fixed by constraining `ext` to `[a-z0-9]{1,8}` with a safe default; verified in the API docker image (compile + 10-case functional, no path escapes). Shipped in this batch's PR.
+
+**HAVE:** #16469 non-awaited-onvif — Nurby ONVIF fully async (discovery/onvif.py:197/:208), no PTZ autotrack to regress.
+
+**N/A:** #16254 batch-review-fetch (no review-segment model), #16425 /api/metrics (admin-only stats endpoint, no public /metrics), #16435 MQTT QoS (no MQTT). Rest: frontend, hwaccel/ML (YOLOv9/cudnn/hailo/jetson/openvino), web-push notifications, HA integration/addon, GenAI prompt-config, docs, 0.16 release mergebacks.
+
+## Batch 36 (PRs 16212-15865)
+
+Fanned-out batch (worktree-isolated). HAVE 2 / N/A 43 / GAP 0.
+
+**HAVE:** #16195 OPENAI_BASE_URL — Nurby has per-provider configurable base_url with sane defaults (llm.py:299; analyzer.py:747, vlm.py:239; Anthropic/Gemini/Ollama defaults too). #15964 API image MIME — Nurby consistently encodes/serves explicit `media_type="image/jpeg"` (persons.py:129, observations.py:127, guardian.py:478/782, cameras.py:859); video/audio/zip have correct media_type too. No extension-driven mismatch path.
+
+**N/A highlight:** #16096 retention pre/post-capture — investigated retention.py fully. Nurby uses a flat per-camera time/size policy (`_enforce_time`:317 deletes by `started_at < cutoff`; `_enforce_size`:364 deletes oldest until under cap), with no review/event-linked retention, so there is no pre/post-capture keep-window to widen. Different (simpler) design, not a bug.
+
+**N/A:** ffmpeg PRs (#16041/#15956/#16027/#15865/#16158 — Nurby uses OpenCV+mediamtx, no libav-version-gated preset table), ONVIF dep swaps (#15894/#15906 — raw httpx SOAP by design), #15943 manual-events (no review-segment concept), #15903 GPU-stats (no NVML endpoint), #16211/#16191 PTZ interpolation. Rest: ML face/bird/plus, frontend, CI/docker, docs.
+
+### Fan-out note (batches 33-36)
+First parallelized run: 4 sub-agents triaged 45 PRs each in isolated git worktrees, returned structured ledger+findings (no commits), and the parent consolidated into one PR. Net across 180 PRs: 9 HAVE, 169 N/A, 2 GAP (issue #88), 1 shipped security fix (persons.py ext sanitize, from the #16433 lens). Region confirmed a ~94% N/A desert (face/LPR/classification ML + hwaccel + i18n + docs).

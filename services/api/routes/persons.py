@@ -778,8 +778,12 @@ async def upload_face(
         raise HTTPException(status_code=400, detail="Empty file")
 
     # Save photo. The disk write can be large (user-uploaded image), so keep
-    # it off the event loop.
-    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
+    # it off the event loop. The extension is derived from the client-supplied
+    # filename, which is untrusted: a value like "x./../../etc/foo" would
+    # otherwise let the join escape PHOTOS_DIR (path traversal / arbitrary
+    # write), so keep only a short alphanumeric suffix with a safe default.
+    raw_ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
+    ext = "".join(c for c in raw_ext if c.isalnum()).lower()[:8] or "jpg"
     photo_filename = f"{person_id}.{ext}"
     photo_path = os.path.join(PHOTOS_DIR, photo_filename)
 
