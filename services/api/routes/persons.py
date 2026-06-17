@@ -1,5 +1,6 @@
 """People management API. CRUD for persons + face photo upload + auto-discovery suggestions + activity feed."""
 
+import asyncio
 import os
 import uuid
 from datetime import datetime
@@ -776,18 +777,22 @@ async def upload_face(
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    # Save photo. The extension is derived from the client-supplied filename,
-    # which is untrusted: a value like "x./../../etc/foo" would otherwise let
-    # the join escape PHOTOS_DIR (path traversal / arbitrary write). Keep only
-    # a short alphanumeric suffix and fall back to a safe default.
-    os.makedirs(PHOTOS_DIR, exist_ok=True)
+    # Save photo. The disk write can be large (user-uploaded image), so keep
+    # it off the event loop. The extension is derived from the client-supplied
+    # filename, which is untrusted: a value like "x./../../etc/foo" would
+    # otherwise let the join escape PHOTOS_DIR (path traversal / arbitrary
+    # write), so keep only a short alphanumeric suffix with a safe default.
     raw_ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
     ext = "".join(c for c in raw_ext if c.isalnum()).lower()[:8] or "jpg"
     photo_filename = f"{person_id}.{ext}"
     photo_path = os.path.join(PHOTOS_DIR, photo_filename)
 
-    with open(photo_path, "wb") as f:
-        f.write(image_bytes)
+    def _write_photo() -> None:
+        os.makedirs(PHOTOS_DIR, exist_ok=True)
+        with open(photo_path, "wb") as f:
+            f.write(image_bytes)
+
+    await asyncio.to_thread(_write_photo)
 
     person.photo_path = photo_path
     await db.commit()
