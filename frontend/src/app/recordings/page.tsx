@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { RecordingDetectionOverlay } from "@/components/RecordingDetectionOverlay";
 import { MotionHeatstrip } from "@/components/MotionHeatstrip";
+import { MotionReviewItems } from "@/components/MotionReviewItems";
 
 // Objects people most often scrub for. Free of a fixed list otherwise.
 const COMMON_OBJECTS = ["person", "cat", "dog", "car", "truck", "bus", "bicycle", "motorcycle"];
@@ -460,6 +461,13 @@ export default function RecordingsPage() {
                 />
               </div>
               <MotionHeatstrip
+                cameraId={expandedRec.camera_id}
+                startedAt={expandedRec.started_at}
+                endedAt={expandedRec.ended_at}
+                durationSeconds={expandedRec.duration_seconds}
+                videoRef={videoRef}
+              />
+              <MotionReviewItems
                 cameraId={expandedRec.camera_id}
                 startedAt={expandedRec.started_at}
                 endedAt={expandedRec.ended_at}
