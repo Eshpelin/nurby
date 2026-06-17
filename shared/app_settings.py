@@ -211,6 +211,15 @@ DEFAULTS: dict[str, Any] = {
     # Public base URL of the guardian app, used to build the invite/claim magic
     # link in onboarding emails (for example "https://app.example.com").
     "guardian_app_base_url": "",
+    # ── Motion-score time series (#37) ───────────────────────────────
+    # Master switch for persisting the downsampled per-camera motion-score
+    # series into motion_samples (backs GET /cameras/{id}/motion). Defaults
+    # OFF: the writer runs on every keyframe (~1 row/camera/second) and the
+    # table has NO retention/pruning yet, so leaving it on would grow the
+    # table without bound. Existing deployments see zero new writes until an
+    # admin opts in. PREREQUISITE before enabling in production: add a
+    # retention/pruning sweep for motion_samples (mirror har_segment_retention_days).
+    "motion_series_enabled": False,
 }
 
 

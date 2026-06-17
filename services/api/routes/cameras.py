@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.api.motion_query import DEFAULT_BUCKET_SECONDS
 from services.discovery.onvif import (
     discover_onvif_cameras,
     ptz_continuous_move,
@@ -303,6 +304,76 @@ async def camera_action_timeline(
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     items = await camera_segments(db, camera_id, since=since, action=action, limit=limit)
     return {"items": items, "count": len(items), "hours": hours}
+
+
+@router.get("/{camera_id}/motion")
+async def camera_motion_activity(
+    camera_id: uuid.UUID,
+    from_: datetime = Query(..., alias="from"),
+    to: datetime = Query(...),
+    bucket_seconds: int = Query(default=DEFAULT_BUCKET_SECONDS, ge=1, le=3600),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bucketed motion-activity series for a camera over [from, to].
+
+    Returns server-side-aggregated motion intensity (peak score 0..1) per
+    ``bucket_seconds`` bucket, backing the timeline motion heatstrip + scrub
+    (#37). Aggregation is done in SQL (services.api.motion_query); empty
+    buckets are omitted and the caller treats a missing bucket as zero.
+    Mirrors Frigate's optimized motion-activity endpoint (#23383)."""
+    from services.api.motion_query import (
+        MAX_BUCKETS,
+        clamp_bucket_seconds,
+        motion_buckets_query,
+    )
+
+    # Per-user camera ACL (issue #40): a restricted user gets 404 for a
+    # camera outside their allowed set, exactly like the other single-camera
+    # reads. Owner/admin (ALL) unaffected.
+    await _require_camera_in_scope(camera_id, current_user, db)
+
+    cam = await db.get(Camera, camera_id)
+    if cam is None:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    if to <= from_:
+        raise HTTPException(status_code=422, detail="`to` must be after `from`")
+
+    bucket_seconds = clamp_bucket_seconds(bucket_seconds)
+
+    # Reject windows that would produce an unbounded series. The UI requests a
+    # bucket width sized to the zoom level, so this only trips on abuse.
+    span_seconds = (to - from_).total_seconds()
+    if span_seconds / bucket_seconds > MAX_BUCKETS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"window too large for bucket_seconds={bucket_seconds}: "
+                f"would exceed {MAX_BUCKETS} buckets. widen bucket_seconds "
+                "or narrow the window."
+            ),
+        )
+
+    result = await db.execute(
+        motion_buckets_query(camera_id, from_, to, bucket_seconds)
+    )
+    buckets = [
+        {
+            "t": row.bucket_start.isoformat(),
+            "intensity": float(row.intensity),
+            "samples": int(row.samples),
+        }
+        for row in result.all()
+    ]
+    return {
+        "camera_id": str(camera_id),
+        "from": from_.isoformat(),
+        "to": to.isoformat(),
+        "bucket_seconds": bucket_seconds,
+        "buckets": buckets,
+        "count": len(buckets),
+    }
 
 
 @router.post("", status_code=201)

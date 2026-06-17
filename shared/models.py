@@ -203,6 +203,41 @@ class CameraStatusLog(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class MotionSample(Base):
+    """Downsampled per-camera motion-score time series.
+
+    Written from the existing motion pipeline (the perception keyframe path),
+    NOT a second detector. Each row is one 1-second bucket carrying the peak
+    motion score seen in that second (0..1). Sub-second duplicates within a
+    bucket are coalesced via an upsert on (camera_id, bucket) that keeps the
+    max score, so write volume is bounded to at most one row per camera-second
+    regardless of frame rate.
+
+    Read side (GET /cameras/{id}/motion) re-aggregates these 1s buckets into
+    coarser caller-chosen buckets server-side (see services.api.motion_query),
+    mirroring Frigate's optimized motion-activity endpoint (#23383).
+
+    Retention: prune alongside recordings (same window). A scheduled cleanup is
+    out of scope for this foundation PR and tracked as next-step work.
+    """
+
+    __tablename__ = "motion_samples"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    camera_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # Timestamp truncated to the 1-second write bucket (UTC).
+    bucket: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Peak motion score in this bucket, 0..1.
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (
+        # One row per camera per second. Upsert target for max-score coalescing.
+        UniqueConstraint("camera_id", "bucket", name="uq_motion_samples_camera_bucket"),
+        # Range scans are always (camera_id, time-window); composite covers them.
+        Index("ix_motion_samples_camera_bucket", "camera_id", "bucket"),
+    )
+
+
 class Recording(Base):
     __tablename__ = "recordings"
 
