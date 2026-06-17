@@ -12,7 +12,7 @@ from shared.schemas import CameraUpdate
 
 
 def _dets(*labels):
-    return [{"label": l, "confidence": 0.9} for l in labels]
+    return [{"label": lbl, "confidence": 0.9} for lbl in labels]
 
 
 def test_no_config_or_no_detections_returns_empty():
