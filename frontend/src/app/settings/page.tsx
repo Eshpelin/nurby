@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import TelegramSection from "@/components/TelegramSection";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
@@ -24,7 +25,7 @@ import {
 } from "./settings-helpers";
 
 export default function SettingsPage() {
-  const { authFetch, token } = useAuth();
+  const { user, authFetch, token } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [showProviderModal, setShowProviderModal] = useState(false);
@@ -549,7 +550,17 @@ export default function SettingsPage() {
 
   return (
     <div className="px-6 py-6 max-w-3xl">
-      <h1 className="text-2xl font-semibold tracking-tight mb-6">Settings</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        {user?.role === "admin" && (
+          <Link
+            href="/settings/access"
+            className="px-3 py-1.5 rounded-md border border-border text-sm hover:bg-muted transition-colors"
+          >
+            Camera access
+          </Link>
+        )}
+      </div>
 
       <div className="mb-6">
         <SoftwareUpdateCard />
