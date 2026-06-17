@@ -25,8 +25,13 @@ def test_camera_and_time_filters_present():
     sql = _sql(_filtered_recordings_query(cid, t0, t1, None))
     assert "from recordings" in sql
     assert "camera_id =" in sql
-    assert "started_at >=" in sql
-    assert "started_at <=" in sql
+    # Lower bound tests the recording's window_end (overlap semantics, #65),
+    # not started_at, so a clip that began before `from_` but is still
+    # running is not dropped. window_end is coalesce(ended_at, started_at +
+    # make_interval(duration)).
+    assert "make_interval" in sql
+    assert ">=" in sql
+    assert "started_at <=" in sql  # upper bound stays on started_at
     assert "exists" not in sql  # no object filter -> no subquery
 
 
