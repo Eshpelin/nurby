@@ -1285,3 +1285,48 @@
 {"pr": 17148, "title": "Fix bug where safari and firefox cache image for too long", "area": "frontend", "type": "fix", "decision": "na"}
 {"pr": 17147, "title": "Ensure time range filter retains selected values", "area": "frontend", "type": "fix", "decision": "na"}
 {"pr": 17146, "title": "Cleanup bird classification", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 17145, "title": "Fix snapshot failing", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 17144, "title": "Implement ONVIF retry mechanism", "area": "ingest", "type": "feat", "decision": "na", "note": "Nurby ingests RTSP via ffmpeg, no ONVIF PTZ stack"}
+{"pr": 17138, "title": "Simplify auth check", "area": "auth", "type": "refactor", "decision": "na", "note": "Frigate proxy-header auth (remote-user/remote-role); Nurby uses JWT bearer auth in shared/auth.py"}
+{"pr": 17137, "title": "Review items per user", "area": "api", "type": "feat", "decision": "na", "note": "per-user review-seen state, Frigate-specific review feature"}
+{"pr": 17136, "title": "Make detection threshold configurable", "area": "perception", "type": "feat", "decision": "na", "note": "object-detector threshold config, Nurby uses VLM not detector thresholds"}
+{"pr": 17132, "title": "Ensure restart dialog isn't shown if config isn't valid", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17129, "title": "Fix rtsp config access", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17128, "title": "Rename identifier field", "area": "ml", "type": "chore", "decision": "na", "note": "LPR field rename"}
+{"pr": 17125, "title": "Enable audio by default", "area": "config", "type": "chore", "decision": "na"}
+{"pr": 17123, "title": "Use identifier field for unknown license plates", "area": "ml", "type": "feat", "decision": "na", "note": "LPR"}
+{"pr": 17119, "title": "Update go2rtc version to 1.9.9", "area": "ingest", "type": "chore", "decision": "na", "note": "Nurby does not bundle go2rtc"}
+{"pr": 17112, "title": "Bugfixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17111, "title": "Update hardware recommendation", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 17105, "title": "Refactor manual event api to use ZMQ", "area": "api", "type": "refactor", "decision": "na", "note": "Frigate inter-process ZMQ for manual events; Nurby uses async DB + queue, different IPC model"}
+{"pr": 17099, "title": "Face blur factor", "area": "ml", "type": "feat", "decision": "na", "note": "face recognition"}
+{"pr": 17094, "title": "Update Hailo library to v4.20.1", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 17093, "title": "Add docs for user roles", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 17091, "title": "Add self return for pydantic", "area": "config", "type": "fix", "decision": "na", "note": "logger config validator returns self"}
+{"pr": 17079, "title": "Refactor sub label api", "area": "api", "type": "refactor", "decision": "na", "note": "sub_label is Frigate event metadata, LPR/face plumbing"}
+{"pr": 17068, "title": "Face multi select", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 17067, "title": "More auth role fixes", "area": "auth", "type": "fix", "decision": "na", "note": "Frigate proxy-header role mapping + AuthForm.tsx; not applicable to Nurby JWT model"}
+{"pr": 17066, "title": "Auth role bugfixes", "area": "auth", "type": "fix", "decision": "na", "note": "proxy header_map.role + /profile role resolution, Frigate proxy-auth model"}
+{"pr": 17046, "title": "LPR tweaks", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 17045, "title": "Ensure audio listener is defined before trying to stop ffmpeg", "area": "ingest", "type": "fix", "decision": "na", "note": "Frigate audio AudioEventMaintainer ffmpeg lifecycle"}
+{"pr": 17044, "title": "Ensure admin is default role", "area": "auth", "type": "fix", "decision": "have", "note": "Nurby bootstrap admins explicitly set role=admin (services/api/routes/auth.py:56,111); normal default is viewer (shared/models.py:679) - safer than Frigate. Also serializes first-run race via pg advisory lock (auth.py:85)"}
+{"pr": 17035, "title": "Small UI bugfix", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17030, "title": "Base path via environment variable", "area": "frontend", "type": "feat", "decision": "na", "note": "web base_path for reverse-proxy subpath"}
+{"pr": 17024, "title": "Settings UI bugfix", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17007, "title": "Fix yolov9 link", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 17006, "title": "Update python deps", "area": "deps", "type": "chore", "decision": "na"}
+{"pr": 16995, "title": "Add cameras filter to History view", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16993, "title": "video['global'] can be empty resulting in a divide by zero", "area": "perception", "type": "fix", "decision": "na", "note": "GPU stats parsing in frigate/util/services.py; Nurby has no equivalent gpu-stats text parser"}
+{"pr": 16989, "title": "Update live.md", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16983, "title": "Update web deps", "area": "deps", "type": "chore", "decision": "na"}
+{"pr": 16980, "title": "Disable detection by default", "area": "config", "type": "chore", "decision": "na"}
+{"pr": 16979, "title": "Refactor enabled camera listeners", "area": "ingest", "type": "refactor", "decision": "na", "note": "Frigate ZMQ camera enable/disable listeners"}
+{"pr": 16978, "title": "UI viewer role", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16962, "title": "Fix previews failing when disabled", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 16961, "title": "Ensure disabling a camera also disables audio detection", "area": "ingest", "type": "fix", "decision": "na", "note": "Frigate audio AudioEventMaintainer / video.py"}
+{"pr": 16949, "title": "Docs updates", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 16947, "title": "Orient live camera feed for best screen fit when in fullscreen mode", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16939, "title": "Ensure GenAI thumbnails are always jpegs", "area": "genai", "type": "fix", "decision": "have", "note": "Nurby VLM always re-encodes frames to JPEG via cv2.imencode('.jpg') before base64 (services/perception/vlm.py:91,186), so model never receives non-jpeg bytes"}
+{"pr": 16931, "title": "Fixed the issue where internal context copy occurs frequently.", "area": "perception", "type": "fix", "decision": "na", "note": "C/embedding internal buffer copy optimization"}
+{"pr": 16929, "title": "Add camera enable switch to mobile drawer", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 16926, "title": "Quick fix", "area": "frontend", "type": "fix", "decision": "na"}
