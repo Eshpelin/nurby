@@ -20,6 +20,11 @@ import os
 import subprocess
 
 from shared.config import settings
+from shared.ffmpeg_safe import (
+    PROTOCOL_WHITELIST_ARGS,
+    DisallowedFfmpegArgError,
+    assert_allowed_args,
+)
 from shared.paths import safe_getsize
 
 DEFAULT_SIGMA = 20
@@ -46,7 +51,7 @@ def blur_clip(src_path: str, sigma: int = DEFAULT_SIGMA) -> str:
         return dest
     tmp = f"{dest}.{os.getpid()}.tmp.mp4"
     cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
+        "ffmpeg", *PROTOCOL_WHITELIST_ARGS, "-y", "-loglevel", "error",
         "-i", src_path,
         "-vf", f"gblur=sigma={sigma}",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
@@ -56,7 +61,11 @@ def blur_clip(src_path: str, sigma: int = DEFAULT_SIGMA) -> str:
         tmp,
     ]
     try:
+        assert_allowed_args(cmd)
         proc = subprocess.run(cmd, capture_output=True, timeout=120)
+    except DisallowedFfmpegArgError as exc:
+        _unlink(tmp)
+        raise RuntimeError(f"clip blur refused: {exc}") from exc
     except (subprocess.TimeoutExpired, OSError) as exc:
         _unlink(tmp)
         raise RuntimeError(f"clip blur failed: {exc}") from exc

@@ -50,6 +50,11 @@ DEFAULTS: dict[str, Any] = {
     # sirens, relays, n8n on the same host) are a first-class feature.
     # Cloud metadata endpoints are always refused regardless of this flag.
     "webhook_block_private_networks": False,
+    # Camera-stream SSRF hardening for server-fetched http_snapshot /
+    # http_mjpeg / hls URLs. Off by default: LAN cameras (192.168/10/172.16)
+    # are legitimate on a self-hosted box. Loopback / link-local / cloud
+    # metadata targets are always refused regardless of this flag.
+    "camera_block_private_networks": False,
     # Global object-detection allowlist. None / empty = detect everything
     # (the detector's full class set). A non-empty list of YOLO labels means
     # only those classes survive detection on every camera: nothing else gets

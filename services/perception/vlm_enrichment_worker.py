@@ -36,6 +36,11 @@ from sqlalchemy import select
 
 from shared.app_settings import get_setting
 from shared.database import async_session
+from shared.ffmpeg_safe import (
+    PROTOCOL_WHITELIST_ARGS,
+    assert_allowed_args,
+    contained_input,
+)
 from shared.models import Observation, ObservationVlmPass, Recording
 
 logger = logging.getLogger("nurby.perception.vlm_enrichment")
@@ -523,9 +528,14 @@ def _extract_frame(video_path: str, offset_seconds: float):
         import cv2
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
             out = tf.name
+        cmd = [
+            "ffmpeg", *PROTOCOL_WHITELIST_ARGS,
+            "-y", "-ss", f"{offset_seconds:.2f}", "-i", video_path,
+            "-frames:v", "1", "-q:v", "3", out,
+        ]
+        assert_allowed_args(cmd)
         subprocess.run(
-            ["ffmpeg", "-y", "-ss", f"{offset_seconds:.2f}", "-i", video_path,
-             "-frames:v", "1", "-q:v", "3", out],
+            cmd,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20,
         )
         img = cv2.imread(out)
@@ -550,15 +560,8 @@ def _hmontage(frames):
 
 
 def _resolve_recording_path(file_path: str) -> str | None:
-    if not file_path:
-        return None
-    if os.path.isabs(file_path):
-        return file_path
+    """Resolve a stored recording path to an absolute disk path contained
+    inside ``recordings_path``. Returns None on escape so a poisoned row is
+    never fed to ffmpeg."""
     from shared.config import settings
-    base = os.path.abspath(settings.recordings_path)
-    rel = file_path
-    for prefix in ("./recordings/", "recordings/", "./"):
-        if rel.startswith(prefix):
-            rel = rel[len(prefix):]
-            break
-    return os.path.join(base, rel)
+    return contained_input(file_path, settings.recordings_path)
