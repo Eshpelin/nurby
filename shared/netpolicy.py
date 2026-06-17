@@ -23,7 +23,11 @@ import ipaddress
 import socket
 from urllib.parse import urlparse
 
-__all__ = ["webhook_target_rejection"]
+__all__ = [
+    "webhook_target_rejection",
+    "stream_target_rejection",
+    "stream_target_rejection_sync",
+]
 
 # Always refused, regardless of settings.
 _METADATA_HOSTS = {
@@ -92,3 +96,75 @@ async def webhook_target_rejection(url: str) -> str | None:
     except Exception:
         block_private = False
     return await asyncio.to_thread(_rejection_sync, url, block_private)
+
+
+# ── Camera stream targets (SSRF) ──────────────────────────────────────
+#
+# http_snapshot / http_mjpeg / hls camera URLs are operator-supplied and
+# fetched server-side, which is a classic SSRF lever: a malicious or
+# poisoned camera row can point the ingestion worker at an internal
+# service or the cloud metadata endpoint and exfiltrate the response into
+# decoded "frames". The scheme allowlist (PR #34, shared/schemas.py)
+# closes file:// / gopher:// etc.; this closes the host/IP dimension.
+#
+# Cloud metadata and loopback / link-local addresses can never be a real
+# camera, so they are refused unconditionally. RFC1918 private ranges
+# (10/8, 172.16/12, 192.168/16) ARE legitimate for LAN cameras on a
+# self-hosted box, so they are only refused when the operator opts into
+# the ``camera_block_private_networks`` hardening setting (default off),
+# mirroring ``webhook_block_private_networks``.
+
+
+def stream_target_rejection_sync(url: str, block_private: bool = False) -> str | None:
+    """Reason this camera stream URL must be refused, or None when allowed.
+
+    Always refuses cloud metadata, loopback (127/8, ::1) and link-local
+    (169.254/16, fe80::/10) targets. RFC1918 private ranges are refused
+    only when ``block_private`` is set.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return "invalid URL"
+    host = (parsed.hostname or "").strip().lower()
+    if not host:
+        return "URL has no host"
+
+    if host in _METADATA_HOSTS:
+        return f"refusing cloud metadata endpoint {host}"
+    addresses = _addresses_for(host)
+    for addr in addresses:
+        if addr.is_link_local and str(addr).startswith("169.254.169."):
+            return f"refusing cloud metadata address {addr}"
+
+    # Loopback and link-local can never be a legitimate camera; always refuse.
+    for addr in addresses:
+        if addr.is_loopback:
+            return f"refusing loopback stream target {addr}"
+        if addr.is_link_local:
+            return f"refusing link-local stream target {addr}"
+
+    if block_private:
+        for addr in addresses:
+            if addr.is_private:
+                return (
+                    f"{host} resolves to a private address ({addr}) and "
+                    "camera_block_private_networks is enabled"
+                )
+    return None
+
+
+async def stream_target_rejection(url: str) -> str | None:
+    """Reason this camera stream URL must be refused, or None when allowed.
+
+    Reads the ``camera_block_private_networks`` app setting; DNS work runs
+    off the event loop. Loopback / link-local / metadata are always
+    refused regardless of the setting.
+    """
+    from shared.app_settings import get_setting
+
+    try:
+        block_private = bool(await get_setting("camera_block_private_networks", False))
+    except Exception:
+        block_private = False
+    return await asyncio.to_thread(stream_target_rejection_sync, url, block_private)

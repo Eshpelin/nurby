@@ -20,6 +20,7 @@ import numpy as np
 from shared.config import settings
 from shared.database import async_session
 from shared.models import Camera, CameraStatusLog, Recording
+from shared.netpolicy import stream_target_rejection
 from shared.paths import safe_getsize
 
 logger = logging.getLogger("nurby.ingestion.stream")
@@ -137,6 +138,39 @@ class StreamWorker:
             self._redis = aioredis.from_url(settings.redis_url)
         return self._redis
 
+    # Stream types whose URL is fetched server-side over HTTP(S) and is
+    # therefore an SSRF lever (the response is decoded into "frames"). RTSP
+    # / webcam / usb / file are not HTTP-fetched here so are not host-checked.
+    _SSRF_CHECKED_TYPES = (
+        STREAM_TYPE_HTTP_SNAPSHOT,
+        STREAM_TYPE_HTTP_MJPEG,
+        STREAM_TYPE_HLS,
+    )
+
+    async def _ssrf_rejected(self) -> bool:
+        """True when this camera's URL points at a forbidden internal target.
+
+        Loopback / link-local / cloud-metadata are always refused; RFC1918
+        private ranges only when ``camera_block_private_networks`` is on
+        (LAN cameras are legitimate on a self-hosted box). Scheme is already
+        validated upstream by shared.schemas.validate_stream_url (PR #34).
+        """
+        if self.stream_type not in self._SSRF_CHECKED_TYPES:
+            return False
+        try:
+            reason = await stream_target_rejection(self.stream_url)
+        except Exception:
+            logger.exception("SSRF check failed for camera %s; refusing", self.camera_id)
+            return True
+        if reason:
+            logger.error(
+                "refusing camera %s stream URL (SSRF guard): %s",
+                self.camera_id, reason,
+            )
+            await self._update_camera_status("offline", f"blocked: {reason}")
+            return True
+        return False
+
     async def run(self):
         """Main loop. Dispatches to correct handler by stream type.
 
@@ -148,6 +182,12 @@ class StreamWorker:
         while self._running:
             self._connected_this_cycle = False
             try:
+                if await self._ssrf_rejected():
+                    # Don't pull this camera at all. A short sleep avoids a
+                    # busy loop while still re-checking (the operator may
+                    # fix the URL or the host may re-resolve).
+                    await asyncio.sleep(RECONNECT_MAX_DELAY)
+                    continue
                 if self.stream_type == STREAM_TYPE_HTTP_SNAPSHOT:
                     await self._process_snapshot_stream()
                 else:

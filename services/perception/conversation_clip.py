@@ -34,6 +34,13 @@ from sqlalchemy import select
 
 from shared.config import settings
 from shared.database import async_session
+from shared.ffmpeg_safe import (
+    PROTOCOL_WHITELIST_ARGS,
+    PROTOCOL_WHITELIST_CONCAT_ARGS,
+    DisallowedFfmpegArgError,
+    assert_allowed_args,
+    contained_input,
+)
 from shared.models import Conversation, Recording
 from shared.paths import safe_getsize
 
@@ -116,7 +123,8 @@ async def build_clip_for_conversation(
                         f.write(f"file '{safe}'\n")
                 rc = await _run_ffmpeg(
                     [
-                        "ffmpeg", "-hide_banner", "-loglevel", "warning", "-y",
+                        "ffmpeg", *PROTOCOL_WHITELIST_CONCAT_ARGS,
+                        "-hide_banner", "-loglevel", "warning", "-y",
                         "-f", "concat", "-safe", "0",
                         "-i", concat_list,
                         "-c", "copy",
@@ -129,7 +137,8 @@ async def build_clip_for_conversation(
                     # different SPS/PPS and stream-copy concat fails.
                     rc = await _run_ffmpeg(
                         [
-                            "ffmpeg", "-hide_banner", "-loglevel", "warning", "-y",
+                            "ffmpeg", *PROTOCOL_WHITELIST_CONCAT_ARGS,
+                            "-hide_banner", "-loglevel", "warning", "-y",
                             "-f", "concat", "-safe", "0",
                             "-i", concat_list,
                             "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
@@ -170,7 +179,8 @@ async def _trim_segment(src: str, ss: float, duration: float, dst: str) -> bool:
         return False
     rc = await _run_ffmpeg(
         [
-            "ffmpeg", "-hide_banner", "-loglevel", "warning", "-y",
+            "ffmpeg", *PROTOCOL_WHITELIST_ARGS,
+            "-hide_banner", "-loglevel", "warning", "-y",
             "-ss", f"{ss:.3f}",
             "-i", src,
             "-t", f"{duration:.3f}",
@@ -183,7 +193,8 @@ async def _trim_segment(src: str, ss: float, duration: float, dst: str) -> bool:
         return True
     rc = await _run_ffmpeg(
         [
-            "ffmpeg", "-hide_banner", "-loglevel", "warning", "-y",
+            "ffmpeg", *PROTOCOL_WHITELIST_ARGS,
+            "-hide_banner", "-loglevel", "warning", "-y",
             "-ss", f"{ss:.3f}",
             "-i", src,
             "-t", f"{duration:.3f}",
@@ -247,16 +258,11 @@ def _silent_remove(path: str) -> None:
 
 
 def _resolve_path(stored: str | None) -> str | None:
-    if not stored:
-        return None
-    if os.path.isabs(stored):
-        return stored
-    rel = stored
-    for prefix in ("./recordings/", "recordings/", "./"):
-        if rel.startswith(prefix):
-            rel = rel[len(prefix):]
-            break
-    return os.path.join(os.path.abspath(settings.recordings_path), rel)
+    """Resolve a stored recording path to an absolute disk path contained
+    inside ``recordings_path``. Returns None on escape (``..``/symlink/
+    absolute-outside-root) so a poisoned row degrades to "no clip" instead
+    of feeding an arbitrary file to ffmpeg."""
+    return contained_input(stored, settings.recordings_path)
 
 
 def _file_ok(path: str) -> bool:
@@ -264,6 +270,11 @@ def _file_ok(path: str) -> bool:
 
 
 async def _run_ffmpeg(cmd: list[str], timeout: float = 120.0) -> int:
+    try:
+        assert_allowed_args(cmd)
+    except DisallowedFfmpegArgError as exc:
+        logger.error("refusing ffmpeg invocation: %s", exc)
+        return 1
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.DEVNULL,

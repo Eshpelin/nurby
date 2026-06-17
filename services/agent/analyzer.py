@@ -39,6 +39,7 @@ import base64
 import hashlib
 import json
 import logging
+import os
 import re
 import string
 import uuid
@@ -57,7 +58,14 @@ from services.perception.vlm import get_active_provider
 from shared.app_settings import get_setting
 from shared.config import settings
 from shared.database import async_session
+from shared.ffmpeg_safe import (
+    PROTOCOL_WHITELIST_ARGS,
+    DisallowedFfmpegArgError,
+    assert_allowed_args,
+    contained_input,
+)
 from shared.models import Camera, Observation, Provider, Recording
+from shared.paths import resolve_inside
 
 logger = logging.getLogger("nurby.agent.analyzer")
 
@@ -264,23 +272,34 @@ def select_frames(window_seconds: int, target_max_frames: int = 8) -> list[float
 
 
 def _resolve_recording_path(rec: Recording) -> Path | None:
-    """Mirror ``services/api/routes/recordings.py:_resolve_recording_path``.
+    """Resolve a recording's stored ``file_path`` to a disk path that is
+    proven to live inside the ``recordings_path`` root before it is handed
+    to ffmpeg.
 
-    The stored ``file_path`` may be absolute, relative to the configured
-    ``recordings_path`` root, or already include the camera prefix. We
-    try the most permissive interpretation first.
+    The stored value may be absolute, relative to the configured root, or
+    already include the camera prefix. Every candidate is run through
+    ``shared.paths`` containment (symlink-resolved + ``commonpath``), so a
+    poisoned DB row carrying ``..`` / an absolute escape / a symlink can
+    never make ffmpeg read a file outside the media directory. Returns
+    ``None`` on escape or when the file is missing.
     """
     raw = rec.file_path or ""
     if not raw:
         return None
-    candidates = [Path(raw)]
-    base = Path(settings.recordings_path)
-    candidates.append(base / raw)
-    candidates.append(base / str(rec.camera_id) / raw)
+    base = os.path.abspath(settings.recordings_path)
+    candidates: list[str] = []
+    # Reuse the shared resolver for the common (root-relative) shapes.
+    contained = contained_input(raw, base)
+    if contained is not None:
+        candidates.append(contained)
+    # Plus the camera-id-prefixed shape used by some older rows.
+    cam_prefixed = resolve_inside(os.path.join(base, str(rec.camera_id), raw), base)
+    if cam_prefixed is not None:
+        candidates.append(cam_prefixed)
     for c in candidates:
         try:
-            if c.exists():
-                return c
+            if os.path.exists(c):
+                return Path(c)
         except OSError:
             continue
     return None
@@ -295,6 +314,7 @@ async def _ffmpeg_extract_one(file_path: Path, ts: float) -> np.ndarray | None:
     """
     cmd = [
         "ffmpeg",
+        *PROTOCOL_WHITELIST_ARGS,
         "-hide_banner",
         "-loglevel",
         "error",
@@ -310,6 +330,11 @@ async def _ffmpeg_extract_one(file_path: Path, ts: float) -> np.ndarray | None:
         "mjpeg",
         "pipe:1",
     ]
+    try:
+        assert_allowed_args(cmd)
+    except DisallowedFfmpegArgError as exc:
+        logger.error("refusing ffmpeg invocation: %s", exc)
+        return None
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,

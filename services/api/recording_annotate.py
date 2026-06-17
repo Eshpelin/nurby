@@ -24,6 +24,11 @@ import subprocess
 import textwrap
 
 from shared.config import settings
+from shared.ffmpeg_safe import (
+    PROTOCOL_WHITELIST_ARGS,
+    DisallowedFfmpegArgError,
+    assert_allowed_args,
+)
 from shared.paths import safe_getsize
 
 logger = logging.getLogger(__name__)
@@ -243,7 +248,7 @@ def render_annotated(
     # Transcode to broadly-playable H.264 (faststart) and mux original audio if
     # present. If ffmpeg is unavailable/fails, keep the mp4v render as-is.
     cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
+        "ffmpeg", *PROTOCOL_WHITELIST_ARGS, "-y", "-loglevel", "error",
         "-i", tmp, "-i", src_path,
         "-map", "0:v:0", "-map", "1:a:0?",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
@@ -251,6 +256,7 @@ def render_annotated(
         dest,
     ]
     try:
+        assert_allowed_args(cmd)
         proc = subprocess.run(cmd, capture_output=True, timeout=600)
         if proc.returncode == 0 and safe_getsize(dest) > 0:
             try:
@@ -259,6 +265,8 @@ def render_annotated(
                 pass
             return dest
         logger.warning("annotate ffmpeg transcode failed rc=%s; keeping mp4v", proc.returncode)
+    except DisallowedFfmpegArgError as exc:
+        logger.error("refusing annotate ffmpeg invocation: %s; keeping mp4v", exc)
     except (subprocess.TimeoutExpired, OSError) as exc:
         logger.warning("annotate ffmpeg unavailable (%s); keeping mp4v", exc)
 
