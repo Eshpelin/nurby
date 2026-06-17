@@ -1240,3 +1240,48 @@
 {"pr": 17308, "title": "Various fixes & tweaks (face)", "area": "ml", "type": "fix", "decision": "na"}
 {"pr": 17307, "title": "Bugfixes and docs tweaks (onvif/norfair)", "area": "ptz", "type": "fix", "decision": "na", "note": "ONVIF already async-verified batch-26; norfair tracker internals N/A"}
 {"pr": 17305, "title": "Fix webUI generating HTTP500s when camera disabled", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17298, "title": "Add support for RF-DETR models", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 17296, "title": "Sub label snapshot", "area": "tracking", "type": "feat", "decision": "na"}
+{"pr": 17290, "title": "Face tweaks", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 17289, "title": "LPR improvements", "area": "lpr", "type": "chore", "decision": "na"}
+{"pr": 17278, "title": "Quick fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 17277, "title": "Don't log go2rtc failure when camera is disabled", "area": "api", "type": "fix", "decision": "na"}
+{"pr": 17276, "title": "Add MQTT topic to expose current camera review status", "area": "integration", "type": "feat", "decision": "na", "note": "MQTT-specific; Nurby uses notify/pubsub, not MQTT"}
+{"pr": 17275, "title": "Small tweaks", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 17273, "title": "Disabled cameras fixing", "area": "camera", "type": "fix", "decision": "na"}
+{"pr": 17272, "title": "Actually set the configured face and lpr settings", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 17265, "title": "Plus settings - fix model ID overlap", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17263, "title": "Fix per camera config", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 17262, "title": "Update reviews state when sub label is set", "area": "review", "type": "fix", "decision": "na"}
+{"pr": 17261, "title": "Add model ID to Frigate+ settings page", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 17260, "title": "UI: use correct icon/i18n for Face Library on mobile", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17258, "title": "Ensure i18n pulls from relative url", "area": "i18n", "type": "fix", "decision": "na"}
+{"pr": 17256, "title": "i18n fix for English rendering of TimeAgo seconds", "area": "i18n", "type": "fix", "decision": "na"}
+{"pr": 17248, "title": "Nginx fix: make locales public", "area": "infra", "type": "fix", "decision": "na"}
+{"pr": 17245, "title": "Face Library: show name on details", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 17244, "title": "Face rec: only consider webp files in /faces and handle_request", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 17239, "title": "chore: use better translation (zh-CN)", "area": "i18n", "type": "chore", "decision": "na"}
+{"pr": 17238, "title": "Add openvino support for the DFINE model", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 17235, "title": "Add per-camera face and lpr configs", "area": "config", "type": "feat", "decision": "na"}
+{"pr": 17233, "title": "Face recognize api", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 17225, "title": "Face tweaks", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 17223, "title": "Proxy i18n locales dir for ingress", "area": "infra", "type": "fix", "decision": "na"}
+{"pr": 17218, "title": "add chinese frigatePlus settings i18n keys", "area": "i18n", "type": "chore", "decision": "na"}
+{"pr": 17217, "title": "Fix key error when model path key doesn't exist", "area": "api", "type": "fix", "decision": "na", "note": "Nurby config is DB-backed, not a model.path file lookup"}
+{"pr": 17213, "title": "Improve Face Library Management", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 17208, "title": "Add Frigate+ pane to Settings UI", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 17203, "title": "Face setup wizard", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 17202, "title": "Improve face detection", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 17198, "title": "Refactor and clean up i18n", "area": "i18n", "type": "refactor", "decision": "na"}
+{"pr": 17190, "title": "chinese i18n fix", "area": "i18n", "type": "chore", "decision": "na"}
+{"pr": 17187, "title": "Fix Prometheus Metrics race condition", "area": "metrics", "type": "fix", "decision": "have", "note": "Nurby services/perception/audio/metrics.py is fully lock-guarded; snapshot() builds fresh copies under _lock, no mutate-during-read/del"}
+{"pr": 17184, "title": "i18n fixes", "area": "i18n", "type": "chore", "decision": "na"}
+{"pr": 17171, "title": "Fix model errors", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 17168, "title": "Small tweaks", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 17155, "title": "Fix face library menu item", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17154, "title": "LPR docs update", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 17152, "title": "Add face recognition and license plate recognition to settings UI", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 17150, "title": "Use a recent time window for areas for autotracking zooming", "area": "ptz", "type": "fix", "decision": "na"}
+{"pr": 17148, "title": "Fix bug where safari and firefox cache image for too long", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17147, "title": "Ensure time range filter retains selected values", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 17146, "title": "Cleanup bird classification", "area": "ml", "type": "chore", "decision": "na"}

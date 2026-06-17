@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.privacy import SUPPORTED_TARGETS
-from shared.auth import get_current_user, require_admin
+from shared.auth import get_current_user
 from shared.database import get_db
 from shared.models import PrivacyZone, User
 
@@ -77,7 +77,7 @@ class ZonePatch(BaseModel):
 async def patch_zone(
     zone_id: uuid.UUID,
     body: ZonePatch,
-    _user: User = Depends(require_admin),
+    _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     z = await db.get(PrivacyZone, zone_id)
@@ -107,7 +107,7 @@ async def patch_zone(
 @router.delete("/{zone_id}", status_code=204)
 async def delete_zone(
     zone_id: uuid.UUID,
-    _user: User = Depends(require_admin),
+    _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     z = await db.get(PrivacyZone, zone_id)

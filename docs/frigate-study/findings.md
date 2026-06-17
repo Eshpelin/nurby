@@ -613,3 +613,17 @@ Coverage-only batch. No issues, no merges. Densest N/A region so far: face recog
 Rest: face/LPR/classification ML (#17420/17412/17402/17401/17390/17387/17384/17373/17368/17337/17325/17308), hwaccel (#17411/17388/17321), nginx/devcontainer (#17419/17415/17400/17342/17341/17310), i18n/docs/UI. No backend auth/API/ingest correctness signal.
 
 Region note: state.json had silently fallen 3 batches behind the ledger (cursor said 18017 while ledger/findings already covered batches 27-29 down to 17424, incl. issue #69). Reconciled this run. ledger/findings remain the source of truth; state cursor now corrected.
+
+## Batch 31 (PRs 17298-17146)
+
+Coverage-only batch. No issues, no merges. Same desert: face recognition / LPR / classification ML, Frigate+ settings UI, i18n/locale, hwaccel, docs.
+
+**HAVE (verified):** #17187 "Fix Prometheus Metrics race condition". Frigate's `CustomCollector.collect()` reassigned and `del`-ed entries in shared `self.process_stats` while a concurrent scrape read it, causing intermittent KeyError and corrupt scrapes; fix works on a `.copy()`. Nurby's metrics module `services/perception/audio/metrics.py` is already race-safe: every read/write (`incr`/`gauge`/`observe_latency`/`snapshot`) is wrapped in a module-level `threading.Lock`, and `snapshot()` materializes brand-new lists/dicts inside the lock without mutating or deleting shared state. The admin endpoint (`services/api/routes/admin_stats.py`) just serves that snapshot. No shared-state mutation during read.
+
+**N/A worth noting:**
+- #17217 KeyError when `model.path` key missing — Frigate guards a config-file model.json lookup; Nurby config is DB-backed, no equivalent `config["model"]["path"]` file dereference.
+- #17276 MQTT topic for camera review status — MQTT-specific integration; Nurby surfaces review/alert state via its own notify + pubsub, not MQTT.
+- #17263/#17235/#17272 per-camera face/lpr config — Frigate pydantic config + LPR mixin gating; Nurby's perception/ReID pipeline is separate.
+- #17273 disabled-cameras fix — Frigate ZMQ config-subscriber + frontend ws state.
+
+Rest: face library UI/wizard (#17296/17245/17233/17213/17208/17203/17155/17152), face/LPR ML (#17290/17289/17244/17225/17202/17171/17146), hwaccel (#17298/17238), i18n/locale wave (#17258/17256/17239/17218/17198/17190/17184), nginx/ingress (#17248/17223), docs, frontend caching/filter (#17148/17147). No backend auth/API/ingest correctness signal.
