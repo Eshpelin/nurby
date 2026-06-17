@@ -3,7 +3,6 @@
 Mirrors Frigate PR #23172 (gracefully handle transiently failing stat calls).
 """
 
-import os
 
 from shared.paths import safe_getsize
 
