@@ -22,7 +22,12 @@ from services.discovery.onvif import (
     ptz_stop,
 )
 from shared.auth import get_current_user, require_admin
-from shared.camera_access import allowed_camera_ids, apply_camera_filter
+from shared.camera_access import (
+    ALL,
+    AllowedCameras,
+    allowed_camera_ids,
+    apply_camera_filter,
+)
 from shared.camera_secrets import seal, unseal
 from shared.config import settings
 from shared.database import get_db
@@ -53,6 +58,22 @@ def _camera_to_response(camera: Camera) -> dict:
 router = APIRouter()
 
 _device_probe_pool = ThreadPoolExecutor(max_workers=4)
+
+
+async def _require_camera_in_scope(
+    camera_id: uuid.UUID, current_user: User, db: AsyncSession
+) -> None:
+    """404 when ``camera_id`` is outside the caller's camera ACL (issue #40).
+
+    Single-camera reads (GET, frame, live-detections) scope on the path
+    param itself. Returns 404 rather than 403 so a restricted user cannot
+    probe which camera ids exist. No-op for admins / zero-grant users
+    (``ALL``)."""
+    allowed: AllowedCameras = await allowed_camera_ids(current_user, db)
+    if allowed is ALL:
+        return
+    if camera_id not in allowed:
+        raise HTTPException(status_code=404, detail="Camera not found")
 
 
 class DiscoveredDevice(BaseModel):
@@ -620,7 +641,8 @@ async def ptz_goto(
 
 
 @router.get("/{camera_id}")
-async def get_camera(camera_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_camera(camera_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _require_camera_in_scope(camera_id, current_user, db)
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -832,7 +854,7 @@ async def upload_webcam_frame(
 @router.get("/{camera_id}/frame")
 async def latest_webcam_frame(
     camera_id: uuid.UUID,
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Return the last JPEG frame uploaded for this webcam.
@@ -843,6 +865,7 @@ async def latest_webcam_frame(
     """
     from fastapi.responses import Response
 
+    await _require_camera_in_scope(camera_id, current_user, db)
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -867,7 +890,8 @@ async def latest_webcam_frame(
 @router.get("/{camera_id}/live-detections")
 async def live_detections(
     camera_id: uuid.UUID,
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Return the latest cached fast-lane YOLO detections for overlay.
 
@@ -878,6 +902,8 @@ async def live_detections(
     import json as _json
 
     import redis.asyncio as aioredis
+
+    await _require_camera_in_scope(camera_id, current_user, db)
 
     try:
         r = aioredis.from_url(settings.redis_url)

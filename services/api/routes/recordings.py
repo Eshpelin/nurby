@@ -53,11 +53,42 @@ def _resolve_recording_path(recording: Recording) -> str:
     return _resolve_recording_path_raw(recording.file_path)
 
 
+def _camera_in_scope(allowed: AllowedCameras, camera_id: uuid.UUID | None) -> bool:
+    """True when ``camera_id`` is visible under the ``allowed`` ACL.
+
+    ``ALL`` (admin / zero-grant) sees everything. For a concrete allowlist,
+    a row with no camera is treated as out of scope for restricted users."""
+    if allowed is ALL:
+        return True
+    return camera_id is not None and camera_id in allowed
+
+
+async def _user_from_query_token(token: str | None, db: AsyncSession) -> User:
+    """Resolve a ``?token=`` media-route caller to a live User.
+
+    Raises 401 on a missing/invalid token (via ``require_query_token``) and
+    on a deactivated/unknown user, mirroring ``get_current_user``."""
+    user_id = require_query_token(token)
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or deactivated")
+    return user
+
+
 async def _get_recording_or_404(
-    recording_id: uuid.UUID, db: AsyncSession
+    recording_id: uuid.UUID,
+    db: AsyncSession,
+    allowed: AllowedCameras = ALL,
 ) -> Recording:
+    """Load a recording, 404ing when it is absent *or* outside the caller's
+    camera ACL (issue #40).
+
+    The out-of-scope case returns 404 (not 403) on purpose: a restricted
+    user must not be able to probe which recording ids exist on cameras they
+    cannot see. ``allowed`` defaults to ``ALL`` so unscoped callers behave
+    exactly as before."""
     recording = await db.get(Recording, recording_id)
-    if not recording:
+    if not recording or not _camera_in_scope(allowed, recording.camera_id):
         raise HTTPException(status_code=404, detail="Recording not found")
     return recording
 
@@ -205,23 +236,26 @@ async def download_bundle(
 
 
 @router.get("/{recording_id}", response_model=RecordingResponse)
-async def get_recording(recording_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    return await _get_recording_or_404(recording_id, db)
+async def get_recording(recording_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    allowed = await allowed_camera_ids(current_user, db)
+    return await _get_recording_or_404(recording_id, db, allowed)
 
 
 @router.get("/{recording_id}/stream")
 async def stream_recording(recording_id: uuid.UUID, token: str | None = Query(None), db: AsyncSession = Depends(get_db)):
     # Played in a <video src>, which cannot send an auth header. accept the
     # JWT as ?token= instead (same as thumbnails).
-    require_query_token(token)
-    recording = await _get_recording_or_404(recording_id, db)
+    user = await _user_from_query_token(token, db)
+    allowed = await allowed_camera_ids(user, db)
+    recording = await _get_recording_or_404(recording_id, db, allowed)
     path = _get_disk_path_or_404(recording)
     return FileResponse(path, media_type="video/mp4", filename=os.path.basename(path))
 
 
 @router.get("/{recording_id}/camera", response_model=dict)
-async def get_recording_camera(recording_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    recording = await _get_recording_or_404(recording_id, db)
+async def get_recording_camera(recording_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    allowed = await allowed_camera_ids(current_user, db)
+    recording = await _get_recording_or_404(recording_id, db, allowed)
     camera = await db.get(Camera, recording.camera_id)
     return {"camera_name": camera.name if camera else "Unknown", "camera_id": str(recording.camera_id)}
 
@@ -275,8 +309,9 @@ async def download_recording(
     db: AsyncSession = Depends(get_db),
 ):
     # Downloaded via <a href download>, which cannot send an auth header.
-    require_query_token(token)
-    recording = await _get_recording_or_404(recording_id, db)
+    user = await _user_from_query_token(token, db)
+    allowed = await allowed_camera_ids(user, db)
+    recording = await _get_recording_or_404(recording_id, db, allowed)
     path = _get_disk_path_or_404(recording)
 
     # With no annotation flags this serves the pristine original (unchanged
