@@ -2,16 +2,24 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import String, cast, select
+from sqlalchemy import String, cast, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Event, EventNote, Observation, Person, Rule, User
+from shared.models import Camera, Event, EventNote, Observation, Person, Rule, User
 from shared.paths import escape_like
 from shared.schemas import EventNoteCreate, EventNoteResponse, EventResponse
 
 router = APIRouter()
+
+
+def _not_review_excluded(camera_id_col):
+    """Filter clause keeping only rows whose camera is not hidden from the
+    review/alerts feed. Rows with a null camera_id (no source camera) are
+    kept, since `NULL NOT IN (...)` would otherwise drop them."""
+    excluded = select(Camera.id).where(Camera.exclude_from_review.is_(True))
+    return or_(camera_id_col.is_(None), camera_id_col.not_in(excluded))
 
 
 async def _serialize_note(db: AsyncSession, note: EventNote) -> dict:
@@ -40,7 +48,13 @@ async def list_events(
     offset: int = Query(default=0, ge=0),
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    query = select(Event).order_by(Event.fired_at.desc()).limit(limit).offset(offset)
+    query = (
+        select(Event)
+        .where(_not_review_excluded(Event.camera_id))
+        .order_by(Event.fired_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     if rule_id:
         query = query.where(Event.rule_id == rule_id)
     result = await db.execute(query)
@@ -62,7 +76,9 @@ async def _filtered_events_query(
 ):
     """Shared filter builder for /history and /export.csv. Returns the
     query, or None when a person filter resolves to nobody (no rows)."""
-    query = select(Event).order_by(Event.fired_at.desc())
+    query = select(Event).where(_not_review_excluded(Event.camera_id)).order_by(
+        Event.fired_at.desc()
+    )
     if severity in ("alert", "detection"):
         query = query.where(Event.severity == severity)
     if rule_id:

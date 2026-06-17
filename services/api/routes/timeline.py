@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
 from shared.database import get_db
-from shared.models import Observation, Transcript, User
+from shared.models import Camera, Observation, Transcript, User
 
 
 class SummarizeWindowBody(BaseModel):
@@ -66,8 +66,15 @@ async def get_timeline(
         Transcript.started_at.desc()
     )
 
-    obs_clauses: list = []
-    tx_clauses: list = [Transcript.filtered.is_(False)]
+    # Cameras flagged exclude_from_review never appear in the review/
+    # timeline feed (they keep recording, just dropped from this view).
+    excluded_cameras = select(Camera.id).where(Camera.exclude_from_review.is_(True))
+
+    obs_clauses: list = [Observation.camera_id.not_in(excluded_cameras)]
+    tx_clauses: list = [
+        Transcript.filtered.is_(False),
+        Transcript.camera_id.not_in(excluded_cameras),
+    ]
     if camera_id:
         obs_clauses.append(Observation.camera_id == camera_id)
         tx_clauses.append(Transcript.camera_id == camera_id)

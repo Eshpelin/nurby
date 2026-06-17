@@ -101,6 +101,11 @@ class Camera(Base):
     status: Mapped[str] = mapped_column(String(32), default="offline")
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     webcam_device: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Hide this camera from the review/alerts/timeline feed and its
+    # filters. The camera keeps recording and stays a valid recording
+    # target; only the review surfaces drop it. Distinct from the
+    # dashboard camera-wall hide, which is a per-browser layout choice.
+    exclude_from_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Audio-only mode. When true the ingestion + perception pipelines
     # skip video decode and run only the audio path (VAD, STT, audio
     # events, clap pattern, speech phrase). UI hides the video tile.
