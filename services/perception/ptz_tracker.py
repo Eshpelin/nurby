@@ -265,6 +265,9 @@ class PTZTrackerManager:
             "home_preset": camera.ptz_smart_track_home_preset,
             "lost_seconds": int(camera.ptz_smart_track_lost_seconds or 3),
             "enabled": bool(camera.ptz_smart_track_enabled),
+            # Per-camera clock-skew override. None falls back to the global
+            # onvif_ignore_time_mismatch setting inside the ONVIF layer.
+            "ignore_time_mismatch": getattr(camera, "onvif_ignore_time_mismatch", None),
         }
 
     def _ip_port(self, stream_url: str) -> tuple[str, int]:
@@ -282,6 +285,7 @@ class PTZTrackerManager:
                 username=camera.username, password=unseal(camera.password),
                 profile_token=camera.ptz_profile_token or "Profile_1",
                 pan_speed=pan, tilt_speed=tilt, zoom_speed=zoom,
+                ignore_time_mismatch=getattr(camera, "onvif_ignore_time_mismatch", None),
             )
             if ok:
                 st.moving = True
@@ -302,15 +306,18 @@ class PTZTrackerManager:
                 username = camera_or_ref["username"]
                 password = camera_or_ref["password"]
                 profile = camera_or_ref["profile_token"]
+                ignore_skew = camera_or_ref.get("ignore_time_mismatch")
             else:
                 ip, port = self._ip_port(camera_or_ref.stream_url)
                 username = camera_or_ref.username
                 password = camera_or_ref.password
                 profile = camera_or_ref.ptz_profile_token or "Profile_1"
+                ignore_skew = getattr(camera_or_ref, "onvif_ignore_time_mismatch", None)
             ok = await ptz_stop(
                 ip=ip, port=port,
                 username=username, password=password,
                 profile_token=profile,
+                ignore_time_mismatch=ignore_skew,
             )
             if ok:
                 st.moving = False
@@ -324,18 +331,21 @@ class PTZTrackerManager:
         try:
             ip, port = self._ip_port(ref["stream_url"])
             home = ref.get("home_preset")
+            ignore_skew = ref.get("ignore_time_mismatch")
             if home:
                 await ptz_goto_preset(
                     ip=ip, port=port,
                     username=ref["username"], password=ref["password"],
                     profile_token=ref["profile_token"],
                     preset_token=home,
+                    ignore_time_mismatch=ignore_skew,
                 )
             else:
                 await ptz_stop(
                     ip=ip, port=port,
                     username=ref["username"], password=ref["password"],
                     profile_token=ref["profile_token"],
+                    ignore_time_mismatch=ignore_skew,
                 )
             st.moving = False
             st.last_returned_home = True

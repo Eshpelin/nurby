@@ -13,11 +13,13 @@ import uuid
 import xml.etree.ElementTree as ET
 from base64 import b64encode
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+
+from shared.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +103,18 @@ GET_STREAM_URI_ENVELOPE = """<?xml version="1.0" encoding="UTF-8"?>
       </trt:StreamSetup>
       <trt:ProfileToken>{profile_token}</trt:ProfileToken>
     </trt:GetStreamUri>
+  </s:Body>
+</s:Envelope>"""
+
+# SOAP envelope for GetSystemDateAndTime (device service, no auth required).
+# Used to detect camera clock skew so WS-Security Created can be offset.
+GET_SYSTEM_DATE_TIME_ENVELOPE = """<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope
+  xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+  <s:Header/>
+  <s:Body>
+    <tds:GetSystemDateAndTime/>
   </s:Body>
 </s:Envelope>"""
 
@@ -373,15 +387,21 @@ async def discover_onvif_cameras(timeout: float = 5.0) -> list[dict[str, Any]]:
 # WS-Security UsernameToken header generation
 # ---------------------------------------------------------------------------
 
-def _ws_security_header(username: str, password: str) -> str:
+def _ws_security_header(username: str, password: str, time_offset: float = 0.0) -> str:
     """Build a WS-Security UsernameToken SOAP header block.
 
     Uses the Password Digest method per the ONVIF specification.
     digest = Base64(SHA1(nonce + created + password))
+
+    ``time_offset`` (seconds) is added to the local clock before formatting
+    the Created timestamp. It carries the measured difference between the
+    camera's clock and this server's clock so cameras with no NTP or a
+    drifted RTC accept the token. Defaults to 0 (local-clock behavior).
     """
     nonce_bytes = os.urandom(16)
     nonce_b64 = b64encode(nonce_bytes).decode()
-    created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    created_dt = datetime.now(timezone.utc) + timedelta(seconds=time_offset)
+    created = created_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     digest_input = nonce_bytes + created.encode("utf-8") + password.encode("utf-8")
     digest = b64encode(hashlib.sha1(digest_input).digest()).decode()
 
@@ -400,6 +420,63 @@ def _ws_security_header(username: str, password: str) -> str:
 def _ptz_service_url(ip: str, port: int) -> str:
     """Build the ONVIF PTZ service URL for a given camera."""
     return f"http://{ip}:{port}/onvif/ptz_service"
+
+
+def _device_service_url(ip: str, port: int) -> str:
+    """Build the ONVIF device service URL for a given camera."""
+    return f"http://{ip}:{port}/onvif/device_service"
+
+
+def _parse_onvif_datetime(utc_elem: ET.Element) -> datetime | None:
+    """Parse an ONVIF UTCDateTime element into an aware UTC datetime.
+
+    The element nests <Date><Year/><Month/><Day/></Date> and
+    <Time><Hour/><Minute/><Second/></Time>. Returns None if any field is
+    missing or non-numeric.
+    """
+    def _ival(name: str) -> int | None:
+        txt = _extract_text(_find_recursive(utc_elem, name))
+        if txt is None:
+            return None
+        try:
+            return int(txt)
+        except ValueError:
+            return None
+
+    parts = [_ival(n) for n in ("Year", "Month", "Day", "Hour", "Minute", "Second")]
+    if any(p is None for p in parts):
+        return None
+    year, month, day, hour, minute, second = parts
+    try:
+        return datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+async def _camera_time_offset(
+    client: httpx.AsyncClient,
+    ip: str,
+    port: int,
+    timeout: float = 3.0,
+) -> float:
+    """Query the camera's GetSystemDateAndTime and return camera_time - server_time.
+
+    The offset (seconds) is added to the local clock when building the
+    WS-Security Created timestamp. Returns 0.0 on any failure (unreachable,
+    unparseable, or no UTCDateTime), so the caller falls back to local time.
+    """
+    root = await _soap_request(
+        client, _device_service_url(ip, port), GET_SYSTEM_DATE_TIME_ENVELOPE, timeout=timeout
+    )
+    if root is None:
+        return 0.0
+    utc_elem = _find_recursive(root, "UTCDateTime")
+    if utc_elem is None:
+        return 0.0
+    cam_dt = _parse_onvif_datetime(utc_elem)
+    if cam_dt is None:
+        return 0.0
+    return (cam_dt - datetime.now(timezone.utc)).total_seconds()
 
 
 # ---------------------------------------------------------------------------
@@ -473,16 +550,35 @@ async def _ptz_command(
     username: str | None,
     password: str | None,
     envelope_template: str,
+    *,
+    ignore_time_mismatch: bool | None = None,
     **fmt_kwargs: object,
 ) -> ET.Element | None:
     """Send a PTZ SOAP command and return the parsed XML root (or None on failure).
 
     Handles WS-Security header injection and shared httpx client lifecycle.
+
+    When ``ignore_time_mismatch`` is true (or None and the global
+    ``onvif_ignore_time_mismatch`` setting is on), the camera's clock is
+    queried first via GetSystemDateAndTime and the resulting offset is
+    applied to the WS-Security Created timestamp. This rescues cameras with
+    no NTP or a drifted RTC that would otherwise reject authenticated calls.
     """
-    header = _ws_security_header(username, password) if username and password else "<s:Header/>"
-    envelope = envelope_template.format(header=header, **fmt_kwargs)
+    resolved_ignore = (
+        settings.onvif_ignore_time_mismatch
+        if ignore_time_mismatch is None
+        else ignore_time_mismatch
+    )
     url = _ptz_service_url(ip, port)
     async with httpx.AsyncClient(verify=False) as client:
+        if username and password:
+            time_offset = 0.0
+            if resolved_ignore:
+                time_offset = await _camera_time_offset(client, ip, port)
+            header = _ws_security_header(username, password, time_offset)
+        else:
+            header = "<s:Header/>"
+        envelope = envelope_template.format(header=header, **fmt_kwargs)
         return await _soap_request(client, url, envelope, timeout=5.0)
 
 
@@ -499,6 +595,7 @@ async def ptz_continuous_move(
     pan_speed: float,
     tilt_speed: float,
     zoom_speed: float,
+    ignore_time_mismatch: bool | None = None,
 ) -> bool:
     """Send a ContinuousMove SOAP request to start PTZ movement.
 
@@ -507,6 +604,7 @@ async def ptz_continuous_move(
     root = await _ptz_command(
         ip, port, username, password,
         _PTZ_CONTINUOUS_MOVE_ENVELOPE,
+        ignore_time_mismatch=ignore_time_mismatch,
         profile_token=profile_token,
         pan_speed=pan_speed,
         tilt_speed=tilt_speed,
@@ -521,6 +619,7 @@ async def ptz_stop(
     username: str | None,
     password: str | None,
     profile_token: str,
+    ignore_time_mismatch: bool | None = None,
 ) -> bool:
     """Send a Stop SOAP request to halt all PTZ movement.
 
@@ -529,6 +628,7 @@ async def ptz_stop(
     root = await _ptz_command(
         ip, port, username, password,
         _PTZ_STOP_ENVELOPE,
+        ignore_time_mismatch=ignore_time_mismatch,
         profile_token=profile_token,
     )
     return root is not None and not _is_auth_fault(root)
@@ -540,6 +640,7 @@ async def ptz_get_presets(
     username: str | None,
     password: str | None,
     profile_token: str,
+    ignore_time_mismatch: bool | None = None,
 ) -> list[dict[str, str]]:
     """Fetch saved PTZ presets from the camera.
 
@@ -548,6 +649,7 @@ async def ptz_get_presets(
     root = await _ptz_command(
         ip, port, username, password,
         _PTZ_GET_PRESETS_ENVELOPE,
+        ignore_time_mismatch=ignore_time_mismatch,
         profile_token=profile_token,
     )
     if root is None or _is_auth_fault(root):
@@ -570,6 +672,7 @@ async def ptz_goto_preset(
     password: str | None,
     profile_token: str,
     preset_token: str,
+    ignore_time_mismatch: bool | None = None,
 ) -> bool:
     """Move the camera to a saved preset position.
 
@@ -578,6 +681,7 @@ async def ptz_goto_preset(
     root = await _ptz_command(
         ip, port, username, password,
         _PTZ_GOTO_PRESET_ENVELOPE,
+        ignore_time_mismatch=ignore_time_mismatch,
         profile_token=profile_token,
         preset_token=preset_token,
     )

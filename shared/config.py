@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     # Filesystem root for opt-in raw audio storage.
     audio_storage_path: str = "./audio_clips"
 
+    # ONVIF clock-skew workaround. Some cameras have no NTP or a drifted
+    # RTC and reject WS-Security UsernameToken requests when the Created
+    # timestamp differs from their own clock by more than a few seconds.
+    # When true, PTZ/auth calls first query the camera's
+    # GetSystemDateAndTime (no auth) and offset the Created timestamp to
+    # match the camera's clock. Per-camera override: set the camera's
+    # onvif_ignore_time_mismatch attribute (None falls back to this global).
+    onvif_ignore_time_mismatch: bool = False
+
     recordings_path: str = "./recordings"
     thumbnails_path: str = "./thumbnails"
     jwt_secret: str = _DEFAULT_JWT_SECRET
