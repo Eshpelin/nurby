@@ -6,13 +6,55 @@ import uuid
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from shared.auth import decode_access_token
+from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids
+from shared.database import async_session
+from shared.models import User
 
 logger = logging.getLogger("nurby.api.ws")
 
 router = APIRouter()
 
-# In-memory set of connected clients
-_connections: set[WebSocket] = set()
+# In-memory registry of connected clients, each mapped to the per-user
+# camera ACL resolved at connect time (issue #40). The value is either the
+# ``ALL`` sentinel (admin / zero-grant user, sees everything) or a concrete
+# ``set[UUID]`` allowlist. ``_deliver_local`` consults this to drop
+# camera-specific messages a given recipient may not see.
+_connections: dict[WebSocket, AllowedCameras] = {}
+
+
+def _coerce_camera_id(raw) -> uuid.UUID | None:
+    """Best-effort parse of a broadcast payload's ``camera_id`` into a UUID.
+
+    Broadcasts carry ``camera_id`` as a string most of the time, but some
+    call sites pass a raw UUID or ``None`` (system-wide notices). Returns
+    ``None`` when there is no usable camera id, which the caller treats as
+    "deliver to everyone"."""
+    if raw is None:
+        return None
+    if isinstance(raw, uuid.UUID):
+        return raw
+    try:
+        return uuid.UUID(str(raw))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def _allowed_to_receive(allowed: AllowedCameras, message: dict) -> bool:
+    """Per-recipient fan-out gate for one socket and one decoded message.
+
+    Always deliver when the recipient is unrestricted (``ALL``), or when the
+    message is not camera-specific (no usable top-level ``camera_id``, e.g.
+    a system notice). Otherwise deliver only when the message's camera is in
+    the recipient's allowlist. An empty allowlist therefore drops every
+    camera-tagged message (fail-closed)."""
+    if allowed is ALL:
+        return True
+    if not isinstance(message, dict):
+        return True
+    camera_id = _coerce_camera_id(message.get("camera_id"))
+    if camera_id is None:
+        return True
+    return camera_id in allowed
 
 # ── Cross-process relay ─────────────────────────────────────────────
 #
@@ -43,21 +85,53 @@ async def _get_relay_redis():
 
 
 async def _deliver_local(payload: str) -> None:
+    # Decode once so each socket's ACL can be checked against the message's
+    # camera_id without re-parsing. A non-JSON / non-dict payload is treated
+    # as a system message and delivered to everyone (the gate is a no-op for
+    # it). The cross-process relay reinjects here, so relayed messages are
+    # scoped automatically.
+    try:
+        message = json.loads(payload)
+    except (TypeError, ValueError):
+        message = None
     dead = set()
-    for ws in list(_connections):
+    for ws, allowed in list(_connections.items()):
+        if message is not None and not _allowed_to_receive(allowed, message):
+            continue
         try:
             await ws.send_text(payload)
         except Exception:
             dead.add(ws)
-    # In-place update. an augmented assignment (-=) would rebind the module
-    # global as a function local and raise UnboundLocalError on every call.
-    _connections.difference_update(dead)
+    for ws in dead:
+        _connections.pop(ws, None)
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
+async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
+    """Live dashboard fan-out socket.
+
+    Token-authenticated (issue #40): the JWT rides as ``?token=`` exactly
+    like the mic socket, since browsers cannot set an Authorization header
+    on a WebSocket handshake. The per-user camera ACL is resolved once at
+    connect time and cached alongside the socket; ``_deliver_local`` then
+    drops camera-tagged messages this recipient may not see.
+    """
+    user_id = decode_access_token(token)
+    if user_id is None:
+        await ws.close(code=4401)
+        return
+    # Resolve the user and their allowed-camera set once, before accepting,
+    # so an invalid/deactivated user is rejected and the ACL is fixed for
+    # the life of the connection.
+    async with async_session() as db:
+        user = await db.get(User, user_id)
+        if user is None or not user.is_active:
+            await ws.close(code=4401)
+            return
+        allowed = await allowed_camera_ids(user, db)
+
     await ws.accept()
-    _connections.add(ws)
+    _connections[ws] = allowed
     try:
         while True:
             # Keep connection alive, handle incoming messages if needed
@@ -65,7 +139,9 @@ async def websocket_endpoint(ws: WebSocket):
             # Echo back for now, will be replaced with proper message handling
             await ws.send_text(json.dumps({"type": "ack", "data": data}))
     except WebSocketDisconnect:
-        _connections.discard(ws)
+        _connections.pop(ws, None)
+    finally:
+        _connections.pop(ws, None)
 
 
 async def broadcast(message: dict):
