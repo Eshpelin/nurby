@@ -1910,3 +1910,753 @@
 {"pr": 13800, "title": "Override onnx clip loading", "area": "hwaccel", "type": "fix", "decision": "na"}
 {"pr": 13799, "title": "Install no deps separately for wheel", "area": "ci", "type": "chore", "decision": "na"}
 {"pr": 13795, "title": "Fix vscode launch configuration", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 13794, "title": "Resolve most cspell warnings in python", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 13793, "title": "Update docs dependencies", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13792, "title": "Change path for rockchip ffmpeg", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 13787, "title": "0.15 Release", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13785, "title": "Make logging code self-contained", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13781, "title": "Fix detections logic", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 13780, "title": "Support ONNX model caching", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 13776, "title": "Add support for yolonas via ONNX and allow TensorRT execution provider to work correctly", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 13772, "title": "Standardize bar graph y axis", "area": "metrics", "type": "refactor", "decision": "na"}
+{"pr": 13771, "title": "Check for onvif movement support before attempting movement", "area": "onvif", "type": "feat", "decision": "na"}
+{"pr": 13767, "title": "Add ability to write prompts for genai at the camera level", "area": "genai", "type": "feat", "decision": "have", "note": "Nurby HAS per-camera VLM prompt: Camera.vlm_prompt (models.py:55) used at pipeline.py:921; only Frigate object_prompts (per-label) missing - minor backlog, not filed"}
+{"pr": 13766, "title": "Always close connection to shm frame after detection", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 13765, "title": "Formatting improvements", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13756, "title": "Add onnxruntime nvidia providers", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 13755, "title": "Stop web linter from complaining", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 13754, "title": "Ffmpeg 6", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13753, "title": "Update docs for another supported autotracking cam", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 13752, "title": "Add Arc a750 to hardware stats list", "area": "metrics", "type": "feat", "decision": "na"}
+{"pr": 13748, "title": "Use smarter logic for default ffmpeg handling", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 13744, "title": "Explore tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 13739, "title": "Ffmpeg fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13738, "title": "Explore pane infinite loading", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13737, "title": "Ffmpeg cleanup", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 13730, "title": "Install onevpl tools for intel", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 13726, "title": "Explore view fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13722, "title": "Configurable ffmpeg", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 13721, "title": "Add note about onvif cameras without auth", "area": "auth", "type": "feat", "decision": "na"}
+{"pr": 13720, "title": "Update ffmpeg", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 13718, "title": "Fix filter args", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13716, "title": "Ensure all cameras switch enables/disables each individual switch", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 13712, "title": "Change camera offline error display and message", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13711, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 13710, "title": "Use MobilePage for camera group editor", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 13705, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 13703, "title": "UI Fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13698, "title": "Updated supported cameras: Speco O8P32X", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 13691, "title": "Update autotracking docs, non-fuctional amcrest camera", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13689, "title": "UI Improvements and Tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 13685, "title": "Use tracked object instead of event language in docs and UI", "area": "docs", "type": "refactor", "decision": "na"}
+{"pr": 13683, "title": "Ensure detections are not immediately deleted", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 13682, "title": "Explore page optimizations", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13679, "title": "Explore UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 13678, "title": "Handle middle mouse button clicks", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 13665, "title": "Refactor search details into Explore Page", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 13662, "title": "Find similar footage from review item snapshots", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13658, "title": "Fix search detail pane", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13657, "title": "Make notifications toggleable via MQTT", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 13656, "title": "Don't save preview frames if recording is not enabled", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 13651, "title": "Improve handling of empty frames", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13645, "title": "Refactor Search Page", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 13641, "title": "Add ability to filter search view based on search type", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 13637, "title": "Clarify semantic search and genai docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13636, "title": "Add types to date preview & vod api", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 13634, "title": "Fix thumbnail failure", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13633, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 13613, "title": "Add api docs for review api", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 13608, "title": "Fix arm build", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 13604, "title": "update plus docs for 0.14", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13592, "title": "Use webgl jsmpeg renderer for birdseye", "area": "streaming", "type": "refactor", "decision": "na"}
+{"pr": 13591, "title": "Semantic search UI tweaks", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 13587, "title": "Install onnxruntime with openvino execution provider", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 13584, "title": "[docs] Added info about frigate telegram in third party extensions", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13580, "title": "Docs update: clarify decoding and the detect role", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13579, "title": "Docs update: clarify decoding and the detect role", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13578, "title": "Update ffmpeg to 7.0.2", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 13575, "title": "Don't modalize the export drawer on iOS", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 13572, "title": "Add ffprobe button back to camera metrics page", "area": "metrics", "type": "feat", "decision": "na"}
+{"pr": 13556, "title": "Improve timeline auto scrolling", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13553, "title": "Fix birdseye opening and not closing frames", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 13550, "title": "Implement object lifecycle pane", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 13527, "title": "Fix recording cleanup logic again", "area": "recordings", "type": "refactor", "decision": "na", "note": "Frigate event-linked recording cleanup; Nurby flat retention"}
+{"pr": 13524, "title": "Fix incorrect recording config access", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 13520, "title": "Fix hardcoded camera name", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13518, "title": "Cleanup after recordings refactor", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 13498, "title": "Fix fetching of generated preview video when it is not needed", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 13473, "title": "Lower onvif zeep transport timeouts to 10s", "area": "onvif", "type": "fix", "decision": "na", "note": "Frigate onvif-zeep transport timeout; Nurby raw async httpx ONVIF with own timeouts"}
+{"pr": 13452, "title": "Use escapse string in get_intel_gpu_stats", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 13449, "title": "Fix preview generation for offline camera", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 13438, "title": "Replace individual storage graphs with combined graph", "area": "metrics", "type": "fix", "decision": "na"}
+{"pr": 13436, "title": "Add camera bandwidth back in storage metrics", "area": "metrics", "type": "feat", "decision": "na"}
+{"pr": 13435, "title": "Warn users when creating large motion masks", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13423, "title": "stage 0.15", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13422, "title": "0.14.1 Release", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13416, "title": "Remove duplicated text for default alert", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 13413, "title": "Update python deps", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 13403, "title": "Change wording of offline message to account for broker lwt timeout", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13400, "title": "Don't allow periods in zone or camera group names", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13389, "title": "Add portal to the live player tooltip", "area": "streaming", "type": "feat", "decision": "na"}
+{"pr": 13370, "title": "Update live view docs with camera firmware settings recommendations", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13367, "title": "update go2rtc version in reference config", "area": "config", "type": "chore", "decision": "na"}
+{"pr": 13366, "title": "docs: fix argument spelling", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13355, "title": "Refactor recordings retention to be based on review items", "area": "recordings", "type": "refactor", "decision": "na", "note": "Frigate review-item keep-windows; Nurby flat time/size retention (retention.py)"}
+{"pr": 13335, "title": "Add edgetpu docs for synology specific issue", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 13334, "title": "Add tooltip for icons in review event list", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 13321, "title": "fix default build", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 13318, "title": "update actions for release", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 13309, "title": "Update cameras.md", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13303, "title": "Update discussion templates", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 13295, "title": "Fix delayed preview not showing", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 13292, "title": "Fix discussion templates", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 13291, "title": "Update discussion templates", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 13279, "title": "Emit an 'active' metric for events to address issue #7667", "area": "metrics", "type": "fix", "decision": "na"}
+{"pr": 13271, "title": "Fix case where user's cgroup says it has 0 cpu cores", "area": "infra", "type": "fix", "decision": "na"}
+{"pr": 13269, "title": "Update reference config to make note of global required_zones behavior", "area": "config", "type": "docs", "decision": "na"}
+{"pr": 13255, "title": "Update reference config to include motion enabled field", "area": "config", "type": "feat", "decision": "na"}
+{"pr": 13246, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13245, "title": "Update live player docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13218, "title": "Update cameras.md", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13201, "title": "Fix mobile scroll behavior", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13198, "title": "Fix zmq race condition", "area": "ipc", "type": "fix", "decision": "na", "note": "ZMQ race; Nurby has no ZMQ bus"}
+{"pr": 13197, "title": "Dynamically detect if full screen is supported", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 13194, "title": "Ensure only enabled birdseye cameras are considered active", "area": "streaming", "type": "feat", "decision": "na"}
+{"pr": 13193, "title": "Preview fixes", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 13188, "title": "Add button for downloading full logs", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 13164, "title": "Adjust MSE player playback rate logic", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13160, "title": "Fix plus view resetting", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13158, "title": "Handle frigate+ error", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13147, "title": "Update configuring go2rtc docs to reflect 0.14 changes", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13143, "title": "Live player fixes", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 13136, "title": "updating HACS installation instructions", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13119, "title": "Review detail pane tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 13118, "title": "Don't save preview frames if recording is not enabled", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 13102, "title": "Remove dashboard fullscreen keyboard listener", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 13087, "title": "Add shortcut key \"r\" to mark selected items as reviewed", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 13077, "title": "Catch case where github sends bad json data", "area": "api", "type": "fix", "decision": "have", "note": "Nurby GitHub latest-release fetch wraps resp.json() in try/except (system.py:454-463), already handles bad JSON"}
+{"pr": 13075, "title": "Update reverse proxy documentation", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13071, "title": "Add ability to upload to Frigate+ from review side panel", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 13063, "title": "Add support for review information side panel", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 13039, "title": "Rename bug report", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13030, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13027, "title": "Fix last hour preview", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 13009, "title": "Reset recordings when changing the date", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 13005, "title": "Recordings Fixes", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12998, "title": "Use review item thumbnail for export", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 12997, "title": "Hide record switch when disabled", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12995, "title": "Add docs for installing Frigate as PWA", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 12956, "title": "Catch case where recording starts right at end of request", "area": "recordings", "type": "fix", "decision": "na", "note": "ffmpeg VOD segment-duration edge (api/media.py); Nurby has no ffmpeg VOD assembly"}
+{"pr": 12953, "title": "Add pan/pinch/zoom capability on plus snapshots", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 12951, "title": "Catch case where user tries to end definite manual event", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12950, "title": "Add confirmation dialog before deleting review items", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 12948, "title": "correct github colab url", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12924, "title": "add shortcut for fullscreen in live view", "area": "streaming", "type": "feat", "decision": "na"}
+{"pr": 12909, "title": "Remove user args from http jpeg", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 12908, "title": "Web deps", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 12906, "title": "Fix use experimental migrator", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 12900, "title": "Chunk timeline deletes", "area": "frontend", "type": "fix", "decision": "na", "note": "Frigate bulk Timeline.delete IN-clause SQLite param-limit; Nurby deletes per-row (retention.py), no large IN"}
+{"pr": 12883, "title": "Update docs for correct default camera groups icon name", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 12878, "title": "Add button to mark review item as reviewed in filmstrip", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 12830, "title": "Stage 0.14.1", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12820, "title": "Hailo amd64 support", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 12815, "title": "Fix auth when serving Frigate at a subpath", "area": "auth", "type": "fix", "decision": "na"}
+{"pr": 12812, "title": "Ensure review card icon color for event view is visible in light mode", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12807, "title": "Fix default model for rknn detector", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 12799, "title": "Add camera name to audio debug line", "area": "audio", "type": "feat", "decision": "na"}
+{"pr": 12794, "title": "Handle case where user stops scrubbing but remains hovering", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12789, "title": "Ensure review cameras are sorted by config ui order if specified", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 12787, "title": "Use camera status to get state of camera config", "area": "config", "type": "refactor", "decision": "na"}
+{"pr": 12785, "title": "Handle case where sub label was null", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12768, "title": "Only use dense property on phones for motion review timeline", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 12755, "title": "Fix iOS export buttons", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12753, "title": "Fix large tablet recording view layout", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12744, "title": "Add right click to delete points in desktop mask/zone editor", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 12743, "title": "Use radix css var to limit desktop menu height", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 12742, "title": "Notification action", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12727, "title": "Persist live view muted/unmuted for session only", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 12725, "title": "Fix tall videos from covering height in export page", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12714, "title": "Update docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 12711, "title": "Remove mention in docs of outdated yolox model", "area": "docs", "type": "refactor", "decision": "na"}
+{"pr": 12694, "title": "Display messages when no events exist", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12681, "title": "Build libusb for coral compatibility", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 12663, "title": "apply iOS z-index fix to safari", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12660, "title": "Show skeleton when live filmstrip items are loading", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 12633, "title": "Limit preview threads", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12611, "title": "Fix frigate failing when no config is defined", "area": "config", "type": "fix", "decision": "na", "note": "s6 no-config-file startup; Nurby has pydantic-env defaults, no config file required"}
+{"pr": 12608, "title": "Add filmstrip video/image toggle to general settings", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 12607, "title": "Docs updates", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 12599, "title": "Bugfix: loitering_time can be zero", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 12597, "title": "Fix preview serialization", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12596, "title": "Ensure persisted value is kept in sync with selected value", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12594, "title": "Use pickle for config objects", "area": "config", "type": "refactor", "decision": "na", "note": "ZMQ pickle config objects; Nurby has no ZMQ bus"}
+{"pr": 12591, "title": "Prevent pandas overflow and runtime errors from division by zero/NaN", "area": "misc", "type": "fix", "decision": "na", "note": "pandas resample div-by-zero/NaN; Nurby has no pandas timeline aggregation"}
+{"pr": 12590, "title": "Use JSON instead of pickle for serialization", "area": "misc", "type": "refactor", "decision": "na", "note": "swaps zmq send_pyobj->send_json (pickle hardening); Nurby has no ZMQ/pickle IPC"}
+{"pr": 12571, "title": "UI Tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 12568, "title": "Disable semantic search by default", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 12560, "title": "Persist show reviewed locally so it maintains state", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12558, "title": "Catch hailo8l initialization error", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 12555, "title": "Bump docker/login-action from 3.2.0 to 3.3.0", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 12542, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12523, "title": "Implement support for notifications", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 12513, "title": "Fix plus sorting button", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12507, "title": "Add more icons to event icon types", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 12502, "title": "Disable web assembly for jsmpeg player", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12499, "title": "Reset preferred live modes to defaults on window visibility change", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 12498, "title": "Use canvas2d renderer for jsmpeg player", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 12491, "title": "User-selectable weekday start (Sunday/Monday) for review calendar", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12490, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12487, "title": "Update automation", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 12482, "title": "Prevent onPlaying from being called repeatedly in jsmpeg player", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12480, "title": "Add camera name to recordings log", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 12477, "title": "Don't allow backwards exports", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12476, "title": "Fix ui config migration", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 12464, "title": "Use refs in liveReady timeout", "area": "streaming", "type": "refactor", "decision": "na"}
+{"pr": 12461, "title": "Check if camera is inactive before disabling liveReady", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 12459, "title": "Fix handling of default group", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12458, "title": "Fix flashing of previous still image when live player stops", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 12457, "title": "Fix camera filtering logic", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12456, "title": "Filter alerts by camera group", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12446, "title": "Add example of single pcie coral", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 12444, "title": "No need to check for h264 onvif profile", "area": "onvif", "type": "fix", "decision": "na"}
+{"pr": 12441, "title": "Update docs for clarity on review items", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 12434, "title": "update link to info on plus", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 12431, "title": "Initial support for Hailo-8L", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 12429, "title": "Improve safari image scrolling performance", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12421, "title": "Don't detach media", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12417, "title": "Recordings improvements", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12415, "title": "Attempt to support zoom-only onvif cams", "area": "onvif", "type": "feat", "decision": "na"}
+{"pr": 12412, "title": "Review classification view bugfix", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 12411, "title": "Improve camera image loading", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12410, "title": "Move review classification settings to camera settings view", "area": "ml", "type": "refactor", "decision": "na"}
+{"pr": 12401, "title": "Update review docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 12395, "title": "Installation and getting started docs improvements", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 12394, "title": "Debug camera image fix", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12393, "title": "strip whitespaces when loading secrets", "area": "auth", "type": "fix", "decision": "na", "note": "strips /run/secrets file newline; Nurby loads secrets via pydantic env (config.py)"}
+{"pr": 12390, "title": "Simplify ws updating", "area": "ipc", "type": "refactor", "decision": "na"}
+{"pr": 12389, "title": "Fix linter warnings on color order", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 12388, "title": "Update Web deps", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 12387, "title": "Fix review update causing api spam", "area": "api", "type": "chore", "decision": "na"}
+{"pr": 12386, "title": "Use grid for searches", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 12381, "title": "Use thumbnails instead of review images for search", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 12379, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 12375, "title": "Docs tweaks", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 12373, "title": "Theme updates", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 12364, "title": "Various UI tweaks and changes", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 12363, "title": "Limit shm frame count", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 12362, "title": "Revert \"Limited shm frame count (#12346)\"", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 12352, "title": "Bug fix for ONVIF cameras, adjust_time parameter added", "area": "onvif", "type": "fix", "decision": "gap", "note": "ONVIF WS-Security Created stamped with local clock (onvif.py:384), no GetSystemDateAndTime offset -> skewed-clock cams reject auth. Filed issue Eshpelin/nurby#93"}
+{"pr": 12346, "title": "Limited shm frame count", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 12327, "title": "Remove matplotlib", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 12304, "title": "OpenVino - Error clarification for compile_model function", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 12297, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 12288, "title": "Update export docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 12281, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 12272, "title": "Apply landscape margin to ptz controls on mobile only", "area": "onvif", "type": "fix", "decision": "na"}
+{"pr": 12271, "title": "Ensure MSE onPlaying always gets called, even if loadeddata never fires", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12253, "title": "Enforce minimum value for mqtt stats update", "area": "ipc", "type": "chore", "decision": "na"}
+{"pr": 12251, "title": "Update ffmpeg source", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 12250, "title": "Add fullscreen button to the default live grid on desktops", "area": "streaming", "type": "feat", "decision": "na"}
+{"pr": 12249, "title": "Change qsv device arg to standard hwaccel arg", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 12243, "title": "Use latest 5.1 ffmpeg update", "area": "test", "type": "refactor", "decision": "na"}
+{"pr": 12242, "title": "Re-center ptz controls in mobile landscape and prevent text selection", "area": "onvif", "type": "fix", "decision": "na"}
+{"pr": 12232, "title": "Use cache key for mask/zone editor image", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 12219, "title": "Use camera name instead of stream_name for jsmpeg players", "area": "streaming", "type": "refactor", "decision": "na"}
+{"pr": 12216, "title": "Live player fixes", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 12213, "title": "Fix jsmpeg player flickering", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12210, "title": "Fix nginx 5000 template", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 12207, "title": "Fix audio model download again", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 12202, "title": "Live player fixes and improvements", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 12200, "title": "Fix yamnet model download", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 12192, "title": "docs(go2rtc): troubleshooting improvements", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 12190, "title": "config reference: add note about birdseye>layout>scaling_factor", "area": "config", "type": "feat", "decision": "na"}
+{"pr": 12174, "title": "Nginx config tweaks", "area": "infra", "type": "chore", "decision": "na"}
+{"pr": 12153, "title": "Quick fix", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12141, "title": "Update TLS docs with certbot instructions", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 12139, "title": "Downgrade go2rtc", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 12135, "title": "Make chroma listen on 127.0.0.1", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 12131, "title": "Chroma logs in Frontend", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 12126, "title": "Fix review items", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12124, "title": "Semantic Search Indexing Optimization", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 12122, "title": "Show correct previous state when updating for end", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12112, "title": "Semantic Search Frontend", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 12105, "title": "Semantic Search API", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 12104, "title": "Fix left swipe on preview", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12097, "title": "Add reviews topic to MQTT docs", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 12093, "title": "Fix preview failing on cameras with - in name", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12088, "title": "Added FAQ entry for viewing logs", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12086, "title": "Simplify zone objects docs example", "area": "docs", "type": "refactor", "decision": "na"}
+{"pr": 12083, "title": "Auto focus user field for login", "area": "auth", "type": "fix", "decision": "na"}
+{"pr": 12080, "title": "Fix event film strip export timing", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12079, "title": "Prevent ptz keyboard shortcuts from reopening presets menu", "area": "onvif", "type": "fix", "decision": "na"}
+{"pr": 12078, "title": "Only close MSE websocket when it's already open", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 12070, "title": "Timeline performance improvements", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12066, "title": "fix case where camera is disabled and has no previews", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12064, "title": "Fix showing loading indicator when first loading a camera without preview", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12063, "title": "Update go2rtc to 1.9.4", "area": "streaming", "type": "chore", "decision": "na"}
+{"pr": 12062, "title": "Update web readme", "area": "docs", "type": "chore", "decision": "na"}
+{"pr": 12061, "title": "Various UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 12051, "title": "Treat meta key same as ctrl", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12044, "title": "Add ability to select all on desktop", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 12042, "title": "fix key error for RKNN detector", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 12040, "title": "Fix case where S6 timestamp is missing", "area": "infra", "type": "fix", "decision": "na"}
+{"pr": 12033, "title": "Player fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12032, "title": "Small jsmpeg and mse player fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12031, "title": "Use api path to determine type", "area": "api", "type": "refactor", "decision": "na"}
+{"pr": 12025, "title": "Increase thumbnail resolution for mobile", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 12024, "title": "Set image height to make bandwidth usage lower", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 12022, "title": "Don't fail when preview restore fails", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 12002, "title": "UI Tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11994, "title": "enable tls by default if undefined", "area": "infra", "type": "feat", "decision": "na", "note": "nginx TLS default-on; Nurby terminates TLS at deploy/ingress"}
+{"pr": 11993, "title": "Use modal on dropdowns for mobile only", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 11985, "title": "Fix header auth", "area": "auth", "type": "fix", "decision": "na", "note": "proxy header_map auth; Nurby pure Bearer (auth.py:142, ?token= fallback :98)"}
+{"pr": 11984, "title": "Fix X-Proxy-Secret header passthrough", "area": "auth", "type": "fix", "decision": "na", "note": "nginx X-Proxy-Secret reverse-proxy trust; Nurby has no proxy-mode delegated auth"}
+{"pr": 11981, "title": "Update template to include all detector types", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 11973, "title": "Optional proxy in config", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 11972, "title": "Consolidate onvif camera recommendations in docs", "area": "docs", "type": "refactor", "decision": "na"}
+{"pr": 11971, "title": "set shortest edge to preview height", "area": "recordings", "type": "test", "decision": "na"}
+{"pr": 11964, "title": "deepstack: Show failure exception", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11963, "title": "split out proxy from auth", "area": "auth", "type": "refactor", "decision": "na"}
+{"pr": 11959, "title": "Fix calendar date activity", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11954, "title": "clarify vaapi vs qsv", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11953, "title": "clarify model id", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11952, "title": "Update FFmpeg for Rockchip", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 11951, "title": "clarify plus models", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11948, "title": "Manually set current time when selecting event", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11947, "title": "clarifications for proxy auth mode", "area": "auth", "type": "fix", "decision": "na"}
+{"pr": 11944, "title": "Draggable grid fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11940, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11931, "title": "UI Tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11922, "title": "Correctly update segment data", "area": "recordings", "type": "chore", "decision": "na"}
+{"pr": 11920, "title": "Ensure uri components are decoded", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11914, "title": "Activity indicator for alerts/detections count when loading", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 11913, "title": "Activity indicator whenever preferred live mode changes", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 11911, "title": "Fix cpu count when process name includes the word processor", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11899, "title": "Semantic Search for Detections", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 11896, "title": "Copy review data so there is a diff", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11890, "title": "Add scrollbar class to preview row/column", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 11883, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11882, "title": "Review UI improvements", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11879, "title": "Review improvements", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11877, "title": "just check for secret file specifically", "area": "ci", "type": "fix", "decision": "na", "note": "docker-secret file JWT lookup; Nurby uses pydantic-env (config.py), no /run/secrets"}
+{"pr": 11863, "title": "UI changes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11855, "title": "Live player fixes and improvements", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 11834, "title": "move clip.mp4 backend to clips folder", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 11829, "title": "Object mask editor bugfix", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11820, "title": "Remove mention of recordings timeline object debugging", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 11812, "title": "Make sure camera is always set in settings", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11808, "title": "Change breakpoint for desktop motion review columns", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11805, "title": "Retain 3 columns on desktop motion review", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11799, "title": "Update deps", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 11795, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11793, "title": "Shutdown hang", "area": "misc", "type": "fix", "decision": "na", "note": "multiprocess SIGTERM/queue-drain shutdown; Nurby async single-app"}
+{"pr": 11790, "title": "Compare timestamps instead of datetimes when exporting", "area": "recordings", "type": "fix", "decision": "na", "note": "export.py thumbnail aware/naive datetime; Nurby thumbs are FS paths, now() in fn bodies"}
+{"pr": 11789, "title": "Ensure datetime comparison is the same (native vs aware)", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11786, "title": "Ensure export thumbnail datetime is UTC", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11780, "title": "Change debug message about deleting db entries to warning", "area": "db", "type": "fix", "decision": "na"}
+{"pr": 11777, "title": "Draggable grid layout bugfixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11769, "title": "Ensure nginx worker processes respects docker limits", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11766, "title": "Some small layout tweaks for portrait cams and motion review", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11752, "title": "fix: remove contradictory ffmpeg param, resolve missing preview", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 11749, "title": "Don't show preview for birdseye", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11745, "title": "Try webrtc when mse fails with decoding error", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 11742, "title": "UI Fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11740, "title": "Fix unclean shutdown of ZMQ", "area": "ipc", "type": "fix", "decision": "na", "note": "ZMQ socket cleanup; Nurby has no ZMQ bus"}
+{"pr": 11728, "title": "Ensure review padding is consistently applied", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11723, "title": "Theme scrollbars with tailwind-scrollbar", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11722, "title": "Update authentication.md to note port 8080 vs 5000", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11721, "title": "Ensure debug switches match loaded options", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11718, "title": "fix duplicate id in bug report", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11716, "title": "Fix bug template", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 11712, "title": "Add bug template to issues", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 11704, "title": "Use valid/unique css identifier for jsmpeg canvas elements", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 11695, "title": "Add coco-80 labelmap and update FFmpeg for Rockchip ", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 11692, "title": "UI tweaks and bugfixes", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11691, "title": "fix tempio install for arm64", "area": "infra", "type": "fix", "decision": "na"}
+{"pr": 11690, "title": "improve tls implementation", "area": "infra", "type": "feat", "decision": "na"}
+{"pr": 11686, "title": "Typo on edgetpu.md", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11685, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11680, "title": "Fix export image path containing too many /", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11679, "title": "Update deps", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 11678, "title": "TLS support", "area": "infra", "type": "feat", "decision": "na"}
+{"pr": 11677, "title": "feat: apply ingress path to app paths", "area": "infra", "type": "fix", "decision": "na"}
+{"pr": 11671, "title": "Don't fail if user has bind mounted nginx config", "area": "infra", "type": "fix", "decision": "na"}
+{"pr": 11666, "title": "Fullscreen changes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11665, "title": "Handle error when live view stalls", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 11656, "title": "Bugfix: Camera grid layout check", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11655, "title": "Fix Statusbar rendering NaN% for unsupported GPUs", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 11653, "title": "Adjust nginx proc count based on available CPUs", "area": "infra", "type": "fix", "decision": "na"}
+{"pr": 11652, "title": "Don't sleep mobile devices when fullscreen", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11650, "title": "Update dialog sizing for plus dialog", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11649, "title": "Non-modal dropdown menus", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11648, "title": "UI Fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11646, "title": "Handle case where user sets detections as empty list", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 11645, "title": "Adds support for YOLO-NAS in OpenVino", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 11638, "title": "Set static handlebar size ", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11636, "title": "Don't show mark reviewed button when all items are in progress", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11630, "title": "Assume 1 grid column by default on live dashboard", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 11629, "title": "Always save previews in UTC offset", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11625, "title": "Fix jsmpeg birdseye fullscreen", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 11624, "title": "Various bugfixes and improvements", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11622, "title": "Improve efficiency of log and metrics pages", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 11618, "title": "Remove live mode from config", "area": "config", "type": "refactor", "decision": "na"}
+{"pr": 11616, "title": "Use single string or list for camera groups cameras", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 11614, "title": "Cache camera stream info to speed up future config generations", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 11613, "title": "Settings rework", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 11606, "title": "cache current hour previews", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11605, "title": "Always use mse unless two way talk is requested", "area": "streaming", "type": "refactor", "decision": "na"}
+{"pr": 11602, "title": "UI Fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11600, "title": "Fix iOS fullscreen on current hour preview", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11599, "title": "Ensure the correct container is used for jsmpeg canvas calcs", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11598, "title": "Draw motion mask first", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11596, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11593, "title": "Allow normalization of motion data only on valid dataframes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11587, "title": "Remove duplicated live view aspect calculation", "area": "streaming", "type": "refactor", "decision": "na"}
+{"pr": 11586, "title": "Simplify timezone math", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 11584, "title": "Live view tweaks and jsmpeg bugfix", "area": "streaming", "type": "chore", "decision": "na"}
+{"pr": 11583, "title": "Handle case where preview doesn't automatically changeover", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11575, "title": "Fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11571, "title": "remove libusb build", "area": "ci", "type": "refactor", "decision": "na"}
+{"pr": 11567, "title": "Make jsmpeg players fully responsive", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11563, "title": "upgrade to latest openvino version", "area": "hwaccel", "type": "test", "decision": "na"}
+{"pr": 11562, "title": "Add ability to interact with review items in events list", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 11561, "title": "Fix live view updating when it shouldn't be", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 11560, "title": "Review docs updates", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11559, "title": "Bugfix: refresh editor value when raw config string is updated", "area": "config", "type": "chore", "decision": "na"}
+{"pr": 11556, "title": "Optimistic state bug fix", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11545, "title": "Live view aspect calculation bugfix", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 11541, "title": "Tweaks and fixes", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 11536, "title": "Redirect non-existent paths to live view", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 11526, "title": "Bugfixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11519, "title": "Ensure resizable handles are above jsmpeg canvas elements", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11503, "title": "Update docs for rockchip platform", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11495, "title": "Mask/zone editor layout bugfix", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11491, "title": "Safely load config file for go2rtc", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 11487, "title": "Fix extra space in ffmpeg4 preview command", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11485, "title": "Adjust date math", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11484, "title": "Fix current hour check for uneven timezones", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11483, "title": "Update beta docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11480, "title": "Update Deps", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 11479, "title": "UI tweaks / fixes", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11474, "title": "Clean up config editor", "area": "config", "type": "refactor", "decision": "na"}
+{"pr": 11469, "title": "Improve preview loading", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11459, "title": "UI Tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11457, "title": "Update review APIs docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11455, "title": "Update motion detection tuning to reflect UI tuner", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 11452, "title": "Add clarifying message and docs link around motion masks", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 11451, "title": "Remove parked car guide as it is no longer relevant", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 11449, "title": "Don't timeshift recordings", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11447, "title": "cspell fixes", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 11446, "title": "Add padding to bottom of drawer for iOS PWA only", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 11444, "title": "Fix timezone conversion logic", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11436, "title": "Add guard clause for api error", "area": "api", "type": "feat", "decision": "na"}
+{"pr": 11435, "title": "Log warning for high detect fps", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 11434, "title": "Support timezones ", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 11429, "title": "UI improvements", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11426, "title": "Add optional env var in vite for easier development", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 11425, "title": "Fix broken links", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11423, "title": "UI Fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11422, "title": "add setting for secure flag on cookie", "area": "auth", "type": "feat", "decision": "na", "note": "cookie_secure flag for JWT cookie; Nurby is pure Bearer (auth.py:17), sets no cookies"}
+{"pr": 11421, "title": "UI Tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11420, "title": "Bugfixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11419, "title": "0.14 Release", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11417, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11408, "title": "Implement common post_processing", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 11407, "title": "Update go2rtc and implement stream probe to only show 2 way talk when supported", "area": "streaming", "type": "feat", "decision": "na"}
+{"pr": 11406, "title": "Recording fixes", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11403, "title": "Mobile/PWA spacing fixes", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 11400, "title": "Fix preview saving for ffmpeg builds < 5", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 11397, "title": "Mobile layout tweaks and bugfixes", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11396, "title": "Add autotracking enable/disable button to live view", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 11384, "title": "Preview bugfixes", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11373, "title": "Use prettier-plugin-tailwindcss", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 11372, "title": "Tweaks and fixes", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 11371, "title": "Update to frigate+ documentation", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11365, "title": "Reimplement support for rknn detector", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 11361, "title": "Improve mask error", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11360, "title": "Bugfixes and small UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11351, "title": "Update FFmpeg for Rockchip", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 11347, "title": "Auth!", "area": "auth", "type": "feat", "decision": "have", "note": "Frigate nginx auth_request+JWT+limiter; Nurby already Bearer-token auth (shared/auth.py), FastAPI-native"}
+{"pr": 11339, "title": "Minimal config in installation guide", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 11334, "title": "Camera group layout fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11332, "title": "Bug fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11318, "title": "Implement recordings fullscreen and rework recordings layout size calculation", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 11317, "title": "Tweak camera group layout editor buttons", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11312, "title": "Fix NaN check in system graphs", "area": "metrics", "type": "fix", "decision": "na"}
+{"pr": 11310, "title": "Icon picker component", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11309, "title": "Backend and webui fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11304, "title": "Web Deps", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11303, "title": "Add link to system stats from status bar", "area": "metrics", "type": "feat", "decision": "na"}
+{"pr": 11293, "title": "Simplify preview refreshing with custom hook", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 11292, "title": "Improve config validation error messages", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 11291, "title": "Draggable camera grid tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11290, "title": "Fix setting manual event update time", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 11289, "title": "Fix aarch64 build", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 11279, "title": "Drag to reorder/resize cameras in camera groups", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11278, "title": "Use cn() for class names throughout", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 11276, "title": "Add scrollbar on ptz presets dropdown", "area": "onvif", "type": "feat", "decision": "na"}
+{"pr": 11273, "title": "Implement infinite scrolling for frigate+ view", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 11267, "title": "Use portal on all sidebar tooltips", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 11265, "title": "Fix touch events", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11263, "title": "UI Tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11261, "title": "Update HA integration doc with image entities following #548", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 11241, "title": "Support desktop touchscreens for timelines", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 11237, "title": "Misc UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11236, "title": "Zone/mask editor improvements", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11235, "title": "Cleanup config validation", "area": "config", "type": "refactor", "decision": "na"}
+{"pr": 11226, "title": "Adjust stationary reqs depending on state", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 11225, "title": "Event cleanup", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 11212, "title": "Add ability to submit frames from recordings", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 11210, "title": "Make zone/mask editor circle radius larger on mobile only", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 11209, "title": "Fix overflowing portrait images in debug and motion tuner views", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11204, "title": "Add support for more object icons", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 11196, "title": "Show motion playback on page initially", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11192, "title": "Fix scroll back", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11191, "title": "Config validation fixes", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 11190, "title": "Add severity filter", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 11186, "title": "Revamp object debug view", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11182, "title": "Use alert/detection colors as background for motion segments", "area": "ml", "type": "refactor", "decision": "na"}
+{"pr": 11179, "title": "UI Fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11176, "title": "Simplify on connect", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 11175, "title": "Fix crash on mobile review", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11174, "title": "Save initial camera state to update when websocket connects", "area": "ipc", "type": "chore", "decision": "na"}
+{"pr": 11173, "title": "Use full resolution aspect ratio when available", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 11166, "title": "Add support for TensorRT v10 (multiple api calls have changed)", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 11162, "title": "Add chip for active objects on live view", "area": "streaming", "type": "feat", "decision": "na"}
+{"pr": 11161, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11160, "title": "Use pre buffer for other links", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 11157, "title": "Fix handling mixed masks", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11155, "title": "UI tweaks for screen sizes", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11150, "title": "[stats] Fix tooltip showing as undefined for first tick", "area": "metrics", "type": "fix", "decision": "na"}
+{"pr": 11148, "title": "Force X axis labels to be rotated correctly", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11147, "title": "Fix rounding for MB for some stats", "area": "metrics", "type": "fix", "decision": "na"}
+{"pr": 11145, "title": "Explicitly set pandas dtype to reduce memory usage and fix warning", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 11143, "title": "Open to recordings with pre-buffer", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11141, "title": "Live view not loading for MSE/JSMpeg if overriding live stream", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 11140, "title": "Link to relevant page from status bar warnings / errors", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11132, "title": "Add page titles for settings views", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 11130, "title": "Cleanup error gpu", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 11129, "title": "Security improvement: ensure user provided file names don't exceed max length", "area": "misc", "type": "fix", "decision": "na", "note": "Frigate caps user filename len in CACHE_DIR clips; Nurby paths are UUID/DB + resolve_inside (recordings.py:168,207), no user-built filename"}
+{"pr": 11126, "title": "Update theme colors", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11117, "title": "Camera group dialog changes and fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11097, "title": "Clear ongoing reviews on startup", "area": "ipc", "type": "fix", "decision": "na", "note": "Frigate clears dangling ReviewSegments on startup; Nurby closes track segments at runtime (har_runner.py:121)"}
+{"pr": 11083, "title": "fix motion config updating", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 11080, "title": "Add camera fps to graphs", "area": "metrics", "type": "feat", "decision": "na"}
+{"pr": 11072, "title": "Improve review mqtt topic", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 11068, "title": "Make all corners less rounded on mobile", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11066, "title": "Add status bar provider", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 11059, "title": "Fix array out of range error in reviews", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11049, "title": "Use export name in export deletion dialog instead of file id", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 11048, "title": "Make a backup DB before doing migrations", "area": "db", "type": "fix", "decision": "na", "note": "Frigate copies SQLite db before peewee migration; Nurby is Postgres+Alembic (main.py:58), server-side backup"}
+{"pr": 11045, "title": "Small logs view tweaks", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 11044, "title": "Update deps", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 11042, "title": "Dynamically scale the slider height when hovering + other UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11040, "title": "Save exports to database", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11036, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 11035, "title": "Improve polygon undo function", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11028, "title": "chore: fix some typos in comments", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 11027, "title": "Remove gifs and use existing views", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 11026, "title": "Show coral temps on system page if available", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 11022, "title": "Improve config validation for zones and object masks", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 11020, "title": "New mask/zone editor and motion tuner", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 11012, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 11005, "title": "Migrate export filenames", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 11003, "title": "Remove use_experimental config as part of config migration", "area": "config", "type": "refactor", "decision": "na"}
+{"pr": 11002, "title": "Add ability to link to review items directly", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 10998, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10990, "title": "Add support for arbitrary sub labels in reviews", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 10982, "title": "Fix camera switching and loading position", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10974, "title": "More UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10972, "title": "UI Improvements", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10968, "title": "Implement score filtering on Frigate+ Page", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 10967, "title": "Make wsdl_dir path resolving more robust", "area": "misc", "type": "fix", "decision": "na", "note": "Frigate python-onvif wsdl_dir resolution; Nurby uses raw httpx ONVIF, no wsdl dep"}
+{"pr": 10961, "title": "Implement config migration and restructure config for new review format", "area": "config", "type": "feat", "decision": "na"}
+{"pr": 10949, "title": "Further improve event loading", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10946, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10939, "title": "Timeline handlebar changes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10937, "title": "Fix build formatting", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 10936, "title": "Fix vertical camera layout scaling", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10924, "title": "Ongoing review segments", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10920, "title": "Ui Tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10915, "title": "Fix button colors", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10914, "title": "Add variable for selected foreground color", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 10912, "title": "use relative coordinates for masks & zones", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 10911, "title": "Improve stats", "area": "metrics", "type": "fix", "decision": "na"}
+{"pr": 10909, "title": "Fix colors for default light mode theme", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10904, "title": "Always handle random lines on frigate logs", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10903, "title": "Fix export button colors", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10888, "title": "Fix rewrite rule in nginx.conf", "area": "infra", "type": "refactor", "decision": "na"}
+{"pr": 10887, "title": "Fix frigate startup stats", "area": "metrics", "type": "fix", "decision": "na"}
+{"pr": 10886, "title": "Use zmq for event end queue and update python deps", "area": "ipc", "type": "refactor", "decision": "na", "note": "ZMQ event-end queue; Nurby async single-app, no ZMQ"}
+{"pr": 10884, "title": "Fix button color dark mode logic", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10882, "title": "UI tweaks and bugfixes", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10879, "title": "Use fast start for exports", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10875, "title": "Update web deps", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10873, "title": "Improve Landscape mobile views", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10866, "title": "Truncate write ahead log if it gets too big", "area": "misc", "type": "fix", "decision": "na", "note": "SQLite WAL manual truncate; Nurby is Postgres, WAL server-managed"}
+{"pr": 10854, "title": "Add y axis to camera stats graphs", "area": "metrics", "type": "feat", "decision": "na"}
+{"pr": 10853, "title": "Redesign logs page", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 10850, "title": "Add ability to search exports", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 10848, "title": "UI bugfixes and tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10847, "title": "Write default config if no config is saved when first starting frigate", "area": "config", "type": "fix", "decision": "na", "note": "Frigate writes default YAML config on first start; Nurby pydantic-env defaults baked in"}
+{"pr": 10846, "title": "Cleanup", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10833, "title": "Motion review improvements", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10831, "title": "Implement camera stats graphs", "area": "metrics", "type": "feat", "decision": "na"}
+{"pr": 10827, "title": "Optimistic UI for mobile buttons", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10826, "title": "Storage Graphs", "area": "metrics", "type": "fix", "decision": "na"}
+{"pr": 10825, "title": "Optimistic UI", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10824, "title": "Fix exports", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10816, "title": "Timeline tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10815, "title": "Implement general page of system graphs", "area": "metrics", "type": "feat", "decision": "na"}
+{"pr": 10811, "title": "Don't show warning for disabled cameras", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10809, "title": "Redesign log page and pull logs in chunks", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 10799, "title": "Link live recordings", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10794, "title": "Don't stop mse in background when using pip", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10791, "title": "Add ability to rename exports", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 10790, "title": "Fix UI crash", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10784, "title": "Support manual detections in review items", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 10781, "title": "Live view improvements", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 10779, "title": "Fix outline width", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10778, "title": "Make motion timeline more efficient", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 10777, "title": "Support ONVIF exceptions when sending pan-tilt commands", "area": "onvif", "type": "fix", "decision": "have", "note": "Nurby PTZ wraps SOAP in try/except returning None (onvif.py:207-216,470-535); failed move never raises"}
+{"pr": 10775, "title": "UI tweaks and bugfixes", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10774, "title": "Fix mobile playback in some cases", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10761, "title": "Use drawer instead of dropdown menu for mobile settings", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 10759, "title": "Clarify Proxmox LXC instructions; reference #5773 instead of #1111", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 10755, "title": "Fix s6 dependency by removing download-models", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 10751, "title": "Motion timeline bugfix", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10750, "title": "Make export date/time respect configured timezone in config", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 10735, "title": "Improve review book keeping", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 10734, "title": "Implement alerts when a potential problem is detected", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 10728, "title": "Recording fixes", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10727, "title": "UI Tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10726, "title": "Timeline tweaks for mobile", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10724, "title": "Cleanup event filters", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10717, "title": "Remove all AGPL licensed YOLO references from Frigate", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 10716, "title": "Remove all AGPL licensed YOLO references from Frigate", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 10714, "title": "Fix inconsistent spacing", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 10713, "title": "Fix camera list not scrolling", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10711, "title": "Mobile recordings redesign", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10709, "title": "Improve restart timing", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10708, "title": "Fix draggable element pixel alignment", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10707, "title": "Make deleting review items delete recordings as well", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10703, "title": "Bump actions/setup-python from 5.0.0 to 5.1.0", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 10695, "title": "Quick UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10693, "title": "Timeline tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10692, "title": "Add ability to export from recordings page", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 10690, "title": "Redesign Recordings View", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10689, "title": "Fix recordings viewer jumping when scrolling on timeline", "area": "recordings", "type": "chore", "decision": "na"}
+{"pr": 10685, "title": "Add tooltips for review item chips", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 10677, "title": "Improve timeline scrolling with dynamic speed", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10675, "title": "Improve refreshing of review items", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10673, "title": "Fix timeline upward scrolling limit", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10671, "title": "Only allow visible cameras to go live on dashboard", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 10667, "title": "Motion review changes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10663, "title": "Include which cameras detected motion during aggregated data", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 10659, "title": "Motion review playback optimizations", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10653, "title": "IPv6 listen in nginx.conf", "area": "infra", "type": "fix", "decision": "na"}
+{"pr": 10651, "title": "UI changes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10645, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10642, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10638, "title": "Fix safari preview transition", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10636, "title": "Smooth transitions between preview scrubbing", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10632, "title": "Respect motion only when playing back", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10630, "title": "Make saving preview frames on restart more reliable", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10629, "title": "Add relative movement by clicking for supported ptzs", "area": "onvif", "type": "feat", "decision": "na"}
+{"pr": 10628, "title": "Add ability to set playback speed on motion playback", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 10627, "title": "Rewrite events communication to use zmq instead of mp.Queue", "area": "ipc", "type": "refactor", "decision": "na", "note": "rewrite events comms zmq vs mp.Queue; Nurby async single-app"}
+{"pr": 10626, "title": "Add option to show motion only on motion timeline", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 10617, "title": "Move keyboard controls to video controls", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 10609, "title": "Motion playback", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10608, "title": "WebUI Fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10607, "title": "Bump dependabot/fetch-metadata from 1 to 2", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 10597, "title": "Make stationary detection more resilient to inaccurate boxes", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 10593, "title": "Only create docs dependabot PRs for docusaurus deps", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 10591, "title": "Update docs deps", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 10589, "title": "Timeline minimap and scrolling changes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10588, "title": "Update rest of web deps", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10587, "title": "Timeline fixes and changes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10585, "title": "Update recordings view", "area": "recordings", "type": "chore", "decision": "na"}
+{"pr": 10569, "title": "Summary timeline", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10567, "title": "UI cleanup", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10564, "title": "More web deps", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10562, "title": "Web deps again", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10549, "title": "small docs typo fix for zones", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 10546, "title": "Always check previews when refocusing the page", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10544, "title": "Update Web deps", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10543, "title": "Ability to configure loitering time in a zone", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 10537, "title": "Clean up selected data for recording", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10535, "title": "Don't use apple icon for android pwa", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 10534, "title": "Fix preview getting wrong update time", "area": "recordings", "type": "chore", "decision": "na"}
+{"pr": 10528, "title": "Fix divide by zero in normalized motion data", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10522, "title": "Timeline fixes and export handles", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10512, "title": "Fix android/chrome seeking on previews", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10510, "title": "Add snapshot-clean.png API endpoint", "area": "api", "type": "feat", "decision": "na", "note": "snapshot-clean.png from tracked-object pipeline; Nurby has no clean_copy concept, FS-path snapshots"}
+{"pr": 10502, "title": "Use preview quality setting to set image height and webp quality", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10501, "title": "Improve mobile handlebar timestamp", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10499, "title": "Fix thumbnails for panoramic cameras", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10497, "title": "Normalize motion data in chunks", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10496, "title": "Consolidate recordings view into one view", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10495, "title": "Maintain existing overlay state when setting hash", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10494, "title": "Mark items as reviewed when manually seeking", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10488, "title": "Make all motion segments clickable", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10486, "title": "Fix frigate+ submit and recordings layouts for portrait cameras", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10485, "title": "Add birdseye live view", "area": "streaming", "type": "feat", "decision": "na"}
+{"pr": 10484, "title": "Save motion in DB as motion box count", "area": "db", "type": "fix", "decision": "na", "note": "motion-box count to DB from CV detector; Nurby has no motion-box detector"}
+{"pr": 10483, "title": "Remove dev env var requirement and update docs for latest config", "area": "docs", "type": "refactor", "decision": "na"}
+{"pr": 10481, "title": "WebUI Fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10480, "title": "Add region count to database and use for motion activity", "area": "db", "type": "feat", "decision": "na"}
+{"pr": 10479, "title": "Fix zoom scaling for live view", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 10478, "title": "Fix switching camera group bug", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10475, "title": "Add ability to zoom in to live and recordings views", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 10466, "title": "Add C520WS to ONVIF PTZ camera recommendations.", "area": "onvif", "type": "feat", "decision": "na"}
+{"pr": 10463, "title": "Add skeleton for loading exports and improve spacing on bottom sheet", "area": "ci", "type": "feat", "decision": "na"}
+{"pr": 10462, "title": "Improve Recordings loading", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10460, "title": "Adjust mark these reviewed to update UI and then run api call", "area": "api", "type": "chore", "decision": "na"}
+{"pr": 10459, "title": "Rework motion data calculation", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 10456, "title": "Use Inter webfont instead of ttf", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 10454, "title": "Dim motion segments for motion during alerts and detections", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 10452, "title": "Reduce outliers in motion data to ensure consistent scaling for timeline", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10448, "title": "Persist selected camera group for live", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 10447, "title": "use credentials for webmanifest", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 10446, "title": "Bump docker/login-action from 3.0.0 to 3.1.0", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 10439, "title": "Recording scrubbing fixes", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10435, "title": "Mute video by default and allow control of volume", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10434, "title": "Cleanup gif on safari", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10431, "title": "Use react lazy to break js files into smaller chunks & remove videojs in favor of hls.js", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 10425, "title": "Fix jsmpeg player component", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10424, "title": "Fix jumping to segment in recordings view", "area": "recordings", "type": "chore", "decision": "na"}
+{"pr": 10422, "title": "Fix two way talk starting webrtc session", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 10421, "title": "Fix gif layout", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10408, "title": "Add micropohone button for two way talk on live view", "area": "streaming", "type": "feat", "decision": "na"}
+{"pr": 10406, "title": "Improve preview loading", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10405, "title": "Optimize web config to be installed as PWA", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 10404, "title": "Add ability to add legacy birdseye to camera groups", "area": "streaming", "type": "feat", "decision": "na"}
+{"pr": 10403, "title": "Filter review items and motion to be main camera in recordings view only", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10402, "title": "UI tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10401, "title": "Override default player controls", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10398, "title": "Add special casing for android preview scrubbing", "area": "ci", "type": "feat", "decision": "na"}
+{"pr": 10388, "title": "Fix preview update", "area": "recordings", "type": "chore", "decision": "na"}
+{"pr": 10385, "title": "Use flexbox for full recordings view", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10384, "title": "Preview improvements", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10381, "title": "Indicate on calendar which days have unreviewed activity", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10380, "title": "refactor motion calculation", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 10370, "title": "Fix segments on motion review", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10366, "title": "Update live.md", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 10365, "title": "Layout tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10364, "title": "Fix image cleanup", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10359, "title": "Redesign exports page", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 10358, "title": "Fix timeline handlebar position", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 10357, "title": "Fix dst offset calculation", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10351, "title": "Fix handling of recordings and switching cameras", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10350, "title": "Don't check autotracking onvif requirements for users with autotracking disabled", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 10346, "title": "Adjustments and fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10342, "title": "Fixed incorrect label link", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10338, "title": "fix preview comparison", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10337, "title": "Ensure at least 2 frames are saved per minute in preview video", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 10336, "title": "Timeline handlebar tweaks", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 10335, "title": "Cleanup to use new preview video player in dynamic player", "area": "recordings", "type": "feat", "decision": "na"}
+{"pr": 10333, "title": "Handlebar dragging fix", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 10332, "title": "Add job to delete old GHCR container images", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 10330, "title": "Rework mobile drawers to have a max height and use drawers for plus", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 10329, "title": "Fix motion review", "area": "misc", "type": "fix", "decision": "na"}

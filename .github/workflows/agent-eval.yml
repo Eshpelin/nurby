@@ -37,11 +37,15 @@ jobs:
         # The eval harness is intentionally DB-free in CI. We only need
         # the packages the runner actually imports. pyyaml is the YAML
         # parser; pytest + pytest-asyncio drive the suite; sqlalchemy +
-        # pgvector are imported transitively by shared/models.py.
+        # pgvector are imported transitively by shared/models.py;
+        # pydantic-settings is imported by shared/config.py, which sits on
+        # the collection import chain (services.agent -> shared.models ->
+        # shared.database -> shared.config). Without it, pytest fails to
+        # even collect tests/test_agent_eval.py.
         run: |
           python -m pip install --upgrade pip
           pip install pytest pytest-asyncio pyyaml \
-            "sqlalchemy[asyncio]>=2.0.0" "pydantic>=2.0.0" \
+            "sqlalchemy[asyncio]>=2.0.0" "pydantic>=2.0.0" pydantic-settings \
             "pgvector>=0.3.0" "asyncpg>=0.30.0"
 
       - name: Run agent eval
