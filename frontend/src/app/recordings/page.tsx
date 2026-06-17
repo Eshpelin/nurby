@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { RecordingDetectionOverlay } from "@/components/RecordingDetectionOverlay";
+import { MotionHeatstrip } from "@/components/MotionHeatstrip";
 
 // Objects people most often scrub for. Free of a fixed list otherwise.
 const COMMON_OBJECTS = ["person", "cat", "dog", "car", "truck", "bus", "bicycle", "motorcycle"];
@@ -458,6 +459,13 @@ export default function RecordingsPage() {
                   onTargets={setSeekTargets}
                 />
               </div>
+              <MotionHeatstrip
+                cameraId={expandedRec.camera_id}
+                startedAt={expandedRec.started_at}
+                endedAt={expandedRec.ended_at}
+                durationSeconds={expandedRec.duration_seconds}
+                videoRef={videoRef}
+              />
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5">
                   <button
