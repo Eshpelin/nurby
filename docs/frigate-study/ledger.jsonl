@@ -1510,3 +1510,403 @@
 {"pr": 15882, "title": "Update for correct audio requirements", "area": "docs", "type": "docs", "decision": "na"}
 {"pr": 15881, "title": "Simplify model config", "area": "config", "type": "refactor", "decision": "na"}
 {"pr": 15865, "title": "Remove extra data except from keypackets when using qsv", "area": "hwaccel-ffmpeg", "type": "fix", "decision": "na"}
+{"pr": 15854, "title": "Improvements to face recognition", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 15818, "title": "Add metrics page for embeddings and face / license plate processing times", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 15811, "title": "Fix facedet download", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 15803, "title": "Refactor camera activity processing", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 15796, "title": "Add support for SR-IOV GPU stats", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 15795, "title": "Add ffmpeg config to increase HEVC compatibility with Apple devices", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 15786, "title": "Implement face recognition training in UI", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 15779, "title": "Update model docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15757, "title": "Add UI for managing face recognitions", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 15756, "title": "update link", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 15736, "title": "Tracked object details pane bugfix", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 15724, "title": "Fix event cleanup", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 15717, "title": "Object lifecycle fix", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15709, "title": "Small changes for consistent language ", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15705, "title": "Sort camera group edit screen by ui config values", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 15699, "title": "rockchip: update dependencies and add script for model conversion", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 15695, "title": "Fix crash when streams are undefined in go2rtc config password cleaning", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 15679, "title": "Face recognition logic improvements", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 15670, "title": "Improve face recognition", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 15646, "title": "Update TRT", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 15643, "title": "GenAI: add ability to save JPGs sent to provider", "area": "genai", "type": "feat", "decision": "have", "note": "Nurby persists VLM frames to disk: analyzer.py:973 _save_thumbnails -> <thumbnails_path>/agent/<run_id>/<vlm_call_id>/<idx>.jpg"}
+{"pr": 15641, "title": "Remove duplicated rockchip build", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 15640, "title": "Fix trt", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 15638, "title": "Simplify TensorRT image", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 15634, "title": "Update openvino", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 15633, "title": "Add tooltips to ptz controls", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 15618, "title": "Update python deps", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 15617, "title": "Update docs deps", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15616, "title": "Make hailo wheels support any minor version", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 15615, "title": "SHM frame name bugfix", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 15614, "title": "Enable temporary caching of camera images", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15607, "title": "Change Amcrest example to subtype=3", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15605, "title": "Add dahua and amcrest to camera specific documentation", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 15603, "title": "Fix #7944: Adds tls_insecure to the onvif configuration", "area": "config", "type": "fix", "decision": "na", "note": "Nurby ONVIF httpx client already verify=False (insecure-by-default) onvif.py:351; config toggle is a nicety"}
+{"pr": 15598, "title": "Bug Fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15590, "title": "Catch OS error when checking storage utilization", "area": "metrics", "type": "fix", "decision": "na"}
+{"pr": 15584, "title": "Preserve line numbers in config validation", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 15561, "title": "Clarify GenAI description generation timing", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15552, "title": "Update camera specific settings to make note of hikvision authentication", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 15550, "title": "Fix always the same image is sent to GenAI", "area": "genai", "type": "fix", "decision": "na"}
+{"pr": 15538, "title": "Improve review message", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15527, "title": "GenAI bugfixes", "area": "genai", "type": "fix", "decision": "have", "note": "Nurby guards missing thumbnail files (analyzer.py:1251/:282) and provider errors in llm.py"}
+{"pr": 15525, "title": "Don't crop by region for genai snapshot for manual events", "area": "genai", "type": "fix", "decision": "na"}
+{"pr": 15524, "title": "Ensure that go2rtc streams are cleaned", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 15521, "title": "Prometheus exporter redo v16 branch", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 15513, "title": "Add FAQ to explain why streams might work in VLC but not in Frigate", "area": "streaming", "type": "feat", "decision": "na"}
+{"pr": 15505, "title": "Optimize HTTP Requests with Connection Pooling for DeepStack Detector", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 15501, "title": "Update iframe interval recommendation", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 15500, "title": "Improve message for detected objects in review items", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15490, "title": "apply zizmor recommendations", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 15480, "title": "Cleanup handling of first object message", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 15473, "title": "Cap storage bandwidth", "area": "metrics", "type": "fix", "decision": "na"}
+{"pr": 15472, "title": "Reimplement downloading of face detection model", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 15468, "title": "Remove debug cleanup change", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 15465, "title": "Fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15453, "title": "Improve semantic search docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15451, "title": "Standardize handling of config files", "area": "config", "type": "refactor", "decision": "na"}
+{"pr": 15432, "title": "return 401 for login failures", "area": "auth", "type": "fix", "decision": "have", "note": "Nurby login already returns 401 for bad credentials (auth.py:229)"}
+{"pr": 15415, "title": "Refactor event cleanup to consider review severity", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 15389, "title": "API response cleanup", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 15378, "title": "fix auth remote addr access", "area": "auth", "type": "fix", "decision": "na"}
+{"pr": 15376, "title": "Ensure label does not overlap with box or go out of frame", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15348, "title": "Make note of go2rtc encoded URLs", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 15347, "title": "Update nvidia docs to reflect preset", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15342, "title": "Explore sorting", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 15334, "title": "Preserve search query in overlay state hook", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 15327, "title": "Api improvements", "area": "api", "type": "fix", "decision": "na"}
+{"pr": 15310, "title": "Move label placement when overlapping small boxes", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 15307, "title": "Explore bulk actions", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 15299, "title": "Fix audio event creation", "area": "audio", "type": "fix", "decision": "na"}
+{"pr": 15296, "title": "Handle case where camera name ends in number", "area": "misc", "type": "fix", "decision": "na", "note": "Frigate SHM frame-name collision; Nurby has no SHM frame bus"}
+{"pr": 15293, "title": "Fix event cleanup debug logging crash", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 15291, "title": "Explore audio event tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 15286, "title": "Fix audio events in explore section", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 15275, "title": "Let the docker container spend more time to clean up and shut down (docs)", "area": "docs", "type": "refactor", "decision": "na"}
+{"pr": 15274, "title": "SHM tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 15272, "title": "Fix camera access and improve typing", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 15271, "title": "Fix formatting", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15257, "title": "Fix frontend bug when consecutive underscores are used in camera names", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 15254, "title": "Update hardware recs", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 15223, "title": "Fix ruff", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 15222, "title": "Face recognition fixes", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 15205, "title": "Improve face recognition", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 15204, "title": "Add docs for go2rtc logging", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 15187, "title": "Fix extraction of Hailo userspace libs", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 15167, "title": "Set hailo build library path", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 15162, "title": "Added more unit tests for the review controller", "area": "test", "type": "test", "decision": "na"}
+{"pr": 15103, "title": "Update base image", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 15100, "title": "Fix sending events", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15087, "title": "Added code to update host to download weights", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 15077, "title": "Started unit tests for the review controller", "area": "test", "type": "test", "decision": "na"}
+{"pr": 15075, "title": "Fix link to api in genai docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15072, "title": "Fix embeddings", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 15070, "title": "Update genai docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 15055, "title": "Tracked object metadata changes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15052, "title": "fix writing to birdseye restream buffer", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 15051, "title": "Fix birdseye", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 15043, "title": "Cleanup correctly", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 15035, "title": "Fix round robin", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 15027, "title": "Round robin SHM management", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 15020, "title": "Duplicate onnx build info", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 15012, "title": "Update Ollama docs and add genai debug logging", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 15011, "title": "Make all SHM management untracked", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 15009, "title": "Increase max shm frames", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 15004, "title": "Various Fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14980, "title": "Update authentication.md", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14946, "title": "Update edge tpu docs for RPi 5 kernel", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14933, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14930, "title": "Handle in progress previews export and fix time check bug", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 14915, "title": "Fix small typo", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14910, "title": "Clarify frigate+ filter", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14909, "title": "Add ability to filter Explore by Frigate+ submission status", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 14908, "title": "Use custom body for the export recordings endpoint", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 14902, "title": "fix tensorrt model generation variable", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14898, "title": "Add support for specifying tensorrt device", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 14887, "title": "Pin all intel packages", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 14884, "title": "Pin intel driver", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 14880, "title": "Genai bugfix", "area": "genai", "type": "fix", "decision": "na"}
+{"pr": 14872, "title": "Revert audio detection as service manager process", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14871, "title": "Auto-unmute inbound audio when enabling two way audio", "area": "audio", "type": "fix", "decision": "na"}
+{"pr": 14870, "title": "Small general filter bugfix", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14866, "title": "Fix review filter", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14865, "title": "Don't generate tensorrt models by default", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14854, "title": "fix regex for cookie_name to be general snake case", "area": "auth", "type": "fix", "decision": "na", "note": "cookie_name config pattern; Nurby uses pure Bearer tokens (auth.py:17), no cookie config"}
+{"pr": 14851, "title": "Don't pass hwaccel args to preview", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14850, "title": "Small genai fix", "area": "genai", "type": "fix", "decision": "na"}
+{"pr": 14847, "title": "Re-send camera states after websocket disconnects and reconnects", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14836, "title": "Cleanup batching", "area": "recordings", "type": "refactor", "decision": "na"}
+{"pr": 14835, "title": "Use SVC to normalize and classify faces for recognition", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14833, "title": "Add more debug logs for preview and output", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 14830, "title": "update hardware recommendations", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 14815, "title": "Show dialog when restarting from config editor", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14814, "title": "UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14813, "title": "Bugfixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14797, "title": "Optimize Explore summary database query", "area": "frontend", "type": "fix", "decision": "na", "note": "composite (label,start_time) index; Nurby already indexes fired_at + FK cols (models.py:617-631), label is JSON payload"}
+{"pr": 14792, "title": "Overwrite existing saved search", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14790, "title": "Fix missing tensor_input", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14786, "title": "Various fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14767, "title": "Clarify semantic search GPU", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14766, "title": "Fix object processing logic for detections", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14761, "title": "Fix exports migration when there is none", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 14758, "title": "Fix devcontainer when there is no ~/.ssh/know_hosts file", "area": "ci", "type": "fix", "decision": "na"}
+{"pr": 14753, "title": "Docs: correct go2rtc version used", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14750, "title": "Avoid divide by zero in shm_frame_count", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 14744, "title": "Connect Review item details to Explore", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14739, "title": "update docs for new labels", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 14734, "title": "simplify hailort", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 14730, "title": "Fix validation activity indicator", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14729, "title": "Fix width of object lifecycle buttons", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14728, "title": "Set the loglevel for OpenCV ffmpeg messages to fatal", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14727, "title": "Use regular expressions for plate matching", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14720, "title": "Fix float input", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14719, "title": "UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14705, "title": "Clean up copy output", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 14703, "title": "Various fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14700, "title": "Small tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14698, "title": "Fix jetson onnxruntime", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14689, "title": "Don't open file with read permissions if there is no need to write to it", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14688, "title": "Jetson onnxruntime", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14687, "title": "Add info about GPUs that are supported for semantic search", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 14686, "title": "Add docs update to type of change in PR template", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 14685, "title": "Add specific section about GPU in semantic search", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 14684, "title": "Fix config loading", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 14675, "title": "fix string comparison on mqtt error message for Server unavailable", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 14674, "title": "Update Hailo Driver to 4.19", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 14669, "title": "UI changes and bugfixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14668, "title": "Fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14667, "title": "Annotation offset bugfix", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14662, "title": "Object lifecycle change", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14659, "title": "Add ability to configure model input dtype", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 14658, "title": "Handle hwaccel_args not being set for birdseye restream", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14651, "title": "UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14648, "title": "Add h8l and rocm to release workflow", "area": "hwaccel", "type": "feat", "decision": "na"}
+{"pr": 14647, "title": "Update facenet model", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 14641, "title": "LPR improvements", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14615, "title": "Prevent division by zero in lpr confidence checks", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14610, "title": "Fix label check", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14593, "title": "More bug fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14590, "title": "Docs updates", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14588, "title": "Bug fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14587, "title": "Bugfixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14584, "title": "Bump actions/setup-python from 5.1.0 to 5.3.0", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 14575, "title": "fix: hailo driver wrong version name", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 14564, "title": "License plate recognition (ALPR) backend", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14563, "title": "Better review sub-labels", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14558, "title": "Slightly downgrade onnxruntime-gpu", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14556, "title": "Deps updates", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 14544, "title": "Face detection", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14541, "title": "Fix score in search details dialog for old events", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14540, "title": "Quick Fix", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14537, "title": "Improve face recognition", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14535, "title": "Export preview via api", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 14534, "title": "Explore fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14528, "title": "Improve error message when semantic search is not enabled with genai", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14525, "title": "Small UI changes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14523, "title": "Increase download output", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14521, "title": "Catch empty bytes in streaming download", "area": "streaming", "type": "fix", "decision": "na", "note": "ffmpeg subprocess stdout EOF guard; Nurby streams are DB-backed CSV generators, no subprocess pipe"}
+{"pr": 14518, "title": "Accessibility features", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 14516, "title": "UI changes and fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14505, "title": "UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14495, "title": "Face recognition backend", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14493, "title": "Reenable revalidation of first page", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14492, "title": "Various fixes and improvements", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14490, "title": "Bugfix: Update tracked object description optimistically", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 14486, "title": "Don't run CI builds on docs-only change", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14485, "title": "Don't run pull_request builds on docs-only change", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14482, "title": "Ollama: minor docs tweak to specify command", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14481, "title": "Model and genai fixes", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14480, "title": "Fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14466, "title": "Websocket bugfix", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14460, "title": "Misc bugfixes and improvements", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14451, "title": "Improve Explore SQL query memory usage", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14448, "title": "Fix snapshot API redirect", "area": "api", "type": "fix", "decision": "na"}
+{"pr": 14439, "title": "Explore snapshot and clip filter", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14438, "title": "Semantic search docs update", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14414, "title": "Autotracking bugfix", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14413, "title": "Generative AI changes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14410, "title": "Various fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14409, "title": "Adjust Explore settings", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14401, "title": "Updated Documentation for the Review endpoints", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14398, "title": "Fix build", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 14397, "title": "Add score filter to Explore view", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 14396, "title": "Update logos handling", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 14393, "title": "Explore UI changes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14389, "title": "Remove line in install deps", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 14388, "title": "Refactor MobilePage to work like shadcn components", "area": "frontend", "type": "refactor", "decision": "na"}
+{"pr": 14387, "title": "Use config attribute map instead of hard coded", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 14381, "title": "Search and search filter UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14378, "title": "Embeddings UI updates", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 14370, "title": "Update coral troubleshooting docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14369, "title": "UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14365, "title": "Always run embedding descs one by one", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14364, "title": "Db fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14352, "title": "Updated Documentation: Autotracking add support details for Sunba 405-D20X 4K camera.", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 14348, "title": "Explore layout changes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14347, "title": "Improve download link", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14346, "title": "Streaming download", "area": "api-media", "type": "feat", "decision": "have", "note": "Nurby serves downloads via FastAPI FileResponse streaming from disk (recordings.py:187,207,281); no in-memory ffmpeg buffering"}
+{"pr": 14341, "title": "Don't allow unlimited unprocessed segments to stay in cache", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 14339, "title": "Add ability to rename camera groups", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 14338, "title": "Bugfixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14330, "title": "Fix genai labels", "area": "genai", "type": "fix", "decision": "na"}
+{"pr": 14329, "title": "Detection adjustments", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14328, "title": "Search UI tweaks and bugfixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14326, "title": "UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14325, "title": "Batch embeddings fixes", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14321, "title": "See a preview when using the timeline to export footage", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14320, "title": "Support batch embeddings when reindexing", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 14319, "title": "Don't show Frigate+ submission card if plus is disabled", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14308, "title": "Improve reindex completion flag", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14305, "title": "Fixes for model downloading", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14302, "title": "Only revalidate if event update is valid", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 14299, "title": "Add support for more icons in webUI", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 14298, "title": "Fix substitution on genai prompts", "area": "genai", "type": "fix", "decision": "na"}
+{"pr": 14297, "title": "Prevent single letter words from matching filter suggestions", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14296, "title": "Add info icons for popovers in debug view", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 14295, "title": "Update object docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14290, "title": "Remove device config and use model size to configure device used", "area": "ml", "type": "refactor", "decision": "na"}
+{"pr": 14285, "title": "Reduce onnx memory usage", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14284, "title": "Embeddings normalization fixes", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14283, "title": "Openvino models", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14280, "title": "Reset saved search stats on embeddings reindex", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14279, "title": "Add time remaining to embedding reindex pane", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 14278, "title": "Use number keys on keyboard to move ptz camera to presets", "area": "streaming", "type": "refactor", "decision": "na"}
+{"pr": 14273, "title": "Correctly handle camera command in dispatcher", "area": "ipc", "type": "fix", "decision": "na"}
+{"pr": 14272, "title": "Fix event cleanup", "area": "recordings", "type": "refactor", "decision": "na", "note": "real [chunk] double-list bug but only in embeddings deletion; Nurby has no embeddings store"}
+{"pr": 14271, "title": "Allow empty description for tracked objects", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14270, "title": "Add config option to select fp16 or quantized jina vision model", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 14269, "title": "Embeddings fixes", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14268, "title": "Add embeddings reindex progress to the UI", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 14266, "title": "Restructure embeddings", "area": "ml", "type": "refactor", "decision": "na"}
+{"pr": 14264, "title": "Fix config editor error pane", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14263, "title": "Bug fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14256, "title": "Ensure genai prompt is properly formatted", "area": "genai", "type": "fix", "decision": "na"}
+{"pr": 14253, "title": "Embedding gpu", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14252, "title": "Use JinaAI models for embeddings", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14249, "title": "Fix detector config help template", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14226, "title": "Remove builds from install docs", "area": "docs", "type": "refactor", "decision": "na"}
+{"pr": 14224, "title": "Improve docs on exports API endpoints", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14221, "title": "Handle loitering objects that are stationary", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14217, "title": "Search fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14213, "title": "Update markupsafe requirement from ==2.1.* to ==3.0.* in /docker/main", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14207, "title": "Always display confidence chip on similarity searches", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14206, "title": "Improve Nvidia GPU stats", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14205, "title": "Adjust zscore normalization bias for descriptions", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14203, "title": "Initialize path before calling super()", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14202, "title": "Docs updates", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14193, "title": "Bug Fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14184, "title": "Search details video pane fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14182, "title": "Log correct tensorRT version when debugging", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 14180, "title": "Revamp object snapshot tab", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14178, "title": "Use Swagger documentation for Frigate HTTP API", "area": "api-docs", "type": "docs", "decision": "have", "note": "Nurby FastAPI app auto-generates OpenAPI/Swagger at /docs natively"}
+{"pr": 14163, "title": "Use sqlite-vec extension instead of chromadb for embeddings", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14161, "title": "add docs for yolonas plus models", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 14150, "title": "Add service manager infrastructure", "area": "misc", "type": "feat", "decision": "na", "note": "Frigate multiprocess service supervisor; Nurby runs async services in one app"}
+{"pr": 14145, "title": "Include lsof in container", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14142, "title": "Added stop_event to util.Process", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14140, "title": "Fix shared memory frames being stuck when a camera capture crashed", "area": "misc", "type": "fix", "decision": "na", "note": "Frigate SHM frame leak on capture crash; Nurby has no shared-memory frame buffer"}
+{"pr": 14139, "title": "Fix autotracking absolute zoom interpolation logic", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 14138, "title": "Fix mjpeg api", "area": "streaming", "type": "fix", "decision": "na"}
+{"pr": 14136, "title": "Correct preview docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14128, "title": "Make env vars warning more clear", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14124, "title": "Properly call super() in subclasses", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14123, "title": "Do not migrate db to new config path", "area": "config", "type": "feat", "decision": "na"}
+{"pr": 14122, "title": "Fix fix logging", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14121, "title": "Fix alert thumbnails on iOS and Safari desktop", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14120, "title": "Don't consider segments containing unprocessed frames in segment count", "area": "recordings", "type": "fix", "decision": "na"}
+{"pr": 14118, "title": "UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14117, "title": "Clean up hwaccel docs", "area": "docs", "type": "refactor", "decision": "na"}
+{"pr": 14116, "title": "UI improvements and fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14103, "title": "Azure genai fixes", "area": "genai", "type": "fix", "decision": "na"}
+{"pr": 14102, "title": "Add Azure OpenAI as genai provider", "area": "genai", "type": "feat", "decision": "na"}
+{"pr": 14093, "title": "Fix event entries", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14092, "title": "Bug fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14091, "title": "Don't assume single render device is D128", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14090, "title": "Refactor attribute saving", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 14088, "title": "UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14079, "title": "Fix logging", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14078, "title": "Add genai use_snapshot to reference config", "area": "genai", "type": "feat", "decision": "na"}
+{"pr": 14077, "title": "Add ability to configure genai to use snapshot instead of thumbnails", "area": "genai", "type": "feat", "decision": "na"}
+{"pr": 14076, "title": "Misc Improvements", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14073, "title": "Improve Intel GPU stats", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14072, "title": "Improve rocm handling of different models", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 14065, "title": "Improve gamma filter", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14064, "title": "Misc fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14038, "title": "Split config.py into multiple files", "area": "config", "type": "refactor", "decision": "na"}
+{"pr": 14037, "title": "Remove debug log", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 14035, "title": "Dynamic attributes config", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 14034, "title": "Clarify storage metrics values with a popover", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 14022, "title": "Fix dynamic api ordering", "area": "api", "type": "fix", "decision": "na"}
+{"pr": 14019, "title": "Update Templates", "area": "ml", "type": "chore", "decision": "na"}
+{"pr": 14015, "title": "Revert all cameras switches behavior", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 14013, "title": "Fixes & Tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 14011, "title": "Ensure config file naming is consistent throughout", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 14010, "title": "UI fixes", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13996, "title": "Fix snapshot access", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13994, "title": "Update object_detectors.md", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13992, "title": "make the hailo user instalation script a bit more failsafe", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 13991, "title": "Update hailo driver to 4.18", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 13990, "title": "Fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13988, "title": "Fix ROCm inference", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 13985, "title": "Fix saving config", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 13983, "title": "Tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13978, "title": "Search functionality and UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13969, "title": "Fix config saving api", "area": "config", "type": "fix", "decision": "na"}
+{"pr": 13968, "title": "Increase healthcheck start period to 5 minutes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13966, "title": "Remove incorrect package on hailo install", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 13965, "title": "Search UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13964, "title": "Proparly handle text based responses", "area": "api", "type": "fix", "decision": "na"}
+{"pr": 13962, "title": "Fix genai logic", "area": "genai", "type": "fix", "decision": "na"}
+{"pr": 13961, "title": "Add ability to use 12 hour time in input time filter", "area": "misc", "type": "feat", "decision": "na"}
+{"pr": 13960, "title": "Return version as html", "area": "misc", "type": "chore", "decision": "na"}
+{"pr": 13958, "title": "Add ability to restrict genai to objects and zones at the camera level", "area": "genai", "type": "feat", "decision": "na"}
+{"pr": 13957, "title": "Do not use a default value of datetime for params", "area": "misc", "type": "fix", "decision": "na", "note": "stale import-time datetime.now() pydantic defaults; absent in Nurby (all now() in fn bodies, recap.py:98)"}
+{"pr": 13955, "title": "Api fixes", "area": "api", "type": "fix", "decision": "na", "note": "slowapi login rate-limiter null-guard; Nurby auth is Bearer-token (auth.py)"}
+{"pr": 13950, "title": "Custom classes for Process and Metrics", "area": "metrics", "type": "fix", "decision": "na"}
+{"pr": 13947, "title": "Embeddings maintainer fix", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 13946, "title": "Add ability to filter search by time range", "area": "frontend", "type": "feat", "decision": "na"}
+{"pr": 13943, "title": "Add error logging to genai clients", "area": "genai", "type": "feat", "decision": "na"}
+{"pr": 13942, "title": "Review api fixes", "area": "api", "type": "fix", "decision": "na"}
+{"pr": 13941, "title": "PTZ camera support docs update", "area": "docs", "type": "feat", "decision": "na"}
+{"pr": 13940, "title": "Regenerate description fixes", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13937, "title": "Fix plus api", "area": "api", "type": "fix", "decision": "na"}
+{"pr": 13936, "title": "More api fixes", "area": "api", "type": "fix", "decision": "na"}
+{"pr": 13933, "title": "Improve performance of image fetching", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13932, "title": "Fix api path handling", "area": "api", "type": "fix", "decision": "na"}
+{"pr": 13930, "title": "Regenerate genai tracked object descriptions ", "area": "genai", "type": "fix", "decision": "na"}
+{"pr": 13915, "title": "Autotracking: don't set up onvif zoom space if zooming is disabled", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 13910, "title": "Improve hailo docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13909, "title": "Disable keepalive for Safari in nginx vod location", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13905, "title": "Don't print error for requesting camera info", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13903, "title": "Search UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13902, "title": "Chroma fixes", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 13897, "title": "Move more things out of FrigateApp", "area": "misc", "type": "refactor", "decision": "na"}
+{"pr": 13891, "title": "Decrease number of X ticks on system and camera graphs", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13889, "title": "Remove PyYAML usages and dependency", "area": "misc", "type": "refactor", "decision": "na", "note": "Frigate drops PyYAML for ruamel; Nurby config is pydantic env, no YAML parsing"}
+{"pr": 13886, "title": "Include radeontop in arm build", "area": "frontend", "type": "chore", "decision": "na"}
+{"pr": 13885, "title": "Remove context file from tensorrt cache", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 13883, "title": "Removed usage of PyYAML for config parsing.", "area": "config", "type": "refactor", "decision": "na"}
+{"pr": 13871, "title": "Frigate HTTP API using FastAPI", "area": "api", "type": "refactor", "decision": "have", "note": "Frigate migrating flask->FastAPI; Nurby already FastAPI throughout (services/api/routes/*)"}
+{"pr": 13861, "title": "Update openvino to 2024.3", "area": "hwaccel", "type": "chore", "decision": "na"}
+{"pr": 13856, "title": "Fix similarity search", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13851, "title": "Simplify tensorrt building", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 13848, "title": "Clarify live view codecs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13842, "title": "Update install_deps.sh fix typo to fix CI", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 13841, "title": "UI tweaks", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13840, "title": "Display warning when search embeddings models are being downloaded", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 13834, "title": "Update ffmpeg to 7 and update intel hwaccel docs", "area": "docs", "type": "docs", "decision": "na"}
+{"pr": 13833, "title": "Improve navigation", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13830, "title": "Do not handle object if data is None", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13829, "title": "Use intel apt for out of tree drivers", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13816, "title": "Rocm yolonas", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 13815, "title": "Improved search input", "area": "frontend", "type": "fix", "decision": "na"}
+{"pr": 13813, "title": "Make note of multi-model on GPU support", "area": "ml", "type": "feat", "decision": "na"}
+{"pr": 13806, "title": "Use cpu provider for embeddings models", "area": "ml", "type": "fix", "decision": "na"}
+{"pr": 13805, "title": "Revert \"Rewrite yaml loader\"", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13804, "title": "Refactor onnx providers", "area": "hwaccel", "type": "refactor", "decision": "na"}
+{"pr": 13803, "title": "Rewrite yaml loader", "area": "misc", "type": "fix", "decision": "na"}
+{"pr": 13800, "title": "Override onnx clip loading", "area": "hwaccel", "type": "fix", "decision": "na"}
+{"pr": 13799, "title": "Install no deps separately for wheel", "area": "ci", "type": "chore", "decision": "na"}
+{"pr": 13795, "title": "Fix vscode launch configuration", "area": "ci", "type": "fix", "decision": "na"}
