@@ -22,7 +22,7 @@ from alembic import op
 
 
 revision: str = 'e7f9a1c3b5d7'
-down_revision: Union[str, Sequence[str], None] = ('d4e6f8a0b2c4', 'f2a4c6e8b1d3', 'f3a4b5c6d7e8')
+down_revision: Union[str, Sequence[str], None] = 'e4f6a8c0b2d5'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
