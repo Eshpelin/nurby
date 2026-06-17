@@ -10,12 +10,14 @@ for the Postgres dialect (mirrors ``tests/test_recordings_filters.py``).
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
@@ -192,6 +194,180 @@ def test_owner_sees_all_rows_restricted_sees_subset():
     restricted_sql = _sql(_filtered_recordings_query(None, None, None, None, {one}))
     assert "camera_id in (" in restricted_sql
     assert str(one) in restricted_sql
+
+
+# ── WS fan-out per-recipient scoping (issue #40, services/api/ws.py) ──
+#
+# The dashboard socket caches each connection's allowed-camera set at
+# connect time; ``_deliver_local`` drops camera-tagged messages a given
+# recipient may not see. These exercise the pure decision function and the
+# real delivery loop against a fake socket registry, so a restricted socket
+# never receives another camera's stream while ALL / untagged still flow.
+
+from services.api import ws as ws_mod  # noqa: E402
+from services.api.ws import _allowed_to_receive, _deliver_local  # noqa: E402
+
+
+def test_ws_all_recipient_receives_every_camera():
+    msg = {"type": "event", "camera_id": str(uuid.uuid4())}
+    assert _allowed_to_receive(ALL, msg) is True
+
+
+def test_ws_restricted_recipient_drops_foreign_camera():
+    mine = uuid.uuid4()
+    theirs = uuid.uuid4()
+    assert _allowed_to_receive({mine}, {"type": "event", "camera_id": str(mine)}) is True
+    assert _allowed_to_receive({mine}, {"type": "event", "camera_id": str(theirs)}) is False
+
+
+def test_ws_untagged_system_message_reaches_everyone():
+    # A message with no camera_id (system notice) is delivered regardless of
+    # how narrow the recipient's allowlist is, even an empty one.
+    assert _allowed_to_receive(set(), {"type": "system", "message": "hi"}) is True
+    assert _allowed_to_receive({uuid.uuid4()}, {"type": "ack"}) is True
+
+
+def test_ws_empty_allowlist_fails_closed_on_tagged_message():
+    assert _allowed_to_receive(set(), {"type": "event", "camera_id": str(uuid.uuid4())}) is False
+
+
+def test_ws_camera_id_as_uuid_or_string_both_match():
+    cid = uuid.uuid4()
+    assert _allowed_to_receive({cid}, {"type": "event", "camera_id": cid}) is True
+    assert _allowed_to_receive({cid}, {"type": "event", "camera_id": str(cid)}) is True
+
+
+class _FakeSocket:
+    """Records the payloads ``_deliver_local`` would send to one client."""
+
+    def __init__(self) -> None:
+        self.sent: list[str] = []
+
+    async def send_text(self, payload: str) -> None:
+        self.sent.append(payload)
+
+
+@pytest.mark.asyncio
+async def test_deliver_local_routes_per_recipient_allowlist(monkeypatch):
+    cam_a = uuid.uuid4()
+    cam_b = uuid.uuid4()
+    owner = _FakeSocket()           # ALL: sees everything
+    only_a = _FakeSocket()          # restricted to cam_a
+    none_sock = _FakeSocket()       # empty allowlist: only untagged
+
+    registry = {owner: ALL, only_a: {cam_a}, none_sock: set()}
+    monkeypatch.setattr(ws_mod, "_connections", registry)
+
+    # A cam_b-tagged message: only the owner gets it.
+    await _deliver_local(json.dumps({"type": "event", "camera_id": str(cam_b)}))
+    assert len(owner.sent) == 1
+    assert only_a.sent == []
+    assert none_sock.sent == []
+
+    # A cam_a-tagged message: owner + the cam_a-scoped socket.
+    await _deliver_local(json.dumps({"type": "event", "camera_id": str(cam_a)}))
+    assert len(owner.sent) == 2
+    assert len(only_a.sent) == 1
+    assert none_sock.sent == []
+
+    # An untagged system message reaches every socket, even the empty one.
+    await _deliver_local(json.dumps({"type": "system", "message": "maintenance"}))
+    assert len(owner.sent) == 3
+    assert len(only_a.sent) == 2
+    assert len(none_sock.sent) == 1
+
+
+# ── media-serving byte endpoints scope to 404, not 403 (issue #40) ────
+#
+# A restricted caller asking for a recording/observation/camera on a
+# camera outside their allowlist gets 404 (so ids cannot be probed), while
+# an owned camera passes through. These drive the real handler-internal
+# scoping seams directly, avoiding JWT/HTTP plumbing.
+
+import services.api.routes.cameras as cameras_mod  # noqa: E402
+from services.api.routes.observations import (  # noqa: E402
+    _camera_in_scope as _obs_in_scope,
+)
+from services.api.routes.recordings import (  # noqa: E402
+    _camera_in_scope as _rec_in_scope,
+)
+from services.api.routes.recordings import _get_recording_or_404  # noqa: E402
+
+
+class _GetDB:
+    """Stub session whose ``get(model, id)`` returns canned rows."""
+
+    def __init__(self, rows: dict):
+        self._rows = rows
+
+    async def get(self, model, ident):
+        return self._rows.get((model.__name__, ident))
+
+
+def test_camera_in_scope_all_and_set():
+    cid = uuid.uuid4()
+    other = uuid.uuid4()
+    # ALL sees any camera (and a null camera_id).
+    assert _rec_in_scope(ALL, cid) is True
+    assert _rec_in_scope(ALL, None) is True
+    # A concrete allowlist scopes precisely and excludes null-camera rows.
+    assert _rec_in_scope({cid}, cid) is True
+    assert _rec_in_scope({cid}, other) is False
+    assert _rec_in_scope({cid}, None) is False
+    # Observations share the same contract.
+    assert _obs_in_scope({cid}, cid) is True
+    assert _obs_in_scope({cid}, other) is False
+
+
+@pytest.mark.asyncio
+async def test_get_recording_404_for_cross_user_camera():
+    owned = uuid.uuid4()
+    foreign_cam = uuid.uuid4()
+    rec_id = uuid.uuid4()
+    db = _GetDB({("Recording", rec_id): SimpleNamespace(id=rec_id, camera_id=foreign_cam)})
+
+    # Restricted to a camera that is NOT the recording's camera -> 404.
+    with pytest.raises(HTTPException) as exc:
+        await _get_recording_or_404(rec_id, db, {owned})
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_recording_200_for_owned_camera():
+    owned = uuid.uuid4()
+    rec_id = uuid.uuid4()
+    row = SimpleNamespace(id=rec_id, camera_id=owned)
+    db = _GetDB({("Recording", rec_id): row})
+
+    got = await _get_recording_or_404(rec_id, db, {owned})
+    assert got is row
+
+    # ALL (admin / zero-grant) also passes through.
+    got2 = await _get_recording_or_404(rec_id, db, ALL)
+    assert got2 is row
+
+
+@pytest.mark.asyncio
+async def test_camera_require_scope_404_and_passthrough():
+    owned = uuid.uuid4()
+    foreign = uuid.uuid4()
+
+    # Restricted caller hitting a camera outside the allowlist: resolve the
+    # grant set via the fake execute, then expect a 404.
+    def restricted_responder(stmt: str):
+        return [(owned,)]
+
+    db = FakeDB(restricted_responder)
+    with pytest.raises(HTTPException) as exc:
+        await cameras_mod._require_camera_in_scope(foreign, _user("viewer"), db)
+    assert exc.value.status_code == 404
+
+    # The owned camera passes (no raise).
+    await cameras_mod._require_camera_in_scope(owned, _user("viewer"), db)
+
+    # Admin bypasses entirely (ALL), even on a camera with no grant row.
+    admin_db = FakeDB(lambda stmt: (_ for _ in ()).throw(AssertionError("admin must not query")))
+    await cameras_mod._require_camera_in_scope(foreign, _user("admin"), admin_db)
 
 
 # Sanity: timestamps used above are tz-aware (parity with sibling suites).
