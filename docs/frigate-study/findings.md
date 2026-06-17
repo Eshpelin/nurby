@@ -690,3 +690,36 @@ Fanned-out batch (worktree-isolated). HAVE 2 / N/A 43 / GAP 0.
 
 ### Fan-out note (batches 33-36)
 First parallelized run: 4 sub-agents triaged 45 PRs each in isolated git worktrees, returned structured ledger+findings (no commits), and the parent consolidated into one PR. Net across 180 PRs: 9 HAVE, 169 N/A, 2 GAP (issue #88), 1 shipped security fix (persons.py ext sanitize, from the #16433 lens). Region confirmed a ~94% N/A desert (face/LPR/classification ML + hwaccel + i18n + docs).
+
+## Batch 37 (PRs 15854-15027)
+
+Fanned-out 100-PR batch (worktree-isolated). HAVE 3 / N/A 97 / GAP 0.
+
+**HAVE:** #15432 return-401-on-login-failure (Nurby login already 401s on bad creds, auth.py:229). #15643 GenAI save-JPGs-sent-to-provider (Nurby persists every VLM frame, analyzer.py:973 _save_thumbnails). #15527 GenAI bugfixes / missing-snapshot + None-provider guards (analyzer.py:1251/:282, llm.py).
+
+**Notable N/A (diff-verified):** #15603 ONVIF tls_insecure (Nurby httpx already verify=False, onvif.py:351), #15378 auth remote_addr (Flask-era; Nurby is FastAPI Request.client.host), #15590 storage OSError (admin-only metrics, doesn't walk Frigate RECORD/CLIPS paths), #15584/#15451 config line-numbers/file-handling (Nurby pydantic-env), #15550/#15525 GenAI closure/region-crop bugs (Nurby builds frame lists explicitly), SHM cluster #15296/#15615/#15274/#15035/#15027 (no SHM frame bus). Region: ML face-recognition + hwaccel (TRT/openvino/hailo/rockchip) + frontend/docs.
+
+## Batch 38 (PRs 15020-14505)
+
+Fanned-out 100-PR batch (worktree-isolated). HAVE 0 / N/A 100 / GAP 0.
+
+**Notable N/A (diff-verified):** #14521 empty-bytes streaming download (guards ffmpeg subprocess stdout EOF; Nurby's StreamingResponses are DB-backed CSV generators, events.py:168/transcripts.py:133, no subprocess pipe), #14854 cookie_name regex (Nurby pure Bearer, auth.py:17, no cookie config), #14689/#14684 config file open-mode/path (Nurby pydantic-env), #14930/#14908/#14535/#14523 preview/recording export + media download (no export pipeline), #14797 Explore composite index (Nurby already indexes fired_at + FK cols, models.py:617-631; label lives in JSON payload). Region: frontend UI, ML (face/LPR/ALPR backend, detection), hwaccel (tensorrt/intel/hailo/jetson/rocm).
+
+## Batch 39 (PRs 14495-14136)
+
+Fanned-out 100-PR batch (worktree-isolated). HAVE 2 / N/A 98 / GAP 0.
+
+**HAVE:** #14346 streaming-download (Nurby serves clips via FastAPI FileResponse streaming from disk, recordings.py:187/207/281; no in-memory buffering). #14178 Swagger HTTP API (Nurby FastAPI auto-generates OpenAPI/Swagger at /docs).
+
+**Notable N/A (backend-shaped, architecture mismatch):** #14451 Explore SQL memory (per-label iterator; no analogous endpoint), #14272 event-cleanup [chunk] double-list bug (only in embeddings deletion; Nurby has no vector store), #14341 segment-cache mover (Nurby writes clips directly), #14140 SHM frame leak on crash (no SHM ring), #14150/#14142 multiprocess service-manager + Process stop_event (Nurby async single-app), #14273 camera-command dispatcher (no config bus), #14203/#14163 sqlite-vec init/migration (no sqlite-vec). Region: JinaAI/sqlite-vec embeddings migration, genai, Explore/search frontend, PTZ autotracking.
+
+## Batch 40 (PRs 14128-13795)
+
+Fanned-out 100-PR batch (worktree-isolated). HAVE 1 / N/A 99 / GAP 0.
+
+**HAVE:** #13871 Frigate-HTTP-API-using-FastAPI (Frigate migrating flask->FastAPI; Nurby already FastAPI throughout, services/api/routes/*).
+
+**Notable N/A (diff-verified):** #13957/#13942 stale import-time `datetime.now()` pydantic param defaults (real Frigate bug; verified ABSENT in Nurby - all now() calls are inside fn bodies, recap.py:69/98/145), #13955 slowapi login rate-limiter null-guard (Nurby Bearer auth), #13936/#13969/#14123 file-based YAML config parse/save/migrate (Nurby pydantic-env), #13889/#13883/#13803/#13805 PyYAML->ruamel config loader (Nurby parses no YAML config; not a deser-safety gap), #13933 Response-vs-StreamingResponse micro-perf (Nurby thumbs are FS paths), #13932 "fix api path handling" (route-ordering + body default, NOT traversal). Region: frontend, hwaccel (ROCm/Intel/Hailo/tensorrt/openvino), genai description tuning, ML embeddings, file-config/FastAPI-migration refactors.
+
+### Fan-out note (batches 37-40)
+Second fan-out, scaled to 100 PRs/agent: 4 worktree-isolated agents triaged 400 PRs (15854-13795) title-first (diffing only ~15-25 backend-plausible candidates each), returned structured ledger+findings, parent consolidated into one PR. Net: 6 HAVE, 394 N/A, 0 GAP, 0 fixes. This deep pre-0.16 region (early 2025) is the Frigate embeddings/face-recognition/hwaccel/frontend era - a near-total N/A desert for the Nurby backend. The few real backend bugs Frigate fixed (datetime defaults, [chunk] double-list, SHM leaks, ffmpeg-buffer download) are all architecture-specific to Frigate (YAML config, multiprocess+SHM, flask, vector store) and verified absent in Nurby's pydantic-env + async + FastAPI + DB-backed design.
