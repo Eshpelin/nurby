@@ -723,3 +723,44 @@ Fanned-out 100-PR batch (worktree-isolated). HAVE 1 / N/A 99 / GAP 0.
 
 ### Fan-out note (batches 37-40)
 Second fan-out, scaled to 100 PRs/agent: 4 worktree-isolated agents triaged 400 PRs (15854-13795) title-first (diffing only ~15-25 backend-plausible candidates each), returned structured ledger+findings, parent consolidated into one PR. Net: 6 HAVE, 394 N/A, 0 GAP, 0 fixes. This deep pre-0.16 region (early 2025) is the Frigate embeddings/face-recognition/hwaccel/frontend era - a near-total N/A desert for the Nurby backend. The few real backend bugs Frigate fixed (datetime defaults, [chunk] double-list, SHM leaks, ffmpeg-buffer download) are all architecture-specific to Frigate (YAML config, multiprocess+SHM, flask, vector store) and verified absent in Nurby's pydantic-env + async + FastAPI + DB-backed design.
+
+## Batch 41 (PRs 13794-12820)
+
+Fanned-out 150-PR batch (worktree-isolated). HAVE 2 / N/A 148 / GAP 0. (Agent flagged #13767 as a gap; parent verification downgraded it to HAVE - see below.)
+
+**HAVE:** #13077 catch-bad-GitHub-JSON (Nurby wraps resp.json() in try/except, system.py:454-463). #13767 camera-level GenAI prompts - CORRECTED from agent's gap claim: Nurby DOES have per-camera VLM prompt override (`Camera.vlm_prompt`, shared/models.py:55, applied at services/perception/pipeline.py:921). Frigate's only extra is per-object-label `object_prompts`, a niche addition; not issue-worthy. (The agent looked only at the agent/recap `ANALYZER_SYSTEM_PROMPT` path and missed the perception VLM path.)
+
+**Notable diffed-N/A:** #12900 bulk Timeline.delete IN-clause SQLite param-limit (Nurby deletes per-row, retention.py), #13355/#13527 review-item keep-windows (Nurby flat retention), #12956 ffmpeg VOD edge, #13473 onvif-zeep timeout (Nurby raw httpx), #13198 ZMQ race (no ZMQ bus), #12909 ffmpeg http-jpeg user-agent arg. Region: frontend (Explore/Search/live-player), ffmpeg/hwaccel build, ML/ONNX, embeddings, MQTT, docs, release staging.
+
+## Batch 42 (PRs 12815-11985)
+
+Fanned-out 150-PR batch (worktree-isolated). HAVE 0 / N/A 149 / GAP 1.
+
+**GAP -> issue Eshpelin/nurby#93:** #12352 ONVIF clock-skew tolerance. Nurby's `_ws_security_header()` (services/discovery/onvif.py:376) stamps the WS-Security `Created` timestamp with the local server clock (onvif.py:384) and never queries the camera's `GetSystemDateAndTime` to compute an offset. Cameras with skewed clocks reject the UsernameToken digest -> broken PTZ/auth. (A sub-agent also spawned a background-task chip for this; the issue is canonical.)
+
+**Notable diffed-N/A:** #11985 proxy header_map auth (Nurby pure Bearer, auth.py:142), #12393 strip /run/secrets newline (Nurby pydantic-env secrets), #12611 no-config startup (env defaults), #12590/#12594 ZMQ pickle->json hardening (no ZMQ/pickle IPC), #12591 pandas div-by-zero (no pandas timeline), #11994 nginx TLS default-on (TLS at deploy). Region: frontend (jsmpeg/MSE players, review UI, exports, timeline), hwaccel (Hailo/RKNN/Coral), embeddings/semantic-search, nginx/go2rtc, docs, CI.
+
+## Batch 43 (PRs 11984-11419)
+
+Fanned-out 150-PR batch (worktree-isolated). HAVE 0 / N/A 150 / GAP 0. Frigate 0.14 release window.
+
+**Notable diffed-N/A:** #11422 cookie_secure flag (Nurby pure Bearer, no cookies), #11984/#11973/#11963/#11877 nginx proxy-secret/proxy-config/JWT-docker-secret (no proxy-mode auth, pydantic-env config), #11790/#11789/#11786 export aware-vs-naive datetime churn (Nurby thumbs FS paths, clock.py centralizes tz), #11793 multiprocess shutdown + #11740 ZMQ cleanup (async single-app, no ZMQ), #11646 detections empty-list semantics. Region: UI/jsmpeg/live-view, docs, hwaccel (Rockchip/OpenVINO/edgetpu/vaapi), nginx/TLS infra, ML semantic-search.
+
+## Batch 44 (PRs 11417-10809)
+
+Fanned-out 150-PR batch (worktree-isolated). HAVE 1 / N/A 149 / GAP 0. Frigate web-rewrite era.
+
+**HAVE:** #11347 "Auth!" - Frigate's nginx auth_request + JWT (joserfc) + Flask-Limiter; Nurby already does pure Bearer-token auth (shared/auth.py), FastAPI-native, no nginx subrequest.
+
+**Notable diffed-N/A:** #11129 user-filename max-length CACHE_DIR DoS guard (Nurby paths UUID/DB + resolve_inside, recordings.py:168,207 - no user-built filename), #11048 SQLite db file-copy before peewee migration (Nurby Postgres+Alembic, main.py:58), #10866 SQLite WAL truncate (Postgres-managed), #10847 write default YAML config (Nurby env defaults), #10967 python-onvif wsdl_dir (Nurby raw httpx ONVIF), #11097 clear dangling ReviewSegments on startup (Nurby closes segments at runtime, har_runner.py:121), #10886 ZMQ event queue. Region: ~120/150 pure frontend (web/.tsx), rest SQLite/peewee internals, ZMQ, hwaccel, config plumbing, MQTT, docs.
+
+## Batch 45 (PRs 10799-10329)
+
+Fanned-out 150-PR batch (worktree-isolated). HAVE 1 / N/A 149 / GAP 0. Late-2023/early-2024 Frigate UI-redesign wave.
+
+**HAVE:** #10777 ONVIF pan-tilt exception handling - Nurby already swallows ONVIF/SOAP failures gracefully (`_soap_request` try/except returning None, onvif.py:207-216; PTZ via `_ptz_command`->`_soap_request`, :470-535), so a failed move never raises.
+
+**Notable diffed-N/A:** #10510 snapshot-clean.png (clean_copy from tracked-object pipeline; Nurby FS-path snapshots, no clean_copy), #10750/#10357 export-tz/DST (pure frontend; Nurby tz server-side via clock.py), #10627 ZMQ events bus (async single-app), #10484/#10480 motion-box/region counts to DB (Frigate CV detector; Nurby has none), #10543 zone loitering + #10350 autotracking gating (Frigate tracking pipeline). Region: web UI overhaul (timeline, motion review, recordings, previews, exports, PWA), dep bumps, docs, ML/tracking internals.
+
+### Fan-out note (batches 41-45)
+Third fan-out, scaled to 5 agents x 150 PRs = 750 PRs (15854... no, 13794-10329) in one run. Net: 4 HAVE / 745 N/A / 1 GAP (issue #93 ONVIF clock-skew) / 0 fixes. One agent over-flagged #13767 as a gap; parent verification (per the scrutinize-claims gate) downgraded it to HAVE (Nurby has Camera.vlm_prompt at pipeline.py:921). This whole region is Frigate's 0.14/0.15 web-rewrite + embeddings/semantic-search + hwaccel era - a near-total N/A desert for the Nurby backend; every backend-adjacent Frigate fix (SQLite WAL/migration backup, ZMQ/multiprocess shutdown, nginx proxy/TLS, cookie/proxy auth, YAML config, python-onvif wsdl, user-filename DoS) is obviated by Nurby's Postgres+Alembic / async single-app / FastAPI Bearer-auth / pydantic-env / raw-httpx-ONVIF / UUID-path architecture.
