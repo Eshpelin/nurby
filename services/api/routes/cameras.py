@@ -376,6 +376,144 @@ async def camera_motion_activity(
     }
 
 
+# Hard cap on the motion-review window (seconds). The series is per-second, so a
+# huge window would scan an unbounded number of rows; the UI scrubs a bounded
+# range, so this only trips on abuse. 7 days matches the default
+# motion_series_retention_days, the most history that can exist anyway.
+MOTION_REVIEW_MAX_WINDOW_SECONDS = 7 * 24 * 3600
+
+
+@router.get("/{camera_id}/motion/review-items")
+async def camera_motion_review_items(
+    camera_id: uuid.UUID,
+    from_: datetime = Query(..., alias="from"),
+    to: datetime = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Motion-only review items for a camera over [from, to] (#37).
+
+    Returns contiguous spans of *significant* motion (from the per-camera 1s
+    motion series, ``motion_samples``) that have NO detected object/Observation
+    (or Event) overlapping them. These catch activity the object detector
+    missed, complementing the Detections feed.
+
+    Computed on the fly from ``motion_samples`` + existing observations/events;
+    nothing new is stored. Span shape (threshold / min-duration / merge-gap) is
+    fixed by the documented constants in services.api.motion_review.
+
+    Gating: the motion series only populates when ``motion_series_enabled`` is
+    on, so when the flag is off (default) or the table is empty there are simply
+    no rows and this degrades to ``{"items": [], "count": 0}`` rather than
+    erroring. A camera flagged ``exclude_from_review`` is hidden from this review
+    surface (empty list), exactly like the timeline/observations feeds. The
+    per-user camera ACL (issue #40) still 404s a camera outside the caller's set.
+    """
+    from services.api.motion_review import (
+        MAX_REVIEW_SPANS,
+        MERGE_GAP_SECONDS,
+        MIN_SPAN_SECONDS,
+        MOTION_REVIEW_THRESHOLD,
+        build_motion_only_spans,
+        motion_seconds_query,
+        overlapping_events_query,
+        overlapping_observations_query,
+    )
+
+    # Per-user camera ACL (issue #40): a restricted user gets 404 for a camera
+    # outside their allowed set, exactly like the other single-camera reads.
+    await _require_camera_in_scope(camera_id, current_user, db)
+
+    cam = await db.get(Camera, camera_id)
+    if cam is None:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    if to <= from_:
+        raise HTTPException(status_code=422, detail="`to` must be after `from`")
+
+    span_seconds = (to - from_).total_seconds()
+    if span_seconds > MOTION_REVIEW_MAX_WINDOW_SECONDS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "window too large: motion review supports at most "
+                f"{MOTION_REVIEW_MAX_WINDOW_SECONDS} seconds; narrow the window."
+            ),
+        )
+
+    empty = {
+        "camera_id": str(camera_id),
+        "from": from_.isoformat(),
+        "to": to.isoformat(),
+        "threshold": MOTION_REVIEW_THRESHOLD,
+        "min_span_seconds": MIN_SPAN_SECONDS,
+        "merge_gap_seconds": MERGE_GAP_SECONDS,
+        "items": [],
+        "count": 0,
+    }
+
+    # Hidden from the review feed: keep recording, but never surface here. Same
+    # rule the timeline/observations endpoints apply. Degrade to empty, not 404,
+    # so the caller can still draw the (empty) motion-review lane.
+    if cam.exclude_from_review:
+        return empty
+
+    motion_rows = [
+        (row.bucket, float(row.score))
+        for row in (
+            await db.execute(
+                motion_seconds_query(camera_id, from_, to, MOTION_REVIEW_THRESHOLD)
+            )
+        ).all()
+    ]
+    if not motion_rows:
+        # Flag off / empty series / no significant motion: empty, never error.
+        return empty
+
+    obs_rows = [
+        (row.started_at, row.ended_at)
+        for row in (
+            await db.execute(overlapping_observations_query(camera_id, from_, to))
+        ).all()
+    ]
+    event_instants = [
+        row.fired_at
+        for row in (
+            await db.execute(overlapping_events_query(camera_id, from_, to))
+        ).all()
+    ]
+
+    spans = build_motion_only_spans(
+        motion_rows,
+        obs_rows,
+        event_instants,
+        merge_gap_seconds=MERGE_GAP_SECONDS,
+        min_span_seconds=MIN_SPAN_SECONDS,
+        max_spans=MAX_REVIEW_SPANS,
+    )
+
+    items = [
+        {
+            "start": s.start.isoformat(),
+            "end": s.end.isoformat(),
+            "duration_seconds": s.duration_seconds,
+            "peak_intensity": s.peak,
+            "samples": s.samples,
+        }
+        for s in spans
+    ]
+    return {
+        "camera_id": str(camera_id),
+        "from": from_.isoformat(),
+        "to": to.isoformat(),
+        "threshold": MOTION_REVIEW_THRESHOLD,
+        "min_span_seconds": MIN_SPAN_SECONDS,
+        "merge_gap_seconds": MERGE_GAP_SECONDS,
+        "items": items,
+        "count": len(items),
+    }
+
+
 @router.post("", status_code=201)
 async def create_camera(body: CameraCreate, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     payload = body.model_dump()
