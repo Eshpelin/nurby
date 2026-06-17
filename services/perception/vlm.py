@@ -42,6 +42,49 @@ SYSTEM_PROMPT = (
 )
 
 
+def build_object_guidance(
+    detections: list[dict] | None,
+    object_prompts: dict | None,
+) -> str:
+    """Build a per-object-class guidance block for the prompt.
+
+    Nurby's VLM is scene-level (one call per keyframe over all
+    detections), whereas Frigate's genai object_prompts key a whole
+    prompt on a single tracked object's label. To adapt, we union the
+    guidance snippets for whichever configured labels are actually
+    present in this frame into one "pay special attention to" clause.
+    Matching is case-insensitive; license_plate is skipped (its OCR is
+    surfaced via extra_context). Returns "" when nothing applies.
+    """
+    if not object_prompts or not detections:
+        return ""
+    # Lower-cased lookup so config keys match YOLO labels regardless of case.
+    lowered = {
+        str(k).lower(): str(v).strip()
+        for k, v in object_prompts.items()
+        if v and str(v).strip()
+    }
+    if not lowered:
+        return ""
+    parts: list[str] = []
+    seen: set[str] = set()
+    for d in detections:
+        label = str(d.get("label", "")).lower()
+        if not label or label == "license_plate" or label in seen:
+            continue
+        guidance = lowered.get(label)
+        if guidance:
+            parts.append(f"{label}: {guidance}")
+            seen.add(label)
+    if not parts:
+        return ""
+    return (
+        " Pay special attention to these object types present in the frame -> "
+        + "; ".join(parts)
+        + "."
+    )
+
+
 async def get_active_provider() -> Provider | None:
     """Fetch the first active VLM provider from the database."""
     try:
@@ -75,6 +118,7 @@ class VLMClient:
         extra_context: str | None = None,
         max_input_tokens: int | None = None,
         camera_id: str | None = None,
+        object_prompts: dict | None = None,
     ) -> str | None:
         """Send frame to VLM and get a scene description.
 
@@ -149,6 +193,13 @@ class VLMClient:
                 sections.append(("detections", detection_context))
             if extra_block:
                 sections.append(("extra", extra_block))
+            # Per-object-class guidance for the labels present this frame.
+            # High keep-priority (just under base): it is operator-configured
+            # intent, so it should survive budget trimming over YOLO labels
+            # and heard text.
+            object_guidance = build_object_guidance(detections, object_prompts)
+            if object_guidance:
+                sections.append(("object_guidance", object_guidance))
             sections.append(("base", base_block))
 
             input_cap = resolve_input_cap(

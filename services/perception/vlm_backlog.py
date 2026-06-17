@@ -84,6 +84,7 @@ class BacklogEnvelope:
     frame: np.ndarray | None
     stale: bool = False
     priority: str = "normal"
+    object_prompts: dict | None = None
     raw: dict = field(default_factory=dict)
 
 
@@ -132,6 +133,7 @@ class VLMBacklog:
         refiner_max_tokens: int | None = None,
         refiner_max_input_tokens: int | None = None,
         priority: str = "normal",
+        object_prompts: dict | None = None,
     ) -> str:
         """Push a job onto the backlog. Returns the job_id."""
         if priority not in ("normal", "high"):
@@ -164,6 +166,7 @@ class VLMBacklog:
             "refiner_max_tokens": refiner_max_tokens,
             "refiner_max_input_tokens": refiner_max_input_tokens,
             "priority": priority,
+            "object_prompts": object_prompts,
         }
         payload = json.dumps(meta, default=str).encode("utf-8")
         target_key = self.list_key(camera_id, priority)
@@ -225,6 +228,7 @@ class VLMBacklog:
             "max_input_tokens": meta.get("max_input_tokens"),
             "heard_text": meta.get("heard_text"),
             "extra_context": meta.get("extra_context"),
+            "object_prompts": meta.get("object_prompts"),
             "timestamp": datetime.fromisoformat(meta["timestamp"]),
             "enqueued_at": float(meta.get("enqueued_at") or time.time()),
             "refiner_provider_id": uuid.UUID(meta["refiner_provider_id"])

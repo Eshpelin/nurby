@@ -124,6 +124,9 @@ class VLMJob:
     max_input_tokens: int | None = None
     heard_text: str | None = None
     extra_context: str | None = None
+    # Per-object-class prompt guidance ({label: guidance}). Injected into
+    # the prompt for whichever labels are present in this frame's detections.
+    object_prompts: dict | None = None
     # Cascade refiner config. When refiner_provider is set, the worker
     # evaluates the trigger lists against the primary's output after
     # the first call returns and, on a hit, fires a second call to the
@@ -362,6 +365,7 @@ class VLMQueue:
                     max_input_tokens=job.max_input_tokens,
                     heard_text=job.heard_text,
                     extra_context=job.extra_context,
+                    object_prompts=job.object_prompts,
                     timestamp=job.timestamp,
                     refiner_provider_id=(
                         job.refiner_provider.id if job.refiner_provider else None
@@ -521,6 +525,7 @@ class VLMQueue:
                         heard_text=job.heard_text,
                         extra_context=job.extra_context,
                         max_input_tokens=job.max_input_tokens,
+                        object_prompts=job.object_prompts,
                     ),
                     timeout=VLM_CALL_TIMEOUT_SECONDS,
                 )
@@ -694,6 +699,7 @@ class VLMQueue:
                 extra_context=merged_context,
                 max_input_tokens=job.refiner_max_input_tokens,
                 camera_id=camera_id,
+                object_prompts=job.object_prompts,
             )
             duration = time.monotonic() - start
             if not refined:
@@ -933,6 +939,7 @@ class VLMQueue:
             max_input_tokens=env.max_input_tokens,
             heard_text=env.heard_text,
             extra_context=env.extra_context,
+            object_prompts=env.object_prompts,
             refiner_provider=refiner,
             refiner_trigger_objects=env.refiner_trigger_objects,
             refiner_keywords=env.refiner_keywords,

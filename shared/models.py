@@ -56,6 +56,14 @@ class Camera(Base):
     vlm_interval: Mapped[int] = mapped_column(Integer, default=0)  # seconds between VLM calls, 0 = every keyframe
     vlm_max_tokens: Mapped[int] = mapped_column(Integer, default=200)
     vlm_max_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Per-object-class prompt guidance. A {label: guidance} map (e.g.
+    # {"person": "describe clothing and whether carrying anything",
+    # "car": "note make, colour, and plate region"}). Nurby's VLM is
+    # scene-level (one call per keyframe over all detections), so at
+    # prompt-build time the guidance snippets for whichever labels are
+    # present in the frame are unioned into a "pay special attention to"
+    # section. Mirrors Frigate's per-camera genai object_prompts (#13767).
+    vlm_object_prompts: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Cascade refiner. When set, the primary VLM's output is post-
     # processed by the refiner provider whenever a trigger matches.
     vlm_refiner_provider_id: Mapped[uuid.UUID | None] = mapped_column(
