@@ -6,6 +6,7 @@
 // /api/agent/ask -> WS stream -> archive into pastRuns on done.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useAgentRunStream } from "@/lib/agentWs";
@@ -354,18 +355,18 @@ export default function AskPage() {
                   Detection, recording, and alerts keep working without one.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
-                  <a
+                  <Link
                     href="/settings"
                     className="px-4 py-2 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90"
                   >
                     Set one up
-                  </a>
-                  <a
+                  </Link>
+                  <Link
                     href="/"
                     className="px-4 py-2 text-sm rounded-md border border-border hover:bg-muted text-foreground"
                   >
                     Use keyword search →
-                  </a>
+                  </Link>
                 </div>
               </div>
             ) : showEmpty ? (
