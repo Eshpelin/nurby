@@ -34,7 +34,10 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; message: string; latency_ms?: number; models?: string[] }>>({});
 
   // Expanded sections
-  const [showProviders, setShowProviders] = useState(false);
+  // Expanded by default so the AI Providers section is discoverable.
+  // Providers are optional, but new users should easily find where to add
+  // one to unlock scene descriptions and Ask Nurby.
+  const [showProviders, setShowProviders] = useState(true);
   const [showStorage, setShowStorage] = useState(false);
 
   // Invite key state
@@ -596,6 +599,9 @@ export default function SettingsPage() {
 
           {showProviders && (
             <div className="px-4 pb-4 border-t border-border pt-3 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Providers are optional; detection/recording/alerts work without one.
+              </p>
               {/* Configured providers */}
               {providers.length > 0 && (
                 <div className="space-y-2">

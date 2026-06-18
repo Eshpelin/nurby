@@ -297,6 +297,12 @@ export default function AskPage() {
     [pastRuns.length, activeQuestion],
   );
 
+  // Ask Nurby needs an AI provider; every other feature works without
+  // one. When none is configured, show a clear path forward (set one up,
+  // or fall back to keyword search) instead of persona cards that can't
+  // send because no model is selected.
+  const noProviders = !providersLoading && !providersMissing && providers.length === 0;
+
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
       {/* History rail. Drawer on mobile. */}
@@ -339,7 +345,30 @@ export default function AskPage() {
                 {submitError}
               </div>
             )}
-            {showEmpty ? (
+            {noProviders ? (
+              <div className="max-w-xl mx-auto px-6 py-12 text-center space-y-4">
+                <div className="text-3xl">✨</div>
+                <h1 className="text-xl font-semibold tracking-tight">Ask Nurby needs an AI provider</h1>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Ask Nurby answers questions about your cameras in plain English, which needs an AI provider.
+                  Detection, recording, and alerts keep working without one.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
+                  <a
+                    href="/settings"
+                    className="px-4 py-2 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90"
+                  >
+                    Set one up
+                  </a>
+                  <a
+                    href="/"
+                    className="px-4 py-2 text-sm rounded-md border border-border hover:bg-muted text-foreground"
+                  >
+                    Use keyword search →
+                  </a>
+                </div>
+              </div>
+            ) : showEmpty ? (
               <EmptyState onPersonaClick={(q) => sendQuestion(q)} />
             ) : (
               <Conversation

@@ -13,6 +13,7 @@ import { LiveCaptionOverlay } from "@/components/LiveCaptionOverlay";
 import { CurrentActivityStrip } from "@/components/CurrentActivityStrip";
 import { AudioActiveDot } from "@/components/AudioActiveDot";
 import { VLMStatusBadge } from "@/components/VLMStatusBadge";
+import { VLMOptionalBanner } from "@/components/VLMOptionalBanner";
 import { SummarizeNowButton } from "@/components/SummarizeNowButton";
 import { CameraStatsHover } from "@/components/CameraStatsHover";
 import { RefinedBadge } from "@/components/RefinedBadge";
@@ -1468,6 +1469,8 @@ function DashboardContent() {
 
   return (
     <div className="px-4 py-4 h-[calc(100vh-3.5rem)] flex flex-col">
+
+      <VLMOptionalBanner />
 
       {showLearningBanner && (
         <div className="mb-3 flex items-start gap-3 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">

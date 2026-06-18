@@ -308,10 +308,14 @@ export function Navbar() {
             const label = offline
               ? "AI offline"
               : missing
-                ? "set up AI"
+                ? "AI optional"
                 : provider ? `${provider.kind} / ${provider.name}` : "AI ready";
             const title = vlmHealth?.message
-              || (offline ? "The configured AI model is unreachable." : missing ? "No AI model configured." : "AI model is reachable.");
+              || (offline
+                ? "The configured AI model is unreachable."
+                : missing
+                  ? "AI optional — set up to enable scene descriptions & Ask Nurby. Detection, recording, and alerts work without it."
+                  : "AI model is reachable.");
             return (
               <Link
                 href="/settings"
