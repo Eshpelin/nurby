@@ -168,7 +168,7 @@ class CameraManager:
 
     async def _sync_cameras(self):
         async with async_session() as db:
-            result = await db.execute(select(Camera))
+            result = await db.execute(select(Camera).where(Camera.enabled.is_(True)))
             cameras = {c.id: c for c in result.scalars().all()}
 
         # Keep MediaMTX paths aligned with DB state before starting workers

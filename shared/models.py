@@ -114,6 +114,11 @@ class Camera(Base):
     # target; only the review surfaces drop it. Distinct from the
     # dashboard camera-wall hide, which is a per-browser layout choice.
     exclude_from_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Master enable/disable. When False the ingestion manager will not
+    # start (or will tear down) all workers for this camera: stream,
+    # audio, STT, and MediaMTX path. The camera row is kept intact so
+    # config and history are preserved. Mirrors Frigate PRs #16894/#16920.
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Audio-only mode. When true the ingestion + perception pipelines
     # skip video decode and run only the audio path (VAD, STT, audio
     # events, clap pattern, speech phrase). UI hides the video tile.
