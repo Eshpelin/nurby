@@ -474,7 +474,8 @@ async def answer_question(
     directives = [
         "Answer the question directly in 1 to 3 short sentences.",
         "Synthesize across observations. Summarize behaviour, not each frame.",
-        "Do not list observations one by one. Do not number them. Do not use bullet points unless the user asked for a list.",
+        "Do not list observations one by one. Do not number them."
+        " Do not use bullet points unless the user asked for a list.",
     ]
     if wants_time:
         directives.append("Include the relevant timestamp in natural language, like 'around 7:30 pm'.")

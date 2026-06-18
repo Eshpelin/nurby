@@ -270,7 +270,10 @@ class VLMClient:
             logger.exception("action classify failed for provider %s", provider.name)
             return None
 
-    async def _call_openai(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None) -> str | None:
+    async def _call_openai(
+        self, b64_image: str, prompt: str, provider: Provider,
+        system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None,
+    ) -> str | None:
         http = await self._get_http()
         model = provider.default_model or "gpt-4o-mini"
 
@@ -314,7 +317,10 @@ class VLMClient:
             op="vlm",
         )
 
-    async def _call_anthropic(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None) -> str | None:
+    async def _call_anthropic(
+        self, b64_image: str, prompt: str, provider: Provider,
+        system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None,
+    ) -> str | None:
         http = await self._get_http()
         model = provider.default_model or "claude-sonnet-4-20250514"
 
@@ -368,7 +374,10 @@ class VLMClient:
             op="vlm",
         )
 
-    async def _call_google(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None) -> str | None:
+    async def _call_google(
+        self, b64_image: str, prompt: str, provider: Provider,
+        system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None,
+    ) -> str | None:
         """Call Google Gemini native API (generativelanguage.googleapis.com)."""
         http = await self._get_http()
         model = provider.default_model or "gemini-2.0-flash"
@@ -408,7 +417,10 @@ class VLMClient:
             op="vlm",
         )
 
-    async def _call_ollama(self, b64_image: str, prompt: str, provider: Provider, system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None) -> str | None:
+    async def _call_ollama(
+        self, b64_image: str, prompt: str, provider: Provider,
+        system_prompt: str = SYSTEM_PROMPT, max_tokens: int | None = None,
+    ) -> str | None:
         http = await self._get_http()
         model = provider.default_model or "moondream"
 
