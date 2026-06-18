@@ -136,7 +136,16 @@ async def reinterpret_journey(
     else:
         provider = await finalizer._resolve_provider()  # noqa: SLF001
     if provider is None:
-        raise HTTPException(status_code=500, detail="no provider configured")
+        # No VLM/LLM provider configured. AI synthesis is optional, so we
+        # degrade gracefully instead of 500ing: return the journey as-is
+        # (already carries counts/timestamps/segments) plus a flag the UI
+        # uses to show "add a provider to enable narrative summaries"
+        # rather than a hard error. Detection, tracking, and the path view
+        # keep working without a provider.
+        payload = _serialize(row)
+        payload["ai_synthesis"] = False
+        payload["message"] = "Add an AI provider to enable narrative summaries."
+        return payload
     text = await finalizer._build_summary(provider, row)  # noqa: SLF001
     if not text or text.strip().upper().startswith("SKIP"):
         raise HTTPException(status_code=502, detail="summary returned empty")

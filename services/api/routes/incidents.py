@@ -178,7 +178,16 @@ async def reinterpret_incident(
     else:
         provider = await finalizer._resolve_provider(cam)  # noqa: SLF001
     if provider is None:
-        raise HTTPException(status_code=500, detail="no provider configured")
+        # No VLM/LLM provider configured. AI synthesis is optional, so we
+        # degrade gracefully instead of 500ing: return the incident as-is
+        # (already carries occurrence_count/timestamps/thumbnails) plus a
+        # flag the UI uses to surface "add a provider to enable scene
+        # descriptions" rather than a hard error. Detection and the rolling
+        # incident card keep working without a provider.
+        payload = _serialize(row)
+        payload["ai_synthesis"] = False
+        payload["message"] = "Add an AI provider to enable scene descriptions."
+        return payload
     text = await finalizer._build_summary(provider, cam, row, obs_rows)  # noqa: SLF001
     if not text or text.strip().upper().startswith("SKIP"):
         raise HTTPException(status_code=502, detail="summary returned empty")
