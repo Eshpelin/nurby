@@ -9,6 +9,7 @@ against known embeddings stored in pgvector.
 
 import asyncio
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -26,6 +27,68 @@ MATCH_THRESHOLD = 1.1
 
 # Tighter cluster threshold so unknown-person clusters stay coherent.
 CLUSTER_THRESHOLD = 1.0
+
+# --- Quality gates -------------------------------------------------------
+# A face below this detector confidence or pixel size produces an unreliable
+# embedding. We refuse to match OR cluster it. Dropping a sighting is safer
+# than inventing a wrong identity or spawning a junk cluster.
+MIN_DET_SCORE = 0.50
+MIN_FACE_PIXELS = 40
+# Opening or extending a cluster is held to a stricter bar: a clean, frontal,
+# reasonably large face. Off-angle / blurry / tiny crops are the main reason
+# one real person fans out into several "Unknown" clusters.
+CLUSTER_MIN_DET_SCORE = 0.65
+CLUSTER_MIN_FACE_PIXELS = 60
+CLUSTER_MAX_YAW_RATIO = 0.55
+
+# How many recent samples per cluster to compare a new face against. Matching
+# the nearest real sample (rather than one drifting centroid) keeps a cluster
+# from rejecting the same person seen at a new angle.
+MAX_CLUSTER_SAMPLES = 8
+
+
+def _renorm(vec: np.ndarray) -> np.ndarray:
+    """Project a vector back onto the unit sphere. ArcFace embeddings are
+    L2-normalized; an average of several is not, and comparing a shrunken mean
+    with raw L2 distance silently distorts every threshold."""
+    norm = float(np.linalg.norm(vec))
+    return vec / norm if norm > 0 else vec
+
+
+def _yaw_ratio(kps) -> float | None:
+    """Frontal-ness proxy from the 5 InsightFace keypoints
+    [left_eye, right_eye, nose, left_mouth, right_mouth]. Returns the nose's
+    horizontal offset from the eye midpoint as a fraction of inter-ocular
+    distance: ~0 is dead frontal, large is profile. None when unusable."""
+    try:
+        le, re_, nose = kps[0], kps[1], kps[2]
+        eye_cx = (float(le[0]) + float(re_[0])) / 2.0
+        interocular = abs(float(re_[0]) - float(le[0]))
+        if interocular < 1e-3:
+            return None
+        return abs(float(nose[0]) - eye_cx) / interocular
+    except Exception:
+        return None
+
+
+def _viable_for_match(face: dict) -> bool:
+    """Minimum bar to even attempt matching a face to a known person."""
+    return (
+        face.get("detect_score", 0.0) >= MIN_DET_SCORE
+        and face.get("face_px", 0) >= MIN_FACE_PIXELS
+    )
+
+
+def _viable_for_cluster(face: dict) -> bool:
+    """Stricter bar to open or extend an unknown-person cluster."""
+    if face.get("detect_score", 0.0) < CLUSTER_MIN_DET_SCORE:
+        return False
+    if face.get("face_px", 0) < CLUSTER_MIN_FACE_PIXELS:
+        return False
+    yaw = face.get("yaw_ratio")
+    if yaw is not None and yaw > CLUSTER_MAX_YAW_RATIO:
+        return False
+    return True
 
 
 class FaceRecognizer:
@@ -88,6 +151,9 @@ class FaceRecognizer:
                 "bbox": [x1, y1, x2, y2],
                 "embedding": emb.tolist(),
                 "detect_score": float(getattr(face, "det_score", 0.0) or 0.0),
+                # Quality signals used to gate matching and clustering.
+                "face_px": int(min(x2 - x1, y2 - y1)),
+                "yaw_ratio": _yaw_ratio(getattr(face, "kps", None)),
             })
         logger.debug("InsightFace detected %d face(s)", len(faces))
         return faces
@@ -106,7 +172,17 @@ class FaceRecognizer:
             return faces
 
         for face in faces:
-            face_emb = np.array(face["embedding"])
+            # Garbage crops (tiny / low-confidence) yield embeddings that
+            # land anywhere; matching them risks a confident wrong identity.
+            if not _viable_for_match(face):
+                face["person_id"] = None
+                face["person_name"] = None
+                face["match_distance"] = None
+                continue
+
+            # Use the per-track pooled embedding when the pipeline attached one
+            # (stabler than a single noisy frame), else the raw frame embedding.
+            face_emb = np.array(face.get("match_embedding") or face["embedding"])
             best_match = None
             best_distance = float("inf")
 
@@ -159,16 +235,26 @@ class FaceRecognizer:
         Returns the cluster_id the face was assigned to, so callers can persist
         it on the observation for later grouping.
         """
-        face_emb = np.array(face["embedding"])
+        # Quality gate. Only clean, frontal, reasonably large faces may open or
+        # extend a cluster. Low-grade crops are the main reason one real person
+        # splits into several "Unknown" clusters, so we drop them here.
+        if not _viable_for_cluster(face):
+            return None
 
-        # Load existing pending clusters
-        clusters = await self._load_pending_clusters()
+        # The raw frame embedding is stored as the cluster sample (diverse
+        # gallery for nearest-sample matching). The pooled per-track embedding,
+        # when present, drives the membership decision (stabler).
+        sample_emb = np.array(face["embedding"])
+        decide_emb = np.array(face.get("match_embedding") or face["embedding"])
+
+        # Compare against the nearest stored sample of each pending cluster, not
+        # a single averaged centroid that drifts as poses accumulate.
+        cluster_samples = await self._load_pending_cluster_samples()
 
         best_cluster_id = None
         best_distance = float("inf")
-
-        for cluster_id, rep_emb in clusters:
-            distance = np.linalg.norm(face_emb - rep_emb)
+        for cluster_id, embs in cluster_samples.items():
+            distance = min(float(np.linalg.norm(decide_emb - e)) for e in embs)
             if distance < best_distance:
                 best_distance = distance
                 best_cluster_id = cluster_id
@@ -180,12 +266,12 @@ class FaceRecognizer:
 
         if best_cluster_id and best_distance < CLUSTER_THRESHOLD:
             # Add to existing cluster
-            await self._add_to_cluster(best_cluster_id, face_emb, camera_id, thumbnail_path)
+            await self._add_to_cluster(best_cluster_id, sample_emb, camera_id, thumbnail_path)
             logger.info("Added face to cluster %s (distance=%.4f)", best_cluster_id, best_distance)
             return best_cluster_id
         else:
             # Create new cluster
-            new_id = await self._create_cluster(face_emb, camera_id, thumbnail_path)
+            new_id = await self._create_cluster(sample_emb, camera_id, thumbnail_path)
             logger.info("Created new face cluster %s", new_id)
             if new_id:
                 # Fire-and-forget VLM appearance description on the initial crop
@@ -242,6 +328,48 @@ class FaceRecognizer:
             logger.exception("Failed to load face clusters")
             return []
 
+    async def _load_pending_cluster_samples(
+        self, max_per_cluster: int = MAX_CLUSTER_SAMPLES,
+    ) -> dict:
+        """Return {cluster_id: [np.array, ...]} for pending clusters.
+
+        Each cluster's representative is always included, plus up to
+        `max_per_cluster` of its most recent real samples. Matching a new face
+        against the nearest of these (not a single drifting mean) is what keeps
+        a cluster from rejecting the same person at a new angle.
+        """
+        try:
+            from shared.models import FaceCluster, FaceClusterSample
+            async with async_session() as db:
+                clusters = (await db.execute(
+                    select(FaceCluster.id, FaceCluster.representative_embedding)
+                    .where(FaceCluster.status == "pending")
+                )).all()
+                if not clusters:
+                    return {}
+
+                out: dict = {cid: [np.array(rep)] for cid, rep in clusters}
+
+                samples = (await db.execute(
+                    select(
+                        FaceClusterSample.cluster_id,
+                        FaceClusterSample.embedding,
+                    )
+                    .where(FaceClusterSample.cluster_id.in_(list(out.keys())))
+                    .order_by(FaceClusterSample.captured_at.desc())
+                )).all()
+
+                counts: dict = {}
+                for cid, emb in samples:
+                    if counts.get(cid, 0) >= max_per_cluster:
+                        continue
+                    out[cid].append(np.array(emb))
+                    counts[cid] = counts.get(cid, 0) + 1
+                return out
+        except Exception:
+            logger.exception("Failed to load face cluster samples")
+            return {}
+
     # Same-session window. Repeated detections of the same face inside this
     # window count as one visit. Prevents a person standing in frame from
     # inflating sighting_count by one per frame.
@@ -287,7 +415,9 @@ class FaceRecognizer:
                 cluster.sighting_count += 1
                 old_emb = np.array(cluster.representative_embedding)
                 n = cluster.sighting_count
-                new_rep = ((old_emb * (n - 1)) + embedding) / n
+                # Running mean of unit vectors, renormalized back to the unit
+                # sphere so L2 distance to it stays calibrated as samples grow.
+                new_rep = _renorm(((old_emb * (n - 1)) + embedding) / n)
                 cluster.representative_embedding = new_rep.tolist()
 
                 if cluster.sighting_count <= 5 and thumbnail_path:
@@ -414,3 +544,59 @@ class FaceRecognizer:
         except Exception:
             logger.exception("Failed to generate embedding from image")
             return None
+
+
+class FaceTrackPooler:
+    """Per-camera running mean of face embeddings, keyed by tracker_id.
+
+    A single keyframe's face embedding is noisy: angle, motion blur and
+    lighting jitter push it around enough that the same person, frame to
+    frame, can land in different clusters. Pooling the embeddings seen for one
+    track and matching the pooled (averaged, renormalized) vector gives a far
+    stabler identity decision for the life of that track.
+
+    State is in-memory per camera and expires `ttl` seconds after a track was
+    last updated, so a reused tracker_id never inherits a stale person. The
+    influence of any one track is capped at `max_samples` so a long-standing
+    track stays responsive to genuine change (e.g. someone new picking up the
+    same tracker_id after an ID swap).
+    """
+
+    def __init__(self, ttl: float = 90.0, max_samples: int = 12) -> None:
+        self.ttl = ttl
+        self.max_samples = max_samples
+        # tracker_id -> {"sum": np.ndarray, "n": int, "last": float}
+        self._state: dict[int, dict] = {}
+
+    def pool(self, tracker_id, embedding, *, now: float | None = None) -> list[float]:
+        """Fold `embedding` into the track's running mean and return the
+        current pooled unit embedding as a list."""
+        now = time.monotonic() if now is None else now
+        self._expire(now)
+        tid = int(tracker_id)
+        emb = np.asarray(embedding, dtype=float)
+
+        st = self._state.get(tid)
+        if st is None:
+            st = {"sum": emb.copy(), "n": 1, "last": now}
+            self._state[tid] = st
+        else:
+            # Cap influence: decay the running sum so it never represents more
+            # than max_samples frames, keeping recent frames weighted.
+            if st["n"] >= self.max_samples:
+                scale = (self.max_samples - 1) / self.max_samples
+                st["sum"] = st["sum"] * scale
+                st["n"] = self.max_samples - 1
+            st["sum"] = st["sum"] + emb
+            st["n"] += 1
+            st["last"] = now
+
+        return _renorm(st["sum"] / st["n"]).tolist()
+
+    def _expire(self, now: float) -> None:
+        for tid in list(self._state):
+            if now - self._state[tid]["last"] > self.ttl:
+                del self._state[tid]
+
+    def reset(self) -> None:
+        self._state.clear()

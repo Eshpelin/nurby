@@ -42,6 +42,14 @@ DEFAULTS: dict[str, Any] = {
     # Minimum sighting count before a body/face cluster is offered
     # for naming via Telegram. Used by reid_sweeper.
     "cluster_naming_min_sightings": 3,
+    # Face cluster consolidation sweeper (face_merger). Interval between
+    # passes, and the L2 distance bands (on unit ArcFace embeddings) for
+    # merging two pending clusters and for attaching a pending cluster to an
+    # already-named person. Tighter than the live clustering threshold (1.0)
+    # because both actions are hard to undo.
+    "face_cluster_merge_interval_seconds": 600,
+    "face_cluster_merge_threshold": 0.85,
+    "face_cluster_attach_threshold": 1.0,
     # Public-facing base URL for the API (used in templated
     # notifications and Telegram webhook registration). Sourced from
     # env config by default; an explicit override stored here wins.
