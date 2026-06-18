@@ -104,6 +104,33 @@ def bind_faces_to_tracks(person_tracks, faces) -> dict[int, dict]:
     return out
 
 
+def assign_tracker_ids(person_tracks, faces) -> None:
+    """Stamp each face with the ``tracker_id`` of the tightest person track box
+    whose region contains the face centre. Mutates the face dicts in place,
+    setting ``face["tracker_id"]`` (left unset when no track contains it).
+
+    Unlike :func:`bind_faces_to_tracks` this runs *before* recognition, for
+    every face (matched or not), so the pipeline can pool a track's face
+    embeddings into one stable identity decision."""
+    tracks = [
+        t
+        for t in (person_tracks or [])
+        if t.get("tracker_id") is not None and _valid_box(t.get("bbox"))
+    ]
+    if not tracks:
+        return
+    for f in faces or []:
+        fb = f.get("bbox")
+        if not _valid_box(fb):
+            continue
+        fc = _center(fb)
+        containing = [t for t in tracks if _inside(fc, t["bbox"])]
+        if not containing:
+            continue
+        winner = min(containing, key=lambda t: _area(t["bbox"]))
+        f["tracker_id"] = int(winner["tracker_id"])
+
+
 class IdentityBinder:
     """Stateful per-camera binder that holds bindings across keyframes.
 

@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from services.events.engine import RuleEngine
 from services.perception.detector import ObjectDetector
-from services.perception.faces import FaceRecognizer
+from services.perception.faces import FaceRecognizer, FaceTrackPooler
 from services.perception.plates import detect_plates
 from services.perception.reid import BodyReID
 from services.perception.vehicles import (
@@ -62,6 +62,11 @@ class PerceptionPipeline:
         from services.perception.tracker import ObjectTracker
         self._trackers: dict[str, ObjectTracker] = {}
         self._ObjectTracker = ObjectTracker
+        # Per-camera face embedding poolers. Average a track's face embeddings
+        # so the same person matches/clusters as one stable identity instead of
+        # flickering frame to frame.
+        self._face_poolers: dict[str, FaceTrackPooler] = {}
+        self._FaceTrackPooler = FaceTrackPooler
         # Per-camera HAR identity binders. Hold tracker_id -> person_id across
         # keyframes so a track keeps its identity through face occlusion.
         from services.perception.identity_binding import IdentityBinder
@@ -577,11 +582,36 @@ class PerceptionPipeline:
                 # No specific labels configured means any detection triggers recording
                 await self._set_record_trigger(camera_id)
 
-        # Step 2. Run face detection and matching (if enabled for this camera)
+        # Step 2. Per-camera tracker FIRST, so every person detection carries a
+        # stable `tracker_id` before face recognition runs. Body re-id and
+        # spatial_events consume the same tracker state downstream.
+        tracker = self._trackers.get(camera_id)
+        if tracker is None:
+            tracker = self._ObjectTracker()
+            self._trackers[camera_id] = tracker
+        tracker.update(detections)
+        person_dets = [d for d in detections if d.get("label") == "person"]
+
+        # Step 2a. Face detection, per-track pooling, matching, clustering.
         faces = []
         if cam is None or cam.detect_faces:
             faces = await self._face.detect_and_embed(frame)
             if faces:
+                # Stamp each face with the tracker_id of the person box it sits
+                # inside, then fold that track's embeddings into a running mean.
+                # Matching/clustering the pooled embedding keeps one person from
+                # flickering into several identities across noisy frames.
+                from services.perception.identity_binding import assign_tracker_ids
+                assign_tracker_ids(person_dets, faces)
+                pooler = self._face_poolers.get(camera_id)
+                if pooler is None:
+                    pooler = self._FaceTrackPooler()
+                    self._face_poolers[camera_id] = pooler
+                for face in faces:
+                    tid = face.get("tracker_id")
+                    if tid is not None:
+                        face["match_embedding"] = pooler.pool(tid, face["embedding"])
+
                 faces = await self._face.match_faces(faces)
                 matched = [f for f in faces if f.get("person_id")]
                 logger.info(
@@ -599,23 +629,13 @@ class PerceptionPipeline:
                         if cluster_id:
                             face["cluster_id"] = str(cluster_id)
 
-        # Step 2a. Per-camera tracker. Runs before body re-id so each
-        # person detection carries a `tracker_id` for the centroid
-        # buffer. spatial_events still consumes the same tracker state
-        # downstream.
-        tracker = self._trackers.get(camera_id)
-        if tracker is None:
-            tracker = self._ObjectTracker()
-            self._trackers[camera_id] = tracker
-        tracker.update(detections)
-
         # Step 2b. Body re-identification. For every YOLO person bbox,
         # compute an OSNet appearance embedding and cluster it. This
         # builds a cross-camera identity graph that survives even when
         # the face is not visible. When a face hit lands on the same
         # frame, its cluster's Person link is used as a strong prior so
         # the body cluster gets confirmed and tagged with that Person.
-        person_dets = [d for d in detections if d.get("label") == "person"]
+        # (person_dets was computed in Step 2 after tracker.update.)
         if person_dets:
             try:
                 await self._body.embed_persons(frame, person_dets)

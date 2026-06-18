@@ -93,6 +93,12 @@ async def lifespan(app: FastAPI):
     from services.perception.reid_sweeper import BodyReIDSweeper
     reid_sweeper = BodyReIDSweeper()
     reid_task = asyncio.create_task(reid_sweeper.run())
+    # Face cluster consolidation. Merge duplicate "Unknown" clusters and
+    # attach pending clusters to already-named persons (continuous enrollment),
+    # so one real person stops showing up as several People entries.
+    from services.perception.face_merger import FaceClusterMerger
+    face_merger = FaceClusterMerger()
+    face_merger_task = asyncio.create_task(face_merger.run())
     # Telegram long-poll supervisor. One asyncio task per enabled bot
     # token, reconciled every 30s against telegram_channels.
     from services.notify.telegram import shutdown_client as _tg_shutdown
@@ -118,6 +124,8 @@ async def lifespan(app: FastAPI):
     digest_task.cancel()
     reid_sweeper.stop()
     reid_task.cancel()
+    face_merger.stop()
+    face_merger_task.cancel()
     tg_manager.stop()
     tg_task.cancel()
     try:
