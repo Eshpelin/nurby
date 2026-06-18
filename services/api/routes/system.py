@@ -506,5 +506,8 @@ async def trigger_update(_current_user: User = Depends(require_admin)):
     return {
         "started": True,
         "self_update_enabled": True,
-        "message": "Update started. The stack will pull, rebuild, run migrations, and restart. This page will be briefly unavailable.",
+        "message": (
+            "Update started. The stack will pull, rebuild, run migrations, and restart."
+            " This page will be briefly unavailable."
+        ),
     }

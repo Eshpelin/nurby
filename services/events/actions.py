@@ -424,8 +424,12 @@ async def _execute_api_call(action, observation_data, rule, event_id, ctx):
                 resp = await client.request(
                     method, url, headers=headers, params=query_params, timeout=timeout,
                 )
-                logger.info("API call fired for rule '%s' -> %s %s (status %d)", rule.name, method, url, resp.status_code)
-                await _update_event_status(event_id, "api_call", "success" if resp.status_code < 400 else "failed")
+                logger.info(
+                    "API call fired for rule '%s' -> %s %s (status %d)",
+                    rule.name, method, url, resp.status_code,
+                )
+                status = "success" if resp.status_code < 400 else "failed"
+                await _update_event_status(event_id, "api_call", status)
             except httpx.TimeoutException:
                 await _update_event_status(event_id, "api_call", "failed", f"Timeout on {method} {url}")
             except httpx.RequestError as exc:
@@ -483,7 +487,10 @@ async def _execute_notify(action, observation_data, rule, event_id, ctx):
                 severity=action.get("severity", "info"),
                 rule_id=rule.id,
                 camera_id=uuid.UUID(observation_data["camera_id"]) if observation_data.get("camera_id") else None,
-                observation_id=uuid.UUID(observation_data["observation_id"]) if observation_data.get("observation_id") else None,
+                observation_id=(
+                    uuid.UUID(observation_data["observation_id"])
+                    if observation_data.get("observation_id") else None
+                ),
             )
             db.add(notif)
             await db.commit()

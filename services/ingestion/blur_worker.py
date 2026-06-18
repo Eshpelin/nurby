@@ -87,7 +87,9 @@ async def _load_protected_embeddings() -> list[tuple[uuid.UUID, str, np.ndarray]
         return []
 
 
-async def _update_status(recording_id: uuid.UUID, status: str, error: Optional[str] = None, new_path: Optional[str] = None):
+async def _update_status(
+    recording_id: uuid.UUID, status: str, error: Optional[str] = None, new_path: Optional[str] = None
+):
     try:
         async with async_session() as db:
             rec = await db.get(Recording, recording_id)

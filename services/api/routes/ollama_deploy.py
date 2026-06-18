@@ -56,29 +56,46 @@ VISION_MODELS = [
     # native audio on the e-variants). The recommended local default on
     # capable machines. Listed first so the RAM-aware recommender prefers
     # it, and falls back to lighter models on modest hardware.
-    {"name": "gemma4:12b", "label": "Gemma 4 12B", "family": "Gemma 4", "ram_gb": 12, "quality": "best", "vision": True, "description": "Newest Google multimodal. agentic, runs on 16GB+ laptops"},
-    {"name": "gemma4:e4b", "label": "Gemma 4 E4B", "family": "Gemma 4", "ram_gb": 8, "quality": "great", "vision": True, "description": "Lighter Gemma 4 with native audio input, for mid-range machines"},
-    {"name": "gemma4:e2b", "label": "Gemma 4 E2B", "family": "Gemma 4", "ram_gb": 6, "quality": "good", "vision": True, "description": "Smallest Gemma 4, native audio, for modest hardware"},
+    {"name": "gemma4:12b", "label": "Gemma 4 12B", "family": "Gemma 4", "ram_gb": 12,
+     "quality": "best", "vision": True, "description": "Newest Google multimodal. agentic, runs on 16GB+ laptops"},
+    {"name": "gemma4:e4b", "label": "Gemma 4 E4B", "family": "Gemma 4", "ram_gb": 8,
+     "quality": "great", "vision": True,
+     "description": "Lighter Gemma 4 with native audio input, for mid-range machines"},
+    {"name": "gemma4:e2b", "label": "Gemma 4 E2B", "family": "Gemma 4", "ram_gb": 6,
+     "quality": "good", "vision": True, "description": "Smallest Gemma 4, native audio, for modest hardware"},
     # Gemma 3 (Google, all sizes support vision)
-    {"name": "gemma3:27b", "label": "Gemma 3 27B", "family": "Gemma", "ram_gb": 20, "quality": "best", "vision": True, "description": "Highest quality vision model from Google"},
-    {"name": "gemma3:12b", "label": "Gemma 3 12B", "family": "Gemma", "ram_gb": 10, "quality": "great", "vision": True, "description": "Great balance of quality and speed"},
-    {"name": "gemma3:4b", "label": "Gemma 3 4B", "family": "Gemma", "ram_gb": 4, "quality": "good", "vision": True, "description": "Good quality, runs on most machines"},
-    {"name": "gemma3:1b", "label": "Gemma 3 1B", "family": "Gemma", "ram_gb": 2, "quality": "fast", "vision": True, "description": "Ultra-light, works on low-end hardware"},
+    {"name": "gemma3:27b", "label": "Gemma 3 27B", "family": "Gemma", "ram_gb": 20,
+     "quality": "best", "vision": True, "description": "Highest quality vision model from Google"},
+    {"name": "gemma3:12b", "label": "Gemma 3 12B", "family": "Gemma", "ram_gb": 10,
+     "quality": "great", "vision": True, "description": "Great balance of quality and speed"},
+    {"name": "gemma3:4b", "label": "Gemma 3 4B", "family": "Gemma", "ram_gb": 4,
+     "quality": "good", "vision": True, "description": "Good quality, runs on most machines"},
+    {"name": "gemma3:1b", "label": "Gemma 3 1B", "family": "Gemma", "ram_gb": 2,
+     "quality": "fast", "vision": True, "description": "Ultra-light, works on low-end hardware"},
     # LLaVA (vision-language model)
-    {"name": "llava:34b", "label": "LLaVA 34B", "family": "LLaVA", "ram_gb": 24, "quality": "best", "vision": True, "description": "Top-tier vision understanding"},
-    {"name": "llava:13b", "label": "LLaVA 13B", "family": "LLaVA", "ram_gb": 10, "quality": "great", "vision": True, "description": "Strong vision model, well-tested"},
-    {"name": "llava:7b", "label": "LLaVA 7B", "family": "LLaVA", "ram_gb": 5, "quality": "good", "vision": True, "description": "Proven vision model, moderate resources"},
+    {"name": "llava:34b", "label": "LLaVA 34B", "family": "LLaVA", "ram_gb": 24,
+     "quality": "best", "vision": True, "description": "Top-tier vision understanding"},
+    {"name": "llava:13b", "label": "LLaVA 13B", "family": "LLaVA", "ram_gb": 10,
+     "quality": "great", "vision": True, "description": "Strong vision model, well-tested"},
+    {"name": "llava:7b", "label": "LLaVA 7B", "family": "LLaVA", "ram_gb": 5,
+     "quality": "good", "vision": True, "description": "Proven vision model, moderate resources"},
     # LLaVA-Llama3
-    {"name": "llava-llama3", "label": "LLaVA-Llama3 8B", "family": "LLaVA", "ram_gb": 6, "quality": "good", "vision": True, "description": "LLaVA fine-tuned on Llama 3"},
+    {"name": "llava-llama3", "label": "LLaVA-Llama3 8B", "family": "LLaVA", "ram_gb": 6,
+     "quality": "good", "vision": True, "description": "LLaVA fine-tuned on Llama 3"},
     # BakLLaVA
-    {"name": "bakllava", "label": "BakLLaVA 7B", "family": "LLaVA", "ram_gb": 5, "quality": "good", "vision": True, "description": "Mistral-based vision model"},
+    {"name": "bakllava", "label": "BakLLaVA 7B", "family": "LLaVA", "ram_gb": 5,
+     "quality": "good", "vision": True, "description": "Mistral-based vision model"},
     # Moondream (tiny, edge-optimized)
-    {"name": "moondream", "label": "Moondream 1.8B", "family": "Moondream", "ram_gb": 2, "quality": "fast", "vision": True, "description": "Tiny vision model for edge devices"},
+    {"name": "moondream", "label": "Moondream 1.8B", "family": "Moondream", "ram_gb": 2,
+     "quality": "fast", "vision": True, "description": "Tiny vision model for edge devices"},
     # Llama 3.2 Vision
-    {"name": "llama3.2-vision:11b", "label": "Llama 3.2 Vision 11B", "family": "Llama", "ram_gb": 8, "quality": "great", "vision": True, "description": "Meta's multimodal Llama with vision"},
-    {"name": "llama3.2-vision:90b", "label": "Llama 3.2 Vision 90B", "family": "Llama", "ram_gb": 55, "quality": "best", "vision": True, "description": "Largest Llama vision model"},
+    {"name": "llama3.2-vision:11b", "label": "Llama 3.2 Vision 11B", "family": "Llama", "ram_gb": 8,
+     "quality": "great", "vision": True, "description": "Meta's multimodal Llama with vision"},
+    {"name": "llama3.2-vision:90b", "label": "Llama 3.2 Vision 90B", "family": "Llama", "ram_gb": 55,
+     "quality": "best", "vision": True, "description": "Largest Llama vision model"},
     # MiniCPM-V
-    {"name": "minicpm-v", "label": "MiniCPM-V 8B", "family": "MiniCPM", "ram_gb": 6, "quality": "good", "vision": True, "description": "Compact vision model from OpenBMB"},
+    {"name": "minicpm-v", "label": "MiniCPM-V 8B", "family": "MiniCPM", "ram_gb": 6,
+     "quality": "good", "vision": True, "description": "Compact vision model from OpenBMB"},
 ]
 
 
@@ -292,7 +309,9 @@ async def deploy_model(
                 return DeployStatus(stage="error", message=f"Failed to start Ollama. {str(exc)}")
 
         installed = await _get_installed_models()
-        if model_name not in installed and not any(m.startswith(model_name.split(":")[0]) for m in installed if ":" in model_name):
+        if model_name not in installed and not any(
+            m.startswith(model_name.split(":")[0]) for m in installed if ":" in model_name
+        ):
             try:
                 proc = await asyncio.create_subprocess_exec(
                     ollama_path, "pull", model_name,
@@ -306,7 +325,10 @@ async def deploy_model(
                     error_msg = stderr.decode().strip() if stderr else "Unknown error"
                     return DeployStatus(stage="error", message=f"Failed to pull {model_name}. {error_msg}")
             except asyncio.TimeoutError:
-                return DeployStatus(stage="error", message=f"Model pull timed out after 10 minutes. Try running 'ollama pull {model_name}' manually.")
+                return DeployStatus(
+                    stage="error",
+                    message=f"Model pull timed out after 10 minutes. Try running 'ollama pull {model_name}' manually.",
+                )
             except (OSError, FileNotFoundError) as exc:
                 return DeployStatus(stage="error", message=f"Pull failed. {str(exc)}")
         provider_url = OLLAMA_URL
@@ -315,7 +337,9 @@ async def deploy_model(
         # No local binary, but a reachable Ollama server (bundled service or
         # one on the host/network). Pull over the HTTP API.
         installed = _remote_models
-        if model_name not in installed and not any(m.startswith(model_name.split(":")[0]) for m in installed if ":" in model_name):
+        if model_name not in installed and not any(
+            m.startswith(model_name.split(":")[0]) for m in installed if ":" in model_name
+        ):
             ok, msg = await _pull_via_http(remote_url, model_name)
             if not ok:
                 return DeployStatus(stage="error", message=msg)

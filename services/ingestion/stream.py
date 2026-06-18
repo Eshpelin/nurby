@@ -426,7 +426,8 @@ class StreamWorker:
             and isinstance(source, str)
             and source.startswith(("http://", "https://", "rtsp://"))
         )
-        if file_is_remote or self.stream_type in (STREAM_TYPE_RTSP, STREAM_TYPE_HLS, STREAM_TYPE_HTTP_MJPEG, STREAM_TYPE_WEBCAM):
+        streaming_types = (STREAM_TYPE_RTSP, STREAM_TYPE_HLS, STREAM_TYPE_HTTP_MJPEG, STREAM_TYPE_WEBCAM)
+        if file_is_remote or self.stream_type in streaming_types:
             # RTSP over TCP is more reliable than default UDP across NAT.
             # stimeout is socket read timeout in microseconds. Without it,
             # OpenCV's FFmpeg wrapper can hang indefinitely on silent peers.
@@ -445,7 +446,10 @@ class StreamWorker:
             cap = cv2.VideoCapture(source)
 
         if not cap.isOpened():
-            logger.error("Failed to open %s stream for camera %s at %s", self.stream_type, self.camera_id, self.stream_url)
+            logger.error(
+                "Failed to open %s stream for camera %s at %s",
+                self.stream_type, self.camera_id, self.stream_url,
+            )
             return None
         logger.info("Connected to camera %s via %s", self.camera_id, self.stream_type)
         return cap

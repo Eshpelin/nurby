@@ -1292,7 +1292,10 @@ class PerceptionPipeline:
                     logger.exception("incident assignment failed obs=%s", obs.id)
                 await db.commit()
                 await db.refresh(obs)
-                logger.info("Stored observation %s for camera %s with %d detections", obs.id, camera_id, len(detections))
+                logger.info(
+                    "Stored observation %s for camera %s with %d detections",
+                    obs.id, camera_id, len(detections),
+                )
 
                 # Invalidate starred recaps when any identified face appears.
                 if person_detections and person_detections.get("faces"):

@@ -236,13 +236,19 @@ async def download_bundle(
 
 
 @router.get("/{recording_id}", response_model=RecordingResponse)
-async def get_recording(recording_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_recording(
+    recording_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     allowed = await allowed_camera_ids(current_user, db)
     return await _get_recording_or_404(recording_id, db, allowed)
 
 
 @router.get("/{recording_id}/stream")
-async def stream_recording(recording_id: uuid.UUID, token: str | None = Query(None), db: AsyncSession = Depends(get_db)):
+async def stream_recording(
+    recording_id: uuid.UUID, token: str | None = Query(None), db: AsyncSession = Depends(get_db)
+):
     # Played in a <video src>, which cannot send an auth header. accept the
     # JWT as ?token= instead (same as thumbnails).
     user = await _user_from_query_token(token, db)
@@ -253,7 +259,11 @@ async def stream_recording(recording_id: uuid.UUID, token: str | None = Query(No
 
 
 @router.get("/{recording_id}/camera", response_model=dict)
-async def get_recording_camera(recording_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_recording_camera(
+    recording_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     allowed = await allowed_camera_ids(current_user, db)
     recording = await _get_recording_or_404(recording_id, db, allowed)
     camera = await db.get(Camera, recording.camera_id)
@@ -334,7 +344,11 @@ async def download_recording(
 
 
 @router.delete("/{recording_id}", status_code=204)
-async def delete_recording(recording_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def delete_recording(
+    recording_id: uuid.UUID,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     recording = await db.get(Recording, recording_id)
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")

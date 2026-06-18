@@ -228,7 +228,9 @@ class FaceRecognizer:
             logger.exception("Failed to load known embeddings")
             return []
 
-    async def cluster_unknown_face(self, face: dict, camera_id: str, frame: np.ndarray | None = None) -> uuid.UUID | None:
+    async def cluster_unknown_face(
+        self, face: dict, camera_id: str, frame: np.ndarray | None = None
+    ) -> uuid.UUID | None:
         """Cluster an unmatched face. Either adds to existing cluster or creates new one.
 
         face dict must have 'embedding' and 'bbox' keys.
@@ -375,7 +377,9 @@ class FaceRecognizer:
     # inflating sighting_count by one per frame.
     SIGHTING_DEBOUNCE_SECONDS = 300  # 5 min
 
-    async def _add_to_cluster(self, cluster_id: uuid.UUID, embedding: np.ndarray, camera_id: str, thumbnail_path: str | None):
+    async def _add_to_cluster(
+        self, cluster_id: uuid.UUID, embedding: np.ndarray, camera_id: str, thumbnail_path: str | None
+    ):
         """Add a face sighting to an existing cluster.
 
         Debounced. Within SIGHTING_DEBOUNCE_SECONDS of last_seen_at we only
@@ -427,7 +431,9 @@ class FaceRecognizer:
         except Exception:
             logger.exception("Failed to add to cluster %s", cluster_id)
 
-    async def _create_cluster(self, embedding: np.ndarray, camera_id: str, thumbnail_path: str | None) -> uuid.UUID | None:
+    async def _create_cluster(
+        self, embedding: np.ndarray, camera_id: str, thumbnail_path: str | None
+    ) -> uuid.UUID | None:
         """Create a new face cluster from a single face detection."""
         try:
             from sqlalchemy import text

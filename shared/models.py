@@ -30,7 +30,8 @@ class Camera(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     stream_url: Mapped[str] = mapped_column(String(1024), nullable=False)
-    stream_type: Mapped[str] = mapped_column(String(32), default="rtsp")  # rtsp, http_mjpeg, http_snapshot, hls, usb, file
+    # rtsp, http_mjpeg, http_snapshot, hls, usb, file
+    stream_type: Mapped[str] = mapped_column(String(32), default="rtsp")
     snapshot_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     location_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Which facility exposes this camera. Null = unscoped (visible to all
@@ -51,7 +52,9 @@ class Camera(Base):
     recording_clip_pre: Mapped[int] = mapped_column(Integer, default=5)  # pre-buffer seconds for clip mode
     recording_clip_post: Mapped[int] = mapped_column(Integer, default=10)  # post-buffer seconds for clip mode
     # Per-camera perception config
-    vlm_provider_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True, index=True)
+    vlm_provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     vlm_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)  # custom system prompt override
     vlm_interval: Mapped[int] = mapped_column(Integer, default=0)  # seconds between VLM calls, 0 = every keyframe
     vlm_max_tokens: Mapped[int] = mapped_column(Integer, default=200)
@@ -92,13 +95,17 @@ class Camera(Base):
     vlm_trigger: Mapped[str] = mapped_column(String(16), default="always")  # always, on_object
     vlm_trigger_objects: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # e.g. ["person", "cat"]
     # Multi-model detection config
-    detection_models: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # list of {"model", "confidence", "enabled", "label_filter"}
+    # list of {"model", "confidence", "enabled", "label_filter"}
+    detection_models: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     detection_merge: Mapped[str] = mapped_column(String(16), default="any")  # any, consensus, best
-    detection_consensus_min: Mapped[int] = mapped_column(Integer, default=2)  # min models that must agree for consensus mode
+    # min models that must agree for consensus mode
+    detection_consensus_min: Mapped[int] = mapped_column(Integer, default=2)
     # Per-camera digest config
     digest_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     digest_period: Mapped[str] = mapped_column(String(16), default="24h")  # 1h, 6h, 12h, 24h, 48h, 7d
-    digest_provider_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True, index=True)
+    digest_provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     digest_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Retention policy
     retention_mode: Mapped[str] = mapped_column(String(16), default="none")  # none, time, size
@@ -143,11 +150,14 @@ class Camera(Base):
     audio_capture_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     audio_transcribe_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     audio_store_raw: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    transcript_store: Mapped[str] = mapped_column(String(16), default="full", nullable=False)  # full, redacted, summary_only
+    # full, redacted, summary_only
+    transcript_store: Mapped[str] = mapped_column(String(16), default="full", nullable=False)
     audio_language: Mapped[str] = mapped_column(String(8), default="en", nullable=False)
     audio_retention_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
     transcript_retention_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
-    stt_provider_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True, index=True)
+    stt_provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     stt_budget_minutes_per_hour: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     # STT accuracy/speed knobs. Defaults match the original behavior, so a
     # camera left alone transcribes exactly as before. Raise beam_size for
@@ -158,11 +168,14 @@ class Camera(Base):
     audio_stt_condition_on_previous_text: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     audio_stt_no_speech_threshold: Mapped[float] = mapped_column(Float, default=0.6, nullable=False)
     # Summarization config (window-level VLM recap)
-    summary_provider_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True)
+    summary_provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True
+    )
     summary_mode: Mapped[str] = mapped_column(String(16), default="off", nullable=False)  # off, periodic, event, both
     summary_period_seconds: Mapped[int] = mapped_column(Integer, default=1800, nullable=False)  # 30 min default
     summary_event_quiet_seconds: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
-    summary_event_trigger_objects: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # YOLO labels e.g. ["person"]
+    # YOLO labels e.g. ["person"]
+    summary_event_trigger_objects: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     summary_event_min_duration_seconds: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     summary_max_tokens: Mapped[int] = mapped_column(Integer, default=400, nullable=False)
     # Conversation grouping (audio rollup)
@@ -317,13 +330,17 @@ class FaceCluster(Base):
     __tablename__ = "face_clusters"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    representative_embedding = mapped_column(Vector(512), nullable=False)  # average embedding of cluster (InsightFace ArcFace)
+    # average embedding of cluster (InsightFace ArcFace)
+    representative_embedding = mapped_column(Vector(512), nullable=False)
     sample_thumbnail_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)  # best face crop
     sighting_count: Mapped[int] = mapped_column(Integer, default=1)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     first_camera_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
-    person_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("persons.id", ondelete="SET NULL"), nullable=True, index=True)  # linked once named
+    # linked once named
+    person_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("persons.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending, named, ignored
     auto_label_number: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True)  # "Unknown 645"
     appearance_description: Mapped[str | None] = mapped_column(Text, nullable=True)  # VLM short demographics/clothing
@@ -338,7 +355,9 @@ class FaceClusterSample(Base):
     __tablename__ = "face_cluster_samples"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    cluster_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("face_clusters.id", ondelete="CASCADE"), nullable=False, index=True)
+    cluster_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("face_clusters.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     camera_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     embedding = mapped_column(Vector(512), nullable=False)
     thumbnail_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
@@ -418,7 +437,8 @@ class Vehicle(Base):
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     nickname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     license_plate: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
-    vehicle_type: Mapped[str | None] = mapped_column(String(32), nullable=True)  # car, truck, bus, motorcycle, van, forklift
+    # car, truck, bus, motorcycle, van, forklift
+    vehicle_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     make: Mapped[str | None] = mapped_column(String(64), nullable=True)
     model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     color: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -797,7 +817,9 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[dict] = mapped_column(JSON, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class AudioCapture(Base):
@@ -1573,7 +1595,8 @@ class GuardianLink(Base):
     guardian_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    relationship_label: Mapped[str | None] = mapped_column(String(64), nullable=True)  # mother, father, grandparent, carer
+    # mother, father, grandparent, carer
+    relationship_label: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # full | summary | alerts_only  (see brief section 11)
     tier: Mapped[str] = mapped_column(String(16), default="full", nullable=False)
     # Per-link alert opt-ins within the facility-allowed set. booleans keyed by
@@ -1586,7 +1609,8 @@ class GuardianLink(Base):
     # these and they gate exactly as paid features will.
     premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # recap + smart search
     live_presence: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # removes 30-min delay
-    live_video: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # blurred live clips, lifts image cap
+    # blurred live clips, lifts image cap
+    live_video: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     audio: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # audio-derived signals
     # At least one primary parent paid unlocks free extra guardians on this person.
     is_primary_parent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

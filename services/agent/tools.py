@@ -1006,7 +1006,10 @@ _GET_EVENTS_SCHEMA = {
         "include_payload": {
             "type": "boolean",
             "default": False,
-            "description": "Include the per-event payload dict. Off by default to keep responses small; turn on when you need camera_id or detection labels.",
+            "description": (
+                "Include the per-event payload dict. Off by default to keep responses small;"
+                " turn on when you need camera_id or detection labels."
+            ),
         },
         "limit": {
             "type": "integer",
@@ -2289,7 +2292,10 @@ _GET_VEHICLES_SCHEMA = {
         },
         "query": {
             "type": "string",
-            "description": "Filter to vehicles whose description/make/model/color/type contains this, e.g. 'red', 'nissan', 'truck', 'forklift'.",
+            "description": (
+                "Filter to vehicles whose description/make/model/color/type contains this,"
+                " e.g. 'red', 'nissan', 'truck', 'forklift'."
+            ),
         },
         "hours": {
             "type": "integer",

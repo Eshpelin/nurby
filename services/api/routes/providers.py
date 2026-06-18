@@ -88,7 +88,11 @@ async def vlm_health(
 
 
 @router.post("", response_model=ProviderResponse, status_code=201)
-async def create_provider(body: ProviderCreate, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def create_provider(
+    body: ProviderCreate,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     provider = Provider(**body.model_dump())
     db.add(provider)
     await db.commit()
@@ -97,7 +101,11 @@ async def create_provider(body: ProviderCreate, _current_user: User = Depends(re
 
 
 @router.get("/{provider_id}", response_model=ProviderResponse)
-async def get_provider(provider_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_provider(
+    provider_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     provider = await db.get(Provider, provider_id)
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
@@ -124,7 +132,11 @@ async def update_provider(
 
 
 @router.post("/{provider_id}/test", response_model=ProviderTestResult)
-async def test_provider(provider_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def test_provider(
+    provider_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Test connectivity to a VLM provider by hitting its API."""
     provider = await db.get(Provider, provider_id)
     if not provider:
@@ -251,7 +263,11 @@ async def test_provider(provider_id: uuid.UUID, _current_user: User = Depends(ge
 
 
 @router.delete("/{provider_id}", status_code=204)
-async def delete_provider(provider_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def delete_provider(
+    provider_id: uuid.UUID,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     provider = await db.get(Provider, provider_id)
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
