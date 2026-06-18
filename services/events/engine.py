@@ -163,6 +163,17 @@ class RuleEngine:
         # on 3 keyframes inside its window, so a single hot frame (leaf
         # gusting past, headlight flare) cannot fire an alert.
         self._persistence: dict[tuple, tuple[float, int]] = {}
+        # Fire-once-per-incident dedup state. Maps (rule_id, incident_id) ->
+        # epoch this rule first fired for that incident. A rule with
+        # fire_once_per="incident" alerts at most once for the lifetime of a
+        # given incident, even when its condition matches on every keyframe of
+        # a long cluster of sightings. Keyed by the incident id threaded into
+        # rule_data by the perception pipeline (it is assigned in the same
+        # observation-insert pass that runs before rule evaluation). A new
+        # incident id is a fresh subject/cluster and alerts again. Bounded by
+        # _INCIDENT_FIRED_MAX entries with an oldest-half trim so a
+        # long-running process cannot grow this unbounded.
+        self._incident_fired: dict[tuple, float] = {}
         # Pubsub invalidator. set when start_invalidation_listener is called.
         self._invalidate_stop: asyncio.Event | None = None
         self._invalidate_task: asyncio.Task | None = None
@@ -226,6 +237,22 @@ class RuleEngine:
             # trigger match) so a subject leaving ends its visit even though
             # the trigger then stops matching.
             if fire_once_per_visit and self._visit_already_fired(
+                rule.id, observation_data
+            ):
+                continue
+
+            # Fire-once-per-incident dedup. A rule with
+            # fire_once_per="incident" alerts at most once for the lifetime of
+            # the incident this observation belongs to, keyed by incident id.
+            # The pipeline assigns the incident before rule eval and threads
+            # its id into observation_data["incident_id"], so the check can see
+            # it here. When the observation belongs to no incident (tracking
+            # off, motion-only scene), this is a no-op and cooldown stays the
+            # right tool, mirroring the visit fallback above.
+            fire_once_per_incident = (
+                (rule.trigger_pattern or {}).get("fire_once_per") == "incident"
+            )
+            if fire_once_per_incident and self._incident_already_fired(
                 rule.id, observation_data
             ):
                 continue
@@ -972,6 +999,33 @@ class RuleEngine:
                 fired[key] = now
             return False
         return True
+
+    # Cap on the per-incident dedup map. When exceeded the oldest half is
+    # dropped so a long-running perception process cannot grow it unbounded.
+    _INCIDENT_FIRED_MAX = 4096
+
+    def _incident_already_fired(self, rule_id, data: dict) -> bool:
+        """True when this rule has already fired for the incident this
+        observation belongs to (so it must not re-fire for the same
+        incident). The first match records the fire and returns False.
+
+        Falls back to "not deduped" when the observation carries no incident
+        id (incident tracking disabled, or a motion-only scene that never
+        opens an incident), where cooldown is the right tool instead."""
+        incident_id = data.get("incident_id")
+        if not incident_id:
+            return False
+        key = (rule_id, str(incident_id))
+        if key in self._incident_fired:
+            return True
+        # Opportunistic GC so the map cannot grow without bound on a
+        # long-lived process. Drop the older half by recorded epoch.
+        if len(self._incident_fired) >= self._INCIDENT_FIRED_MAX:
+            ordered = sorted(self._incident_fired.items(), key=lambda kv: kv[1])
+            keep = ordered[len(ordered) // 2:]
+            self._incident_fired = dict(keep)
+        self._incident_fired[key] = time.time()
+        return False
 
     @staticmethod
     def _filter_detection_geometry(detections: list, pattern: dict, data: dict) -> list:

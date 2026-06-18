@@ -787,7 +787,7 @@ class PerceptionPipeline:
                 "count": len(faces or []) + len(bodies_payload),
             }
 
-        observation_id = await self._store_observation(
+        observation_id, incident_id = await self._store_observation(
             camera_id=uuid.UUID(camera_id),
             timestamp=timestamp,
             detections=detections,
@@ -986,6 +986,10 @@ class PerceptionPipeline:
         # Step 7. Evaluate rules against this observation
         rule_data = {
             "observation_id": str(observation_id) if observation_id else None,
+            # Incident this observation was assigned to (or None when
+            # tracking is off / motion-only). Threaded through so a rule with
+            # fire_once_per="incident" can dedup against the incident lifetime.
+            "incident_id": str(incident_id) if incident_id else None,
             "camera_id": camera_id,
             "timestamp": timestamp.isoformat(),
             "motion_score": motion_score,
@@ -1124,8 +1128,16 @@ class PerceptionPipeline:
         vlm_provider: str | None = None,
         confidence: float | None = None,
         thumbnail_path: str | None = None,
-    ) -> uuid.UUID | None:
-        """Store observation in Postgres. Returns observation ID."""
+    ) -> tuple[uuid.UUID | None, uuid.UUID | None]:
+        """Store observation in Postgres.
+
+        Returns ``(observation_id, incident_id)``. The incident id is the
+        open/new incident this observation was assigned to (or None when
+        incident tracking is off, the scene is motion-only, or on a debounce
+        extend). It is threaded back to the caller so rule evaluation can do
+        true fire-once-per-incident dedup, since the incident is assigned in
+        this same pass, before rules run.
+        """
         try:
             object_detections = {
                 "objects": [
@@ -1222,7 +1234,10 @@ class PerceptionPipeline:
                                 "Extended observation %s on camera %s (same scene, %s)",
                                 recent.id, camera_id, ",".join(new_labels) or "no-labels",
                             )
-                            return recent.id
+                            # Debounce extend reuses the prior observation row
+                            # and does not re-run incident assignment, so no
+                            # incident id is surfaced for this keyframe.
+                            return recent.id, None
 
                 obs = Observation(
                     camera_id=camera_id,
@@ -1241,7 +1256,9 @@ class PerceptionPipeline:
                 # camera matching its signature, or open a new one.
                 # Done in the same session so observation.incident_id
                 # and the incident row's occurrence_count + last_seen
-                # advance atomically.
+                # advance atomically. Hoisted out of the try so it can be
+                # returned to the caller for fire-once-per-incident dedup.
+                assigned_incident_id: uuid.UUID | None = None
                 try:
                     from services.perception.incident_tracker import assign_incident
 
@@ -1250,6 +1267,7 @@ class PerceptionPipeline:
                         inc_id = await assign_incident(db, cam_for_inc, obs)
                         if inc_id is not None:
                             obs.incident_id = inc_id
+                            assigned_incident_id = inc_id
                 except Exception:
                     logger.exception("incident assignment failed obs=%s", obs.id)
                 await db.commit()
@@ -1278,10 +1296,10 @@ class PerceptionPipeline:
                         except Exception:
                             logger.exception("Failed to invalidate starred recaps")
 
-                return obs.id
+                return obs.id, assigned_incident_id
         except Exception:
             logger.exception("Failed to store observation")
-            return None
+            return None, None
 
     async def _generate_and_store_embedding(
         self,
