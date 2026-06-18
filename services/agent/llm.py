@@ -284,7 +284,10 @@ def _messages_to_openai(system_prompt: str, messages: list[dict]) -> list[dict]:
                 if text_blocks:
                     out.append({"role": "user", "content": _flatten_text(text_blocks)})
             else:
-                out.append({"role": "user", "content": _flatten_text(blocks) if not isinstance(content, str) else content})
+                out.append({
+                    "role": "user",
+                    "content": _flatten_text(blocks) if not isinstance(content, str) else content,
+                })
         elif role == "assistant":
             blocks = _content_blocks(content)
             text_parts = [b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("type") == "text"]
@@ -304,7 +307,10 @@ def _messages_to_openai(system_prompt: str, messages: list[dict]) -> list[dict]:
                 entry["tool_calls"] = tool_calls
             out.append(entry)
         else:
-            out.append({"role": role or "user", "content": content if isinstance(content, str) else _flatten_text(content)})
+            out.append({
+                "role": role or "user",
+                "content": content if isinstance(content, str) else _flatten_text(content),
+            })
     return out
 
 
@@ -645,11 +651,18 @@ async def llm_call(
     """
     kind = _normalize_kind(provider.kind)
     if kind == "anthropic":
-        return await _call_anthropic(provider, model, system_prompt, messages, tools, max_tokens, stream, stream_callback)
+        return await _call_anthropic(
+            provider, model, system_prompt, messages, tools, max_tokens, stream, stream_callback
+        )
     if kind == "openai":
-        return await _call_openai_like(provider, model, system_prompt, messages, tools, max_tokens, stream, stream_callback)
+        return await _call_openai_like(
+            provider, model, system_prompt, messages, tools, max_tokens, stream, stream_callback
+        )
     if kind == "ollama":
-        return await _call_openai_like(provider, model, system_prompt, messages, tools, max_tokens, stream, stream_callback, is_ollama=True)
+        return await _call_openai_like(
+            provider, model, system_prompt, messages, tools, max_tokens, stream,
+            stream_callback, is_ollama=True,
+        )
     if kind == "gemini":
         return await _call_gemini(provider, model, system_prompt, messages, tools, max_tokens, stream, stream_callback)
     raise LLMProviderUnsupportedError(f"unhandled provider kind {kind!r}")

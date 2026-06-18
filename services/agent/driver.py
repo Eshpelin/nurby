@@ -43,20 +43,36 @@ SYSTEM_PROMPT_TEMPLATE = """You are Nurby Agent. You answer questions about a ho
 
 Workflow.
 - Plan briefly inside <plan> tags before any tool calls.
-- For most questions, call get_household_snapshot on turn 0 so you have camera + Person + active-journey context before deciding what to do next.
-- For narrative or summary questions ("what happened today?", "give me a recap"), call summarize_activity FIRST. It returns per-Person sighting counts, per-rule firing counts, per-label observation counts, and per-camera activity in one round-trip. Then drill in with the other tools only as needed.
-- For LONG summaries spanning multiple days or weeks ("summarize the last week", "what happened this month at the front door"), call summarize_window instead of summarize_activity. summarize_activity is for a single day.
-- For "how many times did X happen?" or "when did rule Y fire?", call get_events. Rule firings are confirmed semantic facts. do NOT re-analyze frames with the VLM to recount them.
+- For most questions, call get_household_snapshot on turn 0 so you have camera + Person +
+  active-journey context before deciding what to do next.
+- For narrative or summary questions ("what happened today?", "give me a recap"), call
+  summarize_activity FIRST. It returns per-Person sighting counts, per-rule firing counts,
+  per-label observation counts, and per-camera activity in one round-trip. Then drill in with
+  the other tools only as needed.
+- For LONG summaries spanning multiple days or weeks ("summarize the last week", "what happened
+  this month at the front door"), call summarize_window instead of summarize_activity.
+  summarize_activity is for a single day.
+- For "how many times did X happen?" or "when did rule Y fire?", call get_events. Rule firings
+  are confirmed semantic facts. do NOT re-analyze frames with the VLM to recount them.
 - Use query_observations for searching past activity by topic + time + person + label.
 - Use get_journeys for "where did X go" or "when was X here" questions about Persons.
-- For "who was with X", "did X come back", "where did X go", or "was X seen with a <thing>", use query_relationships instead of stitching multiple get_journeys calls.
-- Use get_last_sightings when you need the most recent timestamp for an entity across all time without a fresh search.
-- Use analyze_clip or analyze_frame ONLY when indexed data does not answer the question. These are expensive.
+- For "who was with X", "did X come back", "where did X go", or "was X seen with a <thing>",
+  use query_relationships instead of stitching multiple get_journeys calls.
+- Use get_last_sightings when you need the most recent timestamp for an entity across all time
+  without a fresh search.
+- Use analyze_clip or analyze_frame ONLY when indexed data does not answer the question.
+  These are expensive.
 
 Widen-then-fail rule (important).
-- The cheap query tools default to a 24-hour window. If your first query returns ZERO results for an entity the user asked about, do NOT immediately answer "not seen".
-- Instead, escalate the window. Call again with hours=168 (7 days). If still empty, hours=720 (30 days). If still empty, call get_last_sightings with the default 30-day window before declaring absence.
-- When you DO find a sighting in a widened window, lead your answer with what you found AND when. Example. "I haven't seen the cat in the last 24 hours, but I last saw her 19 hours ago at the back door [obs:abc123]." That is the right shape of answer for an absence-with-history question.
+- The cheap query tools default to a 24-hour window. If your first query returns ZERO results
+  for an entity the user asked about, do NOT immediately answer "not seen".
+- Instead, escalate the window. Call again with hours=168 (7 days). If still empty, hours=720
+  (30 days). If still empty, call get_last_sightings with the default 30-day window before
+  declaring absence.
+- When you DO find a sighting in a widened window, lead your answer with what you found AND
+  when. Example. "I haven't seen the cat in the last 24 hours, but I last saw her 19 hours ago
+  at the back door [obs:abc123]." That is the right shape of answer for an absence-with-history
+  question.
 - Only declare "no record" when the 30-day window is also empty.
 
 Citations.
@@ -313,7 +329,8 @@ class AgentDriver:
                         "type": "budget_warn",
                         "percent_used": int(max(
                             (budget.used_tokens * 100 / budget.token_budget) if budget.token_budget else 0,
-                            (budget.used_cost_cents * 100 / budget.cost_budget_cents) if budget.cost_budget_cents else 0,
+                            (budget.used_cost_cents * 100 / budget.cost_budget_cents)
+                            if budget.cost_budget_cents else 0,
                         )),
                         "remaining_cents": budget.remaining_cost_cents,
                     })
@@ -373,7 +390,9 @@ class AgentDriver:
                         await self._emit(state, run_id, {"type": "budget_warn",
                                                           "percent_used": 100,
                                                           "remaining_cents": 0})
-                        final_text = await self._forced_synthesis(provider, model, system_prompt, messages, state, run_id)
+                        final_text = await self._forced_synthesis(
+                            provider, model, system_prompt, messages, state, run_id
+                        )
                         await runs_mod.update_run(run_id, db,
                                                   status="budget_exhausted",
                                                   final_answer=final_text,
@@ -529,14 +548,20 @@ class AgentDriver:
 
     async def _forced_synthesis(self, provider, model, system_prompt, messages, state, run_id) -> str:
         """One final non-tool LLM call asking for a partial summary."""
-        prompt = system_prompt + "\n\nIMPORTANT. You are out of budget or turns. Summarize what you know from the evidence gathered so far. Do not call any more tools."
+        prompt = (
+            system_prompt
+            + "\n\nIMPORTANT. You are out of budget or turns. Summarize what you know"
+            " from the evidence gathered so far. Do not call any more tools."
+        )
         try:
             resp = await llm_call(
                 provider=provider,
                 model=model,
                 system_prompt=prompt,
-                messages=messages + [{"role": "user",
-                                       "content": "Please give a partial answer based on the evidence gathered so far. Make clear you ran out of time."}],
+                messages=messages + [{"role": "user", "content": (
+                    "Please give a partial answer based on the evidence gathered so far."
+                    " Make clear you ran out of time."
+                )}],
                 tools=[],
                 max_tokens=DEFAULT_MAX_TOKENS_PER_CALL,
                 stream=False,

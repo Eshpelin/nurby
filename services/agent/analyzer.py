@@ -426,7 +426,10 @@ def _distribute_samples(
     if total_span <= 0 or total_frames <= 0:
         return out
     # Allocate frame count per recording, floor + remainder.
-    raw = [(rec, span, off_start, off_end, (span / total_span) * total_frames) for (rec, span, off_start, off_end) in intersections]
+    raw = [
+        (rec, span, off_start, off_end, (span / total_span) * total_frames)
+        for (rec, span, off_start, off_end) in intersections
+    ]
     allocations = [(rec, off_start, off_end, max(0, int(round(quota))) if span > 0 else 0)
                    for (rec, span, off_start, off_end, quota) in raw]
     # Generate evenly-spaced timestamps inside each recording's window.
