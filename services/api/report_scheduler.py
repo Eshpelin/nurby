@@ -70,11 +70,44 @@ def build_question(report, person_name: str | None) -> str:
     return " ".join(parts)
 
 
+async def run_stats_only_report(report_id: uuid.UUID) -> tuple[str, str | None]:
+    """Produce a stats-only digest when no AI provider is available.
+
+    Scene narration and Ask Nurby need a provider, but a scheduled report
+    should still arrive: the digest generator degrades to a structured,
+    provider-free summary (who/when/which camera roll-ups, no LLM prose).
+    Returns ("ok", text) on success so the report SUCCEEDS instead of being
+    marked failed, keeping the no-provider experience calm and useful.
+    """
+    from services.search.digest import generate_digest
+
+    async with async_session() as db:
+        report = await db.get(ScheduledReport, report_id)
+        if report is None:
+            return ("failed", "report not found")
+        try:
+            # provider=None routes generate_digest to its narrative fallback,
+            # built from the same roll-ups, with no LLM call.
+            digest = await generate_digest(db, period="24h", provider=None)
+        except Exception:
+            logger.exception("report %s stats-only digest crashed", report_id)
+            return ("failed", "stats-only digest crashed; see logs")
+
+    summary = (digest.get("summary") or "").strip()
+    if not summary:
+        return ("empty", None)
+    return ("ok", summary)
+
+
 async def run_report(report_id: uuid.UUID) -> tuple[str, str | None]:
     """Run one report through the agent now. Returns (status, output).
 
     status is "ok", "empty", or "failed". Used by both the scheduler tick
     and the manual POST /api/reports/{id}/run endpoint.
+
+    When no usable AI provider is configured the report does not fail: it
+    falls back to a stats-only digest so the user still receives their
+    scheduled summary (AI prose is optional).
     """
     from services.agent import runs as runs_mod
     from services.agent.driver import AgentDriver
@@ -107,10 +140,13 @@ async def run_report(report_id: uuid.UUID) -> tuple[str, str | None]:
             if default:
                 provider = await db.get(Provider, uuid.UUID(str(default)))
         if provider is None or not provider.active:
-            return ("failed", "no active agent provider configured")
+            # No AI provider: succeed with a stats-only digest instead of
+            # failing the scheduled report.
+            return await run_stats_only_report(report_id)
         model = provider.default_model
         if not model:
-            return ("failed", f"provider {provider.name} has no default model")
+            # Provider exists but cannot run the agent: still deliver stats.
+            return await run_stats_only_report(report_id)
 
         person_name = None
         if report.person_id:
