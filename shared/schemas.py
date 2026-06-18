@@ -96,6 +96,7 @@ class CameraCreate(BaseModel):
     webcam_device: str | None = Field(default=None, max_length=255)
     audio_only: bool = False
     exclude_from_review: bool = False
+    enabled: bool = True
     privacy_zone_targets: list[str] | None = None
     privacy_zone_blur_strength: int = Field(default=55, ge=5, le=151)
     yolo_world_prompts: list[str] | None = None
@@ -171,6 +172,7 @@ class CameraUpdate(BaseModel):
     webcam_device: str | None = Field(default=None, max_length=255)
     audio_only: bool | None = None
     exclude_from_review: bool | None = None
+    enabled: bool | None = None
     privacy_zone_targets: list[str] | None = None
     privacy_zone_blur_strength: int | None = Field(default=None, ge=5, le=151)
     yolo_world_prompts: list[str] | None = None
@@ -270,6 +272,7 @@ class CameraResponse(BaseModel):
     webcam_device: str | None = None
     audio_only: bool = False
     exclude_from_review: bool = False
+    enabled: bool = True
     privacy_zone_targets: list[str] | None = None
     privacy_zone_blur_strength: int = 55
     yolo_world_prompts: list[str] | None = None
