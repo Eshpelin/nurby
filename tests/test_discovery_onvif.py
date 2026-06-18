@@ -476,3 +476,160 @@ async def test_ptz_command_skips_time_query_when_flag_off(monkeypatch):
     created = _local(seen_envelopes[0], "Created").text
     # Local clock, so within a couple years of now (not the 2035 camera clock).
     assert created.startswith(str(datetime.now(timezone.utc).year))
+
+
+# ── video-profile selection (issue #101 / Frigate PR #9708) ───────────
+
+
+# Profiles response where the first profile is audio-only (no
+# VideoEncoderConfiguration) and the second profile carries video.
+_PROFILES_AUDIO_FIRST_XML = """<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:trt="http://www.onvif.org/ver10/media/wsdl"
+  xmlns:tt="http://www.onvif.org/ver10/schema">
+ <s:Body><trt:GetProfilesResponse>
+   <trt:Profiles token="Audio_1">
+     <tt:Name>audio-only</tt:Name>
+     <tt:AudioEncoderConfiguration>
+       <tt:Encoding>AAC</tt:Encoding>
+     </tt:AudioEncoderConfiguration>
+   </trt:Profiles>
+   <trt:Profiles token="Video_1">
+     <tt:Name>mainstream</tt:Name>
+     <tt:VideoEncoderConfiguration>
+       <tt:Encoding>H264</tt:Encoding>
+       <tt:Resolution><tt:Width>1920</tt:Width><tt:Height>1080</tt:Height></tt:Resolution>
+     </tt:VideoEncoderConfiguration>
+   </trt:Profiles>
+ </trt:GetProfilesResponse></s:Body></s:Envelope>"""
+
+# Profiles response where both profiles carry VideoEncoderConfiguration.
+_PROFILES_ALL_VIDEO_XML = """<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:trt="http://www.onvif.org/ver10/media/wsdl"
+  xmlns:tt="http://www.onvif.org/ver10/schema">
+ <s:Body><trt:GetProfilesResponse>
+   <trt:Profiles token="Profile_1">
+     <tt:Name>mainstream</tt:Name>
+     <tt:VideoEncoderConfiguration>
+       <tt:Encoding>H264</tt:Encoding>
+       <tt:Resolution><tt:Width>1920</tt:Width><tt:Height>1080</tt:Height></tt:Resolution>
+     </tt:VideoEncoderConfiguration>
+   </trt:Profiles>
+   <trt:Profiles token="Profile_2">
+     <tt:Name>substream</tt:Name>
+     <tt:VideoEncoderConfiguration>
+       <tt:Encoding>H264</tt:Encoding>
+       <tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution>
+     </tt:VideoEncoderConfiguration>
+   </trt:Profiles>
+ </trt:GetProfilesResponse></s:Body></s:Envelope>"""
+
+# Profiles response where no profile has encoding info at all (legacy
+# or stripped ONVIF response).
+_PROFILES_NO_ENCODING_XML = """<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:trt="http://www.onvif.org/ver10/media/wsdl"
+  xmlns:tt="http://www.onvif.org/ver10/schema">
+ <s:Body><trt:GetProfilesResponse>
+   <trt:Profiles token="Profile_1">
+     <tt:Name>main</tt:Name>
+   </trt:Profiles>
+   <trt:Profiles token="Profile_2">
+     <tt:Name>sub</tt:Name>
+   </trt:Profiles>
+ </trt:GetProfilesResponse></s:Body></s:Envelope>"""
+
+
+def _make_router_with_profiles(profiles_xml: str):
+    """Return a SOAP router that substitutes the given profiles XML."""
+
+    def router(envelope: str):
+        if "GetDeviceInformation" in envelope:
+            return ET.fromstring(_DEVICE_INFO_XML)
+        if "GetCapabilities" in envelope:
+            return ET.fromstring(_CAPABILITIES_XML)
+        if "GetProfiles" in envelope:
+            return ET.fromstring(profiles_xml)
+        if "GetStreamUri" in envelope:
+            return ET.fromstring(_STREAM_URI_XML)
+        return None
+
+    return router
+
+
+@pytest.mark.asyncio
+async def test_probe_device_skips_audio_only_first_profile(monkeypatch):
+    """When the first profile has no VideoEncoderConfiguration, the second
+    (video) profile token is used for GetStreamUri — not Audio_1."""
+    chosen_tokens: list[str] = []
+
+    base_router = _make_router_with_profiles(_PROFILES_AUDIO_FIRST_XML)
+
+    async def _fake_soap(client, url, envelope, timeout=3.0):
+        if "GetStreamUri" in envelope:
+            # Extract the ProfileToken from the request envelope to assert on it.
+            root = ET.fromstring(envelope)
+            for el in root.iter():
+                if el.tag.endswith("}ProfileToken") or el.tag == "ProfileToken":
+                    if el.text:
+                        chosen_tokens.append(el.text.strip())
+        return base_router(envelope)
+
+    monkeypatch.setattr(onvif, "_soap_request", _fake_soap)
+    out = await onvif._probe_device("http://10.0.0.5:80/onvif/device_service", client=None)
+
+    assert out["stream_url"] == "rtsp://10.0.0.5:554/Streaming/Channels/101"
+    # Must have used the video profile, not the audio-only first profile.
+    assert chosen_tokens == ["Video_1"], (
+        f"Expected ['Video_1'], got {chosen_tokens}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_probe_device_all_video_profiles_uses_first(monkeypatch):
+    """When every profile has a VideoEncoderConfiguration, the first one wins."""
+    chosen_tokens: list[str] = []
+
+    base_router = _make_router_with_profiles(_PROFILES_ALL_VIDEO_XML)
+
+    async def _fake_soap(client, url, envelope, timeout=3.0):
+        if "GetStreamUri" in envelope:
+            root = ET.fromstring(envelope)
+            for el in root.iter():
+                if el.tag.endswith("}ProfileToken") or el.tag == "ProfileToken":
+                    if el.text:
+                        chosen_tokens.append(el.text.strip())
+        return base_router(envelope)
+
+    monkeypatch.setattr(onvif, "_soap_request", _fake_soap)
+    out = await onvif._probe_device("http://10.0.0.5:80/onvif/device_service", client=None)
+
+    assert out["stream_url"] == "rtsp://10.0.0.5:554/Streaming/Channels/101"
+    assert chosen_tokens == ["Profile_1"], (
+        f"Expected ['Profile_1'], got {chosen_tokens}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_probe_device_falls_back_to_first_token_when_no_encoding_info(monkeypatch):
+    """When no profile carries VideoEncoderConfiguration, fall back to
+    profile_tokens[0] to preserve current behavior for compliant cameras."""
+    chosen_tokens: list[str] = []
+
+    base_router = _make_router_with_profiles(_PROFILES_NO_ENCODING_XML)
+
+    async def _fake_soap(client, url, envelope, timeout=3.0):
+        if "GetStreamUri" in envelope:
+            root = ET.fromstring(envelope)
+            for el in root.iter():
+                if el.tag.endswith("}ProfileToken") or el.tag == "ProfileToken":
+                    if el.text:
+                        chosen_tokens.append(el.text.strip())
+        return base_router(envelope)
+
+    monkeypatch.setattr(onvif, "_soap_request", _fake_soap)
+    out = await onvif._probe_device("http://10.0.0.5:80/onvif/device_service", client=None)
+
+    assert out["stream_url"] == "rtsp://10.0.0.5:554/Streaming/Channels/101"
+    # Fallback: first profile token in list order.
+    assert chosen_tokens == ["Profile_1"], (
+        f"Expected ['Profile_1'], got {chosen_tokens}"
+    )

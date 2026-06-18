@@ -306,6 +306,7 @@ async def _probe_device(onvif_url: str, client: httpx.AsyncClient) -> dict[str, 
     else:
         profile_elements = _find_all_recursive(profiles_root, "Profiles")
         profile_tokens: list[str] = []
+        first_video_token: str | None = None
         for prof in profile_elements:
             token = prof.get("token")
             name_elem = _find_recursive(prof, "Name")
@@ -315,6 +316,7 @@ async def _probe_device(onvif_url: str, client: httpx.AsyncClient) -> dict[str, 
                 profile_tokens.append(token)
 
             # Try to extract resolution from the video encoder config
+            vec_elem = _find_recursive(prof, "VideoEncoderConfiguration")
             width_elem = _find_recursive(prof, "Width")
             height_elem = _find_recursive(prof, "Height")
             if width_elem is not None and height_elem is not None:
@@ -323,9 +325,19 @@ async def _probe_device(onvif_url: str, client: httpx.AsyncClient) -> dict[str, 
                 if w and h and result["resolution"] is None:
                     result["resolution"] = f"{w}x{h}"
 
-        # Step 4. Get stream URI for the first profile
-        if profile_tokens:
-            stream_envelope = GET_STREAM_URI_ENVELOPE.format(profile_token=profile_tokens[0])
+            # Track the first profile that carries a VideoEncoderConfiguration.
+            # ONVIF profiles are not guaranteed to list video first; an
+            # audio-only or metadata-only first profile would yield a broken
+            # stream URL.  See Frigate PR #9708 and Nurby issue #101.
+            if first_video_token is None and vec_elem is not None and token:
+                first_video_token = token
+
+        # Step 4. Get stream URI for the first video profile, falling back to
+        # profile_tokens[0] when no profile exposes VideoEncoderConfiguration
+        # (preserves current behavior for fully-compliant cameras).
+        chosen_token = first_video_token or (profile_tokens[0] if profile_tokens else None)
+        if chosen_token:
+            stream_envelope = GET_STREAM_URI_ENVELOPE.format(profile_token=chosen_token)
             stream_root = await _soap_request(client, media_url, stream_envelope)
             if stream_root is not None and not _is_auth_fault(stream_root):
                 uri_elem = _find_recursive(stream_root, "Uri")

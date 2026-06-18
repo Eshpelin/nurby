@@ -675,8 +675,10 @@ class Event(Base):
     )
     # Footage covering the observation, resolved at fire time by camera +
     # timestamp. Lets an alert consumer jump straight to the clip.
+    # FK with ondelete="SET NULL" so retention deletes degrade gracefully
+    # ("no clip" link) rather than leaving a dangling id (fixes #102).
     recording_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
+        UUID(as_uuid=True), ForeignKey("recordings.id", ondelete="SET NULL"), nullable=True, index=True
     )
     fired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     # Denormalized from the rule (and demotable by a failed verify) so the
