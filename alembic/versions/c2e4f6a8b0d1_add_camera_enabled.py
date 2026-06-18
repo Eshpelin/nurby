@@ -1,7 +1,7 @@
 """add cameras.enabled (master per-camera enable/disable toggle)
 
 Revision ID: c2e4f6a8b0d1
-Revises: b1d3f5a7c9e2
+Revises: e3f5a7c9b1d4
 Create Date: 2026-06-18 00:00:00.000000
 
 Adds a master ``enabled`` boolean to the cameras table so an operator
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c2e4f6a8b0d1"
-down_revision: Union[str, Sequence[str], None] = "b1d3f5a7c9e2"
+down_revision: Union[str, Sequence[str], None] = "e3f5a7c9b1d4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
