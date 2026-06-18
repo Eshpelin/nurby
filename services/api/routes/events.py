@@ -137,8 +137,12 @@ async def event_history(
     status: str | None = Query(default=None),
     from_: datetime | None = Query(default=None, alias="from", description="Inclusive start (ISO 8601)"),
     to: datetime | None = Query(default=None, description="Inclusive end (ISO 8601)"),
-    person_id: uuid.UUID | None = Query(default=None, description="Filter to events whose observation names this person"),
-    label: str | None = Query(default=None, description="Filter to events whose observation carries this label"),
+    person_id: uuid.UUID | None = Query(
+        default=None, description="Filter to events whose observation names this person"
+    ),
+    label: str | None = Query(
+        default=None, description="Filter to events whose observation carries this label"
+    ),
     acked: bool | None = Query(default=None, description="true = acknowledged only, false = unreviewed only"),
     severity: str | None = Query(default=None, description="alert or detection"),
     limit: int = Query(default=50, le=200),
@@ -386,7 +390,11 @@ async def delete_event_note(
 
 
 @router.post("/{event_id}/acknowledge", response_model=EventResponse)
-async def acknowledge_event(event_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def acknowledge_event(
+    event_id: uuid.UUID,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")

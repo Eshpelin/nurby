@@ -686,7 +686,11 @@ async def test_webhook_delivery(
     if (ch.delivery_mode or "long_poll") != "webhook":
         raise HTTPException(status_code=400, detail="Channel is not in webhook mode.")
     ok, err = await _probe_backend_health()
-    return {"ok": bool(ok), "error": err, "probed_url": (settings.public_base_url or "").rstrip("/") + "/api/health" if settings.public_base_url else None}
+    probed_url = (
+        (settings.public_base_url or "").rstrip("/") + "/api/health"
+        if settings.public_base_url else None
+    )
+    return {"ok": bool(ok), "error": err, "probed_url": probed_url}
 
 
 def _escape_html(value: str) -> str:

@@ -135,7 +135,11 @@ async def list_observations(
 
 
 @router.get("/{observation_id}", response_model=ObservationResponse)
-async def get_observation(observation_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_observation(
+    observation_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     observation = await db.get(Observation, observation_id)
     allowed = await allowed_camera_ids(current_user, db)
     # 404 (not 403) when out of the caller's camera ACL, to avoid id probing.

@@ -715,7 +715,11 @@ async def _ensure_unique_display_name(
 
 
 @router.post("", response_model=PersonResponse, status_code=201)
-async def create_person(body: PersonCreate, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def create_person(
+    body: PersonCreate,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     await _ensure_unique_display_name(db, body.display_name)
     person = Person(**body.model_dump())
     db.add(person)
@@ -725,7 +729,11 @@ async def create_person(body: PersonCreate, _current_user: User = Depends(get_cu
 
 
 @router.get("/{person_id}", response_model=PersonResponse)
-async def get_person(person_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_person(
+    person_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -734,7 +742,10 @@ async def get_person(person_id: uuid.UUID, _current_user: User = Depends(get_cur
 
 @router.patch("/{person_id}", response_model=PersonResponse)
 async def update_person(
-    person_id: uuid.UUID, body: PersonUpdate, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    person_id: uuid.UUID,
+    body: PersonUpdate,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     person = await db.get(Person, person_id)
     if not person:
@@ -754,7 +765,11 @@ async def update_person(
 
 
 @router.delete("/{person_id}", status_code=204)
-async def delete_person(person_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def delete_person(
+    person_id: uuid.UUID,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")

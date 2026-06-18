@@ -61,7 +61,11 @@ async def list_rules(_current_user: User = Depends(get_current_user), db: AsyncS
 
 
 @router.post("", response_model=RuleResponse, status_code=201)
-async def create_rule(body: RuleCreate, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def create_rule(
+    body: RuleCreate,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     rule = Rule(**body.model_dump())
     db.add(rule)
     await db.commit()
@@ -93,7 +97,11 @@ async def rules_last_fired(
 
 
 @router.get("/{rule_id}", response_model=RuleResponse)
-async def get_rule(rule_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_rule(
+    rule_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     rule = await db.get(Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -101,7 +109,12 @@ async def get_rule(rule_id: uuid.UUID, _current_user: User = Depends(get_current
 
 
 @router.patch("/{rule_id}", response_model=RuleResponse)
-async def update_rule(rule_id: uuid.UUID, body: RuleUpdate, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def update_rule(
+    rule_id: uuid.UUID,
+    body: RuleUpdate,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     rule = await db.get(Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -152,7 +165,11 @@ async def unsnooze_rule(
 
 
 @router.delete("/{rule_id}", status_code=204)
-async def delete_rule(rule_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def delete_rule(
+    rule_id: uuid.UUID,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     rule = await db.get(Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")

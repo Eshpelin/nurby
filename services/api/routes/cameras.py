@@ -515,7 +515,11 @@ async def camera_motion_review_items(
 
 
 @router.post("", status_code=201)
-async def create_camera(body: CameraCreate, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def create_camera(
+    body: CameraCreate,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     payload = body.model_dump()
     # Credentials are sealed at rest (see shared/camera_secrets).
     payload["password"] = seal(payload.get("password"))
@@ -850,7 +854,11 @@ async def ptz_goto(
 
 
 @router.get("/{camera_id}")
-async def get_camera(camera_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_camera(
+    camera_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     await _require_camera_in_scope(camera_id, current_user, db)
     camera = await db.get(Camera, camera_id)
     if not camera:
@@ -870,7 +878,10 @@ async def get_camera(camera_id: uuid.UUID, current_user: User = Depends(get_curr
 
 @router.patch("/{camera_id}")
 async def update_camera(
-    camera_id: uuid.UUID, body: CameraUpdate, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)
+    camera_id: uuid.UUID,
+    body: CameraUpdate,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
 ):
     camera = await db.get(Camera, camera_id)
     if not camera:
@@ -1132,7 +1143,11 @@ async def live_detections(
 
 
 @router.delete("/{camera_id}", status_code=204)
-async def delete_camera(camera_id: uuid.UUID, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def delete_camera(
+    camera_id: uuid.UUID,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")

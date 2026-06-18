@@ -35,7 +35,11 @@ async def unread_count(_current_user: User = Depends(get_current_user), db: Asyn
 
 
 @router.patch("/{notification_id}/read", response_model=NotificationResponse)
-async def mark_read(notification_id: uuid.UUID, _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def mark_read(
+    notification_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     notif = await db.get(Notification, notification_id)
     if not notif:
         raise HTTPException(status_code=404, detail="Notification not found")
