@@ -23,9 +23,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # CPU one the other services use).
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install torch torchvision
-RUN --mount=type=cache,target=/root/.cache/pip pip install \
-    fastapi "uvicorn[standard]" httpx pydantic pydantic-settings \
-    transformers accelerate pillow huggingface_hub
+# Pinned set (notably transformers==4.57.1 — newer majors break the model's
+# custom modeling code). See services/grounding/requirements.txt.
+COPY services/grounding/requirements.txt /tmp/grounding-requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r /tmp/grounding-requirements.txt
 
 COPY shared/ shared/
 COPY services/__init__.py services/__init__.py

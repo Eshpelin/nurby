@@ -96,8 +96,8 @@ export function GroundingSettingsCard() {
           <p className="text-xs text-muted-foreground">
             Describe any object in plain language and Nurby points at it in your
             footage, beyond the fixed detector classes. Uses the LocateAnything
-            model. needs an NVIDIA GPU (local) or a remote endpoint, and downloads
-            ~6&nbsp;GB on first use.
+            model, which runs on an NVIDIA GPU or Apple Silicon. Downloads
+            ~6&nbsp;GB on first use. no account or token needed.
           </p>
         </div>
         <button

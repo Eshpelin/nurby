@@ -30,13 +30,17 @@ LocateAnything-3B (`nvidia/LocateAnything-3B`):
   Multiple boxes per response are possible.
 - **Architecture:** MoonViT vision encoder + Qwen2.5-3B-Instruct LM + MLP projector,
   Parallel Box Decoding. 3B params.
-- **Inference:** `transformers` with `trust_remote_code=True`, BF16. Needs a datacenter
-  NVIDIA GPU (Ampere/Hopper/Lovelace/Blackwell — A100/H100/L40). ~12–35 GB VRAM
-  depending on attention backend and image size. Seconds per frame. Modes fast/slow/hybrid.
-- **License:** **NVIDIA non-commercial** (academic/non-profit research only; commercial
-  use not permitted except by NVIDIA). The product owner has chosen to proceed; the
-  architecture stays model-agnostic so a permissively-licensed grounder
-  (Grounding DINO / OWLv2 / extended YOLO-World) can drop in for the commercial V2 path.
+- **Inference:** `transformers==4.57.1` (PINNED — 5.x breaks the model's custom modeling
+  code) with `trust_remote_code=True`, BF16. A datacenter NVIDIA GPU is *recommended* for
+  throughput, but **not required**: it also runs on **Apple Silicon (MPS)** and CPU. Validated
+  on an M4 / 48 GB MacBook Pro — 15 s load, ~1–5 s/frame in `slow` (autoregressive) mode.
+  The default `magi` attention is CUDA-only; off-CUDA we force `sdpa` (fully supported), and
+  `fast`/`hybrid` Parallel-Box-Decoding modes need CUDA kernels so off-CUDA clamps to `slow`.
+  Modes fast/slow/hybrid.
+- **License:** **NVIDIA non-commercial** (academic/non-profit research; fine for personal /
+  self-hosted use). The repo is **NOT gated** — it downloads with no HF token and no license
+  click-through. The architecture stays model-agnostic so a permissively-licensed grounder
+  (Grounding DINO / OWLv2 / extended YOLO-World) can drop in for a commercial path if needed.
 
 ### 1.1 Two properties that drive the whole design
 
@@ -213,54 +217,39 @@ in Rules. Avoid "AI Search" (collides with Ask). Honest tagline: *"Describe it, 
 
 ---
 
-## 4. Offline & installation (a blocker, solved separately)
+## 4. Offline & installation (simpler than first assumed)
 
-Nurby's offline guarantee today is `scripts/fetch-models.sh`: it host-side pulls **public**
-YOLO/InsightFace/EasyOCR assets and `COPY`s them into the image so runtime needs no network.
-LocateAnything-3B breaks every assumption that relies on:
+The v1 draft assumed this was a gated, token-required, must-mirror blocker. **That was wrong**
+(verified by actually pulling the model): `nvidia/LocateAnything-3B` is a **public, ungated**
+HuggingFace repo, so the weights download with **no HF token, no login, and no license
+click-through**. So the first-time UX is genuinely one step:
 
-- **Gated + licensed on HF** → cannot `curl`; needs an HF token + accepted license.
-- **Non-commercial license** → cannot legally bake the weights into a published image we
-  redistribute.
-- **`trust_remote_code=True`** → ships executable vendor Python; "offline" silently depends on
-  HF being reachable to fetch `modeling_*.py` unless we vendor and pin it.
+1. User flips **Enable FindAnything** (off by default).
+2. On first scan the grounding service runs `snapshot_download("nvidia/LocateAnything-3B")` —
+   ~6 GB, no token — into its weights volume, surfacing progress on the health endpoint.
+3. After that, run with `HF_HUB_OFFLINE=1` for a fully-offline runtime.
 
-**Therefore: an opt-in, one-time online setup step (net-new, not a reuse of fetch-models.sh).**
-Goal = Ollama-grade UX. Note Ollama does **not** bundle models into its install; you opt in per
-model (`ollama pull`) and it streams from a registry Ollama hosts. We copy that pattern, not a
-base-image bundle (see "why opt-in" below). It:
+`GROUNDING_MIRROR_URL` remains an **optional** override only for air-gapped installs that cannot
+reach huggingface.co. No token, mirror, or per-user license click is needed in the default path
+(`scripts/setup-grounding.sh` is now just an optional pre-fetch).
 
-1. records the user's NVIDIA-license acceptance — **folded into the Nurby install/enable flow**
-   (show the license, capture consent once, like any EULA);
-2. fetches the weights to a local volume, pinned to a `revision=<SHA>`;
-3. vendors + pins the `trust_remote_code` modeling files at that SHA;
-4. runtime then runs with `HF_HUB_OFFLINE=1` — **fully offline thereafter**.
+**Not via Ollama.** Nurby already uses Ollama for the *general* VLM, but Ollama/llama.cpp serve
+GGUF models from a fixed set of architectures and **cannot run LocateAnything** (custom
+`locateanything` arch: MoonViT vision tower + Parallel Box Decoding + `trust_remote_code`, shipped
+as safetensors + custom Python, no GGUF). So grounding is served by our own small transformers
+service (the §2.1 HTTP seam), downloaded directly. The general VLM stays on Ollama, unchanged.
 
-   (`snapshot_download(revision=<pinned SHA>)` + `HF_HUB_OFFLINE=1` already gives reproducibility;
-   a separate hand-rolled checksum/manifest step is belt-and-suspenders and can be deferred — do
-   not let it expand P0 scope.)
-
-**Where the weights come from — two options (decide before P0):**
-- **Nurby-hosted mirror** → truly one-click, no HF token (the full Ollama UX). Requires confirming
-  NVIDIA's license permits **redistribution** (a bigger act than *using* the model, and one that
-  must also be OK for the commercial V2 product). This is a legal check, not an engineering one.
-- **Automated HF pull with a one-time token** (recommended default) → user pastes an HF token +
-  accepts the license on HF once; we automate everything else. Slightly less slick but needs **no**
-  redistribution right from us, so zero legal exposure. Switch to the mirror once legal clears it.
-
-**Why opt-in, not bundled into the base download.** ~90% of self-hosters run on a NUC / old PC /
-Pi with **no datacenter GPU**. The model is ~6 GB **and won't run at all** without a supported
-NVIDIA GPU. Bundling it into base = 6 GB of dead weight + a scary GPU dependency for most users.
-So it is an **opt-in component** ("Enable FindAnything? ~6 GB, needs an NVIDIA GPU") that is
-one-step *when you opt in*. This is faithful to Ollama (opt-in per model), not a deviation from it.
-
-**This model can't run inside Ollama itself** (custom MoonViT vision tower + `trust_remote_code` +
-custom box decoding; Ollama/llama.cpp supports only a fixed set of architectures). We copy
-Ollama's *UX*; we host a small dedicated inference service for the model (the §2.1 HTTP seam).
+**Where it runs.** Datacenter NVIDIA GPU via the compose `grounding` profile is the throughput
+path. **On Apple Silicon, run the service natively on the host** (`python -m
+services.grounding.server`) — Docker Desktop cannot pass Metal/MPS into a Linux container — with
+the API container pointing at it (`grounding_backend=remote`, `http://host.docker.internal:8800`).
+Validated on an M4/48 GB: real model, ~15 s load, ~1–5 s/frame, 5 chickens located correctly.
+CPU also works (slower). So it is **not** a GPU-gated feature; it is opt-in only because it is a
+~6 GB download most self-hosters won't want by default.
 
 Off by default. The base install never touches it. Grounding has a global enable flag
 (default **off**) and a health surface (mirror the `vlm_health` navbar check) reporting
-model-loaded / OOM / disabled.
+model-loaded / downloading / disabled.
 
 **Remote backend = leaves the privacy boundary.** Sending frames (faces, plates, family) to a
 remote endpoint is exactly what this product exists to prevent. It is a *knowing developer

@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 #
-# One-time, opt-in setup for FindAnything / visual grounding (LocateAnything).
+# Optional pre-fetch for FindAnything / visual grounding (LocateAnything-3B).
 #
-# This is the "Enable FindAnything?" step (docs/findanything-design.md §4). It
-# is NOT part of the base install: the model is ~6GB and needs a datacenter
-# NVIDIA GPU, so ~90% of self-hosters never want it. Running this is the
-# explicit opt-in, and accepting the license here is the license consent.
+# You usually DON'T need to run this: when you enable FindAnything, the
+# grounding service downloads the model itself on first use. nvidia/
+# LocateAnything-3B is a public, ungated HuggingFace repo, so there is NO
+# token, NO login, and NO license click-through required. This script just
+# lets you pre-download the ~6 GB ahead of time (e.g. before going offline).
 #
-# Goal = Ollama-grade UX: when GROUNDING_MIRROR_URL is set, the weights stream
-# from the Nurby mirror as a single tarball, no HuggingFace token, no license
-# click. Without a mirror it falls back to a token-gated HuggingFace pull
-# (set HF_TOKEN). After this runs once, the grounding service is fully offline.
+# Air-gapped installs that cannot reach huggingface.co can instead point
+# GROUNDING_MIRROR_URL at an internal mirror serving the snapshot tarball.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -26,14 +25,6 @@ if [ -n "$(ls -A "$DEST" 2>/dev/null || true)" ]; then
   exit 0
 fi
 
-cat <<'EOF'
-────────────────────────────────────────────────────────────────────────────
-FindAnything uses NVIDIA LocateAnything-3B, licensed for non-commercial /
-research use (NVIDIA License). By continuing you accept those terms.
-See https://huggingface.co/nvidia/LocateAnything-3B for the full license.
-────────────────────────────────────────────────────────────────────────────
-EOF
-
 if [ -n "$MIRROR" ]; then
   TARNAME="${MODEL_ID//\//_}-${REVISION}.tar.gz"
   URL="${MIRROR%/}/${TARNAME}"
@@ -43,12 +34,14 @@ if [ -n "$MIRROR" ]; then
   tar -xzf "$TMP" -C "$DEST"
   rm -f "$TMP"
 else
-  : "${HF_TOKEN:?No GROUNDING_MIRROR_URL set and HF_TOKEN is empty. Set one of them.}"
-  echo "fetch grounding weights from HuggingFace ($MODEL_ID @ $REVISION)"
+  echo "fetch grounding weights from HuggingFace ($MODEL_ID @ $REVISION) — no token needed"
+  # HF_HUB_ENABLE_HF_TRANSFER speeds up the ~6 GB pull when hf_transfer is installed.
+  HF_HUB_ENABLE_HF_TRANSFER="${HF_HUB_ENABLE_HF_TRANSFER:-1}" \
   python - "$MODEL_ID" "$REVISION" "$DEST" <<'PY'
 import sys
 from huggingface_hub import snapshot_download
 model_id, revision, dest = sys.argv[1], sys.argv[2], sys.argv[3]
+# token is intentionally omitted: the repo is ungated.
 snapshot_download(repo_id=model_id, revision=revision, local_dir=dest)
 print("done")
 PY
@@ -56,3 +49,10 @@ fi
 
 echo "done. grounding weights in $DEST"
 du -sh "$DEST" 2>/dev/null || true
+
+cat <<'EOF'
+
+Note: LocateAnything-3B is under the NVIDIA non-commercial research license.
+Fine for personal / self-hosted use; review the license for other uses:
+https://huggingface.co/nvidia/LocateAnything-3B
+EOF

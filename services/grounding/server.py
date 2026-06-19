@@ -38,11 +38,26 @@ app = FastAPI(title="Nurby Grounding", version="0.1.0")
 _STATE: dict = {
     "model": None,
     "processor": None,
+    "tokenizer": None,
+    "device": None,
     "loading": False,
     "downloading": False,
     "download_pct": None,
     "error": None,
 }
+
+
+def _pick_device():
+    """cuda > mps (Apple Silicon) > cpu. The model card targets datacenter
+    GPUs, but a 3B model in bf16 (~6GB) runs on Apple Silicon's unified memory
+    via Metal/MPS too, just slower."""
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 _LOAD_LOCK = asyncio.Lock()
 
 
@@ -112,18 +127,20 @@ async def _ensure_loaded() -> None:
 
 
 async def _ensure_weights() -> None:
-    """Make sure the weights are present, downloading from the mirror if not.
+    """Make the weights present, downloading on first use.
 
-    This is the "click → it just downloads" path (design §4). The mirror
-    serves a single tar.gz of the pinned snapshot, so there is no HF token and
-    no license click at runtime (consent was captured at install/enable).
+    No HF token and no license click are required: nvidia/LocateAnything-3B is
+    a public, **ungated** repo, so a plain ``snapshot_download`` just works.
+    This is the genuine one-click "enable → it downloads → it works" path
+    (design §4). ``GROUNDING_MIRROR_URL`` is an optional override only for
+    air-gapped installs that cannot reach huggingface.co.
     """
     dest = Path(settings.grounding_weights_dir)
     if dest.exists() and any(dest.iterdir()):
         return
+    dest.mkdir(parents=True, exist_ok=True)
 
     mirror = settings.grounding_mirror_url
-    dest.mkdir(parents=True, exist_ok=True)
     if mirror:
         tar_name = (
             f"{settings.grounding_model_id.replace('/', '_')}"
@@ -140,22 +157,26 @@ async def _ensure_weights() -> None:
             _STATE["download_pct"] = None
         return
 
-    # No mirror configured. fall back to a token-gated HuggingFace pull.
-    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-    if not token:
-        raise RuntimeError(
-            "grounding weights missing and no GROUNDING_MIRROR_URL or HF_TOKEN set. "
-            "Run scripts/setup-grounding.sh."
-        )
+    # Default: direct, token-free pull from HuggingFace (the repo is ungated).
+    # An HF token is optional and only raises anonymous rate limits.
     from huggingface_hub import snapshot_download
 
-    await asyncio.to_thread(
-        snapshot_download,
-        repo_id=settings.grounding_model_id,
-        revision=settings.grounding_model_revision,
-        local_dir=str(dest),
-        token=token,
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN") or None
+    logger.info(
+        "downloading grounding weights from HuggingFace (%s, no token required)",
+        settings.grounding_model_id,
     )
+    _STATE["downloading"] = True
+    try:
+        await asyncio.to_thread(
+            snapshot_download,
+            repo_id=settings.grounding_model_id,
+            revision=settings.grounding_model_revision,
+            local_dir=str(dest),
+            token=token,
+        )
+    finally:
+        _STATE["downloading"] = False
 
 
 async def _download_and_extract(url: str, dest: Path) -> None:
@@ -185,22 +206,28 @@ def _safe_extract(buf: io.BytesIO, dest: Path) -> None:
 
 def _load_model() -> None:
     import torch
-    from transformers import AutoModel, AutoProcessor
+    from transformers import AutoModel, AutoProcessor, AutoTokenizer
 
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    # Let unsupported MPS ops fall back to CPU instead of erroring.
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
     src = settings.grounding_weights_dir
-    logger.info("loading grounding model from %s (bf16)", src)
+    device = _pick_device()
+    # The model's default text attention is `magi` (CUDA/Hopper only); off-CUDA
+    # we force `sdpa`, which the model fully supports (MoonViT also auto-falls
+    # back to sdpa without flash-attn).
+    attn = None if device == "cuda" else "sdpa"
+    logger.info("loading grounding model from %s (bf16, device=%s, attn=%s)", src, device, attn)
+    tokenizer = AutoTokenizer.from_pretrained(src, trust_remote_code=True)
     processor = AutoProcessor.from_pretrained(src, trust_remote_code=True)
-    model = AutoModel.from_pretrained(
-        src,
-        trust_remote_code=True,
-        torch_dtype=torch.bfloat16,
-    )
-    if torch.cuda.is_available():
-        model = model.to("cuda")
-    model.eval()
+    kwargs = {"trust_remote_code": True, "torch_dtype": torch.bfloat16}
+    if attn:
+        kwargs["attn_implementation"] = attn
+    model = AutoModel.from_pretrained(src, **kwargs).to(device).eval()
+    _STATE["tokenizer"] = tokenizer
     _STATE["processor"] = processor
     _STATE["model"] = model
+    _STATE["device"] = device
 
 
 def _decode_image(image_b64: str):
@@ -216,28 +243,49 @@ def _decode_image(image_b64: str):
 
 
 def _run_inference(image, prompt: str, mode: str, max_new_tokens: int) -> str:
-    """Generate the model's raw coordinate text.
+    """Generate the model's raw coordinate text via the LocateAnything recipe.
 
-    NOTE: the exact processor/generate call must be confirmed against the
-    LocateAnything-3B model card when wiring real hardware (the model ships
-    custom modeling code via trust_remote_code). This follows the standard
-    transformers VLM shape and is intentionally never exercised in CI.
+    Follows the model card's worker recipe (py_apply_chat_template +
+    process_vision_info + the custom generate signature). The user's prompt is
+    wrapped in the grounding instruction template. On Apple Silicon / CPU the
+    `fast`/`hybrid` Parallel-Box-Decoding modes need CUDA kernels, so we clamp
+    to `slow` (plain autoregressive), which produces the same <box> output.
     """
     import torch
 
     model = _STATE["model"]
     processor = _STATE["processor"]
-    inputs = processor(images=image, text=prompt, return_tensors="pt")
-    if torch.cuda.is_available():
-        inputs = {k: v.to("cuda") for k, v in inputs.items()}
-    gen_kwargs = {"max_new_tokens": max_new_tokens}
-    # The model card exposes fast | slow | hybrid via generation_mode.
-    if mode:
-        gen_kwargs["generation_mode"] = mode
-    with torch.inference_mode():
-        out = model.generate(**inputs, **gen_kwargs)
-    text = processor.batch_decode(out, skip_special_tokens=False)[0]
-    return text
+    tokenizer = _STATE["tokenizer"]
+    device = _STATE["device"] or "cpu"
+
+    if device != "cuda":
+        mode = "slow"
+
+    question = f"Locate all the instances that matches the following description: {prompt}."
+    messages = [{"role": "user", "content": [
+        {"type": "image", "image": image},
+        {"type": "text", "text": question},
+    ]}]
+    text = processor.py_apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    images, videos = processor.process_vision_info(messages)
+    inputs = processor(text=[text], images=images, videos=videos, return_tensors="pt").to(device)
+    pixel_values = inputs["pixel_values"].to(torch.bfloat16)
+
+    with torch.no_grad():
+        resp = model.generate(
+            pixel_values=pixel_values,
+            input_ids=inputs["input_ids"],
+            attention_mask=inputs["attention_mask"],
+            image_grid_hws=inputs.get("image_grid_hws", None),
+            tokenizer=tokenizer,
+            max_new_tokens=max_new_tokens,
+            use_cache=True,
+            generation_mode=mode,
+            do_sample=False,
+            verbose=False,
+        )
+    answer = resp[0] if isinstance(resp, tuple) else resp
+    return answer if isinstance(answer, str) else str(answer)
 
 
 def main() -> None:  # pragma: no cover - container entrypoint

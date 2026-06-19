@@ -1,0 +1,26 @@
+# Runtime deps for the FindAnything / visual grounding service.
+#
+# transformers is PINNED: LocateAnything-3B ships custom trust_remote_code that
+# matches transformers 4.57.x. Newer majors (5.x) changed the attention-impl
+# signature and break model load with `unexpected keyword argument
+# 'allow_all_kernels'`. Do not bump without re-validating against the model.
+#
+# torch / torchvision are installed separately (CPU/CUDA wheel on Linux, the
+# default wheel on Apple Silicon for MPS), so they are intentionally not here.
+transformers==4.57.1
+accelerate
+peft
+huggingface_hub
+hf_transfer
+pillow
+lmdb
+# Video decoding the processor imports at load. decord has no Apple-Silicon
+# wheel, so macOS uses the eva-decord fork (provides the same `decord` module).
+decord==0.6.0; platform_system != "Darwin"
+eva-decord; platform_system == "Darwin"
+# HTTP server (the §2.1 seam).
+fastapi
+uvicorn[standard]
+httpx
+pydantic
+pydantic-settings
