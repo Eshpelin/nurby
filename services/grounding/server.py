@@ -75,6 +75,13 @@ class GroundResponse(BaseModel):
 
 @app.get("/health")
 async def health() -> dict:
+    # Resolve the device even before the model loads so the UI can tell the
+    # user whether grounding will run on a GPU (cuda), Apple Silicon (mps),
+    # or fall back to (slow) cpu.
+    try:
+        device = _STATE["device"] or _pick_device()
+    except Exception:
+        device = None
     return {
         "status": "ok" if _STATE["model"] is not None else "cold",
         "model_loaded": _STATE["model"] is not None,
@@ -82,6 +89,7 @@ async def health() -> dict:
         "download_pct": _STATE["download_pct"],
         "model": settings.grounding_model_id,
         "revision": settings.grounding_model_revision,
+        "device": device,
         "error": _STATE["error"],
     }
 

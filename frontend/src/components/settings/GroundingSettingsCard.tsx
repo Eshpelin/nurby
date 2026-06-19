@@ -15,8 +15,13 @@ interface GroundingHealth {
   model_loaded?: boolean;
   downloading?: boolean;
   download_pct?: number | null;
+  device?: string | null; // cuda | mps | cpu (reported by the grounding service)
   error?: string;
 }
+
+const IS_MAC =
+  typeof navigator !== "undefined" &&
+  /Mac/i.test(navigator.platform || navigator.userAgent || "");
 
 export function GroundingSettingsCard() {
   const { authFetch, user } = useAuth();
@@ -123,7 +128,7 @@ export function GroundingSettingsCard() {
               onChange={(e) => {
                 const v = e.target.value === "remote" ? "remote" : "local";
                 setBackend(v);
-                patch({ grounding_backend: v });
+                patch({ grounding_backend: v }).then(loadHealth);
               }}
               className="text-xs bg-background border border-border rounded px-2 py-1"
             >
@@ -151,10 +156,54 @@ export function GroundingSettingsCard() {
           {health && (
             <p className="text-[11px] text-muted-foreground">
               Status: {health.status ?? (health.model_loaded ? "ready" : "cold")}
+              {health.device ? ` · running on ${health.device.toUpperCase()}` : ""}
               {health.downloading ? ` · downloading model ${health.download_pct ?? 0}%` : ""}
               {health.error ? ` · ${health.error}` : ""}
             </p>
           )}
+
+          {/* Setup & platform help. The grounding model needs to run where it
+              can reach a GPU; what that means depends on the OS, so we spell it
+              out here (the right moment is when you've opted in) rather than in
+              the generic first-run wizard. */}
+          {backend === "local" && (() => {
+            const reachable =
+              !!health && health.status !== "unreachable" && health.status !== "misconfigured";
+            const mac = (
+              <li>
+                <span className="text-foreground">Apple Silicon (Mac):</span> run it on your host —{" "}
+                <code className="bg-background px-1 rounded">python -m services.grounding.server</code>.
+                Docker can&apos;t use the Mac GPU (Metal), so it must run outside the container.
+              </li>
+            );
+            const linux = (
+              <li>
+                <span className="text-foreground">Linux + NVIDIA GPU:</span>{" "}
+                <code className="bg-background px-1 rounded">docker compose --profile grounding up -d grounding</code>.
+              </li>
+            );
+            return (
+              <div
+                className={`text-[11px] rounded px-2 py-1.5 space-y-1 border ${reachable ? "text-muted-foreground border-border bg-muted/40" : "text-amber-300 border-amber-500/30 bg-amber-500/10"}`}
+              >
+                <div>
+                  {reachable
+                    ? "Grounding service connected. Where it runs:"
+                    : "Grounding service not reachable yet. Start it where it can use a GPU:"}
+                </div>
+                <ul className="list-disc pl-4 space-y-1">
+                  {IS_MAC ? <>{mac}{linux}</> : <>{linux}{mac}</>}
+                  <li>
+                    <span className="text-foreground">No GPU:</span> switch Backend to{" "}
+                    <em>Remote endpoint</em> above (frames leave your machine), or expect slow CPU.
+                  </li>
+                </ul>
+                <div className="text-[10px] opacity-80">
+                  ~6&nbsp;GB downloads automatically on first scan. no account or token needed.
+                </div>
+              </div>
+            );
+          })()}
 
           {!isAdmin && (
             <p className="text-[10px] text-muted-foreground">Only an admin can change these.</p>
