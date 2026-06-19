@@ -40,10 +40,16 @@ export function CameraWall({
   items,
   onExit,
   toolbarExtra,
+  fullscreenRef,
 }: {
   items: WallItem[];
   onExit?: () => void;
   toolbarExtra?: React.ReactNode;
+  // Element to take to OS fullscreen. Defaults to the wall itself, but the
+  // dashboard passes the wrapper that ALSO holds the timeline panel, so going
+  // fullscreen keeps the timeline visible instead of hiding it (only the
+  // fullscreened subtree renders). Collapse the timeline first for cameras-only.
+  fullscreenRef?: React.RefObject<HTMLElement | null>;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -123,11 +129,13 @@ export function CameraWall({
   }, [cols]);
 
   const toggleFullscreen = useCallback(() => {
-    const el = rootRef.current;
+    // Prefer the dashboard wrapper (wall + timeline) so the timeline survives
+    // fullscreen; fall back to the wall's own root.
+    const el = fullscreenRef?.current ?? rootRef.current;
     if (!el) return;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
     else el.requestFullscreen?.().catch(() => undefined);
-  }, []);
+  }, [fullscreenRef]);
 
   const resetLayout = useCallback(() => {
     setSpans({});

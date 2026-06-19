@@ -652,6 +652,9 @@ function DashboardContent() {
     if (typeof window !== "undefined" && localStorage.getItem("nurby-timeline-open") === "false") return false;
     return true;
   });
+  // Wraps the camera wall + the timeline panel. The wall's Fullscreen button
+  // targets this so the timeline stays visible in fullscreen (see CameraWall).
+  const dashboardWrapRef = useRef<HTMLDivElement>(null);
   const toggleTimeline = useCallback(() => {
     setTimelineOpen((open) => {
       const next = !open;
@@ -1516,10 +1519,11 @@ function DashboardContent() {
         />
       )}
 
-      <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
+      <div ref={dashboardWrapRef} className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 bg-background">
         {/* LEFT. Customizable camera wall (the main area). */}
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           <CameraWall
+            fullscreenRef={dashboardWrapRef}
             items={[
               ...cameras.map((cam): WallItem => ({ id: cam.id, name: cam.name, render: () => renderWallTile(cam) })),
               ...widgets.map((w): WallItem => ({
