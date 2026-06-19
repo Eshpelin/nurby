@@ -459,6 +459,16 @@ autonomous until the hallucination/verification story is proven.
   plus an optional non-sticky "Deep visual scan" toggle — adopted in §3.2. This also **dissolved the
   hardest P1 blocker**: the scan is now a direct user-initiated endpoint, so the agent pause/resume
   consent machinery is no longer needed (§3.6 rewritten).
-- **Status:** three review passes + owner direction folded in. **P0 is buildable once §12 Q1 +
-  Q1b (backend + weights distribution) are picked. Recommended next: confirm those two, then spike
-  P0 behind the global enable flag.**
+- **Status:** three review passes + owner direction folded in.
+- **Implemented** on branch `feat/findanything-locateanything` (owner decisions: local-GPU reference
+  + remote escape hatch, Nurby mirror weights, personal/non-commercial use, auto-download in the
+  search flow). Shipped P0 (grounding core: HTTP seam, `<box>` parser, priority gate, dedicated
+  config, GPU service + mirror auto-download, docker-compose profile, SSRF), P1 (deep-scan endpoint
+  + job poll + intent routing + two UI entry points + Settings card), P3 (`locate` rule action with
+  the §6 corroboration gate), and P2's cache half (append-only `grounding_results` table + migration
+  validated on a real pgvector Postgres + teach-the-index write-back). 63 unit tests green
+  (46 new + 17 regression), ruff + tsc + eslint clean. **Deferred** (documented): persisting a clean
+  unannotated keyframe in the live ingestion path (§7. unverifiable hot-path change. scan grounds
+  the existing thumbnail meanwhile) and the autonomous P4 items. The real GPU inference in
+  `services/grounding/server.py` is write-only behind a GPU marker per §10 (no datacenter GPU in
+  CI), so the exact LocateAnything processor/generate call must be confirmed on real hardware.
