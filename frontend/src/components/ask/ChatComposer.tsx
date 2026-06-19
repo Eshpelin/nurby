@@ -25,6 +25,11 @@ interface ChatComposerProps {
   usage: UsageToday | null;
   usageLoading: boolean;
   focusKey?: number;
+  // FindAnything "Deep visual scan" toggle (design §3.2). Per-search and
+  // non-sticky: the parent resets it after each send so nobody leaves it on
+  // and hammers the GPU. Optional so other callers are unaffected.
+  deepScan?: boolean;
+  onToggleDeepScan?: (v: boolean) => void;
 }
 
 export default function ChatComposer({
@@ -42,6 +47,8 @@ export default function ChatComposer({
   usage,
   usageLoading,
   focusKey = 0,
+  deepScan = false,
+  onToggleDeepScan,
 }: ChatComposerProps) {
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -89,6 +96,20 @@ export default function ChatComposer({
             deploying={deploying}
           />
           <CostMeter usage={usage} loading={usageLoading} />
+          {onToggleDeepScan && (
+            <label
+              className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none"
+              title="Slower: scans the raw footage with the visual grounding model. Uses the GPU."
+            >
+              <input
+                type="checkbox"
+                checked={deepScan}
+                onChange={(e) => onToggleDeepScan(e.target.checked)}
+                className="accent-green-500"
+              />
+              Deep visual scan
+            </label>
+          )}
           <div className="ml-auto flex items-center gap-2">
             {inFlight && (
               <button

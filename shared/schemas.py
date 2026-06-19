@@ -443,7 +443,19 @@ class NotificationResponse(BaseModel):
 
 _VALID_ACTION_TYPES = {
     "webhook", "api_call", "broadcast", "notify", "email", "vlm_call", "telegram",
-    "verify",
+    "verify", "locate",
+}
+
+# The shape a `locate` action binds into vars, so {{vars.<output>.found}} etc.
+# validate against the action chain's static ref check.
+_LOCATE_OUTPUT_SCHEMA = {
+    "properties": {
+        "found": {"type": "boolean"},
+        "count": {"type": "integer"},
+        "label": {"type": "string"},
+        "corroborated": {"type": "boolean"},
+        "boxes": {"type": "array"},
+    }
 }
 
 # Phase 2 inline-button actions. Kept in lockstep with
@@ -526,6 +538,31 @@ def _validate_verify_action(action, idx: int) -> None:
         raise ValueError(f"action[{idx}] verify on_fail must be 'stop' or 'continue'")
 
 
+def _validate_locate_action(action, idx: int) -> None:
+    """Validate a ``locate`` (FindAnything) action. ``prompt`` is required;
+    ``on_fail`` (if present) is stop|continue; ``min_overlap`` (if present) is a
+    float in [0, 1]; ``require_corroboration`` (if present) is a bool. There is
+    deliberately no ``min_confidence``. the model has no calibrated score."""
+    prompt = action.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError(f"action[{idx}] locate requires a non-empty 'prompt'")
+
+    on_fail = action.get("on_fail")
+    if on_fail is not None and on_fail not in ("stop", "continue"):
+        raise ValueError(f"action[{idx}] locate on_fail must be 'stop' or 'continue'")
+
+    mo = action.get("min_overlap")
+    if mo is not None:
+        if isinstance(mo, bool) or not isinstance(mo, (int, float)):
+            raise ValueError(f"action[{idx}] locate min_overlap must be a number")
+        if not (0.0 <= float(mo) <= 1.0):
+            raise ValueError(f"action[{idx}] locate min_overlap must be in [0, 1]")
+
+    rc = action.get("require_corroboration")
+    if rc is not None and not isinstance(rc, bool):
+        raise ValueError(f"action[{idx}] locate require_corroboration must be a boolean")
+
+
 def _validate_action_chain(actions):
     """Static checks. each action is a dict, has a known type, and
     any `{{vars.X.*}}` references point to an `output` declared by a
@@ -551,6 +588,9 @@ def _validate_action_chain(actions):
 
         if a_type == "verify":
             _validate_verify_action(action, idx)
+
+        if a_type == "locate":
+            _validate_locate_action(action, idx)
 
         refs = collect_refs(action)
         for ref in refs:
@@ -580,6 +620,14 @@ def _validate_action_chain(actions):
                 known_outputs.add(output)
                 if isinstance(action.get("response_schema"), dict):
                     known_schemas[output] = action["response_schema"]
+
+        if a_type == "locate":
+            output = action.get("output")
+            if output:
+                if not re.fullmatch(r"[a-zA-Z_][\w]*", output):
+                    raise ValueError(f"action[{idx}] output '{output}' is not a valid identifier")
+                known_outputs.add(output)
+                known_schemas[output] = _LOCATE_OUTPUT_SCHEMA
 
 
 def _validate_trigger_pattern(trigger_pattern: dict) -> None:
@@ -979,6 +1027,10 @@ class SystemSettingsResponse(BaseModel):
     guardian_pickup_window_seconds: int = 120
     guardian_image_blur_radius: int = 12
     guardian_unblurred_clips_enabled: bool = False
+    # FindAnything / visual grounding.
+    grounding_enabled: bool = False
+    grounding_backend: str = "local"
+    grounding_remote_url: str | None = None
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -1012,6 +1064,10 @@ class SystemSettingsUpdate(BaseModel):
     guardian_pickup_window_seconds: int | None = Field(default=None, ge=10, le=1800)
     guardian_image_blur_radius: int | None = Field(default=None, ge=1, le=100)
     guardian_unblurred_clips_enabled: bool | None = None
+    # FindAnything / visual grounding.
+    grounding_enabled: bool | None = None
+    grounding_backend: str | None = Field(default=None, pattern="^(local|remote)$")
+    grounding_remote_url: str | None = None
 
 
 # -- User schemas --

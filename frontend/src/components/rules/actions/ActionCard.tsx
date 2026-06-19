@@ -13,6 +13,7 @@ import {
   type TelegramDraft,
   type VlmCallDraft,
   type VerifyDraft,
+  type LocateDraft,
   type TelegramChannelOption,
 } from "../types";
 import { useSortable } from "@dnd-kit/sortable";
@@ -25,6 +26,7 @@ import { EmailEditor } from "./EmailEditor";
 import { TelegramEditor } from "./TelegramEditor";
 import { VlmCallEditor } from "./VlmCallEditor";
 import { VerifyEditor } from "./VerifyEditor";
+import { LocateEditor } from "./LocateEditor";
 import { type VarSpec } from "./VarInserter";
 
 export interface ActionCardProps {
@@ -75,6 +77,7 @@ export function ActionCard({
   // vlm_call only when its on-error is set to stop.
   const canStopChain =
     draft.type === "verify" ||
+    (draft.type === "locate" && (draft as LocateDraft).onFail === "stop") ||
     (draft.type === "vlm_call" && (draft as VlmCallDraft).onError === "stop");
 
   // One-line summary shown when the card is collapsed.
@@ -211,6 +214,12 @@ export function ActionCard({
           {draft.type === "verify" && (
             <VerifyEditor
               draft={draft as VerifyDraft}
+              onChange={(next) => onReplace(next)}
+            />
+          )}
+          {draft.type === "locate" && (
+            <LocateEditor
+              draft={draft as LocateDraft}
               onChange={(next) => onReplace(next)}
             />
           )}

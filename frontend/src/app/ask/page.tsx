@@ -15,6 +15,8 @@ import ChatComposer from "@/components/ask/ChatComposer";
 import Conversation from "@/components/ask/Conversation";
 import EmptyState from "@/components/ask/EmptyState";
 import OnboardingModal from "@/components/ask/OnboardingModal";
+import { DeepScanResults } from "@/components/search/DeepScanResults";
+import { useDeepScan } from "@/lib/useDeepScan";
 import type {
   AgentRunDetail,
   ProviderModel,
@@ -46,6 +48,11 @@ export default function AskPage() {
   const [composerFocusKey, setComposerFocusKey] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // FindAnything deep visual scan. The composer toggle (deepScan) is
+  // non-sticky: it kicks a scan alongside the agent ask, then resets.
+  const deep = useDeepScan();
+  const [deepScan, setDeepScan] = useState(false);
 
   const stream = useAgentRunStream(activeRunId, token);
   const isStreaming = activeRunId !== null && stream.status !== "closed" && stream.status !== "error";
@@ -191,6 +198,13 @@ export default function AskPage() {
     if (!model || !questionText.trim()) return;
     setSubmitError(null);
     setText("");
+    // FindAnything deep scan is independent of the agent (design §3.2/§3.6):
+    // fire it on send when toggled, BEFORE the agent ask, so a failed/uncon-
+    // figured agent never blocks visual search. Non-sticky: reset the toggle.
+    if (deepScan) {
+      deep.start(questionText);
+      setDeepScan(false);
+    }
     // Parent run only inherits within 5 min idle window.
     const recent = Date.now() - lastTurnFinishedAt.current < 5 * 60 * 1000;
     const parent = recent ? parentRunId : null;
@@ -230,7 +244,7 @@ export default function AskPage() {
       setSubmitError(e instanceof Error ? e.message : "Network error.");
       setActiveQuestion(null);
     }
-  }, [authFetch, model, parentRunId]);
+  }, [authFetch, model, parentRunId, deepScan, deep]);
 
   const cancelActive = useCallback(async () => {
     if (!activeRunId) return;
@@ -303,6 +317,11 @@ export default function AskPage() {
   // or fall back to keyword search) instead of persona cards that can't
   // send because no model is selected.
   const noProviders = !providersLoading && !providersMissing && providers.length === 0;
+
+  // The query the "Scan the raw footage" button grounds: the in-flight
+  // question, else the last asked one, else whatever is in the composer.
+  const lastQuestion =
+    activeQuestion || pastRuns[pastRuns.length - 1]?.question || text;
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
@@ -379,6 +398,37 @@ export default function AskPage() {
                 isStreaming={isStreaming}
               />
             )}
+
+            {/* FindAnything entry point: offered on every result set so it
+                catches both "no results" and "results, but not what I meant"
+                (design §3.2). The click is the cost consent (§3.6). Also shown
+                whenever a scan is active/has results, so it survives even when
+                the agent produced no conversation (FindAnything is independent
+                of the agent). */}
+            {!noProviders && (!showEmpty || deep.scan || deep.running) && (
+              <div className="mt-6">
+                {!deep.scan && (
+                  <button
+                    type="button"
+                    onClick={() => deep.start(lastQuestion)}
+                    disabled={!lastQuestion.trim()}
+                    className="text-xs px-3 py-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                  >
+                    Not seeing it? Scan the raw footage →
+                  </button>
+                )}
+                <DeepScanResults scan={deep.scan} error={deep.error} />
+                {deep.scan && !deep.running && (
+                  <button
+                    type="button"
+                    onClick={deep.reset}
+                    className="mt-3 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Clear scan
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -397,6 +447,8 @@ export default function AskPage() {
           usage={usage}
           usageLoading={usageLoading}
           focusKey={composerFocusKey}
+          deepScan={deepScan}
+          onToggleDeepScan={setDeepScan}
         />
       </main>
 

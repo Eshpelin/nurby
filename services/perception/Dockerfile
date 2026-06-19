@@ -70,6 +70,8 @@ COPY services/api/ services/api/
 # The pipeline and audio path import the rule engine and these siblings.
 # Ship them so imports resolve at startup. heavy paths load lazily.
 COPY services/events/ services/events/
+# FindAnything grounding: the events `locate` action imports it at runtime.
+COPY services/grounding/ services/grounding/
 COPY services/discovery/ services/discovery/
 COPY services/notify/ services/notify/
 COPY services/guardian/ services/guardian/

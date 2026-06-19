@@ -19,6 +19,8 @@ COPY shared/ shared/
 COPY services/agent/ services/agent/
 COPY services/perception/ services/perception/
 COPY services/search/ services/search/
+# FindAnything grounding: search/events import it at runtime.
+COPY services/grounding/ services/grounding/
 COPY services/events/ services/events/
 COPY services/notify/ services/notify/
 COPY services/mcp/ services/mcp/

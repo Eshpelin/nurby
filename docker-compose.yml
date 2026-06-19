@@ -114,6 +114,41 @@ services:
     #           count: all
     #           capabilities: [gpu]
 
+  # FindAnything / visual grounding (LocateAnything-3B). The model is ~6GB and
+  # needs a datacenter NVIDIA GPU, so it is behind the "grounding" profile: a
+  # plain `docker compose up` never builds or starts it. Enable with:
+  #   docker compose --profile grounding up -d grounding
+  # The API + perception services reach it at http://grounding:8800. Weights
+  # are fetched once on first use from GROUNDING_MIRROR_URL into the
+  # grounding_models volume, then it runs fully offline.
+  grounding:
+    profiles: ["grounding"]
+    image: ghcr.io/${NURBY_REGISTRY_OWNER:-eshpelin}/nurby-grounding:${NURBY_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: services/grounding/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8800:8800"
+    environment:
+      GROUNDING_WEIGHTS_DIR: /data/grounding
+      GROUNDING_MODEL_ID: ${GROUNDING_MODEL_ID:-nvidia/LocateAnything-3B}
+      GROUNDING_MODEL_REVISION: ${GROUNDING_MODEL_REVISION:-main}
+      # Nurby mirror for one-click, token-free weights download (design §4).
+      GROUNDING_MIRROR_URL: ${GROUNDING_MIRROR_URL:-}
+      # Fallback when no mirror is set: a HuggingFace token for the gated pull.
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - grounding_models:/data/grounding
+    # Requires a supported NVIDIA GPU + nvidia-container-toolkit on the host.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
   # Nurby MCP server. exposes the read-only agent tools over the Model
   # Context Protocol so any MCP client (Claude Desktop, etc) can query a
   # household's cameras. Behind the "mcp" profile so a plain
@@ -239,3 +274,4 @@ volumes:
   thumbnails:
   audio:
   ollama_models:
+  grounding_models:

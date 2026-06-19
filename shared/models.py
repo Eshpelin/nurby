@@ -628,6 +628,47 @@ class ObservationVlmPass(Base):
     )
 
 
+class GroundingResult(Base):
+    """A FindAnything visual-grounding result for one (observation, prompt).
+
+    Append-only and query-dependent: grounding is ``prompt + frame -> boxes``,
+    so one observation can be grounded by many prompts (design §7). Keyed by
+    (observation_id, prompt_hash, model_revision) for idempotency. it doubles
+    as the persistent cache (skip re-inference) AND the teach-the-index tag
+    store (a located 'chicken' makes the next search for it instant). It is
+    safe-by-default w.r.t. rules: the engine only evaluates live ``rule_data``
+    and never re-runs against stored rows, so a written tag cannot retro-fire
+    an automation (design §7.1).
+    """
+
+    __tablename__ = "grounding_results"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    observation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("observations.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    # Normalized query text plus its hash (the cache/lookup key component).
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    model_revision: Mapped[str] = mapped_column(String(64), nullable=False)
+    found: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    corroborated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # [{"bbox_norm": [x1,y1,x2,y2], "is_point": bool, "label": str}, ...]
+    boxes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "observation_id", "prompt_hash", "model_revision",
+            name="ux_grounding_obs_prompt_rev",
+        ),
+    )
+
+
 class DigestEntry(Base):
     __tablename__ = "digest_entries"
 

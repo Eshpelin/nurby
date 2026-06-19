@@ -1,7 +1,8 @@
+import asyncio
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -217,3 +218,138 @@ async def run_backfill(
         updated=updated,
         message=f"Backfill complete. {updated} observations updated with embeddings.",
     )
+
+
+# ── FindAnything deep scan (visual grounding) ──────────────────────────
+#
+# Direct, user-initiated visual search: the "Scan the raw footage" button /
+# "Deep visual scan" toggle land here (design §3.2/§3.6). It pre-filters
+# candidate frames from the index then runs grounding only on those, streaming
+# boxes back via the poll endpoint. Person/identity queries are routed to
+# face-rec instead of grounding (§3.4).
+
+
+class ScanRequest(BaseModel):
+    query: str
+    camera_id: uuid.UUID | None = None
+    time_from: datetime | None = None
+    time_to: datetime | None = None
+    max_frames: int | None = None
+
+
+class ScanRoutedModel(BaseModel):
+    kind: str
+    name: str
+    message: str
+
+
+class ScanFrameModel(BaseModel):
+    observation_id: str
+    camera_id: str
+    camera_name: str
+    started_at: str
+    thumbnail_path: str | None
+    boxes: list[dict]
+
+
+class ScanStatusModel(BaseModel):
+    scan_id: str
+    status: str
+    scanned: int
+    total: int
+    found: int
+    summary: str
+    results: list[ScanFrameModel]
+    routed: ScanRoutedModel | None = None
+    error: str | None = None
+    leaves_privacy_boundary: bool = False
+
+
+def _job_to_status(job) -> ScanStatusModel:
+    return ScanStatusModel(
+        scan_id=job.id,
+        status=job.status,
+        scanned=job.scanned,
+        total=job.total,
+        found=job.found,
+        summary=job.summary(),
+        results=[
+            ScanFrameModel(
+                observation_id=r.observation_id,
+                camera_id=r.camera_id,
+                camera_name=r.camera_name,
+                started_at=r.started_at,
+                thumbnail_path=r.thumbnail_path,
+                boxes=r.boxes,
+            )
+            for r in job.results
+        ],
+        routed=(
+            ScanRoutedModel(kind=job.routed.kind, name=job.routed.name, message=job.routed.message)
+            if job.routed
+            else None
+        ),
+        error=job.error,
+        leaves_privacy_boundary=job.leaves_privacy_boundary,
+    )
+
+
+@router.post("/scan", response_model=ScanStatusModel)
+async def start_scan(
+    body: ScanRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Kick off a deep visual scan and return the initial job state. Poll
+    ``GET /search/scan/{scan_id}`` for streamed results."""
+    from services.grounding.config import is_enabled
+    from services.search.scan import get_registry, run_scan
+
+    query = (body.query or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query is required")
+    if not await is_enabled():
+        raise HTTPException(
+            status_code=409,
+            detail="FindAnything is not enabled. Turn on visual grounding in Settings.",
+        )
+
+    registry = get_registry()
+    # One active scan per user keeps a single user from wedging the GPU (§5).
+    existing = registry.active_for_user(str(current_user.id))
+    if existing is not None:
+        return _job_to_status(existing)
+
+    job = registry.create(str(current_user.id), query)
+    asyncio.create_task(
+        run_scan(
+            job,
+            camera_id=body.camera_id,
+            time_from=body.time_from,
+            time_to=body.time_to,
+            max_frames=body.max_frames or 0,
+        )
+    )
+    return _job_to_status(job)
+
+
+@router.get("/scan/{scan_id}", response_model=ScanStatusModel)
+async def get_scan(
+    scan_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Poll a deep-scan job. Results accumulate as frames are grounded."""
+    from services.search.scan import get_registry
+
+    job = get_registry().get(scan_id)
+    # 404 (not 403) on a foreign job so we never confirm another user's id.
+    if job is None or job.user_id != str(current_user.id):
+        raise HTTPException(status_code=404, detail="scan not found")
+    return _job_to_status(job)
+
+
+@router.get("/grounding/health")
+async def grounding_health(_current_user: User = Depends(get_current_user)):
+    """Health of the grounding backend for the navbar surface."""
+    from services.grounding.client import get_client
+
+    return await get_client().health()

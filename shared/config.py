@@ -76,6 +76,41 @@ class Settings(BaseSettings):
     smtp_from: str = ""
     smtp_tls: bool = True
 
+    # ── FindAnything / visual grounding (LocateAnything) ────────────────
+    # Static deployment config for the grounding subsystem. The runtime
+    # on/off toggle and the local-vs-remote backend choice live in
+    # app_settings (UI-flippable); these are host/deploy-level knobs.
+    #
+    # grounding_service_url. Where the local grounding microservice lives
+    # (the docker-compose `grounding` service, started with its profile).
+    grounding_service_url: str = "http://grounding:8800"
+    # The reference model and a PINNED revision. Pin a commit SHA in
+    # production so trust_remote_code modeling files are reproducible and
+    # the runtime can stay fully offline (HF_HUB_OFFLINE=1).
+    grounding_model_id: str = "nvidia/LocateAnything-3B"
+    grounding_model_revision: str = "main"
+    # Local weights volume (inside the grounding container).
+    grounding_weights_dir: str = "./models/grounding"
+    # Nurby-hosted mirror base URL. When set, the grounding service and
+    # scripts/setup-grounding.sh stream the weights tarball from here for a
+    # one-click, token-free, Ollama-style download. Unset = fall back to a
+    # token-gated HuggingFace pull.
+    grounding_mirror_url: str | None = None
+    # Per-request inference timeout (a 3B VLM is seconds per frame).
+    grounding_request_timeout_s: float = 120.0
+    # Cost guards (see design §5/§6/§9). max_frames caps a single scan's GPU
+    # fan-out; max_boxes/max_output_tokens cap a single response so a crafted
+    # prompt cannot flood the parser/rules; max_image_px caps the decoded
+    # image fed to the GPU (decompression-bomb guard).
+    grounding_max_frames: int = 24
+    grounding_max_boxes: int = 50
+    grounding_max_output_tokens: int = 8192
+    grounding_max_image_px: int = 2560
+    # Global GPU concurrency. The model is one shared resource across the
+    # whole system, NOT one lane per camera; keep this at 1 (maybe 2 on a
+    # big card). Interactive search preempts background rule grounding.
+    grounding_max_concurrency: int = 1
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

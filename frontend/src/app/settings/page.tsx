@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import TelegramSection from "@/components/TelegramSection";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
+import { GroundingSettingsCard } from "@/components/settings/GroundingSettingsCard";
 import { ALL_PROVIDERS, PROVIDER_KINDS } from "@/lib/provider-presets";
 import { ProviderFields } from "@/components/ProviderFields";
 import { timezoneOptions } from "@/lib/timezones";
@@ -1101,6 +1102,9 @@ export default function SettingsPage() {
             <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${enrichEnabled ? "left-[1.375rem]" : "left-0.5"}`} />
           </button>
         </div>
+
+        {/* FindAnything (visual grounding) */}
+        <GroundingSettingsCard />
 
         {/* Daily digest */}
         <div className="rounded-lg border border-border bg-card px-4 py-3.5 space-y-3">

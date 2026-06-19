@@ -32,6 +32,8 @@ COPY services/perception/ services/perception/
 COPY services/notify/ services/notify/
 COPY services/events/ services/events/
 COPY services/search/ services/search/
+# FindAnything grounding: search/scan.py and events/actions.py import it.
+COPY services/grounding/ services/grounding/
 COPY services/digest/ services/digest/
 COPY services/discovery/ services/discovery/
 COPY services/agent/ services/agent/
