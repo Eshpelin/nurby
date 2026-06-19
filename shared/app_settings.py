@@ -234,6 +234,22 @@ DEFAULTS: dict[str, Any] = {
     # retention loop deletes buckets older than this window. Set 0 to disable
     # pruning (not recommended while motion_series_enabled is on).
     "motion_series_retention_days": 7,
+    # ── FindAnything / visual grounding (docs/findanything-design.md) ────
+    # Master switch for the grounding subsystem (LocateAnything). Default
+    # OFF: the model is ~6 GB and needs a datacenter NVIDIA GPU, so the base
+    # install never touches it. Enabling it is the opt-in "Enable
+    # FindAnything?" step, which also kicks the one-time weights download.
+    "grounding_enabled": False,
+    # Where the model runs. "local" = the bundled grounding microservice
+    # (the reference path); "remote" = an operator-supplied HTTP endpoint
+    # for GPU-less self-hosters. Remote LEAVES the privacy boundary (frames
+    # go off-box) and is a loudly-labeled escape hatch, never the default.
+    "grounding_backend": "local",
+    # Remote grounding endpoint base URL (only used when backend=="remote").
+    # Server-fetched, so it is SSRF-checked (shared/netpolicy) before use.
+    "grounding_remote_url": None,
+    # Inference speed/quality mode passed to the model: fast | slow | hybrid.
+    "grounding_mode": "hybrid",
 }
 
 
