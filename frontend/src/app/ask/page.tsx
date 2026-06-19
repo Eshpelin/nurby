@@ -198,6 +198,13 @@ export default function AskPage() {
     if (!model || !questionText.trim()) return;
     setSubmitError(null);
     setText("");
+    // FindAnything deep scan is independent of the agent (design §3.2/§3.6):
+    // fire it on send when toggled, BEFORE the agent ask, so a failed/uncon-
+    // figured agent never blocks visual search. Non-sticky: reset the toggle.
+    if (deepScan) {
+      deep.start(questionText);
+      setDeepScan(false);
+    }
     // Parent run only inherits within 5 min idle window.
     const recent = Date.now() - lastTurnFinishedAt.current < 5 * 60 * 1000;
     const parent = recent ? parentRunId : null;
@@ -233,12 +240,6 @@ export default function AskPage() {
       }
       setActiveRunId(runId);
       setHistoryRefresh((k) => k + 1);
-      // Deep visual scan was opted into for this send: run it in parallel,
-      // then reset the toggle (non-sticky, design §3.2).
-      if (deepScan) {
-        deep.start(questionText);
-        setDeepScan(false);
-      }
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "Network error.");
       setActiveQuestion(null);
@@ -400,8 +401,11 @@ export default function AskPage() {
 
             {/* FindAnything entry point: offered on every result set so it
                 catches both "no results" and "results, but not what I meant"
-                (design §3.2). The click is the cost consent (§3.6). */}
-            {!noProviders && !showEmpty && (
+                (design §3.2). The click is the cost consent (§3.6). Also shown
+                whenever a scan is active/has results, so it survives even when
+                the agent produced no conversation (FindAnything is independent
+                of the agent). */}
+            {!noProviders && (!showEmpty || deep.scan || deep.running) && (
               <div className="mt-6">
                 {!deep.scan && (
                   <button

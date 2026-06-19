@@ -224,7 +224,12 @@ async def run_scan(
     if frame_loader is None:
         frame_loader = _default_frame_loader
 
-    max_frames = max(1, min(max_frames, settings.grounding_max_frames))
+    # 0 / unset means "use the default budget", NOT "scan one frame". The UI
+    # does not send max_frames, so without this the scan would check a single
+    # frame and silently miss almost everything.
+    if not max_frames or max_frames < 1:
+        max_frames = settings.grounding_max_frames
+    max_frames = min(max_frames, settings.grounding_max_frames)
 
     try:
         async with async_session() as db:

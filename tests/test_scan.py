@@ -202,6 +202,33 @@ async def test_run_scan_caps_max_frames(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_run_scan_unset_max_frames_uses_default(monkeypatch):
+    # The UI sends no max_frames (-> 0). It must mean "default budget", not
+    # "scan exactly one frame".
+    captured = {}
+
+    async def fake_search(db, query=None, **kwargs):
+        captured["limit"] = kwargs.get("limit")
+        return []
+
+    monkeypatch.setattr(query_mod, "search_observations", fake_search)
+
+    async def no_route(db, query):
+        return None
+
+    monkeypatch.setattr(scan_mod, "classify_intent", no_route)
+
+    from shared.config import settings
+
+    job = ScanJob(id="j7", user_id="u1", query="x")
+    await scan_mod.run_scan(
+        job, camera_id=None, time_from=None, time_to=None,
+        max_frames=0, client=_Client(_Result(False)), frame_loader=_frame_ok,
+    )
+    assert captured["limit"] == settings.grounding_max_frames
+
+
+@pytest.mark.asyncio
 async def test_run_scan_tops_up_recent_for_novel_query(monkeypatch):
     # The index knows nothing about a novel term, but recent frames exist.
     # FindAnything must still scan them (that's its whole point, §3.3).
