@@ -70,6 +70,7 @@ Nurby is free, open-source software for recording and understanding your securit
 - **You own the data.** Runs entirely on your hardware via Docker Compose. With a local model nothing ever leaves your network.
 - **Bring your own brain.** Use a free local model through Ollama, or OpenAI, Anthropic, or Gemini. Swap them per camera with no restart.
 - **It understands, not just detects.** YOLO finds objects, faces are recognized and grouped into people, and a vision model captions scenes. A built-in agent answers questions over all of it.
+- **FindAnything: search beyond the ~80 COCO classes.** YOLO only knows a fixed handful of object types. When you look for something it never detects, a *chicken*, a *red ladder*, a *child in a blue jacket*, Nurby falls back to NVIDIA's open-vocabulary **[LocateAnything](https://huggingface.co/nvidia/LocateAnything-3B)** grounding model and points at it in your footage anyway, drawing boxes on what it finds. Describe anything in plain words and Nurby locates it, an open-world dictionary instead of a fixed label set, which makes search genuinely intelligent. It runs locally on an NVIDIA GPU or Apple Silicon (no account or token), and the same capability is available as a Rules "visual condition" ("when a chicken is in the coop, do X"). Off by default; one toggle enables it.
 - **Automation that reaches the real world.** Rules can notify, email, call webhooks, sound physical alarms, and gate on a second AI confirmation before firing.
 - **Programmable.** A documented REST API, long-lived API keys, signed webhooks, and an MCP server let you build on top of it.
 
@@ -81,7 +82,7 @@ What people actually run Nurby for:
 - **Baby and elder care.** A gentle "still moving" check on a crib or a room, and passive check-ins that do not spam you with alerts. Audio triggers catch a baby cry or a smoke alarm.
 - **Pets and wildlife.** Recognize your own animals, log their activity, and trigger a deterrent (a siren or lights) when an unwanted animal shows up.
 - **Intrusion and loitering.** Draw a zone on the live feed and alert when someone stays too long, or when an unknown face appears after hours. Chain a verify step so a second AI confirmation fires the siren only when it is real.
-- **Find anything later.** Ask in plain language: "where was the dog last night", "show me the white van on the driveway this week", "anything unusual today". No scrubbing timelines.
+- **Find anything later.** Ask in plain language: "where was the dog last night", "show me the white van on the driveway this week", "anything unusual today". No scrubbing timelines. And with **FindAnything**, search the raw footage for things the detector was never trained on, open-vocabulary, and Nurby boxes them for you.
 - **Small business and farm.** Multi-camera coverage, license-plate reads on vehicles, daily digests of who and what was seen, and event logging you can export.
 - **Build your own automations.** Every event can hit a webhook, so you can push alerts into your home automation, a chat app, a spreadsheet, or a tool like n8n. See [Automate with n8n](#automate-with-n8n).
 

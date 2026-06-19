@@ -16,7 +16,7 @@ import Conversation from "@/components/ask/Conversation";
 import EmptyState from "@/components/ask/EmptyState";
 import OnboardingModal from "@/components/ask/OnboardingModal";
 import { DeepScanResults } from "@/components/search/DeepScanResults";
-import { useDeepScan } from "@/lib/useDeepScan";
+import { useDeepScan, type ScanStatus } from "@/lib/useDeepScan";
 import type {
   AgentRunDetail,
   ProviderModel,
@@ -53,6 +53,10 @@ export default function AskPage() {
   // non-sticky: it kicks a scan alongside the agent ask, then resets.
   const deep = useDeepScan();
   const [deepScan, setDeepScan] = useState(false);
+  // Completed scans, threaded into the conversation under the run that
+  // triggered them (keyed by run id), so older results don't dangle at the
+  // bottom after newer messages. The live scan stays under the current turn.
+  const [scansByRun, setScansByRun] = useState<Record<string, { scan: ScanStatus | null; error: string | null }>>({});
 
   const stream = useAgentRunStream(activeRunId, token);
   const isStreaming = activeRunId !== null && stream.status !== "closed" && stream.status !== "error";
@@ -198,12 +202,21 @@ export default function AskPage() {
     if (!model || !questionText.trim()) return;
     setSubmitError(null);
     setText("");
+    // Thread the previous turn's scan into history (keyed by its run) before
+    // this turn takes over the live slot, so results stay in chat order
+    // instead of dangling at the bottom under newer messages.
+    if ((deep.scan || deep.error) && parentRunId) {
+      const snapshot = { scan: deep.scan, error: deep.error };
+      setScansByRun((prev) => ({ ...prev, [parentRunId]: snapshot }));
+    }
     // FindAnything deep scan is independent of the agent (design §3.2/§3.6):
     // fire it on send when toggled, BEFORE the agent ask, so a failed/uncon-
     // figured agent never blocks visual search. Non-sticky: reset the toggle.
     if (deepScan) {
       deep.start(questionText);
       setDeepScan(false);
+    } else {
+      deep.reset();
     }
     // Parent run only inherits within 5 min idle window.
     const recent = Date.now() - lastTurnFinishedAt.current < 5 * 60 * 1000;
@@ -274,8 +287,10 @@ export default function AskPage() {
     setParentRunId(null);
     setText("");
     setComposerFocusKey((k) => k + 1);
+    setScansByRun({});
+    deep.reset();
     stream.reset();
-  }, [stream]);
+  }, [stream, deep]);
 
   // ----- deep-link via ?run=
   useEffect(() => {
@@ -396,6 +411,7 @@ export default function AskPage() {
                 activeQuestion={activeQuestion}
                 activeEvents={stream.events}
                 isStreaming={isStreaming}
+                scansByRun={scansByRun}
               />
             )}
 
