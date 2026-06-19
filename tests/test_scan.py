@@ -201,6 +201,40 @@ async def test_run_scan_caps_max_frames(monkeypatch):
     assert captured["limit"] == settings.grounding_max_frames
 
 
+@pytest.mark.asyncio
+async def test_run_scan_tops_up_recent_for_novel_query(monkeypatch):
+    # The index knows nothing about a novel term, but recent frames exist.
+    # FindAnything must still scan them (that's its whole point, §3.3).
+    async def fake_search(db, query=None, **kwargs):
+        return [] if query else [_candidate(0), _candidate(1)]
+
+    monkeypatch.setattr(query_mod, "search_observations", fake_search)
+
+    async def no_route(db, q):
+        return None
+
+    monkeypatch.setattr(scan_mod, "classify_intent", no_route)
+
+    async def _miss(*a, **k):
+        return None
+
+    async def _noop(*a, **k):
+        return None
+
+    monkeypatch.setattr(scan_mod, "get_cached_grounding", _miss)
+    monkeypatch.setattr(scan_mod, "store_grounding", _noop)
+
+    job = ScanJob(id="t1", user_id="u1", query="chicken")
+    client = _Client(_Result(found=True))
+    await scan_mod.run_scan(
+        job, camera_id=None, time_from=None, time_to=None,
+        max_frames=10, client=client, frame_loader=_frame_ok,
+    )
+    assert job.scanned == 2  # recent frames grounded despite zero text match
+    assert client.calls == 2
+    assert job.found == 2
+
+
 # ── persistent cache wiring ────────────────────────────────────────────────
 
 @pytest.mark.asyncio

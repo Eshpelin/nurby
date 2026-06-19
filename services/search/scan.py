@@ -236,6 +236,12 @@ async def run_scan(
 
             from services.search.query import search_observations
 
+            # Targeted pre-filter: frames the index already associates with the
+            # query (cheap, high-precision). Then TOP UP with recent frames so
+            # NOVEL vocabulary the index has never seen is still findable, which
+            # is the whole point of FindAnything (design §3.3). Without the
+            # top-up a brand-new term ("chicken") returns nothing, because no
+            # caption or detection mentions it yet.
             candidates = await search_observations(
                 db,
                 query=job.query,
@@ -244,6 +250,23 @@ async def run_scan(
                 time_to=time_to,
                 limit=max_frames,
             )
+            if len(candidates) < max_frames:
+                recent = await search_observations(
+                    db,
+                    query=None,
+                    camera_id=camera_id,
+                    time_from=time_from,
+                    time_to=time_to,
+                    limit=max_frames,
+                )
+                seen = {c.get("id") for c in candidates}
+                for r in recent:
+                    if r.get("id") in seen:
+                        continue
+                    candidates.append(r)
+                    seen.add(r.get("id"))
+                    if len(candidates) >= max_frames:
+                        break
 
         job.total = len(candidates)
         if not candidates:
