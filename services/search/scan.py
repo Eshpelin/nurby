@@ -25,6 +25,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from services.grounding.cache import get_cached_grounding, store_grounding
 from shared.config import settings
 
 logger = logging.getLogger("nurby.search.scan")
@@ -188,6 +189,17 @@ def _default_frame_loader(thumbnail_path: str | None):
     return cv2.imread(safe)
 
 
+def _frame_result(cand: dict, boxes: list) -> ScanFrameResult:
+    return ScanFrameResult(
+        observation_id=str(cand.get("id")),
+        camera_id=str(cand.get("camera_id")),
+        camera_name=cand.get("camera_name") or "",
+        started_at=cand.get("started_at") or "",
+        thumbnail_path=cand.get("thumbnail_path"),
+        boxes=boxes,
+    )
+
+
 async def run_scan(
     job: ScanJob,
     *,
@@ -238,14 +250,27 @@ async def run_scan(
             job.status = "done"
             return
 
+        revision = settings.grounding_model_revision
         for cand in candidates:
             job.scanned += 1
+            obs_id = cand.get("id")
             job.cameras_seen.add(str(cand.get("camera_id")))
+
+            # Persistent cache: a prior scan of this frame+prompt is reused, so
+            # the GPU never re-runs and once-located terms come back instantly
+            # (design §7). A miss / no-DB degrades silently to a fresh ground.
+            cached = await get_cached_grounding(obs_id, job.query, revision)
+            if cached is not None:
+                if cached.get("found"):
+                    job.found += 1
+                    job.results.append(_frame_result(cand, cached.get("boxes") or []))
+                continue
+
             frame = None
             try:
                 frame = await asyncio.to_thread(frame_loader, cand.get("thumbnail_path"))
             except Exception:
-                logger.debug("scan frame load failed for obs %s", cand.get("id"), exc_info=True)
+                logger.debug("scan frame load failed for obs %s", obs_id, exc_info=True)
             if frame is None:
                 continue
 
@@ -255,25 +280,19 @@ async def run_scan(
             if result.error:
                 logger.debug("grounding error during scan: %s", result.error)
                 continue
+
+            boxes_payload = [
+                {"bbox_norm": list(b.bbox_norm), "is_point": b.is_point, "label": b.label}
+                for b in result.boxes
+            ]
+            # Teach the index: persist the hit (and the miss) for next time.
+            await store_grounding(
+                obs_id, job.query, revision,
+                found=result.found, corroborated=False, boxes=boxes_payload,
+            )
             if result.found:
                 job.found += 1
-                job.results.append(
-                    ScanFrameResult(
-                        observation_id=str(cand.get("id")),
-                        camera_id=str(cand.get("camera_id")),
-                        camera_name=cand.get("camera_name") or "",
-                        started_at=cand.get("started_at") or "",
-                        thumbnail_path=cand.get("thumbnail_path"),
-                        boxes=[
-                            {
-                                "bbox_norm": list(b.bbox_norm),
-                                "is_point": b.is_point,
-                                "label": b.label,
-                            }
-                            for b in result.boxes
-                        ],
-                    )
-                )
+                job.results.append(_frame_result(cand, boxes_payload))
         job.status = "done"
     except Exception as exc:
         logger.exception("scan job %s failed", job.id)

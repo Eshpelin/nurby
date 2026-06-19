@@ -57,6 +57,16 @@ def _patch_candidates(monkeypatch, candidates):
         return None
 
     monkeypatch.setattr(scan_mod, "classify_intent", no_route)
+    # Default the persistent cache to "miss + no-op store" so tests don't hit a
+    # DB; cache-specific tests override these.
+    async def _miss(obs_id, prompt, rev):
+        return None
+
+    async def _noop_store(obs_id, prompt, rev, **kwargs):
+        return None
+
+    monkeypatch.setattr(scan_mod, "get_cached_grounding", _miss)
+    monkeypatch.setattr(scan_mod, "store_grounding", _noop_store)
 
 
 def _frame_ok(path):
@@ -189,6 +199,51 @@ async def test_run_scan_caps_max_frames(monkeypatch):
         max_frames=10_000, client=_Client(_Result(False)), frame_loader=_frame_ok,
     )
     assert captured["limit"] == settings.grounding_max_frames
+
+
+# ── persistent cache wiring ────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_run_scan_uses_cache_hit(monkeypatch):
+    _patch_candidates(monkeypatch, [_candidate(0)])
+
+    async def hit(obs_id, prompt, rev):
+        return {"found": True, "corroborated": False, "count": 1,
+                "boxes": [{"bbox_norm": [0.1, 0.1, 0.2, 0.2], "is_point": False, "label": "x"}]}
+
+    monkeypatch.setattr(scan_mod, "get_cached_grounding", hit)
+    job = ScanJob(id="c1", user_id="u1", query="cat")
+    client = _Client(_Result(found=True))
+
+    await scan_mod.run_scan(
+        job, camera_id=None, time_from=None, time_to=None,
+        max_frames=10, client=client, frame_loader=_frame_ok,
+    )
+    assert job.found == 1
+    assert client.calls == 0  # cache hit, GPU never touched
+    assert job.results[0].boxes[0]["label"] == "x"
+
+
+@pytest.mark.asyncio
+async def test_run_scan_stores_on_miss(monkeypatch):
+    _patch_candidates(monkeypatch, [_candidate(0)])
+    stored = {}
+
+    async def capture_store(obs_id, prompt, rev, **kwargs):
+        stored["found"] = kwargs.get("found")
+        stored["boxes"] = kwargs.get("boxes")
+
+    monkeypatch.setattr(scan_mod, "store_grounding", capture_store)
+    job = ScanJob(id="c2", user_id="u1", query="cat")
+    client = _Client(_Result(found=True))
+
+    await scan_mod.run_scan(
+        job, camera_id=None, time_from=None, time_to=None,
+        max_frames=10, client=client, frame_loader=_frame_ok,
+    )
+    assert client.calls == 1
+    assert stored["found"] is True
+    assert isinstance(stored["boxes"], list)
 
 
 # ── classify_intent ───────────────────────────────────────────────────────

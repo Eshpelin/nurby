@@ -233,6 +233,13 @@ async def test_resolve_backend_remote_metadata_refused(monkeypatch):
     assert "refused" in backend.error
 
 
+def test_cache_prompt_hash_normalizes():
+    from services.grounding.cache import prompt_hash
+
+    assert prompt_hash("Chicken") == prompt_hash("  chicken ")
+    assert prompt_hash("a red ladder") != prompt_hash("a blue ladder")
+
+
 @pytest.mark.asyncio
 async def test_resolve_backend_local_default(monkeypatch):
     from services.grounding import config as cfg
