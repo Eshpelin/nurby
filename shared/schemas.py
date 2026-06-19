@@ -979,6 +979,10 @@ class SystemSettingsResponse(BaseModel):
     guardian_pickup_window_seconds: int = 120
     guardian_image_blur_radius: int = 12
     guardian_unblurred_clips_enabled: bool = False
+    # FindAnything / visual grounding.
+    grounding_enabled: bool = False
+    grounding_backend: str = "local"
+    grounding_remote_url: str | None = None
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -1012,6 +1016,10 @@ class SystemSettingsUpdate(BaseModel):
     guardian_pickup_window_seconds: int | None = Field(default=None, ge=10, le=1800)
     guardian_image_blur_radius: int | None = Field(default=None, ge=1, le=100)
     guardian_unblurred_clips_enabled: bool | None = None
+    # FindAnything / visual grounding.
+    grounding_enabled: bool | None = None
+    grounding_backend: str | None = Field(default=None, pattern="^(local|remote)$")
+    grounding_remote_url: str | None = None
 
 
 # -- User schemas --

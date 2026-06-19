@@ -344,6 +344,10 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     "guardian_unblurred_clips_enabled",
     "guardian_require_consent",
     "guardian_app_base_url",
+    # FindAnything / visual grounding.
+    "grounding_enabled",
+    "grounding_backend",
+    "grounding_remote_url",
 )
 
 
