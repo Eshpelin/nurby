@@ -232,6 +232,7 @@ export const ACTION_TYPES = [
   { value: "telegram", label: "Telegram" },
   { value: "vlm_call", label: "VLM Call" },
   { value: "verify", label: "Verify with AI" },
+  { value: "locate", label: "Visual condition (FindAnything)" },
 ];
 
 export const TELEGRAM_TEMPLATE_VARS = [
@@ -650,7 +651,8 @@ export type ActionType =
   | "email"
   | "telegram"
   | "vlm_call"
-  | "verify";
+  | "verify"
+  | "locate";
 
 export interface WebhookDraft {
   type: "webhook" | "api_call";
@@ -718,6 +720,19 @@ export interface VerifyDraft {
   providerId?: string;
 }
 
+// FindAnything "Visual condition": runs the grounding model on the triggering
+// frame after a cheap trigger fires. There is no confidence slider (the model
+// has no calibrated score); instead `requireCorroboration` gates a located box
+// on overlapping a real detection (design §6).
+export interface LocateDraft {
+  type: "locate";
+  prompt: string;
+  onFail: "stop" | "continue";
+  requireCorroboration: boolean;
+  minOverlap: number;
+  output: string;
+}
+
 export type ActionDraft =
   | WebhookDraft
   | BroadcastDraft
@@ -725,7 +740,8 @@ export type ActionDraft =
   | EmailDraft
   | TelegramDraft
   | VlmCallDraft
-  | VerifyDraft;
+  | VerifyDraft
+  | LocateDraft;
 
 export const MAX_ACTIONS_PER_RULE = 8;
 
@@ -788,6 +804,15 @@ export function defaultDraftForType(type: ActionType): ActionDraft {
         question: "",
         minConfidence: 0.6,
         onFail: "stop",
+      };
+    case "locate":
+      return {
+        type,
+        prompt: "",
+        onFail: "stop",
+        requireCorroboration: true,
+        minOverlap: 0.1,
+        output: "loc",
       };
   }
 }
@@ -882,6 +907,18 @@ export function dictToDraft(raw: Record<string, unknown>): ActionDraft {
         minConfidence: typeof mc === "number" ? mc : 0.6,
         onFail,
         providerId: (raw.provider_id as string) || "",
+      };
+    }
+    case "locate": {
+      const mo = raw.min_overlap;
+      const onFail = raw.on_fail === "continue" ? "continue" : "stop";
+      return {
+        type: "locate",
+        prompt: (raw.prompt as string) || "",
+        onFail,
+        requireCorroboration: raw.require_corroboration !== false,
+        minOverlap: typeof mo === "number" ? mo : 0.1,
+        output: (raw.output as string) || "loc",
       };
     }
   }
@@ -999,6 +1036,16 @@ export function draftToDict(d: ActionDraft): Record<string, unknown> {
     }
     return action;
   }
+  if (d.type === "locate") {
+    return {
+      type: "locate",
+      prompt: d.prompt,
+      on_fail: d.onFail,
+      require_corroboration: d.requireCorroboration,
+      min_overlap: d.minOverlap,
+      output: d.output || "loc",
+    };
+  }
   // Unreachable. All union members handled above.
   return { type: (d as ActionDraft).type };
 }
@@ -1056,6 +1103,9 @@ export function validateActionChainRefs(
     if (d.type === "vlm_call" && d.output) {
       known.add(d.output);
     }
+    if (d.type === "locate" && d.output) {
+      known.add(d.output);
+    }
   }
   return null;
 }
@@ -1109,6 +1159,10 @@ export function validateActionDraft(d: ActionDraft): string | null {
     }
     return null;
   }
+  if (d.type === "locate") {
+    if (!d.prompt.trim()) return "Describe what to locate";
+    return null;
+  }
   return null;
 }
 
@@ -1121,6 +1175,10 @@ export function availableVarsBefore(
   const out: { name: string; keys: string[] }[] = [];
   for (let i = 0; i < index; i++) {
     const d = drafts[i];
+    if (d.type === "locate" && d.output) {
+      out.push({ name: d.output, keys: ["found", "count", "label", "corroborated", "boxes"] });
+      continue;
+    }
     if (d.type !== "vlm_call" || !d.output) continue;
     const keys: string[] = [];
     if (d.useSchema && d.schemaText.trim()) {

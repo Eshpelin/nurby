@@ -351,6 +351,8 @@ async def execute_action(
         await _execute_telegram(action, observation_data, rule, event_id, ctx)
     elif action_type == "verify":
         await _execute_verify(action, observation_data, rule, event_id, ctx)
+    elif action_type == "locate":
+        await _execute_locate(action, observation_data, rule, event_id, ctx)
     else:
         logger.warning("Unknown action type '%s' in rule '%s'", action_type, rule.name)
         await _update_event_status(event_id, action_type or "unknown", "failed", f"Unknown action type '{action_type}'")
@@ -1043,6 +1045,209 @@ async def _apply_verify_outcome(
     )
     await _update_event_status(
         event_id, "verify", "success", f"verify failed but on_fail=continue. {verdict}",
+    )
+
+
+# ── Locate action (FindAnything visual-grounding condition) ──
+#
+# A deterministic, user-authored, post-trigger condition (design §3.7): a
+# cheap trigger (motion / a coarse YOLO label) fires first, THEN this runs the
+# grounding model on the triggering frame and the action chain branches on the
+# result via {{vars.<output>.found}}. It is NOT a live trigger predicate (the
+# engine cannot afford a GPU call inside evaluate()) and an LLM never decides
+# when it fires.
+#
+# Correctness gate (design §6): a raw grounding box hallucinates, so by default
+# a located box must be CORROBORATED by a cheap signal in the same region (a
+# YOLO detection overlapping it) before `found` is true. This is why search
+# ships before autonomous rules, and why the rule path keeps a human-authored
+# deterministic gate around the model.
+
+
+async def _record_locate_on_event(event_id: uuid.UUID, locate_result: dict) -> None:
+    """Stamp the locate outcome onto Event.payload['locate'] for the timeline
+    and audit trail (mirrors _record_verify_on_event)."""
+    try:
+        async with async_session() as db:
+            event = await db.get(Event, event_id)
+            if event is None:
+                return
+            payload = dict(event.payload or {})
+            payload["locate"] = locate_result
+            event.payload = payload
+            await db.commit()
+    except Exception:
+        logger.exception("Failed to record locate result on event %s", event_id)
+
+
+def _iou(a: tuple, b: tuple) -> float:
+    """IoU of two normalized [x1,y1,x2,y2] boxes."""
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+    iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
+    inter = iw * ih
+    if inter <= 0:
+        return 0.0
+    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+    union = area_a + area_b - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _corroborates(boxes, observation_data: dict, min_overlap: float) -> bool:
+    """True when at least one located box overlaps a cheap detection signal.
+
+    Uses the YOLO object detections already on the frame as the corroborating
+    signal: a real "chicken" box should overlap something the detector also
+    saw moving/standing there. Detection bboxes are pixels, so we normalize
+    them with the frame dims before comparing to the normalized grounding box.
+    Without usable frame dims or any detections we cannot corroborate, so we
+    return False (fail safe. the gate suppresses rather than over-fires).
+    """
+    fw = observation_data.get("frame_width") or 0
+    fh = observation_data.get("frame_height") or 0
+    if fw <= 0 or fh <= 0:
+        return False
+    objs = (observation_data.get("object_detections") or {}).get("objects") or []
+    det_norm: list[tuple] = []
+    for d in objs:
+        bb = d.get("bbox")
+        if isinstance(bb, (list, tuple)) and len(bb) == 4:
+            det_norm.append((bb[0] / fw, bb[1] / fh, bb[2] / fw, bb[3] / fh))
+    if not det_norm:
+        return False
+    for gb in boxes:
+        for db in det_norm:
+            if _iou(gb.bbox_norm, db) >= min_overlap:
+                return True
+    return False
+
+
+def _load_locate_frame(observation_data: dict):
+    """Load the triggering frame as a BGR ndarray for grounding.
+
+    Prefers the thumbnail path already on the live rule_data, falling back to
+    the stored Observation row. Returns None when no frame is available (the
+    caller then treats the locate as a fail, never a silent pass)."""
+    import cv2
+
+    from shared.config import settings as _settings
+    from shared.paths import resolve_inside
+
+    path = observation_data.get("thumbnail_path")
+    if path:
+        safe = resolve_inside(path, _settings.thumbnails_path)
+        if safe:
+            img = cv2.imread(safe)
+            if img is not None:
+                return img
+    return None
+
+
+async def _ground_locate(frame, prompt: str):
+    """Run grounding on the background (rule) priority lane."""
+    from services.grounding.client import get_client
+
+    return await get_client().ground(frame, prompt, interactive=False)
+
+
+async def _execute_locate(action, observation_data, rule, event_id, ctx):
+    """Locate ``prompt`` in the triggering frame and branch the chain on it."""
+    prompt = render(action.get("prompt") or "", ctx).strip()
+    output_name = action.get("output")
+    on_fail = action.get("on_fail", "stop")
+    if on_fail not in ("stop", "continue"):
+        on_fail = "stop"
+    require_corroboration = bool(action.get("require_corroboration", True))
+    try:
+        min_overlap = float(action.get("min_overlap", 0.1))
+    except (TypeError, ValueError):
+        min_overlap = 0.1
+
+    if not prompt:
+        await _update_event_status(event_id, "locate", "failed", "missing 'prompt'")
+        await _apply_locate_outcome(
+            action, observation_data, rule, event_id, output_name,
+            found=False, boxes=[], corroborated=False, prompt="",
+            summary="locate action has no prompt",
+        )
+        return
+
+    frame = await asyncio.to_thread(_load_locate_frame, observation_data)
+    if frame is None:
+        await _apply_locate_outcome(
+            action, observation_data, rule, event_id, output_name,
+            found=False, boxes=[], corroborated=False, prompt=prompt,
+            summary="no frame to inspect",
+        )
+        return
+
+    result = await _ground_locate(frame, prompt)
+    if result.error:
+        logger.info("locate for rule '%s' could not run. %s", rule.name, result.error)
+        await _apply_locate_outcome(
+            action, observation_data, rule, event_id, output_name,
+            found=False, boxes=[], corroborated=False, prompt=prompt,
+            summary=result.error,
+        )
+        return
+
+    boxes = result.boxes
+    corroborated = True
+    if boxes and require_corroboration:
+        corroborated = _corroborates(boxes, observation_data, min_overlap)
+    found = bool(boxes) and (corroborated or not require_corroboration)
+
+    await _apply_locate_outcome(
+        action, observation_data, rule, event_id, output_name,
+        found=found, boxes=boxes, corroborated=corroborated, prompt=prompt,
+        summary=f"{len(boxes)} box(es), corroborated={corroborated}",
+    )
+
+
+async def _apply_locate_outcome(
+    action, observation_data, rule, event_id, output_name,
+    *, found, boxes, corroborated, prompt, summary,
+):
+    """Bind {{vars.<output>.*}}, record the outcome, and apply on_fail. Shared
+    by every exit of _execute_locate so the audit stamp is never skipped."""
+    if output_name:
+        vars_bag = observation_data.setdefault("vars", {})
+        vars_bag[output_name] = {
+            "found": bool(found),
+            "count": len(boxes) if found else 0,
+            "label": prompt,
+            "corroborated": bool(corroborated),
+            "boxes": [list(b.bbox_norm) for b in boxes],
+        }
+
+    await _record_locate_on_event(event_id, {
+        "found": bool(found),
+        "count": len(boxes),
+        "corroborated": bool(corroborated),
+        "prompt": prompt,
+        "summary": summary,
+    })
+
+    on_fail = action.get("on_fail", "stop")
+    if on_fail not in ("stop", "continue"):
+        on_fail = "stop"
+
+    if found:
+        logger.info("locate FOUND for rule '%s'. %s", rule.name, summary)
+        await _update_event_status(event_id, "locate", "success")
+        return
+
+    if on_fail == "stop":
+        logger.info("locate NOT FOUND for rule '%s'. stopping chain. %s", rule.name, summary)
+        await _update_event_status(event_id, "locate", "skipped", f"locate not found. {summary}")
+        raise RuntimeError(f"locate stopped chain. {summary}")
+
+    logger.info("locate NOT FOUND for rule '%s'. continuing (on_fail=continue)", rule.name)
+    await _update_event_status(
+        event_id, "locate", "success", f"locate not found but on_fail=continue. {summary}",
     )
 
 
