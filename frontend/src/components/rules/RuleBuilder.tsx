@@ -9,6 +9,7 @@ import {
   describeTrigger,
   resolveCameraNames,
   draftToDict,
+  defaultDraftForType,
   validateActionChainRefs,
   validateActionDraft,
   type Camera,
@@ -523,7 +524,25 @@ export function RuleBuilder({
               modelClasses={modelClasses}
               modelClassesLoading={modelClassesLoading}
               formTriggerType={state.formTriggerType}
-              setFormTriggerType={(v) => dispatch({ type: "setTriggerType", value: v })}
+              setFormTriggerType={(v) => {
+                // "FindAnything" is a shortcut, not a real trigger type: the
+                // engine can't run a GPU grounding call inside the live trigger
+                // loop (see locate action). Selecting it sets a cheap motion
+                // pre-gate and prepends a Visual-condition (locate) action the
+                // user then fills in, so they get a "starter" feel safely.
+                if (v === "findanything") {
+                  dispatch({ type: "setTriggerType", value: "motion" });
+                  dispatch({
+                    type: "setFormActions",
+                    value: [
+                      defaultDraftForType("locate"),
+                      ...state.formActions.filter((a) => a.type !== "locate"),
+                    ],
+                  });
+                  return;
+                }
+                dispatch({ type: "setTriggerType", value: v });
+              }}
               formTriggerLabel={state.formTriggerLabel}
               setFormTriggerLabel={setterFor("formTriggerLabel")}
               formTriggerMinFrames={state.formTriggerMinFrames}
