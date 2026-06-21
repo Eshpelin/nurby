@@ -1,6 +1,15 @@
 # Sequence Rules — temporal, multi-step automations (design sketch)
 
-Status: **Draft sketch** (pre-implementation). Owner: TBD. Last updated: 2026-06-21.
+Status: **Draft sketch** (pre-implementation, refinement round 1). Owner: TBD. Last updated: 2026-06-21.
+
+**Decisions folded in (round 1):**
+- **Absence detection is core to v1** — a sequence can fire when an expected step
+  does NOT happen in time ("package not picked up in 10 min"). Two action sets:
+  `on_complete` and `on_timeout`.
+- **All correlation modes are supported** (person / journey / incident / camera /
+  none), chosen per rule, not a single fixed mode. See §4.
+- **Cross-camera in v1** — steps may span cameras (correlated by person/journey).
+- **Steps can be any trigger predicate OR a FindAnything/verify check.**
 
 ## 1. The problem
 
@@ -26,15 +35,18 @@ action chain runs when all steps complete (or via a timeout branch).
 ```yaml
 trigger: face_recognized(Sam)              # step 0 — starts an instance
 sequence:
-  correlate_by: incident | person | camera # bind the steps to the same subject/scope
+  correlate_by: person | journey | incident | camera | none   # how steps bind (§4)
+  cameras: [ ... ]                          # optional extra scope; omit ⇒ cross-camera
+  on_refire: ignore | restart              # step 0 fires again while active (§6)
+  max_active: 20                            # cost guard: concurrent instances (§6)
   steps:
-    - check: locate("a key in his hand")    # a trigger-predicate OR a locate/verify check
+    - check: <any trigger predicate OR locate/verify>   # e.g. locate("a key in his hand")
       pre_gate: { motion: true }            # cheap filter before any GPU work
       within_seconds: 30                    # deadline from the previous step
     - check: locate("a key in the key box")
       within_seconds: 120
-  on_timeout: drop | fire                   # "didn't happen" can itself be an alert
-actions: [ notify, ... ]                    # run on completion; sees {{steps.N.*}}
+on_complete: [ notify, ... ]               # all steps satisfied; sees {{trigger.*}}, {{steps.N.*}}
+on_timeout:  [ notify "Sam didn't put the key away", ... ]   # a step timed out (absence); optional
 ```
 
 Incremental by design: the existing trigger + action chain are unchanged; a rule
@@ -66,18 +78,34 @@ Two additions to `services/events/`:
      and we're inside the window. That bounds GPU to live sequences. Reuse the
      grounding global gate + result cache.
 
-## 4. Correlation (the hard part)
+## 4. Correlation (all modes, chosen per rule)
 
-Binding steps to the *same* subject is what makes "Sam's key" not match "anyone's
-key." Three levels, increasing accuracy + cost:
+Correlation decides whether a new observation belongs to an in-flight instance.
+The step **window always bounds**; the correlation key **narrows**. All modes are
+supported; the user picks per rule (the right one depends on the automation):
 
-- **`camera` (+ window)** — same camera within the window. Simplest, approximate
-  (could match a different subject). Fine default for many rules.
-- **`incident`** — bind to the incident/cluster the start observation belongs to.
-  Nurby already groups repeat sightings into incidents, so this is a strong
-  middle ground and the **recommended v1 default**.
-- **`person`** — bind to the recognized identity (face/re-id) across steps. The
-  true "Sam" binding, but only as reliable as re-id holding frame-to-frame.
+- **`person`** — same recognized identity (`person_id` from face/re-id).
+  Camera-independent, so it works **cross-camera**. Most precise when the face is
+  seen; degrades when it isn't. Best for "a specific person does A then B."
+- **`journey`** — Nurby's cross-camera person track (a journey stitches a
+  person's path across cameras + brief identity gaps). The **strongest
+  cross-camera binding**; as good as journey quality. Best for "enters front →
+  kitchen."
+- **`incident`** — the sighting cluster the start observation belongs to. Strong
+  same-area binding; cross-camera only insofar as incidents span cameras.
+- **`camera`** — same camera, no subject binding. For single-camera,
+  subject-agnostic sequences (a door, a package on one cam, a parking spot).
+- **`none` (window-only)** — any observation within the window, anywhere.
+  Loosest; for global "X then Y" with no subject. False-positive-prone — pair
+  with short windows + specific step checks.
+
+Optional **`cameras`** scope narrows any mode to specific cameras/zones (omit for
+cross-camera). The engine computes the correlation key from the observation per
+the chosen mode; an instance only advances on observations with a matching key.
+
+**Honesty:** cross-camera `person`/`journey` binding is the least reliable link
+(re-id across cameras drops), and small-object grounding compounds it — so the
+most ambitious sequences (the key-box example) are the most approximate.
 
 ## 5. UX
 
@@ -88,27 +116,62 @@ timeouts; and the on-timeout behavior. A new "Sequence" summary line in plain
 language ("When Sam is seen, then within 30s a key in hand, then within 2m a key
 in the box → notify").
 
-## 6. Cost & safety
+## 6. Instance lifecycle, vars, cost & safety
 
-- **Bound concurrent in-flight instances** (per rule + global) to cap GPU + state.
-- **Cheap pre-gate before any locate step**; reuse the grounding gate + cache.
-- Keep the FindAnything **§6 corroboration / verification** principle on the
-  final action — sequences *compound* false positives, so the payoff action
-  should still be gated.
-- `on_timeout: fire` is powerful but is the more autonomous path; keep it opt-in
-  and, for security-grade alerts, verifiable.
+**Lifecycle (per instance):**
+- **start** — step 0 (trigger) matches; compute the correlation key; create
+  `active` instance at `step_index = 1`, `deadline = now + step1.within_seconds`.
+- **advance** — an observation with a matching key satisfies the current step
+  within its deadline → bump `step_index`, arm the next deadline. Last step →
+  `completed` → run **`on_complete`** actions.
+- **timeout** — the sweeper finds `now > deadline` → `expired`; if `on_timeout`
+  actions exist, run them (this is absence detection).
+- **re-fire** — step 0 fires again while an instance is `active`. Policy
+  `on_refire`: **`ignore`** (default — don't reset progress) or **`restart`**
+  (fresh instance/deadline). One `active` instance per `(rule, key)`.
+
+**Two action sets** (both see the vars below):
+- **`on_complete`** — the success chain (the existing action chain, reused).
+- **`on_timeout`** — the absence chain ("the expected thing didn't happen"),
+  with which step timed out available. Separate so success vs absence can do
+  different things.
+
+**Vars threading:** templates/conditions in either chain can reference
+`{{trigger.*}}` (the start observation) and `{{steps.0.*}} … {{steps.N.*}}` (each
+satisfied step's data — detected label, locate boxes/`found`, observation id,
+camera, timestamp).
+
+**Cost & safety:**
+- **`max_active` cap** per rule + a global cap; at the cap, new starts are
+  dropped (logged), not queued — bounds GPU + state.
+- **Cheap `pre_gate` before any locate step**, plus the existing grounding global
+  gate + result cache, so an in-flight sequence never grounds every frame.
+- Keep the FindAnything **corroboration/verify** gate on the payoff action —
+  sequences *compound* false positives.
+- `on_timeout: fire` is the more autonomous path (fires with no positive
+  detection); opt-in, and for security-grade alerts, verifiable.
 
 ## 7. Phasing
 
-- **v1 (MVP):** linear steps; `correlate_by: incident` (+ camera fallback); each
-  step is a trigger-predicate OR a locate/verify check; per-step window;
-  `on_timeout: drop`; one instance per `(rule, key)`; DB table + sweeper; builder
-  "Then…" UI. Covers "Sam enters → key in the box within 2m."
-- **v2:** `person` correlation; `on_timeout: fire` ("didn't happen") branch;
-  any-of / parallel steps; richer `{{steps.*}}` threading; timeline overlay of
-  in-flight sequences.
-- **Defer:** branching DAGs, cross-camera journeys as the correlation key,
-  action-recognition gestures ("putting" vs the before/after states).
+v1 now includes everything decided in round 1 (absence firing, all correlation
+modes, cross-camera, any-check steps), so it's a larger build — roughly
+FindAnything-sized. Internal build order (each lands working + verified before
+the next):
+
+1. **Engine core** — `rule_sequence_instances` table + migration; the
+   start/advance state machine; the sweeper loop; `camera` + `incident`
+   correlation; linear steps with cheap-predicate checks; `on_complete` actions.
+2. **Absence + control** — `on_timeout` action chain + sweeper firing;
+   `on_refire` policy; `max_active` caps; `{{trigger.*}}`/`{{steps.*}}` vars.
+3. **FindAnything steps** — locate/verify as step checks, behind the `pre_gate`
+   + grounding gate/cache.
+4. **Cross-camera identity** — `person` + `journey` correlation.
+5. **Builder UI** — the "Then…" step editor, correlation + window controls, the
+   `on_complete`/`on_timeout` action sets, and the plain-language summary.
+
+- **Defer (v2+):** branching DAGs / any-of / parallel steps; a timeline overlay
+  of in-flight sequences; action-recognition gestures ("putting" vs the
+  before/after states).
 
 ## 8. Honest limits
 
