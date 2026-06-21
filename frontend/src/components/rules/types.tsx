@@ -173,7 +173,7 @@ export const Icon = {
 
 export const TRIGGER_TYPES: TriggerType[] = [
   { value: "object_detected", label: "Object detected", icon: Icon.box,       desc: "Person, car, dog, package, or any YOLO class.", accent: "green",  group: "vision" },
-  { value: "findanything",    label: "FindAnything",    icon: Icon.spark,     desc: "Describe anything to look for. Sets a motion gate + a visual-condition action you fill in.", accent: "amber", group: "vision" },
+  { value: "findanything",    label: "FindAnything",    icon: Icon.spark,     desc: "Describe anything to look for. Adds a motion gate + a visual-condition action. GPU-heavy, so it only runs when the trigger fires and is throttled by the cooldown.", accent: "amber", group: "vision" },
   { value: "vehicle_detected", label: "Vehicle / plate", icon: Icon.box,      desc: "A specific license plate, or any plate-identified vehicle.", accent: "amber", group: "vision" },
   { value: "face_detected",   label: "Face detected",   icon: Icon.user,      desc: "Any face visible in frame, known or not.",       accent: "blue",   group: "faces" },
   { value: "face_recognized", label: "Known face",      icon: Icon.userCheck, desc: "A specific person in your library.",              accent: "blue",   group: "faces" },

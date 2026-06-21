@@ -25,6 +25,13 @@ export function LocateEditor({ draft, onChange }: LocateEditorProps) {
         specific thing described in plain language. The rest of the rule runs
         only if it&apos;s found. Needs FindAnything enabled in Settings.
       </div>
+      <div className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1.5">
+        This runs a GPU vision model — it&apos;s seconds per frame, not free. It
+        only fires when the trigger above does, so keep a cheap trigger and a
+        cooldown (Wait between alerts) so it never runs on every frame. The
+        grounding service also self-limits (one inference at a time + a result
+        cache), so a chatty trigger can&apos;t pile up GPU work.
+      </div>
 
       <div>
         <label className="text-xs text-muted-foreground block mb-1">
