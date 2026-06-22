@@ -1213,3 +1213,81 @@ export function buildRuleSummary(rule: Rule, cameras: Camera[]): string {
     rule.cooldown_seconds,
   );
 }
+
+// ── Temporal sequence rules (docs/sequence-rules-design.md) ──
+// A sequence rule carries a `sequence` block in trigger_pattern: the base
+// trigger is step 0, and these are the ordered "and then" steps. v1 step checks
+// support the two highest-value kinds inline — an object detection or a
+// FindAnything (locate). on_complete reuses the rule's main action chain;
+// on_timeout is the absence alert that fires when a step never happens in time.
+
+export type SeqCheckKind = "object" | "locate";
+
+export interface SeqStepDraft {
+  kind: SeqCheckKind;
+  label: string; // object label OR locate prompt
+  withinSeconds: string;
+  preGateLabel: string; // locate only: object that must be present before grounding
+  requireCorroboration: boolean; // locate only
+}
+
+export const SEQ_CORRELATE_OPTIONS: { value: string; label: string; hint: string }[] = [
+  { value: "camera", label: "Same camera", hint: "Steps must happen on the camera that started the sequence." },
+  { value: "person", label: "Same person", hint: "Bind to a recognized face across cameras. Needs face recognition." },
+  { value: "journey", label: "Same body (cross-camera)", hint: "Follow one body across cameras via re-id. Approximate." },
+  { value: "incident", label: "Same incident", hint: "Bind to the active incident the trigger belongs to." },
+  { value: "none", label: "Anywhere", hint: "Any later observation in the window counts, regardless of subject." },
+];
+
+export function defaultSeqStep(kind: SeqCheckKind = "object"): SeqStepDraft {
+  return { kind, label: "", withinSeconds: "120", preGateLabel: "", requireCorroboration: true };
+}
+
+export function seqStepToDict(s: SeqStepDraft): Record<string, unknown> {
+  const within = parseInt(s.withinSeconds) || 60;
+  const step: Record<string, unknown> = { within_seconds: within };
+  if (s.kind === "locate") {
+    step.check = { type: "locate", prompt: s.label.trim(), require_corroboration: s.requireCorroboration };
+    if (s.preGateLabel.trim()) step.pre_gate = { type: "object_detected", label: s.preGateLabel.trim() };
+  } else {
+    step.check = { type: "object_detected", label: s.label.trim() };
+  }
+  return step;
+}
+
+export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
+  const check = (raw.check as Record<string, unknown>) || {};
+  const within = raw.within_seconds != null ? String(raw.within_seconds) : "120";
+  if (check.type === "locate") {
+    const pre = (raw.pre_gate as Record<string, unknown>) || {};
+    return {
+      kind: "locate",
+      label: (check.prompt as string) || "",
+      withinSeconds: within,
+      preGateLabel: (pre.label as string) || "",
+      requireCorroboration: check.require_corroboration !== false,
+    };
+  }
+  return {
+    kind: "object",
+    label: (check.label as string) || "",
+    withinSeconds: within,
+    preGateLabel: "",
+    requireCorroboration: true,
+  };
+}
+
+export function describeSeqStep(s: SeqStepDraft): string {
+  const within = parseInt(s.withinSeconds) || 60;
+  if (s.kind === "locate") {
+    const pre = s.preGateLabel.trim() ? ` (when ${s.preGateLabel.trim()} present)` : "";
+    return `find "${s.label.trim() || "…"}"${pre} within ${within}s`;
+  }
+  return `${s.label.trim() || "object"} appears within ${within}s`;
+}
+
+export function validateSeqStep(s: SeqStepDraft): string | null {
+  if (!s.label.trim()) return s.kind === "locate" ? "Describe what to find" : "Object label is required";
+  if ((parseInt(s.withinSeconds) || 0) <= 0) return "Time window must be greater than 0";
+  return null;
+}

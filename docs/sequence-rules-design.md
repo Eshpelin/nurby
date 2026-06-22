@@ -1,6 +1,6 @@
 # Sequence Rules — temporal, multi-step automations (design sketch)
 
-Status: **Draft sketch** (pre-implementation, refinement round 1). Owner: TBD. Last updated: 2026-06-21.
+Status: **Shipped (v1, all 5 slices)**. Owner: TBD. Last updated: 2026-06-22.
 
 **Decisions folded in (round 1):**
 - **Absence detection is core to v1** — a sequence can fire when an expected step
@@ -153,21 +153,30 @@ camera, timestamp).
 
 ## 7. Phasing
 
-v1 now includes everything decided in round 1 (absence firing, all correlation
-modes, cross-camera, any-check steps), so it's a larger build — roughly
-FindAnything-sized. Internal build order (each lands working + verified before
-the next):
+v1 includes everything decided in round 1 (absence firing, all correlation
+modes, cross-camera, any-check steps). All 5 slices have shipped, each landed
+working + verified before the next:
 
-1. **Engine core** — `rule_sequence_instances` table + migration; the
-   start/advance state machine; the sweeper loop; `camera` + `incident`
+1. **Engine core** ✅ — `rule_sequence_instances` table + migration; the
+   start/advance state machine; the sweeper loop; `camera` + `incident` + `none`
    correlation; linear steps with cheap-predicate checks; `on_complete` actions.
-2. **Absence + control** — `on_timeout` action chain + sweeper firing;
-   `on_refire` policy; `max_active` caps; `{{trigger.*}}`/`{{steps.*}}` vars.
-3. **FindAnything steps** — locate/verify as step checks, behind the `pre_gate`
-   + grounding gate/cache.
-4. **Cross-camera identity** — `person` + `journey` correlation.
-5. **Builder UI** — the "Then…" step editor, correlation + window controls, the
-   `on_complete`/`on_timeout` action sets, and the plain-language summary.
+2. **Absence + control** ✅ — `on_timeout` action chain + sweeper firing;
+   `on_refire` policy; `max_active` caps; `{{vars.trigger.*}}`/`{{vars.steps.N.*}}`
+   vars. (The firing path was extracted to `services/events/firing.py`, shared by
+   the trigger path, on_complete, and on_timeout.)
+3. **FindAnything steps** ✅ — `locate` as a step check via
+   `actions.run_locate_check`, behind an optional cheap `pre_gate` so GPU runs
+   only when worthwhile. (`verify` step checks deferred — see §8.)
+4. **Cross-camera identity** ✅ — `person` (face) + `journey` (body re-id)
+   correlation; a frame yields a set of keys so one frame advances/starts a
+   sequence per present subject.
+5. **Builder UI** ✅ — `SequenceSection`: the "Then…" step editor (object /
+   FindAnything checks + window + pre_gate), correlation + re-fire + max-active
+   controls, the `on_complete`/`on_timeout` action chains, and a plain-language
+   summary. Verified end-to-end (payload capture + screenshot).
+
+The vars namespace shipped as `{{vars.trigger.*}}` / `{{vars.steps.N.*}}` (reusing
+the existing `vars` bag) rather than bare `{{trigger.*}}`.
 
 - **Defer (v2+):** branching DAGs / any-of / parallel steps; a timeline overlay
   of in-flight sequences; action-recognition gestures ("putting" vs the
@@ -181,3 +190,13 @@ the next):
   *approximates* the action but isn't true action recognition.
 - This is real engineering, not a toggle: DB table + migration, an engine state
   machine, a sweeper loop, schema + validation, and builder UI. Multi-part.
+- **As-built limits (v1):**
+  - `person`/`journey` correlation depends on face recognition / body re-id
+    holding across cameras — the least-reliable binding. A frame with multiple
+    subjects starts one instance each, so a specific-person trigger can also
+    start bystander instances (they simply time out). `max_active` bounds this.
+  - **`verify` (VLM-confirm) step checks are not wired yet** — only `locate`
+    runs; a `verify` step currently no-ops (never matches). Future slice.
+  - The builder exposes two step-check kinds inline (object detection +
+    FindAnything locate); the full trigger-predicate palette as a step check is
+    expressible via the API but not yet surfaced in the UI.

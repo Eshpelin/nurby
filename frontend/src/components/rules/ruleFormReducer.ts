@@ -4,9 +4,12 @@
 // `formActions: ActionDraft[]`; ActionsSection owns per-card editing.
 import {
   defaultDraftForType,
+  defaultSeqStep,
   dictToDraft,
+  seqStepFromDict,
   type ActionDraft,
   type Rule,
+  type SeqStepDraft,
 } from "./types";
 
 export interface RuleFormState {
@@ -60,8 +63,16 @@ export interface RuleFormState {
   formCondTimeBefore: string;
   formCondConfidence: string;
 
-  // Action chain.
+  // Action chain. When the rule is a sequence, this is the on_complete chain.
   formActions: ActionDraft[];
+
+  // Temporal sequence group (docs/sequence-rules-design.md).
+  formSequenceEnabled: boolean;
+  formSequenceCorrelateBy: string;
+  formSequenceOnRefire: "ignore" | "restart";
+  formSequenceMaxActive: string;
+  formSequenceSteps: SeqStepDraft[];
+  formSequenceTimeoutActions: ActionDraft[];
 
   // Misc
   formCooldown: string;
@@ -118,6 +129,13 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
   formCondConfidence: "any",
 
   formActions: [defaultDraftForType("notify")],
+
+  formSequenceEnabled: false,
+  formSequenceCorrelateBy: "camera",
+  formSequenceOnRefire: "ignore",
+  formSequenceMaxActive: "20",
+  formSequenceSteps: [defaultSeqStep()],
+  formSequenceTimeoutActions: [],
 
   formCooldown: "300",
   formError: "",
@@ -282,6 +300,23 @@ export function hydrateFromRule(rule: Rule): RuleFormState {
       ? rawActions.map((a) => dictToDraft(a as Record<string, unknown>))
       : [defaultDraftForType("notify")];
 
+  // Temporal sequence block (trigger_pattern.sequence). on_complete is the
+  // rule's main action chain (above); on_timeout lives inside the block.
+  const seq = (tp.sequence as Record<string, unknown>) || null;
+  base.formSequenceEnabled = !!seq;
+  if (seq) {
+    base.formSequenceCorrelateBy = (seq.correlate_by as string) || "camera";
+    base.formSequenceOnRefire =
+      (seq.on_refire as "ignore" | "restart") === "restart" ? "restart" : "ignore";
+    base.formSequenceMaxActive = seq.max_active != null ? String(seq.max_active) : "20";
+    const steps = Array.isArray(seq.steps) ? (seq.steps as Record<string, unknown>[]) : [];
+    base.formSequenceSteps = steps.length
+      ? steps.map((s) => seqStepFromDict(s))
+      : [defaultSeqStep()];
+    const ot = Array.isArray(seq.on_timeout) ? (seq.on_timeout as Record<string, unknown>[]) : [];
+    base.formSequenceTimeoutActions = ot.map((a) => dictToDraft(a));
+  }
+
   base.formCooldown = String(r.cooldown_seconds);
   base.formError = "";
   base.submitting = false;
@@ -298,6 +333,8 @@ export function ruleFormReducer(
       return {
         ...INITIAL_RULE_FORM_STATE,
         formActions: [defaultDraftForType("notify")],
+        formSequenceSteps: [defaultSeqStep()],
+        formSequenceTimeoutActions: [],
       };
     case "hydrate":
       return hydrateFromRule(action.rule);

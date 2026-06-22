@@ -10,8 +10,10 @@ import {
   resolveCameraNames,
   draftToDict,
   defaultDraftForType,
+  seqStepToDict,
   validateActionChainRefs,
   validateActionDraft,
+  validateSeqStep,
   type Camera,
   type Person,
   type Rule,
@@ -23,6 +25,7 @@ import {
   type RuleFormState,
 } from "./ruleFormReducer";
 import { SummaryCard } from "./SummaryCard";
+import { SequenceSection } from "./SequenceSection";
 import { TriggerSection } from "./TriggerSection";
 import { ConditionsSection } from "./ConditionsSection";
 import { ActionsSection } from "./ActionsSection";
@@ -351,6 +354,24 @@ export function RuleBuilder({
       conditions.min_confidence = confMap[s.formCondConfidence] ?? 0.4;
     }
 
+    // Temporal sequence: the base trigger becomes step 0, and the sequence
+    // block carries the ordered steps + correlation + the on_timeout chain.
+    // The rule's main action chain (below) is on_complete.
+    if (s.formSequenceEnabled && s.formSequenceSteps.length > 0) {
+      const sequence: Record<string, unknown> = {
+        correlate_by: s.formSequenceCorrelateBy,
+        on_refire: s.formSequenceOnRefire,
+        max_active: parseInt(s.formSequenceMaxActive) || 20,
+        steps: s.formSequenceSteps.map(seqStepToDict),
+      };
+      if (s.formSequenceTimeoutActions.length > 0) {
+        sequence.on_timeout = s.formSequenceTimeoutActions.map(draftToDict);
+      }
+      // The camera scope, if any, also bounds the sequence.
+      if (s.formCondCameras.length > 0) sequence.cameras = s.formCondCameras;
+      trigger_pattern.sequence = sequence;
+    }
+
     const actionDicts = s.formActions.map(draftToDict);
     return {
       name: s.formName.trim(),
@@ -371,30 +392,62 @@ export function RuleBuilder({
       setError("Name is required");
       return;
     }
-    if (s.formActions.length === 0) {
-      setError("At least one action is required");
-      return;
-    }
 
-    const errs: Record<number, string> = {};
-    s.formActions.forEach((d, i) => {
-      const e = validateActionDraft(d);
-      if (e) errs[i] = e;
-    });
-    const chainErr = validateActionChainRefs(s.formActions);
-    if (chainErr && !errs[chainErr.index]) errs[chainErr.index] = chainErr.message;
-    if (Object.keys(errs).length > 0) {
-      setCardErrors(errs);
-      const first = Math.min(...Object.keys(errs).map(Number));
-      setError(`Action ${first + 1}: ${errs[first]}`);
-      if (typeof document !== "undefined") {
-        requestAnimationFrame(() => {
-          document.getElementById(`rule-action-${first}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-        });
+    // Sequence rules: validate steps, and allow an empty on_complete chain as
+    // long as the on_timeout (absence) chain has actions.
+    if (s.formSequenceEnabled) {
+      if (s.formSequenceSteps.length === 0) {
+        setError("Add at least one sequence step");
+        return;
       }
-      return;
+      for (let i = 0; i < s.formSequenceSteps.length; i++) {
+        const e = validateSeqStep(s.formSequenceSteps[i]);
+        if (e) {
+          setError(`Sequence step ${i + 1}: ${e}`);
+          return;
+        }
+      }
+      if (s.formActions.length === 0 && s.formSequenceTimeoutActions.length === 0) {
+        setError("Add an action for completion or for timeout");
+        return;
+      }
+      // Per-card validation for both chains. Chain-ref checks are skipped here
+      // because on_complete/on_timeout may reference {{vars.trigger.*}} /
+      // {{vars.steps.*}}, which the server validates.
+      for (const d of [...s.formActions, ...s.formSequenceTimeoutActions]) {
+        const e = validateActionDraft(d);
+        if (e) {
+          setError(`Action: ${e}`);
+          return;
+        }
+      }
+      setCardErrors({});
+    } else {
+      if (s.formActions.length === 0) {
+        setError("At least one action is required");
+        return;
+      }
+
+      const errs: Record<number, string> = {};
+      s.formActions.forEach((d, i) => {
+        const e = validateActionDraft(d);
+        if (e) errs[i] = e;
+      });
+      const chainErr = validateActionChainRefs(s.formActions);
+      if (chainErr && !errs[chainErr.index]) errs[chainErr.index] = chainErr.message;
+      if (Object.keys(errs).length > 0) {
+        setCardErrors(errs);
+        const first = Math.min(...Object.keys(errs).map(Number));
+        setError(`Action ${first + 1}: ${errs[first]}`);
+        if (typeof document !== "undefined") {
+          requestAnimationFrame(() => {
+            document.getElementById(`rule-action-${first}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+          });
+        }
+        return;
+      }
+      setCardErrors({});
     }
-    setCardErrors({});
 
     dispatch({ type: "setSubmitting", value: true });
     setError("");
@@ -632,12 +685,34 @@ export function RuleBuilder({
             />
           </CollapsibleSection>
 
+          {state.formSequenceEnabled && (
+            <div className="text-[11px] text-muted-foreground -mb-2 px-1">
+              These actions run when the sequence completes (on complete).
+            </div>
+          )}
           <ActionsSection
             telegramChannels={telegramChannels}
             telegramChannelsLoading={telegramChannelsLoading}
             formActions={state.formActions}
             setFormActions={updaterFor("formActions")}
             cardErrors={cardErrors}
+          />
+
+          <SequenceSection
+            enabled={state.formSequenceEnabled}
+            setEnabled={setterFor("formSequenceEnabled")}
+            correlateBy={state.formSequenceCorrelateBy}
+            setCorrelateBy={setterFor("formSequenceCorrelateBy")}
+            onRefire={state.formSequenceOnRefire}
+            setOnRefire={setterFor("formSequenceOnRefire")}
+            maxActive={state.formSequenceMaxActive}
+            setMaxActive={setterFor("formSequenceMaxActive")}
+            steps={state.formSequenceSteps}
+            setSteps={updaterFor("formSequenceSteps")}
+            timeoutActions={state.formSequenceTimeoutActions}
+            setTimeoutActions={updaterFor("formSequenceTimeoutActions")}
+            telegramChannels={telegramChannels}
+            telegramChannelsLoading={telegramChannelsLoading}
           />
 
           <div className="border border-border rounded-md p-3">
