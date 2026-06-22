@@ -119,7 +119,13 @@ def install_engine(monkeypatch, rules, *, redis=None, share_redis=None):
     async def _store_event(*args, **kwargs):
         return uuid.uuid4()
 
-    monkeypatch.setattr(engine_mod, "execute_action", recorder)
-    # Patch the bound method via the instance so the class is untouched.
-    eng._store_event = _store_event  # type: ignore[method-assign]
+    # The fire path runs through services.events.firing now: it resolves
+    # execute_action from services.events.actions at call time and persists via
+    # firing.store_event. Patch both seams so tests need no DB and can capture
+    # every action dispatch via the returned recorder.
+    from services.events import actions as actions_mod
+    from services.events import firing as firing_mod
+
+    monkeypatch.setattr(actions_mod, "execute_action", recorder)
+    monkeypatch.setattr(firing_mod, "store_event", _store_event)
     return eng, recorder

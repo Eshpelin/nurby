@@ -34,15 +34,14 @@ except ImportError:  # pragma: no cover - py<3.9
 
 from sqlalchemy import select
 
-from services.events import sequences
-from services.events.actions import execute_action
+from services.events import firing, sequences
 from services.perception.spatial_events import (
     _cross_direction,
     _point_in_polygon,
     _segments_cross,
 )
 from shared.database import async_session
-from shared.models import Event, Recording, Rule
+from shared.models import Recording, Rule
 
 # Redis pubsub channel that backend routes publish to whenever a rule
 # is created, updated, or deleted. The perception process listens and
@@ -275,64 +274,16 @@ class RuleEngine:
             await self._fire(rule, observation_data)
 
     async def _fire(self, rule, observation_data: dict) -> None:
-        """Store the event, broadcast it, run the rule's action chain, and fan
-        out to webhook subscriptions. Shared by the normal trigger path and the
+        """Resolve footage for this observation, then run the rule's action chain
+        via the shared firing path. Used by the normal trigger path and the
         sequence-completion path (on_complete)."""
         # Resolve the footage clip covering this observation so the
         # event and any webhook payload carry a direct link to it.
         await self._attach_footage(observation_data)
-
-        # Store event
-        event_id = await self._store_event(
-            rule_id=rule.id,
-            observation_id=observation_data.get("observation_id"),
-            payload=observation_data,
+        await firing.fire_actions(
+            rule, observation_data, rule.actions,
             severity=getattr(rule, "severity", None) or "alert",
         )
-
-        # Tell every connected dashboard a rule just fired, regardless
-        # of the rule's own action chain, so the live timeline shows
-        # triggers as they happen.
-        try:
-            from services.api.ws import broadcast as _ws_broadcast
-
-            await _ws_broadcast({
-                "type": "event_fired",
-                "event_id": str(event_id),
-                "rule_id": str(rule.id),
-                "rule_name": rule.name,
-                "severity": getattr(rule, "severity", None) or "alert",
-                "camera_id": observation_data.get("camera_id"),
-                "camera_name": observation_data.get("camera_name") or "",
-                "observation_id": observation_data.get("observation_id"),
-                "event_kind": observation_data.get("event_kind") or "observation",
-                "timestamp": observation_data.get("timestamp"),
-            })
-        except Exception:
-            logger.debug("event_fired broadcast failed", exc_info=True)
-
-        # Execute actions. Thread a shared `vars` dict so later actions
-        # can reference outputs written by earlier ones.
-        observation_data.setdefault("vars", {})
-        for action in self._wrap_actions(rule.actions):
-            try:
-                await execute_action(action, observation_data, rule, event_id)
-            except RuntimeError as exc:
-                # Chain-abort signal. A vlm_call with on_error=stop or a
-                # verify action that failed confirmation raises here to
-                # suppress every remaining action (notify, telegram, ...).
-                logger.info("Rule '%s' chain stopped. %s", rule.name, exc)
-                break
-            except Exception:
-                logger.exception("Action failed for rule '%s'", rule.name)
-
-        # Fan the fired event out to standing webhook subscriptions.
-        try:
-            from services.events.actions import dispatch_subscriptions
-
-            await dispatch_subscriptions(observation_data, rule, event_id)
-        except Exception:
-            logger.exception("subscription dispatch failed for rule '%s'", rule.name)
 
     async def _evaluate_sequence(self, rule, seq: dict, data: dict, tz) -> None:
         """Drive a sequence rule for this observation: advance any in-flight
@@ -1288,15 +1239,6 @@ class RuleEngine:
                 pass
 
     @staticmethod
-    def _wrap_actions(actions) -> list[dict]:
-        """Ensure actions is always a list."""
-        if isinstance(actions, list):
-            return actions
-        if isinstance(actions, dict):
-            return [actions]
-        return []
-
-    @staticmethod
     async def _attach_footage(data: dict) -> None:
         """Enrich observation_data with recording_id + recording_url for
         the clip that covers this observation on the same camera.
@@ -1349,47 +1291,3 @@ class RuleEngine:
         base = (_settings.public_base_url or "").rstrip("/")
         data["recording_id"] = str(rec.id)
         data["recording_url"] = f"{base}/api/recordings/{rec.id}/stream"
-
-    @staticmethod
-    async def _store_event(
-        rule_id: uuid.UUID,
-        observation_id: str | None,
-        payload: dict,
-        severity: str = "alert",
-    ) -> uuid.UUID:
-        """Store fired event in DB."""
-        try:
-            obs_uuid = uuid.UUID(observation_id) if observation_id else None
-        except (ValueError, TypeError):
-            obs_uuid = None
-
-        rec_raw = payload.get("recording_id")
-        try:
-            rec_uuid = uuid.UUID(str(rec_raw)) if rec_raw else None
-        except (ValueError, TypeError):
-            rec_uuid = None
-
-        cam_raw = payload.get("camera_id")
-        try:
-            cam_uuid = uuid.UUID(str(cam_raw)) if cam_raw else None
-        except (ValueError, TypeError):
-            cam_uuid = None
-
-        event = Event(
-            rule_id=rule_id,
-            observation_id=obs_uuid,
-            recording_id=rec_uuid,
-            severity=severity if severity in ("alert", "detection") else "alert",
-            camera_id=cam_uuid,
-            payload=payload,
-        )
-        try:
-            async with async_session() as db:
-                db.add(event)
-                await db.commit()
-                await db.refresh(event)
-                logger.info("Stored event %s for rule %s", event.id, rule_id)
-                return event.id
-        except Exception:
-            logger.exception("Failed to store event")
-            return uuid.uuid4()

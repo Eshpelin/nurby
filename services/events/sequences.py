@@ -81,11 +81,37 @@ def is_locate_check(step: dict) -> bool:
     return step_check(step).get("type") in ("locate", "verify")
 
 
+# Compact observation fields snapshotted into an instance so on_complete /
+# on_timeout actions can reference {{vars.trigger.*}} and {{vars.steps.N.*}}.
+# Kept small so the JSON column stays bounded.
+_SNAPSHOT_FIELDS = (
+    "observation_id", "camera_id", "camera_name", "timestamp", "timestamp_local",
+    "incident_id", "recording_id", "recording_url", "thumbnail_url", "vlm_description",
+)
+
+
+def _snapshot(data: dict) -> dict:
+    return {k: data.get(k) for k in _SNAPSHOT_FIELDS if data.get(k) is not None}
+
+
+def _reconstruct_obs(inst_vars: dict | None) -> dict:
+    """Build an observation_data-like context for an on_timeout fire, which has
+    no live frame. The start (trigger) snapshot supplies camera/timestamp, and
+    vars expose the whole journey to the action chain."""
+    inst_vars = inst_vars or {}
+    trig = inst_vars.get("trigger") or {}
+    data = dict(trig)
+    data["event_kind"] = "sequence_timeout"
+    data["vars"] = {"trigger": trig, "steps": inst_vars.get("steps") or []}
+    return data
+
+
 @dataclass
 class _Active:
     id: uuid.UUID
     step_index: int
     step_deadline: datetime
+    vars: dict | None = None
 
 
 # ── DB ops (own sessions; monkeypatched in tests) ───────────────────────
@@ -104,7 +130,7 @@ async def _find_active_for_key(rule_id, key: str) -> list[_Active]:
                 RuleSequenceInstance.correlation_key == key,
             )
         )).scalars().all()
-        return [_Active(r.id, r.step_index, r.step_deadline) for r in rows]
+        return [_Active(r.id, r.step_index, r.step_deadline, r.vars) for r in rows]
 
 
 async def _count_active(rule_id) -> int:
@@ -123,7 +149,7 @@ async def _count_active(rule_id) -> int:
         )).scalar() or 0)
 
 
-async def _create(rule_id, key: str, step_index: int, deadline: datetime) -> None:
+async def _create(rule_id, key: str, step_index: int, deadline: datetime, vars: dict | None = None) -> None:
     from shared.database import async_session
     from shared.models import RuleSequenceInstance
 
@@ -131,11 +157,12 @@ async def _create(rule_id, key: str, step_index: int, deadline: datetime) -> Non
         db.add(RuleSequenceInstance(
             rule_id=rule_id, correlation_key=key,
             step_index=step_index, step_deadline=deadline, status="active",
+            vars=vars or {"trigger": {}, "steps": []},
         ))
         await db.commit()
 
 
-async def _advance(instance_id, step_index: int, deadline: datetime) -> None:
+async def _advance(instance_id, step_index: int, deadline: datetime, step_snapshot: dict | None = None) -> None:
     from shared.database import async_session
     from shared.models import RuleSequenceInstance
 
@@ -144,6 +171,10 @@ async def _advance(instance_id, step_index: int, deadline: datetime) -> None:
         if inst and inst.status == "active":
             inst.step_index = step_index
             inst.step_deadline = deadline
+            # Reassign vars wholesale so SQLAlchemy detects the JSON change.
+            cur = dict(inst.vars or {})
+            cur["steps"] = list(cur.get("steps") or []) + [step_snapshot or {}]
+            inst.vars = cur
             await db.commit()
 
 
@@ -158,7 +189,7 @@ async def _set_status(instance_id, status: str) -> None:
             await db.commit()
 
 
-async def _restart(instance_id, deadline: datetime) -> None:
+async def _restart(instance_id, deadline: datetime, trigger_snapshot: dict | None = None) -> None:
     from shared.database import async_session
     from shared.models import RuleSequenceInstance
 
@@ -167,18 +198,22 @@ async def _restart(instance_id, deadline: datetime) -> None:
         if inst and inst.status == "active":
             inst.step_index = 0
             inst.step_deadline = deadline
+            inst.vars = {"trigger": trigger_snapshot or {}, "steps": []}
             await db.commit()
 
 
 async def expire_due(now: datetime | None = None) -> int:
-    """Mark active instances past their deadline as expired. Returns the count.
-    (on_timeout firing is slice 2; this just stops them lingering/advancing.)"""
+    """Mark active instances past their deadline as expired and fire the rule's
+    on_timeout action chain (the absence alert — "X happened but Y never did").
+    Returns the number expired."""
     from sqlalchemy import select
 
+    from services.events import firing
     from shared.database import async_session
-    from shared.models import RuleSequenceInstance
+    from shared.models import Rule, RuleSequenceInstance
 
     now = now or datetime.now(timezone.utc)
+    pending = []  # (rule, on_timeout_actions, severity, inst_vars)
     n = 0
     async with async_session() as db:
         rows = (await db.execute(
@@ -187,11 +222,28 @@ async def expire_due(now: datetime | None = None) -> int:
                 RuleSequenceInstance.step_deadline < now,
             ).limit(500)
         )).scalars().all()
+        rule_cache: dict = {}
         for r in rows:
             r.status = "expired"
             n += 1
+            if r.rule_id not in rule_cache:
+                rule_cache[r.rule_id] = await db.get(Rule, r.rule_id)
+            rule = rule_cache[r.rule_id]
+            if rule and rule.enabled:
+                seq = get_sequence(rule.trigger_pattern)
+                on_timeout = (seq or {}).get("on_timeout")
+                if on_timeout:
+                    pending.append((rule, on_timeout, getattr(rule, "severity", None) or "alert", r.vars))
         if n:
             await db.commit()
+    # Fire on_timeout chains after the status commit, outside the session.
+    for rule, on_timeout, severity, inst_vars in pending:
+        try:
+            await firing.fire_actions(
+                rule, _reconstruct_obs(inst_vars), on_timeout, severity=severity,
+            )
+        except Exception:
+            logger.exception("on_timeout fire failed for rule '%s'", getattr(rule, "name", "?"))
     return n
 
 
@@ -233,10 +285,21 @@ async def evaluate_sequence(
                 continue
             nxt = inst.step_index + 1
             if nxt >= len(steps):
+                # Complete: thread the journey (trigger + all step snapshots,
+                # including this final one) into vars so on_complete actions can
+                # reference {{vars.trigger.*}} / {{vars.steps.N.*}}.
+                data.setdefault("vars", {})
+                data["vars"]["trigger"] = (inst.vars or {}).get("trigger") or {}
+                data["vars"]["steps"] = list((inst.vars or {}).get("steps") or []) + [_snapshot(data)]
+                data["event_kind"] = "sequence_complete"
                 await _set_status(inst.id, "completed")
                 await fire_cb()
             else:
-                await _advance(inst.id, nxt, now + timedelta(seconds=step_within_seconds(steps[nxt])))
+                await _advance(
+                    inst.id, nxt,
+                    now + timedelta(seconds=step_within_seconds(steps[nxt])),
+                    _snapshot(data),
+                )
 
         # 2. Start a new instance when the base trigger (step 0) matched.
         if start_matched:
@@ -245,7 +308,7 @@ async def evaluate_sequence(
             first_deadline = now + timedelta(seconds=step_within_seconds(steps[0]))
             if existing:
                 if on_refire == "restart":
-                    await _restart(existing[0].id, first_deadline)
+                    await _restart(existing[0].id, first_deadline, _snapshot(data))
                 # ignore: leave the in-flight instance untouched
                 return
             try:
@@ -257,6 +320,6 @@ async def evaluate_sequence(
                     "sequence rule '%s' at max_active=%d; dropping new start", rule.name, max_active,
                 )
                 return
-            await _create(rule.id, key, 0, first_deadline)
+            await _create(rule.id, key, 0, first_deadline, {"trigger": _snapshot(data), "steps": []})
     except Exception:
         logger.exception("evaluate_sequence failed for rule '%s'", getattr(rule, "name", "?"))

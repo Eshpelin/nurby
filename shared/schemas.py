@@ -573,7 +573,11 @@ def _validate_action_chain(actions):
     from services.events.templates import collect_refs
 
     items = actions if isinstance(actions, list) else [actions] if isinstance(actions, dict) else []
-    known_outputs: set[str] = set()
+    # `trigger` and `steps` are sequence-rule pseudo-outputs: on_complete /
+    # on_timeout chains may reference {{vars.trigger.*}} (the start observation)
+    # and {{vars.steps.N.*}} (each satisfied step). Always allowed; non-sequence
+    # rules simply never populate them. See docs/sequence-rules-design.md.
+    known_outputs: set[str] = {"trigger", "steps"}
     known_schemas: dict[str, dict] = {}
 
     for idx, action in enumerate(items):

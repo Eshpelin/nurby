@@ -105,6 +105,6 @@ def test_event_carries_rule_severity(monkeypatch):
 
         return _uuid.uuid4()
 
-    monkeypatch.setattr(eng, "_store_event", fake_store)
+    monkeypatch.setattr("services.events.firing.store_event", fake_store)
     asyncio.run(eng.evaluate({"camera_id": "cam"}))
     assert stored["severity"] == "detection"

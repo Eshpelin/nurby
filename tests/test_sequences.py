@@ -60,6 +60,26 @@ def test_is_locate_check():
     assert seqmod.is_locate_check({"check": {"type": "object_detected"}}) is False
 
 
+def test_snapshot_compact():
+    snap = seqmod._snapshot({"camera_id": "c1", "timestamp": "t", "junk": "x", "motion_score": 5})
+    assert snap == {"camera_id": "c1", "timestamp": "t"}  # only known fields kept
+
+
+def test_reconstruct_obs():
+    iv = {"trigger": {"camera_id": "c1", "timestamp": "t0"}, "steps": [{"camera_id": "c1"}]}
+    data = seqmod._reconstruct_obs(iv)
+    assert data["camera_id"] == "c1"
+    assert data["event_kind"] == "sequence_timeout"
+    assert data["vars"]["trigger"] == iv["trigger"]
+    assert data["vars"]["steps"] == iv["steps"]
+
+
+def test_reconstruct_obs_empty():
+    data = seqmod._reconstruct_obs(None)
+    assert data["event_kind"] == "sequence_timeout"
+    assert data["vars"] == {"trigger": {}, "steps": []}
+
+
 # ── orchestration (DB ops faked) ───────────────────────────────────────────
 
 @pytest.fixture
@@ -67,23 +87,23 @@ def store(monkeypatch):
     state = {"active": [], "create": [], "advance": [], "status": [], "restart": [], "fire": 0}
 
     async def find_active(rule_id, key):
-        return [seqmod._Active(a["id"], a["step_index"], a["deadline"])
+        return [seqmod._Active(a["id"], a["step_index"], a["deadline"], a.get("vars"))
                 for a in state["active"] if a["key"] == key and a["status"] == "active"]
 
     async def count_active(rule_id):
         return len([a for a in state["active"] if a["status"] == "active"])
 
-    async def create(rule_id, key, step_index, deadline):
-        state["create"].append((key, step_index, deadline))
+    async def create(rule_id, key, step_index, deadline, vars=None):
+        state["create"].append((key, step_index, deadline, vars))
 
-    async def advance(iid, step_index, deadline):
-        state["advance"].append((iid, step_index, deadline))
+    async def advance(iid, step_index, deadline, step_snapshot=None):
+        state["advance"].append((iid, step_index, deadline, step_snapshot))
 
     async def set_status(iid, status):
         state["status"].append((iid, status))
 
-    async def restart(iid, deadline):
-        state["restart"].append((iid, deadline))
+    async def restart(iid, deadline, trigger_snapshot=None):
+        state["restart"].append((iid, deadline, trigger_snapshot))
 
     monkeypatch.setattr(seqmod, "_find_active_for_key", find_active)
     monkeypatch.setattr(seqmod, "_count_active", count_active)
@@ -94,9 +114,9 @@ def store(monkeypatch):
     return state
 
 
-def _add_active(store, key, step_index, deadline, status="active"):
+def _add_active(store, key, step_index, deadline, status="active", vars=None):
     store["active"].append({"id": uuid.uuid4(), "key": key, "step_index": step_index,
-                            "deadline": deadline, "status": status})
+                            "deadline": deadline, "status": status, "vars": vars})
     return store["active"][-1]["id"]
 
 
@@ -115,9 +135,10 @@ async def test_start_creates_instance(store):
         start_matched=True, step_match_fn=lambda p: False, fire_cb=fire, now=_now(),
     )
     assert len(store["create"]) == 1
-    key, idx, deadline = store["create"][0]
+    key, idx, deadline, vars = store["create"][0]
     assert key == "cam:c1" and idx == 0
     assert deadline == _now() + timedelta(seconds=30)  # step 0 within_seconds
+    assert vars == {"trigger": {"camera_id": "c1"}, "steps": []}  # trigger snapshot
 
 
 @pytest.mark.asyncio
@@ -130,22 +151,29 @@ async def test_advance_to_next_step(store):
         start_matched=False, step_match_fn=lambda p: True, fire_cb=fire, now=_now(),
     )
     assert len(store["advance"]) == 1
-    _iid, idx, _deadline = store["advance"][0]
+    _iid, idx, _deadline, snap = store["advance"][0]
     assert idx == 1
+    assert snap == {"camera_id": "c1"}  # step snapshot recorded
     assert store["fire"] == 0  # not the last step
 
 
 @pytest.mark.asyncio
 async def test_complete_fires_on_last_step(store):
-    _add_active(store, "cam:c1", 1, _now() + timedelta(seconds=20))  # at last step (len 2)
+    _add_active(store, "cam:c1", 1, _now() + timedelta(seconds=20),  # at last step (len 2)
+                vars={"trigger": {"camera_id": "c1", "timestamp": "t0"}, "steps": [{"camera_id": "c1"}]})
+    data = {"camera_id": "c1"}
     async def fire():
         store["fire"] += 1
     await seqmod.evaluate_sequence(
-        _Rule(), _seq(n=2), {"camera_id": "c1"},
+        _Rule(), _seq(n=2), data,
         start_matched=False, step_match_fn=lambda p: True, fire_cb=fire, now=_now(),
     )
     assert store["fire"] == 1
-    assert ("completed" in [s for _i, s in store["status"]])
+    assert "completed" in [s for _i, s in store["status"]]
+    # on_complete sees the full journey via vars.
+    assert data["vars"]["trigger"] == {"camera_id": "c1", "timestamp": "t0"}
+    assert len(data["vars"]["steps"]) == 2  # prior step + final completing snapshot
+    assert data["event_kind"] == "sequence_complete"
 
 
 @pytest.mark.asyncio
@@ -266,3 +294,21 @@ def test_schema_locate_step_validated():
     # a locate step with no prompt is rejected via _validate_locate_action
     with pytest.raises(ValueError):
         _validate_sequence({"steps": [{"check": {"type": "locate"}, "within_seconds": 5}]})
+
+
+def test_schema_on_timeout_can_reference_trigger_and_step_vars():
+    # The absence-alert chain references the start observation and step journey.
+    _validate_sequence({
+        "steps": [{"check": {"type": "object_detected"}, "within_seconds": 5}],
+        "on_timeout": [
+            {"type": "notify", "message": "{{vars.trigger.camera_name}}: nobody put it away"},
+            {"type": "telegram", "message": "first seen {{vars.steps.0.timestamp}}"},
+        ],
+    })
+
+
+def test_schema_unknown_var_still_rejected():
+    # trigger/steps are allowed, but a genuinely undeclared var is not.
+    from shared.schemas import _validate_action_chain
+    with pytest.raises(ValueError):
+        _validate_action_chain([{"type": "notify", "message": "{{vars.nope.x}}"}])

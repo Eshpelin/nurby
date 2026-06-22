@@ -42,7 +42,9 @@ def test_vars_shared_across_action_chain(monkeypatch):
             obs.setdefault("vars", {})["threat"] = {"level": "high", "reason": "tested"}
         seen_payloads.append((action["type"], dict(obs.get("vars", {}))))
 
-    monkeypatch.setattr("services.events.engine.execute_action", fake_exec)
+    # The fire path runs through services.events.firing, which resolves
+    # execute_action from services.events.actions at call time.
+    monkeypatch.setattr("services.events.actions.execute_action", fake_exec)
     asyncio.run(eng.evaluate({}))
 
     assert [t for t, _ in seen_payloads] == ["vlm_call", "webhook"]
