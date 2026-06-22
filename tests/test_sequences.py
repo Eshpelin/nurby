@@ -190,7 +190,8 @@ async def test_overdue_instance_not_advanced(store):
 
 
 @pytest.mark.asyncio
-async def test_locate_step_skipped_in_slice1(store):
+async def test_locate_step_skipped_without_grounding(store):
+    # No locate_check_fn wired -> locate steps never match (e.g. pure unit run).
     _add_active(store, "cam:c1", 0, _now() + timedelta(seconds=20))
     seq = {"correlate_by": "camera", "steps": [
         {"check": {"type": "locate", "prompt": "x"}, "within_seconds": 30},
@@ -202,7 +203,80 @@ async def test_locate_step_skipped_in_slice1(store):
         _Rule(), seq, {"camera_id": "c1"},
         start_matched=False, step_match_fn=lambda p: True, fire_cb=fire, now=_now(),
     )
-    assert store["advance"] == []  # locate step not evaluated in slice 1
+    assert store["advance"] == []
+
+
+@pytest.mark.asyncio
+async def test_locate_step_runs_with_grounding(store):
+    _add_active(store, "cam:c1", 0, _now() + timedelta(seconds=20))
+    seq = {"correlate_by": "camera", "steps": [
+        {"check": {"type": "locate", "prompt": "key"}, "within_seconds": 30},
+        {"check": {"type": "object_detected"}, "within_seconds": 30},
+    ]}
+    calls = []
+    async def locate_fn(check, data):
+        calls.append(check["prompt"])
+        return True
+    async def fire():
+        store["fire"] += 1
+    # step_match_fn returns False, so any advance must come from the locate path.
+    await seqmod.evaluate_sequence(
+        _Rule(), seq, {"camera_id": "c1"},
+        start_matched=False, step_match_fn=lambda p: False,
+        fire_cb=fire, locate_check_fn=locate_fn, now=_now(),
+    )
+    assert calls == ["key"]            # grounding invoked
+    assert len(store["advance"]) == 1  # advanced past the locate step
+
+
+@pytest.mark.asyncio
+async def test_locate_pre_gate_blocks_grounding(store):
+    _add_active(store, "cam:c1", 0, _now() + timedelta(seconds=20))
+    seq = {"correlate_by": "camera", "steps": [
+        {"check": {"type": "locate", "prompt": "key"},
+         "pre_gate": {"type": "object_detected", "label": "person"},
+         "within_seconds": 30},
+        {"check": {"type": "object_detected"}, "within_seconds": 30},
+    ]}
+    calls = []
+    async def locate_fn(check, data):
+        calls.append(1)
+        return True
+    async def fire():
+        store["fire"] += 1
+    # pre_gate predicate returns False -> grounding must NOT run.
+    await seqmod.evaluate_sequence(
+        _Rule(), seq, {"camera_id": "c1"},
+        start_matched=False, step_match_fn=lambda p: False,
+        fire_cb=fire, locate_check_fn=locate_fn, now=_now(),
+    )
+    assert calls == []             # GPU skipped by the cheap gate
+    assert store["advance"] == []
+
+
+@pytest.mark.asyncio
+async def test_locate_pre_gate_allows_grounding(store):
+    _add_active(store, "cam:c1", 0, _now() + timedelta(seconds=20))
+    seq = {"correlate_by": "camera", "steps": [
+        {"check": {"type": "locate", "prompt": "key"},
+         "pre_gate": {"type": "object_detected", "label": "person"},
+         "within_seconds": 30},
+        {"check": {"type": "object_detected"}, "within_seconds": 30},
+    ]}
+    calls = []
+    async def locate_fn(check, data):
+        calls.append(1)
+        return True
+    async def fire():
+        store["fire"] += 1
+    # pre_gate passes (step_match_fn True) -> grounding runs and advances.
+    await seqmod.evaluate_sequence(
+        _Rule(), seq, {"camera_id": "c1"},
+        start_matched=False, step_match_fn=lambda p: True,
+        fire_cb=fire, locate_check_fn=locate_fn, now=_now(),
+    )
+    assert calls == [1]
+    assert len(store["advance"]) == 1
 
 
 @pytest.mark.asyncio
@@ -312,3 +386,17 @@ def test_schema_unknown_var_still_rejected():
     from shared.schemas import _validate_action_chain
     with pytest.raises(ValueError):
         _validate_action_chain([{"type": "notify", "message": "{{vars.nope.x}}"}])
+
+
+def test_schema_valid_pre_gate():
+    _validate_sequence({"steps": [
+        {"check": {"type": "locate", "prompt": "key"}, "within_seconds": 5,
+         "pre_gate": {"type": "object_detected", "label": "person"}},
+    ]})
+
+
+def test_schema_bad_pre_gate():
+    with pytest.raises(ValueError):
+        _validate_sequence({"steps": [
+            {"check": {"type": "object_detected"}, "within_seconds": 5, "pre_gate": "person"},
+        ]})

@@ -292,11 +292,14 @@ class RuleEngine:
         start_matched = self._match_trigger(rule.trigger_pattern, data, rule.id, tz)
         if start_matched and rule.conditions and not self._check_conditions(rule.conditions, data, tz):
             start_matched = False
+        from services.events.actions import run_locate_check
+
         await sequences.evaluate_sequence(
             rule, seq, data,
             start_matched=start_matched,
             step_match_fn=lambda pat: self._match_trigger(pat, data, rule.id, tz),
             fire_cb=lambda: self._fire(rule, data),
+            locate_check_fn=run_locate_check,
         )
 
     async def _maybe_reload_rules(self):

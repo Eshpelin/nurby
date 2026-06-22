@@ -249,17 +249,35 @@ async def expire_due(now: datetime | None = None) -> int:
 
 # ── orchestration ───────────────────────────────────────────────────────
 
+async def _step_matches(step: dict, data: dict, step_match_fn, locate_check_fn) -> bool:
+    """Does this observation satisfy ``step``? Cheap trigger-predicate checks go
+    through ``step_match_fn``; grounding-backed (locate) checks go through the
+    async ``locate_check_fn`` — but only after an optional cheap ``pre_gate``
+    predicate passes, so GPU cost is spent only when worthwhile."""
+    chk = step_check(step)
+    if is_locate_check(step):
+        if locate_check_fn is None:
+            return False  # grounding not wired (e.g. pure unit tests)
+        pre = step.get("pre_gate")
+        if isinstance(pre, dict) and pre.get("type") and not step_match_fn(pre):
+            return False  # cheap precondition failed; don't spend GPU
+        return bool(await locate_check_fn(chk, data))
+    return bool(step_match_fn(chk))
+
+
 async def evaluate_sequence(
     rule, seq: dict, data: dict, *,
     start_matched: bool,
     step_match_fn,
     fire_cb,
+    locate_check_fn=None,
     now: datetime | None = None,
 ) -> None:
     """Advance any in-flight instance this observation satisfies, then (if the
     base trigger matched) start a new one. ``step_match_fn(pattern)->bool`` tests
-    a step's cheap trigger-predicate check; ``fire_cb()`` runs the rule's
-    on_complete actions. Never raises."""
+    a step's cheap trigger-predicate check; ``locate_check_fn(check, data)`` runs
+    a FindAnything/locate step check; ``fire_cb()`` runs the rule's on_complete
+    actions. Never raises."""
     try:
         now = now or datetime.now(timezone.utc)
         steps = seq.get("steps") or []
@@ -279,9 +297,7 @@ async def evaluate_sequence(
             if inst.step_index >= len(steps):
                 continue
             step = steps[inst.step_index]
-            if is_locate_check(step):
-                continue  # slice 3
-            if not step_match_fn(step_check(step)):
+            if not await _step_matches(step, data, step_match_fn, locate_check_fn):
                 continue
             nxt = inst.step_index + 1
             if nxt >= len(steps):

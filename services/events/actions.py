@@ -1153,6 +1153,39 @@ async def _ground_locate(frame, prompt: str):
     return await get_client().ground(frame, prompt, interactive=False)
 
 
+async def run_locate_check(check: dict, observation_data: dict) -> bool:
+    """Run a FindAnything locate as a plain boolean check, with no action-chain
+    side effects (no vars binding, no event stamping, no on_fail).
+
+    Used by temporal sequence step checks: the sequence engine only calls this
+    while an instance is actively waiting on this step (and after any cheap
+    pre_gate passes), so GPU cost stays bounded to in-flight sequences. Returns
+    False on any failure (no prompt, no frame, grounding error) so a step never
+    silently passes. See docs/sequence-rules-design.md."""
+    prompt = (check.get("prompt") or "").strip()
+    if not prompt:
+        return False
+    require_corroboration = bool(check.get("require_corroboration", True))
+    try:
+        min_overlap = float(check.get("min_overlap", 0.1))
+    except (TypeError, ValueError):
+        min_overlap = 0.1
+
+    frame = await asyncio.to_thread(_load_locate_frame, observation_data)
+    if frame is None:
+        return False
+    result = await _ground_locate(frame, prompt)
+    if result.error:
+        logger.info("sequence locate check could not run. %s", result.error)
+        return False
+    boxes = result.boxes
+    if not boxes:
+        return False
+    if require_corroboration:
+        return _corroborates(boxes, observation_data, min_overlap)
+    return True
+
+
 async def _execute_locate(action, observation_data, rule, event_id, ctx):
     """Locate ``prompt`` in the triggering frame and branch the chain on it."""
     prompt = render(action.get("prompt") or "", ctx).strip()
