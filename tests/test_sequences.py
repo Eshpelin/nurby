@@ -54,6 +54,18 @@ def test_correlation_key_camera_scope():
     assert seqmod.correlation_key({"camera_id": "c1"}, "camera", cameras=["c1"]) == "cam:c1"
 
 
+def test_correlation_keys_person_and_journey():
+    data = {"person_detections": {
+        "faces": [{"person_id": "sam"}, {"person_id": "sam"}],  # de-duped
+        "bodies": [{"body_cluster_id": "b1"}],
+        "tracks": [{"person_id": "bob"}, {"body_cluster_id": "b2"}]}}
+    assert seqmod.correlation_keys(data, "person") == ["person:sam", "person:bob"]
+    assert seqmod.correlation_keys(data, "journey") == ["journey:b1", "journey:b2"]
+    # singular helper returns the first
+    assert seqmod.correlation_key(data, "person") == "person:sam"
+    assert seqmod.correlation_key({"person_detections": {"faces": []}}, "person") is None
+
+
 def test_is_locate_check():
     assert seqmod.is_locate_check({"check": {"type": "locate"}}) is True
     assert seqmod.is_locate_check({"check": {"type": "verify"}}) is True
@@ -326,14 +338,43 @@ async def test_max_active_caps_starts(store):
 
 
 @pytest.mark.asyncio
-async def test_unsupported_correlation_is_noop(store):
+async def test_person_correlation_starts_per_subject(store):
+    data = {"camera_id": "c1", "person_detections": {"faces": [
+        {"person_id": "sam"}, {"person_id": "bob"}]}}
     async def fire():
         store["fire"] += 1
     await seqmod.evaluate_sequence(
-        _Rule(), _seq(correlate="person"), {"camera_id": "c1", "person_id": "p1"},
+        _Rule(), _seq(correlate="person"), data,
+        start_matched=True, step_match_fn=lambda p: False, fire_cb=fire, now=_now(),
+    )
+    keys = sorted(k for k, *_ in store["create"])
+    assert keys == ["person:bob", "person:sam"]  # one instance per recognized subject
+
+
+@pytest.mark.asyncio
+async def test_person_advance_matches_only_that_subject(store):
+    _add_active(store, "person:sam", 0, _now() + timedelta(seconds=20))
+    data = {"camera_id": "c1", "person_detections": {"faces": [
+        {"person_id": "sam"}, {"person_id": "bob"}]}}
+    async def fire():
+        store["fire"] += 1
+    await seqmod.evaluate_sequence(
+        _Rule(), _seq(correlate="person"), data,
+        start_matched=False, step_match_fn=lambda p: True, fire_cb=fire, now=_now(),
+    )
+    assert len(store["advance"]) == 1  # only Sam's in-flight instance advanced
+
+
+@pytest.mark.asyncio
+async def test_no_subject_is_noop(store):
+    # person mode but no recognized faces -> nothing to bind.
+    async def fire():
+        store["fire"] += 1
+    await seqmod.evaluate_sequence(
+        _Rule(), _seq(correlate="person"), {"camera_id": "c1"},
         start_matched=True, step_match_fn=lambda p: True, fire_cb=fire, now=_now(),
     )
-    assert store["create"] == [] and store["advance"] == []  # person = slice 4
+    assert store["create"] == [] and store["advance"] == []
 
 
 # ── schema validation ──────────────────────────────────────────────────────

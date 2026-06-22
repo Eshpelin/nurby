@@ -26,9 +26,7 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger("nurby.events.sequences")
 
-# Correlation modes implemented in slice 1. person/journey are accepted by the
-# schema but resolve to no key here (no-op) until slice 4.
-_SLICE1_MODES = {"camera", "incident", "none"}
+_VALID_MODES = {"camera", "incident", "none", "person", "journey"}
 _DEFAULT_MAX_ACTIVE = 20
 
 
@@ -44,23 +42,64 @@ def get_sequence(trigger_pattern) -> dict | None:
     return None
 
 
-def correlation_key(data: dict, mode: str, cameras=None) -> str | None:
-    """Key that binds an observation to an in-flight instance, or None when the
-    observation is out of scope / the mode isn't resolvable for this frame."""
+def _present_person_ids(data: dict) -> list[str]:
+    """Recognized identities present this frame (face person_id, or a track's
+    held person identity). De-duped, order preserved."""
+    pd = data.get("person_detections") or {}
+    out: list[str] = []
+    for f in pd.get("faces") or []:
+        pid = f.get("person_id")
+        if pid and str(pid) not in out:
+            out.append(str(pid))
+    for t in pd.get("tracks") or []:
+        pid = t.get("person_id")
+        if pid and str(pid) not in out:
+            out.append(str(pid))
+    return out
+
+
+def _present_body_ids(data: dict) -> list[str]:
+    """Cross-camera body re-id clusters present this frame (the journey id)."""
+    pd = data.get("person_detections") or {}
+    out: list[str] = []
+    for b in pd.get("bodies") or []:
+        bid = b.get("body_cluster_id")
+        if bid and str(bid) not in out:
+            out.append(str(bid))
+    for t in pd.get("tracks") or []:
+        bid = t.get("body_cluster_id")
+        if bid and str(bid) not in out:
+            out.append(str(bid))
+    return out
+
+
+def correlation_keys(data: dict, mode: str, cameras=None) -> list[str]:
+    """All keys this observation binds to. One key for camera/incident/none, but
+    person/journey can yield several (multiple recognized subjects in frame), so
+    a single frame can advance/start a sequence per subject. Empty = out of
+    scope or no resolvable subject this frame."""
     cam = str(data.get("camera_id") or "")
-    if cameras:
-        if cam not in {str(c) for c in cameras}:
-            return None  # out of the rule's camera scope
+    if cameras and cam not in {str(c) for c in cameras}:
+        return []  # out of the rule's camera scope
     mode = (mode or "camera").lower()
     if mode == "none":
-        return "all"
+        return ["all"]
     if mode == "camera":
-        return f"cam:{cam}" if cam else None
+        return [f"cam:{cam}"] if cam else []
     if mode == "incident":
         inc = data.get("incident_id")
-        return f"inc:{inc}" if inc else None
-    # person / journey — slice 4
-    return None
+        return [f"inc:{inc}"] if inc else []
+    if mode == "person":
+        return [f"person:{p}" for p in _present_person_ids(data)]
+    if mode == "journey":
+        return [f"journey:{b}" for b in _present_body_ids(data)]
+    return []
+
+
+def correlation_key(data: dict, mode: str, cameras=None) -> str | None:
+    """First key this observation binds to (see correlation_keys), or None."""
+    ks = correlation_keys(data, mode, cameras)
+    return ks[0] if ks else None
 
 
 def step_within_seconds(step: dict) -> int:
@@ -284,58 +323,70 @@ async def evaluate_sequence(
         if not steps:
             return
         mode = (seq.get("correlate_by") or "camera").lower()
-        if mode not in _SLICE1_MODES:
-            return  # person/journey not yet wired (slice 4)
-        key = correlation_key(data, mode, seq.get("cameras"))
-        if key is None:
+        if mode not in _VALID_MODES:
+            return
+        # A frame can bind to several subjects (person/journey), so advance/start
+        # per key. camera/incident/none yield a single key.
+        keys = correlation_keys(data, mode, seq.get("cameras"))
+        if not keys:
             return  # out of scope or no resolvable subject on this frame
 
-        # 1. Advance in-flight instances bound to this key.
-        for inst in await _find_active_for_key(rule.id, key):
-            if inst.step_deadline and inst.step_deadline < now:
-                continue  # overdue; the sweeper will expire it
-            if inst.step_index >= len(steps):
-                continue
-            step = steps[inst.step_index]
-            if not await _step_matches(step, data, step_match_fn, locate_check_fn):
-                continue
-            nxt = inst.step_index + 1
-            if nxt >= len(steps):
-                # Complete: thread the journey (trigger + all step snapshots,
-                # including this final one) into vars so on_complete actions can
-                # reference {{vars.trigger.*}} / {{vars.steps.N.*}}.
-                data.setdefault("vars", {})
-                data["vars"]["trigger"] = (inst.vars or {}).get("trigger") or {}
-                data["vars"]["steps"] = list((inst.vars or {}).get("steps") or []) + [_snapshot(data)]
-                data["event_kind"] = "sequence_complete"
-                await _set_status(inst.id, "completed")
-                await fire_cb()
-            else:
-                await _advance(
-                    inst.id, nxt,
-                    now + timedelta(seconds=step_within_seconds(steps[nxt])),
-                    _snapshot(data),
-                )
+        # 1. Advance any in-flight instance this observation satisfies.
+        for key in keys:
+            await _advance_key(
+                rule, key, steps, data, now, step_match_fn, locate_check_fn, fire_cb,
+            )
 
-        # 2. Start a new instance when the base trigger (step 0) matched.
-        if start_matched:
-            on_refire = (seq.get("on_refire") or "ignore").lower()
+        # 2. Start a new instance per subject when the base trigger matched.
+        if not start_matched:
+            return
+        on_refire = (seq.get("on_refire") or "ignore").lower()
+        try:
+            max_active = int(seq.get("max_active", _DEFAULT_MAX_ACTIVE) or _DEFAULT_MAX_ACTIVE)
+        except (TypeError, ValueError):
+            max_active = _DEFAULT_MAX_ACTIVE
+        active_count = await _count_active(rule.id)
+        first_deadline = now + timedelta(seconds=step_within_seconds(steps[0]))
+        for key in keys:
             existing = await _find_active_for_key(rule.id, key)
-            first_deadline = now + timedelta(seconds=step_within_seconds(steps[0]))
             if existing:
                 if on_refire == "restart":
                     await _restart(existing[0].id, first_deadline, _snapshot(data))
-                # ignore: leave the in-flight instance untouched
-                return
-            try:
-                max_active = int(seq.get("max_active", _DEFAULT_MAX_ACTIVE) or _DEFAULT_MAX_ACTIVE)
-            except (TypeError, ValueError):
-                max_active = _DEFAULT_MAX_ACTIVE
-            if await _count_active(rule.id) >= max_active:
+                continue  # ignore: leave the in-flight instance untouched
+            if active_count >= max_active:
                 logger.info(
                     "sequence rule '%s' at max_active=%d; dropping new start", rule.name, max_active,
                 )
-                return
+                continue
             await _create(rule.id, key, 0, first_deadline, {"trigger": _snapshot(data), "steps": []})
+            active_count += 1
     except Exception:
         logger.exception("evaluate_sequence failed for rule '%s'", getattr(rule, "name", "?"))
+
+
+async def _advance_key(rule, key, steps, data, now, step_match_fn, locate_check_fn, fire_cb) -> None:
+    for inst in await _find_active_for_key(rule.id, key):
+        if inst.step_deadline and inst.step_deadline < now:
+            continue  # overdue; the sweeper will expire it
+        if inst.step_index >= len(steps):
+            continue
+        step = steps[inst.step_index]
+        if not await _step_matches(step, data, step_match_fn, locate_check_fn):
+            continue
+        nxt = inst.step_index + 1
+        if nxt >= len(steps):
+            # Complete: thread the journey (trigger + all step snapshots,
+            # including this final one) into vars so on_complete actions can
+            # reference {{vars.trigger.*}} / {{vars.steps.N.*}}.
+            data.setdefault("vars", {})
+            data["vars"]["trigger"] = (inst.vars or {}).get("trigger") or {}
+            data["vars"]["steps"] = list((inst.vars or {}).get("steps") or []) + [_snapshot(data)]
+            data["event_kind"] = "sequence_complete"
+            await _set_status(inst.id, "completed")
+            await fire_cb()
+        else:
+            await _advance(
+                inst.id, nxt,
+                now + timedelta(seconds=step_within_seconds(steps[nxt])),
+                _snapshot(data),
+            )
