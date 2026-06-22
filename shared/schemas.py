@@ -630,6 +630,42 @@ def _validate_action_chain(actions):
                 known_schemas[output] = _LOCATE_OUTPUT_SCHEMA
 
 
+def _validate_sequence(seq) -> None:
+    """Validate a temporal `sequence` block on a trigger_pattern
+    (docs/sequence-rules-design.md)."""
+    if not isinstance(seq, dict):
+        raise ValueError("trigger_pattern.sequence must be an object")
+    steps = seq.get("steps")
+    if not isinstance(steps, list) or not steps:
+        raise ValueError("sequence requires a non-empty 'steps' list")
+    for i, step in enumerate(steps):
+        if not isinstance(step, dict):
+            raise ValueError(f"sequence step[{i}] must be an object")
+        check = step.get("check")
+        if not isinstance(check, dict) or not check.get("type"):
+            raise ValueError(f"sequence step[{i}] needs a 'check' with a type")
+        w = step.get("within_seconds")
+        if isinstance(w, bool) or not isinstance(w, (int, float)) or w <= 0:
+            raise ValueError(f"sequence step[{i}] needs a positive 'within_seconds'")
+        if check.get("type") == "locate":
+            _validate_locate_action(check, i)
+    mode = seq.get("correlate_by")
+    if mode is not None and mode not in ("person", "journey", "incident", "camera", "none"):
+        raise ValueError("sequence correlate_by must be person|journey|incident|camera|none")
+    refire = seq.get("on_refire")
+    if refire is not None and refire not in ("ignore", "restart"):
+        raise ValueError("sequence on_refire must be 'ignore' or 'restart'")
+    ma = seq.get("max_active")
+    if ma is not None and (isinstance(ma, bool) or not isinstance(ma, int) or ma <= 0):
+        raise ValueError("sequence max_active must be a positive integer")
+    cams = seq.get("cameras")
+    if cams is not None and not isinstance(cams, list):
+        raise ValueError("sequence cameras must be a list")
+    on_timeout = seq.get("on_timeout")
+    if on_timeout is not None:
+        _validate_action_chain(on_timeout)
+
+
 def _validate_trigger_pattern(trigger_pattern: dict) -> None:
     """Reject geometry-bound trigger shapes that cannot evaluate.
 
@@ -643,6 +679,10 @@ def _validate_trigger_pattern(trigger_pattern: dict) -> None:
         raise ValueError("trigger_pattern must be an object")
 
     t = trigger_pattern.get("type")
+
+    seq = trigger_pattern.get("sequence")
+    if seq is not None:
+        _validate_sequence(seq)
 
     if t == "loitering":
         # Legacy zone_name mode is still supported (pipeline pre-

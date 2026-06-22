@@ -669,6 +669,51 @@ class GroundingResult(Base):
     )
 
 
+class RuleSequenceInstance(Base):
+    """An in-flight temporal sequence rule (docs/sequence-rules-design.md).
+
+    A sequence rule = a normal trigger (step 0 / start) + a `sequence` block in
+    its trigger_pattern holding ordered steps (each a check + time window). When
+    the start trigger fires we create an instance here; subsequent observations
+    that satisfy the current step within its deadline advance it; the last step
+    completing runs the rule's on_complete actions, and a step lapsing past its
+    deadline marks the instance expired (the sweeper handles that, and fires
+    on_timeout in a later slice).
+
+    `correlation_key` binds steps to the same subject/scope (camera / incident /
+    person / journey / none). `step_index` is the 0-based index of the step we
+    are currently waiting for; `step_deadline` is when that step lapses.
+    """
+
+    __tablename__ = "rule_sequence_instances"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rule_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rules.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    correlation_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    step_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # active | completed | expired
+    status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    step_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Accumulated {trigger, steps:[...]} context for vars threading (later slice).
+    vars: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        # Lookup live instances for a (rule, subject) on each observation.
+        Index("ix_rule_seq_rule_status_key", "rule_id", "status", "correlation_key"),
+        # Sweeper scan for overdue active instances.
+        Index("ix_rule_seq_status_deadline", "status", "step_deadline"),
+    )
+
+
 class DigestEntry(Base):
     __tablename__ = "digest_entries"
 

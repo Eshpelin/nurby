@@ -250,6 +250,10 @@ DEFAULTS: dict[str, Any] = {
     "grounding_remote_url": None,
     # Inference speed/quality mode passed to the model: fast | slow | hybrid.
     "grounding_mode": "hybrid",
+    # ── Temporal sequence rules (docs/sequence-rules-design.md) ──────────
+    # How often the sweeper expires in-flight sequence instances whose current
+    # step lapsed past its deadline. Lower = tighter timeout granularity.
+    "sequence_sweep_interval_seconds": 15,
 }
 
 

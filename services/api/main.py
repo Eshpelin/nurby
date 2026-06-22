@@ -99,6 +99,11 @@ async def lifespan(app: FastAPI):
     from services.perception.face_merger import FaceClusterMerger
     face_merger = FaceClusterMerger()
     face_merger_task = asyncio.create_task(face_merger.run())
+    # Temporal sequence rules. Expire in-flight instances whose current step
+    # lapsed past its deadline (docs/sequence-rules-design.md).
+    from services.events.sequence_sweeper import SequenceSweeper
+    seq_sweeper = SequenceSweeper()
+    seq_sweeper_task = asyncio.create_task(seq_sweeper.run())
     # Telegram long-poll supervisor. One asyncio task per enabled bot
     # token, reconciled every 30s against telegram_channels.
     from services.notify.telegram import shutdown_client as _tg_shutdown
@@ -126,6 +131,8 @@ async def lifespan(app: FastAPI):
     reid_task.cancel()
     face_merger.stop()
     face_merger_task.cancel()
+    seq_sweeper.stop()
+    seq_sweeper_task.cancel()
     tg_manager.stop()
     tg_task.cancel()
     try:
