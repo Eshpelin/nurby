@@ -20,7 +20,7 @@ from services.search.query import (
 )
 from shared.auth import get_current_user, require_admin
 from shared.database import get_db
-from shared.models import Camera, DigestEntry, Provider, User
+from shared.models import Camera, DigestEntry, Observation, Provider, User
 from shared.schemas import DigestEntryResponse
 
 router = APIRouter()
@@ -345,6 +345,76 @@ async def get_scan(
     if job is None or job.user_id != str(current_user.id):
         raise HTTPException(status_code=404, detail="scan not found")
     return _job_to_status(job)
+
+
+class LocateNowRequest(BaseModel):
+    camera_id: uuid.UUID
+    prompt: str
+
+
+class LocateNowResponse(BaseModel):
+    found: bool
+    boxes: list[dict]
+    observation_id: str | None = None
+    camera_name: str = ""
+    thumbnail_path: str | None = None
+    started_at: str | None = None
+    summary: str
+
+
+@router.post("/locate-now", response_model=LocateNowResponse)
+async def locate_now(
+    body: LocateNowRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Ground a prompt against a camera's most-recent frame, synchronously —
+    the "find X in this camera now" affordance. One frame, one inference (vs the
+    deep scan over recordings). Uses the interactive grounding lane since the
+    user is waiting, and benefits from the same result cache."""
+    from services.grounding.client import get_client
+    from services.grounding.config import is_enabled
+    from services.search.scan import _default_frame_loader
+
+    prompt = (body.prompt or "").strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="prompt is required")
+    if not await is_enabled():
+        raise HTTPException(
+            status_code=409,
+            detail="FindAnything is not enabled. Turn on visual grounding in Settings.",
+        )
+
+    obs = (await db.execute(
+        select(Observation)
+        .where(Observation.camera_id == body.camera_id, Observation.thumbnail_path.is_not(None))
+        .order_by(Observation.started_at.desc())
+        .limit(1)
+    )).scalars().first()
+    cam = await db.get(Camera, body.camera_id)
+    cam_name = (cam.name if cam else "") or ""
+
+    if obs is None:
+        return LocateNowResponse(found=False, boxes=[], camera_name=cam_name,
+                                 summary="No recent frame for this camera yet.")
+
+    frame = await asyncio.to_thread(_default_frame_loader, obs.thumbnail_path)
+    if frame is None:
+        return LocateNowResponse(found=False, boxes=[], observation_id=str(obs.id),
+                                 camera_name=cam_name, thumbnail_path=obs.thumbnail_path,
+                                 started_at=obs.started_at.isoformat(),
+                                 summary="Could not load the latest frame.")
+
+    result = await get_client().ground(frame, prompt, interactive=True)
+    if result.error:
+        raise HTTPException(status_code=503, detail=f"grounding unavailable: {result.error}")
+
+    boxes = [{"bbox_norm": list(b.bbox_norm), "label": b.label} for b in result.boxes]
+    return LocateNowResponse(
+        found=bool(boxes), boxes=boxes, observation_id=str(obs.id), camera_name=cam_name,
+        thumbnail_path=obs.thumbnail_path, started_at=obs.started_at.isoformat(),
+        summary=f"{len(boxes)} match(es) for '{prompt}'." if boxes else f"No '{prompt}' in the latest frame.",
+    )
 
 
 @router.get("/grounding/health")
