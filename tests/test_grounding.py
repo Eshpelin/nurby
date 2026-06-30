@@ -164,6 +164,22 @@ async def test_client_disabled_returns_error(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_client_warmup_responder_is_noop_ok(monkeypatch):
+    _patch_enabled(monkeypatch)
+    c = client_mod.GroundingClient(responder=lambda p, f: "<box>1,1,2,2</box>")
+    out = await c.warmup()
+    assert out["enabled"] is True and out["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_client_warmup_disabled(monkeypatch):
+    _patch_enabled(monkeypatch, enabled=False)
+    c = client_mod.GroundingClient(responder=lambda p, f: "<box>1,1,2,2</box>")
+    out = await c.warmup()
+    assert out["enabled"] is False
+
+
+@pytest.mark.asyncio
 async def test_client_grounds_via_responder(monkeypatch):
     _patch_enabled(monkeypatch)
     c = client_mod.GroundingClient(

@@ -159,6 +159,24 @@ class GroundingClient:
         except Exception as exc:
             return {"enabled": True, "backend": backend.kind, "status": "unreachable", "error": str(exc)}
 
+    async def warmup(self) -> dict:
+        """Ask the backend to start loading the model now, so the first real
+        grounding call doesn't pay the cold-start. Best-effort and fast: it
+        returns without waiting for the load to finish. No-op for the in-process
+        responder (already resident)."""
+        if not await is_enabled():
+            return {"enabled": False, "status": "disabled"}
+        backend = await resolve_backend()
+        if backend.error or self._responder is not None:
+            return {"enabled": True, "status": "ok", "backend": backend.kind}
+        try:
+            http = await self._get_http()
+            resp = await http.post(f"{backend.base_url}/warmup", timeout=5.0)
+            resp.raise_for_status()
+            return {"enabled": True, "backend": backend.kind, **resp.json()}
+        except Exception as exc:
+            return {"enabled": True, "backend": backend.kind, "status": "unreachable", "error": str(exc)}
+
     # ── internals ──────────────────────────────────────────────────────
 
     async def _infer(

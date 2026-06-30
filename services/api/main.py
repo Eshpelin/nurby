@@ -104,6 +104,17 @@ async def lifespan(app: FastAPI):
     from services.events.sequence_sweeper import SequenceSweeper
     seq_sweeper = SequenceSweeper()
     seq_sweeper_task = asyncio.create_task(seq_sweeper.run())
+
+    # Optionally warm the grounding model so the first FindAnything isn't slow.
+    async def _warm_grounding() -> None:
+        try:
+            from shared.app_settings import get_setting
+            if await get_setting("grounding_preload", False):
+                from services.grounding.client import get_client
+                await get_client().warmup()
+        except Exception:
+            logging.getLogger("nurby.api").debug("grounding warmup failed", exc_info=True)
+    warm_grounding_task = asyncio.create_task(_warm_grounding())
     # Telegram long-poll supervisor. One asyncio task per enabled bot
     # token, reconciled every 30s against telegram_channels.
     from services.notify.telegram import shutdown_client as _tg_shutdown
@@ -133,6 +144,7 @@ async def lifespan(app: FastAPI):
     face_merger_task.cancel()
     seq_sweeper.stop()
     seq_sweeper_task.cancel()
+    warm_grounding_task.cancel()
     tg_manager.stop()
     tg_task.cancel()
     try:

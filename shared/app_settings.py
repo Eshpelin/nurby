@@ -254,6 +254,9 @@ DEFAULTS: dict[str, Any] = {
     # How often the sweeper expires in-flight sequence instances whose current
     # step lapsed past its deadline. Lower = tighter timeout granularity.
     "sequence_sweep_interval_seconds": 15,
+    # Warm the grounding model at API startup so the first FindAnything doesn't
+    # pay the ~6GB cold-load. Off by default (loads lazily on first use).
+    "grounding_preload": False,
 }
 
 

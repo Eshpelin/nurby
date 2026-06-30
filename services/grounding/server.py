@@ -116,6 +116,26 @@ async def ground(req: GroundRequest) -> GroundResponse:
     return GroundResponse(raw=raw, model_revision=settings.grounding_model_revision)
 
 
+@app.post("/warmup")
+async def warmup() -> dict:
+    """Kick the (slow, ~6GB) model load in the background and return immediately.
+    Idempotent: a no-op once warm or already loading. The first real /ground
+    then doesn't pay the cold-start latency. Poll /health for readiness."""
+    if _STATE["model"] is None and not _STATE["loading"]:
+        _STATE["_warmup_task"] = asyncio.create_task(_ensure_loaded())
+    return await health()
+
+
+@app.on_event("startup")
+async def _maybe_preload() -> None:
+    """Optionally preload the model when the server starts so the first request
+    isn't slow. Off by default; enable with GROUNDING_PRELOAD=1. Loads in the
+    background so /health is up immediately."""
+    if os.getenv("GROUNDING_PRELOAD", "").strip().lower() in ("1", "true", "yes", "on"):
+        logger.info("GROUNDING_PRELOAD set — preloading model at startup")
+        _STATE["_warmup_task"] = asyncio.create_task(_ensure_loaded())
+
+
 # ── model lifecycle ────────────────────────────────────────────────────
 
 
