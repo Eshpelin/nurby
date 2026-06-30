@@ -91,6 +91,10 @@ def patched(monkeypatch):
     monkeypatch.setattr(actions, "_update_event_status", AsyncMock())
     monkeypatch.setattr(actions, "_record_locate_on_event", AsyncMock())
     monkeypatch.setattr(actions, "_load_locate_frame", lambda od: object())
+    # Keep the persistent grounding cache out of the way (no DB in unit tests);
+    # default to a miss + a no-op write so the live-grounding path runs.
+    monkeypatch.setattr("services.grounding.cache.get_cached_grounding", AsyncMock(return_value=None))
+    monkeypatch.setattr("services.grounding.cache.store_grounding", AsyncMock())
 
 
 def _obs_with_det():
@@ -152,6 +156,31 @@ async def test_locate_default_trusts_box_for_open_vocab(monkeypatch, patched):
     )
     assert obs["vars"]["loc"]["found"] is True
     assert obs["vars"]["loc"]["corroborated"] is False
+
+
+@pytest.mark.asyncio
+async def test_locate_cache_hit_skips_grounding(monkeypatch, patched):
+    # On a persistent-cache hit, the boxes come from the cache: no GPU call.
+    monkeypatch.setattr(
+        "services.grounding.cache.get_cached_grounding",
+        AsyncMock(return_value={"boxes": [[0.1, 0.1, 0.3, 0.3]],
+                                "found": True, "corroborated": True, "count": 1}),
+    )
+    called = {"ground": 0}
+
+    async def fake_ground(frame, prompt):
+        called["ground"] += 1
+        return _Result(boxes=[_Box((0.1, 0.1, 0.3, 0.3))])
+
+    monkeypatch.setattr(actions, "_ground_locate", fake_ground)
+    obs = _obs_with_det()
+    await actions._execute_locate(
+        {"type": "locate", "prompt": "chicken", "output": "loc"},
+        obs, _Rule(), uuid.uuid4(), {},
+    )
+    assert obs["vars"]["loc"]["found"] is True
+    assert obs["vars"]["loc"]["count"] == 1
+    assert called["ground"] == 0  # served from cache, no inference
 
 
 @pytest.mark.asyncio

@@ -1153,6 +1153,52 @@ async def _ground_locate(frame, prompt: str):
     return await get_client().ground(frame, prompt, interactive=False)
 
 
+async def _ground_locate_cached(observation_data: dict, prompt: str):
+    """Ground ``prompt`` on the observation's frame, reusing the persistent
+    grounding cache keyed by (observation_id, prompt, model_revision). Returns
+    ``(boxes, error)`` — ``boxes`` is a list of GroundedBox, ``error`` a string.
+
+    On a cache hit there is no GPU call and no frame load, so a repeat locate of
+    the same frame+prompt — or several concurrent sequence instances waiting on
+    the same locate step — pay for one inference, not N. Only the raw boxes are
+    cached; corroboration/`found` stay rule-specific and are recomputed by the
+    caller. The cache is best-effort: any read/write failure degrades to a live
+    grounding call, never an error."""
+    from services.grounding.cache import get_cached_grounding, store_grounding
+    from services.grounding.parse import GroundedBox
+    from shared.config import settings as _settings
+
+    obs_id = observation_data.get("observation_id")
+    revision = getattr(_settings, "grounding_model_revision", "main") or "main"
+
+    if obs_id:
+        cached = await get_cached_grounding(obs_id, prompt, revision)
+        if cached is not None:
+            # Only bbox_norm is read downstream (corroboration + vars); bbox_px
+            # and label aren't cached, so fill placeholders.
+            boxes = [
+                GroundedBox(bbox_norm=tuple(b), bbox_px=(0, 0, 0, 0), label="")
+                for b in (cached.get("boxes") or [])
+                if isinstance(b, (list, tuple)) and len(b) == 4
+            ]
+            return boxes, None
+
+    frame = await asyncio.to_thread(_load_locate_frame, observation_data)
+    if frame is None:
+        return None, "no frame to inspect"
+    result = await _ground_locate(frame, prompt)
+    if result.error:
+        return None, result.error
+    boxes = result.boxes
+    if obs_id:
+        await store_grounding(
+            obs_id, prompt, revision,
+            found=bool(boxes), corroborated=False,
+            boxes=[list(b.bbox_norm) for b in boxes],
+        )
+    return boxes, None
+
+
 async def run_locate_check(check: dict, observation_data: dict) -> bool:
     """Run a FindAnything locate as a plain boolean check, with no action-chain
     side effects (no vars binding, no event stamping, no on_fail).
@@ -1171,14 +1217,10 @@ async def run_locate_check(check: dict, observation_data: dict) -> bool:
     except (TypeError, ValueError):
         min_overlap = 0.1
 
-    frame = await asyncio.to_thread(_load_locate_frame, observation_data)
-    if frame is None:
+    boxes, err = await _ground_locate_cached(observation_data, prompt)
+    if err is not None:
+        logger.info("sequence locate check could not run. %s", err)
         return False
-    result = await _ground_locate(frame, prompt)
-    if result.error:
-        logger.info("sequence locate check could not run. %s", result.error)
-        return False
-    boxes = result.boxes
     if not boxes:
         return False
     if require_corroboration:
@@ -1208,26 +1250,16 @@ async def _execute_locate(action, observation_data, rule, event_id, ctx):
         )
         return
 
-    frame = await asyncio.to_thread(_load_locate_frame, observation_data)
-    if frame is None:
+    boxes, err = await _ground_locate_cached(observation_data, prompt)
+    if err is not None:
+        logger.info("locate for rule '%s' could not run. %s", rule.name, err)
         await _apply_locate_outcome(
             action, observation_data, rule, event_id, output_name,
             found=False, boxes=[], corroborated=False, prompt=prompt,
-            summary="no frame to inspect",
+            summary=err,
         )
         return
 
-    result = await _ground_locate(frame, prompt)
-    if result.error:
-        logger.info("locate for rule '%s' could not run. %s", rule.name, result.error)
-        await _apply_locate_outcome(
-            action, observation_data, rule, event_id, output_name,
-            found=False, boxes=[], corroborated=False, prompt=prompt,
-            summary=result.error,
-        )
-        return
-
-    boxes = result.boxes
     # Corroboration is a *signal*, not a veto by default. FindAnything exists
     # for open-vocabulary objects YOLO can't detect (a chicken), so requiring
     # overlap with a YOLO box would silently fail exactly those. Always compute
