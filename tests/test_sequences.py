@@ -96,7 +96,7 @@ def test_reconstruct_obs_empty():
 
 @pytest.fixture
 def store(monkeypatch):
-    state = {"active": [], "create": [], "advance": [], "status": [], "restart": [], "fire": 0}
+    state = {"active": [], "create": [], "advance": [], "status": [], "restart": [], "bump": [], "fire": 0}
 
     async def find_active(rule_id, key):
         return [seqmod._Active(a["id"], a["step_index"], a["deadline"], a.get("vars"))
@@ -117,12 +117,19 @@ def store(monkeypatch):
     async def restart(iid, deadline, trigger_snapshot=None):
         state["restart"].append((iid, deadline, trigger_snapshot))
 
+    async def bump_hits(iid, hits):
+        state["bump"].append((iid, hits))
+        for a in state["active"]:
+            if a["id"] == iid:
+                a["vars"] = {**(a.get("vars") or {}), "_hits": hits}
+
     monkeypatch.setattr(seqmod, "_find_active_for_key", find_active)
     monkeypatch.setattr(seqmod, "_count_active", count_active)
     monkeypatch.setattr(seqmod, "_create", create)
     monkeypatch.setattr(seqmod, "_advance", advance)
     monkeypatch.setattr(seqmod, "_set_status", set_status)
     monkeypatch.setattr(seqmod, "_restart", restart)
+    monkeypatch.setattr(seqmod, "_bump_hits", bump_hits)
     return state
 
 
@@ -186,6 +193,33 @@ async def test_complete_fires_on_last_step(store):
     assert data["vars"]["trigger"] == {"camera_id": "c1", "timestamp": "t0"}
     assert len(data["vars"]["steps"]) == 2  # prior step + final completing snapshot
     assert data["event_kind"] == "sequence_complete"
+
+
+@pytest.mark.asyncio
+async def test_confirm_frames_needs_k_agreeing(store):
+    # confirm_frames=2: first matching frame bumps the counter (no advance),
+    # the second confirms and advances.
+    iid = _add_active(store, "cam:c1", 0, _now() + timedelta(seconds=60),
+                      vars={"trigger": {}, "steps": [], "_hits": 0})
+    seq = {"correlate_by": "camera", "steps": [
+        {"check": {"type": "object_detected"}, "within_seconds": 60, "confirm_frames": 2},
+        {"check": {"type": "object_detected"}, "within_seconds": 60},
+    ]}
+    async def fire():
+        store["fire"] += 1
+    # frame 1 → bump to 1, no advance
+    await seqmod.evaluate_sequence(
+        _Rule(), seq, {"camera_id": "c1"},
+        start_matched=False, step_match_fn=lambda p: True, fire_cb=fire, now=_now(),
+    )
+    assert store["advance"] == []
+    assert store["bump"] == [(iid, 1)]
+    # frame 2 → reaches 2, advances (the bump wrote _hits=1 back to the instance)
+    await seqmod.evaluate_sequence(
+        _Rule(), seq, {"camera_id": "c1"},
+        start_matched=False, step_match_fn=lambda p: True, fire_cb=fire, now=_now(),
+    )
+    assert len(store["advance"]) == 1
 
 
 @pytest.mark.asyncio
@@ -440,4 +474,14 @@ def test_schema_bad_pre_gate():
     with pytest.raises(ValueError):
         _validate_sequence({"steps": [
             {"check": {"type": "object_detected"}, "within_seconds": 5, "pre_gate": "person"},
+        ]})
+
+
+def test_schema_confirm_frames():
+    _validate_sequence({"steps": [
+        {"check": {"type": "object_detected"}, "within_seconds": 5, "confirm_frames": 3},
+    ]})
+    with pytest.raises(ValueError):
+        _validate_sequence({"steps": [
+            {"check": {"type": "object_detected"}, "within_seconds": 5, "confirm_frames": 0},
         ]})

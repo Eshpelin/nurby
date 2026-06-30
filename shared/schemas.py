@@ -656,6 +656,9 @@ def _validate_sequence(seq) -> None:
         pre = step.get("pre_gate")
         if pre is not None and (not isinstance(pre, dict) or not pre.get("type")):
             raise ValueError(f"sequence step[{i}] pre_gate must be an object with a type")
+        cf = step.get("confirm_frames")
+        if cf is not None and (isinstance(cf, bool) or not isinstance(cf, int) or cf < 1):
+            raise ValueError(f"sequence step[{i}] confirm_frames must be a positive integer")
     mode = seq.get("correlate_by")
     if mode is not None and mode not in ("person", "journey", "incident", "camera", "none"):
         raise ValueError("sequence correlate_by must be person|journey|incident|camera|none")

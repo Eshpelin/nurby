@@ -109,6 +109,16 @@ def step_within_seconds(step: dict) -> int:
         return 60
 
 
+def step_confirm_frames(step: dict) -> int:
+    """How many agreeing frames within the window confirm this step. >1 trades
+    latency for fewer false hits — agreement across frames substitutes for the
+    grounding model's absent score."""
+    try:
+        return max(1, int(step.get("confirm_frames", 1)))
+    except (TypeError, ValueError):
+        return 1
+
+
 def step_check(step: dict) -> dict:
     c = step.get("check")
     return c if isinstance(c, dict) else {}
@@ -213,6 +223,22 @@ async def _advance(instance_id, step_index: int, deadline: datetime, step_snapsh
             # Reassign vars wholesale so SQLAlchemy detects the JSON change.
             cur = dict(inst.vars or {})
             cur["steps"] = list(cur.get("steps") or []) + [step_snapshot or {}]
+            cur["_hits"] = 0  # reset multi-frame confirmation for the new step
+            inst.vars = cur
+            await db.commit()
+
+
+async def _bump_hits(instance_id, hits: int) -> None:
+    """Record a partial multi-frame confirmation (hits toward confirm_frames)
+    without advancing the instance."""
+    from shared.database import async_session
+    from shared.models import RuleSequenceInstance
+
+    async with async_session() as db:
+        inst = await db.get(RuleSequenceInstance, instance_id)
+        if inst and inst.status == "active":
+            cur = dict(inst.vars or {})
+            cur["_hits"] = hits
             inst.vars = cur
             await db.commit()
 
@@ -373,6 +399,14 @@ async def _advance_key(rule, key, steps, data, now, step_match_fn, locate_check_
         step = steps[inst.step_index]
         if not await _step_matches(step, data, step_match_fn, locate_check_fn):
             continue
+        # Multi-frame confirmation: require K agreeing frames within the window
+        # before the step counts. Agreement substitutes for the absent score.
+        need = step_confirm_frames(step)
+        if need > 1:
+            hits = int((inst.vars or {}).get("_hits", 0)) + 1
+            if hits < need:
+                await _bump_hits(inst.id, hits)
+                continue  # not confirmed yet; stay on this step
         nxt = inst.step_index + 1
         if nxt >= len(steps):
             # Complete: thread the journey (trigger + all step snapshots,

@@ -138,7 +138,16 @@ export function SequenceSection(props: SequenceSectionProps) {
                       onChange={(e) => patchStep(i, { withinSeconds: e.target.value })}
                       className={`${INPUT_CLS} w-20`}
                     />
-                    <span className="text-[11px] text-muted-foreground">seconds</span>
+                    <span className="text-[11px] text-muted-foreground">seconds · confirm</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={s.confirmFrames}
+                      onChange={(e) => patchStep(i, { confirmFrames: e.target.value })}
+                      title="Require this many agreeing frames within the window before the step counts. >1 cuts noise."
+                      className={`${INPUT_CLS} w-16`}
+                    />
+                    <span className="text-[11px] text-muted-foreground">frame(s)</span>
                   </div>
 
                   {s.kind === "locate" && (

@@ -1227,6 +1227,7 @@ export interface SeqStepDraft {
   kind: SeqCheckKind;
   label: string; // object label OR locate prompt
   withinSeconds: string;
+  confirmFrames: string; // require N agreeing frames within the window (>1 cuts noise)
   preGateLabel: string; // locate only: object that must be present before grounding
   requireCorroboration: boolean; // locate only
 }
@@ -1240,12 +1241,14 @@ export const SEQ_CORRELATE_OPTIONS: { value: string; label: string; hint: string
 ];
 
 export function defaultSeqStep(kind: SeqCheckKind = "object"): SeqStepDraft {
-  return { kind, label: "", withinSeconds: "120", preGateLabel: "", requireCorroboration: false };
+  return { kind, label: "", withinSeconds: "120", confirmFrames: "1", preGateLabel: "", requireCorroboration: false };
 }
 
 export function seqStepToDict(s: SeqStepDraft): Record<string, unknown> {
   const within = parseInt(s.withinSeconds) || 60;
   const step: Record<string, unknown> = { within_seconds: within };
+  const confirm = parseInt(s.confirmFrames) || 1;
+  if (confirm > 1) step.confirm_frames = confirm;
   if (s.kind === "locate") {
     step.check = { type: "locate", prompt: s.label.trim(), require_corroboration: s.requireCorroboration };
     if (s.preGateLabel.trim()) step.pre_gate = { type: "object_detected", label: s.preGateLabel.trim() };
@@ -1258,12 +1261,14 @@ export function seqStepToDict(s: SeqStepDraft): Record<string, unknown> {
 export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
   const check = (raw.check as Record<string, unknown>) || {};
   const within = raw.within_seconds != null ? String(raw.within_seconds) : "120";
+  const confirm = raw.confirm_frames != null ? String(raw.confirm_frames) : "1";
   if (check.type === "locate") {
     const pre = (raw.pre_gate as Record<string, unknown>) || {};
     return {
       kind: "locate",
       label: (check.prompt as string) || "",
       withinSeconds: within,
+      confirmFrames: confirm,
       preGateLabel: (pre.label as string) || "",
       requireCorroboration: check.require_corroboration === true,
     };
@@ -1272,6 +1277,7 @@ export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
     kind: "object",
     label: (check.label as string) || "",
     withinSeconds: within,
+    confirmFrames: confirm,
     preGateLabel: "",
     requireCorroboration: false,
   };
