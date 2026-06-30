@@ -120,6 +120,8 @@ async def test_locate_found_and_corroborated(monkeypatch, patched):
 
 @pytest.mark.asyncio
 async def test_locate_box_without_corroboration_stops_chain(monkeypatch, patched):
+    # With require_corroboration explicitly ON, a box that overlaps no detection
+    # vetoes the chain (the precision-gate path).
     async def fake_ground(frame, prompt):
         return _Result(boxes=[_Box((0.8, 0.8, 0.9, 0.9))])  # nowhere near the bird
 
@@ -127,10 +129,29 @@ async def test_locate_box_without_corroboration_stops_chain(monkeypatch, patched
     obs = _obs_with_det()
     with pytest.raises(RuntimeError):
         await actions._execute_locate(
-            {"type": "locate", "prompt": "chicken", "output": "loc", "on_fail": "stop"},
+            {"type": "locate", "prompt": "chicken", "output": "loc",
+             "on_fail": "stop", "require_corroboration": True},
             obs, _Rule(), uuid.uuid4(), {},
         )
     assert obs["vars"]["loc"]["found"] is False
+
+
+@pytest.mark.asyncio
+async def test_locate_default_trusts_box_for_open_vocab(monkeypatch, patched):
+    # The trap fix: by DEFAULT (no require_corroboration), a located box counts
+    # even when it overlaps no YOLO detection — the open-vocabulary case. The
+    # corroboration signal is still surfaced (here: False).
+    async def fake_ground(frame, prompt):
+        return _Result(boxes=[_Box((0.8, 0.8, 0.9, 0.9))])  # a chicken YOLO can't see
+
+    monkeypatch.setattr(actions, "_ground_locate", fake_ground)
+    obs = _obs_with_det()
+    await actions._execute_locate(
+        {"type": "locate", "prompt": "chicken", "output": "loc"},
+        obs, _Rule(), uuid.uuid4(), {},
+    )
+    assert obs["vars"]["loc"]["found"] is True
+    assert obs["vars"]["loc"]["corroborated"] is False
 
 
 @pytest.mark.asyncio

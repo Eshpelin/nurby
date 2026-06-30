@@ -811,7 +811,7 @@ export function defaultDraftForType(type: ActionType): ActionDraft {
         type,
         prompt: "",
         onFail: "stop",
-        requireCorroboration: true,
+        requireCorroboration: false,
         minOverlap: 0.1,
         output: "loc",
       };
@@ -917,7 +917,7 @@ export function dictToDraft(raw: Record<string, unknown>): ActionDraft {
         type: "locate",
         prompt: (raw.prompt as string) || "",
         onFail,
-        requireCorroboration: raw.require_corroboration !== false,
+        requireCorroboration: raw.require_corroboration === true,
         minOverlap: typeof mo === "number" ? mo : 0.1,
         output: (raw.output as string) || "loc",
       };
@@ -1240,7 +1240,7 @@ export const SEQ_CORRELATE_OPTIONS: { value: string; label: string; hint: string
 ];
 
 export function defaultSeqStep(kind: SeqCheckKind = "object"): SeqStepDraft {
-  return { kind, label: "", withinSeconds: "120", preGateLabel: "", requireCorroboration: true };
+  return { kind, label: "", withinSeconds: "120", preGateLabel: "", requireCorroboration: false };
 }
 
 export function seqStepToDict(s: SeqStepDraft): Record<string, unknown> {
@@ -1265,7 +1265,7 @@ export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
       label: (check.prompt as string) || "",
       withinSeconds: within,
       preGateLabel: (pre.label as string) || "",
-      requireCorroboration: check.require_corroboration !== false,
+      requireCorroboration: check.require_corroboration === true,
     };
   }
   return {
@@ -1273,7 +1273,7 @@ export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
     label: (check.label as string) || "",
     withinSeconds: within,
     preGateLabel: "",
-    requireCorroboration: true,
+    requireCorroboration: false,
   };
 }
 

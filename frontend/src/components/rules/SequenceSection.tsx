@@ -160,7 +160,7 @@ export function SequenceSection(props: SequenceSectionProps) {
                           checked={s.requireCorroboration}
                           onChange={(e) => patchStep(i, { requireCorroboration: e.target.checked })}
                         />
-                        Require the box to overlap a detection (fewer false hits)
+                        Require a YOLO detection in the same spot — leave off for things YOLO can&apos;t see (a chicken, a key)
                       </label>
                       <div className="text-[11px] text-amber-400/90">
                         FindAnything runs a GPU vision model. The pre-gate above keeps it cheap by

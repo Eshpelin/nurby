@@ -1,10 +1,11 @@
 "use client";
 
 // Editor for the FindAnything "Visual condition" (locate) action. Runs the
-// grounding model on the triggering frame; the chain continues only if the
-// thing is located (and, by default, corroborated by a real detection in the
-// same spot, design §6). No confidence slider: the model has no calibrated
-// score, so we gate on corroboration instead of a fake number.
+// grounding model on the triggering frame; the chain continues if the thing is
+// located. Corroboration (overlap with a YOLO detection) is OFF by default —
+// it's a precision gate for common objects, but it would veto open-vocabulary
+// things YOLO can't detect, which is the whole point of FindAnything. No
+// confidence slider: the model has no calibrated score.
 
 import { type LocateDraft } from "../types";
 import { StyledSelect } from "../StyledSelect";
@@ -55,7 +56,9 @@ export function LocateEditor({ draft, onChange }: LocateEditorProps) {
           className="accent-green-500"
         />
         <label htmlFor="locate-corroborate" className="text-xs text-muted-foreground">
-          Require a real detection in the same spot (recommended. cuts false alarms)
+          Require a YOLO detection in the same spot — a precision gate. Leave
+          OFF for open-vocabulary things (a chicken, a key). Turn ON only for
+          common objects (person, car) to cut false alarms.
         </label>
       </div>
 

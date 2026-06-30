@@ -1165,7 +1165,7 @@ async def run_locate_check(check: dict, observation_data: dict) -> bool:
     prompt = (check.get("prompt") or "").strip()
     if not prompt:
         return False
-    require_corroboration = bool(check.get("require_corroboration", True))
+    require_corroboration = bool(check.get("require_corroboration", False))
     try:
         min_overlap = float(check.get("min_overlap", 0.1))
     except (TypeError, ValueError):
@@ -1193,7 +1193,7 @@ async def _execute_locate(action, observation_data, rule, event_id, ctx):
     on_fail = action.get("on_fail", "stop")
     if on_fail not in ("stop", "continue"):
         on_fail = "stop"
-    require_corroboration = bool(action.get("require_corroboration", True))
+    require_corroboration = bool(action.get("require_corroboration", False))
     try:
         min_overlap = float(action.get("min_overlap", 0.1))
     except (TypeError, ValueError):
@@ -1228,9 +1228,12 @@ async def _execute_locate(action, observation_data, rule, event_id, ctx):
         return
 
     boxes = result.boxes
-    corroborated = True
-    if boxes and require_corroboration:
-        corroborated = _corroborates(boxes, observation_data, min_overlap)
+    # Corroboration is a *signal*, not a veto by default. FindAnything exists
+    # for open-vocabulary objects YOLO can't detect (a chicken), so requiring
+    # overlap with a YOLO box would silently fail exactly those. Always compute
+    # it (surfaced as vars.<output>.corroborated) but only let it veto `found`
+    # when the user explicitly opts in via require_corroboration.
+    corroborated = _corroborates(boxes, observation_data, min_overlap) if boxes else False
     found = bool(boxes) and (corroborated or not require_corroboration)
 
     await _apply_locate_outcome(
