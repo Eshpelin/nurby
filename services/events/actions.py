@@ -1228,6 +1228,54 @@ async def run_locate_check(check: dict, observation_data: dict) -> bool:
     return True
 
 
+async def run_verify_check(check: dict, observation_data: dict) -> bool:
+    """Run a verify (VLM yes/no) as a plain boolean check, no chain side effects.
+    Passes only when verdict==yes AND confidence>=min_confidence. Used by
+    sequence verify-step checks. Returns False on any failure."""
+    question = (check.get("question") or "").strip()
+    observation_id = observation_data.get("observation_id")
+    if not question or not observation_id:
+        return False
+    try:
+        obs_uuid = uuid.UUID(str(observation_id))
+    except (ValueError, TypeError):
+        return False
+    try:
+        min_confidence = float(check.get("min_confidence", 0.6))
+    except (TypeError, ValueError):
+        min_confidence = 0.6
+    provider_id = None
+    if check.get("provider_id"):
+        try:
+            provider_id = uuid.UUID(str(check["provider_id"]))
+        except (ValueError, TypeError):
+            provider_id = None
+    try:
+        from services.agent.analyzer import analyze_frame_target
+
+        result = await analyze_frame_target(_VerifyCtx(), obs_uuid, question, provider_id=provider_id)
+    except Exception:
+        logger.info("sequence verify check could not run", exc_info=True)
+        return False
+    answer = result.answer or {}
+    if answer.get("error"):
+        return False
+    verdict = answer.get("verdict", "cannot_tell")
+    try:
+        confidence = float(answer.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    return verdict == "yes" and confidence >= min_confidence
+
+
+async def run_grounding_check(check: dict, observation_data: dict) -> bool:
+    """Dispatch a grounding-backed sequence step check: verify (VLM yes/no) or
+    locate (FindAnything box)."""
+    if (check or {}).get("type") == "verify":
+        return await run_verify_check(check, observation_data)
+    return await run_locate_check(check, observation_data)
+
+
 async def _execute_locate(action, observation_data, rule, event_id, ctx):
     """Locate ``prompt`` in the triggering frame and branch the chain on it."""
     prompt = render(action.get("prompt") or "", ctx).strip()

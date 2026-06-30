@@ -653,6 +653,8 @@ def _validate_sequence(seq) -> None:
             raise ValueError(f"sequence step[{i}] needs a positive 'within_seconds'")
         if check.get("type") == "locate":
             _validate_locate_action(check, i)
+        if check.get("type") == "verify":
+            _validate_verify_action(check, i)
         pre = step.get("pre_gate")
         if pre is not None and (not isinstance(pre, dict) or not pre.get("type")):
             raise ValueError(f"sequence step[{i}] pre_gate must be an object with a type")

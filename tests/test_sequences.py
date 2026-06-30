@@ -523,3 +523,13 @@ def test_schema_confirm_frames():
         _validate_sequence({"steps": [
             {"check": {"type": "object_detected"}, "within_seconds": 5, "confirm_frames": 0},
         ]})
+
+
+def test_schema_verify_step():
+    _validate_sequence({"steps": [
+        {"check": {"type": "verify", "question": "is the door open?"}, "within_seconds": 5},
+    ]})
+    with pytest.raises(ValueError):  # verify needs a question
+        _validate_sequence({"steps": [
+            {"check": {"type": "verify"}, "within_seconds": 5},
+        ]})

@@ -110,6 +110,7 @@ export function SequenceSection(props: SequenceSectionProps) {
                     >
                       <option value="object">Object detected</option>
                       <option value="locate">FindAnything (locate)</option>
+                      <option value="verify">Verify (ask the AI)</option>
                     </select>
                     <button
                       type="button"
@@ -125,7 +126,13 @@ export function SequenceSection(props: SequenceSectionProps) {
                     type="text"
                     value={s.label}
                     onChange={(e) => patchStep(i, { label: e.target.value })}
-                    placeholder={s.kind === "locate" ? 'e.g. "a key in the key box"' : "e.g. package"}
+                    placeholder={
+                      s.kind === "locate"
+                        ? 'e.g. "a key in the key box"'
+                        : s.kind === "verify"
+                          ? 'e.g. "is the garage door open?"'
+                          : "e.g. package"
+                    }
                     className={`${INPUT_CLS} w-full`}
                   />
 

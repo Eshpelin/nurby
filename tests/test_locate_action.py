@@ -221,3 +221,57 @@ async def test_locate_no_frame_fails(monkeypatch, patched):
         obs, _Rule(), uuid.uuid4(), {},
     )
     assert obs["vars"]["loc"]["found"] is False
+
+
+# ── verify step check (D2) ─────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_run_verify_check_passes_on_yes_high_conf(monkeypatch):
+    class _R:
+        answer = {"verdict": "yes", "confidence": 0.9}
+
+    async def fake_analyze(ctx, obs, q, provider_id=None):
+        return _R()
+
+    monkeypatch.setattr("services.agent.analyzer.analyze_frame_target", fake_analyze)
+    ok = await actions.run_verify_check(
+        {"type": "verify", "question": "is the door open?", "min_confidence": 0.6},
+        {"observation_id": str(uuid.uuid4())},
+    )
+    assert ok is True
+
+
+@pytest.mark.asyncio
+async def test_run_verify_check_fails_low_conf(monkeypatch):
+    class _R:
+        answer = {"verdict": "yes", "confidence": 0.3}
+
+    async def fake_analyze(ctx, obs, q, provider_id=None):
+        return _R()
+
+    monkeypatch.setattr("services.agent.analyzer.analyze_frame_target", fake_analyze)
+    ok = await actions.run_verify_check(
+        {"type": "verify", "question": "x", "min_confidence": 0.6},
+        {"observation_id": str(uuid.uuid4())},
+    )
+    assert ok is False
+
+
+@pytest.mark.asyncio
+async def test_run_verify_check_no_question_or_obs_is_false():
+    assert await actions.run_verify_check({"type": "verify"}, {"observation_id": str(uuid.uuid4())}) is False
+    assert await actions.run_verify_check({"type": "verify", "question": "x"}, {}) is False
+
+
+@pytest.mark.asyncio
+async def test_run_grounding_check_dispatches(monkeypatch):
+    async def fake_verify(check, obs):
+        return True
+
+    async def fake_locate(check, obs):
+        return False
+
+    monkeypatch.setattr(actions, "run_verify_check", fake_verify)
+    monkeypatch.setattr(actions, "run_locate_check", fake_locate)
+    assert await actions.run_grounding_check({"type": "verify"}, {}) is True
+    assert await actions.run_grounding_check({"type": "locate"}, {}) is False

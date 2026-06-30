@@ -1221,7 +1221,7 @@ export function buildRuleSummary(rule: Rule, cameras: Camera[]): string {
 // FindAnything (locate). on_complete reuses the rule's main action chain;
 // on_timeout is the absence alert that fires when a step never happens in time.
 
-export type SeqCheckKind = "object" | "locate";
+export type SeqCheckKind = "object" | "locate" | "verify";
 
 export interface SeqStepDraft {
   kind: SeqCheckKind;
@@ -1254,6 +1254,8 @@ export function seqStepToDict(s: SeqStepDraft): Record<string, unknown> {
   if (s.kind === "locate") {
     step.check = { type: "locate", prompt: s.label.trim(), require_corroboration: s.requireCorroboration };
     if (s.preGateLabel.trim()) step.pre_gate = { type: "object_detected", label: s.preGateLabel.trim() };
+  } else if (s.kind === "verify") {
+    step.check = { type: "verify", question: s.label.trim() };
   } else {
     step.check = { type: "object_detected", label: s.label.trim() };
   }
@@ -1277,6 +1279,17 @@ export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
       requireCorroboration: check.require_corroboration === true,
     };
   }
+  if (check.type === "verify") {
+    return {
+      kind: "verify",
+      label: (check.question as string) || "",
+      withinSeconds: within,
+      confirmFrames: confirm,
+      negate,
+      preGateLabel: "",
+      requireCorroboration: false,
+    };
+  }
   return {
     kind: "object",
     label: (check.label as string) || "",
@@ -1294,6 +1307,10 @@ export function describeSeqStep(s: SeqStepDraft): string {
     const pre = s.preGateLabel.trim() ? ` (when ${s.preGateLabel.trim()} present)` : "";
     const verb = s.negate ? "do NOT find" : "find";
     return `${verb} "${s.label.trim() || "…"}"${pre} within ${within}s`;
+  }
+  if (s.kind === "verify") {
+    const q = s.label.trim() || "…";
+    return `${s.negate ? "AI says no to" : "AI confirms"} "${q}" within ${within}s`;
   }
   const obj = s.label.trim() || "object";
   return s.negate ? `no ${obj} within ${within}s` : `${obj} appears within ${within}s`;
