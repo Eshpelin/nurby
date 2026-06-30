@@ -150,6 +150,16 @@ export function SequenceSection(props: SequenceSectionProps) {
                     <span className="text-[11px] text-muted-foreground">frame(s)</span>
                   </div>
 
+                  <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="accent-green-500"
+                      checked={s.negate}
+                      onChange={(e) => patchStep(i, { negate: e.target.checked })}
+                    />
+                    Match when this is ABSENT — order two steps for a transition (not there → there)
+                  </label>
+
                   {s.kind === "locate" && (
                     <div className="space-y-2 border-t border-border pt-2">
                       <div className="flex items-center gap-2 flex-wrap">

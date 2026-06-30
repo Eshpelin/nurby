@@ -318,16 +318,22 @@ async def _step_matches(step: dict, data: dict, step_match_fn, locate_check_fn) 
     """Does this observation satisfy ``step``? Cheap trigger-predicate checks go
     through ``step_match_fn``; grounding-backed (locate) checks go through the
     async ``locate_check_fn`` — but only after an optional cheap ``pre_gate``
-    predicate passes, so GPU cost is spent only when worthwhile."""
+    predicate passes, so GPU cost is spent only when worthwhile.
+
+    ``step.negate`` inverts the check, so a step can match on ABSENCE. With step
+    ordering this expresses a transition: "key NOT in box" then "key in box" =
+    he put it in. (A pre_gate that fails still yields no-match, not asserted
+    absence — we can't claim a thing is gone if we couldn't look.)"""
     chk = step_check(step)
+    negate = bool(step.get("negate"))
     if is_locate_check(step):
         if locate_check_fn is None:
             return False  # grounding not wired (e.g. pure unit tests)
         pre = step.get("pre_gate")
         if isinstance(pre, dict) and pre.get("type") and not step_match_fn(pre):
             return False  # cheap precondition failed; don't spend GPU
-        return bool(await locate_check_fn(chk, data))
-    return bool(step_match_fn(chk))
+        return bool(await locate_check_fn(chk, data)) != negate
+    return bool(step_match_fn(chk)) != negate
 
 
 async def evaluate_sequence(

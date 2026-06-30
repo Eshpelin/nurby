@@ -326,6 +326,44 @@ async def test_locate_pre_gate_allows_grounding(store):
 
 
 @pytest.mark.asyncio
+async def test_negate_locate_matches_on_absence(store):
+    _add_active(store, "cam:c1", 0, _now() + timedelta(seconds=20))
+    seq = {"correlate_by": "camera", "steps": [
+        {"check": {"type": "locate", "prompt": "key in box"}, "negate": True, "within_seconds": 30},
+        {"check": {"type": "object_detected"}, "within_seconds": 30},
+    ]}
+    async def locate_absent(check, data):
+        return False  # the thing is NOT there
+    async def fire():
+        store["fire"] += 1
+    await seqmod.evaluate_sequence(
+        _Rule(), seq, {"camera_id": "c1"},
+        start_matched=False, step_match_fn=lambda p: True,
+        fire_cb=fire, locate_check_fn=locate_absent, now=_now(),
+    )
+    assert len(store["advance"]) == 1  # absence satisfied the negated step
+
+
+@pytest.mark.asyncio
+async def test_negate_locate_no_match_when_present(store):
+    _add_active(store, "cam:c1", 0, _now() + timedelta(seconds=20))
+    seq = {"correlate_by": "camera", "steps": [
+        {"check": {"type": "locate", "prompt": "key in box"}, "negate": True, "within_seconds": 30},
+        {"check": {"type": "object_detected"}, "within_seconds": 30},
+    ]}
+    async def locate_present(check, data):
+        return True  # it IS there → negated step must not match
+    async def fire():
+        store["fire"] += 1
+    await seqmod.evaluate_sequence(
+        _Rule(), seq, {"camera_id": "c1"},
+        start_matched=False, step_match_fn=lambda p: True,
+        fire_cb=fire, locate_check_fn=locate_present, now=_now(),
+    )
+    assert store["advance"] == []
+
+
+@pytest.mark.asyncio
 async def test_refire_ignore_does_not_duplicate(store):
     _add_active(store, "cam:c1", 0, _now() + timedelta(seconds=20))
     seq = _seq()
