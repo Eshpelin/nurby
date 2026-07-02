@@ -303,6 +303,59 @@ async def test_smtp(body: SmtpTestRequest, _current_user: User = Depends(require
 # is admin-only and accepts a partial body. Any unknown key on PATCH
 # is rejected with 400 so the surface stays narrow and audit-friendly.
 
+@router.get("/system/setup-checklist")
+async def get_setup_checklist(
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Aggregate state for the durable dashboard setup-checklist card.
+
+    Replaces the one-shot wizard as the surface that tells a new install
+    what is still missing: a real camera, an AI provider, an active rule,
+    and at least one notification channel."""
+    import os
+
+    from shared.app_settings import get_setting
+    from shared.email import resolve_smtp
+    from shared.models import Provider, Rule, TelegramChannel, WebhookSubscription
+
+    cameras = (await db.execute(select(Camera.stream_type, Camera.stream_url))).all()
+    demo_url = os.environ.get(
+        "NURBY_DEMO_VIDEO_URL",
+        "https://nurby.ai/demo/nurby-demo-loop.mp4",
+    )
+    real_cameras = [
+        c for c in cameras if not (c.stream_type == "file" and c.stream_url == demo_url)
+    ]
+
+    provider_count = await db.scalar(
+        select(func.count()).select_from(Provider).where(Provider.active.is_(True))
+    )
+    rule_count = await db.scalar(
+        select(func.count()).select_from(Rule).where(Rule.enabled.is_(True))
+    )
+
+    channels: list[str] = []
+    telegram_count = await db.scalar(
+        select(func.count()).select_from(TelegramChannel).where(TelegramChannel.enabled.is_(True))
+    )
+    if telegram_count:
+        channels.append("telegram")
+    smtp_cfg = await resolve_smtp()
+    if smtp_cfg.get("host") and smtp_cfg.get("from_addr"):
+        channels.append("smtp")
+    webhook_count = await db.scalar(select(func.count()).select_from(WebhookSubscription))
+    if webhook_count:
+        channels.append("webhook_subscription")
+
+    return {
+        "camera_added": {"done": len(cameras) > 0, "demo_only": bool(cameras) and not real_cameras},
+        "provider_connected": {"done": bool(provider_count)},
+        "first_rule_active": {"done": bool(rule_count)},
+        "notifications_configured": {"done": bool(channels), "channels": channels},
+        "dismissed": bool(await get_setting("setup_checklist_dismissed", False)),
+    }
+
+
 SETTINGS_WHITELIST: tuple[str, ...] = (
     "system_timezone",
     "journey_idle_seconds",
@@ -317,6 +370,7 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     "public_base_url",
     "rules_cooldown_backend",
     "onboarding_dismissed",
+    "setup_checklist_dismissed",
     "vlm_enrichment_enabled",
     "vlm_enrichment_budget_minutes_per_hour",
     "vehicle_appearance_match_min_similarity",
