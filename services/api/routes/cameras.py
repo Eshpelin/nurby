@@ -14,6 +14,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.api.camera_probe import (
+    ERROR_HINTS,
+    parse_target,
+    probe_rtsp_describe,
+    probe_tcp,
+)
 from services.api.motion_query import DEFAULT_BUCKET_SECONDS
 from services.discovery.onvif import (
     discover_onvif_cameras,
@@ -633,6 +639,29 @@ class TestConnectionRequest(BaseModel):
     auth_token: str | None = None
 
 
+def _probe_failure(probe: dict) -> dict:
+    """Convert a camera_probe result into a test-connection error response."""
+    code = probe.get("error_code", "unknown")
+    return {
+        "ok": False,
+        "error_code": code,
+        "error": probe.get("detail") or "Connection failed",
+        "hint": ERROR_HINTS.get(code),
+    }
+
+
+def _decode_failure(stream_type: str, message: str) -> dict:
+    """Failure after the network pre-probe succeeded: the server answered
+    but ffmpeg could not open or read the stream."""
+    code = "decode" if stream_type != "usb" else "unknown"
+    return {
+        "ok": False,
+        "error_code": code,
+        "error": message,
+        "hint": ERROR_HINTS.get(code),
+    }
+
+
 def _test_stream_connection(url: str, stream_type: str) -> dict:
     """Probe a camera stream. Runs in thread pool. Returns status dict."""
     import cv2
@@ -645,28 +674,30 @@ def _test_stream_connection(url: str, stream_type: str) -> dict:
     elif stream_type == "hls":
         cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
         if not cap.isOpened():
-            return {"ok": False, "error": "Failed to open HLS stream"}
+            return _decode_failure(stream_type, "Failed to open HLS stream")
         ret, _ = cap.read()
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS) or 0
         cap.release()
         if not ret:
-            return {"ok": False, "error": "Connected but failed to read frame"}
+            return _decode_failure(stream_type, "Connected but failed to read frame")
         return {"ok": True, "width": w, "height": h, "fps": round(fps, 1)}
     else:
         source = url
 
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
-        return {"ok": False, "error": "Failed to open stream. Check URL and credentials."}
+        return _decode_failure(
+            stream_type, "Server answered but the video stream could not be opened."
+        )
     ret, _ = cap.read()
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 0
     cap.release()
     if not ret:
-        return {"ok": False, "error": "Connected but failed to read frame"}
+        return _decode_failure(stream_type, "Connected but failed to read frame")
     return {"ok": True, "width": w, "height": h, "fps": round(fps, 1)}
 
 
@@ -695,15 +726,40 @@ async def test_camera_connection(
                 img_array = np.frombuffer(resp.content, dtype=np.uint8)
                 frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
                 if frame is None:
-                    return {"ok": False, "error": "Got response but could not decode as image"}
+                    return {
+                        "ok": False,
+                        "error_code": "decode",
+                        "error": "Got response but could not decode as image",
+                        "hint": ERROR_HINTS["decode"],
+                    }
                 h, w = frame.shape[:2]
                 return {"ok": True, "width": w, "height": h, "fps": round(1.0 / 2.0, 1)}
         except httpx.TimeoutException:
-            return {"ok": False, "error": "Connection timed out after 10 seconds"}
+            return {
+                "ok": False,
+                "error_code": "timeout",
+                "error": "Connection timed out after 10 seconds",
+                "hint": ERROR_HINTS["timeout"],
+            }
+        except httpx.ConnectError as exc:
+            code = "dns" if "resolve" in str(exc).lower() or "name" in str(exc).lower() else "refused"
+            return {
+                "ok": False,
+                "error_code": code,
+                "error": str(exc),
+                "hint": ERROR_HINTS.get(code),
+            }
         except httpx.HTTPStatusError as exc:
-            return {"ok": False, "error": f"HTTP {exc.response.status_code}"}
+            status = exc.response.status_code
+            code = "auth" if status in (401, 407) else "not_found" if status == 404 else "http_error"
+            return {
+                "ok": False,
+                "error_code": code,
+                "error": f"HTTP {status}",
+                "hint": ERROR_HINTS.get(code),
+            }
         except Exception as exc:
-            return {"ok": False, "error": str(exc)}
+            return {"ok": False, "error_code": "unknown", "error": str(exc), "hint": None}
 
     url = build_auth_url(body.stream_url, body.username, body.password)
     if body.auth_token and body.stream_type in ("http_mjpeg", "hls"):
@@ -711,14 +767,51 @@ async def test_camera_connection(
         url = f"{url}{separator}token={body.auth_token}"
 
     loop = asyncio.get_running_loop()
+
+    # Cheap network pre-probes so failures are classified before the
+    # heavyweight ffmpeg open collapses everything into one vague error.
+    auth_suspect = False
+    if body.stream_type in ("rtsp", "hls", "http_mjpeg"):
+        host, port = parse_target(body.stream_url)
+        if host:
+            tcp = await loop.run_in_executor(_device_probe_pool, probe_tcp, host, port)
+            if not tcp.get("ok"):
+                return _probe_failure(tcp)
+            if body.stream_type == "rtsp":
+                describe = await loop.run_in_executor(
+                    _device_probe_pool,
+                    probe_rtsp_describe,
+                    url,
+                    body.username,
+                    body.password,
+                )
+                if not describe.get("ok"):
+                    # A Digest-only camera answers 401 to our Basic attempt even
+                    # with valid credentials, so when credentials were provided
+                    # we still let ffmpeg (which speaks Digest) try below.
+                    if describe.get("error_code") != "auth" or not body.username:
+                        return _probe_failure(describe)
+                    auth_suspect = True
+
     try:
         result = await asyncio.wait_for(
             loop.run_in_executor(_device_probe_pool, _test_stream_connection, url, body.stream_type),
             timeout=15.0,
         )
+        if not result.get("ok") and auth_suspect:
+            # ffmpeg (which speaks Digest) also failed: credentials are the
+            # most likely culprit, not the codec.
+            result["error_code"] = "auth"
+            result["error"] = "The camera rejected the credentials."
+            result["hint"] = ERROR_HINTS["auth"]
         return result
     except asyncio.TimeoutError:
-        return {"ok": False, "error": "Connection timed out after 15 seconds"}
+        return {
+            "ok": False,
+            "error_code": "timeout",
+            "error": "Connection timed out after 15 seconds",
+            "hint": ERROR_HINTS["timeout"],
+        }
 
 
 # ---------------------------------------------------------------------------

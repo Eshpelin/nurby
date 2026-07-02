@@ -5,7 +5,7 @@
 // enable RTSP/ONVIF and find credentials. "Use this URL" drops the
 // template into the stream-URL field so the user only swaps <ip>.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CAMERA_BRANDS, findBrand, type RtspSupport } from "@/lib/camera-brands";
 
 interface Props {
@@ -13,6 +13,9 @@ interface Props {
   onUseTemplate: (url: string) => void;
   // Optional. Start collapsed unless the user opens it.
   defaultOpen?: boolean;
+  // Optional. Increment to force the panel open (e.g. after a connection
+  // test fails with an error the brand guide can help with).
+  forceOpenSignal?: number;
 }
 
 const SUPPORT_BADGE: Record<RtspSupport, { label: string; cls: string }> = {
@@ -21,10 +24,14 @@ const SUPPORT_BADGE: Record<RtspSupport, { label: string; cls: string }> = {
   no: { label: "Cloud-locked", cls: "bg-rose-500/15 text-rose-400 border-rose-500/30" },
 };
 
-export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false }: Props) {
+export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, forceOpenSignal = 0 }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const [brandId, setBrandId] = useState<string>("");
   const brand = brandId ? findBrand(brandId) : undefined;
+
+  useEffect(() => {
+    if (forceOpenSignal > 0) setOpen(true);
+  }, [forceOpenSignal]);
 
   return (
     <div className="rounded-md border border-border bg-background/40">

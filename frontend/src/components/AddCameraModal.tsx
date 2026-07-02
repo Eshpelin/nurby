@@ -182,6 +182,8 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
   const [testingConnection, setTestingConnection] = useState(false);
   const lastFailedTestUrl = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
+  const [brandHelpSignal, setBrandHelpSignal] = useState(0);
 
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
   const [scanningDevices, setScanningDevices] = useState(false);
@@ -228,6 +230,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
   async function handleSubmitCamera(payload: Record<string, unknown>) {
     setSubmitting(true);
     setError(null);
+    setErrorHint(null);
     try {
       // Probe network streams before saving so an unreachable camera fails
       // here, with a reason, instead of being created and sitting offline.
@@ -254,12 +257,29 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
           const tj = await tr.json().catch(() => ({}));
           if (!(tr.ok && tj.ok)) {
             lastFailedTestUrl.current = urlKey;
+            const friendly: Record<string, string> = {
+              dns: "The camera's address could not be found",
+              refused: "The camera refused the connection",
+              timeout: "The camera did not respond",
+              auth: "The camera rejected the username or password",
+              not_found: "The camera answered, but the stream path is wrong",
+              decode: "The camera answered, but the video could not be read",
+            };
+            const headline =
+              friendly[tj.error_code as string] || "Could not connect to the camera";
             setError(
-              `Could not connect to the camera: ${tj.error || tj.detail || `status ${tr.status}`}. ` +
-                "Check the URL and credentials, or submit again to add it anyway.",
+              `${headline}: ${tj.error || tj.detail || `status ${tr.status}`}. ` +
+                "Fix it and try again, or submit again to add the camera anyway.",
             );
+            setErrorHint(tj.hint || null);
+            // These failures are usually solved by the per-brand URL and
+            // credential guide, so open it.
+            if (["auth", "not_found", "dns"].includes(tj.error_code as string)) {
+              setBrandHelpSignal((s) => s + 1);
+            }
             return;
           }
+          setErrorHint(null);
         } catch {
           // The probe endpoint itself failed (not the camera). Do not block
           // adding the camera on it.
@@ -355,6 +375,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
     if (!name.trim() || !webcamStream) return;
     setSubmitting(true);
     setError(null);
+    setErrorHint(null);
     try {
       // Create camera row first so we get its id to key the publisher against.
       const payload: Record<string, unknown> = {
@@ -560,6 +581,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
               {["rtsp", "http_mjpeg", "http_snapshot", "hls"].includes(streamType) && (
                 <div className="mb-2">
                   <CameraBrandHelp
+                    forceOpenSignal={brandHelpSignal}
                     onUseTemplate={(url) => {
                       setStreamType("rtsp");
                       setStreamUrl(url);
@@ -638,7 +660,12 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
               </div>
             )}
 
-            {error && <p className="text-sm text-danger">{error}</p>}
+            {error && (
+              <div className="space-y-1">
+                <p className="text-sm text-danger">{error}</p>
+                {errorHint && <p className="text-xs text-muted-foreground">{errorHint}</p>}
+              </div>
+            )}
 
             <div className="flex flex-col items-end gap-1.5 pt-2">
               {(!name.trim() || (streamType === "webcam" ? !webcamStream : streamType === "browser_mic" ? false : !streamUrl.trim())) && !submitting && (
