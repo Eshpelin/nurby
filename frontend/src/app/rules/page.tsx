@@ -13,6 +13,7 @@ import {
   type TelegramChannelOption,
 } from "@/components/rules/types";
 import { RulesList } from "@/components/rules/RulesList";
+import type { RuleHealth } from "@/components/rules/RuleCard";
 import { RuleEventsPanel } from "@/components/rules/RuleEventsPanel";
 import { TemplateGallery } from "@/components/rules/TemplateGallery";
 import { WebhookSubscriptions } from "@/components/rules/WebhookSubscriptions";
@@ -39,6 +40,7 @@ export default function RulesPage() {
   // /api/events fetch on mount + after each save. Cached for 30s.
   const [lastFiredByRule, setLastFiredByRule] = useState<Record<string, string | null>>({});
   const lastFiredFetchedAt = useRef<number>(0);
+  const [healthByRule, setHealthByRule] = useState<Record<string, RuleHealth>>({});
 
   const fetchRules = useCallback(async () => {
     try {
@@ -109,6 +111,12 @@ export default function RulesPage() {
       setLastFiredByRule(await res.json());
     } catch {
       /* silent */
+    }
+    try {
+      const hr = await authFetch("/api/rules/health");
+      if (hr.ok) setHealthByRule(await hr.json());
+    } catch {
+      /* silent. badges just don't render */
     }
   }, [authFetch]);
 
@@ -235,6 +243,7 @@ export default function RulesPage() {
             persons={persons}
             selectedRuleId={selectedRule?.id ?? null}
             lastFiredByRule={lastFiredByRule}
+            healthByRule={healthByRule}
             telegramChannels={telegramChannels}
             onSelect={setSelectedRule}
             onToggleEnabled={handleToggle}

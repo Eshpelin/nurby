@@ -915,6 +915,9 @@ class RuleTestResponse(BaseModel):
     cooldown_active: bool = False
     synthesized_observation: dict
     would_fire: list[RuleTestActionPreview] = Field(default_factory=list)
+    # Non-fatal problems, e.g. a camera_id/person_id that matches no row.
+    # The builder surfaces these before save.
+    warnings: list[str] = Field(default_factory=list)
 
 
 class RuleReplaySample(BaseModel):

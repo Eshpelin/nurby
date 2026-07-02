@@ -1,6 +1,6 @@
 "use client";
 
-import { RuleCard } from "./RuleCard";
+import { RuleCard, type RuleHealth } from "./RuleCard";
 import { TemplateGallery } from "./TemplateGallery";
 import { type Camera, type Person, type Rule, type TelegramChannelOption } from "./types";
 
@@ -10,6 +10,7 @@ export interface RulesListProps {
   persons: Person[];
   selectedRuleId: string | null;
   lastFiredByRule: Record<string, string | null>;
+  healthByRule?: Record<string, RuleHealth>;
   telegramChannels: TelegramChannelOption[];
   onSelect: (rule: Rule) => void;
   onToggleEnabled: (rule: Rule) => void;
@@ -28,6 +29,7 @@ export function RulesList({
   persons,
   selectedRuleId,
   lastFiredByRule,
+  healthByRule,
   telegramChannels,
   onSelect,
   onToggleEnabled,
@@ -59,6 +61,7 @@ export function RulesList({
           cameras={cameras}
           selected={selectedRuleId === r.id}
           lastFiredAt={lastFiredByRule[r.id] ?? null}
+          health={healthByRule?.[r.id] ?? null}
           onSelect={() => onSelect(r)}
           onToggleEnabled={() => onToggleEnabled(r)}
           onEdit={() => onEdit(r)}

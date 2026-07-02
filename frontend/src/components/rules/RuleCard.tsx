@@ -3,12 +3,22 @@
 import { useState } from "react";
 import { buildRuleSummary, describeTrigger, type Camera, type Rule } from "./types";
 
+export interface RuleHealth {
+  last_fired_at: string | null;
+  fires_7d: number;
+  last_action_status: string | null;
+  last_action_error: string | null;
+  stale_refs: string[];
+}
+
 export interface RuleCardProps {
   rule: Rule;
   cameras: Camera[];
   selected: boolean;
   // Last-fired-at timestamp (ISO). Null/undefined renders "Never fired".
   lastFiredAt?: string | null;
+  // Aggregate from GET /api/rules/health (action failures, stale refs).
+  health?: RuleHealth | null;
   onSelect: () => void;
   onToggleEnabled: () => void;
   onEdit: () => void;
@@ -34,6 +44,7 @@ export function RuleCard({
   cameras,
   selected,
   lastFiredAt,
+  health,
   onSelect,
   onToggleEnabled,
   onEdit,
@@ -52,6 +63,16 @@ export function RuleCard({
       ? "border-red-800 bg-red-900/30 text-red-400"
       : "border-border bg-muted/40 text-muted-foreground"
     : "border-border bg-muted/40 text-muted-foreground";
+
+  // Health badges: latest action failed, references pointing nowhere, or
+  // an enabled rule that has matched nothing in 14 days (distinct from
+  // "Never fired": it HAS a history, just a dead recent window).
+  const actionFailing = health?.last_action_status === "failed";
+  const staleRefs = health?.stale_refs?.length ? health.stale_refs : null;
+  const olderThan14d = createdMs > 0 && Date.now() - createdMs > 14 * 24 * 3600 * 1000;
+  const quiet14d =
+    rule.enabled && olderThan14d && !neverFired && health != null && health.fires_7d === 0 &&
+    !!health.last_fired_at && Date.now() - new Date(health.last_fired_at).getTime() > 14 * 24 * 3600 * 1000;
 
   return (
     <div
@@ -88,6 +109,30 @@ export function RuleCard({
               >
                 {neverFired ? "Never fired" : `Fired ${formatRelative(lastFiredAt!)}`}
               </span>
+              {actionFailing && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded border border-red-800 bg-red-900/30 text-red-400"
+                  title={health?.last_action_error || "The last action execution failed"}
+                >
+                  Action failing
+                </span>
+              )}
+              {staleRefs && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded border border-amber-700 bg-amber-900/30 text-amber-400"
+                  title={staleRefs.join("\n")}
+                >
+                  Broken reference
+                </span>
+              )}
+              {quiet14d && !actionFailing && !staleRefs && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded border border-amber-700 bg-amber-900/30 text-amber-400"
+                  title="Enabled, but nothing has matched in over 14 days. Check the trigger and camera scope."
+                >
+                  No matches in 14d
+                </span>
+              )}
               {!rule.enabled && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">
                   Disabled

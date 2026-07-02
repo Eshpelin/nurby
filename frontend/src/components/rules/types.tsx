@@ -616,6 +616,8 @@ export interface RuleTestResponse {
   cooldown_active: boolean;
   synthesized_observation: Record<string, unknown>;
   would_fire: RuleTestActionPreview[];
+  // Non-fatal problems, e.g. camera/person ids that match no row.
+  warnings?: string[];
 }
 
 export interface RuleReplaySample {
