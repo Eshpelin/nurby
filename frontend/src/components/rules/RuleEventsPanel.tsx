@@ -122,8 +122,8 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
   }, [selectedRule, fetchRuleEvents]);
 
   return (
-    <aside className="col-span-4">
-      <div className="sticky top-20 rounded-lg border border-border bg-card p-5">
+    <aside className="col-span-1 lg:col-span-4">
+      <div className="lg:sticky lg:top-20 rounded-lg border border-border bg-card p-5">
         <div className="flex items-center gap-2 mb-4">
           <span className="w-1.5 h-1.5 rounded-full bg-accent pulse-dot" />
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">

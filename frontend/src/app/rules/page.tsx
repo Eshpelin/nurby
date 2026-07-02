@@ -236,7 +236,7 @@ export default function RulesPage() {
           Loading.
         </div>
       ) : (
-        <div className="grid grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <RulesList
             rules={rules}
             cameras={cameras}

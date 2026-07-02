@@ -41,7 +41,7 @@ export function RulesList({
 }: RulesListProps) {
   if (rules.length === 0) {
     return (
-      <div className="col-span-12">
+      <div className="col-span-1 lg:col-span-12">
         <TemplateGallery
           cameras={cameras}
           persons={persons}
@@ -53,7 +53,7 @@ export function RulesList({
     );
   }
   return (
-    <section className="col-span-8 space-y-3">
+    <section className="col-span-1 lg:col-span-8 space-y-3">
       {rules.map((r) => (
         <RuleCard
           key={r.id}
