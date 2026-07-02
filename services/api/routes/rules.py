@@ -173,6 +173,17 @@ async def rules_last_fired(
     return {str(rule_id): fired_at.isoformat() for rule_id, fired_at in rows}
 
 
+@router.get("/schema")
+async def rules_schema(_current_user: User = Depends(get_current_user)):
+    """Introspection: every trigger type, action type, condition field, and
+    the sequence block shape. Static registry (shared/rule_schema.py), so
+    the frontend and NL rule generation stop hardcoding enums. Must stay
+    registered before the /{rule_id} catch-all."""
+    from shared.rule_schema import build_schema
+
+    return build_schema()
+
+
 @router.get("/health")
 async def rules_health(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
