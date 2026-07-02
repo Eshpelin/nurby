@@ -2508,6 +2508,172 @@ async def get_daily_digest(ctx: dict, limit: int = 1) -> dict:
 ToolFn = Callable[..., Awaitable[dict]]
 
 
+# ── Setup / automation tools ────────────────────────────────────────
+
+
+_GET_RULE_SCHEMA_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {},
+}
+
+
+async def get_rule_schema(ctx: dict) -> dict:
+    """The full rule vocabulary (trigger types, action types, condition
+    fields, sequence shape). Call before create_rule when unsure which
+    fields a trigger or action takes."""
+    from shared.rule_schema import build_schema
+
+    return build_schema()
+
+
+_CREATE_RULE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["name", "trigger_pattern", "actions"],
+    "properties": {
+        "name": {"type": "string", "description": "Short human title for the rule."},
+        "trigger_pattern": {
+            "type": "object",
+            "description": "One trigger object; shapes from get_rule_schema.",
+        },
+        "conditions": {
+            "type": ["object", "null"],
+            "description": "Optional camera/time/confidence filters.",
+        },
+        "actions": {
+            "type": "array",
+            "items": {"type": "object"},
+            "description": "Action chain; shapes from get_rule_schema.",
+        },
+        "cooldown_seconds": {"type": "integer", "minimum": 0, "default": 300},
+        "severity": {"type": "string", "enum": ["alert", "detection"]},
+    },
+}
+
+
+async def create_rule(
+    ctx: dict,
+    *,
+    name: str,
+    trigger_pattern: dict,
+    actions: list[dict],
+    conditions: dict | None = None,
+    cooldown_seconds: int = 300,
+    severity: str = "detection",
+) -> dict:
+    """Create an automation rule DISABLED, for the user to review and
+    switch on. The driver has no confirmation step, so never-enabled-by-
+    default is the safety gate here; keep it."""
+    from services.api.routes.rules import _stale_rule_refs
+    from shared.schemas import RuleCreate
+
+    db = ctx["db"]
+    try:
+        body = RuleCreate(
+            name=name,
+            enabled=False,
+            trigger_pattern=trigger_pattern,
+            conditions=conditions,
+            actions=actions,
+            cooldown_seconds=cooldown_seconds,
+            severity=severity,
+        )
+    except Exception as exc:
+        return {"ok": False, "error": f"Validation failed: {str(exc)[:600]}"}
+
+    stale = await _stale_rule_refs(db, trigger_pattern, conditions, actions)
+    if stale:
+        return {"ok": False, "error": "Broken references: " + "; ".join(stale)}
+
+    rule = Rule(**body.model_dump())
+    db.add(rule)
+    await db.commit()
+    await db.refresh(rule)
+    return {
+        "ok": True,
+        "rule_id": str(rule.id),
+        "enabled": False,
+        "review_url": f"/rules/{rule.id}/edit",
+        "note": (
+            "Created disabled. Tell the user to review and enable it at the "
+            "review_url (or the Rules page)."
+        ),
+    }
+
+
+_TEST_CAMERA_CONNECTION_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["camera_id"],
+    "properties": {
+        "camera_id": {"type": "string", "description": "UUID of an existing camera."},
+    },
+}
+
+
+async def test_camera_connection(ctx: dict, *, camera_id: str) -> dict:
+    """Network probe of a camera's stream endpoint with a classified
+    verdict (dns/refused/timeout/auth/not_found) and a fix hint."""
+    import asyncio as _asyncio
+
+    from services.api.camera_probe import ERROR_HINTS, parse_target, probe_rtsp_describe, probe_tcp
+
+    db = ctx["db"]
+    try:
+        cam = await db.get(Camera, uuid.UUID(camera_id))
+    except ValueError:
+        return {"ok": False, "error": "camera_id is not a UUID"}
+    if cam is None:
+        return {"ok": False, "error": "No camera with that id"}
+    if cam.stream_type in ("file", "usb", "webcam", "browser_mic"):
+        return {
+            "ok": True,
+            "skipped": True,
+            "detail": f"{cam.stream_type} source has no network endpoint to probe",
+        }
+    host, port = parse_target(cam.stream_url or "")
+    if not host:
+        return {"ok": False, "error_code": "dns", "error": "Stream URL has no hostname"}
+    tcp = await _asyncio.to_thread(probe_tcp, host, port, 4.0)
+    if not tcp.get("ok"):
+        code = tcp.get("error_code", "unknown")
+        return {
+            "ok": False,
+            "error_code": code,
+            "error": tcp.get("detail"),
+            "hint": ERROR_HINTS.get(code),
+        }
+    result: dict = {"ok": True, "detail": f"{host}:{port} reachable"}
+    if cam.stream_type == "rtsp":
+        describe = await _asyncio.to_thread(probe_rtsp_describe, cam.stream_url, None, None, 5.0)
+        if not describe.get("ok"):
+            code = describe.get("error_code", "unknown")
+            result = {
+                "ok": False,
+                "error_code": code,
+                "error": describe.get("detail"),
+                "hint": ERROR_HINTS.get(code),
+            }
+    return result
+
+
+_RUN_DOCTOR_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {},
+}
+
+
+async def run_doctor(ctx: dict) -> dict:
+    """Full system health pass (db, redis, stream relay, every camera,
+    every AI provider, smtp, disk) with per-check verdicts and hints."""
+    from services.api.routes.doctor import run_doctor as doctor_endpoint
+
+    checks = await doctor_endpoint(_current_user=ctx["user"], db=ctx["db"])
+    return {"checks": [c.model_dump() for c in checks]}
+
+
 TOOL_REGISTRY: list[dict[str, Any]] = [
     {
         "name": "query_observations",
@@ -2753,6 +2919,61 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
         ),
         "input_schema": _ANALYZE_FRAME_SCHEMA,
         "fn": analyze_frame,
+        "side_effect": "read",
+        "cost_class": "medium",
+    },
+    {
+        "name": "get_rule_schema",
+        "description": (
+            "The complete rule vocabulary: every trigger type, action "
+            "type, and condition field with their exact field names and "
+            "required flags. Call this BEFORE create_rule whenever you "
+            "are not certain of a trigger or action shape. Cheap."
+        ),
+        "input_schema": _GET_RULE_SCHEMA_SCHEMA,
+        "fn": get_rule_schema,
+        "side_effect": "read",
+        "cost_class": "cheap",
+    },
+    {
+        "name": "create_rule",
+        "description": (
+            "Create an automation rule from the user's request ('watch "
+            "for packages at the front door'). The rule is ALWAYS "
+            "created disabled; tell the user to review and enable it at "
+            "the returned review_url. Use get_rule_schema first for the "
+            "trigger/action shapes and get_camera_layout to resolve "
+            "camera names to UUIDs; never invent UUIDs. Cheap."
+        ),
+        "input_schema": _CREATE_RULE_SCHEMA,
+        "fn": create_rule,
+        "side_effect": "write",
+        "cost_class": "cheap",
+    },
+    {
+        "name": "test_camera_connection",
+        "description": (
+            "Network probe of one camera's stream endpoint. Returns a "
+            "classified verdict (dns / refused / timeout / auth / "
+            "not_found) plus a fix hint. Use when the user says a "
+            "camera is black, offline, or won't connect. Cheap."
+        ),
+        "input_schema": _TEST_CAMERA_CONNECTION_SCHEMA,
+        "fn": test_camera_connection,
+        "side_effect": "read",
+        "cost_class": "cheap",
+    },
+    {
+        "name": "run_doctor",
+        "description": (
+            "Full system health pass: database, redis, stream relay, "
+            "every camera, every AI provider, email config, disk space. "
+            "Per-check verdicts with fix hints. Use for 'why isn't this "
+            "working?' or general health questions. Medium cost (probes "
+            "every camera and provider)."
+        ),
+        "input_schema": _RUN_DOCTOR_SCHEMA,
+        "fn": run_doctor,
         "side_effect": "read",
         "cost_class": "medium",
     },

@@ -30,6 +30,7 @@ import { SystemHealthFooter } from "@/components/SystemHealthFooter";
 import { LLMErrorToasts } from "@/components/LLMErrorToasts";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SetupChecklistCard } from "@/components/SetupChecklistCard";
+import { AskComposerCard } from "@/components/AskComposerCard";
 import { SecureAccountModal } from "@/components/SecureAccountModal";
 import CameraBrandHelp from "@/components/CameraBrandHelp";
 import { TranscriptCard } from "@/components/TranscriptCard";
@@ -1524,6 +1525,7 @@ function DashboardContent() {
         {/* LEFT. Customizable camera wall (the main area). */}
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           <SetupChecklistCard onAddCamera={() => { setModalInitialType(undefined); setModalOpen(true); }} />
+          <AskComposerCard />
           <CameraWall
             fullscreenRef={dashboardWrapRef}
             items={[

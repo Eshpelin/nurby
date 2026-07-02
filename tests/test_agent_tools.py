@@ -654,6 +654,10 @@ def test_registry_lookup():
         "get_daily_digest",
         "analyze_clip",
         "analyze_frame",
+        "get_rule_schema",
+        "create_rule",
+        "test_camera_connection",
+        "run_doctor",
     }
 
 
