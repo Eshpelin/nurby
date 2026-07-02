@@ -22,6 +22,7 @@ from services.api.routes import (
     detection_models,
     devices,
     digests,
+    doctor,
     events,
     guardian,
     incidents,
@@ -208,6 +209,7 @@ app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(invites.router, prefix="/api/invites", tags=["invites"])
 app.include_router(guardian.router, prefix="/api/guardian", tags=["guardian"])
 app.include_router(system.router, prefix="/api", tags=["system"])
+app.include_router(doctor.router, prefix="/api", tags=["doctor"])
 app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
 app.include_router(detection_models.router, prefix="/api/detection-models", tags=["detection-models"])
 app.include_router(recordings.router, prefix="/api/recordings", tags=["recordings"])

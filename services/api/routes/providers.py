@@ -141,7 +141,14 @@ async def test_provider(
     provider = await db.get(Provider, provider_id)
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
+    return await run_provider_test(provider)
 
+
+async def run_provider_test(provider: Provider) -> ProviderTestResult:
+    """Provider connectivity test, shared by POST /{id}/test and the
+    system doctor. Goes beyond a bare ping: Anthropic runs a 1-token
+    inference; Ollama also verifies the configured model is installed
+    (a reachable Ollama with a failed pull is the classic silent gap)."""
     start = time.monotonic()
 
     try:
@@ -229,6 +236,21 @@ async def test_provider(
                 if resp.status_code == 200:
                     data = resp.json()
                     model_names = [m["name"] for m in data.get("models", [])]
+                    wanted = provider.default_model
+                    if wanted and not any(
+                        m == wanted or m.split(":")[0] == wanted.split(":")[0]
+                        for m in model_names
+                    ):
+                        return ProviderTestResult(
+                            ok=False,
+                            message=(
+                                f"Ollama is reachable but the configured model "
+                                f"'{wanted}' is not installed. Run `ollama pull {wanted}` "
+                                "or deploy it from Settings."
+                            ),
+                            latency_ms=latency,
+                            models=model_names,
+                        )
                     return ProviderTestResult(
                         ok=True,
                         message=f"Connected. {len(model_names)} models installed",
