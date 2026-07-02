@@ -67,6 +67,11 @@ export function CameraWall({
   useEffect(() => { try { localStorage.setItem(ORDER_KEY, JSON.stringify(order)); } catch { /* ignore */ } }, [order]);
   useEffect(() => { try { localStorage.setItem(SPANS_KEY, JSON.stringify(spans)); } catch { /* ignore */ } }, [spans]);
 
+  // A phone-width wall always renders one column: three 120px-wide feeds
+  // are unusable, and the saved desktop preference shouldn't leak into
+  // mobile. The preference itself is kept for when the viewport widens.
+  const effectiveCols = gridW > 0 && gridW < 640 ? 1 : cols;
+
   // Keep the cell height ~16:9 of one column. Implicit rows are this tall, so
   // a 1x1 tile is a normal feed and taller spans grow vertically.
   useEffect(() => {
@@ -75,7 +80,8 @@ export function CameraWall({
     const ro = new ResizeObserver(() => {
       const w = el.clientWidth;
       setGridW(w);
-      setRowH(Math.max(120, Math.round((w / cols) * (9 / 16))));
+      const c = w > 0 && w < 640 ? 1 : cols;
+      setRowH(Math.max(120, Math.round((w / c) * (9 / 16))));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -125,8 +131,8 @@ export function CameraWall({
   }, [ordered]);
 
   const setSpan = useCallback((id: string, w: number, h: number) => {
-    setSpans((prev) => ({ ...prev, [id]: { w: clamp(w, 1, cols), h: clamp(h, 1, MAX_SPAN_H) } }));
-  }, [cols]);
+    setSpans((prev) => ({ ...prev, [id]: { w: clamp(w, 1, effectiveCols), h: clamp(h, 1, MAX_SPAN_H) } }));
+  }, [effectiveCols]);
 
   const toggleFullscreen = useCallback(() => {
     // Prefer the dashboard wrapper (wall + timeline) so the timeline survives
@@ -143,7 +149,7 @@ export function CameraWall({
     setCols(3);
   }, [items]);
 
-  const cellW = gridW > 0 ? gridW / cols : 0;
+  const cellW = gridW > 0 ? gridW / effectiveCols : 0;
   const soloItem = solo ? items.find((it) => it.id === solo) : null;
 
   return (
@@ -158,7 +164,9 @@ export function CameraWall({
         </div>
         <div className="flex items-center gap-2">
           {toolbarExtra}
-          <div className="flex items-center gap-0.5 p-0.5 rounded bg-muted/50 border border-border">
+          {/* Column picker and reset are desktop concerns; mobile is
+              forced to one column. */}
+          <div className="hidden sm:flex items-center gap-0.5 p-0.5 rounded bg-muted/50 border border-border">
             {COL_CHOICES.map((c) => (
               <button
                 key={c}
@@ -171,7 +179,7 @@ export function CameraWall({
             ))}
           </div>
           <button onClick={resetLayout}
-            className="text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/50 transition-colors"
+            className="hidden sm:block text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/50 transition-colors"
             title="Reset wall layout">Reset</button>
           <button onClick={toggleFullscreen}
             className="text-[11px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
@@ -190,7 +198,7 @@ export function CameraWall({
         className="flex-1 overflow-y-auto scrollbar-thin"
         style={{
           display: "grid",
-          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(${effectiveCols}, minmax(0, 1fr))`,
           gridAutoRows: `${rowH}px`,
           gridAutoFlow: "dense",
           gap: "0.4rem",

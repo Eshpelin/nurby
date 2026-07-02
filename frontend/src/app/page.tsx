@@ -1472,8 +1472,11 @@ function DashboardContent() {
     />
   );
 
+  // Desktop is a viewport-locked two-column app (each column scrolls
+  // internally). Below lg the columns stack, so the page must scroll
+  // normally instead: no height cap, no collapsed flex children.
   return (
-    <div className="px-4 py-4 h-[calc(100vh-3.5rem)] flex flex-col">
+    <div className="px-4 py-4 lg:h-[calc(100vh-3.5rem)] flex flex-col">
 
       <VLMOptionalBanner />
 
@@ -1521,9 +1524,9 @@ function DashboardContent() {
         />
       )}
 
-      <div ref={dashboardWrapRef} className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 bg-background">
+      <div ref={dashboardWrapRef} className="flex flex-col lg:flex-row gap-4 lg:flex-1 lg:min-h-0 bg-background">
         {/* LEFT. Customizable camera wall (the main area). */}
-        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+        <div className="lg:flex-1 min-w-0 flex flex-col lg:min-h-0">
           <SetupChecklistCard onAddCamera={() => { setModalInitialType(undefined); setModalOpen(true); }} />
           <AskComposerCard />
           <CameraWall
@@ -1690,7 +1693,7 @@ function DashboardContent() {
         )}
 
         {/* RIGHT. Timeline + Search. Collapsible side panel. */}
-        <main className={`flex flex-col min-h-0 min-w-0 ${timelineOpen ? "lg:w-[420px] flex-shrink-0" : "hidden"}`}>
+        <main className={`flex flex-col lg:min-h-0 min-w-0 ${timelineOpen ? "lg:w-[420px] flex-shrink-0" : "hidden"}`}>
           {/* Search bar */}
           <div className="flex-shrink-0 mb-3">
             <div className="flex gap-2">
@@ -1963,8 +1966,10 @@ function DashboardContent() {
             </div>
           )}
 
-          {/* Timeline feed (scrollable) */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin pr-1">
+          {/* Timeline feed. Internal scroll on desktop; on mobile the
+              column isn't height-capped, so bound it to keep the page
+              from growing endlessly. */}
+          <div className="flex-1 max-h-[60vh] lg:max-h-none overflow-y-auto scrollbar-thin pr-1">
             {isSearching ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <svg className="animate-spin h-5 w-5 text-muted-foreground" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
@@ -2741,7 +2746,7 @@ function LocalAIHintCard() {
 
   if (!show) return null;
   return (
-    <div className="fixed bottom-4 left-4 z-40 w-80 rounded-lg border border-accent/30 bg-card-elevated shadow-xl p-3">
+    <div className="hidden md:block fixed bottom-4 left-4 z-40 w-80 rounded-lg border border-accent/30 bg-card-elevated shadow-xl p-3">
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <div className="text-xs font-semibold flex items-center gap-1.5">
           <span>🧠</span> Add AI descriptions
@@ -2810,7 +2815,7 @@ function AskHintCard() {
     "Where's the dog right now?",
   ];
   return (
-    <div className="fixed bottom-4 right-4 z-40 w-72 rounded-lg border border-accent/30 bg-card-elevated shadow-xl p-3">
+    <div className="hidden md:block fixed bottom-4 right-4 z-40 w-72 rounded-lg border border-accent/30 bg-card-elevated shadow-xl p-3">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="text-xs font-semibold flex items-center gap-1.5">
           <span>💬</span> Try asking Nurby
