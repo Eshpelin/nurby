@@ -37,6 +37,7 @@ from services.api.routes import (
     recordings,
     reports,
     rules,
+    rules_nl,
     search,
     summaries,
     system,
@@ -217,6 +218,7 @@ app.include_router(observations.router, prefix="/api/observations", tags=["obser
 app.include_router(persons.router, prefix="/api/persons", tags=["persons"])
 app.include_router(vehicles.router, prefix="/api/vehicles", tags=["vehicles"])
 app.include_router(body_clusters.router, prefix="/api/body-clusters", tags=["body-clusters"])
+app.include_router(rules_nl.router, prefix="/api/rules", tags=["rules"])
 app.include_router(rules.router, prefix="/api/rules", tags=["rules"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])

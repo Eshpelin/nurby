@@ -13,6 +13,7 @@ import {
   type TemplateContext,
   type TemplateParamName,
 } from "@/lib/rule-templates";
+import { DescribeRuleBox } from "./DescribeRuleBox";
 import { StyledSelect } from "./StyledSelect";
 import type { Camera, Person, Rule, TelegramChannelOption } from "./types";
 
@@ -94,6 +95,9 @@ export function TemplateGallery({
           </p>
         </div>
       )}
+      <div className="max-w-4xl mx-auto mb-6">
+        <DescribeRuleBox onGenerated={onUseTemplate} />
+      </div>
       <div className="space-y-6 max-w-4xl mx-auto">
         {categories.map((cat) => {
           const templates = RULE_TEMPLATES.filter((t) => t.category === cat);
