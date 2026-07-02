@@ -871,14 +871,14 @@ function DoneStep({ onClose }: { onClose: () => void }) {
           Two things worth doing next
         </div>
         <a
-          href="/rules"
+          href="/rules/new?template=package-at-door"
           className="flex items-start gap-3 rounded-md border border-border bg-card/40 px-3 py-2 hover:border-accent/50 transition-colors"
         >
           <span className="text-base leading-none">🔔</span>
           <span>
-            <span className="block text-xs font-medium">Create your first rule</span>
+            <span className="block text-xs font-medium">Create your first alert</span>
             <span className="block text-[11px] text-muted-foreground leading-tight">
-              Get a Telegram or email alert when something specific happens.
+              Start from a ready-made template, like &ldquo;tell me when a package arrives&rdquo;.
             </span>
           </span>
         </a>
