@@ -4,8 +4,10 @@
 // The model output is never saved directly; it lands in the builder for
 // review and goes through the normal validated create path.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { useMentions } from "@/components/mentions/useMentions";
+import { MentionDropdown } from "@/components/mentions/MentionDropdown";
 import type { Rule } from "./types";
 
 export function DescribeRuleBox({ onGenerated }: { onGenerated: (rule: Rule) => void }) {
@@ -14,6 +16,8 @@ export function DescribeRuleBox({ onGenerated }: { onGenerated: (rule: Rule) => 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const mention = useMentions(inputRef, prompt, setPrompt);
 
   const generate = async () => {
     if (!prompt.trim() || busy) return;
@@ -24,7 +28,10 @@ export function DescribeRuleBox({ onGenerated }: { onGenerated: (rule: Rule) => 
       const res = await authFetch("/api/rules/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim() }),
+        body: JSON.stringify({
+          prompt: prompt.trim(),
+          mentions: mention.activeMentions(prompt),
+        }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -57,20 +64,36 @@ export function DescribeRuleBox({ onGenerated }: { onGenerated: (rule: Rule) => 
         <span className="text-sm font-semibold">Describe your alert</span>
       </div>
       <div className="flex gap-2">
-        <input
-          type="text"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              generate();
-            }
-          }}
-          placeholder='e.g. "email me if someone loiters by the garage after 10pm"'
-          className="flex-1 px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
-          disabled={busy}
-        />
+        <div className="relative flex-1">
+          <MentionDropdown
+            open={mention.open}
+            items={mention.items}
+            highlight={mention.highlight}
+            onSelect={mention.select}
+            placement="below"
+          />
+          <input
+            ref={inputRef}
+            type="text"
+            value={prompt}
+            onChange={(e) => {
+              setPrompt(e.target.value);
+              requestAnimationFrame(mention.refresh);
+            }}
+            onClick={mention.refresh}
+            onBlur={() => setTimeout(mention.close, 100)}
+            onKeyDown={(e) => {
+              if (mention.onKeyDown(e)) return;
+              if (e.key === "Enter") {
+                e.preventDefault();
+                generate();
+              }
+            }}
+            placeholder='e.g. "when @Arman reaches the porch, fire @FrontPorchAlarm"'
+            className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
+            disabled={busy}
+          />
+        </div>
         <button
           type="button"
           onClick={generate}
