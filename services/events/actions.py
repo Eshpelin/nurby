@@ -360,17 +360,18 @@ async def execute_action(
         await _update_event_status(event_id, action_type or "unknown", "failed", f"Unknown action type '{action_type}'")
 
 
-def render_device_payload(template: dict, ctx: dict) -> dict:
-    """Render a device payload template with BOTH `{var}` and `{{var}}`
+def render_payload(template, ctx: dict):
+    """Render a payload template with BOTH `{var}` and `{{var}}`
     token styles.
 
     Device preset payloads (integrations/devices/catalog.py) use the
     single-brace shorthand users learned from Notification/Telegram
     templates; the shared engine only speaks double-brace. Run the
     normal renderer first (it consumes {{token}}), then expand the
-    remaining single-brace tokens for scalar context keys. Also used by
-    the device test-fire endpoint so a manual test exercises the exact
-    fire-time path."""
+    remaining single-brace tokens for scalar context keys. Used for
+    device, webhook, and api_call payload templates, and by the device
+    test-fire endpoint so a manual test exercises the exact fire-time
+    path."""
 
     def expand(value):
         if isinstance(value, dict):
@@ -418,13 +419,13 @@ async def _execute_device(action, observation_data, rule, event_id, ctx):
         payload_template = device.payload_template
 
     payload = (
-        render_device_payload(payload_template, ctx)
+        render_payload(payload_template, ctx)
         if payload_template
         else _build_default_payload(ctx)
     )
     extras = action.get("extras")
     if isinstance(extras, dict):
-        payload.update(render_device_payload(extras, ctx))
+        payload.update(render_payload(extras, ctx))
 
     ok, detail = await deliver_signed(
         "POST", endpoint_url, payload, secret=secret, timeout=timeout
@@ -444,7 +445,7 @@ async def _execute_webhook(action, observation_data, rule, event_id, ctx):
 
     payload_template = action.get("payload_template")
     if payload_template:
-        payload = render(payload_template, ctx)
+        payload = render_payload(payload_template, ctx)
     else:
         payload = _build_default_payload(ctx)
 
@@ -474,7 +475,7 @@ async def _execute_api_call(action, observation_data, rule, event_id, ctx):
     payload = None
     payload_template = action.get("payload_template")
     if payload_template:
-        payload = render(payload_template, ctx)
+        payload = render_payload(payload_template, ctx)
     elif method in ("POST", "PUT", "PATCH"):
         payload = _build_default_payload(ctx)
 

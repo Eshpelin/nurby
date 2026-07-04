@@ -121,7 +121,7 @@ async def test_device_instance(
     so the browser cannot do this itself). Renders the payload template
     with a synthetic context and delivers with the same signed/retried
     path rule actions use."""
-    from services.events.actions import deliver_signed, render_device_payload
+    from services.events.actions import deliver_signed, render_payload
 
     device = await db.get(Device, device_id)
     if not device:
@@ -135,7 +135,7 @@ async def test_device_instance(
         "recording_url": "",
         "thumbnail_url": "",
     }
-    payload = render_device_payload(
+    payload = render_payload(
         device.payload_template or {"event": "{rule_name}", "description": "{detections_summary}"},
         context,
     )
