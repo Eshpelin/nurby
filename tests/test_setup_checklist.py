@@ -6,7 +6,7 @@ import pytest
 
 from services.api.routes.system import get_setup_checklist
 
-DEMO_URL = "https://nurby.ai/demo/nurby-demo-loop.mp4"
+from services.api.routes.cameras import DEMO_VIDEO_FALLBACK_URL as DEMO_URL
 
 
 def make_user():

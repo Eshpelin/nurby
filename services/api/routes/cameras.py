@@ -553,17 +553,29 @@ async def create_camera(
     return _camera_to_response(camera)
 
 
+# Fallback demo feed when NURBY_DEMO_VIDEO_URL is unset. A long (116s)
+# static street-corner clip so the out-of-box camera reads as real CCTV
+# and the VLM narration has an actual scene arc. Single source of truth:
+# the setup checklist imports this to detect a demo-only install.
+# (Pexels free license; mirror to nurby.ai/demo/ and flip this if we
+# want first-party hosting.)
+DEMO_VIDEO_FALLBACK_URL = (
+    "https://videos.pexels.com/video-files/4791196/4791196-hd_1920_1080_30fps.mp4"
+)
+
+
+def resolve_demo_video_url() -> str:
+    import os
+
+    return os.environ.get("NURBY_DEMO_VIDEO_URL", DEMO_VIDEO_FALLBACK_URL)
+
+
 @router.post("/demo", status_code=201)
 async def create_demo_camera(_current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Create a ready-to-use demo camera that streams looping sample
     footage, so a new user can try Nurby without owning a camera. The
     source URL is configurable via NURBY_DEMO_VIDEO_URL."""
-    import os
-
-    demo_url = os.environ.get(
-        "NURBY_DEMO_VIDEO_URL",
-        "https://nurby.ai/static/SecurityCamCompilation.mp4",
-    )
+    demo_url = resolve_demo_video_url()
     # Idempotent. If a demo camera already exists (magic run twice, or the
     # dashboard demo button clicked again), reuse it instead of stacking
     # duplicate rows.

@@ -160,8 +160,11 @@ async def main():
         # toward camera) and one rich in vehicles, so the People and Vehicles
         # pages both have real material. scene_mode=indoor keeps face
         # clustering on (outdoor skips it to avoid passerby flooding).
-        FACE_URL = "https://videos.pexels.com/video-files/6784527/6784527-uhd_3840_2160_24fps.mp4"
-        VEH_URL = "https://videos.pexels.com/video-files/854100/854100-hd_1920_1080_25fps.mp4"
+        # Long (80-120s) static-camera Pexels clips so a looping feed reads
+        # as real CCTV instead of a stuttering 8-second GIF and the VLM has
+        # an actual narrative arc to describe.
+        FACE_URL = "https://videos.pexels.com/video-files/9898433/9898433-hd_2048_1080_25fps.mp4"  # indoor home cam, 82s
+        VEH_URL = "https://videos.pexels.com/video-files/4791790/4791790-hd_1920_1080_30fps.mp4"  # residential street, 120s
         # name -> (location, url)
         CAM_FEEDS = {
             "Front Door": ("Entrance", FACE_URL),

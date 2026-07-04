@@ -312,17 +312,13 @@ async def get_setup_checklist(
     Replaces the one-shot wizard as the surface that tells a new install
     what is still missing: a real camera, an AI provider, an active rule,
     and at least one notification channel."""
-    import os
-
+    from services.api.routes.cameras import resolve_demo_video_url
     from shared.app_settings import get_setting
     from shared.email import resolve_smtp
     from shared.models import Provider, Rule, TelegramChannel, WebhookSubscription
 
     cameras = (await db.execute(select(Camera.stream_type, Camera.stream_url))).all()
-    demo_url = os.environ.get(
-        "NURBY_DEMO_VIDEO_URL",
-        "https://nurby.ai/demo/nurby-demo-loop.mp4",
-    )
+    demo_url = resolve_demo_video_url()
     real_cameras = [
         c for c in cameras if not (c.stream_type == "file" and c.stream_url == demo_url)
     ]
