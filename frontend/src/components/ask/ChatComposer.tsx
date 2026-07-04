@@ -9,11 +9,15 @@ import { useEffect, useRef } from "react";
 import type { ProviderModel, UsageToday } from "./types";
 import ModelSelector from "./ModelSelector";
 import CostMeter from "./CostMeter";
+import { useMentions } from "@/components/mentions/useMentions";
+import { MentionDropdown } from "@/components/mentions/MentionDropdown";
+import type { MentionRef } from "@/lib/useMentionables";
 
 interface ChatComposerProps {
   value: string;
   onChange: (v: string) => void;
-  onSend: () => void;
+  // Called with the @-mentions still present in the text at send time.
+  onSend: (mentions: MentionRef[]) => void;
   onCancel: () => void;
   inFlight: boolean;
   model: ProviderModel | null;
@@ -51,6 +55,7 @@ export default function ChatComposer({
   onToggleDeepScan,
 }: ChatComposerProps) {
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const mention = useMentions(taRef, value, onChange);
 
   // Autogrow the textarea up to ~6 lines.
   useEffect(() => {
@@ -67,25 +72,41 @@ export default function ChatComposer({
   const canSend = value.trim().length > 0 && !!model && !inFlight;
 
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // The mention dropdown owns navigation keys while open.
+    if (mention.onKeyDown(e)) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (canSend) onSend();
+      if (canSend) onSend(mention.activeMentions(value));
     }
   };
 
   return (
     <div className="border-t border-border bg-background/95 backdrop-blur sticky bottom-0">
       <div className="max-w-3xl mx-auto px-4 py-3 space-y-2">
-        <textarea
-          ref={taRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKey}
-          rows={1}
-          placeholder="Ask Nurby anything about your cameras."
-          aria-label="Ask Nurby a question"
-          className="w-full resize-none px-3 py-2.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-accent placeholder:text-muted-foreground"
-        />
+        <div className="relative">
+          <MentionDropdown
+            open={mention.open}
+            items={mention.items}
+            highlight={mention.highlight}
+            onSelect={mention.select}
+            placement="above"
+          />
+          <textarea
+            ref={taRef}
+            value={value}
+            onChange={(e) => {
+              onChange(e.target.value);
+              requestAnimationFrame(mention.refresh);
+            }}
+            onKeyDown={onKey}
+            onClick={mention.refresh}
+            onBlur={() => setTimeout(mention.close, 100)}
+            rows={1}
+            placeholder="Ask Nurby anything about your cameras. Type @ to tag a person, camera or device."
+            aria-label="Ask Nurby a question"
+            className="w-full resize-none px-3 py-2.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-accent placeholder:text-muted-foreground"
+          />
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
           <ModelSelector
             value={model}
@@ -123,7 +144,7 @@ export default function ChatComposer({
             )}
             <button
               type="button"
-              onClick={onSend}
+              onClick={() => onSend(mention.activeMentions(value))}
               disabled={!canSend}
               aria-label="Send question"
               className="px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"

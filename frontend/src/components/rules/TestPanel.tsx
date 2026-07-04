@@ -313,6 +313,14 @@ export default function TestPanel({
             {testResult.reason}
           </div>
 
+          {(testResult.warnings?.length ?? 0) > 0 && (
+            <div className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md px-2.5 py-1.5 space-y-0.5">
+              {testResult.warnings!.map((w, i) => (
+                <div key={i}>⚠ {w}</div>
+              ))}
+            </div>
+          )}
+
           <div>
             <button
               type="button"

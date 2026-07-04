@@ -188,11 +188,15 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
     onClose();
   }
 
-  // Escape closes the wizard, except while magic is provisioning (work is
-  // in flight and a half-finished close would be confusing).
+  // Escape closes the wizard. During magic, first cancel any in-flight
+  // model download (best-effort) so nothing keeps pulling in the dark.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && step !== "magic") dismiss();
+      if (e.key !== "Escape") return;
+      if (step === "magic") {
+        authFetch("/api/ollama/deploy", { method: "DELETE" }).catch(() => {});
+      }
+      dismiss();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -214,14 +218,17 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
               </span>
             )}
           </div>
-          {step !== "magic" && (
-            <button
-              onClick={dismiss}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Skip for now
-            </button>
-          )}
+          <button
+            onClick={() => {
+              if (step === "magic") {
+                authFetch("/api/ollama/deploy", { method: "DELETE" }).catch(() => {});
+              }
+              dismiss();
+            }}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Skip for now
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
@@ -238,6 +245,10 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
                 onComplete();
               }}
               onFallback={() => setStep("camera")}
+              onCloudFallback={() => {
+                setCloudMode(true);
+                setStep("provider");
+              }}
             />
           )}
           {step === "camera" && (
@@ -424,147 +435,216 @@ function ChooseStep({
   );
 }
 
-// The magic. Runs the minimal provisioning sequence end to end with a live
-// progress bar, then lands on the dashboard. Every step is best-effort. a
-// missing local AI never blocks the camera, since detection, faces and
-// rules work without a VLM.
+// The magic. Provisions the demo camera, then handles local AI honestly:
+// an explicit choice when no Ollama is found, real pull progress with a
+// cancel button, and a summary of what was actually set up.
+type MagicPhase =
+  | "camera"        // adding the demo camera
+  | "cameraError"   // demo camera failed. retry or go manual
+  | "detect"        // probing for a local Ollama
+  | "fork"          // no Ollama found. user picks a path
+  | "pulling"       // model download in flight (cancellable)
+  | "summary";      // what was provisioned + next steps
+
 function MagicStep({
   onDone,
   onFallback,
+  onCloudFallback,
 }: {
   onDone: () => void;
   onFallback: () => void;
+  onCloudFallback: () => void;
 }) {
   const { authFetch } = useAuth();
-  const [pct, setPct] = useState(6);
-  const [label, setLabel] = useState("Setting up your space");
+  const [phase, setPhase] = useState<MagicPhase>("camera");
   const [tasks, setTasks] = useState<{ camera: TaskState; vlm: TaskState }>({
     camera: "pending",
     vlm: "pending",
   });
+  const [pullPct, setPullPct] = useState<number | null>(null);
+  const [pullMsg, setPullMsg] = useState("");
+  const [vlmNote, setVlmNote] = useState<string | null>(null);
+  const [deployedModel, setDeployedModel] = useState<string | null>(null);
+  const [fellBackFrom, setFellBackFrom] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Run the provisioning sequence exactly once per mount lifetime. Guards
-  // against a strict-mode double-invoke or any remount firing two demo
-  // POSTs and two deploys.
   const startedRef = useRef(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cancelledRef = useRef(false);
 
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const addDemoCamera = useCallback(async () => {
+    setPhase("camera");
+    setError(null);
+    setTasks((t) => ({ ...t, camera: "running" }));
+    try {
+      const r = await authFetch("/api/cameras/demo", { method: "POST" });
+      if (!r.ok && r.status !== 409) throw new Error(String(r.status));
+      setTasks((t) => ({ ...t, camera: "done" }));
+      return true;
+    } catch {
+      setTasks((t) => ({ ...t, camera: "pending" }));
+      setError(
+        "Could not add the demo camera. It streams from nurby.ai, so this " +
+          "usually means no internet access. Retry, or set up your own camera.",
+      );
+      setPhase("cameraError");
+      return false;
+    }
+  }, [authFetch]);
+
+  const finishWithoutVlm = useCallback((note: string) => {
+    stopPolling();
+    setTasks((t) => ({ ...t, vlm: "skipped" }));
+    setVlmNote(note);
+    setPhase("summary");
+  }, [stopPolling]);
+
+  // Poll the deploy job until it settles.
+  const pollDeploy = useCallback(
+    (model: string) => {
+      stopPolling();
+      pollRef.current = setInterval(async () => {
+        if (cancelledRef.current) return;
+        try {
+          const r = await authFetch("/api/ollama/deploy/status");
+          const s = await r.json().catch(() => ({}));
+          if (s.stage === "pulling" || s.stage === "registering") {
+            setPullPct(typeof s.progress === "number" ? s.progress : null);
+            setPullMsg(s.message || `Downloading ${model}`);
+          } else if (s.stage === "done") {
+            stopPolling();
+            setDeployedModel(s.model || model);
+            setTasks((t) => ({ ...t, vlm: "done" }));
+            setPhase("summary");
+          } else if (s.stage === "cancelled") {
+            finishWithoutVlm("Download cancelled. Resume anytime from Settings; finished layers are kept.");
+          } else if (s.stage === "error" || s.stage === "idle") {
+            stopPolling();
+            // Fall back once to a small proven model, then give up honestly.
+            if (model !== "gemma3:4b") {
+              setFellBackFrom(model);
+              startDeploy("gemma3:4b");
+            } else {
+              finishWithoutVlm(s.message || "Model download failed. Set up AI later from Settings.");
+            }
+          }
+        } catch {
+          /* transient poll failure. keep polling */
+        }
+      }, 2000);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [authFetch, stopPolling, finishWithoutVlm],
+  );
+
+  const startDeploy = useCallback(
+    async (model: string) => {
+      setPhase("pulling");
+      setPullPct(null);
+      setPullMsg(`Starting download of ${model}`);
+      setTasks((t) => ({ ...t, vlm: "running" }));
+      try {
+        const dr = await authFetch("/api/ollama/deploy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model }),
+        });
+        const data = await dr.json().catch(() => ({}));
+        if (dr.ok && data.stage === "done") {
+          setDeployedModel(data.model || model);
+          setTasks((t) => ({ ...t, vlm: "done" }));
+          setPhase("summary");
+          return;
+        }
+        if (dr.ok && data.stage === "pulling") {
+          pollDeploy(model);
+          return;
+        }
+        // Preflight failures (disk/RAM) or no-ollama: try the light model
+        // once when the problem is resources, otherwise stop honestly.
+        if (data.code === "insufficient_ram" || data.code === "insufficient_disk") {
+          if (model !== "gemma3:1b") {
+            setFellBackFrom(model);
+            startDeploy("gemma3:1b");
+            return;
+          }
+        }
+        finishWithoutVlm(data.message || "Could not start the model download.");
+      } catch {
+        finishWithoutVlm("Could not reach the server to start the download.");
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [authFetch, pollDeploy, finishWithoutVlm],
+  );
+
+  const cancelPull = useCallback(async () => {
+    try {
+      await authFetch("/api/ollama/deploy", { method: "DELETE" });
+    } catch {
+      /* the poll notices either way */
+    }
+    finishWithoutVlm("Download cancelled. Resume anytime from Settings; finished layers are kept.");
+  }, [authFetch, finishWithoutVlm]);
+
+  const detectAndDeploy = useCallback(async () => {
+    setPhase("detect");
+    setTasks((t) => ({ ...t, vlm: "running" }));
+    let reachable = false;
+    let model = "gemma3:4b";
+    try {
+      const sr = await authFetch("/api/ollama/status");
+      if (sr.ok) {
+        const s = await sr.json();
+        reachable = !!(s.installed || s.running);
+        model = s.recommended_model || model;
+      }
+    } catch {
+      /* treat as no local AI */
+    }
+    if (reachable) {
+      startDeploy(model);
+    } else {
+      setTasks((t) => ({ ...t, vlm: "pending" }));
+      setPhase("fork");
+    }
+  }, [authFetch, startDeploy]);
+
+  // Run once per mount (guards strict-mode double-invoke).
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    let cancelled = false;
-    let creep: ReturnType<typeof setInterval> | null = null;
-    const set = (p: number, l?: string) => {
-      if (cancelled) return;
-      setPct((prev) => Math.max(prev, p));
-      if (l) setLabel(l);
-    };
-
     (async () => {
-      // 1. Demo camera.
-      set(12, "Adding a live demo camera");
-      setTasks((t) => ({ ...t, camera: "running" }));
-      try {
-        const r = await authFetch("/api/cameras/demo", { method: "POST" });
-        if (!r.ok && r.status !== 409) throw new Error(String(r.status));
-        if (!cancelled) setTasks((t) => ({ ...t, camera: "done" }));
-      } catch {
-        // The camera is the one thing we truly need. If it fails, hand off
-        // to the manual flow rather than landing on an empty dashboard.
-        if (!cancelled) {
-          setError("Could not add the demo camera. Let's set it up by hand.");
-          setTimeout(() => !cancelled && onFallback(), 1800);
-        }
-        return;
-      }
-
-      // 2. Local vision model (best-effort).
-      set(32, "Looking for local AI");
-      setTasks((t) => ({ ...t, vlm: "running" }));
-      let reachable = false;
-      let model = "gemma3:4b";
-      try {
-        const sr = await authFetch("/api/ollama/status");
-        if (sr.ok) {
-          const s = await sr.json();
-          reachable = !!(s.installed || s.running);
-          model = s.recommended_model || model;
-        }
-      } catch {
-        /* treat as no local AI */
-      }
-
-      if (reachable) {
-        set(42, "Deploying a private vision model. This can take a few minutes");
-        // Smoothly creep the bar while the (long) pull runs.
-        creep = setInterval(() => {
-          if (cancelled) return;
-          setPct((prev) => (prev < 88 ? prev + 2 : prev));
-        }, 1500);
-        // Try the RAM-recommended model (e.g. Gemma 4). If that pull fails
-        // (tag variance on a host, low RAM), fall back to a proven small
-        // model so magic still ends with a working local VLM.
-        const tryDeploy = async (m: string) => {
-          const dr = await authFetch("/api/ollama/deploy", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model: m }),
-          });
-          const data = await dr.json().catch(() => ({}));
-          return dr.ok && data.stage === "done";
-        };
-        try {
-          let ok = await tryDeploy(model);
-          if (!ok && model !== "gemma3:4b") {
-            if (!cancelled) setLabel("Falling back to a lighter local model");
-            ok = await tryDeploy("gemma3:4b");
-          }
-          if (creep) clearInterval(creep);
-          if (!cancelled) setTasks((t) => ({ ...t, vlm: ok ? "done" : "skipped" }));
-        } catch {
-          if (creep) clearInterval(creep);
-          if (!cancelled) setTasks((t) => ({ ...t, vlm: "skipped" }));
-        }
-      } else {
-        // No local AI available. Skip honestly. the product still works.
-        if (!cancelled) setTasks((t) => ({ ...t, vlm: "skipped" }));
-      }
-
-      // 3. Done.
-      set(100, "Ready");
-      setTimeout(() => {
-        if (!cancelled) onDone();
-      }, 800);
+      const ok = await addDemoCamera();
+      if (ok) detectAndDeploy();
     })();
-
     return () => {
-      cancelled = true;
-      if (creep) clearInterval(creep);
+      cancelledRef.current = true;
+      stopPolling();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const busy = phase === "camera" || phase === "detect";
 
   return (
     <div className="space-y-5 py-2">
       <div className="text-center space-y-1">
         <div className="text-3xl">✨</div>
-        <h3 className="text-lg font-semibold">Working some magic</h3>
-        <p className="text-xs text-muted-foreground">
-          Sit tight. Setting up everything you need to see Nurby in action.
-        </p>
-      </div>
-
-      {/* Progress bar */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">{label}</span>
-          <span className="font-mono font-medium">{Math.round(pct)}%</span>
-        </div>
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
-          <div
-            className="h-full bg-accent transition-[width] duration-700 ease-out"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
+        <h3 className="text-lg font-semibold">
+          {phase === "summary" ? "Here's what I set up" : "Working some magic"}
+        </h3>
+        {busy && (
+          <p className="text-xs text-muted-foreground">
+            Setting up everything you need to see Nurby in action.
+          </p>
+        )}
       </div>
 
       {/* Task checklist */}
@@ -573,13 +653,156 @@ function MagicStep({
         <MagicTaskRow
           state={tasks.vlm}
           label="Set up a private local vision model"
-          skippedNote="No local AI found. added later from Settings"
+          skippedNote={vlmNote || "Skipped"}
         />
       </div>
 
-      {error && (
-        <div className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md px-2.5 py-1.5">
-          {error}
+      {/* Demo camera failed: retry or go manual. No auto-teleport. */}
+      {phase === "cameraError" && (
+        <div className="space-y-3">
+          <div className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md px-2.5 py-1.5">
+            {error}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const ok = await addDemoCamera();
+                if (ok) detectAndDeploy();
+              }}
+              className="px-3 py-1.5 text-xs rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={onFallback}
+              className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted"
+            >
+              Set up a camera manually
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* No local AI found: an explicit choice instead of a silent skip. */}
+      {phase === "fork" && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            No local AI was found on this machine. Pick how you want scene
+            descriptions and &ldquo;Ask Nurby&rdquo; to work:
+          </p>
+          <div className="rounded-md border border-border p-3 space-y-1">
+            <div className="text-xs font-medium">🖥️ Install Ollama (private, free)</div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Get it from{" "}
+              <a href="https://ollama.com/download" target="_blank" rel="noreferrer" className="underline">
+                ollama.com/download
+              </a>
+              , or start the bundled service with{" "}
+              <code className="font-mono bg-muted px-1 rounded">docker compose --profile local-ai up -d ollama</code>.
+              Then hit re-check.
+            </p>
+            <button
+              type="button"
+              onClick={detectAndDeploy}
+              className="mt-1 px-3 py-1 text-[11px] rounded-md border border-border hover:bg-muted"
+            >
+              Re-check for Ollama
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={onCloudFallback}
+            className="w-full text-left rounded-md border border-border p-3 hover:border-accent transition-colors"
+          >
+            <div className="text-xs font-medium">☁️ Use a cloud model instead</div>
+            <p className="text-[11px] text-muted-foreground">
+              OpenAI, Anthropic or Gemini with your own API key. Frames are sent to the provider.
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              finishWithoutVlm(
+                "Skipped by choice. Scene descriptions and Ask Nurby are off; " +
+                  "detection, faces, recording and rules all work.",
+              )
+            }
+            className="w-full text-left rounded-md border border-border p-3 hover:border-accent transition-colors"
+          >
+            <div className="text-xs font-medium">⏭️ Continue without AI descriptions</div>
+            <p className="text-[11px] text-muted-foreground">
+              Detection, faces, recording and rules work without a vision model. Add one later in Settings.
+            </p>
+          </button>
+        </div>
+      )}
+
+      {/* Real pull progress with a cancel button. */}
+      {phase === "pulling" && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-muted-foreground">{pullMsg}</span>
+            <span className="font-mono font-medium">
+              {pullPct != null ? `${Math.round(pullPct)}%` : "…"}
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className={`h-full bg-accent transition-[width] duration-700 ease-out ${pullPct == null ? "animate-pulse w-1/4" : ""}`}
+              style={pullPct != null ? { width: `${pullPct}%` } : undefined}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] text-muted-foreground">
+              Big download; a few minutes on fast connections. Cancel keeps finished layers.
+            </p>
+            <button
+              type="button"
+              onClick={cancelPull}
+              className="px-3 py-1 text-[11px] rounded-md border border-border hover:bg-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Summary: what actually got provisioned, and what's next. */}
+      {phase === "summary" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-border p-3 space-y-1.5 text-xs">
+            <div>📹 Demo camera streaming sample CCTV footage. Add your own from the dashboard.</div>
+            {deployedModel ? (
+              <div>
+                🧠 Local AI: <span className="font-mono">{deployedModel}</span>
+                {fellBackFrom && (
+                  <span className="text-muted-foreground"> (fell back from {fellBackFrom})</span>
+                )}
+                . Runs on this machine; nothing leaves your network.
+              </div>
+            ) : (
+              <div className="text-muted-foreground">
+                🧠 No vision model set up. {vlmNote}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onDone}
+              className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90"
+            >
+              Open dashboard
+            </button>
+            <a
+              href="/rules/new?template=package-at-door"
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Create your first alert
+            </a>
+          </div>
         </div>
       )}
     </div>
@@ -871,14 +1094,14 @@ function DoneStep({ onClose }: { onClose: () => void }) {
           Two things worth doing next
         </div>
         <a
-          href="/rules"
+          href="/rules/new?template=package-at-door"
           className="flex items-start gap-3 rounded-md border border-border bg-card/40 px-3 py-2 hover:border-accent/50 transition-colors"
         >
           <span className="text-base leading-none">🔔</span>
           <span>
-            <span className="block text-xs font-medium">Create your first rule</span>
+            <span className="block text-xs font-medium">Create your first alert</span>
             <span className="block text-[11px] text-muted-foreground leading-tight">
-              Get a Telegram or email alert when something specific happens.
+              Start from a ready-made template, like &ldquo;tell me when a package arrives&rdquo;.
             </span>
           </span>
         </a>

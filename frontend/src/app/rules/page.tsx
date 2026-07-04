@@ -13,7 +13,9 @@ import {
   type TelegramChannelOption,
 } from "@/components/rules/types";
 import { RulesList } from "@/components/rules/RulesList";
+import type { RuleHealth } from "@/components/rules/RuleCard";
 import { RuleEventsPanel } from "@/components/rules/RuleEventsPanel";
+import { TemplateGallery } from "@/components/rules/TemplateGallery";
 import { WebhookSubscriptions } from "@/components/rules/WebhookSubscriptions";
 import { RULE_PREFILL_KEY } from "@/app/rules/new/page";
 
@@ -32,11 +34,13 @@ export default function RulesPage() {
 
   const [telegramChannels, setTelegramChannels] = useState<TelegramChannelOption[]>([]);
   const [telegramChannelsLoading, setTelegramChannelsLoading] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   // Most-recent event timestamp per rule. Computed from a single
   // /api/events fetch on mount + after each save. Cached for 30s.
   const [lastFiredByRule, setLastFiredByRule] = useState<Record<string, string | null>>({});
   const lastFiredFetchedAt = useRef<number>(0);
+  const [healthByRule, setHealthByRule] = useState<Record<string, RuleHealth>>({});
 
   const fetchRules = useCallback(async () => {
     try {
@@ -107,6 +111,12 @@ export default function RulesPage() {
       setLastFiredByRule(await res.json());
     } catch {
       /* silent */
+    }
+    try {
+      const hr = await authFetch("/api/rules/health");
+      if (hr.ok) setHealthByRule(await hr.json());
+    } catch {
+      /* silent. badges just don't render */
     }
   }, [authFetch]);
 
@@ -188,25 +198,52 @@ export default function RulesPage() {
             {ruleCount} rule{ruleCount !== 1 ? "s" : ""} configured
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90"
-        >
-          + Create rule
-        </button>
+        <div className="flex items-center gap-2">
+          {rules.length > 0 && (
+            <button
+              onClick={() => setShowTemplates((v) => !v)}
+              className="px-3 py-1.5 text-sm rounded-md border border-border hover:border-accent font-medium"
+            >
+              Templates
+            </button>
+          )}
+          <button
+            onClick={openCreate}
+            className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90"
+          >
+            + Create rule
+          </button>
+        </div>
       </div>
+
+      {showTemplates && rules.length > 0 && (
+        <div className="mb-6 rounded-lg border border-border bg-card/50 p-4">
+          <TemplateGallery
+            compact
+            cameras={cameras}
+            persons={persons}
+            telegramChannels={telegramChannels}
+            onUseTemplate={(synth) => {
+              setShowTemplates(false);
+              stashPrefillAndCreate(synth);
+            }}
+          />
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-muted-foreground py-20 text-center">
           Loading.
         </div>
       ) : (
-        <div className="grid grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <RulesList
             rules={rules}
             cameras={cameras}
+            persons={persons}
             selectedRuleId={selectedRule?.id ?? null}
             lastFiredByRule={lastFiredByRule}
+            healthByRule={healthByRule}
             telegramChannels={telegramChannels}
             onSelect={setSelectedRule}
             onToggleEnabled={handleToggle}

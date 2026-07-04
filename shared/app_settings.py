@@ -78,6 +78,9 @@ DEFAULTS: dict[str, Any] = {
     # the wizard by flipping it back to false. localStorage is only a
     # fast-path cache on top of this.
     "onboarding_dismissed": False,
+    # Durable dashboard setup-checklist card (camera / provider / rule /
+    # notifications). Dismissible independently of the one-shot wizard.
+    "setup_checklist_dismissed": False,
     # ── Agent v1 (Wave 1A, docs/agent-design.md section 7) ──────────
     # Per-user daily token budget across all agent runs. Counted on
     # both orchestration LLM + analyzer (VLM) tokens.

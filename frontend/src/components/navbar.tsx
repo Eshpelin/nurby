@@ -140,6 +140,20 @@ export function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [secureOpen, setSecureOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Close the mobile menu on navigation and on Escape.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   const fetchProvider = useCallback(async () => {
     try {
@@ -237,7 +251,30 @@ export function Navbar() {
   return (
     <div className="border-b border-border bg-background sticky top-0 z-50">
       <div className="px-3 sm:px-6 h-14 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-4 lg:gap-8 min-w-0 flex-1">
+        <div className="flex items-center gap-3 lg:gap-8 min-w-0 flex-1">
+          {/* Hamburger. Ten nav links don't fit a phone; below md they
+              live in a dropdown instead of a cramped scroll strip. */}
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="md:hidden p-1.5 -ml-1 rounded-md text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              {menuOpen ? (
+                <>
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                </>
+              ) : (
+                <>
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </>
+              )}
+            </svg>
+          </button>
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-7 h-7 rounded-md bg-accent flex items-center justify-center">
               <svg
@@ -258,9 +295,8 @@ export function Navbar() {
             </span>
           </div>
 
-          {/* Horizontal-scroll nav so the full set of links stays reachable
-              on narrow screens instead of clipping off the right edge. */}
-          <nav className="flex items-center gap-1 overflow-x-auto scrollbar-thin -mx-1 px-1 min-w-0">
+          {/* Inline nav from md up; the hamburger dropdown covers phones. */}
+          <nav className="hidden md:flex items-center gap-1 overflow-x-auto scrollbar-thin -mx-1 px-1 min-w-0">
             {NAV_ITEMS.filter((item) => item.roles.includes(role)).map((item) => {
               const isActive = pathname === item.href;
               return (
@@ -396,6 +432,27 @@ export function Navbar() {
           </div>
         </div>
       </div>
+      {/* Mobile nav dropdown */}
+      {menuOpen && (
+        <nav className="md:hidden border-t border-border bg-background px-3 py-2 grid grid-cols-2 gap-1">
+          {NAV_ITEMS.filter((item) => item.roles.includes(role)).map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`px-3 py-2 rounded-md text-sm transition-all ${
+                  isActive
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
       {secureOpen && <SecureAccountModal onClose={() => setSecureOpen(false)} />}
     </div>
   );

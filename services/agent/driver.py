@@ -167,6 +167,17 @@ def _result_summary(name: str, result: dict) -> str:
 # ── Conversation memory ─────────────────────────────────────────────
 
 
+def _format_mentions_line(mentions: list[dict]) -> str:
+    """Render the pre-resolved @-mentions block for a prompt."""
+    lines = [
+        "The user explicitly referenced these entities (pre-resolved; "
+        "trust these ids over any name lookup):"
+    ]
+    for m in mentions:
+        lines.append(f"- '{m.get('name')}' = {m.get('kind')} {m.get('id')}")
+    return "\n".join(lines)
+
+
 async def _load_parent_chain(parent_run_id: uuid.UUID, db) -> list[dict]:
     """Walk up to PARENT_CONTEXT_MAX_DEPTH ancestors and return canonical
     Anthropic-style messages summarizing prior turns. Newest last.
@@ -190,7 +201,12 @@ async def _load_parent_chain(parent_run_id: uuid.UUID, db) -> list[dict]:
         cur = run.parent_run_id
         depth += 1
     for run in reversed(chain):
-        out.append({"role": "user", "content": run.question})
+        question = run.question
+        # Replay the turn's @-mentions so a follow-up keeps the
+        # pre-resolved entity ids instead of re-guessing from names.
+        if run.mentions:
+            question += "\n\n" + _format_mentions_line(run.mentions)
+        out.append({"role": "user", "content": question})
         # Compose an evidence preamble from the prior run's tool_calls
         # so the LLM can cite back to the same observations without
         # having to re-search. Cap at the 5 most recent calls and
@@ -298,6 +314,7 @@ class AgentDriver:
         provider: Provider,
         model: str,
         parent_run_id: uuid.UUID | None,
+        mentions: list[dict] | None = None,
     ) -> None:
         """Execute the tool-use loop for ``run_id`` to completion."""
         state = _LoopState()
@@ -339,6 +356,10 @@ class AgentDriver:
                     now_iso=datetime.now(timezone.utc).isoformat(),
                     system_timezone=system_tz,
                 )
+                # Appended AFTER .format(): mention names may contain
+                # braces, which would break str.format placeholders.
+                if mentions:
+                    system_prompt += "\n\n" + _format_mentions_line(mentions)
 
                 messages: list[dict] = []
                 if parent_run_id is not None:

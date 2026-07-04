@@ -50,6 +50,7 @@ async def create_run(
     model: str | None,
     parent_run_id: uuid.UUID | None,
     db: AsyncSession,
+    mentions: list[dict] | None = None,
 ) -> AgentRun:
     """Create a new ``running`` AgentRun row and return it."""
 
@@ -65,6 +66,7 @@ async def create_run(
         tokens_in=0,
         tokens_out=0,
         cost_cents=0,
+        mentions=mentions or None,
     )
     db.add(run)
     await db.commit()

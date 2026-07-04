@@ -54,6 +54,103 @@ async def _publish_invalidation(rule_id: uuid.UUID | str) -> None:
         logger.debug("rule invalidation publish failed", exc_info=True)
 
 
+def _as_uuid(value) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _collect_rule_refs(
+    trigger_pattern, conditions, actions
+) -> tuple[dict[str, list[tuple[str, uuid.UUID]]], list[str]]:
+    """Gather every camera/person/telegram-channel/device reference in a
+    rule, as (field_path, id) pairs, plus messages for values sitting in
+    a ref position that are not UUIDs at all (e.g. an LLM writing a
+    camera NAME into camera_ids — previously a silent never-match)."""
+    refs: dict[str, list[tuple[str, uuid.UUID]]] = {
+        "camera": [],
+        "person": [],
+        "telegram_channel": [],
+        "device": [],
+    }
+    malformed: list[str] = []
+
+    def add(kind: str, path: str, value) -> None:
+        if value is None or value == "":
+            return
+        u = _as_uuid(value)
+        if u is not None:
+            refs[kind].append((path, u))
+        else:
+            malformed.append(
+                f"{path} is not a valid {kind} id (got '{str(value)[:60]}'); use the entity's UUID"
+            )
+
+    tp = trigger_pattern if isinstance(trigger_pattern, dict) else {}
+    add("camera", "trigger_pattern.camera_id", tp.get("camera_id"))
+    add("person", "trigger_pattern.person_id", tp.get("person_id"))
+    seq = tp.get("sequence")
+    if isinstance(seq, dict):
+        for i, cam in enumerate(seq.get("cameras") or []):
+            add("camera", f"sequence.cameras[{i}]", cam)
+        for i, step in enumerate(seq.get("steps") or []):
+            check = step.get("check") if isinstance(step, dict) else None
+            if isinstance(check, dict):
+                add("camera", f"sequence.steps[{i}].camera_id", check.get("camera_id"))
+                add("person", f"sequence.steps[{i}].person_id", check.get("person_id"))
+
+    cond = conditions if isinstance(conditions, dict) else {}
+    add("camera", "conditions.camera_id", cond.get("camera_id"))
+    for i, cam in enumerate(cond.get("camera_ids") or []):
+        add("camera", f"conditions.camera_ids[{i}]", cam)
+
+    items = actions if isinstance(actions, list) else [actions] if isinstance(actions, dict) else []
+    for i, action in enumerate(items):
+        if not isinstance(action, dict):
+            continue
+        if action.get("type") == "telegram":
+            add("telegram_channel", f"actions[{i}].channel_id", action.get("channel_id"))
+        elif action.get("type") == "device":
+            add("device", f"actions[{i}].device_id", action.get("device_id"))
+    return refs, malformed
+
+
+async def _stale_rule_refs(db: AsyncSession, trigger_pattern, conditions, actions) -> list[str]:
+    """Return one human message per reference that matches no existing row.
+
+    Catches the classic silent never-fire: a rule pointing at a deleted
+    (or mistyped) camera/person/channel evaluates forever without matching
+    and without erroring."""
+    from shared.models import Camera, Device, Person, TelegramChannel
+
+    refs, messages_pre = _collect_rule_refs(trigger_pattern, conditions, actions)
+    model_by_kind = {
+        "camera": Camera,
+        "person": Person,
+        "telegram_channel": TelegramChannel,
+        "device": Device,
+    }
+    label_by_kind = {
+        "camera": "camera",
+        "person": "person",
+        "telegram_channel": "Telegram channel",
+        "device": "device",
+    }
+    messages: list[str] = list(messages_pre)
+    for kind, pairs in refs.items():
+        if not pairs:
+            continue
+        ids = {u for _, u in pairs}
+        model = model_by_kind[kind]
+        rows = await db.execute(select(model.id).where(model.id.in_(ids)))
+        existing = {r[0] for r in rows.all()}
+        for path, u in pairs:
+            if u not in existing:
+                messages.append(f"{path} does not match any {label_by_kind[kind]} ({u})")
+    return messages
+
+
 @router.get("", response_model=list[RuleResponse])
 async def list_rules(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Rule).order_by(Rule.created_at))
@@ -66,6 +163,9 @@ async def create_rule(
     _current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    stale = await _stale_rule_refs(db, body.trigger_pattern, body.conditions, body.actions)
+    if stale:
+        raise HTTPException(status_code=422, detail="; ".join(stale))
     rule = Rule(**body.model_dump())
     db.add(rule)
     await db.commit()
@@ -96,6 +196,79 @@ async def rules_last_fired(
     return {str(rule_id): fired_at.isoformat() for rule_id, fired_at in rows}
 
 
+@router.get("/schema")
+async def rules_schema(_current_user: User = Depends(get_current_user)):
+    """Introspection: every trigger type, action type, condition field, and
+    the sequence block shape. Static registry (shared/rule_schema.py), so
+    the frontend and NL rule generation stop hardcoding enums. Must stay
+    registered before the /{rule_id} catch-all."""
+    from shared.rule_schema import build_schema
+
+    return build_schema()
+
+
+@router.get("/health")
+async def rules_health(
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Per-rule health aggregate for the rules list: last fire, 7-day fire
+    count, latest action outcome, and stale references (camera/person/
+    channel ids that no longer exist). Supersedes /last-fired, which is
+    kept for compatibility."""
+    from sqlalchemy import func as sa_func
+
+    from shared.models import Event
+
+    rules = (await db.execute(select(Rule))).scalars().all()
+
+    last_fired = dict(
+        (
+            await db.execute(
+                select(Event.rule_id, sa_func.max(Event.fired_at))
+                .where(Event.rule_id.is_not(None))
+                .group_by(Event.rule_id)
+            )
+        ).all()
+    )
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    fires_7d = dict(
+        (
+            await db.execute(
+                select(Event.rule_id, sa_func.count())
+                .where(Event.rule_id.is_not(None), Event.fired_at >= week_ago)
+                .group_by(Event.rule_id)
+            )
+        ).all()
+    )
+    # Latest event per rule for action_status/action_error (Postgres
+    # DISTINCT ON keeps only the newest row per rule_id).
+    latest = {
+        rule_id: (status, error)
+        for rule_id, status, error in (
+            await db.execute(
+                select(Event.rule_id, Event.action_status, Event.action_error)
+                .where(Event.rule_id.is_not(None))
+                .distinct(Event.rule_id)
+                .order_by(Event.rule_id, Event.fired_at.desc())
+            )
+        ).all()
+    }
+
+    out: dict[str, dict] = {}
+    for rule in rules:
+        stale = await _stale_rule_refs(db, rule.trigger_pattern, rule.conditions, rule.actions)
+        fired_at = last_fired.get(rule.id)
+        status, error = latest.get(rule.id, (None, None))
+        out[str(rule.id)] = {
+            "last_fired_at": fired_at.isoformat() if fired_at else None,
+            "fires_7d": int(fires_7d.get(rule.id, 0)),
+            "last_action_status": status,
+            "last_action_error": error,
+            "stale_refs": stale,
+        }
+    return out
+
+
 @router.get("/{rule_id}", response_model=RuleResponse)
 async def get_rule(
     rule_id: uuid.UUID,
@@ -120,6 +293,14 @@ async def update_rule(
         raise HTTPException(status_code=404, detail="Rule not found")
 
     updates = body.model_dump(exclude_unset=True)
+    stale = await _stale_rule_refs(
+        db,
+        updates.get("trigger_pattern", rule.trigger_pattern),
+        updates.get("conditions", rule.conditions),
+        updates.get("actions", rule.actions),
+    )
+    if stale:
+        raise HTTPException(status_code=422, detail="; ".join(stale))
     for field, value in updates.items():
         setattr(rule, field, value)
 
@@ -734,6 +915,8 @@ async def test_rule(
 
     would_fire = _render_actions_preview(body.actions or [], observation, fake_rule)
 
+    warnings = await _stale_rule_refs(db, body.trigger_pattern, body.conditions, body.actions)
+
     return RuleTestResponse(
         matched=matched,
         reason=reason,
@@ -743,6 +926,7 @@ async def test_rule(
         cooldown_active=False,
         synthesized_observation=observation,
         would_fire=would_fire,
+        warnings=warnings,
     )
 
 

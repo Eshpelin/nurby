@@ -353,9 +353,86 @@ async def execute_action(
         await _execute_verify(action, observation_data, rule, event_id, ctx)
     elif action_type == "locate":
         await _execute_locate(action, observation_data, rule, event_id, ctx)
+    elif action_type == "device":
+        await _execute_device(action, observation_data, rule, event_id, ctx)
     else:
         logger.warning("Unknown action type '%s' in rule '%s'", action_type, rule.name)
         await _update_event_status(event_id, action_type or "unknown", "failed", f"Unknown action type '{action_type}'")
+
+
+def render_device_payload(template: dict, ctx: dict) -> dict:
+    """Render a device payload template with BOTH `{var}` and `{{var}}`
+    token styles.
+
+    Device preset payloads (integrations/devices/catalog.py) use the
+    single-brace shorthand users learned from Notification/Telegram
+    templates; the shared engine only speaks double-brace. Run the
+    normal renderer first (it consumes {{token}}), then expand the
+    remaining single-brace tokens for scalar context keys. Also used by
+    the device test-fire endpoint so a manual test exercises the exact
+    fire-time path."""
+
+    def expand(value):
+        if isinstance(value, dict):
+            return {k: expand(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [expand(v) for v in value]
+        if isinstance(value, str):
+            out = value
+            for key, val in ctx.items():
+                token = "{" + key + "}"
+                if token in out and not isinstance(val, (dict, list)):
+                    out = out.replace(token, _stringify_ctx(val))
+            return out
+        return value
+
+    return expand(render(template, ctx, strict=False))
+
+
+async def _execute_device(action, observation_data, rule, event_id, ctx):
+    """Fire a registered physical device (Device row). Endpoint, secret,
+    timeout and payload template resolve from the row at fire time, so
+    device edits retarget every rule that references it."""
+    from shared.camera_secrets import unseal
+    from shared.database import async_session
+    from shared.models import Device
+
+    raw_id = action.get("device_id")
+    try:
+        device_uuid = uuid.UUID(str(raw_id))
+    except (ValueError, TypeError):
+        await _update_event_status(event_id, "device", "failed", "Missing or invalid 'device_id'")
+        return
+
+    async with async_session() as db:
+        device = await db.get(Device, device_uuid)
+        if device is None:
+            await _update_event_status(event_id, "device", "failed", "Device not found")
+            return
+        if not device.enabled:
+            await _update_event_status(event_id, "device", "failed", "Device is disabled")
+            return
+        endpoint_url = device.endpoint_url
+        secret = unseal(device.secret)
+        timeout = float(device.timeout_seconds or 5)
+        payload_template = device.payload_template
+
+    payload = (
+        render_device_payload(payload_template, ctx)
+        if payload_template
+        else _build_default_payload(ctx)
+    )
+    extras = action.get("extras")
+    if isinstance(extras, dict):
+        payload.update(render_device_payload(extras, ctx))
+
+    ok, detail = await deliver_signed(
+        "POST", endpoint_url, payload, secret=secret, timeout=timeout
+    )
+    if ok:
+        await _update_event_status(event_id, "device", "success")
+    else:
+        await _update_event_status(event_id, "device", "failed", detail)
 
 
 async def _execute_webhook(action, observation_data, rule, event_id, ctx):

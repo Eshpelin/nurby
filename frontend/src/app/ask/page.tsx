@@ -17,6 +17,7 @@ import EmptyState from "@/components/ask/EmptyState";
 import OnboardingModal from "@/components/ask/OnboardingModal";
 import { DeepScanResults } from "@/components/search/DeepScanResults";
 import { useDeepScan, type ScanStatus } from "@/lib/useDeepScan";
+import type { MentionRef } from "@/lib/useMentionables";
 import type {
   AgentRunDetail,
   ProviderModel,
@@ -198,7 +199,7 @@ export default function AskPage() {
   }, [stream.status, activeRunId, finalizeRun]);
 
   // ----- send
-  const sendQuestion = useCallback(async (questionText: string) => {
+  const sendQuestion = useCallback(async (questionText: string, mentions: MentionRef[] = []) => {
     if (!model || !questionText.trim()) return;
     setSubmitError(null);
     setText("");
@@ -231,6 +232,7 @@ export default function AskPage() {
           provider_id: model.provider_id,
           model: model.id,
           parent_run_id: parent,
+          mentions,
         }),
       });
       if (res.status === 404) {
@@ -307,7 +309,15 @@ export default function AskPage() {
     const q = search.get("q");
     if (!q || !model) return;
     askedQ.current = true;
-    sendQuestion(q);
+    // Dashboard composer serializes its @-mentions into &m= (JSON).
+    let mentions: MentionRef[] = [];
+    try {
+      const raw = search.get("m");
+      if (raw) mentions = JSON.parse(raw);
+    } catch {
+      /* malformed param. send without mentions */
+    }
+    sendQuestion(q, mentions);
   }, [search, model, sendQuestion]);
 
   // ----- global keyboard. Cmd/Ctrl+K focuses composer.
@@ -451,7 +461,7 @@ export default function AskPage() {
         <ChatComposer
           value={text}
           onChange={setText}
-          onSend={() => sendQuestion(text)}
+          onSend={(mentions) => sendQuestion(text, mentions)}
           onCancel={cancelActive}
           inFlight={isStreaming}
           model={model}

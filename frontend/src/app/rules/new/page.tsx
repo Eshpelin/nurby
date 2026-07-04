@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { RuleBuilder } from "@/components/rules/RuleBuilder";
 import { useRuleRefData } from "@/components/rules/useRuleRefData";
+import { findTemplate } from "@/lib/rule-templates";
 import type { Rule } from "@/components/rules/types";
 
 // sessionStorage key used to hand a synthetic (non-persisted) rule to
@@ -12,7 +13,8 @@ export const RULE_PREFILL_KEY = "nurby_rule_prefill";
 
 export default function NewRulePage() {
   const router = useRouter();
-  const { cameras, persons, telegramChannels, telegramChannelsLoading, loading } = useRuleRefData();
+  const searchParams = useSearchParams();
+  const { cameras, persons, devices, telegramChannels, telegramChannelsLoading, loading } = useRuleRefData();
   const [prefill, setPrefill] = useState<Rule | null>(null);
 
   useEffect(() => {
@@ -21,11 +23,22 @@ export default function NewRulePage() {
       if (raw) {
         setPrefill(JSON.parse(raw));
         sessionStorage.removeItem(RULE_PREFILL_KEY);
+        return;
       }
     } catch {
       /* ignore malformed prefill */
     }
-  }, []);
+    // Deep link: /rules/new?template=<key>. Used by onboarding and the
+    // setup checklist. sessionStorage prefill (above) takes precedence.
+    const templateKey = searchParams.get("template");
+    if (templateKey) {
+      const template = findTemplate(templateKey);
+      if (template) {
+        setPrefill(template.build({ cameras, persons, telegramChannels }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   if (loading) {
     return <div className="px-6 py-20 text-center text-sm text-muted-foreground">Loading.</div>;
@@ -37,6 +50,7 @@ export default function NewRulePage() {
       prefillRule={prefill}
       cameras={cameras}
       persons={persons}
+      devices={devices}
       telegramChannels={telegramChannels}
       telegramChannelsLoading={telegramChannelsLoading}
       onSaved={() => router.push("/rules")}

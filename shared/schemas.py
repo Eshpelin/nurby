@@ -1,6 +1,7 @@
 import re
 import uuid
 from datetime import datetime
+from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -443,7 +444,7 @@ class NotificationResponse(BaseModel):
 
 _VALID_ACTION_TYPES = {
     "webhook", "api_call", "broadcast", "notify", "email", "vlm_call", "telegram",
-    "verify", "locate",
+    "verify", "locate", "device",
 }
 
 # The shape a `locate` action binds into vars, so {{vars.<output>.found}} etc.
@@ -563,6 +564,19 @@ def _validate_locate_action(action, idx: int) -> None:
         raise ValueError(f"action[{idx}] locate require_corroboration must be a boolean")
 
 
+def _validate_device_action(action, idx):
+    device_id = action.get("device_id")
+    if not device_id:
+        raise ValueError(f"action[{idx}] device action requires 'device_id'")
+    try:
+        uuid.UUID(str(device_id))
+    except (ValueError, TypeError):
+        raise ValueError(f"action[{idx}] device_id must be a UUID")
+    extras = action.get("extras")
+    if extras is not None and not isinstance(extras, dict):
+        raise ValueError(f"action[{idx}] device extras must be an object")
+
+
 def _validate_action_chain(actions):
     """Static checks. each action is a dict, has a known type, and
     any `{{vars.X.*}}` references point to an `output` declared by a
@@ -595,6 +609,9 @@ def _validate_action_chain(actions):
 
         if a_type == "locate":
             _validate_locate_action(action, idx)
+
+        if a_type == "device":
+            _validate_device_action(action, idx)
 
         refs = collect_refs(action)
         for ref in refs:
@@ -915,6 +932,9 @@ class RuleTestResponse(BaseModel):
     cooldown_active: bool = False
     synthesized_observation: dict
     would_fire: list[RuleTestActionPreview] = Field(default_factory=list)
+    # Non-fatal problems, e.g. a camera_id/person_id that matches no row.
+    # The builder surfaces these before save.
+    warnings: list[str] = Field(default_factory=list)
 
 
 class RuleReplaySample(BaseModel):
@@ -1067,6 +1087,7 @@ class SystemSettingsResponse(BaseModel):
     public_base_url: str | None = None
     rules_cooldown_backend: str = "redis"
     onboarding_dismissed: bool = False
+    setup_checklist_dismissed: bool = False
     vlm_enrichment_enabled: bool = True
     vlm_enrichment_budget_minutes_per_hour: int = 20
     vehicle_appearance_match_min_similarity: float = 0.90
@@ -1104,6 +1125,7 @@ class SystemSettingsUpdate(BaseModel):
     public_base_url: str | None = None
     rules_cooldown_backend: str | None = Field(default=None, pattern="^(redis|memory)$")
     onboarding_dismissed: bool | None = None
+    setup_checklist_dismissed: bool | None = None
     vlm_enrichment_enabled: bool | None = None
     vlm_enrichment_budget_minutes_per_hour: int | None = Field(default=None, ge=0, le=600)
     vehicle_appearance_match_min_similarity: float | None = Field(default=None, ge=0.5, le=1.0)
@@ -1375,6 +1397,15 @@ class DigestEntryResponse(BaseModel):
 # and websocket URL the frontend subscribes to for streaming tokens.
 
 
+class MentionRef(BaseModel):
+    """One @-mention attached to a natural-language input: the composer
+    resolved a name to an entity id so the backend never guesses."""
+
+    kind: Literal["person", "camera", "telegram_channel", "device"]
+    id: uuid.UUID
+    name: str = Field(min_length=1, max_length=255)
+
+
 class AgentAskRequest(BaseModel):
     """POST /api/agent/ask body. ``parent_run_id`` carries multi-turn
     follow-ups so the audit page can group them. ``dry_run`` short-
@@ -1386,6 +1417,7 @@ class AgentAskRequest(BaseModel):
     model: str | None = Field(default=None, max_length=128)
     parent_run_id: uuid.UUID | None = None
     dry_run: bool = False
+    mentions: list[MentionRef] = Field(default_factory=list, max_length=20)
 
 
 class AgentAskResponse(BaseModel):
@@ -1696,3 +1728,59 @@ class WidgetDataResponse(BaseModel):
     data: object | None = None
     fetched_at: datetime | None = None
     error: str | None = None
+
+
+# ── Device registry (@ mentions / physical alert devices) ──────────
+
+
+class DeviceCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    preset_id: str | None = Field(default=None, max_length=64)
+    endpoint_url: str = Field(min_length=1, max_length=1024)
+    # Write-only shared HMAC secret; responses only ever say has_secret.
+    secret: str | None = Field(default=None, max_length=1024)
+    payload_template: dict | None = None
+    timeout_seconds: int = Field(default=5, ge=1, le=60)
+    enabled: bool = True
+
+    @field_validator("endpoint_url")
+    @classmethod
+    def _http_url(cls, v: str) -> str:
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("endpoint_url must be an http(s) URL")
+        return v
+
+
+class DeviceUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    preset_id: str | None = Field(default=None, max_length=64)
+    endpoint_url: str | None = Field(default=None, max_length=1024)
+    # Absent = unchanged; empty string = clear (camera-route convention).
+    secret: str | None = Field(default=None, max_length=1024)
+    payload_template: dict | None = None
+    timeout_seconds: int | None = Field(default=None, ge=1, le=60)
+    enabled: bool | None = None
+
+    @field_validator("endpoint_url")
+    @classmethod
+    def _http_url(cls, v: str | None) -> str | None:
+        if v is not None and not v.startswith(("http://", "https://")):
+            raise ValueError("endpoint_url must be an http(s) URL")
+        return v
+
+
+class DeviceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    preset_id: str | None
+    endpoint_url: str
+    has_secret: bool = False
+    payload_template: dict | None
+    timeout_seconds: int
+    enabled: bool
+    last_test_at: datetime | None
+    last_test_ok: bool | None
+    last_error: str | None
+    created_at: datetime

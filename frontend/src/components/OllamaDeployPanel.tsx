@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 
 interface VisionModel {
@@ -109,11 +109,21 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
     }
   };
 
+  // The deploy endpoint returns immediately with stage="pulling"; poll the
+  // job until it settles. Cancel is a DELETE on the same endpoint.
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [pulling, setPulling] = useState(false);
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
   const deploy = async () => {
     if (!model) return;
     setBusy(true);
     setError("");
-    setMsg("Deploying. Starting Ollama and pulling the model. This can take a few minutes on first run.");
+    setMsg("Starting the deploy.");
     try {
       const res = await authFetch("/api/ollama/deploy", {
         method: "POST",
@@ -122,16 +132,56 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.stage === "done") {
+        setBusy(false);
         onProvisioned();
         return;
       }
-      setError(data.message || `Deploy failed (${res.status})`);
+      if (res.ok && data.stage === "pulling") {
+        setPulling(true);
+        setMsg(data.message || `Downloading ${model}.`);
+        pollRef.current = setInterval(async () => {
+          try {
+            const sr = await authFetch("/api/ollama/deploy/status");
+            const s = await sr.json().catch(() => ({}));
+            if (s.stage === "pulling" || s.stage === "registering") {
+              setMsg(
+                s.progress != null
+                  ? `${s.message || `Downloading ${model}`} (${Math.round(s.progress)}%)`
+                  : s.message || `Downloading ${model}.`,
+              );
+            } else {
+              if (pollRef.current) clearInterval(pollRef.current);
+              pollRef.current = null;
+              setPulling(false);
+              setBusy(false);
+              if (s.stage === "done") {
+                onProvisioned();
+              } else {
+                setError(s.message || "Deploy did not finish.");
+                setMsg("");
+              }
+            }
+          } catch {
+            /* transient poll failure. keep polling */
+          }
+        }, 2000);
+        return;
+      }
+      setError(data.message || (res.ok ? "Deploy failed" : `Deploy failed (${res.status})`));
       setMsg("");
+      setBusy(false);
     } catch {
       setError("Network error during deploy");
       setMsg("");
-    } finally {
       setBusy(false);
+    }
+  };
+
+  const cancelDeploy = async () => {
+    try {
+      await authFetch("/api/ollama/deploy", { method: "DELETE" });
+    } catch {
+      /* the poll notices either way */
     }
   };
 
@@ -218,6 +268,15 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
       >
         {busy ? "Working." : `Deploy ${model}`}
       </button>
+      {pulling && (
+        <button
+          type="button"
+          onClick={cancelDeploy}
+          className="w-full px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted"
+        >
+          Cancel download
+        </button>
+      )}
     </div>
   );
 

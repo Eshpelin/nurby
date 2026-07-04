@@ -80,8 +80,35 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
     }
   }, [authFetch]);
 
+  // Replay: run the saved rule over the last 24h of observations to
+  // answer "would this ever fire?" without waiting for a live event.
+  const [replayBusy, setReplayBusy] = useState(false);
+  const [replayMsg, setReplayMsg] = useState<string | null>(null);
+  const runReplay = useCallback(async (ruleId: string) => {
+    setReplayBusy(true);
+    setReplayMsg(null);
+    try {
+      const res = await authFetch(`/api/rules/${ruleId}/replay?hours=24`, { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setReplayMsg(
+          j.matched > 0
+            ? `Would have fired ${j.matched} time${j.matched === 1 ? "" : "s"} in the last 24h (${j.scanned} observations scanned).`
+            : `No matches in the last 24h (${j.scanned} observations scanned). Check the trigger and camera scope.`,
+        );
+      } else {
+        setReplayMsg(j.detail || "Replay failed.");
+      }
+    } catch {
+      setReplayMsg("Replay failed.");
+    } finally {
+      setReplayBusy(false);
+    }
+  }, [authFetch]);
+
   useEffect(() => {
     setSnoozedUntil(selectedRule?.snoozed_until ?? null);
+    setReplayMsg(null);
   }, [selectedRule]);
 
   useEffect(() => {
@@ -95,8 +122,8 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
   }, [selectedRule, fetchRuleEvents]);
 
   return (
-    <aside className="col-span-4">
-      <div className="sticky top-20 rounded-lg border border-border bg-card p-5">
+    <aside className="col-span-1 lg:col-span-4">
+      <div className="lg:sticky lg:top-20 rounded-lg border border-border bg-card p-5">
         <div className="flex items-center gap-2 mb-4">
           <span className="w-1.5 h-1.5 rounded-full bg-accent pulse-dot" />
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -106,6 +133,19 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
         {selectedRule ? (
           <div className="space-y-3 text-sm">
             <SummaryCard text={buildRuleSummary(selectedRule, cameras)} />
+            <div>
+              <button
+                type="button"
+                onClick={() => runReplay(selectedRule.id)}
+                disabled={replayBusy}
+                className="px-2.5 py-1 text-[11px] rounded-md border border-border hover:bg-muted disabled:opacity-50"
+              >
+                {replayBusy ? "Replaying." : "Replay last 24h"}
+              </button>
+              {replayMsg && (
+                <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">{replayMsg}</p>
+              )}
+            </div>
             <div>
               <span className="text-muted-foreground text-xs">Name</span>
               <div className="font-medium">{selectedRule.name}</div>

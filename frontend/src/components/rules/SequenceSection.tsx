@@ -11,6 +11,7 @@ import {
   describeSeqStep,
   SEQ_CORRELATE_OPTIONS,
   type ActionDraft,
+  type DeviceOption,
   type SeqCheckKind,
   type SeqStepDraft,
   type TelegramChannelOption,
@@ -31,6 +32,7 @@ export interface SequenceSectionProps {
   setTimeoutActions: (updater: ActionDraft[] | ((p: ActionDraft[]) => ActionDraft[])) => void;
   telegramChannels: TelegramChannelOption[];
   telegramChannelsLoading: boolean;
+  devices: DeviceOption[];
 }
 
 const SELECT_CLS =
@@ -42,7 +44,7 @@ export function SequenceSection(props: SequenceSectionProps) {
   const {
     enabled, setEnabled, correlateBy, setCorrelateBy, onRefire, setOnRefire,
     maxActive, setMaxActive, steps, setSteps, timeoutActions, setTimeoutActions,
-    telegramChannels, telegramChannelsLoading,
+    telegramChannels, telegramChannelsLoading, devices,
   } = props;
 
   const patchStep = (i: number, patch: Partial<SeqStepDraft>) =>
@@ -246,6 +248,7 @@ export function SequenceSection(props: SequenceSectionProps) {
             <ActionsSection
               telegramChannels={telegramChannels}
               telegramChannelsLoading={telegramChannelsLoading}
+              devices={devices}
               formActions={timeoutActions}
               setFormActions={setTimeoutActions}
               cardErrors={{}}

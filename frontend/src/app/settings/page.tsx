@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import TelegramSection from "@/components/TelegramSection";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
+import { SystemDoctorPanel } from "@/components/SystemDoctorPanel";
+import { DevicesSection } from "@/components/DevicesSection";
 import { GroundingSettingsCard } from "@/components/settings/GroundingSettingsCard";
 import { ALL_PROVIDERS, PROVIDER_KINDS } from "@/lib/provider-presets";
 import { ProviderFields } from "@/components/ProviderFields";
@@ -40,6 +42,7 @@ export default function SettingsPage() {
   // one to unlock scene descriptions and Ask Nurby.
   const [showProviders, setShowProviders] = useState(true);
   const [showStorage, setShowStorage] = useState(false);
+  const [showDoctor, setShowDoctor] = useState(false);
 
   // Invite key state
   const [inviteKeys, setInviteKeys] = useState<InviteKey[]>([]);
@@ -828,6 +831,37 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+
+        {/* System doctor card */}
+        <div className="rounded-lg border border-border bg-card">
+          <button
+            onClick={() => setShowDoctor(!showDoctor)}
+            className="w-full px-4 py-3.5 flex items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-3">
+              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-muted-foreground/40" />
+              <div>
+                <div className="text-sm font-medium">System doctor</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Diagnose cameras, AI providers, and services in one pass
+                </div>
+              </div>
+            </div>
+            <svg
+              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              className={`text-muted-foreground transition-transform ${showDoctor ? "rotate-180" : ""}`}
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          {showDoctor && (
+            <div className="px-4 pb-4 border-t border-border pt-3">
+              <SystemDoctorPanel />
+            </div>
+          )}
+        </div>
+
+        <DevicesSection />
 
         {/* Storage card */}
         <div className="rounded-lg border border-border bg-card">

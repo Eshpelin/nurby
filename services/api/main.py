@@ -22,11 +22,13 @@ from services.api.routes import (
     detection_models,
     devices,
     digests,
+    doctor,
     events,
     guardian,
     incidents,
     invites,
     journeys,
+    mentions,
     notifications,
     observations,
     ollama_deploy,
@@ -36,6 +38,7 @@ from services.api.routes import (
     recordings,
     reports,
     rules,
+    rules_nl,
     search,
     summaries,
     system,
@@ -208,6 +211,7 @@ app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(invites.router, prefix="/api/invites", tags=["invites"])
 app.include_router(guardian.router, prefix="/api/guardian", tags=["guardian"])
 app.include_router(system.router, prefix="/api", tags=["system"])
+app.include_router(doctor.router, prefix="/api", tags=["doctor"])
 app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
 app.include_router(detection_models.router, prefix="/api/detection-models", tags=["detection-models"])
 app.include_router(recordings.router, prefix="/api/recordings", tags=["recordings"])
@@ -215,6 +219,8 @@ app.include_router(observations.router, prefix="/api/observations", tags=["obser
 app.include_router(persons.router, prefix="/api/persons", tags=["persons"])
 app.include_router(vehicles.router, prefix="/api/vehicles", tags=["vehicles"])
 app.include_router(body_clusters.router, prefix="/api/body-clusters", tags=["body-clusters"])
+app.include_router(mentions.router, prefix="/api/mentions", tags=["mentions"])
+app.include_router(rules_nl.router, prefix="/api/rules", tags=["rules"])
 app.include_router(rules.router, prefix="/api/rules", tags=["rules"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
