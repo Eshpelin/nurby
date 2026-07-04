@@ -164,6 +164,10 @@ async def ask(
         synthetic = uuid.uuid4()
         return AgentAskResponse(run_id=synthetic, ws_url=f"/ws/agent/{synthetic}")
 
+    from services.api.routes.mentions import verify_mentions
+
+    verified_mentions = await verify_mentions(db, body.mentions)
+
     run = await runs_mod.create_run(
         user_id=current_user.id,
         question=body.question.strip(),
@@ -171,6 +175,7 @@ async def ask(
         model=model,
         parent_run_id=body.parent_run_id,
         db=db,
+        mentions=verified_mentions,
     )
 
     # Snapshot user + provider so the background task does not race the
@@ -188,6 +193,7 @@ async def ask(
                 provider=provider_snapshot,
                 model=model,
                 parent_run_id=body.parent_run_id,
+                mentions=verified_mentions,
             )
         except Exception:
             logger.exception("agent driver crashed for run %s", run.id)

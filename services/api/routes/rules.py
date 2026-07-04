@@ -71,6 +71,7 @@ def _collect_rule_refs(
         "camera": [],
         "person": [],
         "telegram_channel": [],
+        "device": [],
     }
 
     def add(kind: str, path: str, value) -> None:
@@ -98,8 +99,12 @@ def _collect_rule_refs(
 
     items = actions if isinstance(actions, list) else [actions] if isinstance(actions, dict) else []
     for i, action in enumerate(items):
-        if isinstance(action, dict) and action.get("type") == "telegram":
+        if not isinstance(action, dict):
+            continue
+        if action.get("type") == "telegram":
             add("telegram_channel", f"actions[{i}].channel_id", action.get("channel_id"))
+        elif action.get("type") == "device":
+            add("device", f"actions[{i}].device_id", action.get("device_id"))
     return refs
 
 
@@ -109,11 +114,21 @@ async def _stale_rule_refs(db: AsyncSession, trigger_pattern, conditions, action
     Catches the classic silent never-fire: a rule pointing at a deleted
     (or mistyped) camera/person/channel evaluates forever without matching
     and without erroring."""
-    from shared.models import Camera, Person, TelegramChannel
+    from shared.models import Camera, Device, Person, TelegramChannel
 
     refs = _collect_rule_refs(trigger_pattern, conditions, actions)
-    model_by_kind = {"camera": Camera, "person": Person, "telegram_channel": TelegramChannel}
-    label_by_kind = {"camera": "camera", "person": "person", "telegram_channel": "Telegram channel"}
+    model_by_kind = {
+        "camera": Camera,
+        "person": Person,
+        "telegram_channel": TelegramChannel,
+        "device": Device,
+    }
+    label_by_kind = {
+        "camera": "camera",
+        "person": "person",
+        "telegram_channel": "Telegram channel",
+        "device": "device",
+    }
     messages: list[str] = []
     for kind, pairs in refs.items():
         if not pairs:

@@ -531,6 +531,21 @@ ACTION_TYPES: list[dict] = [
              "description": "Identifier for {{vars.<output>.found|count|label|corroborated|boxes}}."},
         ],
     },
+    {
+        "type": "device",
+        "label": "Device",
+        "group": "delivery",
+        "description": (
+            "Trigger a registered physical device (buzzer, relay, speaker). "
+            "The device's endpoint, secret and payload resolve at fire time."
+        ),
+        "fields": [
+            {"name": "device_id", "type": "uuid", "required": True, "ref": "device",
+             "description": "Registered device to fire (Settings → Devices)."},
+            {"name": "extras", "type": "object", "required": False,
+             "description": "Extra keys merged into the device payload. Template variables allowed."},
+        ],
+    },
 ]
 
 # Rule-level `conditions` object, evaluated after the trigger matches.

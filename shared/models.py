@@ -1259,6 +1259,39 @@ class TelegramChannel(Base):
     )
 
 
+class Device(Base):
+    """User-registered physical alert device (buzzer, relay, speaker).
+
+    Gives hardware an identity: rules reference ``device_id`` and the
+    endpoint/secret/payload resolve from this row at fire time, so
+    renaming a device or rotating its secret retargets every rule with
+    no rule edits. ``preset_id`` links back to the static catalog entry
+    (integrations/devices/catalog.py) the device was set up from, or is
+    null for a custom endpoint. The secret is the shared HMAC key the
+    receiver sketch verifies; sealed with the tolerant camera cipher so
+    a jwt_secret rotation degrades to firing with the stored value
+    instead of failing at alarm time.
+    """
+
+    __tablename__ = "devices"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    preset_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    endpoint_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    secret: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    # None -> snapshot of the preset payload at creation -> engine default.
+    payload_template: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_test_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_test_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class TelegramOutboxDedupe(Base):
     """Short-lived ledger of outbound message hashes.
 
@@ -1428,6 +1461,10 @@ class AgentRun(Base):
     cost_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # @-mentions the user attached to the question: list of
+    # {kind, id, name}. Persisted so multi-turn follow-ups keep the
+    # pre-resolved entity ids (the parent chain replays them).
+    mentions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

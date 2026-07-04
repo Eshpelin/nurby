@@ -28,6 +28,7 @@ from services.api.routes import (
     incidents,
     invites,
     journeys,
+    mentions,
     notifications,
     observations,
     ollama_deploy,
@@ -218,6 +219,7 @@ app.include_router(observations.router, prefix="/api/observations", tags=["obser
 app.include_router(persons.router, prefix="/api/persons", tags=["persons"])
 app.include_router(vehicles.router, prefix="/api/vehicles", tags=["vehicles"])
 app.include_router(body_clusters.router, prefix="/api/body-clusters", tags=["body-clusters"])
+app.include_router(mentions.router, prefix="/api/mentions", tags=["mentions"])
 app.include_router(rules_nl.router, prefix="/api/rules", tags=["rules"])
 app.include_router(rules.router, prefix="/api/rules", tags=["rules"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])

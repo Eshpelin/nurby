@@ -72,7 +72,7 @@ def test_entries_have_label_description_group_fields():
 
 def test_fields_are_well_formed():
     allowed_types = {"string", "number", "boolean", "uuid", "enum", "points", "list", "object"}
-    allowed_refs = {"camera", "person", "telegram_channel"}
+    allowed_refs = {"camera", "person", "telegram_channel", "device"}
     entries = TRIGGER_TYPES + ACTION_TYPES
     all_fields = [f for e in entries for f in e["fields"]] + CONDITION_FIELDS
     all_fields += SEQUENCE_SCHEMA["fields"] + SEQUENCE_SCHEMA["step_fields"]

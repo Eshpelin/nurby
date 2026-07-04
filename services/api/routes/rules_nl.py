@@ -19,8 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
 from shared.database import get_db
-from shared.models import Camera, Person, Provider, TelegramChannel, User
-from shared.schemas import RuleCreate
+from shared.models import Camera, Device, Person, Provider, TelegramChannel, User
+from shared.schemas import MentionRef, RuleCreate
 
 router = APIRouter()
 logger = logging.getLogger("nurby.api.rules_nl")
@@ -29,6 +29,9 @@ logger = logging.getLogger("nurby.api.rules_nl")
 class GenerateRuleRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=2000)
     provider_id: uuid.UUID | None = None
+    # @-mentions from the composer: pre-resolved entity ids the model
+    # must use verbatim. Verified server-side before prompt injection.
+    mentions: list[MentionRef] = Field(default_factory=list, max_length=20)
 
 
 class GenerateRuleResponse(BaseModel):
@@ -56,6 +59,8 @@ def build_system_prompt(
     cameras: list[tuple[str, str]],
     persons: list[tuple[str, str]],
     channels: list[tuple[str, str]],
+    devices: list[tuple[str, str]] | None = None,
+    mentions: list[dict] | None = None,
 ) -> str:
     """Compact, deterministic prompt: the full trigger/action/condition
     vocabulary plus the household's actual entities so names resolve to
@@ -90,6 +95,18 @@ def build_system_prompt(
     lines.append(
         "Telegram channels: " + (", ".join(f'"{n}" = {i}' for i, n in channels) or "none")
     )
+    lines.append(
+        "Devices (physical alarms/relays; use the device action): "
+        + (", ".join(f'"{n}" = {i}' for i, n in (devices or [])) or "none")
+    )
+    if mentions:
+        lines.append("")
+        lines.append(
+            "USER-TAGGED ENTITIES (the user explicitly @-mentioned these; when the "
+            "rule refers to them, use these exact UUIDs, never a different one):"
+        )
+        for m in mentions:
+            lines.append(f"\"{m['name']}\" = {m['kind']} {m['id']}")
     lines.append("")
     lines.append(
         "Prefer the notify action when no Telegram channel exists and no email address "
@@ -183,8 +200,20 @@ async def generate_rule(
             )
         ).all()
     ]
+    devices = [
+        (str(i), n)
+        for i, n in (
+            await db.execute(select(Device.id, Device.name).where(Device.enabled.is_(True)))
+        ).all()
+    ]
 
-    system_prompt = build_system_prompt(build_schema(), cameras, persons, channels)
+    from services.api.routes.mentions import verify_mentions
+
+    verified_mentions = await verify_mentions(db, body.mentions)
+
+    system_prompt = build_system_prompt(
+        build_schema(), cameras, persons, channels, devices, verified_mentions
+    )
     messages = [{"role": "user", "content": body.prompt}]
     notes: list[str] = []
 
