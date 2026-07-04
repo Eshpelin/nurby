@@ -24,7 +24,7 @@ CHANNEL = uuid.uuid4()
 
 
 def test_collect_refs_full_shape():
-    refs = _collect_rule_refs(
+    refs, malformed = _collect_rule_refs(
         {
             "type": "face_recognized",
             "person_id": str(PERSON),
@@ -42,16 +42,24 @@ def test_collect_refs_full_shape():
     assert len(refs["camera"]) == 5
     assert refs["person"] == [("trigger_pattern.person_id", PERSON)]
     assert refs["telegram_channel"] == [("actions[0].channel_id", CHANNEL)]
+    assert malformed == []
 
 
-def test_collect_refs_skips_non_uuid():
-    refs = _collect_rule_refs({"camera_id": "front-door"}, None, [])
+def test_collect_refs_flags_non_uuid():
+    # A name in a ref position (classic small-LLM failure mode) is no
+    # longer skipped silently; it becomes an actionable message.
+    refs, malformed = _collect_rule_refs(
+        {"camera_id": "front-door"}, {"camera_ids": ["Living Room"]}, []
+    )
     assert refs["camera"] == []
+    assert len(malformed) == 2
+    assert "Living Room" in malformed[1]
 
 
 def test_collect_refs_empty_rule():
-    refs = _collect_rule_refs({}, None, [])
+    refs, malformed = _collect_rule_refs({}, None, [])
     assert all(not v for v in refs.values())
+    assert malformed == []
 
 
 # ---------------------------------------------------------------------------

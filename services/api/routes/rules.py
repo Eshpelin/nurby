@@ -63,21 +63,29 @@ def _as_uuid(value) -> uuid.UUID | None:
 
 def _collect_rule_refs(
     trigger_pattern, conditions, actions
-) -> dict[str, list[tuple[str, uuid.UUID]]]:
-    """Gather every camera/person/telegram-channel reference in a rule,
-    as (field_path, id) pairs. Non-UUID values are skipped here; shape
-    validation belongs to the schema validators."""
+) -> tuple[dict[str, list[tuple[str, uuid.UUID]]], list[str]]:
+    """Gather every camera/person/telegram-channel/device reference in a
+    rule, as (field_path, id) pairs, plus messages for values sitting in
+    a ref position that are not UUIDs at all (e.g. an LLM writing a
+    camera NAME into camera_ids — previously a silent never-match)."""
     refs: dict[str, list[tuple[str, uuid.UUID]]] = {
         "camera": [],
         "person": [],
         "telegram_channel": [],
         "device": [],
     }
+    malformed: list[str] = []
 
     def add(kind: str, path: str, value) -> None:
+        if value is None or value == "":
+            return
         u = _as_uuid(value)
         if u is not None:
             refs[kind].append((path, u))
+        else:
+            malformed.append(
+                f"{path} is not a valid {kind} id (got '{str(value)[:60]}'); use the entity's UUID"
+            )
 
     tp = trigger_pattern if isinstance(trigger_pattern, dict) else {}
     add("camera", "trigger_pattern.camera_id", tp.get("camera_id"))
@@ -105,7 +113,7 @@ def _collect_rule_refs(
             add("telegram_channel", f"actions[{i}].channel_id", action.get("channel_id"))
         elif action.get("type") == "device":
             add("device", f"actions[{i}].device_id", action.get("device_id"))
-    return refs
+    return refs, malformed
 
 
 async def _stale_rule_refs(db: AsyncSession, trigger_pattern, conditions, actions) -> list[str]:
@@ -116,7 +124,7 @@ async def _stale_rule_refs(db: AsyncSession, trigger_pattern, conditions, action
     and without erroring."""
     from shared.models import Camera, Device, Person, TelegramChannel
 
-    refs = _collect_rule_refs(trigger_pattern, conditions, actions)
+    refs, messages_pre = _collect_rule_refs(trigger_pattern, conditions, actions)
     model_by_kind = {
         "camera": Camera,
         "person": Person,
@@ -129,7 +137,7 @@ async def _stale_rule_refs(db: AsyncSession, trigger_pattern, conditions, action
         "telegram_channel": "Telegram channel",
         "device": "device",
     }
-    messages: list[str] = []
+    messages: list[str] = list(messages_pre)
     for kind, pairs in refs.items():
         if not pairs:
             continue

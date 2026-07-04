@@ -147,7 +147,7 @@ def test_validate_device_action():
 
 
 def test_collect_refs_includes_device():
-    refs = _collect_rule_refs(
+    refs, _malformed = _collect_rule_refs(
         {"type": "motion"}, None, [{"type": "device", "device_id": str(DEVICE_ID)}]
     )
     assert refs["device"] == [("actions[0].device_id", DEVICE_ID)]
