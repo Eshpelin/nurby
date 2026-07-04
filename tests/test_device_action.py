@@ -130,10 +130,55 @@ async def test_execute_device_extras_merged():
 
 
 def test_render_device_payload_both_dialects():
-    out = actions.render_device_payload(
+    out = actions.render_payload(
         {"a": "{rule_name}", "b": "{{camera_name}}"}, {"rule_name": "R", "camera_name": "C"}
     )
     assert out == {"a": "R", "b": "C"}
+
+
+@pytest.mark.asyncio
+async def test_execute_webhook_renders_preset_single_brace_tokens():
+    """Webhook actions created from device presets carry single-brace
+    payloads (integrations/devices/catalog.py STANDARD_PAYLOAD); the
+    executor must render both dialects, not ship literal tokens."""
+    from integrations.devices.catalog import STANDARD_PAYLOAD
+
+    delivered = {}
+
+    async def fake_deliver(method, url, payload, **kw):
+        delivered["payload"] = payload
+        return True, "ok"
+
+    with patch.object(actions, "deliver_signed", new=fake_deliver), \
+         patch.object(actions, "_update_event_status", new=AsyncMock()):
+        await actions._execute_webhook(
+            {"type": "webhook", "url": "http://10.0.0.9/alert", "payload_template": dict(STANDARD_PAYLOAD)},
+            {}, make_rule(), uuid.uuid4(), CTX,
+        )
+    assert delivered["payload"]["event"] == "Porch alarm"
+    assert delivered["payload"]["camera"] == "Front Porch"
+    assert "{" not in delivered["payload"]["description"]
+
+
+@pytest.mark.asyncio
+async def test_execute_api_call_renders_preset_single_brace_tokens():
+    delivered = {}
+
+    async def fake_deliver(method, url, payload, **kw):
+        delivered["payload"] = payload
+        return True, "ok"
+
+    with patch.object(actions, "deliver_signed", new=fake_deliver), \
+         patch.object(actions, "_update_event_status", new=AsyncMock()):
+        await actions._execute_api_call(
+            {
+                "type": "api_call",
+                "url": "http://10.0.0.9/alert",
+                "payload_template": {"event": "{rule_name}", "cam": "{{camera_name}}"},
+            },
+            {}, make_rule(), uuid.uuid4(), CTX,
+        )
+    assert delivered["payload"] == {"event": "Porch alarm", "cam": "Front Porch"}
 
 
 def test_validate_device_action():
