@@ -6,6 +6,7 @@ import {
   MAX_ACTIONS_PER_RULE,
   type ActionType,
   type ActionDraft,
+  type DeviceOption,
   type TelegramChannelOption,
 } from "./types";
 import { ActionCard } from "./actions/ActionCard";
@@ -29,6 +30,7 @@ import {
 export interface ActionsSectionProps {
   telegramChannels: TelegramChannelOption[];
   telegramChannelsLoading: boolean;
+  devices: DeviceOption[];
 
   formActions: ActionDraft[];
   setFormActions: (updater: ActionDraft[] | ((prev: ActionDraft[]) => ActionDraft[])) => void;
@@ -38,7 +40,7 @@ export interface ActionsSectionProps {
 }
 
 export function ActionsSection(props: ActionsSectionProps) {
-  const { telegramChannels, telegramChannelsLoading, formActions, setFormActions, cardErrors } =
+  const { telegramChannels, telegramChannelsLoading, devices, formActions, setFormActions, cardErrors } =
     props;
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
 
@@ -123,6 +125,7 @@ export function ActionsSection(props: ActionsSectionProps) {
                 availableVars={availableVarsBefore(formActions, i)}
                 telegramChannels={telegramChannels}
                 telegramChannelsLoading={telegramChannelsLoading}
+                devices={devices}
                 isCollapsed={!!collapsed[i]}
                 onToggleCollapsed={() =>
                   setCollapsed((m) => ({ ...m, [i]: !m[i] }))

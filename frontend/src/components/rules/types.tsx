@@ -63,6 +63,13 @@ export interface Person {
   photo_path: string | null;
 }
 
+// Registered device instance (GET /api/devices/instances), trimmed to
+// what the rule builder needs for the device action picker.
+export interface DeviceOption {
+  id: string;
+  name: string;
+}
+
 export interface TriggerType {
   value: string;
   label: string;
@@ -234,6 +241,7 @@ export const ACTION_TYPES = [
   { value: "vlm_call", label: "VLM Call" },
   { value: "verify", label: "Verify with AI" },
   { value: "locate", label: "Visual condition (FindAnything)" },
+  { value: "device", label: "Device" },
 ];
 
 export const TELEGRAM_TEMPLATE_VARS = [
@@ -381,6 +389,7 @@ export const WEEKEND = ["sat", "sun"];
 // Populated by the page so describeTrigger can resolve ids to names.
 export const personLookup = new Map<string, string>();
 export const cameraLookup = new Map<string, string>();
+export const deviceLookup = new Map<string, string>();
 
 export function describeTrigger(pattern: Record<string, unknown>): string {
   const t = pattern.type as string;
@@ -532,6 +541,11 @@ export function describeActions(actions: Record<string, unknown> | Record<string
         const q = (a.question as string) || "...";
         return `confirm with AI that ${q}`;
       }
+      if (a.type === "device") {
+        const did = (a.device_id as string) || "";
+        if (!did) return "fire device (none selected)";
+        return `fire device ${deviceLookup.get(did) || did.slice(0, 8)}`;
+      }
       return String(a.type);
     })
     .join(", ");
@@ -655,7 +669,8 @@ export type ActionType =
   | "telegram"
   | "vlm_call"
   | "verify"
-  | "locate";
+  | "locate"
+  | "device";
 
 export interface WebhookDraft {
   type: "webhook" | "api_call";
@@ -736,6 +751,16 @@ export interface LocateDraft {
   output: string;
 }
 
+// Fire a registered device instance (Settings → Devices). The backend
+// resolves device_id to the stored endpoint + secret; `extras` is merged
+// into the rendered payload.
+export interface DeviceDraft {
+  type: "device";
+  device_id: string;
+  extrasJson: string;
+  extrasError: string;
+}
+
 export type ActionDraft =
   | WebhookDraft
   | BroadcastDraft
@@ -744,7 +769,8 @@ export type ActionDraft =
   | TelegramDraft
   | VlmCallDraft
   | VerifyDraft
-  | LocateDraft;
+  | LocateDraft
+  | DeviceDraft;
 
 export const MAX_ACTIONS_PER_RULE = 8;
 
@@ -817,6 +843,8 @@ export function defaultDraftForType(type: ActionType): ActionDraft {
         minOverlap: 0.1,
         output: "loc",
       };
+    case "device":
+      return { type, device_id: "", extrasJson: "", extrasError: "" };
   }
 }
 
@@ -922,6 +950,18 @@ export function dictToDraft(raw: Record<string, unknown>): ActionDraft {
         requireCorroboration: raw.require_corroboration === true,
         minOverlap: typeof mo === "number" ? mo : 0.1,
         output: (raw.output as string) || "loc",
+      };
+    }
+    case "device": {
+      const extras = raw.extras;
+      return {
+        type: "device",
+        device_id: (raw.device_id as string) || "",
+        extrasJson:
+          extras && typeof extras === "object"
+            ? JSON.stringify(extras, null, 2)
+            : "",
+        extrasError: "",
       };
     }
   }
@@ -1049,6 +1089,23 @@ export function draftToDict(d: ActionDraft): Record<string, unknown> {
       output: d.output || "loc",
     };
   }
+  if (d.type === "device") {
+    const action: Record<string, unknown> = {
+      type: "device",
+      device_id: d.device_id,
+    };
+    if (d.extrasJson.trim()) {
+      try {
+        const extras = JSON.parse(d.extrasJson);
+        if (extras && typeof extras === "object" && !Array.isArray(extras) && Object.keys(extras).length > 0) {
+          action.extras = extras;
+        }
+      } catch {
+        /* surfaced as extrasError in the editor + validateActionDraft */
+      }
+    }
+    return action;
+  }
   // Unreachable. All union members handled above.
   return { type: (d as ActionDraft).type };
 }
@@ -1164,6 +1221,17 @@ export function validateActionDraft(d: ActionDraft): string | null {
   }
   if (d.type === "locate") {
     if (!d.prompt.trim()) return "Describe what to locate";
+    return null;
+  }
+  if (d.type === "device") {
+    if (!d.device_id) return "Pick a device";
+    if (d.extrasJson.trim()) {
+      try {
+        JSON.parse(d.extrasJson);
+      } catch {
+        return "Extras is not valid JSON";
+      }
+    }
     return null;
   }
   return null;

@@ -12,7 +12,7 @@ export default function EditRulePage() {
   const params = useParams();
   const id = String(params?.id || "");
   const { authFetch } = useAuth();
-  const { cameras, persons, telegramChannels, telegramChannelsLoading, loading } = useRuleRefData();
+  const { cameras, persons, devices, telegramChannels, telegramChannelsLoading, loading } = useRuleRefData();
 
   const [rule, setRule] = useState<Rule | null>(null);
   const [ruleLoading, setRuleLoading] = useState(true);
@@ -57,6 +57,7 @@ export default function EditRulePage() {
       editRule={rule}
       cameras={cameras}
       persons={persons}
+      devices={devices}
       telegramChannels={telegramChannels}
       telegramChannelsLoading={telegramChannelsLoading}
       onSaved={() => router.push("/rules")}

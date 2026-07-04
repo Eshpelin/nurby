@@ -14,7 +14,7 @@ export const RULE_PREFILL_KEY = "nurby_rule_prefill";
 export default function NewRulePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { cameras, persons, telegramChannels, telegramChannelsLoading, loading } = useRuleRefData();
+  const { cameras, persons, devices, telegramChannels, telegramChannelsLoading, loading } = useRuleRefData();
   const [prefill, setPrefill] = useState<Rule | null>(null);
 
   useEffect(() => {
@@ -50,6 +50,7 @@ export default function NewRulePage() {
       prefillRule={prefill}
       cameras={cameras}
       persons={persons}
+      devices={devices}
       telegramChannels={telegramChannels}
       telegramChannelsLoading={telegramChannelsLoading}
       onSaved={() => router.push("/rules")}

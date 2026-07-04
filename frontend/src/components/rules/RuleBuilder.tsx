@@ -15,6 +15,7 @@ import {
   validateActionDraft,
   validateSeqStep,
   type Camera,
+  type DeviceOption,
   type Person,
   type Rule,
   type TelegramChannelOption,
@@ -38,6 +39,7 @@ export interface RuleBuilderProps {
   prefillRule?: Rule | null;
   cameras: Camera[];
   persons: Person[];
+  devices: DeviceOption[];
   telegramChannels: TelegramChannelOption[];
   telegramChannelsLoading: boolean;
   onSaved: () => void;
@@ -94,6 +96,7 @@ export function RuleBuilder({
   prefillRule,
   cameras,
   persons,
+  devices,
   telegramChannels,
   telegramChannelsLoading,
   onSaved,
@@ -693,6 +696,7 @@ export function RuleBuilder({
           <ActionsSection
             telegramChannels={telegramChannels}
             telegramChannelsLoading={telegramChannelsLoading}
+            devices={devices}
             formActions={state.formActions}
             setFormActions={updaterFor("formActions")}
             cardErrors={cardErrors}
@@ -713,6 +717,7 @@ export function RuleBuilder({
             setTimeoutActions={updaterFor("formSequenceTimeoutActions")}
             telegramChannels={telegramChannels}
             telegramChannelsLoading={telegramChannelsLoading}
+            devices={devices}
           />
 
           <div className="border border-border rounded-md p-3">

@@ -14,6 +14,8 @@ import {
   type VlmCallDraft,
   type VerifyDraft,
   type LocateDraft,
+  type DeviceDraft,
+  type DeviceOption,
   type TelegramChannelOption,
 } from "../types";
 import { useSortable } from "@dnd-kit/sortable";
@@ -27,6 +29,7 @@ import { TelegramEditor } from "./TelegramEditor";
 import { VlmCallEditor } from "./VlmCallEditor";
 import { VerifyEditor } from "./VerifyEditor";
 import { LocateEditor } from "./LocateEditor";
+import { DeviceEditor } from "./DeviceEditor";
 import { type VarSpec } from "./VarInserter";
 
 export interface ActionCardProps {
@@ -42,6 +45,7 @@ export interface ActionCardProps {
   availableVars: VarSpec[];
   telegramChannels: TelegramChannelOption[];
   telegramChannelsLoading: boolean;
+  devices: DeviceOption[];
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
 }
@@ -59,6 +63,7 @@ export function ActionCard({
   availableVars,
   telegramChannels,
   telegramChannelsLoading,
+  devices,
   isCollapsed,
   onToggleCollapsed,
 }: ActionCardProps) {
@@ -221,6 +226,15 @@ export function ActionCard({
             <LocateEditor
               draft={draft as LocateDraft}
               onChange={(next) => onReplace(next)}
+            />
+          )}
+          {draft.type === "device" && (
+            <DeviceEditor
+              draft={draft as DeviceDraft}
+              devices={devices}
+              onChange={(patch) =>
+                onReplace({ ...(draft as DeviceDraft), ...patch })
+              }
             />
           )}
         </>

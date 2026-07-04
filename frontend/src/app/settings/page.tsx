@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import TelegramSection from "@/components/TelegramSection";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
 import { SystemDoctorPanel } from "@/components/SystemDoctorPanel";
+import { DevicesSection } from "@/components/DevicesSection";
 import { GroundingSettingsCard } from "@/components/settings/GroundingSettingsCard";
 import { ALL_PROVIDERS, PROVIDER_KINDS } from "@/lib/provider-presets";
 import { ProviderFields } from "@/components/ProviderFields";
@@ -859,6 +860,8 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        <DevicesSection />
 
         {/* Storage card */}
         <div className="rounded-lg border border-border bg-card">
