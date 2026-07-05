@@ -9,22 +9,31 @@ import { useTheme } from "@/lib/theme";
 import { useWebSocket } from "@/lib/ws";
 import { NotificationItem, NotificationsDropdown } from "./notifications";
 import { SecureAccountModal } from "./SecureAccountModal";
+import { MegaNav } from "./MegaNav";
 
-// Each item lists the roles allowed to see it. Operator surfaces are
-// admin/viewer only; Guardian is visible to everyone (a guardian-role user
-// sees ONLY this). This is a UX guard; the API enforces access independently.
-const OPERATOR = ["admin", "viewer"];
-const NAV_ITEMS = [
-  { label: "Dashboard", href: "/", roles: OPERATOR },
-  { label: "Ask Nurby", href: "/ask", roles: OPERATOR },
-  { label: "Recordings", href: "/recordings", roles: OPERATOR },
-  { label: "People", href: "/people", roles: OPERATOR },
-  { label: "Guardian", href: "/guardian", roles: ["admin", "viewer", "guardian"] },
-  { label: "Vehicles", href: "/vehicles", roles: OPERATOR },
-  { label: "Alerts", href: "/events", roles: OPERATOR },
-  { label: "Reports", href: "/reports", roles: OPERATOR },
-  { label: "Rules", href: "/rules", roles: OPERATOR },
-  { label: "Settings", href: "/settings", roles: OPERATOR },
+// Mobile nav: the same surfaces the desktop mega-menu groups, laid out as
+// labelled sections in the hamburger sheet. Guardian is its own group so a
+// guardian-role user (who only ever sees that section) still gets it.
+const MOBILE_GROUPS: { group: string; items: { label: string; href: string }[] }[] = [
+  { group: "Overview", items: [{ label: "Dashboard", href: "/" }] },
+  { group: "Review", items: [
+    { label: "Recordings", href: "/recordings" },
+    { label: "Timeline", href: "/timeline" },
+    { label: "Alerts", href: "/events" },
+  ] },
+  { group: "Directory", items: [
+    { label: "People", href: "/people" },
+    { label: "Vehicles", href: "/vehicles" },
+  ] },
+  { group: "Insights", items: [
+    { label: "Ask Nurby", href: "/ask" },
+    { label: "Reports", href: "/reports" },
+  ] },
+  { group: "Manage", items: [
+    { label: "Rules", href: "/rules" },
+    { label: "Settings", href: "/settings" },
+  ] },
+  { group: "Guardian", items: [{ label: "Guardian", href: "/guardian" }] },
 ];
 
 interface ProviderInfo {
@@ -295,25 +304,22 @@ export function Navbar() {
             </span>
           </div>
 
-          {/* Inline nav from md up; the hamburger dropdown covers phones. */}
-          <nav className="hidden md:flex items-center gap-1 overflow-x-auto scrollbar-thin -mx-1 px-1 min-w-0">
-            {NAV_ITEMS.filter((item) => item.roles.includes(role)).map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`px-3 py-1.5 rounded-md text-sm transition-all whitespace-nowrap flex-shrink-0 ${
-                    isActive
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+          {/* Desktop: grouped mega-menu nav (operators). A guardian-role user
+              only ever has the one surface, so skip the menus for them. */}
+          {isGuardian ? (
+            <nav className="hidden md:flex items-center gap-1">
+              <Link
+                href="/guardian"
+                className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
+                  pathname.startsWith("/guardian") ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Guardian
+              </Link>
+            </nav>
+          ) : (
+            <MegaNav />
+          )}
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
@@ -432,25 +438,32 @@ export function Navbar() {
           </div>
         </div>
       </div>
-      {/* Mobile nav dropdown */}
+      {/* Mobile nav dropdown, grouped to mirror the desktop mega-menu. */}
       {menuOpen && (
-        <nav className="md:hidden border-t border-border bg-background px-3 py-2 grid grid-cols-2 gap-1">
-          {NAV_ITEMS.filter((item) => item.roles.includes(role)).map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`px-3 py-2 rounded-md text-sm transition-all ${
-                  isActive
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="md:hidden border-t border-border bg-background px-3 py-3 space-y-3 max-h-[70vh] overflow-y-auto scrollbar-thin">
+          {MOBILE_GROUPS.filter((g) => (isGuardian ? g.group === "Guardian" : g.group !== "Guardian")).map((g) => (
+            <div key={g.group}>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70 px-1 mb-1">
+                {g.group}
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                {g.items.map((item) => {
+                  const isActive = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`px-3 py-2 rounded-md text-sm transition-all ${
+                        isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
       )}
       {secureOpen && <SecureAccountModal onClose={() => setSecureOpen(false)} />}
