@@ -69,7 +69,14 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    # Fail closed on a malformed/legacy/empty stored hash rather than letting
+    # bcrypt's ValueError ("Invalid salt") propagate. Without this, a single
+    # corrupt password_hash row turns a login into a 500 (leaking a stack
+    # trace) instead of a clean "invalid credentials" 401.
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 def create_access_token(user_id: uuid.UUID) -> str:

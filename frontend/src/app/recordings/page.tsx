@@ -34,6 +34,43 @@ interface Camera {
   height?: number | null;
 }
 
+interface Person {
+  id: string;
+  display_name: string;
+  nickname?: string | null;
+}
+
+interface Vehicle {
+  id: string;
+  display_name: string;
+  license_plate?: string | null;
+  vehicle_type?: string | null;
+}
+
+// Per-recording activity summary shown as chips on each card.
+interface Facet {
+  objects: string[];
+  persons: string[];
+  vehicles: string[];
+  has_audio: boolean;
+}
+
+// A speech transcript hit from /transcripts (used by the "search what was
+// said" mode to jump into the covering recording at the right moment).
+interface Transcript {
+  id: string;
+  camera_id: string;
+  started_at: string;
+  ended_at: string | null;
+  text: string;
+}
+
+// A small emoji glyph per object class, so a card scans at a glance.
+const OBJECT_GLYPH: Record<string, string> = {
+  person: "🧍", cat: "🐈", dog: "🐕", car: "🚗", truck: "🚚",
+  bus: "🚌", bicycle: "🚲", motorcycle: "🏍️", bird: "🐦",
+};
+
 function formatDuration(seconds: number | null): string {
   if (seconds == null) return "unknown";
   const h = Math.floor(seconds / 3600);
@@ -58,19 +95,97 @@ function formatDateTime(iso: string): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
+// Seconds -> m:ss (or h:mm:ss), for clip in/out markers.
+function formatClock(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+  return `${h > 0 ? `${h}:` : ""}${mm}:${String(sec).padStart(2, "0")}`;
+}
+
+// Small activity chips on a recording card: what was seen during the clip.
+// A recording links to detections only by time overlap, so these come from the
+// /facets endpoint rather than the recording row itself.
+function FacetChips({ facet }: { facet: Facet | undefined }) {
+  if (!facet) return null;
+  const { objects, persons, vehicles, has_audio } = facet;
+  if (
+    objects.length === 0 && persons.length === 0 &&
+    vehicles.length === 0 && !has_audio
+  ) {
+    return null;
+  }
+  const chip = "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] leading-none border";
+  return (
+    <div className="flex flex-wrap gap-1 pt-1">
+      {persons.map((p) => (
+        <span key={`p-${p}`} className={`${chip} border-accent/40 bg-accent/10 text-accent`} title={`Person: ${p}`}>
+          🧑 {p}
+        </span>
+      ))}
+      {vehicles.map((v) => (
+        <span key={`v-${v}`} className={`${chip} border-amber-500/40 bg-amber-500/10 text-amber-300`} title={`Vehicle: ${v}`}>
+          🚗 {v}
+        </span>
+      ))}
+      {objects
+        .filter((o) => o !== "person")
+        .map((o) => (
+          <span key={`o-${o}`} className={`${chip} border-border bg-muted text-muted-foreground`} title={`Object: ${o}`}>
+            {OBJECT_GLYPH[o] || "•"} {o}
+          </span>
+        ))}
+      {has_audio && (
+        <span className={`${chip} border-border bg-muted text-muted-foreground`} title="Has audio transcript">
+          🔊 audio
+        </span>
+      )}
+    </div>
+  );
+}
+
 const PAGE_SIZE = 24;
 
 export default function RecordingsPage() {
   const { authFetch, token } = useAuth();
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [persons, setPersons] = useState<Person[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [facets, setFacets] = useState<Record<string, Facet>>({});
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [cameraFilter, setCameraFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [objectFilter, setObjectFilter] = useState("");
+  const [objectFilters, setObjectFilters] = useState<string[]>([]);
+  const [personFilter, setPersonFilter] = useState("");
+  const [vehicleFilter, setVehicleFilter] = useState("");
   const [showBoxes, setShowBoxes] = useState(true);
+  // "Search what was said" mode: transcript full-text search that deep-links
+  // into the covering recording, seeked to the utterance.
+  const [speechQuery, setSpeechQuery] = useState("");
+  const [speechResults, setSpeechResults] = useState<Transcript[] | null>(null);
+  const [speechLoading, setSpeechLoading] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  // A recording resolved from a transcript hit that may not be on the current
+  // grid page, so the modal can still open it.
+  const [directRec, setDirectRec] = useState<Recording | null>(null);
+  // Seconds to seek the player to once its metadata loads (from a speech hit).
+  const pendingSeekRef = useRef<number | null>(null);
+  // Trim/clip export: in/out points (seconds into the recording) for the
+  // server-side clip cut. Null until the user marks them.
+  const [clipStart, setClipStart] = useState<number | null>(null);
+  const [clipEnd, setClipEnd] = useState<number | null>(null);
+
+  const toggleObject = useCallback((obj: string) => {
+    setObjectFilters((prev) =>
+      prev.includes(obj) ? prev.filter((o) => o !== obj) : [...prev, obj],
+    );
+    setPage(0);
+  }, []);
   const [seekTargets, setSeekTargets] = useState<number[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -105,10 +220,16 @@ export default function RecordingsPage() {
     return map;
   }, [cameras]);
 
-  const fetchCameras = useCallback(async () => {
+  const fetchPickers = useCallback(async () => {
     try {
-      const res = await authFetch("/api/cameras");
-      if (res.ok) setCameras(await res.json());
+      const [cRes, pRes, vRes] = await Promise.all([
+        authFetch("/api/cameras"),
+        authFetch("/api/persons"),
+        authFetch("/api/vehicles"),
+      ]);
+      if (cRes.ok) setCameras(await cRes.json());
+      if (pRes.ok) setPersons(await pRes.json());
+      if (vRes.ok) setVehicles(await vRes.json());
     } catch {
       /* silent */
     }
@@ -124,18 +245,32 @@ export default function RecordingsPage() {
       params.set("offset", String(page * PAGE_SIZE));
     }
     if (cameraFilter) params.set("camera_id", cameraFilter);
-    if (objectFilter) params.set("object", objectFilter);
+    for (const obj of objectFilters) params.append("object", obj);
+    if (personFilter) params.set("person_id", personFilter);
+    if (vehicleFilter) params.set("vehicle_id", vehicleFilter);
     if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
     if (dateTo) params.set("to", new Date(dateTo).toISOString());
     return params;
-  }, [page, cameraFilter, objectFilter, dateFrom, dateTo]);
+  }, [page, cameraFilter, objectFilters, personFilter, vehicleFilter, dateFrom, dateTo]);
 
   const fetchRecordings = useCallback(async () => {
     setLoading(true);
+    setFacets({});
     try {
       const res = await authFetch(`/api/recordings?${buildParams(true).toString()}`);
       if (res.ok) {
-        setRecordings(await res.json());
+        const recs: Recording[] = await res.json();
+        setRecordings(recs);
+        // Fetch activity chips for this page in one shot (best-effort).
+        if (recs.length > 0) {
+          try {
+            const ids = recs.map((r) => r.id).join(",");
+            const fRes = await authFetch(`/api/recordings/facets?ids=${encodeURIComponent(ids)}`);
+            if (fRes.ok) setFacets(await fRes.json());
+          } catch {
+            /* chips are optional */
+          }
+        }
       }
     } catch {
       /* silent */
@@ -150,9 +285,93 @@ export default function RecordingsPage() {
     window.open(`/api/recordings/download-bundle?${params.toString()}`, "_blank");
   };
 
+  // Speech search: find transcripts matching the query (respecting the camera
+  // and date filters), so the user can jump to "when someone said X".
+  const runSpeechSearch = useCallback(async () => {
+    const q = speechQuery.trim();
+    if (!q) {
+      setSpeechResults(null);
+      setSpeechError(null);
+      return;
+    }
+    setSpeechLoading(true);
+    setSpeechError(null);
+    try {
+      const params = new URLSearchParams({ search: q, limit: "50" });
+      if (cameraFilter) params.set("camera_id", cameraFilter);
+      if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
+      if (dateTo) params.set("to", new Date(dateTo).toISOString());
+      const res = await authFetch(`/api/transcripts?${params.toString()}`);
+      if (res.ok) {
+        setSpeechResults(await res.json());
+      } else {
+        setSpeechError("Speech search failed.");
+      }
+    } catch {
+      setSpeechError("Speech search failed.");
+    } finally {
+      setSpeechLoading(false);
+    }
+  }, [speechQuery, cameraFilter, dateFrom, dateTo, authFetch]);
+
+  // Open the recording covering a given camera + instant, seeked to it, with a
+  // ~30s clip pre-armed around the moment. A recording links to a detection or
+  // transcript only by time overlap, so resolve it by querying that camera's
+  // recordings around the instant. Returns an error string, or null on success.
+  const openAtMoment = useCallback(async (cameraId: string, isoTs: string): Promise<string | null> => {
+    const ts = new Date(isoTs);
+    const params = new URLSearchParams({
+      camera_id: cameraId,
+      from: new Date(ts.getTime() - 2000).toISOString(),
+      to: new Date(ts.getTime() + 2000).toISOString(),
+      limit: "1",
+    });
+    try {
+      const res = await authFetch(`/api/recordings?${params.toString()}`);
+      const recs: Recording[] = res.ok ? await res.json() : [];
+      const rec = recs[0];
+      if (!rec) {
+        return "No recording covers that moment (footage already rotated out).";
+      }
+      const offset = Math.max(0, (ts.getTime() - new Date(rec.started_at).getTime()) / 1000);
+      pendingSeekRef.current = offset;
+      setDirectRec(rec);
+      setClipStart(Math.max(0, offset - 3));
+      setClipEnd(offset + 27);
+      setExpandedId(rec.id);
+      return null;
+    } catch {
+      return "Could not open that recording.";
+    }
+  }, [authFetch]);
+
+  const openTranscriptHit = useCallback(async (t: Transcript) => {
+    const err = await openAtMoment(t.camera_id, t.started_at);
+    if (err) setSpeechError(err);
+  }, [openAtMoment]);
+
+  // Hand-off from the Timeline page: it stashes {camera_id, started_at} in
+  // sessionStorage then routes here; open that moment on mount.
   useEffect(() => {
-    fetchCameras();
-  }, [fetchCameras]);
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem("nurby_open_moment");
+      if (raw) sessionStorage.removeItem("nurby_open_moment");
+    } catch {
+      /* private mode / no storage */
+    }
+    if (!raw) return;
+    try {
+      const { camera_id, started_at } = JSON.parse(raw);
+      if (camera_id && started_at) openAtMoment(camera_id, started_at);
+    } catch {
+      /* malformed hand-off, ignore */
+    }
+  }, [openAtMoment]);
+
+  useEffect(() => {
+    fetchPickers();
+  }, [fetchPickers]);
 
   useEffect(() => {
     fetchRecordings();
@@ -177,8 +396,10 @@ export default function RecordingsPage() {
   }, [expandedId]);
 
   const expandedRec = useMemo(
-    () => recordings.find((r) => r.id === expandedId) || null,
-    [recordings, expandedId],
+    () =>
+      recordings.find((r) => r.id === expandedId) ||
+      (directRec && directRec.id === expandedId ? directRec : null),
+    [recordings, expandedId, directRec],
   );
 
   const handleDelete = useCallback(async (id: string) => {
@@ -204,9 +425,15 @@ export default function RecordingsPage() {
     setCameraFilter("");
     setDateFrom("");
     setDateTo("");
-    setObjectFilter("");
+    setObjectFilters([]);
+    setPersonFilter("");
+    setVehicleFilter("");
     setPage(0);
   };
+
+  const hasActiveFilters =
+    !!cameraFilter || !!dateFrom || !!dateTo ||
+    objectFilters.length > 0 || !!personFilter || !!vehicleFilter;
 
   const applyPreset = (hours: number) => {
     const now = new Date();
@@ -230,98 +457,222 @@ export default function RecordingsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <select
-          value={cameraFilter}
-          onChange={(e) => {
-            setCameraFilter(e.target.value);
-            setPage(0);
-          }}
-          className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-        >
-          <option value="">All cameras</option>
-          {cameras.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={objectFilter}
-          onChange={(e) => { setObjectFilter(e.target.value); setPage(0); }}
-          className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-          title="Only show clips that contain this object"
-        >
-          <option value="">Any object</option>
-          {COMMON_OBJECTS.map((o) => (
-            <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</option>
-          ))}
-        </select>
-
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">From</label>
-          <input
-            type="datetime-local"
-            value={dateFrom}
-            onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
+      <div className="space-y-3 mb-6">
+        {/* Row 1: who / where / when */}
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={cameraFilter}
+            onChange={(e) => {
+              setCameraFilter(e.target.value);
+              setPage(0);
+            }}
             className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">To</label>
-          <input
-            type="datetime-local"
-            value={dateTo}
-            onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
-            className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-        </div>
-
-        <div className="flex items-center gap-1">
-          {[
-            { label: "Last night", hours: 14 },
-            { label: "24h", hours: 24 },
-            { label: "7d", hours: 168 },
-          ].map((p) => (
-            <button
-              key={p.label}
-              onClick={() => applyPreset(p.hours)}
-              className="px-2 py-1.5 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >{p.label}</button>
-          ))}
-        </div>
-
-        <button
-          onClick={downloadRange}
-          disabled={recordings.length === 0}
-          title="Download every clip matching these filters as a single zip"
-          className="px-3 py-2 text-xs rounded-md border border-accent bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40"
-        >
-          Download range
-        </button>
-
-        {(cameraFilter || dateFrom || dateTo || objectFilter) && (
-          <button
-            onClick={resetFiltersAndPage}
-            className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
-            Clear filters
+            <option value="">All cameras</option>
+            {cameras.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={personFilter}
+            onChange={(e) => { setPersonFilter(e.target.value); setPage(0); }}
+            className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
+            disabled={persons.length === 0}
+            title="Only show clips where this person was seen"
+          >
+            <option value="">Anyone</option>
+            {persons.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nickname || p.display_name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={vehicleFilter}
+            onChange={(e) => { setVehicleFilter(e.target.value); setPage(0); }}
+            className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
+            disabled={vehicles.length === 0}
+            title="Only show clips where this vehicle was seen"
+          >
+            <option value="">Any vehicle</option>
+            {vehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.license_plate || v.display_name}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">From</label>
+            <input
+              type="datetime-local"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
+              className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">To</label>
+            <input
+              type="datetime-local"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
+              className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+
+          <div className="flex items-center gap-1">
+            {[
+              { label: "Last night", hours: 14 },
+              { label: "24h", hours: 24 },
+              { label: "7d", hours: 168 },
+            ].map((p) => (
+              <button
+                key={p.label}
+                onClick={() => applyPreset(p.hours)}
+                className="px-2 py-1.5 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >{p.label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Row 2: object-class multi-select chips + actions */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground mr-1">Contains</span>
+          {COMMON_OBJECTS.map((o) => {
+            const on = objectFilters.includes(o);
+            return (
+              <button
+                key={o}
+                onClick={() => toggleObject(o)}
+                aria-pressed={on}
+                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                  on
+                    ? "border-accent bg-accent/15 text-accent"
+                    : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <span className="mr-1">{OBJECT_GLYPH[o] || "•"}</span>
+                {o[0].toUpperCase() + o.slice(1)}
+              </button>
+            );
+          })}
+
+          <div className="flex-1" />
+
+          <button
+            onClick={downloadRange}
+            disabled={recordings.length === 0}
+            title="Download every clip matching these filters as a single zip"
+            className="px-3 py-2 text-xs rounded-md border border-accent bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40"
+          >
+            Download range
           </button>
-        )}
+
+          {hasActiveFilters && (
+            <button
+              onClick={resetFiltersAndPage}
+              className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        {/* Row 3: search what was said (transcripts) */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); runSpeechSearch(); }}
+          className="flex items-center gap-2"
+        >
+          <div className="relative flex-1 max-w-xl">
+            <svg
+              width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="search"
+              value={speechQuery}
+              onChange={(e) => setSpeechQuery(e.target.value)}
+              placeholder="Search what was said… (e.g. “gate”, “package”, a name)"
+              className="w-full pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={!speechQuery.trim() || speechLoading}
+            className="px-3 py-2 text-xs rounded-md border border-accent bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40"
+          >
+            {speechLoading ? "Searching…" : "Search speech"}
+          </button>
+          {speechResults !== null && (
+            <button
+              type="button"
+              onClick={() => { setSpeechQuery(""); setSpeechResults(null); setSpeechError(null); }}
+              className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </form>
       </div>
+
+      {/* Speech search results: click a line to jump into the recording at that moment. */}
+      {speechResults !== null && (
+        <div className="mb-6 rounded-lg border border-border bg-card overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-border text-xs text-muted-foreground">
+            {speechResults.length === 0
+              ? "No speech matched that search."
+              : `${speechResults.length} spoken moment${speechResults.length === 1 ? "" : "s"} matched "${speechQuery.trim()}"`}
+          </div>
+          {speechError && (
+            <div className="px-4 py-2 text-xs text-red-400 border-b border-border">{speechError}</div>
+          )}
+          <ul className="divide-y divide-border-subtle max-h-80 overflow-y-auto">
+            {speechResults.map((t) => (
+              <li key={t.id}>
+                <button
+                  onClick={() => openTranscriptHit(t)}
+                  className="w-full text-left px-4 py-2.5 flex items-start gap-3 hover:bg-muted/60 transition-colors group"
+                >
+                  <span className="shrink-0 mt-0.5 text-accent">🔊</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm text-foreground truncate group-hover:whitespace-normal">
+                      {t.text}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground mt-0.5">
+                      {cameraNames[t.camera_id] || "Unknown camera"}
+                      <span className="mx-1.5">·</span>
+                      {formatDateTime(t.started_at)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 self-center text-[11px] text-muted-foreground group-hover:text-accent">
+                    Play ▶
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-muted-foreground py-20 text-center">
           Loading recordings.
         </div>
       ) : recordings.length === 0 ? (
-        (cameraFilter || dateFrom || dateTo) ? (
+        hasActiveFilters ? (
           <EmptyState
             title="No recordings match these filters"
-            body="Try a different camera or widen the date range."
+            body="Try a different camera, person, or object, or widen the date range."
             actionLabel="Clear filters"
-            onAction={() => { setCameraFilter(""); setDateFrom(""); setDateTo(""); }}
+            onAction={resetFiltersAndPage}
           />
         ) : (
           <EmptyState
@@ -339,7 +690,12 @@ export default function RecordingsPage() {
               <button
                 key={rec.id}
                 type="button"
-                onClick={() => setExpandedId(rec.id)}
+                onClick={() => {
+                  pendingSeekRef.current = null;
+                  setClipStart(null);
+                  setClipEnd(null);
+                  setExpandedId(rec.id);
+                }}
                 className="group text-left rounded-lg border border-border bg-card overflow-hidden hover:border-accent/60 hover:bg-card/80 transition-all focus:outline-none focus:ring-1 focus:ring-accent"
               >
                 {rec.thumbnail_path ? (
@@ -369,6 +725,7 @@ export default function RecordingsPage() {
                     <span>{formatDuration(rec.duration_seconds)}</span>
                     <span>{formatFileSize(rec.file_size_bytes)}</span>
                   </div>
+                  <FacetChips facet={facets[rec.id]} />
                 </div>
               </button>
             ))}
@@ -446,6 +803,14 @@ export default function RecordingsPage() {
                   autoPlay
                   className="w-full max-h-[60vh] rounded bg-black"
                   src={`/api/recordings/${expandedRec.id}/stream${token ? `?token=${token}` : ""}`}
+                  onLoadedMetadata={(e) => {
+                    // Apply a pending seek from a speech-search jump, once.
+                    if (pendingSeekRef.current != null) {
+                      const v = e.currentTarget;
+                      v.currentTime = Math.min(pendingSeekRef.current, v.duration || pendingSeekRef.current);
+                      pendingSeekRef.current = null;
+                    }
+                  }}
                 />
                 <RecordingDetectionOverlay
                   cameraId={expandedRec.camera_id}
@@ -456,7 +821,7 @@ export default function RecordingsPage() {
                   camHeight={cameraById[expandedRec.camera_id]?.height}
                   videoRef={videoRef}
                   draw={showBoxes}
-                  seekLabel={objectFilter || null}
+                  seekLabel={objectFilters[0] || null}
                   onTargets={setSeekTargets}
                 />
               </div>
@@ -490,7 +855,7 @@ export default function RecordingsPage() {
                   >Next ▶</button>
                   <span className="text-[11px] text-muted-foreground">
                     {seekTargets.length > 0
-                      ? `${seekTargets.length} ${objectFilter || "detection"} moment${seekTargets.length === 1 ? "" : "s"}`
+                      ? `${seekTargets.length} ${objectFilters[0] || "detection"} moment${seekTargets.length === 1 ? "" : "s"}`
                       : "no detections"}
                   </span>
                 </div>
@@ -505,6 +870,66 @@ export default function RecordingsPage() {
                 >
                   Detections {showBoxes ? "on" : "off"}
                 </button>
+              </div>
+
+              {/* Clip trim: mark in/out from the playhead, download just that span. */}
+              <div className="flex items-center gap-2 flex-wrap rounded-md border border-border-subtle bg-background/40 px-3 py-2">
+                <span className="text-[11px] font-medium text-muted-foreground mr-1">Trim clip</span>
+                <button
+                  onClick={() => {
+                    const t = videoRef.current?.currentTime ?? 0;
+                    setClipStart(t);
+                    if (clipEnd != null && clipEnd <= t) setClipEnd(null);
+                  }}
+                  className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title="Set clip start to the current playhead"
+                >Set start{clipStart != null ? ` · ${formatClock(clipStart)}` : ""}</button>
+                <button
+                  onClick={() => {
+                    const t = videoRef.current?.currentTime ?? 0;
+                    setClipEnd(t);
+                    if (clipStart != null && clipStart >= t) setClipStart(null);
+                  }}
+                  className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title="Set clip end to the current playhead"
+                >Set end{clipEnd != null ? ` · ${formatClock(clipEnd)}` : ""}</button>
+                {clipStart != null && clipEnd != null && clipEnd > clipStart && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {formatClock(clipEnd - clipStart)} selected
+                  </span>
+                )}
+                <div className="flex-1" />
+                {(clipStart != null || clipEnd != null) && (
+                  <button
+                    onClick={() => { setClipStart(null); setClipEnd(null); }}
+                    className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >Reset</button>
+                )}
+                <a
+                  href={
+                    clipStart != null && clipEnd != null && clipEnd > clipStart
+                      ? `/api/recordings/${expandedRec.id}/clip?start=${clipStart.toFixed(2)}&end=${clipEnd.toFixed(2)}${token ? `&token=${token}` : ""}`
+                      : undefined
+                  }
+                  download
+                  aria-disabled={!(clipStart != null && clipEnd != null && clipEnd > clipStart)}
+                  onClick={(e) => {
+                    if (!(clipStart != null && clipEnd != null && clipEnd > clipStart)) e.preventDefault();
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded-md border transition-colors ${
+                    clipStart != null && clipEnd != null && clipEnd > clipStart
+                      ? "border-accent bg-accent/10 text-accent hover:bg-accent/20"
+                      : "border-border text-muted-foreground opacity-40 cursor-not-allowed"
+                  }`}
+                  title="Download only the selected span as its own mp4"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Download clip
+                </a>
               </div>
               {confirmDeleteId === expandedRec.id ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2">
