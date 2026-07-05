@@ -95,6 +95,16 @@ function formatDateTime(iso: string): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
+// Seconds -> m:ss (or h:mm:ss), for clip in/out markers.
+function formatClock(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+  return `${h > 0 ? `${h}:` : ""}${mm}:${String(sec).padStart(2, "0")}`;
+}
+
 // Small activity chips on a recording card: what was seen during the clip.
 // A recording links to detections only by time overlap, so these come from the
 // /facets endpoint rather than the recording row itself.
@@ -165,6 +175,10 @@ export default function RecordingsPage() {
   const [directRec, setDirectRec] = useState<Recording | null>(null);
   // Seconds to seek the player to once its metadata loads (from a speech hit).
   const pendingSeekRef = useRef<number | null>(null);
+  // Trim/clip export: in/out points (seconds into the recording) for the
+  // server-side clip cut. Null until the user marks them.
+  const [clipStart, setClipStart] = useState<number | null>(null);
+  const [clipEnd, setClipEnd] = useState<number | null>(null);
 
   const toggleObject = useCallback((obj: string) => {
     setObjectFilters((prev) =>
@@ -322,6 +336,10 @@ export default function RecordingsPage() {
       const offset = Math.max(0, (ts.getTime() - new Date(rec.started_at).getTime()) / 1000);
       pendingSeekRef.current = offset;
       setDirectRec(rec);
+      // Pre-arm a ~30s clip around the utterance so "download this moment" is
+      // one click. A few seconds of lead-in keeps the start intelligible.
+      setClipStart(Math.max(0, offset - 3));
+      setClipEnd(offset + 27);
       setExpandedId(rec.id);
     } catch {
       setSpeechError("Could not open that recording.");
@@ -649,7 +667,12 @@ export default function RecordingsPage() {
               <button
                 key={rec.id}
                 type="button"
-                onClick={() => { pendingSeekRef.current = null; setExpandedId(rec.id); }}
+                onClick={() => {
+                  pendingSeekRef.current = null;
+                  setClipStart(null);
+                  setClipEnd(null);
+                  setExpandedId(rec.id);
+                }}
                 className="group text-left rounded-lg border border-border bg-card overflow-hidden hover:border-accent/60 hover:bg-card/80 transition-all focus:outline-none focus:ring-1 focus:ring-accent"
               >
                 {rec.thumbnail_path ? (
@@ -824,6 +847,66 @@ export default function RecordingsPage() {
                 >
                   Detections {showBoxes ? "on" : "off"}
                 </button>
+              </div>
+
+              {/* Clip trim: mark in/out from the playhead, download just that span. */}
+              <div className="flex items-center gap-2 flex-wrap rounded-md border border-border-subtle bg-background/40 px-3 py-2">
+                <span className="text-[11px] font-medium text-muted-foreground mr-1">Trim clip</span>
+                <button
+                  onClick={() => {
+                    const t = videoRef.current?.currentTime ?? 0;
+                    setClipStart(t);
+                    if (clipEnd != null && clipEnd <= t) setClipEnd(null);
+                  }}
+                  className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title="Set clip start to the current playhead"
+                >Set start{clipStart != null ? ` · ${formatClock(clipStart)}` : ""}</button>
+                <button
+                  onClick={() => {
+                    const t = videoRef.current?.currentTime ?? 0;
+                    setClipEnd(t);
+                    if (clipStart != null && clipStart >= t) setClipStart(null);
+                  }}
+                  className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title="Set clip end to the current playhead"
+                >Set end{clipEnd != null ? ` · ${formatClock(clipEnd)}` : ""}</button>
+                {clipStart != null && clipEnd != null && clipEnd > clipStart && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {formatClock(clipEnd - clipStart)} selected
+                  </span>
+                )}
+                <div className="flex-1" />
+                {(clipStart != null || clipEnd != null) && (
+                  <button
+                    onClick={() => { setClipStart(null); setClipEnd(null); }}
+                    className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >Reset</button>
+                )}
+                <a
+                  href={
+                    clipStart != null && clipEnd != null && clipEnd > clipStart
+                      ? `/api/recordings/${expandedRec.id}/clip?start=${clipStart.toFixed(2)}&end=${clipEnd.toFixed(2)}${token ? `&token=${token}` : ""}`
+                      : undefined
+                  }
+                  download
+                  aria-disabled={!(clipStart != null && clipEnd != null && clipEnd > clipStart)}
+                  onClick={(e) => {
+                    if (!(clipStart != null && clipEnd != null && clipEnd > clipStart)) e.preventDefault();
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded-md border transition-colors ${
+                    clipStart != null && clipEnd != null && clipEnd > clipStart
+                      ? "border-accent bg-accent/10 text-accent hover:bg-accent/20"
+                      : "border-border text-muted-foreground opacity-40 cursor-not-allowed"
+                  }`}
+                  title="Download only the selected span as its own mp4"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Download clip
+                </a>
               </div>
               {confirmDeleteId === expandedRec.id ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2">

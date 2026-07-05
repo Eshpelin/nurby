@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import subprocess
 import tempfile
 import uuid
 import zipfile
@@ -17,9 +18,18 @@ from shared.auth import get_current_user, require_admin, require_query_token
 from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids, apply_camera_filter
 from shared.config import settings
 from shared.database import get_db
+from shared.ffmpeg_safe import (
+    PROTOCOL_WHITELIST_ARGS,
+    DisallowedFfmpegArgError,
+    assert_allowed_args,
+)
 from shared.models import Camera, Observation, Person, Recording, Transcript, User, Vehicle
-from shared.paths import escape_like, resolve_inside
+from shared.paths import escape_like, resolve_inside, safe_getsize
 from shared.schemas import RecordingResponse
+
+# A trimmed clip is capped so a request can't ask us to transcode an
+# arbitrarily long segment on the API host. Over this returns 400.
+_CLIP_MAX_SECONDS = 600
 
 # A facet lookup is bounded so a caller can't ask us to aggregate an
 # unbounded id list in one shot. The recordings grid pages at 24, so 200
@@ -553,6 +563,81 @@ async def download_recording(
         media_type="application/octet-stream",
         filename=filename,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _render_clip(src_path: str, out_path: str, start: float, duration: float) -> bool:
+    """Cut [start, start+duration] out of src into out (re-encoded, faststart).
+    Sync; run in an executor. Input-seek (-ss before -i) is fast; a re-encode
+    keeps the cut frame-accurate at the requested start rather than snapping to
+    the previous keyframe. Returns True on a non-empty output."""
+    cmd = [
+        "ffmpeg", *PROTOCOL_WHITELIST_ARGS, "-y", "-loglevel", "error",
+        "-ss", f"{start:.3f}", "-i", src_path, "-t", f"{duration:.3f}",
+        "-map", "0:v:0", "-map", "0:a:0?",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-movflags", "+faststart",
+        out_path,
+    ]
+    assert_allowed_args(cmd)
+    proc = subprocess.run(cmd, capture_output=True, timeout=300)
+    if proc.returncode != 0:
+        logger.warning("clip ffmpeg failed rc=%s: %s", proc.returncode, proc.stderr[-300:])
+        return False
+    return safe_getsize(out_path) > 0
+
+
+@router.get("/{recording_id}/clip")
+async def download_clip(
+    recording_id: uuid.UUID,
+    start: float = Query(..., ge=0, description="Clip start, seconds from recording start"),
+    end: float = Query(..., gt=0, description="Clip end, seconds from recording start"),
+    token: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download just [start, end] of a recording as its own mp4, cut server-side
+    so the caller never pulls the whole file. Offloaded to a thread (ffmpeg is
+    blocking), mirroring the annotated-download path."""
+    user = await _user_from_query_token(token, db)
+    allowed = await allowed_camera_ids(user, db)
+    recording = await _get_recording_or_404(recording_id, db, allowed)
+    src_path = _get_disk_path_or_404(recording)
+
+    if end <= start:
+        raise HTTPException(status_code=400, detail="end must be greater than start")
+    # Clamp to the known recording length so a too-long `end` doesn't ask ffmpeg
+    # to read past EOF; then enforce the max clip duration.
+    if recording.duration_seconds:
+        end = min(end, float(recording.duration_seconds))
+    duration = end - start
+    if duration <= 0:
+        raise HTTPException(status_code=400, detail="Requested range is outside the recording")
+    if duration > _CLIP_MAX_SECONDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Clip too long ({int(duration)}s). Max is {_CLIP_MAX_SECONDS}s.",
+        )
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+    tmp.close()
+    loop = asyncio.get_event_loop()
+    try:
+        ok = await loop.run_in_executor(None, _render_clip, src_path, tmp.name, start, duration)
+    except (DisallowedFfmpegArgError, subprocess.TimeoutExpired, OSError) as exc:
+        os.remove(tmp.name)
+        logger.error("clip render error for %s: %s", recording.id, exc)
+        raise HTTPException(status_code=500, detail="Could not build clip") from exc
+    if not ok:
+        os.remove(tmp.name)
+        raise HTTPException(status_code=500, detail="Could not build clip")
+
+    filename = f"{recording.started_at:%Y%m%d-%H%M%S}-clip-{int(start)}s-{int(end)}s.mp4"
+    return FileResponse(
+        tmp.name,
+        media_type="application/octet-stream",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        background=BackgroundTask(os.remove, tmp.name),
     )
 
 
