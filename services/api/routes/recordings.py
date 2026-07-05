@@ -17,9 +17,14 @@ from shared.auth import get_current_user, require_admin, require_query_token
 from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids, apply_camera_filter
 from shared.config import settings
 from shared.database import get_db
-from shared.models import Camera, Observation, Recording, User
+from shared.models import Camera, Observation, Person, Recording, Transcript, User, Vehicle
 from shared.paths import escape_like, resolve_inside
 from shared.schemas import RecordingResponse
+
+# A facet lookup is bounded so a caller can't ask us to aggregate an
+# unbounded id list in one shot. The recordings grid pages at 24, so 200
+# comfortably covers a page (plus slack) while capping the fan-out.
+_FACETS_MAX_IDS = 200
 
 # A bundle download is capped so a too-broad range can't build an enormous
 # zip / temp file. Over either limit returns 413 asking to narrow the window.
@@ -103,53 +108,106 @@ def _get_disk_path_or_404(recording: Recording) -> str:
     return path
 
 
-def _filtered_recordings_query(
+def _recording_window_end():
+    """SQL expression for a recording's window end. window_end falls back to
+    started_at + duration (default 1h) when ended_at is NULL (still recording)."""
+    return func.coalesce(
+        Recording.ended_at,
+        Recording.started_at
+        + func.make_interval(0, 0, 0, 0, 0, 0, func.coalesce(Recording.duration_seconds, 3600)),
+    )
+
+
+def _overlapping_observation_matching(clause):
+    """EXISTS() over observations that fall inside the correlated recording's
+    window AND satisfy ``clause`` (a detection-JSON match). An observation
+    belongs to a recording when its start falls within [started_at, window_end]."""
+    return (
+        select(Observation.id)
+        .where(Observation.camera_id == Recording.camera_id)
+        .where(Observation.started_at >= Recording.started_at)
+        .where(Observation.started_at <= _recording_window_end())
+        .where(clause)
+        .correlate(Recording)
+        .exists()
+    )
+
+
+async def _filtered_recordings_query(
+    db: AsyncSession,
     camera_id: uuid.UUID | None,
     from_: datetime | None,
     to: datetime | None,
-    object_label: str | None,
+    object_labels: list[str] | None = None,
+    person_id: uuid.UUID | None = None,
+    vehicle_id: uuid.UUID | None = None,
     allowed: AllowedCameras = ALL,
 ):
-    """Base SELECT for recordings, with optional camera / time-window / object
-    filters. The object filter keeps recordings whose window overlaps an
-    observation carrying that label (reuses the observations.py label match).
+    """Base SELECT for recordings, with optional camera / time-window / object /
+    person / vehicle filters. A recording matches when its window overlaps an
+    observation carrying the requested detection (reuses the same detection-JSON
+    match as observations.py / events.py).
+
+    Filter groups combine with AND (a recording must satisfy every provided
+    group); within the object group, labels combine with OR (any of them).
+    Returns ``None`` when a person filter resolves to nobody, so the caller can
+    short-circuit to an empty result.
 
     ``allowed`` is the per-user camera ACL (issue #40); it defaults to
     ``ALL`` (no filter) so existing callers and tests are unaffected."""
     query = apply_camera_filter(select(Recording), allowed, Recording.camera_id)
     if camera_id:
         query = query.where(Recording.camera_id == camera_id)
-    # A recording occupies the window [started_at, window_end]; window_end falls
-    # back to started_at + duration (default 1h) when ended_at is NULL (still
-    # recording). The from/to range must match on window OVERLAP, not just on
-    # started_at, otherwise a recording that began before `from` but is still
-    # running (or ended inside the window) is wrongly dropped.
-    window_end = func.coalesce(
-        Recording.ended_at,
-        Recording.started_at
-        + func.make_interval(0, 0, 0, 0, 0, 0, func.coalesce(Recording.duration_seconds, 3600)),
-    )
+    # The from/to range must match on window OVERLAP, not just on started_at,
+    # otherwise a recording that began before `from` but is still running (or
+    # ended inside the window) is wrongly dropped.
+    window_end = _recording_window_end()
     if from_:
         query = query.where(window_end >= from_)
     if to:
         query = query.where(Recording.started_at <= to)
-    if object_label:
-        # An observation belongs to a recording if it falls within the
-        # recording's window: [started_at, ended_at or started_at+duration].
-        obs_exists = (
-            select(Observation.id)
-            .where(Observation.camera_id == Recording.camera_id)
-            .where(Observation.started_at >= Recording.started_at)
-            .where(Observation.started_at <= window_end)
-            .where(
+
+    labels = [o for o in (object_labels or []) if o and o.strip()]
+    if labels:
+        # OR across selected labels: keep recordings whose window overlaps an
+        # observation carrying ANY of them.
+        from sqlalchemy import or_
+
+        clause = or_(
+            *[
                 cast(Observation.object_detections, String).ilike(
-                    f'%"label": "{escape_like(object_label)}"%', escape="\\"
+                    f'%"label": "{escape_like(lbl)}"%', escape="\\"
+                )
+                for lbl in labels
+            ]
+        )
+        query = query.where(_overlapping_observation_matching(clause))
+
+    if person_id:
+        # person_detections stores the canonical display_name (same match as
+        # events.py / observations.py). Resolve the id; unknown id -> no rows.
+        name = (
+            await db.execute(select(Person.display_name).where(Person.id == person_id))
+        ).scalars().first()
+        if not name:
+            return None
+        query = query.where(
+            _overlapping_observation_matching(
+                cast(Observation.person_detections, String).ilike(
+                    f'%"person_name": "{escape_like(name)}"%', escape="\\"
                 )
             )
-            .correlate(Recording)
-            .exists()
         )
-        query = query.where(obs_exists)
+
+    if vehicle_id:
+        # vehicle_detections stores vehicle_id directly (no name resolution).
+        query = query.where(
+            _overlapping_observation_matching(
+                cast(Observation.vehicle_detections, String).ilike(
+                    f'%"vehicle_id": "{escape_like(str(vehicle_id))}"%', escape="\\"
+                )
+            )
+        )
     return query
 
 
@@ -158,20 +216,170 @@ async def list_recordings(
     camera_id: uuid.UUID | None = Query(default=None),
     from_: datetime | None = Query(default=None, alias="from", description="Inclusive start (ISO 8601)"),
     to: datetime | None = Query(default=None, description="Inclusive end (ISO 8601)"),
-    object: str | None = Query(default=None, description="Only recordings containing this object label"),
+    object: list[str] = Query(
+        default=[], description="Only recordings containing any of these object labels (repeatable)"
+    ),
+    person_id: uuid.UUID | None = Query(
+        default=None, description="Only recordings whose window overlaps a sighting of this person"
+    ),
+    vehicle_id: uuid.UUID | None = Query(
+        default=None, description="Only recordings whose window overlaps a sighting of this vehicle"
+    ),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     allowed = await allowed_camera_ids(current_user, db)
-    query = (
-        _filtered_recordings_query(camera_id, from_, to, object, allowed)
-        .order_by(Recording.started_at.desc())
-        .limit(limit)
-        .offset(offset)
+    query = await _filtered_recordings_query(
+        db, camera_id, from_, to, object, person_id, vehicle_id, allowed
     )
+    if query is None:
+        return []
+    query = query.order_by(Recording.started_at.desc()).limit(limit).offset(offset)
     result = await db.execute(query)
     return result.scalars().all()
+
+
+def _detection_labels(object_detections: dict | None) -> list[str]:
+    """Distinct object labels from an observation's object_detections JSON."""
+    if not isinstance(object_detections, dict):
+        return []
+    out: list[str] = []
+    for obj in object_detections.get("objects") or []:
+        if isinstance(obj, dict):
+            label = obj.get("label")
+            if isinstance(label, str) and label not in out:
+                out.append(label)
+    return out
+
+
+def _detection_persons(person_detections: dict | None) -> list[str]:
+    """Distinct named persons from an observation's person_detections JSON.
+    Skips unnamed clusters (person_name is the canonical label when known)."""
+    if not isinstance(person_detections, dict):
+        return []
+    out: list[str] = []
+    for face in person_detections.get("faces") or []:
+        if isinstance(face, dict):
+            name = face.get("person_name")
+            if isinstance(name, str) and name and name not in out:
+                out.append(name)
+    return out
+
+
+def _detection_vehicles(vehicle_detections: dict | None) -> list[str]:
+    """Distinct vehicle labels (plate when known, else type) from an
+    observation's vehicle_detections JSON."""
+    if not isinstance(vehicle_detections, dict):
+        return []
+    out: list[str] = []
+    for v in vehicle_detections.get("vehicles") or []:
+        if isinstance(v, dict):
+            label = v.get("plate_text") or v.get("label") or "vehicle"
+            if isinstance(label, str) and label not in out:
+                out.append(label)
+    return out
+
+
+@router.get("/facets")
+async def recordings_facets(
+    ids: str = Query(..., description="Comma-separated recording ids to summarise"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-recording activity summary for the grid cards: which object classes,
+    named people, and vehicles were seen during each recording's window, plus
+    whether it carried any (unfiltered) audio transcript.
+
+    Bounded to one page of ids. Runs two range-scoped queries (observations +
+    transcripts) and buckets in Python by camera + time window, rather than one
+    correlated query per recording, so the cost stays flat as the page fills."""
+    id_list: list[uuid.UUID] = []
+    for raw in ids.split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            id_list.append(uuid.UUID(raw))
+        except ValueError:
+            continue
+        if len(id_list) >= _FACETS_MAX_IDS:
+            break
+    if not id_list:
+        return {}
+
+    allowed = await allowed_camera_ids(current_user, db)
+    recs = (
+        await db.execute(
+            apply_camera_filter(
+                select(Recording).where(Recording.id.in_(id_list)),
+                allowed,
+                Recording.camera_id,
+            )
+        )
+    ).scalars().all()
+    if not recs:
+        return {}
+
+    # Per-recording window [started_at, window_end] computed in Python.
+    windows: list[tuple[Recording, datetime]] = []
+    for r in recs:
+        end = r.ended_at or (r.started_at + timedelta(seconds=r.duration_seconds or 3600))
+        windows.append((r, end))
+
+    cam_ids = {r.camera_id for r, _ in windows}
+    t_min = min(r.started_at for r, _ in windows)
+    t_max = max(end for _, end in windows)
+
+    obs_rows = (
+        await db.execute(
+            select(Observation)
+            .where(Observation.camera_id.in_(cam_ids))
+            .where(Observation.started_at >= t_min)
+            .where(Observation.started_at <= t_max)
+        )
+    ).scalars().all()
+
+    tx_rows = (
+        await db.execute(
+            select(Transcript.camera_id, Transcript.started_at)
+            .where(Transcript.camera_id.in_(cam_ids))
+            .where(Transcript.started_at >= t_min)
+            .where(Transcript.started_at <= t_max)
+            .where(Transcript.filtered.is_(False))
+        )
+    ).all()
+
+    result: dict[str, dict] = {}
+    for r, end in windows:
+        objs: list[str] = []
+        persons: list[str] = []
+        vehicles: list[str] = []
+        for o in obs_rows:
+            if o.camera_id != r.camera_id:
+                continue
+            if not (r.started_at <= o.started_at <= end):
+                continue
+            for lbl in _detection_labels(o.object_detections):
+                if lbl not in objs:
+                    objs.append(lbl)
+            for name in _detection_persons(o.person_detections):
+                if name not in persons:
+                    persons.append(name)
+            for v in _detection_vehicles(o.vehicle_detections):
+                if v not in vehicles:
+                    vehicles.append(v)
+        has_audio = any(
+            cam == r.camera_id and r.started_at <= ts <= end for cam, ts in tx_rows
+        )
+        # Cap chip counts so a busy hour doesn't bloat the card / payload.
+        result[str(r.id)] = {
+            "objects": objs[:6],
+            "persons": persons[:4],
+            "vehicles": vehicles[:4],
+            "has_audio": has_audio,
+        }
+    return result
 
 
 def _build_zip(entries: list[tuple[str, str]], zip_path: str) -> None:
@@ -188,7 +396,9 @@ async def download_bundle(
     camera_id: uuid.UUID | None = Query(default=None),
     from_: datetime | None = Query(default=None, alias="from"),
     to: datetime | None = Query(default=None, description="Inclusive end (ISO 8601)"),
-    object: str | None = Query(default=None),
+    object: list[str] = Query(default=[]),
+    person_id: uuid.UUID | None = Query(default=None),
+    vehicle_id: uuid.UUID | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     """Download every recording matching the filters as a single zip. Bundles
@@ -200,9 +410,12 @@ async def download_bundle(
     if user is None or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or deactivated")
     allowed = await allowed_camera_ids(user, db)
-    query = _filtered_recordings_query(camera_id, from_, to, object, allowed).order_by(
-        Recording.started_at.asc()
+    query = await _filtered_recordings_query(
+        db, camera_id, from_, to, object, person_id, vehicle_id, allowed
     )
+    if query is None:
+        raise HTTPException(status_code=404, detail="No recordings match those filters")
+    query = query.order_by(Recording.started_at.asc())
     recs = (await db.execute(query)).scalars().all()
 
     entries: list[tuple[str, str]] = []

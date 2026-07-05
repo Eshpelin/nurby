@@ -34,6 +34,33 @@ interface Camera {
   height?: number | null;
 }
 
+interface Person {
+  id: string;
+  display_name: string;
+  nickname?: string | null;
+}
+
+interface Vehicle {
+  id: string;
+  display_name: string;
+  license_plate?: string | null;
+  vehicle_type?: string | null;
+}
+
+// Per-recording activity summary shown as chips on each card.
+interface Facet {
+  objects: string[];
+  persons: string[];
+  vehicles: string[];
+  has_audio: boolean;
+}
+
+// A small emoji glyph per object class, so a card scans at a glance.
+const OBJECT_GLYPH: Record<string, string> = {
+  person: "🧍", cat: "🐈", dog: "🐕", car: "🚗", truck: "🚚",
+  bus: "🚌", bicycle: "🚲", motorcycle: "🏍️", bird: "🐦",
+};
+
 function formatDuration(seconds: number | null): string {
   if (seconds == null) return "unknown";
   const h = Math.floor(seconds / 3600);
@@ -58,19 +85,72 @@ function formatDateTime(iso: string): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
+// Small activity chips on a recording card: what was seen during the clip.
+// A recording links to detections only by time overlap, so these come from the
+// /facets endpoint rather than the recording row itself.
+function FacetChips({ facet }: { facet: Facet | undefined }) {
+  if (!facet) return null;
+  const { objects, persons, vehicles, has_audio } = facet;
+  if (
+    objects.length === 0 && persons.length === 0 &&
+    vehicles.length === 0 && !has_audio
+  ) {
+    return null;
+  }
+  const chip = "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] leading-none border";
+  return (
+    <div className="flex flex-wrap gap-1 pt-1">
+      {persons.map((p) => (
+        <span key={`p-${p}`} className={`${chip} border-accent/40 bg-accent/10 text-accent`} title={`Person: ${p}`}>
+          🧑 {p}
+        </span>
+      ))}
+      {vehicles.map((v) => (
+        <span key={`v-${v}`} className={`${chip} border-amber-500/40 bg-amber-500/10 text-amber-300`} title={`Vehicle: ${v}`}>
+          🚗 {v}
+        </span>
+      ))}
+      {objects
+        .filter((o) => o !== "person")
+        .map((o) => (
+          <span key={`o-${o}`} className={`${chip} border-border bg-muted text-muted-foreground`} title={`Object: ${o}`}>
+            {OBJECT_GLYPH[o] || "•"} {o}
+          </span>
+        ))}
+      {has_audio && (
+        <span className={`${chip} border-border bg-muted text-muted-foreground`} title="Has audio transcript">
+          🔊 audio
+        </span>
+      )}
+    </div>
+  );
+}
+
 const PAGE_SIZE = 24;
 
 export default function RecordingsPage() {
   const { authFetch, token } = useAuth();
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [persons, setPersons] = useState<Person[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [facets, setFacets] = useState<Record<string, Facet>>({});
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [cameraFilter, setCameraFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [objectFilter, setObjectFilter] = useState("");
+  const [objectFilters, setObjectFilters] = useState<string[]>([]);
+  const [personFilter, setPersonFilter] = useState("");
+  const [vehicleFilter, setVehicleFilter] = useState("");
   const [showBoxes, setShowBoxes] = useState(true);
+
+  const toggleObject = useCallback((obj: string) => {
+    setObjectFilters((prev) =>
+      prev.includes(obj) ? prev.filter((o) => o !== obj) : [...prev, obj],
+    );
+    setPage(0);
+  }, []);
   const [seekTargets, setSeekTargets] = useState<number[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -105,10 +185,16 @@ export default function RecordingsPage() {
     return map;
   }, [cameras]);
 
-  const fetchCameras = useCallback(async () => {
+  const fetchPickers = useCallback(async () => {
     try {
-      const res = await authFetch("/api/cameras");
-      if (res.ok) setCameras(await res.json());
+      const [cRes, pRes, vRes] = await Promise.all([
+        authFetch("/api/cameras"),
+        authFetch("/api/persons"),
+        authFetch("/api/vehicles"),
+      ]);
+      if (cRes.ok) setCameras(await cRes.json());
+      if (pRes.ok) setPersons(await pRes.json());
+      if (vRes.ok) setVehicles(await vRes.json());
     } catch {
       /* silent */
     }
@@ -124,18 +210,32 @@ export default function RecordingsPage() {
       params.set("offset", String(page * PAGE_SIZE));
     }
     if (cameraFilter) params.set("camera_id", cameraFilter);
-    if (objectFilter) params.set("object", objectFilter);
+    for (const obj of objectFilters) params.append("object", obj);
+    if (personFilter) params.set("person_id", personFilter);
+    if (vehicleFilter) params.set("vehicle_id", vehicleFilter);
     if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
     if (dateTo) params.set("to", new Date(dateTo).toISOString());
     return params;
-  }, [page, cameraFilter, objectFilter, dateFrom, dateTo]);
+  }, [page, cameraFilter, objectFilters, personFilter, vehicleFilter, dateFrom, dateTo]);
 
   const fetchRecordings = useCallback(async () => {
     setLoading(true);
+    setFacets({});
     try {
       const res = await authFetch(`/api/recordings?${buildParams(true).toString()}`);
       if (res.ok) {
-        setRecordings(await res.json());
+        const recs: Recording[] = await res.json();
+        setRecordings(recs);
+        // Fetch activity chips for this page in one shot (best-effort).
+        if (recs.length > 0) {
+          try {
+            const ids = recs.map((r) => r.id).join(",");
+            const fRes = await authFetch(`/api/recordings/facets?ids=${encodeURIComponent(ids)}`);
+            if (fRes.ok) setFacets(await fRes.json());
+          } catch {
+            /* chips are optional */
+          }
+        }
       }
     } catch {
       /* silent */
@@ -151,8 +251,8 @@ export default function RecordingsPage() {
   };
 
   useEffect(() => {
-    fetchCameras();
-  }, [fetchCameras]);
+    fetchPickers();
+  }, [fetchPickers]);
 
   useEffect(() => {
     fetchRecordings();
@@ -204,9 +304,15 @@ export default function RecordingsPage() {
     setCameraFilter("");
     setDateFrom("");
     setDateTo("");
-    setObjectFilter("");
+    setObjectFilters([]);
+    setPersonFilter("");
+    setVehicleFilter("");
     setPage(0);
   };
+
+  const hasActiveFilters =
+    !!cameraFilter || !!dateFrom || !!dateTo ||
+    objectFilters.length > 0 || !!personFilter || !!vehicleFilter;
 
   const applyPreset = (hours: number) => {
     const now = new Date();
@@ -230,85 +336,131 @@ export default function RecordingsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <select
-          value={cameraFilter}
-          onChange={(e) => {
-            setCameraFilter(e.target.value);
-            setPage(0);
-          }}
-          className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-        >
-          <option value="">All cameras</option>
-          {cameras.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={objectFilter}
-          onChange={(e) => { setObjectFilter(e.target.value); setPage(0); }}
-          className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-          title="Only show clips that contain this object"
-        >
-          <option value="">Any object</option>
-          {COMMON_OBJECTS.map((o) => (
-            <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</option>
-          ))}
-        </select>
-
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">From</label>
-          <input
-            type="datetime-local"
-            value={dateFrom}
-            onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
+      <div className="space-y-3 mb-6">
+        {/* Row 1: who / where / when */}
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={cameraFilter}
+            onChange={(e) => {
+              setCameraFilter(e.target.value);
+              setPage(0);
+            }}
             className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">To</label>
-          <input
-            type="datetime-local"
-            value={dateTo}
-            onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
-            className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-        </div>
-
-        <div className="flex items-center gap-1">
-          {[
-            { label: "Last night", hours: 14 },
-            { label: "24h", hours: 24 },
-            { label: "7d", hours: 168 },
-          ].map((p) => (
-            <button
-              key={p.label}
-              onClick={() => applyPreset(p.hours)}
-              className="px-2 py-1.5 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >{p.label}</button>
-          ))}
-        </div>
-
-        <button
-          onClick={downloadRange}
-          disabled={recordings.length === 0}
-          title="Download every clip matching these filters as a single zip"
-          className="px-3 py-2 text-xs rounded-md border border-accent bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40"
-        >
-          Download range
-        </button>
-
-        {(cameraFilter || dateFrom || dateTo || objectFilter) && (
-          <button
-            onClick={resetFiltersAndPage}
-            className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
-            Clear filters
+            <option value="">All cameras</option>
+            {cameras.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={personFilter}
+            onChange={(e) => { setPersonFilter(e.target.value); setPage(0); }}
+            className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
+            disabled={persons.length === 0}
+            title="Only show clips where this person was seen"
+          >
+            <option value="">Anyone</option>
+            {persons.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nickname || p.display_name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={vehicleFilter}
+            onChange={(e) => { setVehicleFilter(e.target.value); setPage(0); }}
+            className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
+            disabled={vehicles.length === 0}
+            title="Only show clips where this vehicle was seen"
+          >
+            <option value="">Any vehicle</option>
+            {vehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.license_plate || v.display_name}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">From</label>
+            <input
+              type="datetime-local"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
+              className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">To</label>
+            <input
+              type="datetime-local"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
+              className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+
+          <div className="flex items-center gap-1">
+            {[
+              { label: "Last night", hours: 14 },
+              { label: "24h", hours: 24 },
+              { label: "7d", hours: 168 },
+            ].map((p) => (
+              <button
+                key={p.label}
+                onClick={() => applyPreset(p.hours)}
+                className="px-2 py-1.5 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >{p.label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Row 2: object-class multi-select chips + actions */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground mr-1">Contains</span>
+          {COMMON_OBJECTS.map((o) => {
+            const on = objectFilters.includes(o);
+            return (
+              <button
+                key={o}
+                onClick={() => toggleObject(o)}
+                aria-pressed={on}
+                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                  on
+                    ? "border-accent bg-accent/15 text-accent"
+                    : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <span className="mr-1">{OBJECT_GLYPH[o] || "•"}</span>
+                {o[0].toUpperCase() + o.slice(1)}
+              </button>
+            );
+          })}
+
+          <div className="flex-1" />
+
+          <button
+            onClick={downloadRange}
+            disabled={recordings.length === 0}
+            title="Download every clip matching these filters as a single zip"
+            className="px-3 py-2 text-xs rounded-md border border-accent bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40"
+          >
+            Download range
           </button>
-        )}
+
+          {hasActiveFilters && (
+            <button
+              onClick={resetFiltersAndPage}
+              className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -316,12 +468,12 @@ export default function RecordingsPage() {
           Loading recordings.
         </div>
       ) : recordings.length === 0 ? (
-        (cameraFilter || dateFrom || dateTo) ? (
+        hasActiveFilters ? (
           <EmptyState
             title="No recordings match these filters"
-            body="Try a different camera or widen the date range."
+            body="Try a different camera, person, or object, or widen the date range."
             actionLabel="Clear filters"
-            onAction={() => { setCameraFilter(""); setDateFrom(""); setDateTo(""); }}
+            onAction={resetFiltersAndPage}
           />
         ) : (
           <EmptyState
@@ -369,6 +521,7 @@ export default function RecordingsPage() {
                     <span>{formatDuration(rec.duration_seconds)}</span>
                     <span>{formatFileSize(rec.file_size_bytes)}</span>
                   </div>
+                  <FacetChips facet={facets[rec.id]} />
                 </div>
               </button>
             ))}
@@ -456,7 +609,7 @@ export default function RecordingsPage() {
                   camHeight={cameraById[expandedRec.camera_id]?.height}
                   videoRef={videoRef}
                   draw={showBoxes}
-                  seekLabel={objectFilter || null}
+                  seekLabel={objectFilters[0] || null}
                   onTargets={setSeekTargets}
                 />
               </div>
@@ -490,7 +643,7 @@ export default function RecordingsPage() {
                   >Next ▶</button>
                   <span className="text-[11px] text-muted-foreground">
                     {seekTargets.length > 0
-                      ? `${seekTargets.length} ${objectFilter || "detection"} moment${seekTargets.length === 1 ? "" : "s"}`
+                      ? `${seekTargets.length} ${objectFilters[0] || "detection"} moment${seekTargets.length === 1 ? "" : "s"}`
                       : "no detections"}
                   </span>
                 </div>
