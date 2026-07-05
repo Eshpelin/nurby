@@ -9,32 +9,7 @@ import { useTheme } from "@/lib/theme";
 import { useWebSocket } from "@/lib/ws";
 import { NotificationItem, NotificationsDropdown } from "./notifications";
 import { SecureAccountModal } from "./SecureAccountModal";
-import { MegaNav } from "./MegaNav";
-
-// Mobile nav: the same surfaces the desktop mega-menu groups, laid out as
-// labelled sections in the hamburger sheet. Guardian is its own group so a
-// guardian-role user (who only ever sees that section) still gets it.
-const MOBILE_GROUPS: { group: string; items: { label: string; href: string }[] }[] = [
-  { group: "Overview", items: [{ label: "Dashboard", href: "/" }] },
-  { group: "Review", items: [
-    { label: "Recordings", href: "/recordings" },
-    { label: "Timeline", href: "/timeline" },
-    { label: "Alerts", href: "/events" },
-  ] },
-  { group: "Directory", items: [
-    { label: "People", href: "/people" },
-    { label: "Vehicles", href: "/vehicles" },
-  ] },
-  { group: "Insights", items: [
-    { label: "Ask Nurby", href: "/ask" },
-    { label: "Reports", href: "/reports" },
-  ] },
-  { group: "Manage", items: [
-    { label: "Rules", href: "/rules" },
-    { label: "Settings", href: "/settings" },
-  ] },
-  { group: "Guardian", items: [{ label: "Guardian", href: "/guardian" }] },
-];
+import { MegaNav, MegaNavMobile } from "./MegaNav";
 
 interface ProviderInfo {
   name: string;
@@ -438,33 +413,23 @@ export function Navbar() {
           </div>
         </div>
       </div>
-      {/* Mobile nav dropdown, grouped to mirror the desktop mega-menu. */}
+      {/* Mobile nav sheet. Operators get the interactive accordion mirror of
+          the desktop mega-menu; a guardian only ever needs the one surface. */}
       {menuOpen && (
-        <nav className="md:hidden border-t border-border bg-background px-3 py-3 space-y-3 max-h-[70vh] overflow-y-auto scrollbar-thin">
-          {MOBILE_GROUPS.filter((g) => (isGuardian ? g.group === "Guardian" : g.group !== "Guardian")).map((g) => (
-            <div key={g.group}>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70 px-1 mb-1">
-                {g.group}
-              </div>
-              <div className="grid grid-cols-2 gap-1">
-                {g.items.map((item) => {
-                  const isActive = pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`px-3 py-2 rounded-md text-sm transition-all ${
-                        isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
+        isGuardian ? (
+          <nav className="md:hidden border-t border-border bg-background px-3 py-3">
+            <Link
+              href="/guardian"
+              className={`block px-3 py-2 rounded-md text-sm ${
+                pathname.startsWith("/guardian") ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Guardian
+            </Link>
+          </nav>
+        ) : (
+          <MegaNavMobile open={menuOpen} onClose={() => setMenuOpen(false)} />
+        )
       )}
       {secureOpen && <SecureAccountModal onClose={() => setSecureOpen(false)} />}
     </div>

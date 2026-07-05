@@ -100,19 +100,23 @@ interface EventRow {
 }
 interface Cam { id: string; name: string }
 
-export function MegaNav() {
-  const pathname = usePathname();
+export interface NavData {
+  cams: Record<string, string>;
+  alertCount: number | null;
+  recentAlerts: EventRow[];
+  latestRec: { id: string; started_at: string; camera_id: string } | null;
+  people: PersonSummary[];
+  vehicles: VehicleSummary[];
+  facesToName: number | null;
+  rules: RuleRow[];
+  ensureData: (id: string) => void;
+  tq: string;
+}
+
+// Live nav data, lazily fetched per menu and cached, shared by the desktop
+// mega-menu and the mobile accordion so neither double-fetches on its own view.
+export function useNavData(): NavData {
   const { authFetch, token } = useAuth();
-
-  const [active, setActive] = useState<string | null>(null);
-  const [anchor, setAnchor] = useState<{ left: number; center: number }>({ left: 0, center: 0 });
-
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const triggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ── live data (lazy per menu, cached) ──
   const [cams, setCams] = useState<Record<string, string>>({});
   const [alertCount, setAlertCount] = useState<number | null>(null);
   const [recentAlerts, setRecentAlerts] = useState<EventRow[]>([]);
@@ -181,6 +185,23 @@ export function MegaNav() {
       fetched.current[id] = false; // allow a retry on the next open
     }
   }, [authFetch]);
+
+  return { cams, alertCount, recentAlerts, latestRec, people, vehicles, facesToName, rules, ensureData, tq };
+}
+
+export function MegaNav() {
+  const pathname = usePathname();
+  const {
+    cams, alertCount, recentAlerts, latestRec, people, vehicles, facesToName, rules, ensureData, tq,
+  } = useNavData();
+
+  const [active, setActive] = useState<string | null>(null);
+  const [anchor, setAnchor] = useState<{ left: number; center: number }>({ left: 0, center: 0 });
+
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const triggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── open / close with hover intent ──
   const measure = useCallback((id: string) => {
@@ -375,13 +396,14 @@ function objectLabel(e: EventRow): string {
 }
 
 function ReviewPanel({
-  cams, alertCount, recentAlerts, latestRec, tq, onNavigate,
+  cams, alertCount, recentAlerts, latestRec, tq, onNavigate, compact,
 }: {
   cams: Record<string, string>; alertCount: number | null; recentAlerts: EventRow[];
-  latestRec: { id: string; started_at: string; camera_id: string } | null; tq: string; onNavigate: () => void;
+  latestRec: { id: string; started_at: string; camera_id: string } | null;
+  tq: string; onNavigate: () => void; compact?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[1.35fr_1fr] gap-3">
+    <div className={`grid gap-3 ${compact ? "grid-cols-1" : "grid-cols-[1.35fr_1fr]"}`}>
       <div>
         <SectionLabel>Needs review</SectionLabel>
         <Link
@@ -460,9 +482,10 @@ function Avatar({ src, name }: { src: string; name: string }) {
 }
 
 function DirectoryPanel({
-  people, vehicles, facesToName, tq, onNavigate,
+  people, vehicles, facesToName, tq, onNavigate, compact,
 }: {
-  people: PersonSummary[]; vehicles: VehicleSummary[]; facesToName: number | null; tq: string; onNavigate: () => void;
+  people: PersonSummary[]; vehicles: VehicleSummary[]; facesToName: number | null;
+  tq: string; onNavigate: () => void; compact?: boolean;
 }) {
   return (
     <div>
@@ -478,7 +501,7 @@ function DirectoryPanel({
           <span className="ml-auto">→</span>
         </Link>
       )}
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid gap-3 ${compact ? "grid-cols-1" : "grid-cols-2"}`}>
         <div>
           <SectionLabel>Recently seen</SectionLabel>
           <div className="space-y-1">
@@ -606,5 +629,112 @@ function ManagePanel({ rules, onNavigate }: { rules: RuleRow[]; onNavigate: () =
       </Link>
       <PanelLinks links={MENUS[3].links} onNavigate={onNavigate} />
     </div>
+  );
+}
+
+// Render a menu's panel by id, compact, for the mobile accordion.
+function PanelFor({ id, nav, onNavigate }: { id: string; nav: NavData; onNavigate: () => void }) {
+  if (id === "review") {
+    return (
+      <ReviewPanel
+        compact cams={nav.cams} alertCount={nav.alertCount} recentAlerts={nav.recentAlerts}
+        latestRec={nav.latestRec} tq={nav.tq} onNavigate={onNavigate}
+      />
+    );
+  }
+  if (id === "directory") {
+    return (
+      <DirectoryPanel
+        compact people={nav.people} vehicles={nav.vehicles} facesToName={nav.facesToName}
+        tq={nav.tq} onNavigate={onNavigate}
+      />
+    );
+  }
+  if (id === "insights") return <InsightsPanel onNavigate={onNavigate} />;
+  return <ManagePanel rules={nav.rules} onNavigate={onNavigate} />;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   Mobile: the same grouped surfaces as an accordion. Each header expands to
+   reveal its live panel (reusing the exact panel components in compact mode),
+   so the phone nav carries the same at-a-glance state as the desktop mega-menu
+   rather than being a plain link list.
+   ──────────────────────────────────────────────────────────────────────── */
+export function MegaNavMobile({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const pathname = usePathname();
+  const nav = useNavData();
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => { if (!open) setExpanded(null); }, [open]);
+
+  const toggle = (id: string) => {
+    setExpanded((prev) => {
+      const next = prev === id ? null : id;
+      if (next) nav.ensureData(next);
+      return next;
+    });
+  };
+
+  if (!open) return null;
+
+  return (
+    <nav className="md:hidden border-t border-border bg-background max-h-[78vh] overflow-y-auto scrollbar-thin">
+      <div className="px-3 py-3 space-y-1.5">
+        <Link
+          href="/"
+          onClick={onClose}
+          className={`block rounded-lg px-3 py-2.5 text-sm ${
+            pathname === "/" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Dashboard
+        </Link>
+
+        {MENUS.map((m) => {
+          const isOpen = expanded === m.id;
+          const routeActive = m.links.some((l) => pathname === l.href);
+          const showBadge = m.id === "review" && (nav.alertCount ?? 0) > 0;
+          return (
+            <div key={m.id} className="rounded-lg border border-border-subtle overflow-hidden">
+              <button
+                onClick={() => toggle(m.id)}
+                aria-expanded={isOpen}
+                className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${
+                  isOpen ? "bg-muted" : "hover:bg-muted/60"
+                }`}
+              >
+                <span className={routeActive || isOpen ? "text-foreground" : "text-muted-foreground"}>{m.label}</span>
+                {showBadge && (
+                  <span className="min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-danger/90 text-white text-[9px] font-bold leading-none">
+                    {nav.alertCount! > 99 ? "99+" : nav.alertCount}
+                  </span>
+                )}
+                <svg
+                  width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"
+                  className={`ml-auto opacity-50 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                >
+                  <path d="M2.5 4.5 L6 8 L9.5 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {isOpen && (
+                <div className="border-t border-border-subtle bg-card/40 p-3">
+                  <PanelFor id={m.id} nav={nav} onNavigate={onClose} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <Link
+          href="/guardian"
+          onClick={onClose}
+          className={`block rounded-lg px-3 py-2.5 text-sm ${
+            pathname.startsWith("/guardian") ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Guardian
+        </Link>
+      </div>
+    </nav>
   );
 }
