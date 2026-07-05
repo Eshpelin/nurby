@@ -55,6 +55,16 @@ interface Facet {
   has_audio: boolean;
 }
 
+// A speech transcript hit from /transcripts (used by the "search what was
+// said" mode to jump into the covering recording at the right moment).
+interface Transcript {
+  id: string;
+  camera_id: string;
+  started_at: string;
+  ended_at: string | null;
+  text: string;
+}
+
 // A small emoji glyph per object class, so a card scans at a glance.
 const OBJECT_GLYPH: Record<string, string> = {
   person: "🧍", cat: "🐈", dog: "🐕", car: "🚗", truck: "🚚",
@@ -144,6 +154,17 @@ export default function RecordingsPage() {
   const [personFilter, setPersonFilter] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState("");
   const [showBoxes, setShowBoxes] = useState(true);
+  // "Search what was said" mode: transcript full-text search that deep-links
+  // into the covering recording, seeked to the utterance.
+  const [speechQuery, setSpeechQuery] = useState("");
+  const [speechResults, setSpeechResults] = useState<Transcript[] | null>(null);
+  const [speechLoading, setSpeechLoading] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  // A recording resolved from a transcript hit that may not be on the current
+  // grid page, so the modal can still open it.
+  const [directRec, setDirectRec] = useState<Recording | null>(null);
+  // Seconds to seek the player to once its metadata loads (from a speech hit).
+  const pendingSeekRef = useRef<number | null>(null);
 
   const toggleObject = useCallback((obj: string) => {
     setObjectFilters((prev) =>
@@ -250,6 +271,63 @@ export default function RecordingsPage() {
     window.open(`/api/recordings/download-bundle?${params.toString()}`, "_blank");
   };
 
+  // Speech search: find transcripts matching the query (respecting the camera
+  // and date filters), so the user can jump to "when someone said X".
+  const runSpeechSearch = useCallback(async () => {
+    const q = speechQuery.trim();
+    if (!q) {
+      setSpeechResults(null);
+      setSpeechError(null);
+      return;
+    }
+    setSpeechLoading(true);
+    setSpeechError(null);
+    try {
+      const params = new URLSearchParams({ search: q, limit: "50" });
+      if (cameraFilter) params.set("camera_id", cameraFilter);
+      if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
+      if (dateTo) params.set("to", new Date(dateTo).toISOString());
+      const res = await authFetch(`/api/transcripts?${params.toString()}`);
+      if (res.ok) {
+        setSpeechResults(await res.json());
+      } else {
+        setSpeechError("Speech search failed.");
+      }
+    } catch {
+      setSpeechError("Speech search failed.");
+    } finally {
+      setSpeechLoading(false);
+    }
+  }, [speechQuery, cameraFilter, dateFrom, dateTo, authFetch]);
+
+  // Open the recording that covers a transcript's moment, seeked to it. A
+  // recording links to a transcript only by time overlap, so resolve it by
+  // querying the camera's recordings around that instant.
+  const openTranscriptHit = useCallback(async (t: Transcript) => {
+    const ts = new Date(t.started_at);
+    const params = new URLSearchParams({
+      camera_id: t.camera_id,
+      from: new Date(ts.getTime() - 2000).toISOString(),
+      to: new Date(ts.getTime() + 2000).toISOString(),
+      limit: "1",
+    });
+    try {
+      const res = await authFetch(`/api/recordings?${params.toString()}`);
+      const recs: Recording[] = res.ok ? await res.json() : [];
+      const rec = recs[0];
+      if (!rec) {
+        setSpeechError("No recording covers that moment (audio kept, video already rotated out).");
+        return;
+      }
+      const offset = Math.max(0, (ts.getTime() - new Date(rec.started_at).getTime()) / 1000);
+      pendingSeekRef.current = offset;
+      setDirectRec(rec);
+      setExpandedId(rec.id);
+    } catch {
+      setSpeechError("Could not open that recording.");
+    }
+  }, [authFetch]);
+
   useEffect(() => {
     fetchPickers();
   }, [fetchPickers]);
@@ -277,8 +355,10 @@ export default function RecordingsPage() {
   }, [expandedId]);
 
   const expandedRec = useMemo(
-    () => recordings.find((r) => r.id === expandedId) || null,
-    [recordings, expandedId],
+    () =>
+      recordings.find((r) => r.id === expandedId) ||
+      (directRec && directRec.id === expandedId ? directRec : null),
+    [recordings, expandedId, directRec],
   );
 
   const handleDelete = useCallback(async (id: string) => {
@@ -461,7 +541,85 @@ export default function RecordingsPage() {
             </button>
           )}
         </div>
+
+        {/* Row 3: search what was said (transcripts) */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); runSpeechSearch(); }}
+          className="flex items-center gap-2"
+        >
+          <div className="relative flex-1 max-w-xl">
+            <svg
+              width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="search"
+              value={speechQuery}
+              onChange={(e) => setSpeechQuery(e.target.value)}
+              placeholder="Search what was said… (e.g. “gate”, “package”, a name)"
+              className="w-full pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={!speechQuery.trim() || speechLoading}
+            className="px-3 py-2 text-xs rounded-md border border-accent bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40"
+          >
+            {speechLoading ? "Searching…" : "Search speech"}
+          </button>
+          {speechResults !== null && (
+            <button
+              type="button"
+              onClick={() => { setSpeechQuery(""); setSpeechResults(null); setSpeechError(null); }}
+              className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </form>
       </div>
+
+      {/* Speech search results: click a line to jump into the recording at that moment. */}
+      {speechResults !== null && (
+        <div className="mb-6 rounded-lg border border-border bg-card overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-border text-xs text-muted-foreground">
+            {speechResults.length === 0
+              ? "No speech matched that search."
+              : `${speechResults.length} spoken moment${speechResults.length === 1 ? "" : "s"} matched "${speechQuery.trim()}"`}
+          </div>
+          {speechError && (
+            <div className="px-4 py-2 text-xs text-red-400 border-b border-border">{speechError}</div>
+          )}
+          <ul className="divide-y divide-border-subtle max-h-80 overflow-y-auto">
+            {speechResults.map((t) => (
+              <li key={t.id}>
+                <button
+                  onClick={() => openTranscriptHit(t)}
+                  className="w-full text-left px-4 py-2.5 flex items-start gap-3 hover:bg-muted/60 transition-colors group"
+                >
+                  <span className="shrink-0 mt-0.5 text-accent">🔊</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm text-foreground truncate group-hover:whitespace-normal">
+                      {t.text}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground mt-0.5">
+                      {cameraNames[t.camera_id] || "Unknown camera"}
+                      <span className="mx-1.5">·</span>
+                      {formatDateTime(t.started_at)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 self-center text-[11px] text-muted-foreground group-hover:text-accent">
+                    Play ▶
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-muted-foreground py-20 text-center">
@@ -491,7 +649,7 @@ export default function RecordingsPage() {
               <button
                 key={rec.id}
                 type="button"
-                onClick={() => setExpandedId(rec.id)}
+                onClick={() => { pendingSeekRef.current = null; setExpandedId(rec.id); }}
                 className="group text-left rounded-lg border border-border bg-card overflow-hidden hover:border-accent/60 hover:bg-card/80 transition-all focus:outline-none focus:ring-1 focus:ring-accent"
               >
                 {rec.thumbnail_path ? (
@@ -599,6 +757,14 @@ export default function RecordingsPage() {
                   autoPlay
                   className="w-full max-h-[60vh] rounded bg-black"
                   src={`/api/recordings/${expandedRec.id}/stream${token ? `?token=${token}` : ""}`}
+                  onLoadedMetadata={(e) => {
+                    // Apply a pending seek from a speech-search jump, once.
+                    if (pendingSeekRef.current != null) {
+                      const v = e.currentTarget;
+                      v.currentTime = Math.min(pendingSeekRef.current, v.duration || pendingSeekRef.current);
+                      pendingSeekRef.current = null;
+                    }
+                  }}
                 />
                 <RecordingDetectionOverlay
                   cameraId={expandedRec.camera_id}
