@@ -76,3 +76,36 @@ body {
   50% { opacity: 0.4; }
 }
 .pulse-dot { animation: pulse 2s ease-in-out infinite; }
+
+/* ── Mega-menu navigation ─────────────────────────────────────────────
+   The panel morphs (position + size) between triggers while its content
+   cross-fades and staggers in, so it reads as one live console surface
+   rather than a set of separate dropdowns. */
+@keyframes megaPanelIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes megaItemIn {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes megaSweep {
+  from { transform: translateX(-130%); }
+  to   { transform: translateX(130%); }
+}
+.mega-panel { animation: megaPanelIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+/* Content re-mounts per menu (keyed), so this fires on every switch. */
+.mega-item { animation: megaItemIn 0.34s cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* A slow accent sheen crossing the panel's top hairline. */
+.mega-sheen { animation: megaSweep 2.8s ease-in-out infinite; }
+/* Faint grid texture for the console feel, tuned to the dark theme. */
+.mega-grid {
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.35) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(120% 120% at 18% 0%, #000 25%, transparent 72%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mega-panel, .mega-item, .mega-sheen { animation: none; }
+}
