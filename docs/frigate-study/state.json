@@ -1,14 +1,14 @@
 {
-  "updated": "2026-06-17",
+  "updated": "2026-07-05",
   "repo": "blakeblackshear/frigate",
   "total_merged_prs": 4058,
   "direction": "newest_to_oldest",
   "cursor_pr": 1,
   "sweep_complete": true,
-  "newest_pr_seen": 23488,
+  "newest_pr_seen": 23627,
   "batches_done": 55,
   "counts": {
-    "logged": 4056,
+    "logged": 4083,
     "pct_of_merged": "~100%",
     "fixes_shipped": 8,
     "issues_open": 13,

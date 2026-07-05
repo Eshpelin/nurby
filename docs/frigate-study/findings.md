@@ -793,3 +793,13 @@ Fifth and last fan-out: 5 parallel agents over 602 PRs (#5430 → #1), Frigate's
 
 ### Sweep summary (batches 1-55)
 All 4058 of Frigate's merged PRs triaged newest→oldest. Logged ~4056 in `ledger.jsonl`. **8 fixes shipped to main** (PRs #34/#39/#43/#47/#49 + #96 ONVIF clock-skew + #104 cred-encoding; plus persons.py path-traversal hardening). **15 issues filed, 2 closed** (#36 verified-safe, #93 fixed by #96; 13 remain as P1-P3 backlog incl. the big architectural #40 per-user camera ACL). The dominant lesson held across all 55 batches: high-value backend findings cluster in the newest PRs (2024-2025 security/auth/API/ingest era); the 2019-2024 region is ~97-99% N/A for the Nurby backend because Frigate's whole stack (Flask/SQLite/ZMQ/SHM/YAML/CV-detector/nginx-proxy-auth) differs architecturally from Nurby's. Net new code risk found in the entire founding-era tail: one credential-encoding bug, now fixed.
+
+## Incremental 2026-07-05
+
+Triaged PRs #23521-#23627 (17 new; PRs #23492-#23526 were already logged by the 2026-06-22 incremental run). Net: 0 HAVE / 16 N/A / 1 GAP. 0 fixes shipped, 0 new issues (both signals fold into existing open issues).
+
+**GAP -> existing issue #40:** Frigate #23578 (allow non-admin users PTZ for cameras they have access to) implements exactly the WS/PTZ slice of Nurby's open per-user camera ACL issue Eshpelin/nurby#40. Frigate's `_check_ws_authorization` now permits camera-scoped command topics (`<camera>/ptz`) when the user's role grants access to that camera via `User.get_allowed_cameras(role, roles_config, camera_names)`. Reference comment added to #40 as an implementation blueprint.
+
+**Async-blocking-I/O -> existing issue #48:** Frigate #23552 wraps sync `sp.run` ffmpeg preview encoding and `plus_api.upload_image` in `asyncio.to_thread` inside async routes. Nurby has no preview routes, but the same class (sync subprocess in async path) still lives at `services/api/routes/system.py:177` (`nvidia-smi`, timeout 1.5s) and `services/api/routes/ollama_deploy.py:151` (`sysctl`, timeout 5s), already captured by open #48.
+
+**Verified N/A by architecture:** #23611 auth `get_remote_addr` null-deref on missing `x-forwarded-for` + SameSite cookie CSRF note (Nurby Bearer/JWT, no XFF trusted-proxy chain, cookie-free so CSRF-immune). #23610 `no_recordings` peewee ACL-filter refactor. #23553 `_resolve_cache_age` Query-object guard for handler-calls-handler (no Nurby equivalent). #23528 unbounded in-memory `recordings_info` growth (Frigate SHM cache-segment maintainer vs Nurby Postgres recordings). #23521/#23522/#23523 CV tracker/detect per-frame perf. #23627 YAML-edit-via-UI round-trip. #23619/#23579/#23572/#23570/#23569/#23542/#23535 docs, ML LPR, Frigate+ UI, frontend.
