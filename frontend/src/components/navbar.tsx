@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { label: "Dashboard", href: "/", roles: OPERATOR },
   { label: "Ask Nurby", href: "/ask", roles: OPERATOR },
   { label: "Recordings", href: "/recordings", roles: OPERATOR },
+  { label: "Timeline", href: "/timeline", roles: OPERATOR },
   { label: "People", href: "/people", roles: OPERATOR },
   { label: "Guardian", href: "/guardian", roles: ["admin", "viewer", "guardian"] },
   { label: "Vehicles", href: "/vehicles", roles: OPERATOR },

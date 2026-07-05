@@ -314,13 +314,14 @@ export default function RecordingsPage() {
     }
   }, [speechQuery, cameraFilter, dateFrom, dateTo, authFetch]);
 
-  // Open the recording that covers a transcript's moment, seeked to it. A
-  // recording links to a transcript only by time overlap, so resolve it by
-  // querying the camera's recordings around that instant.
-  const openTranscriptHit = useCallback(async (t: Transcript) => {
-    const ts = new Date(t.started_at);
+  // Open the recording covering a given camera + instant, seeked to it, with a
+  // ~30s clip pre-armed around the moment. A recording links to a detection or
+  // transcript only by time overlap, so resolve it by querying that camera's
+  // recordings around the instant. Returns an error string, or null on success.
+  const openAtMoment = useCallback(async (cameraId: string, isoTs: string): Promise<string | null> => {
+    const ts = new Date(isoTs);
     const params = new URLSearchParams({
-      camera_id: t.camera_id,
+      camera_id: cameraId,
       from: new Date(ts.getTime() - 2000).toISOString(),
       to: new Date(ts.getTime() + 2000).toISOString(),
       limit: "1",
@@ -330,21 +331,43 @@ export default function RecordingsPage() {
       const recs: Recording[] = res.ok ? await res.json() : [];
       const rec = recs[0];
       if (!rec) {
-        setSpeechError("No recording covers that moment (audio kept, video already rotated out).");
-        return;
+        return "No recording covers that moment (footage already rotated out).";
       }
       const offset = Math.max(0, (ts.getTime() - new Date(rec.started_at).getTime()) / 1000);
       pendingSeekRef.current = offset;
       setDirectRec(rec);
-      // Pre-arm a ~30s clip around the utterance so "download this moment" is
-      // one click. A few seconds of lead-in keeps the start intelligible.
       setClipStart(Math.max(0, offset - 3));
       setClipEnd(offset + 27);
       setExpandedId(rec.id);
+      return null;
     } catch {
-      setSpeechError("Could not open that recording.");
+      return "Could not open that recording.";
     }
   }, [authFetch]);
+
+  const openTranscriptHit = useCallback(async (t: Transcript) => {
+    const err = await openAtMoment(t.camera_id, t.started_at);
+    if (err) setSpeechError(err);
+  }, [openAtMoment]);
+
+  // Hand-off from the Timeline page: it stashes {camera_id, started_at} in
+  // sessionStorage then routes here; open that moment on mount.
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem("nurby_open_moment");
+      if (raw) sessionStorage.removeItem("nurby_open_moment");
+    } catch {
+      /* private mode / no storage */
+    }
+    if (!raw) return;
+    try {
+      const { camera_id, started_at } = JSON.parse(raw);
+      if (camera_id && started_at) openAtMoment(camera_id, started_at);
+    } catch {
+      /* malformed hand-off, ignore */
+    }
+  }, [openAtMoment]);
 
   useEffect(() => {
     fetchPickers();
