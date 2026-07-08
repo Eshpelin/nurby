@@ -61,6 +61,22 @@ The facility side. Grant a guardian or invite one by email, set the tier and ent
 
 ![Guardian facility admin: grant, revoke, and audit access](docs/screenshots/guardian-admin.png)
 
+### Mobile app: the same brain in your pocket
+
+A Flutter companion app mirrors the web dashboard with the same dark-first design language. Five tabs cover the daily loop. **Cameras** shows live tiles with detection boxes and a plain-language activity line under each feed. **Timeline** is the AI-captioned history of what happened, filterable by camera. **Ask** is the same agentic Q&A as the web app, so you can ask "when did the package arrive today" from the couch. **Alerts** lists rule firings with severity and one-tap acknowledge. **More** holds rules, people, vehicles, recordings, and Guardian. The mockups below show the UI direction the app follows.
+
+| Cameras | Timeline | Ask Nurby |
+|:---:|:---:|:---:|
+| ![Mobile cameras tab with live tiles and detection boxes](docs/screenshots/mobile/01-cameras-home.png) | ![Mobile timeline of AI-captioned events](docs/screenshots/mobile/03-timeline.png) | ![Ask Nurby chat answering questions about footage](docs/screenshots/mobile/06-ask-nurby.png) |
+
+| Alerts | Rule editor | Camera detail |
+|:---:|:---:|:---:|
+| ![Mobile alerts with severity and acknowledge](docs/screenshots/mobile/04-alerts.png) | ![Mobile rule editor with when-and-then cards and plain-language preview](docs/screenshots/mobile/05-rule-editor.png) | ![Camera detail with PTZ, detection and recording settings](docs/screenshots/mobile/02-camera-detail.png) |
+
+<p align="center">
+  <img src="docs/screenshots/mobile/07-more.png" alt="More tab with rules, people, vehicles, recordings, and Guardian" width="280">
+</p>
+
 ## What is Nurby?
 
 Nurby is free, open-source software for recording and understanding your security cameras on your own server. It is a self-hosted network video recorder (NVR) and AI surveillance platform. It ingests RTSP and ONVIF IP cameras, detects objects and recognizes faces locally, captions scenes with a vision-language model, and lets you ask questions about your footage in plain language. Everything runs on hardware you control with Docker, so with a local model no video ever leaves your network. People use it as a private home-security camera system, a small-business CCTV setup, and a programmable surveillance platform with a REST API, webhooks, and physical alarm integrations.
