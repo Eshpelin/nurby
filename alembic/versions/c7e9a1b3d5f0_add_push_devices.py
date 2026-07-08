@@ -1,7 +1,7 @@
 """add push_devices (mobile FCM device registry)
 
 Revision ID: c7e9a1b3d5f0
-Revises: a4c8e2d6f0b3
+Revises: c7d9e1f3a5b7
 Create Date: 2026-07-08 00:00:00.000000
 
 Per-user FCM registration tokens so the mobile app can receive push
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c7e9a1b3d5f0"
-down_revision: Union[str, None] = "a4c8e2d6f0b3"
+down_revision: Union[str, None] = "c7d9e1f3a5b7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
