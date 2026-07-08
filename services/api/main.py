@@ -40,6 +40,7 @@ from services.api.routes import (
     rules,
     rules_nl,
     search,
+    shares,
     summaries,
     system,
     telegram,
@@ -215,6 +216,8 @@ app.include_router(doctor.router, prefix="/api", tags=["doctor"])
 app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
 app.include_router(detection_models.router, prefix="/api/detection-models", tags=["detection-models"])
 app.include_router(recordings.router, prefix="/api/recordings", tags=["recordings"])
+app.include_router(shares.router, prefix="/api/shares", tags=["shares"])
+app.include_router(shares.public_router, prefix="/api/share", tags=["shares"])
 app.include_router(observations.router, prefix="/api/observations", tags=["observations"])
 app.include_router(persons.router, prefix="/api/persons", tags=["persons"])
 app.include_router(vehicles.router, prefix="/api/vehicles", tags=["vehicles"])
