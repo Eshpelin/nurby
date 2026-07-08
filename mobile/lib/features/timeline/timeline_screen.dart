@@ -9,7 +9,7 @@ import '../../models/models.dart';
 
 const _pageSize = 50;
 
-typedef _TimelineQuery = ({String? cameraId, int days});
+typedef TimelineQuery = ({String? cameraId, int days});
 
 /// 0 = start of today, otherwise a rolling window of [days] days.
 DateTime _fromFor(int days) {
@@ -20,8 +20,8 @@ DateTime _fromFor(int days) {
 }
 
 /// First page of the merged observation/transcript timeline per filter.
-final _timelineProvider =
-    FutureProvider.family<List<TimelineItem>, _TimelineQuery>(
+final timelineProvider =
+    FutureProvider.family<List<TimelineItem>, TimelineQuery>(
         (ref, q) => ref.watch(timelineRepoProvider).list(
               cameraId: q.cameraId,
               from: _fromFor(q.days),
@@ -45,7 +45,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   bool _loadingMore = false;
   bool _hasMore = true;
 
-  _TimelineQuery get _query => (cameraId: _cameraId, days: _days);
+  TimelineQuery get _query => (cameraId: _cameraId, days: _days);
 
   @override
   void initState() {
@@ -83,13 +83,13 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
 
   Future<void> _refresh() async {
     setState(_resetPaging);
-    ref.invalidate(_timelineProvider);
-    await ref.read(_timelineProvider(_query).future);
+    ref.invalidate(timelineProvider);
+    await ref.read(timelineProvider(_query).future);
   }
 
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
-    final first = ref.read(_timelineProvider(_query)).value;
+    final first = ref.read(timelineProvider(_query)).value;
     if (first == null || first.length < _pageSize) return;
     setState(() => _loadingMore = true);
     try {
@@ -125,11 +125,11 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
       };
       if (types.contains(next.value?['type'])) {
         setState(_resetPaging);
-        ref.invalidate(_timelineProvider);
+        ref.invalidate(timelineProvider);
       }
     });
 
-    final firstPage = ref.watch(_timelineProvider(_query));
+    final firstPage = ref.watch(timelineProvider(_query));
     final cameras = ref.watch(camerasProvider).value ?? const <Camera>[];
     final cameraNames = {for (final c in cameras) c.id: c.name};
 
@@ -143,7 +143,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => _ErrorRetry(
                 message: apiErrorMessage(e),
-                onRetry: () => ref.invalidate(_timelineProvider(_query)),
+                onRetry: () => ref.invalidate(timelineProvider(_query)),
               ),
               data: (items) => _list(items, cameraNames),
             ),

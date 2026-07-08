@@ -958,6 +958,27 @@ class UserCameraAccess(Base):
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class PushDevice(Base):
+    __tablename__ = "push_devices"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)  # ios, android
+    # FCM registration token. Unique so re-registering the same physical
+    # device (new login, reinstalled app) re-assigns the existing row to
+    # the current user instead of duplicating it.
+    token: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    app_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Bumped on every re-register so stale rows are visible to future
+    # housekeeping (FCM invalidates truly dead tokens on send anyway).
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class AppSetting(Base):
     __tablename__ = "app_settings"
 

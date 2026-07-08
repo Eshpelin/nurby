@@ -2,9 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api_client.dart';
 import '../../core/providers.dart';
+import '../../core/push.dart';
 import '../../core/theme.dart';
 import '../../core/ws_client.dart';
+import '../events/events_screen.dart';
+import '../notifications/notifications_screen.dart';
+import '../rules/rules_screen.dart';
+import '../timeline/timeline_screen.dart';
 
 /// Hub for secondary destinations (mirrors the web navbar's long tail).
 class MoreScreen extends ConsumerWidget {
@@ -65,6 +71,25 @@ class MoreScreen extends ConsumerWidget {
               )),
           const Divider(height: 32),
           ListTile(
+            leading:
+                const Icon(Icons.sync, color: NurbyColors.mutedForeground),
+            title: const Text('Sync now'),
+            subtitle: const Text('Refresh cameras, timeline and alerts',
+                style: TextStyle(
+                    fontSize: 12, color: NurbyColors.mutedForeground)),
+            onTap: () => _syncNow(context, ref),
+          ),
+          ListTile(
+            leading: const Icon(Icons.notifications_active_outlined,
+                color: NurbyColors.mutedForeground),
+            title: const Text('Check alerts now'),
+            subtitle: const Text('Poll the server for new alerts',
+                style: TextStyle(
+                    fontSize: 12, color: NurbyColors.mutedForeground)),
+            onTap: () => _checkAlertsNow(context, ref),
+          ),
+          const Divider(height: 32),
+          ListTile(
             leading: const Icon(Icons.logout, color: NurbyColors.danger),
             title:
                 const Text('Sign out', style: TextStyle(color: NurbyColors.danger)),
@@ -73,6 +98,39 @@ class MoreScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Refresh at will: drop every cached list so screens refetch on next look.
+  void _syncNow(BuildContext context, WidgetRef ref) {
+    ref.invalidate(camerasProvider);
+    ref.invalidate(unreadNotificationsProvider);
+    ref.invalidate(unreviewedCountProvider);
+    ref.invalidate(eventsProvider);
+    ref.invalidate(timelineProvider);
+    ref.invalidate(notificationsListProvider);
+    ref.invalidate(rulesProvider);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Synced')));
+  }
+
+  Future<void> _checkAlertsNow(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final result = await checkAlertsNow(
+        ref.read(apiClientProvider),
+        ref.read(sharedPrefsProvider),
+        ref.read(notificationServiceProvider),
+      );
+      messenger.showSnackBar(SnackBar(
+        content: Text(result.newAlerts > 0
+            ? (result.newAlerts == 1
+                ? '1 new alert'
+                : '${result.newAlerts} new alerts')
+            : 'No new alerts'),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+    }
   }
 }
 

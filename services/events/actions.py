@@ -580,6 +580,28 @@ async def _execute_notify(action, observation_data, rule, event_id, ctx):
         logger.exception("Failed to persist notification for rule '%s'", rule.name)
         notif_id = str(uuid.uuid4())
 
+    # Mirror the in-app notification to registered mobile devices.
+    # Household-wide (user_id=None fans out to every device), best-effort,
+    # and never allowed to break the action path. No-ops when push is
+    # unconfigured.
+    try:
+        from shared.push import send_push_to_user
+
+        async with async_session() as db:
+            await send_push_to_user(
+                db,
+                None,
+                title=title_text or f"Nurby: {rule.name}",
+                body=message_text,
+                data={
+                    "notification_id": notif_id,
+                    "event_id": str(event_id),
+                    "rule_id": str(rule.id),
+                },
+            )
+    except Exception:
+        logger.exception("Push dispatch failed for rule '%s'", rule.name)
+
     notification = {
         "type": "notification",
         "id": notif_id,

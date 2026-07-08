@@ -97,6 +97,7 @@ async def deliver_to_guardians(
     subject = subject or "Nurby Guardian"
     telegram_sent = 0
     email_sent = 0
+    push_sent = 0
     seen_users: set = set()
 
     for link in recipients:
@@ -125,8 +126,21 @@ async def deliver_to_guardians(
                 if await _send_email(user.email, subject, message):
                     email_sent += 1
 
+        # Mobile push. Best-effort like the other channels; the dispatcher
+        # itself no-ops when push is unconfigured and never raises.
+        try:
+            from shared.push import send_push_to_user
+
+            res = await send_push_to_user(
+                db, uid, title=subject, body=message, data={"kind": "guardian_alert"}
+            )
+            push_sent += int(res.get("sent", 0))
+        except Exception:  # noqa: BLE001
+            logger.exception("guardian push send failed for %s", uid)
+
     return {
         "telegram_sent": telegram_sent,
         "email_sent": email_sent,
+        "push_sent": push_sent,
         "guardians": len(seen_users),
     }

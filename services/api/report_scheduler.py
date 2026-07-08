@@ -216,6 +216,21 @@ async def _deliver(report, answer: str) -> None:
             )
         except Exception:
             logger.exception("report %s in-app delivery failed", report.id)
+        # Mirror the report notification to registered mobile devices.
+        # Household-wide, best-effort, no-op when push is unconfigured.
+        try:
+            from shared.push import send_push_to_user
+
+            async with async_session() as db:
+                await send_push_to_user(
+                    db,
+                    None,
+                    title=f"Nurby report: {report.name}",
+                    body=answer[:500],
+                    data={"report_id": str(report.id)},
+                )
+        except Exception:
+            logger.exception("report %s push delivery failed", report.id)
     email_to = (delivery.get("email") or "").strip()
     if email_to:
         try:

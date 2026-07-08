@@ -1104,6 +1104,10 @@ class SystemSettingsResponse(BaseModel):
     grounding_enabled: bool = False
     grounding_backend: str = "local"
     grounding_remote_url: str | None = None
+    # Mobile push (FCM). Only the non-secret Firebase client config is
+    # readable; the service account is write-only (it holds a private
+    # key) and is deliberately absent from this response model.
+    push_firebase_client_config: dict | None = None
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -1142,6 +1146,12 @@ class SystemSettingsUpdate(BaseModel):
     grounding_enabled: bool | None = None
     grounding_backend: str | None = Field(default=None, pattern="^(local|remote)$")
     grounding_remote_url: str | None = None
+    # Mobile push (FCM). Paste-in JSON blobs from the Firebase console:
+    # the service account (Project settings -> Service accounts) powers
+    # server-side sends; the client config (apiKey / appId / projectId /
+    # messagingSenderId) is handed to mobile apps via GET /api/push/config.
+    push_fcm_service_account: dict | None = None
+    push_firebase_client_config: dict | None = None
 
 
 # -- User schemas --
