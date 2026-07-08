@@ -141,23 +141,29 @@ def test_apply_filter_empty_set_forces_empty_result():
 # ── list-endpoint query builders honor the ACL ──────────────────────
 
 
-def test_recordings_builder_default_all_is_unscoped():
+@pytest.mark.asyncio
+async def test_recordings_builder_default_all_is_unscoped():
     # Existing callers/tests pass no ``allowed`` and must stay unscoped.
-    sql = _sql(_filtered_recordings_query(None, None, None, None))
+    db = FakeDB(lambda stmt: [])
+    sql = _sql(await _filtered_recordings_query(db, None, None, None, None))
     assert "from recordings" in sql
     assert "where" not in sql
 
 
-def test_recordings_builder_restricted_adds_camera_in_clause():
+@pytest.mark.asyncio
+async def test_recordings_builder_restricted_adds_camera_in_clause():
     ids = {uuid.uuid4(), uuid.uuid4()}
-    sql = _sql(_filtered_recordings_query(None, None, None, None, ids))
+    db = FakeDB(lambda stmt: [])
+    sql = _sql(await _filtered_recordings_query(db, None, None, None, None, allowed=ids))
     assert "camera_id in (" in sql
     for cid in ids:
         assert str(cid) in sql
 
 
-def test_recordings_builder_all_sentinel_is_unscoped():
-    sql = _sql(_filtered_recordings_query(None, None, None, None, ALL))
+@pytest.mark.asyncio
+async def test_recordings_builder_all_sentinel_is_unscoped():
+    db = FakeDB(lambda stmt: [])
+    sql = _sql(await _filtered_recordings_query(db, None, None, None, None, allowed=ALL))
     assert "where" not in sql
 
 
@@ -184,14 +190,16 @@ async def test_events_builder_restricted_adds_camera_in_clause():
 # ── owner vs restricted, end to end on the builder ──────────────────
 
 
-def test_owner_sees_all_rows_restricted_sees_subset():
+@pytest.mark.asyncio
+async def test_owner_sees_all_rows_restricted_sees_subset():
     """The core invariant: an owner (ALL) gets no camera predicate, a
     restricted user (set) gets one scoping to exactly their cameras."""
-    owner_sql = _sql(_filtered_recordings_query(None, None, None, None, ALL))
+    db = FakeDB(lambda stmt: [])
+    owner_sql = _sql(await _filtered_recordings_query(db, None, None, None, None, allowed=ALL))
     assert "camera_id in (" not in owner_sql
 
     one = uuid.uuid4()
-    restricted_sql = _sql(_filtered_recordings_query(None, None, None, None, {one}))
+    restricted_sql = _sql(await _filtered_recordings_query(db, None, None, None, None, allowed={one}))
     assert "camera_id in (" in restricted_sql
     assert str(one) in restricted_sql
 

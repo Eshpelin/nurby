@@ -7,9 +7,14 @@ import uuid
 import zipfile
 from datetime import datetime, timezone
 
+import pytest
 from sqlalchemy.dialects import postgresql
 
 from services.api.routes.recordings import _build_zip, _filtered_recordings_query
+
+# The builder only touches the session when a person filter needs name
+# resolution; none of these tests use one, so no DB stub is required.
+_NO_DB = None
 
 
 def _sql(query) -> str:
@@ -18,11 +23,12 @@ def _sql(query) -> str:
     ).lower()
 
 
-def test_camera_and_time_filters_present():
+@pytest.mark.asyncio
+async def test_camera_and_time_filters_present():
     cid = uuid.uuid4()
     t0 = datetime(2026, 6, 1, tzinfo=timezone.utc)
     t1 = datetime(2026, 6, 2, tzinfo=timezone.utc)
-    sql = _sql(_filtered_recordings_query(cid, t0, t1, None))
+    sql = _sql(await _filtered_recordings_query(_NO_DB, cid, t0, t1, None))
     assert "from recordings" in sql
     assert "camera_id =" in sql
     # Lower bound tests the recording's window_end (overlap semantics, #65),
@@ -35,23 +41,26 @@ def test_camera_and_time_filters_present():
     assert "exists" not in sql  # no object filter -> no subquery
 
 
-def test_object_filter_adds_label_exists_subquery():
-    sql = _sql(_filtered_recordings_query(None, None, None, "cat"))
+@pytest.mark.asyncio
+async def test_object_filter_adds_label_exists_subquery():
+    sql = _sql(await _filtered_recordings_query(_NO_DB, None, None, None, ["cat"]))
     assert "exists" in sql
     assert "ilike" in sql
     assert 'label": "cat' in sql            # the JSON label match pattern
     assert "make_interval" in sql           # window upper bound when ended_at is null
 
 
-def test_no_filters_is_bare_select():
-    sql = _sql(_filtered_recordings_query(None, None, None, None))
+@pytest.mark.asyncio
+async def test_no_filters_is_bare_select():
+    sql = _sql(await _filtered_recordings_query(_NO_DB, None, None, None, None))
     assert "from recordings" in sql
     assert "where" not in sql
 
 
-def test_object_filter_escapes_like_wildcards():
+@pytest.mark.asyncio
+async def test_object_filter_escapes_like_wildcards():
     # A label with a LIKE metachar must be escaped, not treated as a wildcard.
-    sql = _sql(_filtered_recordings_query(None, None, None, "ca%t"))
+    sql = _sql(await _filtered_recordings_query(_NO_DB, None, None, None, ["ca%t"]))
     assert "escape" in sql  # ilike(..., escape="\\") rendered
 
 
