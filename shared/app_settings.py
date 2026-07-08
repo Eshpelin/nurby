@@ -260,6 +260,16 @@ DEFAULTS: dict[str, Any] = {
     # Warm the grounding model at API startup so the first FindAnything doesn't
     # pay the ~6GB cold-load. Off by default (loads lazily on first use).
     "grounding_preload": False,
+    # ── Mobile push (FCM HTTP v1) ────────────────────────────────────────
+    # Firebase service-account JSON pasted by an admin (Project settings ->
+    # Service accounts -> Generate new private key). Powers server-side
+    # sends via shared/push.py. Write-only through the settings API: it is
+    # never echoed back because it contains a private key. None = push off.
+    "push_fcm_service_account": None,
+    # Non-secret Firebase client config (apiKey / appId / projectId /
+    # messagingSenderId) served to mobile apps via GET /api/push/config so
+    # a stock build can init Firebase against any self-hosted install.
+    "push_firebase_client_config": None,
 }
 
 

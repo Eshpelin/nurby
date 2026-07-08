@@ -398,6 +398,11 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     "grounding_enabled",
     "grounding_backend",
     "grounding_remote_url",
+    # Mobile push (FCM). The service account is write-only: it is
+    # PATCHable here but never echoed back (absent from
+    # SystemSettingsResponse), because it contains a private key.
+    "push_fcm_service_account",
+    "push_firebase_client_config",
 )
 
 

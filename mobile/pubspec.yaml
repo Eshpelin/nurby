@@ -44,6 +44,10 @@ dependencies:
   intl: ^0.20.2
   shared_preferences: ^2.5.3
   flutter_webrtc: ^1.5.2
+  flutter_local_notifications: ^19.5.0
+  workmanager: ^0.7.0
+  firebase_core: ^4.11.0
+  firebase_messaging: ^16.4.1
 
 dev_dependencies:
   flutter_test:

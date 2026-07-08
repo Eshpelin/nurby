@@ -4,10 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ServerConfig {
   ServerConfig(this._prefs);
 
-  static const _kBaseUrl = 'server_base_url';
+  /// Public so the background isolate (core/push.dart) can rebuild an
+  /// ApiClient from the same persisted value.
+  static const baseUrlKey = 'server_base_url';
   final SharedPreferences _prefs;
 
-  String? get baseUrl => _prefs.getString(_kBaseUrl);
+  String? get baseUrl => _prefs.getString(baseUrlKey);
 
   Future<void> setBaseUrl(String url) async {
     var normalized = url.trim();
@@ -17,10 +19,10 @@ class ServerConfig {
     if (!normalized.startsWith('http')) {
       normalized = 'http://$normalized';
     }
-    await _prefs.setString(_kBaseUrl, normalized);
+    await _prefs.setString(baseUrlKey, normalized);
   }
 
-  Future<void> clear() => _prefs.remove(_kBaseUrl);
+  Future<void> clear() => _prefs.remove(baseUrlKey);
 
   /// ws:// or wss:// equivalent of the base URL.
   String? get wsBaseUrl {

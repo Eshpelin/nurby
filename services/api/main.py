@@ -35,6 +35,7 @@ from services.api.routes import (
     persons,
     privacy_zones,
     providers,
+    push,
     recordings,
     reports,
     rules,
@@ -225,6 +226,7 @@ app.include_router(rules.router, prefix="/api/rules", tags=["rules"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
+app.include_router(push.router, prefix="/api/push", tags=["push"])
 app.include_router(providers.router, prefix="/api/providers", tags=["providers"])
 app.include_router(ollama_deploy.router, prefix="/api/ollama", tags=["ollama"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -29,6 +31,21 @@ class NurbyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Keep the WS -> local-notification bridge alive for the app's lifetime.
+    ref.watch(wsNotificationBridgeProvider);
+
+    // FCM + background-refresh registration follows the auth phase.
+    ref.listen(authProvider, (prev, next) {
+      final wasIn = prev?.phase == AuthPhase.loggedIn;
+      final isIn = next.phase == AuthPhase.loggedIn;
+      if (!wasIn && isIn) {
+        unawaited(ref.read(pushManagerProvider).onLogin(
+            ref.read(apiClientProvider), ref.read(sharedPrefsProvider)));
+      } else if (wasIn && !isIn) {
+        unawaited(ref.read(pushManagerProvider).onLogout());
+      }
+    });
+
     final router = ref.watch(_routerProvider);
     return MaterialApp.router(
       title: 'Nurby',

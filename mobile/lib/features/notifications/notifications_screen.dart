@@ -8,7 +8,7 @@ import '../../core/theme.dart';
 import '../../models/models.dart';
 
 /// Notification list; family key is the unread-only toggle.
-final _notificationsProvider =
+final notificationsListProvider =
     FutureProvider.family<List<AppNotification>, bool>((ref, unreadOnly) =>
         ref.watch(notificationRepoProvider).list(unreadOnly: unreadOnly));
 
@@ -34,7 +34,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _unreadOnly = false;
 
   void _invalidate() {
-    ref.invalidate(_notificationsProvider);
+    ref.invalidate(notificationsListProvider);
     ref.invalidate(unreadNotificationsProvider);
   }
 
@@ -66,11 +66,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Widget build(BuildContext context) {
     ref.listen(wsMessagesProvider, (_, next) {
       if (next.value?['type'] == 'notification') {
-        ref.invalidate(_notificationsProvider);
+        ref.invalidate(notificationsListProvider);
       }
     });
 
-    final notifications = ref.watch(_notificationsProvider(_unreadOnly));
+    final notifications = ref.watch(notificationsListProvider(_unreadOnly));
 
     return Scaffold(
       appBar: AppBar(
@@ -114,7 +114,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     const SizedBox(height: 12),
                     TextButton(
                       onPressed: () =>
-                          ref.invalidate(_notificationsProvider(_unreadOnly)),
+                          ref.invalidate(notificationsListProvider(_unreadOnly)),
                       child: const Text('Retry'),
                     ),
                   ],
@@ -123,7 +123,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               data: (items) => RefreshIndicator(
                 onRefresh: () async {
                   _invalidate();
-                  await ref.read(_notificationsProvider(_unreadOnly).future);
+                  await ref.read(notificationsListProvider(_unreadOnly).future);
                 },
                 child: items.isEmpty
                     ? ListView(

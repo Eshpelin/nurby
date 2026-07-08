@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
+import 'push.dart';
 import 'repositories.dart';
 import 'server_config.dart';
 import 'ws_client.dart';
@@ -91,6 +93,8 @@ class AuthController extends Notifier<AppAuthState> {
   }
 
   Future<void> logout() async {
+    // Best effort: remove the push device row while the token still works.
+    await PushManager.deleteDevice(api, ref.read(sharedPrefsProvider));
     await api.clearToken();
     state = const AppAuthState(AuthPhase.loggedOut);
   }
@@ -185,4 +189,60 @@ final unreadNotificationsProvider = FutureProvider<int>((ref) async {
   ref.watch(wsMessagesProvider.select(
       (m) => m.value?['type'] == 'notification'));
   return ref.watch(notificationRepoProvider).unreadCount();
+});
+
+// ---- Push notifications ----
+
+/// Overridden in main() with the initialized instance.
+final notificationServiceProvider =
+    Provider<NotificationService>((ref) => NotificationService());
+
+final pushManagerProvider =
+    Provider<PushManager>((ref) => PushManager(ref.watch(notificationServiceProvider)));
+
+/// Tracks whether the app is foregrounded so the WS bridge only fires local
+/// notifications when the user is not looking at the app.
+class AppLifecycleNotifier extends Notifier<AppLifecycleState>
+    with WidgetsBindingObserver {
+  @override
+  AppLifecycleState build() {
+    WidgetsBinding.instance.addObserver(this);
+    ref.onDispose(() => WidgetsBinding.instance.removeObserver(this));
+    return WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    this.state = state;
+  }
+}
+
+final appLifecycleProvider =
+    NotifierProvider<AppLifecycleNotifier, AppLifecycleState>(
+        AppLifecycleNotifier.new);
+
+/// While the socket is still alive but the app is backgrounded (paused,
+/// inactive, app switcher), surface alert-ish WS messages as local
+/// notifications. Watched from NurbyApp so it lives as long as the app.
+final wsNotificationBridgeProvider = Provider<void>((ref) {
+  ref.listen(wsMessagesProvider, (_, next) {
+    final msg = next.value;
+    if (msg == null) return;
+    final type = msg['type'];
+    if (type != 'notification' && type != 'event' && type != 'event_fired') {
+      return;
+    }
+    if (ref.read(appLifecycleProvider) == AppLifecycleState.resumed) return;
+    final service = ref.read(notificationServiceProvider);
+    if (type == 'notification') {
+      service.show('Nurby', msg['message']?.toString() ?? 'New notification');
+    } else {
+      final rule = msg['rule_name']?.toString();
+      final camera = msg['camera_name']?.toString();
+      service.show(
+        (rule == null || rule.isEmpty) ? 'Nurby alert' : rule,
+        (camera == null || camera.isEmpty) ? 'A rule fired' : 'Camera: $camera',
+      );
+    }
+  });
 });

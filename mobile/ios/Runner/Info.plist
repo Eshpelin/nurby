@@ -56,5 +56,14 @@
 	<string>Required by the video engine; Nurby does not record from this device by default.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.nurby.nurbyMobile.alertcheck</string>
+	</array>
 </dict>
 </plist>

@@ -9,10 +9,10 @@ import '../../models/models.dart';
 
 const _pageSize = 50;
 
-typedef _EventsQuery = ({bool? acked, String? cameraId});
+typedef EventsQuery = ({bool? acked, String? cameraId});
 
 /// First page of event history per filter.
-final _eventsProvider = FutureProvider.family<List<Event>, _EventsQuery>(
+final eventsProvider = FutureProvider.family<List<Event>, EventsQuery>(
     (ref, q) => ref.watch(eventRepoProvider).history(
           acked: q.acked,
           cameraId: q.cameraId,
@@ -39,7 +39,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   bool _loadingMore = false;
   bool _hasMore = true;
 
-  _EventsQuery get _query => (acked: _acked, cameraId: _cameraId);
+  EventsQuery get _query => (acked: _acked, cameraId: _cameraId);
 
   @override
   void initState() {
@@ -67,13 +67,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
   Future<void> _refresh() async {
     setState(_resetPaging);
-    ref.invalidate(_eventsProvider);
-    await ref.read(_eventsProvider(_query).future);
+    ref.invalidate(eventsProvider);
+    await ref.read(eventsProvider(_query).future);
   }
 
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
-    final first = ref.read(_eventsProvider(_query)).value;
+    final first = ref.read(eventsProvider(_query)).value;
     if (first == null || first.length < _pageSize) return;
     setState(() => _loadingMore = true);
     try {
@@ -100,7 +100,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
   void _afterAck() {
     setState(_resetPaging);
-    ref.invalidate(_eventsProvider);
+    ref.invalidate(eventsProvider);
     ref.invalidate(unreviewedCountProvider);
   }
 
@@ -136,11 +136,11 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       final type = next.value?['type'];
       if (type == 'event' || type == 'event_fired') {
         setState(_resetPaging);
-        ref.invalidate(_eventsProvider);
+        ref.invalidate(eventsProvider);
       }
     });
 
-    final firstPage = ref.watch(_eventsProvider(_query));
+    final firstPage = ref.watch(eventsProvider(_query));
     final cameras = ref.watch(camerasProvider).value ?? const <Camera>[];
     final visible = [...?firstPage.value, ..._extra];
     final hasUnacked = visible.any((e) => !e.acked);
@@ -168,7 +168,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => _ErrorRetry(
                 message: apiErrorMessage(e),
-                onRetry: () => ref.invalidate(_eventsProvider(_query)),
+                onRetry: () => ref.invalidate(eventsProvider(_query)),
               ),
               data: (items) => _list([...items, ..._extra]),
             ),
