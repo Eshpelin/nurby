@@ -881,6 +881,66 @@ class InviteKey(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ResourceShare(Base):
+    """An anonymous, scoped, revocable share link for ONE recorded resource.
+
+    A recipient opens ``/share/<token>`` with no account and sees only the
+    shared thing (a clip, a frame, an event, or a read-only feed of one
+    camera's past events) — never anything else, never live. The raw token is
+    shown to the creator once and never stored; we keep only its SHA-256 hash,
+    so a database leak does not expose live share URLs (same posture as an API
+    key). Access ends the instant ``revoked_at`` is set, once ``expires_at``
+    passes, or once ``view_count`` reaches ``max_views`` (null = unlimited).
+
+    Media is served by reusing the normal recording/observation/event paths, so
+    a share inherits the system's selective privacy blur automatically — it
+    shows exactly what a restricted viewer would see, not a blanket blur.
+
+    Exactly one of the ``*_id`` columns is set, matching ``kind``; enforced in
+    the create route rather than by a DB constraint.
+    """
+
+    __tablename__ = "resource_shares"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # SHA-256 hex of the raw url-safe token. Lookups hash the presented token
+    # and match on this; the raw token lives only in the shared URL.
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)  # recording|observation|event|camera_events
+
+    recording_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("recordings.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    observation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("observations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    camera_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("cameras.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+
+    label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Who created it (audit). SET NULL so removing a user doesn't silently
+    # delete the shares they handed out; the row stays revocable/auditable.
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    # View cap. null = unlimited; a view is counted once per page/metadata
+    # resolve, NOT per media byte-range request (a single watch must not burn
+    # the whole allowance).
+    max_views: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_accessed_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 class UserCameraAccess(Base):
     __tablename__ = "user_camera_access"
     __table_args__ = (UniqueConstraint("user_id", "camera_id", name="uq_user_camera"),)
