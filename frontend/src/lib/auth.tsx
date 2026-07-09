@@ -57,6 +57,13 @@ const USER_KEY = "nurby_user";
 
 const PUBLIC_PATHS = ["/login", "/setup", "/guardian/claim"];
 
+// /share/{token} pages are anonymous share-link viewers: never bounce a
+// visitor there through login/bootstrap, and never clear their (absent)
+// session on a 401.
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/share/");
+}
+
 // Error that also carries the HTTP status, so callers can react to a
 // 409 (duplicate / already done) without string-matching the message.
 export class ApiError extends Error {
@@ -111,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading) return;
-    if (token || PUBLIC_PATHS.includes(pathname)) return;
+    if (token || isPublicPath(pathname)) return;
     // No token on a protected path. A brand-new install (zero users) should
     // drop the visitor straight in. auto-create a provisional owner via
     // /auth/bootstrap and log them in, so they never hit a signup wall.
@@ -232,7 +239,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
-        if (!PUBLIC_PATHS.includes(pathname)) {
+        if (!isPublicPath(pathname)) {
           router.replace("/");
         }
       }

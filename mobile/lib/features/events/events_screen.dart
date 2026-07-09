@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +7,7 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
+import '../shares/share_sheet.dart';
 
 const _pageSize = 50;
 
@@ -104,15 +106,21 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     ref.invalidate(unreviewedCountProvider);
   }
 
+  /// Connectivity failures were already queued in the outbox by the
+  /// repository, so tell the user the ack will sync rather than that it failed.
+  void _showMutationError(Object e) {
+    final queued = e is DioException && isConnectivityError(e);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:
+            Text(queued ? 'Queued — will sync when online' : apiErrorMessage(e))));
+  }
+
   Future<void> _ack(Event event) async {
     try {
       await ref.read(eventRepoProvider).acknowledge(event.id);
       if (mounted) _afterAck();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
-      }
+      if (mounted) _showMutationError(e);
     }
   }
 
@@ -123,10 +131,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       await ref.read(eventRepoProvider).batchAck(ids);
       if (mounted) _afterAck();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
-      }
+      if (mounted) _showMutationError(e);
     }
   }
 
@@ -377,21 +382,43 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                     '${event.actionType}'
                     '${event.actionStatus != null ? ' · ${event.actionStatus}' : ''}'),
               _kv('STATUS', event.acked ? 'acknowledged' : 'unreviewed'),
-              if (event.observationId != null) ...[
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.image_outlined, size: 18),
-                  label: const Text('View observation'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: NurbyColors.foreground,
-                    side: const BorderSide(color: NurbyColors.border),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  if (event.observationId != null) ...[
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.image_outlined, size: 18),
+                      label: const Text('View observation'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: NurbyColors.foreground,
+                        side: const BorderSide(color: NurbyColors.border),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showObservationSheet(event.observationId!);
+                      },
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.ios_share, size: 18),
+                    label: const Text('Share'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: NurbyColors.foreground,
+                      side: const BorderSide(color: NurbyColors.border),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      showCreateShareSheet(
+                        context,
+                        kind: 'event',
+                        resourceId: event.id,
+                        label: event.ruleName,
+                      );
+                    },
                   ),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _showObservationSheet(event.observationId!);
-                  },
-                ),
-              ],
+                ],
+              ),
             ],
           ),
         ),

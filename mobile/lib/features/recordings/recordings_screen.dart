@@ -7,6 +7,7 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
+import '../shares/share_sheet.dart';
 
 enum _TimeRange {
   today('Today'),
@@ -226,13 +227,25 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
             );
           }
           final rec = _items[i];
+          final cameraName = cameraNames[rec.cameraId] ?? 'Camera';
           return _RecordingRow(
             recording: rec,
-            cameraName: cameraNames[rec.cameraId] ?? 'Camera',
-            onTap: () => _openPlayer(rec, cameraNames[rec.cameraId] ?? 'Camera'),
+            cameraName: cameraName,
+            onTap: () => _openPlayer(rec, cameraName),
+            onLongPress: () => _shareRecording(rec, cameraName),
           );
         },
       ),
+    );
+  }
+
+  void _shareRecording(Recording rec, String cameraName) {
+    showCreateShareSheet(
+      context,
+      kind: 'recording',
+      resourceId: rec.id,
+      label:
+          '$cameraName · ${DateFormat('MMM d, HH:mm').format(rec.startedAt)}',
     );
   }
 
@@ -243,6 +256,7 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
         url: url,
         title: cameraName,
         subtitle: DateFormat('EEE, MMM d y · HH:mm').format(rec.startedAt),
+        onShare: () => _shareRecording(rec, cameraName),
       ),
     ));
   }
@@ -253,11 +267,13 @@ class _RecordingRow extends StatelessWidget {
     required this.recording,
     required this.cameraName,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final Recording recording;
   final String cameraName;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   String get _duration {
     final secs = recording.durationSeconds;
@@ -280,6 +296,7 @@ class _RecordingRow extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
@@ -385,11 +402,13 @@ class _RecordingPlayerPage extends StatefulWidget {
     required this.url,
     required this.title,
     required this.subtitle,
+    required this.onShare,
   });
 
   final String url;
   final String title;
   final String subtitle;
+  final VoidCallback onShare;
 
   @override
   State<_RecordingPlayerPage> createState() => _RecordingPlayerPageState();
@@ -438,6 +457,13 @@ class _RecordingPlayerPageState extends State<_RecordingPlayerPage> {
             Text(widget.subtitle, style: monoStyle.copyWith(fontSize: 11)),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Share link',
+            icon: const Icon(Icons.ios_share, size: 22),
+            onPressed: widget.onShare,
+          ),
+        ],
       ),
       body: Column(
         children: [

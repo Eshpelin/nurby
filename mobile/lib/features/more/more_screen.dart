@@ -30,6 +30,7 @@ class MoreScreen extends ConsumerWidget {
         _NavItem('Vehicles', Icons.directions_car_outlined, '/more/vehicles'),
         _NavItem('Recordings', Icons.video_library_outlined, '/more/recordings'),
         _NavItem('Search', Icons.search, '/more/search'),
+        _NavItem('Share links', Icons.link, '/more/shares'),
         _NavItem(
             'Notifications', Icons.notifications_none, '/more/notifications'),
       ],

@@ -1,4 +1,7 @@
+import 'package:dio/dio.dart';
+
 import 'api_client.dart';
+import 'outbox.dart';
 import '../models/models.dart';
 
 /// One repository per API resource group. Thin: shape mapping only,
@@ -42,6 +45,16 @@ class AuthRepository {
       'password': password,
       'invite_key': inviteKey,
     }) as Map<String, dynamic>;
+    return (
+      j['access_token'] as String,
+      User.fromJson(j['user'] as Map<String, dynamic>)
+    );
+  }
+
+  /// Exchange a scanned QR pairing code for an access token.
+  Future<(String token, User user)> pairClaim(String code) async {
+    final j = await _api.postJson('/api/auth/pair/claim',
+        body: {'code': code}) as Map<String, dynamic>;
     return (
       j['access_token'] as String,
       User.fromJson(j['user'] as Map<String, dynamic>)
@@ -158,8 +171,9 @@ class TimelineRepository {
 }
 
 class EventRepository {
-  EventRepository(this._api);
+  EventRepository(this._api, {MutationOutbox? outbox}) : _outbox = outbox;
   final ApiClient _api;
+  final MutationOutbox? _outbox;
 
   Future<List<Event>> history({
     String? cameraId,
@@ -190,13 +204,37 @@ class EventRepository {
     return j['unreviewed_count'] as int? ?? 0;
   }
 
-  Future<Event> acknowledge(String id) async => Event.fromJson(
-      await _api.postJson('/api/events/$id/ack') as Map<String, dynamic>);
+  /// Offline-safe: on a connectivity failure the ack is queued in the
+  /// outbox for later replay, then the error is rethrown so callers can
+  /// show a "queued" message.
+  Future<Event> acknowledge(String id) async {
+    final path = '/api/events/$id/ack';
+    try {
+      return Event.fromJson(
+          await _api.postJson(path) as Map<String, dynamic>);
+    } on DioException catch (e) {
+      await _maybeEnqueue(e, path);
+      rethrow;
+    }
+  }
 
+  /// Offline-safe, see [acknowledge].
   Future<int> batchAck(List<String> ids) async {
-    final j = await _api.postJson('/api/events/batch-ack',
-        body: {'event_ids': ids}) as Map;
-    return j['updated'] as int? ?? 0;
+    const path = '/api/events/batch-ack';
+    final body = {'event_ids': ids};
+    try {
+      final j = await _api.postJson(path, body: body) as Map;
+      return j['updated'] as int? ?? 0;
+    } on DioException catch (e) {
+      await _maybeEnqueue(e, path, body: body);
+      rethrow;
+    }
+  }
+
+  Future<void> _maybeEnqueue(DioException e, String path,
+      {Object? body}) async {
+    if (_outbox == null || !isConnectivityError(e)) return;
+    await _outbox.enqueue(method: 'POST', path: path, body: body);
   }
 }
 
@@ -347,9 +385,50 @@ class RecordingRepository {
   String streamUrl(String id) => _api.mediaUrl('/api/recordings/$id/stream');
 }
 
-class NotificationRepository {
-  NotificationRepository(this._api);
+class ShareRepository {
+  ShareRepository(this._api);
   final ApiClient _api;
+
+  /// Create an anonymous scoped share link. [expirySeconds] is rounded UP to
+  /// whole days because the backend's granularity is days (min 1, max 30), so
+  /// a "1 hour" choice becomes a 1-day link.
+  Future<CreatedShare> create({
+    required String kind, // recording | observation | event
+    required String resourceId,
+    required int expirySeconds,
+    int? maxViews,
+    String? label,
+  }) async {
+    final days = (expirySeconds / Duration.secondsPerDay).ceil().clamp(1, 30);
+    final j = await _api.postJson('/api/shares', body: {
+      'kind': kind,
+      'resource_id': resourceId,
+      'expires_in_days': days,
+      if (maxViews != null) 'max_views': maxViews,
+      if (label != null) 'label': label,
+    }) as Map<String, dynamic>;
+    return CreatedShare.fromJson(j);
+  }
+
+  /// Share links I created (admins see everyone's).
+  Future<List<ShareLink>> listMine() async {
+    final j = await _api.getJson('/api/shares') as List;
+    return j
+        .whereType<Map>()
+        .map((s) => ShareLink.fromJson(s.cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// Kill a link immediately. Idempotent server-side.
+  Future<ShareLink> revoke(String id) async => ShareLink.fromJson(
+      await _api.postJson('/api/shares/$id/revoke') as Map<String, dynamic>);
+}
+
+class NotificationRepository {
+  NotificationRepository(this._api, {MutationOutbox? outbox})
+      : _outbox = outbox;
+  final ApiClient _api;
+  final MutationOutbox? _outbox;
 
   Future<List<AppNotification>> list({bool unreadOnly = false}) async {
     final j = await _api.getJson('/api/notifications', query: {
@@ -367,8 +446,18 @@ class NotificationRepository {
     return j['unread'] as int? ?? 0;
   }
 
+  /// Offline-safe: queued in the outbox on connectivity failures, then
+  /// rethrown so callers can show a "queued" message.
   Future<void> markRead(String id) async {
-    await _api.patchJson('/api/notifications/$id/read');
+    final path = '/api/notifications/$id/read';
+    try {
+      await _api.patchJson(path);
+    } on DioException catch (e) {
+      if (_outbox != null && isConnectivityError(e)) {
+        await _outbox.enqueue(method: 'PATCH', path: path);
+      }
+      rethrow;
+    }
   }
 
   Future<void> markAllRead() async {

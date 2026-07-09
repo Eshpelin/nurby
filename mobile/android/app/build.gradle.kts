@@ -7,8 +7,8 @@ plugins {
 
 android {
     namespace = "com.nurby.nurby_mobile"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 36 // plugins (mobile_scanner, androidx.core 1.18) need 36
+    ndkVersion = "27.0.12077973" // required by connectivity_plus, firebase, etc.
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

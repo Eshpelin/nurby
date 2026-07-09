@@ -10,7 +10,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { loading } = useAuth();
 
-  const isPublic = PUBLIC_PATHS.includes(pathname);
+  // /share/{token} is the anonymous share-link viewer: render it bare
+  // (no navbar, no session) like the other public paths.
+  const isPublic =
+    PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/share/");
 
   if (loading) {
     return (

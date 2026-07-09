@@ -380,6 +380,72 @@ class TimelineItem {
   final Observation? observation;
 }
 
+/// A share link the current user created (list/manage view). The raw token
+/// is never included here; it is returned exactly once at creation time.
+class ShareLink {
+  ShareLink({
+    required this.id,
+    required this.kind,
+    required this.viewCount,
+    required this.createdAt,
+    required this.status,
+    this.label,
+    this.maxViews,
+    this.expiresAt,
+    this.revokedAt,
+    this.lastAccessedAt,
+  });
+
+  factory ShareLink.fromJson(Map<String, dynamic> j) => ShareLink(
+        id: j['id'] as String,
+        kind: j['kind'] as String? ?? '?',
+        label: j['label'] as String?,
+        maxViews: j['max_views'] as int?,
+        viewCount: j['view_count'] as int? ?? 0,
+        expiresAt: _date(j['expires_at']),
+        revokedAt: _date(j['revoked_at']),
+        createdAt: _date(j['created_at']) ?? DateTime.now(),
+        lastAccessedAt: _date(j['last_accessed_at']),
+        status: j['status'] as String? ?? 'active',
+      );
+
+  final String id;
+  final String kind; // recording | observation | event
+  final String? label;
+  final int? maxViews;
+  final int viewCount;
+  final DateTime? expiresAt;
+  final DateTime? revokedAt;
+  final DateTime createdAt;
+  final DateTime? lastAccessedAt;
+  final String status; // active | expired | revoked | exhausted
+}
+
+/// Creation response: carries the public URL (with the raw token) exactly once.
+class CreatedShare {
+  CreatedShare({
+    required this.id,
+    required this.url,
+    required this.kind,
+    this.expiresAt,
+    this.maxViews,
+  });
+
+  factory CreatedShare.fromJson(Map<String, dynamic> j) => CreatedShare(
+        id: j['id'] as String,
+        url: j['url'] as String? ?? '',
+        kind: j['kind'] as String? ?? '?',
+        expiresAt: _date(j['expires_at']),
+        maxViews: j['max_views'] as int?,
+      );
+
+  final String id;
+  final String url;
+  final String kind;
+  final DateTime? expiresAt;
+  final int? maxViews;
+}
+
 class SystemStatus {
   SystemStatus({
     required this.version,

@@ -6,6 +6,7 @@ import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { RecordingDetectionOverlay } from "@/components/RecordingDetectionOverlay";
 import { MotionHeatstrip } from "@/components/MotionHeatstrip";
 import { MotionReviewItems } from "@/components/MotionReviewItems";
+import { ShareDialog } from "@/components/ShareDialog";
 
 // Objects people most often scrub for. Free of a fixed list otherwise.
 const COMMON_OBJECTS = ["person", "cat", "dog", "car", "truck", "bus", "bicycle", "motorcycle"];
@@ -205,6 +206,8 @@ export default function RecordingsPage() {
     }
   }, [seekTargets]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Recording being shared via an anonymous link (opens ShareDialog).
+  const [shareRec, setShareRec] = useState<Recording | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -381,6 +384,8 @@ export default function RecordingsPage() {
     if (!expandedId) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        // The share dialog stacks on top and owns Escape while open.
+        if (shareRec) return;
         setExpandedId(null);
         setConfirmDeleteId(null);
         setDeleteError(null);
@@ -393,7 +398,7 @@ export default function RecordingsPage() {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [expandedId]);
+  }, [expandedId, shareRec]);
 
   const expandedRec = useMemo(
     () =>
@@ -956,18 +961,34 @@ export default function RecordingsPage() {
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-2">
-                  <a
-                    href={`/api/recordings/${expandedRec.id}/download${token ? `?token=${token}` : ""}`}
-                    download
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 transition-opacity"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    Download
-                  </a>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`/api/recordings/${expandedRec.id}/download${token ? `?token=${token}` : ""}`}
+                      download
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 transition-opacity"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Download
+                    </a>
+                    <button
+                      onClick={() => setShareRec(expandedRec)}
+                      title="Create an anonymous link anyone can open until it expires"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="18" cy="5" r="3" />
+                        <circle cx="6" cy="12" r="3" />
+                        <circle cx="18" cy="19" r="3" />
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                      </svg>
+                      Share
+                    </button>
+                  </div>
                   <button
                     onClick={() => {
                       setConfirmDeleteId(expandedRec.id);
@@ -992,6 +1013,15 @@ export default function RecordingsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {shareRec && (
+        <ShareDialog
+          kind="recording"
+          resourceId={shareRec.id}
+          label={`${cameraNames[shareRec.camera_id] || "Unknown camera"} · ${formatDateTime(shareRec.started_at)}`}
+          onClose={() => setShareRec(null)}
+        />
       )}
     </div>
   );

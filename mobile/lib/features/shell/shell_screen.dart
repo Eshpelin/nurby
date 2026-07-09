@@ -16,6 +16,42 @@ class ShellScreen extends ConsumerStatefulWidget {
   ConsumerState<ShellScreen> createState() => _ShellScreenState();
 }
 
+/// Slim amber strip pinned above the shell content while the device has no
+/// network path. Data on screen keeps rendering from provider caches.
+class OfflineBanner extends StatelessWidget {
+  const OfflineBanner({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: NurbyColors.warning,
+      padding: EdgeInsets.only(
+        top: MediaQuery.paddingOf(context).top + 4,
+        bottom: 5,
+        left: 12,
+        right: 12,
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.cloud_off, size: 14, color: Colors.black),
+          SizedBox(width: 6),
+          Text(
+            'Offline — showing cached data',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ShellScreenState extends ConsumerState<ShellScreen> {
   StatefulNavigationShell get shell => widget.shell;
 
@@ -60,8 +96,22 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
   @override
   Widget build(BuildContext context) {
     final unreviewed = ref.watch(unreviewedCountProvider).value ?? 0;
+    final offline = ref.watch(isOfflineProvider);
     return Scaffold(
-      body: shell,
+      body: Column(
+        children: [
+          if (offline) const OfflineBanner(),
+          // The banner swallows the status-bar inset while it is showing, so
+          // strip it from the tabs to avoid double top padding.
+          Expanded(
+            child: MediaQuery.removePadding(
+              context: context,
+              removeTop: offline,
+              child: shell,
+            ),
+          ),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: shell.currentIndex,
         onDestinationSelected: (i) => shell.goBranch(

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'core/providers.dart';
 import 'core/theme.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/qr_pair_screen.dart';
 import 'features/auth/server_screen.dart';
 import 'features/auth/setup_screen.dart';
 import 'features/ask/ask_screen.dart';
@@ -22,6 +23,7 @@ import 'features/rules/rule_editor_screen.dart';
 import 'features/rules/rules_screen.dart';
 import 'features/search/search_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/shares/shares_screen.dart';
 import 'features/shell/shell_screen.dart';
 import 'features/timeline/timeline_screen.dart';
 import 'features/vehicles/vehicles_screen.dart';
@@ -33,6 +35,8 @@ class NurbyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Keep the WS -> local-notification bridge alive for the app's lifetime.
     ref.watch(wsNotificationBridgeProvider);
+    // Replay offline-queued mutations on reconnect / app resume.
+    ref.watch(outboxDrainProvider);
 
     // FCM + background-refresh registration follows the auth phase.
     ref.listen(authProvider, (prev, next) {
@@ -66,23 +70,29 @@ final _routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final phase = ref.read(authProvider).phase;
       final loc = state.matchedLocation;
-      final onAuthPage =
-          loc == '/server' || loc == '/login' || loc == '/setup' || loc == '/checking';
+      final onAuthPage = loc == '/server' ||
+          loc == '/login' ||
+          loc == '/setup' ||
+          loc == '/checking' ||
+          loc == '/pair';
       switch (phase) {
         case AuthPhase.noServer:
-          return loc == '/server' ? null : '/server';
+          return (loc == '/server' || loc == '/pair') ? null : '/server';
         case AuthPhase.checking:
           return loc == '/checking' ? null : '/checking';
         case AuthPhase.needsSetup:
           return loc == '/setup' ? null : '/setup';
         case AuthPhase.loggedOut:
-          return (loc == '/login' || loc == '/server') ? null : '/login';
+          return (loc == '/login' || loc == '/server' || loc == '/pair')
+              ? null
+              : '/login';
         case AuthPhase.loggedIn:
           return onAuthPage ? '/cameras' : null;
       }
     },
     routes: [
       GoRoute(path: '/server', builder: (_, __) => const ServerScreen()),
+      GoRoute(path: '/pair', builder: (_, __) => const QrPairScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/setup', builder: (_, __) => const SetupScreen()),
       GoRoute(
@@ -138,6 +148,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
                     path: 'recordings',
                     builder: (_, __) => const RecordingsScreen()),
                 GoRoute(path: 'search', builder: (_, __) => const SearchScreen()),
+                GoRoute(path: 'shares', builder: (_, __) => const SharesScreen()),
                 GoRoute(
                     path: 'notifications',
                     builder: (_, __) => const NotificationsScreen()),

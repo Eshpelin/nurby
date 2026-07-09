@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
+import 'outbox.dart';
 import 'push.dart';
 import 'repositories.dart';
 import 'server_config.dart';
@@ -92,6 +94,26 @@ class AuthController extends Notifier<AppAuthState> {
     state = AppAuthState(AuthPhase.loggedIn, user: user);
   }
 
+  /// QR pairing: the scanned payload carries both the server URL and a
+  /// one-time login code, so one scan replaces typing an address and a
+  /// password. Sets state directly instead of invalidating so the claim
+  /// happens exactly once, with errors surfacing to the scan screen.
+  Future<void> pairWithQr(String url, String code) async {
+    final config = ref.read(serverConfigProvider);
+    await config.setBaseUrl(url);
+    _initApi(config.baseUrl!);
+    try {
+      final (token, user) = await AuthRepository(api).pairClaim(code);
+      await api.setToken(token);
+      state = AppAuthState(AuthPhase.loggedIn, user: user);
+    } catch (_) {
+      // Leave the saved server URL (it may well be right) but drop back
+      // to the login screen rather than a broken checking state.
+      state = const AppAuthState(AuthPhase.loggedOut);
+      rethrow;
+    }
+  }
+
   Future<void> logout() async {
     // Best effort: remove the push device row while the token still works.
     await PushManager.deleteDevice(api, ref.read(sharedPrefsProvider));
@@ -121,6 +143,50 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   return ref.read(authProvider.notifier).api;
 });
 
+// ---- Connectivity / offline ----
+
+/// Raw connectivity transitions from the OS.
+final connectivityProvider = StreamProvider<List<ConnectivityResult>>(
+    (ref) => Connectivity().onConnectivityChanged);
+
+/// True when the device reports no network path at all. Before the first
+/// connectivity event arrives we assume online (optimistic default).
+final isOfflineProvider = Provider<bool>((ref) {
+  final results = ref.watch(connectivityProvider).value;
+  if (results == null) return false;
+  return results.isEmpty ||
+      results.every((r) => r == ConnectivityResult.none);
+});
+
+/// Queue of offline mutations, persisted in SharedPreferences.
+final outboxProvider =
+    Provider<MutationOutbox>((ref) => MutationOutbox(ref.watch(sharedPrefsProvider)));
+
+/// Drains the outbox when connectivity returns or the app resumes.
+/// Watched from NurbyApp so it lives as long as the app.
+final outboxDrainProvider = Provider<void>((ref) {
+  Future<void> drainIfLoggedIn() async {
+    if (ref.read(authProvider).phase != AuthPhase.loggedIn) return;
+    final replayed =
+        await ref.read(outboxProvider).drain(ref.read(apiClientProvider));
+    if (replayed > 0) {
+      // Queued acks/read-marks just landed: refresh badges and lists.
+      ref.invalidate(unreviewedCountProvider);
+      ref.invalidate(unreadNotificationsProvider);
+    }
+  }
+
+  ref.listen(isOfflineProvider, (prev, next) {
+    if (prev == true && next == false) unawaited(drainIfLoggedIn());
+  });
+  ref.listen(appLifecycleProvider, (prev, next) {
+    if (next == AppLifecycleState.resumed &&
+        prev != AppLifecycleState.resumed) {
+      unawaited(drainIfLoggedIn());
+    }
+  });
+});
+
 // ---- Repositories ----
 final cameraRepoProvider =
     Provider((ref) => CameraRepository(ref.watch(apiClientProvider)));
@@ -128,8 +194,9 @@ final observationRepoProvider =
     Provider((ref) => ObservationRepository(ref.watch(apiClientProvider)));
 final timelineRepoProvider =
     Provider((ref) => TimelineRepository(ref.watch(apiClientProvider)));
-final eventRepoProvider =
-    Provider((ref) => EventRepository(ref.watch(apiClientProvider)));
+final eventRepoProvider = Provider((ref) => EventRepository(
+    ref.watch(apiClientProvider),
+    outbox: ref.watch(outboxProvider)));
 final ruleRepoProvider =
     Provider((ref) => RuleRepository(ref.watch(apiClientProvider)));
 final personRepoProvider =
@@ -138,8 +205,11 @@ final searchRepoProvider =
     Provider((ref) => SearchRepository(ref.watch(apiClientProvider)));
 final recordingRepoProvider =
     Provider((ref) => RecordingRepository(ref.watch(apiClientProvider)));
-final notificationRepoProvider =
-    Provider((ref) => NotificationRepository(ref.watch(apiClientProvider)));
+final shareRepoProvider =
+    Provider((ref) => ShareRepository(ref.watch(apiClientProvider)));
+final notificationRepoProvider = Provider((ref) => NotificationRepository(
+    ref.watch(apiClientProvider),
+    outbox: ref.watch(outboxProvider)));
 final systemRepoProvider =
     Provider((ref) => SystemRepository(ref.watch(apiClientProvider)));
 

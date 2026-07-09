@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -44,8 +45,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       if (mounted) _invalidate();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+        // Connectivity failures were queued in the outbox by the repository.
+        final queued = e is DioException && isConnectivityError(e);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(queued
+                ? 'Queued — will sync when online'
+                : apiErrorMessage(e))));
       }
     }
   }

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import TelegramSection from "@/components/TelegramSection";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
+import { PairMobileCard } from "@/components/PairMobileCard";
+import { ShareLinksCard } from "@/components/ShareLinksCard";
 import { SystemDoctorPanel } from "@/components/SystemDoctorPanel";
 import { DevicesSection } from "@/components/DevicesSection";
 import { GroundingSettingsCard } from "@/components/settings/GroundingSettingsCard";
@@ -575,6 +577,12 @@ export default function SettingsPage() {
 
       {/* ─── Status Cards ─── */}
       <div className="space-y-3">
+
+        {/* Mobile app pairing card */}
+        <PairMobileCard />
+
+        {/* Anonymous share links audit/revoke */}
+        <ShareLinksCard />
 
         {/* AI Providers card */}
         <div className="rounded-lg border border-border bg-card">

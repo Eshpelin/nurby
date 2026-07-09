@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
@@ -106,6 +107,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2))
                         : const Text('Sign in'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push('/pair'),
+                    icon: const Icon(Icons.qr_code_scanner, size: 20),
+                    label: const Text('Scan QR code'),
                   ),
                   const SizedBox(height: 12),
                   TextButton(

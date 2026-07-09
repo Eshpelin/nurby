@@ -48,6 +48,11 @@ dependencies:
   workmanager: ^0.7.0
   firebase_core: ^4.11.0
   firebase_messaging: ^16.4.1
+  share_plus: ^12.0.2
+  # Pinned to 6.x: 7.x uses NWPath.isUltraConstrained (iOS 26 SDK / Xcode 26),
+  # which does not compile with Xcode 16.
+  connectivity_plus: ^6.1.0
+  mobile_scanner: ^7.1.2
 
 dev_dependencies:
   flutter_test:
@@ -59,8 +64,19 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
   integration_test:
     sdk: flutter
+
+# App icon generation: dart run flutter_launcher_icons
+# Source PNGs come from tool/gen_icon.py (see that script's docstring).
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon_1024.png"
+  adaptive_icon_background: "#0A0A0A"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  remove_alpha_ios: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

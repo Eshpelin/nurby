@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
 import '../../core/theme.dart';
@@ -92,6 +93,19 @@ class _ServerScreenState extends ConsumerState<ServerScreen> {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2))
                         : const Text('Connect'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push('/pair'),
+                    icon: const Icon(Icons.qr_code_scanner, size: 20),
+                    label: const Text('Scan QR code'),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Find the code in the web app under Settings.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: NurbyColors.mutedForeground, fontSize: 12),
                   ),
                 ],
               ),

@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { timeAgo, formatDateTime } from "@/lib/time";
 import { EventNotesPanel } from "@/components/rules/EventNotesPanel";
 import { EventEvidence } from "@/components/EventEvidence";
+import { ShareDialog } from "@/components/ShareDialog";
 import type { Camera, EventEntry, Rule } from "@/components/rules/types";
 
 const PAGE_SIZE = 50;
@@ -33,6 +34,8 @@ export default function EventsPage() {
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Event being shared via an anonymous link (opens ShareDialog).
+  const [shareEvent, setShareEvent] = useState<EventEntry | null>(null);
 
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
@@ -338,6 +341,14 @@ export default function EventsPage() {
                           🔕 Mute 10m
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => setShareEvent(ev)}
+                        className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors"
+                        title="Create an anonymous link anyone can open until it expires"
+                      >
+                        🔗 Share
+                      </button>
                       {ev.action_status === "failed" && ev.action_error && (
                         <span className="text-[11px] text-red-400 truncate">{ev.action_error}</span>
                       )}
@@ -364,6 +375,21 @@ export default function EventsPage() {
             </button>
           )}
         </div>
+      )}
+
+      {shareEvent && (
+        <ShareDialog
+          kind="event"
+          resourceId={shareEvent.id}
+          label={[
+            shareEvent.rule_id ? ruleNames.get(shareEvent.rule_id) || "Rule" : "Event",
+            cameraOf(shareEvent),
+            formatDateTime(shareEvent.fired_at),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          onClose={() => setShareEvent(null)}
+        />
       )}
     </div>
   );

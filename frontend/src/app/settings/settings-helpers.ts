@@ -29,6 +29,28 @@ export interface Camera {
   name: string;
 }
 
+// One row from GET /api/shares (anonymous share links the user created).
+// `label` carries the human context ("Front door · Jun 3, 2:30 PM") set at
+// creation time; the raw link itself is never stored or re-shown.
+export interface ShareRow {
+  id: string;
+  kind: "recording" | "observation" | "event";
+  label: string | null;
+  max_views: number | null;
+  view_count: number;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  last_accessed_at: string | null;
+  status: "active" | "expired" | "revoked" | "exhausted";
+}
+
+export const SHARE_KIND_LABEL: Record<ShareRow["kind"], string> = {
+  recording: "Recording",
+  observation: "Frame",
+  event: "Event",
+};
+
 export interface CameraStorage {
   camera_id: string;
   camera_name: string;

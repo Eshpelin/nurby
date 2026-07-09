@@ -1,5 +1,35 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+/// True when the failure is about reaching the server (timeouts, refused
+/// connections, dead sockets) rather than the server answering with an error.
+bool isConnectivityError(DioException e) {
+  switch (e.type) {
+    case DioExceptionType.connectionTimeout:
+    case DioExceptionType.receiveTimeout:
+    case DioExceptionType.connectionError:
+      return true;
+    case DioExceptionType.unknown:
+      return e.error is SocketException;
+    default:
+      return false;
+  }
+}
+
+/// Backoff schedule for GET retries; length is the max retry count.
+const retryDelays = [Duration(milliseconds: 400), Duration(milliseconds: 1200)];
+
+/// Pure retry decision, exported for tests. [attempt] is the number of
+/// retries already performed for this request (0 before the first retry).
+/// Only idempotent GETs are retried, only on connectivity-type failures.
+/// Response errors (4xx/5xx) are never retried.
+bool shouldRetry(DioException e, int attempt) {
+  if (attempt >= retryDelays.length) return false;
+  if (e.requestOptions.method.toUpperCase() != 'GET') return false;
+  return isConnectivityError(e);
+}
 
 /// Thin wrapper over Dio: attaches JWT, exposes typed helpers,
 /// signals auth expiry so the app can route back to login.
@@ -26,6 +56,31 @@ class ApiClient {
         handler.next(e);
       },
     ));
+    dio.interceptors.add(_retryInterceptor());
+  }
+
+  static const _kRetryAttempt = 'retry_attempt';
+
+  /// Re-issues flaky idempotent GETs (see [shouldRetry]). Re-entering
+  /// dio.fetch runs the whole chain again, so the attempt counter carried in
+  /// RequestOptions.extra is what bounds the recursion.
+  Interceptor _retryInterceptor() {
+    return InterceptorsWrapper(
+      onError: (e, handler) async {
+        final attempt = (e.requestOptions.extra[_kRetryAttempt] as int?) ?? 0;
+        if (!shouldRetry(e, attempt)) {
+          handler.next(e);
+          return;
+        }
+        await Future<void>.delayed(retryDelays[attempt]);
+        e.requestOptions.extra[_kRetryAttempt] = attempt + 1;
+        try {
+          handler.resolve(await dio.fetch<dynamic>(e.requestOptions));
+        } on DioException catch (retryError) {
+          handler.next(retryError);
+        }
+      },
+    );
   }
 
   static const _storage = FlutterSecureStorage();
