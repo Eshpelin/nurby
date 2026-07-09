@@ -1215,6 +1215,19 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 
+class PairStartResponse(BaseModel):
+    # Short-lived single-use pairing code the web app embeds in a QR code.
+    code: str
+    expires_in: int
+    # Externally-reachable API base URL when the deployment configured one
+    # (settings.public_base_url); the frontend falls back to a guess.
+    server_url: str | None = None
+
+
+class PairClaim(BaseModel):
+    code: str = Field(min_length=1, max_length=2048)
+
+
 class AdminSetup(BaseModel):
     email: str = Field(min_length=3, max_length=255)
     display_name: str | None = Field(default=None, max_length=255)

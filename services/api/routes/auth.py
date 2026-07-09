@@ -1,16 +1,27 @@
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.auth import create_access_token, get_current_user, hash_password, verify_password
+from shared.auth import (
+    MOBILE_PAIR_TTL_SECONDS,
+    create_access_token,
+    create_mobile_pair_code,
+    decode_mobile_pair_code,
+    get_current_user,
+    hash_password,
+    verify_password,
+)
+from shared.config import settings
 from shared.database import get_db
 from shared.models import InviteKey, User, UserCameraAccess
 from shared.schemas import (
     AccountClaim,
     AdminSetup,
+    PairClaim,
+    PairStartResponse,
     TokenResponse,
     UserCreate,
     UserLogin,
@@ -249,3 +260,70 @@ async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
 async def get_me(current_user: User = Depends(get_current_user)):
     """Return the currently authenticated user's profile."""
     return current_user
+
+
+# ── Mobile QR pairing ────────────────────────────────────────────────
+#
+# The web app (already logged in) requests a short-lived pairing code and
+# renders it as a QR code together with the server URL. The mobile app
+# scans it and exchanges the code for a normal access token: no server
+# address typing, no password entry on the phone.
+#
+# Single-use enforcement is an in-process jti set. Codes expire after
+# MOBILE_PAIR_TTL_SECONDS anyway, so worst case for a multi-worker
+# deployment is a replay window of two minutes on a code that was only
+# ever shown on the owner's own screen.
+
+_used_pair_jtis: dict[str, datetime] = {}
+
+
+def _prune_used_jtis(now: datetime) -> None:
+    expired = [j for j, exp in _used_pair_jtis.items() if exp <= now]
+    for j in expired:
+        del _used_pair_jtis[j]
+
+
+@router.post("/pair/start", response_model=PairStartResponse)
+async def pair_start(current_user: User = Depends(get_current_user)):
+    """Mint a single-use QR pairing code for the current user."""
+    return PairStartResponse(
+        code=create_mobile_pair_code(current_user.id),
+        expires_in=MOBILE_PAIR_TTL_SECONDS,
+        server_url=settings.public_base_url,
+    )
+
+
+@router.post("/pair/claim", response_model=TokenResponse)
+async def pair_claim(body: PairClaim, db: AsyncSession = Depends(get_db)):
+    """Exchange a scanned pairing code for an access token. Public, but the
+    code itself is the credential: signed, short-lived, and single-use."""
+    decoded = decode_mobile_pair_code(body.code)
+    if decoded is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired pairing code",
+        )
+    user_id, jti = decoded
+
+    now = datetime.now(timezone.utc)
+    _prune_used_jtis(now)
+    if jti in _used_pair_jtis:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Pairing code already used",
+        )
+    _used_pair_jtis[jti] = now + timedelta(seconds=MOBILE_PAIR_TTL_SECONDS)
+
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or deactivated",
+        )
+
+    user.last_login_at = now
+    await db.commit()
+    await db.refresh(user)
+
+    token = create_access_token(user.id)
+    return TokenResponse(access_token=token, user=UserResponse.model_validate(user))

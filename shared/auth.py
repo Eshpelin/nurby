@@ -118,6 +118,41 @@ def require_query_token(token: str | None) -> uuid.UUID:
     return user_id
 
 
+# Mobile QR pairing codes are short-lived by design: the code is visible
+# on the user's screen while the dialog is open, so a narrow window plus
+# single-use (enforced in the claim route) bounds the exposure.
+MOBILE_PAIR_TTL_SECONDS = 120
+
+
+def create_mobile_pair_code(user_id: uuid.UUID) -> str:
+    """A single-purpose, short-lived token embedded in the web app's QR
+    code. The mobile app exchanges it once via /auth/pair/claim for a
+    normal access token, so the user never types credentials on the phone."""
+    expire = datetime.now(timezone.utc) + timedelta(seconds=MOBILE_PAIR_TTL_SECONDS)
+    payload = {
+        "sub": str(user_id),
+        "exp": expire,
+        "purpose": "mobile_pair",
+        "jti": secrets.token_urlsafe(16),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
+
+
+def decode_mobile_pair_code(token: str) -> tuple[uuid.UUID, str] | None:
+    """Return (user_id, jti) for a valid pairing code, else None."""
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+        if payload.get("purpose") != "mobile_pair":
+            return None
+        sub = payload.get("sub")
+        jti = payload.get("jti")
+        if not sub or not jti:
+            return None
+        return uuid.UUID(sub), jti
+    except (JWTError, ValueError):
+        return None
+
+
 def create_guardian_claim_token(user_id: uuid.UUID, days: int = 7) -> str:
     """A single-purpose, time-boxed token a newly invited guardian uses to set
     their own password (a magic link), instead of an admin handing over a temp
