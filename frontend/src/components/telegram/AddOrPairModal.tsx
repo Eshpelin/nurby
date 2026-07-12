@@ -7,6 +7,7 @@ import {
   type TelegramChannel,
   type PairInit,
 } from "./telegram-shared";
+import { extractApiError } from "@/lib/api-error";
 
 export function AddOrPairModal({
   existingChannelId,
@@ -60,7 +61,7 @@ export function AddOrPairModal({
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          setError(body?.detail || "Could not start pairing.");
+          setError(extractApiError(body, "Could not start pairing."));
           return;
         }
         const data: PairInit = await res.json();
@@ -141,7 +142,7 @@ export function AddOrPairModal({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setError(body?.detail || `Telegram rejected the token (${res.status}).`);
+        setError(extractApiError(body, `Telegram rejected the token (${res.status}).`));
         return;
       }
       const ch: TelegramChannel = await res.json();

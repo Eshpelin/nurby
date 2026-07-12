@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { formatDateTime } from "@/lib/time";
+import { extractApiError } from "@/lib/api-error";
 
 // Phase 4. Inline notes panel rendered under each expanded event.
 // Lets the household leave free-text annotations. Telegram-sourced
@@ -55,7 +56,7 @@ export function EventNotesPanel({ eventId }: { eventId: string }) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setError(body?.detail || `Could not save (${res.status}).`);
+        setError(extractApiError(body, `Could not save (${res.status}).`));
         return;
       }
       setDraft("");

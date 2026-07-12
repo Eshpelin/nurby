@@ -7,6 +7,7 @@ import { useWebcamPublisher, listVideoDevices } from "@/lib/webcam-publisher";
 import { STREAM_TYPES } from "@/lib/camera-types";
 import type { StreamType, DiscoveredDevice, DiscoveredOnvifDevice, ModalTab } from "@/lib/camera-types";
 import CameraBrandHelp from "@/components/CameraBrandHelp";
+import { extractApiError } from "@/lib/api-error";
 
 // Network stream types we can probe via /api/cameras/test-connection before saving.
 const TESTABLE_STREAM_TYPES = ["rtsp", "http_mjpeg", "http_snapshot", "hls"];
@@ -294,7 +295,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || `Request failed with status ${res.status}`);
+        throw new Error(extractApiError(body, `Request failed with status ${res.status}`));
       }
       onSuccess();
     } catch (err) {
@@ -391,7 +392,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || `Request failed with status ${res.status}`);
+        throw new Error(extractApiError(body, `Request failed with status ${res.status}`));
       }
       const created = await res.json().catch(() => null);
       if (!created?.id) throw new Error("Camera created without id");
