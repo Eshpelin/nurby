@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { RecordingDetectionOverlay } from "@/components/RecordingDetectionOverlay";
@@ -151,6 +152,7 @@ const PAGE_SIZE = 24;
 
 export default function RecordingsPage() {
   const { authFetch, token } = useAuth();
+  const searchParams = useSearchParams();
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
@@ -171,6 +173,9 @@ export default function RecordingsPage() {
   const [speechResults, setSpeechResults] = useState<Transcript[] | null>(null);
   const [speechLoading, setSpeechLoading] = useState(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
+  // Error from resolving a ?at=/&camera= deep link from the Timeline page
+  // (shown regardless of whether a speech search has ever run).
+  const [momentError, setMomentError] = useState<string | null>(null);
   // A recording resolved from a transcript hit that may not be on the current
   // grid page, so the modal can still open it.
   const [directRec, setDirectRec] = useState<Recording | null>(null);
@@ -323,24 +328,45 @@ export default function RecordingsPage() {
   // recordings around the instant. Returns an error string, or null on success.
   const openAtMoment = useCallback(async (cameraId: string, isoTs: string): Promise<string | null> => {
     const ts = new Date(isoTs);
-    const params = new URLSearchParams({
+    const exactParams = new URLSearchParams({
       camera_id: cameraId,
       from: new Date(ts.getTime() - 2000).toISOString(),
       to: new Date(ts.getTime() + 2000).toISOString(),
       limit: "1",
     });
     try {
-      const res = await authFetch(`/api/recordings?${params.toString()}`);
+      const res = await authFetch(`/api/recordings?${exactParams.toString()}`);
       const recs: Recording[] = res.ok ? await res.json() : [];
-      const rec = recs[0];
+      let rec = recs[0];
+      let exact = true;
+      if (!rec) {
+        // Nothing's window covers this instant exactly — most likely the
+        // clip is still being written and hasn't been finalized into a row
+        // yet. Fall back to the nearest recording by start time (the most
+        // recent one that had already started by then).
+        exact = false;
+        const nearParams = new URLSearchParams({
+          camera_id: cameraId,
+          to: ts.toISOString(),
+          limit: "1",
+        });
+        const nearRes = await authFetch(`/api/recordings?${nearParams.toString()}`);
+        rec = (nearRes.ok ? await nearRes.json() : [])[0];
+      }
       if (!rec) {
         return "No recording covers that moment (footage already rotated out).";
       }
-      const offset = Math.max(0, (ts.getTime() - new Date(rec.started_at).getTime()) / 1000);
-      pendingSeekRef.current = offset;
+      if (exact) {
+        const offset = Math.max(0, (ts.getTime() - new Date(rec.started_at).getTime()) / 1000);
+        pendingSeekRef.current = offset;
+        setClipStart(Math.max(0, offset - 3));
+        setClipEnd(offset + 27);
+      } else {
+        pendingSeekRef.current = null;
+        setClipStart(null);
+        setClipEnd(null);
+      }
       setDirectRec(rec);
-      setClipStart(Math.max(0, offset - 3));
-      setClipEnd(offset + 27);
       setExpandedId(rec.id);
       return null;
     } catch {
@@ -353,24 +379,20 @@ export default function RecordingsPage() {
     if (err) setSpeechError(err);
   }, [openAtMoment]);
 
-  // Hand-off from the Timeline page: it stashes {camera_id, started_at} in
-  // sessionStorage then routes here; open that moment on mount.
+  // Hand-off from the Timeline page: it links here with ?at=<iso
+  // timestamp>&camera=<camera_id> for the moment that was clicked. Apply the
+  // camera filter (so the grid itself reflects the click even if no single
+  // recording can be auto-opened) and try to open the covering recording.
   useEffect(() => {
-    let raw: string | null = null;
-    try {
-      raw = sessionStorage.getItem("nurby_open_moment");
-      if (raw) sessionStorage.removeItem("nurby_open_moment");
-    } catch {
-      /* private mode / no storage */
-    }
-    if (!raw) return;
-    try {
-      const { camera_id, started_at } = JSON.parse(raw);
-      if (camera_id && started_at) openAtMoment(camera_id, started_at);
-    } catch {
-      /* malformed hand-off, ignore */
-    }
-  }, [openAtMoment]);
+    const at = searchParams.get("at");
+    const camera = searchParams.get("camera");
+    if (!at || !camera) return;
+    setCameraFilter(camera);
+    setPage(0);
+    openAtMoment(camera, at).then((err) => {
+      if (err) setMomentError(err);
+    });
+  }, [searchParams, openAtMoment]);
 
   useEffect(() => {
     fetchPickers();
@@ -628,6 +650,10 @@ export default function RecordingsPage() {
         </form>
       </div>
 
+      {momentError && (
+        <p className="mb-4 text-xs text-red-400">{momentError}</p>
+      )}
+
       {/* Speech search results: click a line to jump into the recording at that moment. */}
       {speechResults !== null && (
         <div className="mb-6 rounded-lg border border-border bg-card overflow-hidden">
@@ -705,7 +731,7 @@ export default function RecordingsPage() {
               >
                 {rec.thumbnail_path ? (
                   <img
-                    src={`/api/recordings/${rec.id}/thumbnail`}
+                    src={`/api/recordings/${rec.id}/thumbnail${token ? `?token=${token}` : ""}`}
                     alt="Recording thumbnail"
                     className="w-full h-36 object-cover bg-muted"
                     onError={(e) => {

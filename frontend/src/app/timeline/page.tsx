@@ -81,7 +81,6 @@ export default function TimelinePage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [kindFilter, setKindFilter] = useState<"all" | "observation" | "transcript">("all");
-  const [jumpError, setJumpError] = useState<string | null>(null);
 
   const cameraNames = useMemo(() => {
     const m: Record<string, string> = {};
@@ -98,30 +97,38 @@ export default function TimelinePage() {
     }
   }, [authFetch]);
 
-  const fetchTimeline = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        limit: String(PAGE_SIZE),
-        offset: String(page * PAGE_SIZE),
-      });
-      if (cameraFilter) params.set("camera_id", cameraFilter);
-      if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
-      if (dateTo) params.set("to", new Date(dateTo).toISOString());
-      const res = await authFetch(`/api/timeline?${params.toString()}`);
-      if (res.ok) {
-        const body = await res.json();
-        setItems(body.items ?? []);
-      }
-    } catch {
-      /* silent */
-    } finally {
-      setLoading(false);
-    }
-  }, [authFetch, page, cameraFilter, dateFrom, dateTo]);
-
   useEffect(() => { fetchCameras(); }, [fetchCameras]);
-  useEffect(() => { fetchTimeline(); }, [fetchTimeline]);
+
+  // Fetch the feed whenever a filter or the page changes. Guarded with a
+  // `cancelled` flag (same pattern used elsewhere in this app) so that an
+  // older, slower request can't resolve after a newer one and clobber the
+  // list with stale results (e.g. narrowing the date range to an empty day
+  // right after browsing a day with events).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          limit: String(PAGE_SIZE),
+          offset: String(page * PAGE_SIZE),
+        });
+        if (cameraFilter) params.set("camera_id", cameraFilter);
+        if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
+        if (dateTo) params.set("to", new Date(dateTo).toISOString());
+        const res = await authFetch(`/api/timeline?${params.toString()}`);
+        if (res.ok) {
+          const body = await res.json();
+          if (!cancelled) setItems(body.items ?? []);
+        }
+      } catch {
+        /* silent */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authFetch, page, cameraFilter, dateFrom, dateTo]);
 
   const applyPreset = (hours: number) => {
     const now = new Date();
@@ -130,20 +137,22 @@ export default function TimelinePage() {
     setPage(0);
   };
 
-  // Jump into the recording covering this moment: hand the coordinates to the
-  // recordings player via sessionStorage, then navigate there.
+  // "Last night" means the previous evening through this morning, not the
+  // last 14 hours of clock time (which, run at 11pm, is basically "today").
+  const applyLastNight = () => {
+    const now = new Date();
+    const morning = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0, 0);
+    const evening = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 20, 0, 0, 0);
+    setDateFrom(toLocalInput(evening));
+    setDateTo(toLocalInput(morning));
+    setPage(0);
+  };
+
+  // Jump into the recording covering this moment: hand the coordinates to
+  // the recordings page via query params, which resolves and opens it.
   const playMoment = (item: TimelineItem) => {
-    setJumpError(null);
-    try {
-      sessionStorage.setItem(
-        "nurby_open_moment",
-        JSON.stringify({ camera_id: item.camera_id, started_at: item.started_at }),
-      );
-    } catch {
-      setJumpError("Could not open the player.");
-      return;
-    }
-    router.push("/recordings");
+    const params = new URLSearchParams({ at: item.started_at, camera: item.camera_id });
+    router.push(`/recordings?${params.toString()}`);
   };
 
   const visible = useMemo(
@@ -217,7 +226,9 @@ export default function TimelinePage() {
         </div>
 
         <div className="flex items-center gap-1">
-          {[{ label: "Last night", hours: 14 }, { label: "24h", hours: 24 }, { label: "7d", hours: 168 }].map((p) => (
+          <button onClick={applyLastNight}
+            className="px-2 py-1.5 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">Last night</button>
+          {[{ label: "24h", hours: 24 }, { label: "7d", hours: 168 }].map((p) => (
             <button key={p.label} onClick={() => applyPreset(p.hours)}
               className="px-2 py-1.5 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">{p.label}</button>
           ))}
@@ -232,17 +243,22 @@ export default function TimelinePage() {
         )}
       </div>
 
-      {jumpError && <p className="mb-4 text-xs text-red-400">{jumpError}</p>}
-
       {loading ? (
         <div className="text-sm text-muted-foreground py-20 text-center">Loading timeline.</div>
       ) : visible.length === 0 ? (
-        <EmptyState
-          title="Nothing on the timeline yet"
-          body="Detections and spoken moments from your cameras show up here as they happen. Widen the date range or clear filters to see more."
-          actionLabel={hasFilters ? "Clear filters" : undefined}
-          onAction={hasFilters ? () => { setCameraFilter(""); setDateFrom(""); setDateTo(""); setKindFilter("all"); } : undefined}
-        />
+        hasFilters ? (
+          <EmptyState
+            title="No events match these filters"
+            body="Try a different camera or kind, or widen the date range."
+            actionLabel="Clear filters"
+            onAction={() => { setCameraFilter(""); setDateFrom(""); setDateTo(""); setKindFilter("all"); }}
+          />
+        ) : (
+          <EmptyState
+            title="Nothing on the timeline yet"
+            body="Detections and spoken moments from your cameras show up here as they happen."
+          />
+        )
       ) : (
         <>
           {groups.map((g) => (
