@@ -23,6 +23,8 @@ from shared.models import Camera, CameraStatusLog, Recording
 from shared.netpolicy import stream_target_rejection
 from shared.paths import safe_getsize
 
+from services.ingestion.video_writer import create_segment_writer
+
 logger = logging.getLogger("nurby.ingestion.stream")
 
 SEGMENT_DURATION = 300  # 5-minute recording segments
@@ -311,8 +313,7 @@ class StreamWorker:
                     segment_start = self._frame_buffer[0][1]
                     segment_path = self._segment_path(segment_start)
                     os.makedirs(os.path.dirname(segment_path), exist_ok=True)
-                    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                    writer = cv2.VideoWriter(segment_path, fourcc, fps, (width, height))
+                    writer = create_segment_writer(segment_path, fps, width, height)
                     for buf_frame, _ in self._frame_buffer:
                         writer.write(buf_frame)
                     self._frame_buffer.clear()
@@ -345,9 +346,8 @@ class StreamWorker:
                         segment_path = self._segment_path(now)
                         os.makedirs(os.path.dirname(segment_path), exist_ok=True)
 
-                        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                        writer = cv2.VideoWriter(
-                            segment_path, fourcc, fps, (width, height)
+                        writer = create_segment_writer(
+                            segment_path, fps, width, height
                         )
 
                     writer.write(frame)
@@ -696,11 +696,50 @@ class StreamWorker:
         except Exception:
             logger.exception("Failed to update camera properties")
 
+    def _write_thumbnail(self, file_path: str) -> str | None:
+        """Extract one frame from a finished segment as its grid preview.
+
+        Recordings had a thumbnail_path column and an <img> in the grid,
+        but nothing ever populated the file, so every card rendered a
+        gray placeholder. Best-effort: a recording without a thumbnail
+        is still a valid recording."""
+        try:
+            cap = cv2.VideoCapture(file_path)
+            try:
+                # A frame a second in avoids the black/garbage first frame
+                # some encoders produce.
+                cap.set(cv2.CAP_PROP_POS_MSEC, 1000)
+                ok, frame = cap.read()
+                if not ok:
+                    cap.set(cv2.CAP_PROP_POS_MSEC, 0)
+                    ok, frame = cap.read()
+                if not ok:
+                    return None
+            finally:
+                cap.release()
+            h, w = frame.shape[:2]
+            if w > 480:
+                frame = cv2.resize(frame, (480, max(1, int(h * 480 / w))))
+            thumb_dir = os.path.join(settings.thumbnails_path, "recordings")
+            os.makedirs(thumb_dir, exist_ok=True)
+            base = os.path.splitext(os.path.basename(file_path))[0]
+            thumb_path = os.path.join(thumb_dir, f"{base}.jpg")
+            if not cv2.imwrite(thumb_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 80]):
+                return None
+            return thumb_path
+        except Exception:
+            logger.exception("Thumbnail extraction failed for %s", file_path)
+            return None
+
     async def _save_recording(self, file_path: str, started_at: datetime, ended_at: datetime):
         try:
             _sz = safe_getsize(file_path)
             file_size = _sz if _sz else None
             duration = (ended_at - started_at).total_seconds()
+            loop = asyncio.get_running_loop()
+            thumbnail_path = await loop.run_in_executor(
+                None, self._write_thumbnail, file_path
+            )
 
             async with async_session() as db:
                 recording = Recording(
@@ -710,6 +749,7 @@ class StreamWorker:
                     ended_at=ended_at,
                     duration_seconds=duration,
                     file_size_bytes=file_size,
+                    thumbnail_path=thumbnail_path,
                 )
                 db.add(recording)
                 await db.commit()

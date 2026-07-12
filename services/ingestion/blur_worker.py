@@ -221,8 +221,7 @@ def _process_sync(
 
     # Second pass. apply blur and write output.
     cap = cv2.VideoCapture(src_path)
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(dst_path, fourcc, fps, (w, h))
+    writer = create_segment_writer(dst_path, fps, w, h)
     if not writer.isOpened():
         cap.release()
         return False, "cannot open writer", True
