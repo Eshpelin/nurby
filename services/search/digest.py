@@ -77,10 +77,18 @@ async def generate_digest(
     delta = PERIOD_DELTAS.get(period, timedelta(days=1))
     start = now - delta
 
-    if delta <= timedelta(hours=1):
-        period_label = f"{start.strftime('%H:%M')} to {now.strftime('%H:%M')}"
+    # Label by calendar day, not period length. A 24h window almost always
+    # crosses midnight, and dropping the end date renders a zero-width
+    # range like "Jul 11 15:59 to 15:59".
+    if start.date() == now.date():
+        if delta <= timedelta(hours=1):
+            period_label = f"{start.strftime('%H:%M')} to {now.strftime('%H:%M')}"
+        else:
+            period_label = f"{start.strftime('%b %d %H:%M')} to {now.strftime('%H:%M')}"
     elif delta <= timedelta(days=1):
-        period_label = f"{start.strftime('%b %d %H:%M')} to {now.strftime('%H:%M')}"
+        period_label = (
+            f"{start.strftime('%b %d %H:%M')} to {now.strftime('%b %d %H:%M')}"
+        )
     else:
         period_label = f"{start.strftime('%b %d')} to {now.strftime('%b %d')}"
 
@@ -109,6 +117,7 @@ async def generate_digest(
             "summary": "No observations recorded during this period.",
             "stats": {},
             "highlights": [],
+            "ai_unavailable_reason": None,
         }
 
     # Build statistics
@@ -356,6 +365,7 @@ async def generate_digest(
 
     # Generate natural language summary with the active text/VLM provider.
     summary_text = None
+    llm_failed = False
     if provider:
         try:
             system_prompt = custom_prompt or DEFAULT_DIGEST_PROMPT
@@ -378,11 +388,18 @@ async def generate_digest(
             summary_text = await _call_text_llm(provider, system_prompt, user_prompt)
             if summary_text:
                 summary_text = summary_text.strip()
+            if not summary_text:
+                llm_failed = True
         except Exception:
+            llm_failed = True
             logger.exception("VLM digest summary failed")
 
+    ai_unavailable_reason = None
     if not summary_text:
-        # Narrative fallback built from the same roll-ups. No raw counts.
+        # Narrative fallback built from the same roll-ups. Must never imply
+        # "nothing happened" when detections exist and only the AI narration
+        # is missing. The note lives inside summary_text because stored
+        # DigestEntry rows only persist the summary string.
         parts: list[str] = []
         if safety_hits:
             parts.append(
@@ -391,12 +408,30 @@ async def generate_digest(
         if roll_up_lines:
             parts.append(" ".join(roll_up_lines))
         elif camera_activity:
-            parts.append(
-                f"Quiet period on {', '.join(camera_activity.keys())}. "
-                "Motion was detected but nothing notable was identified."
-            )
+            cams = ", ".join(list(camera_activity.keys())[:3])
+            labels = ", ".join(label for label, _ in top_objects[:3])
+            if labels:
+                parts.append(
+                    f"Activity was recorded on {cams}. "
+                    f"Detections included {labels}."
+                )
+            else:
+                parts.append(f"Motion was recorded on {cams}.")
         else:
             parts.append("Nothing notable happened during this period.")
+
+        if llm_failed:
+            ai_unavailable_reason = "provider_error"
+            parts.append(
+                "AI descriptions are unavailable right now. The AI provider "
+                "could not be reached, so this digest shows detections only."
+            )
+        elif provider is None:
+            ai_unavailable_reason = "no_provider"
+            parts.append(
+                "No AI provider is configured, so this digest shows "
+                "detections only."
+            )
         summary_text = " ".join(parts)
 
     return {
@@ -408,4 +443,5 @@ async def generate_digest(
         "summary": summary_text,
         "stats": stats,
         "highlights": highlights,
+        "ai_unavailable_reason": ai_unavailable_reason,
     }
