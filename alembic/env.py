@@ -31,6 +31,22 @@ def run_migrations_offline():
 
 
 def do_run_migrations(connection):
+    # Extensions the schema depends on (pgvector's `vector` type shows up
+    # mid-chain in the face_embeddings migration). The docker image
+    # pre-installs the extension binaries but each DATABASE still needs
+    # CREATE EXTENSION, so a fresh database on a stock pgvector/postgres
+    # image fails migration without this. Idempotent; requires the
+    # migration role to own the database (true for the default setup).
+    from sqlalchemy import text
+
+    for ext in ("vector", "btree_gist"):
+        try:
+            connection.execute(text(f"CREATE EXTENSION IF NOT EXISTS {ext}"))
+        except Exception:
+            # Non-superuser against a managed DB: fall through and let the
+            # migration surface the real error if the extension is missing.
+            pass
+
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
