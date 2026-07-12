@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { WebSocketProvider } from "@/lib/ws";
 import { Navbar } from "@/components/navbar";
 
 const PUBLIC_PATHS = ["/login", "/setup"];
@@ -27,11 +28,16 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  // WebSocketProvider must wrap the Navbar too, not just the page
+  // content: the navbar's LiveStatusBadge reads the socket status, and
+  // without a provider it falls back to a permanent "disconnected"
+  // (the red "live offline" badge users saw on perfectly healthy
+  // systems).
   return (
-    <>
+    <WebSocketProvider>
       <Navbar />
       <main className="flex-1">{children}</main>
-    </>
+    </WebSocketProvider>
   );
 }
 
