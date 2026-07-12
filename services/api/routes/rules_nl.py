@@ -49,7 +49,7 @@ def _compact_fields(fields: list[dict]) -> str:
         if f.get("enum"):
             bit += f"({'|'.join(str(v) for v in f['enum'])})"
         elif f.get("ref"):
-            bit += f"(<{f['ref']} uuid>)"
+            bit += f"({f['ref']} uuid)"
         parts.append(bit)
     return ", ".join(parts)
 
@@ -67,7 +67,8 @@ def build_system_prompt(
     real UUIDs. Pure, for tests."""
     lines = [
         "You translate a user's plain-language automation wish into a Nurby rule as JSON.",
-        "Output ONLY a JSON object, no prose, no code fences, with keys:",
+        "Output ONLY a JSON object: no prose, no code fences, no comments, no",
+        "trailing commas. Keys:",
         '  name (short human title), enabled (true), trigger_pattern (object),',
         '  conditions (object or null), actions (array), cooldown_seconds (int, default 300),',
         '  severity ("alert" for urgent security things, "detection" otherwise).',
@@ -116,7 +117,47 @@ def build_system_prompt(
         "600s for vehicles)."
     )
     lines.append("")
+    lines.append("CHOOSING THE TRIGGER:")
+    lines.append(
+        '- A generic person ("a person", "someone", "somebody", "anybody", "a man", '
+        '"a woman", "a kid") -> object_detected with label "person". This works on '
+        "every camera with no extra setup. Always set the label on object_detected; "
+        "omitting it fires on EVERY object (cars, cats, packages)."
+    )
+    lines.append(
+        "- face_detected (any face, no identity) is rarely what users want; prefer "
+        "face_recognized for a listed named person and object_detected for a generic "
+        "person."
+    )
+    lines.append(
+        "- face_recognized is ONLY for a specific named individual from the People "
+        "list above; person_id must be one of those exact UUIDs. If the name is not "
+        "in the list, or People is none, do NOT use face_recognized or face_detected; "
+        'use object_detected with label "person".'
+    )
+    lines.append(
+        '- face_unknown is only for "a stranger", "an unknown face", "someone we '
+        'don\'t know".'
+    )
+    lines.append(
+        "- loitering and line_cross need zone geometry drawn in the UI; only pick "
+        'them when the user says "loiters", "hangs around", "stays too long" or '
+        '"crosses the line". For plain arrivals, appearances or walk-ins use '
+        "object_detected."
+    )
+    lines.append(
+        "- Never output a placeholder value like \"person uuid here\"; omit an "
+        "optional field entirely when you have no real UUID for it."
+    )
+    lines.append("")
     lines.append("EXAMPLES:")
+    lines.append(
+        'User: "notify me when a person shows up at the camera" -> '
+        '{"name": "Person spotted", "enabled": true, '
+        '"trigger_pattern": {"type": "object_detected", "label": "person"}, '
+        '"conditions": null, "actions": [{"type": "notify", "message": "Person detected at {camera_name}", "severity": "info"}], '
+        '"cooldown_seconds": 300, "severity": "detection"}'
+    )
     lines.append(
         'User: "tell me when a package arrives" -> '
         '{"name": "Package arrives", "enabled": true, '
@@ -124,6 +165,16 @@ def build_system_prompt(
         '"conditions": null, "actions": [{"type": "notify", "message": "Package detected at {camera_name}", "severity": "info"}], '
         '"cooldown_seconds": 300, "severity": "detection"}'
     )
+    if persons:
+        pid, pname = persons[0]
+        lines.append(
+            f'User: "tell me when {pname} gets home" -> '
+            f'{{"name": "{pname} arrives", "enabled": true, '
+            f'"trigger_pattern": {{"type": "face_recognized", "person_id": "{pid}"}}, '
+            '"conditions": null, "actions": [{"type": "notify", "message": "'
+            f'{pname} spotted at {{camera_name}}", "severity": "info"}}], '
+            '"cooldown_seconds": 300, "severity": "detection"}'
+        )
     lines.append(
         'User: "alert me if a stranger shows up after 10pm" -> '
         '{"name": "Stranger at night", "enabled": true, '
@@ -150,6 +201,35 @@ def parse_rule_json(text: str) -> dict:
         if start != -1 and end > start:
             return json.loads(cleaned[start : end + 1])
         raise
+
+
+def coerce_impossible_face_trigger(
+    rule: dict, persons: list[tuple[str, str]]
+) -> list[str]:
+    """Downgrade face triggers that can never fire to object detection.
+
+    Small local models still sometimes map "a person shows up" to a face
+    trigger. face_recognized cannot fire with an empty person library or a
+    person_id that matches nobody (including hallucinated placeholders), so
+    rewrite to object_detected label "person" and tell the user. Mutates
+    ``rule``; returns notes. Pure, for tests."""
+    tp = rule.get("trigger_pattern") or {}
+    if tp.get("type") != "face_recognized":
+        return []
+    known = {pid for pid, _ in persons}
+    pid = tp.get("person_id")
+    if not persons:
+        reason = "the person library is empty"
+    elif pid is not None and str(pid) not in known:
+        reason = f"person_id {str(pid)[:40]!r} matches nobody in the person library"
+    else:
+        return []
+    rule["trigger_pattern"] = {"type": "object_detected", "label": "person"}
+    return [
+        'Changed the trigger from "Known face" to object detection of a person: '
+        f"{reason}, so the rule could never fire. Add people under People and "
+        "switch the trigger back if you meant a specific person."
+    ]
 
 
 async def _pick_provider(db: AsyncSession, provider_id: uuid.UUID | None) -> Provider:
@@ -258,6 +338,8 @@ async def generate_rule(
                 "raw": raw_text[:2000],
             },
         )
+
+    notes.extend(coerce_impossible_face_trigger(candidate, persons))
 
     warnings = await _stale_rule_refs(
         db, candidate.get("trigger_pattern"), candidate.get("conditions"), candidate.get("actions")
