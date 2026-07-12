@@ -517,7 +517,18 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
   return "Unknown trigger";
 }
 
-export function describeActions(actions: Record<string, unknown> | Record<string, unknown>[]): string {
+// Display-time substitution for the template tokens the backend renders
+// at fire time. Without this, the rule card / preview shows the literal
+// "Rule '{rule_name}' triggered" braces, which reads as broken.
+function previewTemplate(text: string, ruleName?: string): string {
+  return text
+    .replace(/\{\{?rule_name\}?\}/g, ruleName || "this rule")
+    .replace(/\{\{?camera_name\}?\}/g, "the camera")
+    .replace(/\{\{?camera_id\}?\}/g, "the camera")
+    .replace(/\{\{?timestamp(_local)?\}?\}/g, "the time");
+}
+
+export function describeActions(actions: Record<string, unknown> | Record<string, unknown>[], ruleName?: string): string {
   const list = Array.isArray(actions) ? actions : [actions];
   return list
     .map((a) => {
@@ -531,7 +542,7 @@ export function describeActions(actions: Record<string, unknown> | Record<string
         return `${method} ${(a.url as string) || "..."}${hasAuth ? " (authenticated)" : ""}`;
       }
       if (a.type === "broadcast") return "Broadcast via WebSocket";
-      if (a.type === "notify") return `Notify. "${(a.message as string) || "..."}"`;
+      if (a.type === "notify") return `Notify. "${previewTemplate((a.message as string) || "...", ruleName)}"`;
       if (a.type === "email") return `Email to ${(a.to as string) || "..."}`;
       if (a.type === "telegram") {
         const cid = (a.channel_id as string) || "";
@@ -1279,7 +1290,7 @@ export function buildRuleSummary(rule: Rule, cameras: Camera[]): string {
       cond.time_after as string | undefined,
       cond.time_before as string | undefined,
     ),
-    describeActions(rule.actions),
+    describeActions(rule.actions, rule.name),
     rule.cooldown_seconds,
   );
 }

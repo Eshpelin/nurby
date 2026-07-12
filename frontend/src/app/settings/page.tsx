@@ -596,7 +596,11 @@ export default function SettingsPage() {
                 <div className="text-sm font-medium">AI Providers</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {loading ? "Loading." : activeProvider
-                    ? `${activeProvider.name} (${activeProvider.default_model || "default"})`
+                    ? activeProvider.name.includes(`(${activeProvider.default_model})`)
+                      // Providers created by the wizard embed the model in
+                      // their name; don't render "(gemma3:4b) (gemma3:4b)".
+                      ? activeProvider.name
+                      : `${activeProvider.name} (${activeProvider.default_model || "default"})`
                     : "No provider configured"}
                 </div>
               </div>
