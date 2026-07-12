@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { extractApiError } from "@/lib/api-error";
 import TelegramSection from "@/components/TelegramSection";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
 import { PairMobileCard } from "@/components/PairMobileCard";
@@ -544,6 +545,29 @@ export default function SettingsPage() {
       } else {
         const j = await res.json().catch(() => null);
         setSmtpSaveResult({ ok: false, message: j?.detail || `Save failed (${res.status})` });
+      }
+    } catch {
+      setSmtpSaveResult({ ok: false, message: "Network error" });
+    } finally {
+      setSmtpSaving(false);
+    }
+  };
+
+  const handleSmtpRemove = async () => {
+    setSmtpSaving(true);
+    setSmtpSaveResult(null);
+    try {
+      const res = await authFetch("/api/smtp", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host: "", port: 587, user: "", password: "", from_addr: "", tls: true }),
+      });
+      if (res.ok) {
+        setSmtpConfig({ host: "", port: "587", user: "", password: "", from: "", tls: true });
+        setSmtpPasswordInput("");
+        setSmtpSaveResult({ ok: true, message: "Mail server removed. Email alerts are off." });
+      } else {
+        const j = await res.json().catch(() => null);
+        setSmtpSaveResult({ ok: false, message: extractApiError(j, `Remove failed (${res.status})`) });
       }
     } catch {
       setSmtpSaveResult({ ok: false, message: "Network error" });
@@ -1540,10 +1564,24 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
-                  <button onClick={handleSmtpSave} disabled={smtpSaving || !smtpConfig.host.trim()}
-                    className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
-                    {smtpSaving ? "Saving." : "Save"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={handleSmtpSave} disabled={smtpSaving || !smtpConfig.host.trim()}
+                      className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
+                      {smtpSaving ? "Saving." : "Save"}
+                    </button>
+                    {smtpConfigured && (
+                      // The backend treats an empty host as "unconfigure",
+                      // but the Save button requires a host, so there was
+                      // no UI path to remove a saved mail server.
+                      <button
+                        onClick={handleSmtpRemove}
+                        disabled={smtpSaving}
+                        className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40 disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                   {smtpSaveResult && (
                     <span className={`text-xs ${smtpSaveResult.ok ? "text-green-400" : "text-red-400"}`}>
                       {smtpSaveResult.message}
