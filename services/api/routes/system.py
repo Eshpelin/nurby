@@ -105,10 +105,14 @@ async def get_vlm_queue_stats(_current_user: User = Depends(get_current_user)):
     return get_vlm_stats()
 
 
-@router.get("/health")
+@router.get("/system/health")
 async def get_health(_current_user: User = Depends(get_current_user)):
     """Lightweight host-level CPU / RAM / disk / GPU snapshot for the
     footer.
+
+    Mounted at /api/system/health (what SystemHealthFooter polls). The
+    bare /api/health path this used to claim is owned by the uptime
+    healthcheck in main.py, which shadowed this route entirely.
 
     Sampled with psutil. cpu_percent uses interval=None so the call
     returns immediately (uses the value since the last call). The
