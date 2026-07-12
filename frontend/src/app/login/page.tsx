@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 
@@ -11,6 +11,28 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Only offer "Create admin account" when the server actually has no
+  // users. Otherwise the link goes to /setup, which immediately bounces
+  // back here and reads as a broken button.
+  const [needsSetup, setNeedsSetup] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/needs-setup");
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setNeedsSetup(data?.needs_setup === true);
+        }
+      } catch {
+        /* keep the link hidden if the check fails */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,15 +123,17 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-muted-foreground">
-          First time?{" "}
-          <Link
-            href="/setup"
-            className="text-accent hover:underline"
-          >
-            Create admin account
-          </Link>
-        </p>
+        {needsSetup && (
+          <p className="text-center text-sm text-muted-foreground">
+            First time?{" "}
+            <Link
+              href="/setup"
+              className="text-accent hover:underline"
+            >
+              Create admin account
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );
