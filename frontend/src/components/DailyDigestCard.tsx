@@ -112,7 +112,7 @@ export function DailyDigestCard() {
           Morning brief
         </span>
         <span className="text-[10px] text-muted-foreground font-mono">
-          {start.toLocaleDateString()} {start.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} → {end.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}
+          {start.toLocaleDateString()} {start.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} → {end.toLocaleDateString() !== start.toLocaleDateString() ? `${end.toLocaleDateString()} ` : ""}{end.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}
         </span>
         <ChevronIcon
           className={`ml-auto w-3.5 h-3.5 text-muted-foreground transition-transform ${
