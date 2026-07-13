@@ -2520,84 +2520,57 @@ _GET_RULE_SCHEMA_SCHEMA = {
 
 async def get_rule_schema(ctx: dict) -> dict:
     """The full rule vocabulary (trigger types, action types, condition
-    fields, sequence shape). Call before create_rule when unsure which
-    fields a trigger or action takes."""
+    fields, sequence shape). Use it to judge whether an automation the
+    user wants is possible; never surface the raw field names."""
     from shared.rule_schema import build_schema
 
     return build_schema()
 
 
-_CREATE_RULE_SCHEMA = {
+_SUGGEST_RULE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["name", "trigger_pattern", "actions"],
+    "required": ["description"],
     "properties": {
-        "name": {"type": "string", "description": "Short human title for the rule."},
-        "trigger_pattern": {
-            "type": "object",
-            "description": "One trigger object; shapes from get_rule_schema.",
+        "description": {
+            "type": "string",
+            "description": (
+                "Plain-English description of the automation the user "
+                "wants, e.g. 'notify me when a package is left at the "
+                "front door'. No JSON, no field names."
+            ),
         },
-        "conditions": {
-            "type": ["object", "null"],
-            "description": "Optional camera/time/confidence filters.",
-        },
-        "actions": {
-            "type": "array",
-            "items": {"type": "object"},
-            "description": "Action chain; shapes from get_rule_schema.",
-        },
-        "cooldown_seconds": {"type": "integer", "minimum": 0, "default": 300},
-        "severity": {"type": "string", "enum": ["alert", "detection"]},
     },
 }
 
 
-async def create_rule(
-    ctx: dict,
-    *,
-    name: str,
-    trigger_pattern: dict,
-    actions: list[dict],
-    conditions: dict | None = None,
-    cooldown_seconds: int = 300,
-    severity: str = "detection",
-) -> dict:
-    """Create an automation rule DISABLED, for the user to review and
-    switch on. The driver has no confirmation step, so never-enabled-by-
-    default is the safety gate here; keep it."""
-    from services.api.routes.rules import _stale_rule_refs
-    from shared.schemas import RuleCreate
+async def suggest_rule(ctx: dict, *, description: str) -> dict:
+    """Build a Rules-page deep link with the user's request pre-filled.
 
-    db = ctx["db"]
-    try:
-        body = RuleCreate(
-            name=name,
-            enabled=False,
-            trigger_pattern=trigger_pattern,
-            conditions=conditions,
-            actions=actions,
-            cooldown_seconds=cooldown_seconds,
-            severity=severity,
-        )
-    except Exception as exc:
-        return {"ok": False, "error": f"Validation failed: {str(exc)[:600]}"}
+    The chat agent cannot create rules; rule creation happens on the
+    Rules page where the user reviews the drafted rule before saving.
+    This tool URL-encodes the description server-side so the model never
+    has to construct (and potentially mangle) the link itself.
+    """
+    from urllib.parse import quote
 
-    stale = await _stale_rule_refs(db, trigger_pattern, conditions, actions)
-    if stale:
-        return {"ok": False, "error": "Broken references: " + "; ".join(stale)}
-
-    rule = Rule(**body.model_dump())
-    db.add(rule)
-    await db.commit()
-    await db.refresh(rule)
+    description = (description or "").strip()
+    if not description:
+        return {"ok": False, "error": "description must not be empty"}
+    link = "/rules/new?describe=" + quote(description[:500])
     return {
         "ok": True,
-        "rule_id": str(rule.id),
-        "enabled": False,
-        "review_url": f"/rules/{rule.id}/edit",
-        "note": (
-            "Created disabled. Tell the user to review and enable it at the "
-            "review_url (or the Rules page)."
+        "link": link,
+        "message_for_user": (
+            "I can't create rules from this chat, but I can get you most "
+            "of the way there: [Set up this rule](" + link + "). That "
+            "opens the rule builder with your request already filled in, "
+            "so you just review and save."
+        ),
+        "instructions": (
+            "Give the user the message_for_user text (reword if you like, "
+            "but keep the markdown link exactly as is). Never mention "
+            "tools, functions, or field names."
         ),
     }
 
@@ -2926,9 +2899,9 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
         "name": "get_rule_schema",
         "description": (
             "The complete rule vocabulary: every trigger type, action "
-            "type, and condition field with their exact field names and "
-            "required flags. Call this BEFORE create_rule whenever you "
-            "are not certain of a trigger or action shape. Cheap."
+            "type, and condition field. Use it only to judge whether an "
+            "automation the user asks about is possible. Never repeat "
+            "the internal field names to the user. Cheap."
         ),
         "input_schema": _GET_RULE_SCHEMA_SCHEMA,
         "fn": get_rule_schema,
@@ -2936,18 +2909,18 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
         "cost_class": "cheap",
     },
     {
-        "name": "create_rule",
+        "name": "suggest_rule",
         "description": (
-            "Create an automation rule from the user's request ('watch "
-            "for packages at the front door'). The rule is ALWAYS "
-            "created disabled; tell the user to review and enable it at "
-            "the returned review_url. Use get_rule_schema first for the "
-            "trigger/action shapes and get_camera_layout to resolve "
-            "camera names to UUIDs; never invent UUIDs. Cheap."
+            "REQUIRED whenever the user asks to create, set up, or "
+            "change an automation rule or alert. You cannot create "
+            "rules yourself. This tool takes a plain-English "
+            "description of what the user wants and returns a link to "
+            "the Rules page with that description pre-filled; relay "
+            "the link to the user. Cheap; makes no changes."
         ),
-        "input_schema": _CREATE_RULE_SCHEMA,
-        "fn": create_rule,
-        "side_effect": "write",
+        "input_schema": _SUGGEST_RULE_SCHEMA,
+        "fn": suggest_rule,
+        "side_effect": "read",
         "cost_class": "cheap",
     },
     {

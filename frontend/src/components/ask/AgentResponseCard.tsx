@@ -10,9 +10,37 @@
 // feed the same internal "view model" so the rendering is uniform.
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type { AgentEvent } from "@/lib/agentWs";
 import type { AgentRunDetail, Citation } from "./types";
 import CitationChip from "./CitationChip";
+
+// Render `[label](/internal/path)` markdown links in the answer as
+// client-side links (the agent uses these to point at e.g. the Rules
+// page). Only same-app paths are linked; anything else stays text.
+const MD_LINK_RE = /\[([^\]]+)\]\((\/[^\s)]*)\)/g;
+
+function renderAnswer(text: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  MD_LINK_RE.lastIndex = 0;
+  while ((m = MD_LINK_RE.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(
+      <Link
+        key={`${m.index}`}
+        href={m[2]}
+        className="text-accent underline underline-offset-2 hover:opacity-80"
+      >
+        {m[1]}
+      </Link>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
 
 interface TraceItem {
   call_id: string;
@@ -358,7 +386,7 @@ export default function AgentResponseCard({
         )}
 
         {vm.answer ? (
-          <div className="text-sm whitespace-pre-wrap leading-relaxed">{vm.answer}</div>
+          <div className="text-sm whitespace-pre-wrap leading-relaxed">{renderAnswer(vm.answer)}</div>
         ) : vm.done ? (
           vm.noEvidence ? (
             <div className="text-sm text-muted-foreground italic">

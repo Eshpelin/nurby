@@ -655,7 +655,7 @@ def test_registry_lookup():
         "analyze_clip",
         "analyze_frame",
         "get_rule_schema",
-        "create_rule",
+        "suggest_rule",
         "test_camera_connection",
         "run_doctor",
     }
