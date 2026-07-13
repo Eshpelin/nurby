@@ -890,6 +890,16 @@ class RuleTestRequest(BaseModel):
     camera_id: uuid.UUID | None = None
     dry_run_observation: dict | None = None
 
+    @field_validator("actions", mode="before")
+    @classmethod
+    def _coerce_actions(cls, v):
+        # The rule builder sends a bare dict for a single action (the
+        # same shape RuleCreate accepts). Normalize before list
+        # validation so Test doesn't 422 on payloads Save accepts.
+        if isinstance(v, dict):
+            return [v]
+        return v
+
     @field_validator("actions")
     @classmethod
     def _check_actions(cls, v):

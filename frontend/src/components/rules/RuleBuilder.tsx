@@ -122,6 +122,11 @@ export function RuleBuilder({
         if (m?.model && m.enabled !== false) set.add(m.model);
       }
     }
+    // Cameras with no explicit per-camera model still run perception's
+    // built-in default (yolov8n). Without this fallback the class picker
+    // dead-ends on "No detection model configured" for every default
+    // setup, and a person/car class filter can never be chosen.
+    if (set.size === 0 && scoped.length > 0) set.add("yolov8n.pt");
     return Array.from(set).sort();
   }, [cameras, state.formCondCameras]);
 
@@ -382,7 +387,9 @@ export function RuleBuilder({
       trigger_pattern,
       conditions: Object.keys(conditions).length > 0 ? conditions : null,
       actions: actionDicts.length === 1 ? actionDicts[0] : actionDicts,
-      cooldown_seconds: parseInt(s.formCooldown) || 300,
+      cooldown_seconds: Number.isNaN(parseInt(s.formCooldown, 10))
+        ? 300
+        : parseInt(s.formCooldown, 10),
       severity: s.formSeverity === "detection" ? "detection" : "alert",
     };
   };

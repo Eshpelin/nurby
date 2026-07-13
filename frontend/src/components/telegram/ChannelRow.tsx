@@ -9,6 +9,7 @@ import {
   type TestResult,
   statusPill,
 } from "./telegram-shared";
+import { extractApiError } from "@/lib/api-error";
 
 export function ChannelRow({
   channel,
@@ -51,7 +52,7 @@ export function ChannelRow({
         setWebhookInfo(await res.json());
       } else {
         const body = await res.json().catch(() => null);
-        setWebhookError(body?.detail || "Could not fetch webhook info");
+        setWebhookError(extractApiError(body, "Could not fetch webhook info"));
       }
     } catch {
       setWebhookError("Network error fetching webhook info");
@@ -74,7 +75,7 @@ export function ChannelRow({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setWebhookError(body?.detail || `Switch failed (${res.status}).`);
+        setWebhookError(extractApiError(body, `Switch failed (${res.status}).`));
       } else {
         onChange();
         await fetchWebhookInfo();

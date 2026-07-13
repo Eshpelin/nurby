@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/lib/auth";
+import { extractApiError } from "@/lib/api-error";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PersonaPicker } from "@/components/PersonaPicker";
@@ -631,7 +632,7 @@ export default function CameraConfigPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || `Save failed with status ${res.status}`);
+        throw new Error(extractApiError(body, `Save failed with status ${res.status}`));
       }
 
       const updated = await res.json();

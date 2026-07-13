@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { useToast, useConfirm } from "@/lib/feedback";
+import { extractApiError } from "@/lib/api-error";
 import { timeAgo as timeAgoBase } from "@/lib/time";
 
 interface Person {
@@ -118,6 +119,7 @@ export default function PeoplePage() {
   const [formConsent, setFormConsent] = useState(false);
   const [formStarred, setFormStarred] = useState(false);
   const [formRecapPrompt, setFormRecapPrompt] = useState("");
+  const [formPhoto, setFormPhoto] = useState<File | null>(null);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [togglingStar, setTogglingStar] = useState<string | null>(null);
@@ -292,6 +294,23 @@ export default function PeoplePage() {
     setFormConsent(p.consent_given);
     setFormStarred(!!p.is_starred);
     setFormRecapPrompt(p.recap_prompt || "");
+    setFormPhoto(null);
+    setFormError("");
+    setShowModal(true);
+  };
+
+  // Manual person creation. Faces mostly arrive via clustering, but a
+  // household should be able to enroll someone up front (name + photo)
+  // instead of waiting for the cameras to spot them.
+  const openCreate = () => {
+    setEditPerson(null);
+    setFormName("");
+    setFormNickname("");
+    setFormRelationship("");
+    setFormConsent(false);
+    setFormStarred(false);
+    setFormRecapPrompt("");
+    setFormPhoto(null);
     setFormError("");
     setShowModal(true);
   };
@@ -317,7 +336,7 @@ export default function PeoplePage() {
   }, [authFetch]);
 
   const handleSubmit = async () => {
-    if (!editPerson || !formName.trim()) {
+    if (!formName.trim()) {
       setFormError("Name is required");
       return;
     }
@@ -325,22 +344,54 @@ export default function PeoplePage() {
     setFormError("");
 
     try {
-      const res = await authFetch(`/api/persons/${editPerson.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          display_name: formName.trim(),
-          nickname: formNickname.trim() || null,
-          relationship: formRelationship.trim() || null,
-          consent_given: formConsent,
-          is_starred: formStarred,
-          recap_prompt: formRecapPrompt.trim() || null,
-        }),
+      const body = JSON.stringify({
+        display_name: formName.trim(),
+        nickname: formNickname.trim() || null,
+        relationship: formRelationship.trim() || null,
+        consent_given: formConsent,
+        is_starred: formStarred,
+        recap_prompt: formRecapPrompt.trim() || null,
       });
+      const res = editPerson
+        ? await authFetch(`/api/persons/${editPerson.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body,
+          })
+        : await authFetch("/api/persons", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+          });
 
       if (!res.ok) {
-        setFormError("Failed to save");
+        const errBody = await res.json().catch(() => null);
+        setFormError(extractApiError(errBody, "Failed to save"));
         return;
+      }
+
+      // Optional face photo: upload after the person row exists.
+      if (formPhoto) {
+        const saved: Person = editPerson ?? (await res.json());
+        const fd = new FormData();
+        fd.append("file", formPhoto);
+        const faceRes = await authFetch(`/api/persons/${saved.id}/face`, {
+          method: "POST",
+          body: fd,
+        });
+        const faceBody = await faceRes.json().catch(() => null);
+        if (!faceRes.ok) {
+          toast.error("Person saved, but the photo upload failed.");
+        } else if (faceBody?.status === "photo_saved") {
+          // Photo stored but no usable face found: tell the user
+          // instead of silently never matching.
+          toast.info(
+            faceBody.message ||
+              "Photo saved but no face detected. Try a clearer photo."
+          );
+        } else {
+          toast.success("Face photo saved. Nurby will now recognize them.");
+        }
       }
 
       setShowModal(false);
@@ -647,11 +698,19 @@ export default function PeoplePage() {
 
       {/* People activity feed */}
       <div>
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">People</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Activity updates across all cameras
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">People</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Activity updates across all cameras
+            </p>
+          </div>
+          <button
+            onClick={openCreate}
+            className="px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90 flex-shrink-0"
+          >
+            + Add person
+          </button>
         </div>
 
         {loading ? (
@@ -659,13 +718,23 @@ export default function PeoplePage() {
             Loading.
           </div>
         ) : persons.length === 0 ? (
-          <EmptyState
-            icon={<CameraGlyph />}
-            title="No people recognized yet"
-            body="As your cameras see faces, Nurby groups them into people you can name. If you haven't connected a camera yet, start there — recognition begins automatically once one is live."
-            actionLabel="Go to cameras"
-            actionHref="/"
-          />
+          <div>
+            <EmptyState
+              icon={<CameraGlyph />}
+              title="No people recognized yet"
+              body="As your cameras see faces, Nurby groups them into people you can name. You can also add someone now with a face photo, so Nurby recognizes them from their first visit."
+              actionLabel="Go to cameras"
+              actionHref="/"
+            />
+            <div className="text-center mt-3">
+              <button
+                onClick={openCreate}
+                className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors"
+              >
+                + Add a person with a photo
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="space-y-3">
             {persons.map((p) => {
@@ -911,7 +980,9 @@ export default function PeoplePage() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md shadow-xl">
-            <h2 className="text-lg font-semibold mb-4">Edit person</h2>
+            <h2 className="text-lg font-semibold mb-4">
+              {editPerson ? "Edit person" : "Add person"}
+            </h2>
 
             <div className="space-y-3">
               <div>
@@ -955,6 +1026,22 @@ export default function PeoplePage() {
                   className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
                   placeholder="Family, friend, delivery, etc."
                 />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">
+                  Face photo {editPerson ? "(add another)" : "(optional)"}
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setFormPhoto(e.target.files?.[0] ?? null)}
+                  className="w-full text-xs text-muted-foreground file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border file:border-border file:bg-background file:text-xs file:text-foreground file:cursor-pointer"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  One clear photo of their face. Nurby uses it to recognize
+                  them on camera.
+                </p>
               </div>
 
               <label className="flex items-center gap-2 cursor-pointer">

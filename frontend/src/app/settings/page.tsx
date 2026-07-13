@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { extractApiError } from "@/lib/api-error";
 import TelegramSection from "@/components/TelegramSection";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
 import { PairMobileCard } from "@/components/PairMobileCard";
@@ -552,6 +553,29 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSmtpRemove = async () => {
+    setSmtpSaving(true);
+    setSmtpSaveResult(null);
+    try {
+      const res = await authFetch("/api/smtp", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host: "", port: 587, user: "", password: "", from_addr: "", tls: true }),
+      });
+      if (res.ok) {
+        setSmtpConfig({ host: "", port: "587", user: "", password: "", from: "", tls: true });
+        setSmtpPasswordInput("");
+        setSmtpSaveResult({ ok: true, message: "Mail server removed. Email alerts are off." });
+      } else {
+        const j = await res.json().catch(() => null);
+        setSmtpSaveResult({ ok: false, message: extractApiError(j, `Remove failed (${res.status})`) });
+      }
+    } catch {
+      setSmtpSaveResult({ ok: false, message: "Network error" });
+    } finally {
+      setSmtpSaving(false);
+    }
+  };
+
   const activeProvider = providers.find((p) => p.active);
   const maxRecordingBytes = storage
     ? storage.cameras.reduce((max, c) => Math.max(max, c.recording_bytes), 1)
@@ -596,7 +620,11 @@ export default function SettingsPage() {
                 <div className="text-sm font-medium">AI Providers</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {loading ? "Loading." : activeProvider
-                    ? `${activeProvider.name} (${activeProvider.default_model || "default"})`
+                    ? activeProvider.name.includes(`(${activeProvider.default_model})`)
+                      // Providers created by the wizard embed the model in
+                      // their name; don't render "(gemma3:4b) (gemma3:4b)".
+                      ? activeProvider.name
+                      : `${activeProvider.name} (${activeProvider.default_model || "default"})`
                     : "No provider configured"}
                 </div>
               </div>
@@ -1536,10 +1564,24 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
-                  <button onClick={handleSmtpSave} disabled={smtpSaving || !smtpConfig.host.trim()}
-                    className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
-                    {smtpSaving ? "Saving." : "Save"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={handleSmtpSave} disabled={smtpSaving || !smtpConfig.host.trim()}
+                      className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
+                      {smtpSaving ? "Saving." : "Save"}
+                    </button>
+                    {smtpConfigured && (
+                      // The backend treats an empty host as "unconfigure",
+                      // but the Save button requires a host, so there was
+                      // no UI path to remove a saved mail server.
+                      <button
+                        onClick={handleSmtpRemove}
+                        disabled={smtpSaving}
+                        className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40 disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                   {smtpSaveResult && (
                     <span className={`text-xs ${smtpSaveResult.ok ? "text-green-400" : "text-red-400"}`}>
                       {smtpSaveResult.message}

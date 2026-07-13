@@ -6,7 +6,6 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { FeedbackProvider } from "@/lib/feedback";
 import { ThemeProvider, themeInitScript } from "@/lib/theme";
 import { WebcamPublisherProvider } from "@/lib/webcam-publisher";
-import { WebSocketProvider } from "@/lib/ws";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,11 +41,9 @@ export default function RootLayout({
           <FeedbackProvider>
             <AuthShell>
               <WebcamPublisherProvider>
-                <WebSocketProvider>
-                  <ErrorBoundary>
-                    {children}
-                  </ErrorBoundary>
-                </WebSocketProvider>
+                <ErrorBoundary>
+                  {children}
+                </ErrorBoundary>
               </WebcamPublisherProvider>
             </AuthShell>
           </FeedbackProvider>

@@ -7,6 +7,7 @@ import {
   type Camera,
   type Person,
 } from "./types";
+import Link from "next/link";
 import { ModelClassPicker } from "./ModelClassPicker";
 import { StyledSelect } from "./StyledSelect";
 import { GeometryEditor } from "./GeometryEditor";
@@ -444,8 +445,14 @@ export function TriggerSection(props: TriggerSectionProps) {
         <div className="space-y-2">
           <label className="text-xs text-muted-foreground block">Person</label>
           {persons.length === 0 ? (
-            <p className="text-xs text-muted-foreground px-2 py-3 rounded-md border border-dashed border-border">
-              No people yet. Add someone on the People page first.
+            <p className="text-xs px-2 py-3 rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 text-amber-300">
+              No people in your library yet, so this rule will fire for{" "}
+              <span className="font-medium">any known face</span> once one
+              exists. To alert on a specific person,{" "}
+              <Link href="/people" className="underline hover:text-amber-200">
+                add them on the People page
+              </Link>{" "}
+              first (name + face photo), then pick them here.
             </p>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto">

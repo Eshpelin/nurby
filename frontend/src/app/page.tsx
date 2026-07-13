@@ -1548,6 +1548,11 @@ function DashboardContent() {
             toolbarExtra={
               <>
                 <button
+                  onClick={() => { setModalInitialType(undefined); setModalOpen(true); }}
+                  className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
+                  title="Connect another camera (RTSP, ONVIF, webcam)"
+                >+ Camera</button>
+                <button
                   onClick={() => setWidgetBuilder({ open: true, editing: null })}
                   className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
                   title="Add a custom data widget"
@@ -2661,7 +2666,7 @@ function SecureAccountNudge({ hasFootage }: { hasFootage: boolean }) {
         <div className="flex items-start justify-between gap-2 mb-1.5">
           <div className="text-xs font-semibold flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 pulse-dot" />
-            {hasFootage ? "Your footage is live" : "You're all set up"}
+            {hasFootage ? "Your footage is live" : "One step left"}
           </div>
           <button
             onClick={() => setDismissed(true)}
@@ -2673,8 +2678,8 @@ function SecureAccountNudge({ hasFootage }: { hasFootage: boolean }) {
         </div>
         <p className="text-[11px] text-muted-foreground leading-snug mb-2.5">
           {hasFootage
-            ? "Nurby is already watching. One thing left. you haven't set a password, so anyone who reaches this page is an admin. Lock it down."
-            : "One thing left. you haven't set a password, so anyone who reaches this page is an admin. Lock it down."}
+            ? "Nurby is already watching, but you haven't set a password. Anyone who reaches this page is an admin. Lock it down."
+            : "You haven't set a password yet, so anyone who reaches this page is an admin. Lock it down."}
         </p>
         <button
           onClick={() => setOpen(true)}

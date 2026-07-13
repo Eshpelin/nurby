@@ -481,6 +481,27 @@ async def stream_recording(
     return FileResponse(path, media_type="video/mp4", filename=os.path.basename(path))
 
 
+@router.get("/{recording_id}/thumbnail")
+async def get_recording_thumbnail(
+    recording_id: uuid.UUID,
+    token: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Preview frame for the recordings grid. Loaded from an <img>, so
+    auth rides a ``?token=`` query param like /stream does."""
+    user = await _user_from_query_token(token, db)
+    allowed = await allowed_camera_ids(user, db)
+    recording = await _get_recording_or_404(recording_id, db, allowed)
+    if not recording.thumbnail_path:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    path = resolve_inside(recording.thumbnail_path, settings.thumbnails_path)
+    if path is None:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Thumbnail file not found on disk")
+    return FileResponse(path, media_type="image/jpeg")
+
+
 @router.get("/{recording_id}/camera", response_model=dict)
 async def get_recording_camera(
     recording_id: uuid.UUID,

@@ -108,12 +108,13 @@ export function SetupChecklistCard({ onAddCamera }: { onAddCamera?: () => void }
           <button
             key={item.key}
             type="button"
-            onClick={item.done ? undefined : item.onClick}
-            disabled={item.done}
-            className={`w-full flex items-center gap-2.5 text-left text-xs rounded-md px-2 py-1.5 transition-colors ${
-              item.done
-                ? "text-muted-foreground line-through cursor-default"
-                : "hover:bg-muted"
+            // Completed steps stay clickable: "done" means "you did this
+            // once", not "locked forever". The camera row in particular
+            // was the only add-camera entry point on the dashboard.
+            onClick={item.onClick}
+            title={item.done ? "Done. Click to do it again." : undefined}
+            className={`w-full flex items-center gap-2.5 text-left text-xs rounded-md px-2 py-1.5 transition-colors hover:bg-muted ${
+              item.done ? "text-muted-foreground" : ""
             }`}
           >
             <span

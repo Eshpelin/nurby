@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { extractApiError } from "@/lib/api-error";
 
 interface VisionModel {
   name: string;
@@ -80,7 +81,10 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: `Ollama (${modelName})`,
+        // Keep the model out of the display name: the default model is
+        // editable later, and a baked-in model name goes stale (and
+        // doubles up in "name (model)" listings).
+        name: "Ollama",
         kind: "ollama",
         base_url: baseUrl,
         default_model: modelName,
@@ -89,7 +93,7 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      throw new Error(j.detail || `Failed to add provider (${res.status})`);
+      throw new Error(extractApiError(j, `Failed to add provider (${res.status})`));
     }
   }
 

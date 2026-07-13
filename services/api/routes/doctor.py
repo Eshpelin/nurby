@@ -12,7 +12,7 @@ import time
 import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.api.camera_probe import ERROR_HINTS, parse_target, probe_tcp
@@ -132,6 +132,27 @@ async def _check_camera(camera, sem: asyncio.Semaphore) -> DoctorCheck:
     async with sem:
         result = await asyncio.to_thread(probe_tcp, host, port, 4.0)
     if result.get("ok"):
+        # A TCP-open port is not a healthy camera: when the source sits
+        # behind a relay (mediamtx), the relay port answers even while
+        # the camera publishes nothing. Cross-check the live status the
+        # ingestion worker maintains, so the doctor never reports
+        # "Everything looks healthy" while the wall shows OFFLINE.
+        live_status = (camera.status or "").lower()
+        if camera.enabled and live_status in ("offline", "error"):
+            return DoctorCheck(
+                id=cid, label=label, status="fail",
+                detail=(
+                    f"{host}:{port} answers, but the camera is not "
+                    f"delivering video (status: {live_status})"
+                ),
+                hint=(
+                    "The network endpoint is up but no frames are coming "
+                    "through. Check that the camera is powered and "
+                    "streaming, and that the stream path and credentials "
+                    "are right."
+                ),
+                latency_ms=_timed(start),
+            )
         return DoctorCheck(
             id=cid, label=label, status="ok", detail=f"{host}:{port} reachable",
             latency_ms=_timed(start),
@@ -178,6 +199,52 @@ async def _check_smtp() -> DoctorCheck:
     return DoctorCheck(
         id="smtp", label="Email (SMTP)", status="skip",
         detail="Not configured. Email actions are unavailable",
+    )
+
+
+async def _check_alert_channels() -> DoctorCheck:
+    """Warn when rule alerts have nowhere to go outside the app.
+
+    Everything can look green while every notification dead-ends at the
+    in-app bell: no Telegram channel, no SMTP, no webhook subscriber,
+    no paired mobile device. Users only discover that during their
+    first real incident, which is the worst possible time.
+
+    Uses its own session: the request-scoped one is already used
+    concurrently by _check_db inside the same asyncio.gather."""
+    from shared.database import async_session
+    from shared.email import resolve_smtp
+    from shared.models import PushDevice, TelegramChannel, WebhookSubscription
+
+    async with async_session() as db:
+        telegram = (await db.execute(select(func.count(TelegramChannel.id)))).scalar() or 0
+        webhooks = (await db.execute(select(func.count(WebhookSubscription.id)))).scalar() or 0
+        push = (await db.execute(select(func.count(PushDevice.id)))).scalar() or 0
+    smtp_cfg = await resolve_smtp()
+    smtp_ok = bool(smtp_cfg.get("host") and smtp_cfg.get("from_addr"))
+
+    channels = []
+    if telegram:
+        channels.append(f"Telegram ({telegram})")
+    if smtp_ok:
+        channels.append("email")
+    if webhooks:
+        channels.append(f"webhooks ({webhooks})")
+    if push:
+        channels.append(f"mobile push ({push})")
+
+    if channels:
+        return DoctorCheck(
+            id="alert_channels", label="Alert delivery", status="ok",
+            detail=f"Alerts can reach you via {', '.join(channels)}",
+        )
+    return DoctorCheck(
+        id="alert_channels", label="Alert delivery", status="warn",
+        detail="No notification channel is set up. Alerts only appear in this web app",
+        hint=(
+            "Add Telegram, email, or the mobile app in Settings so rule "
+            "alerts reach you when you're not looking at the dashboard."
+        ),
     )
 
 
@@ -232,6 +299,7 @@ async def run_doctor(
         _run_with_timeout(_check_redis(), "redis", "Redis"),
         _run_with_timeout(_check_mediamtx(), "mediamtx", "Stream relay (mediamtx)"),
         _run_with_timeout(_check_smtp(), "smtp", "Email (SMTP)"),
+        _run_with_timeout(_check_alert_channels(), "alert_channels", "Alert delivery"),
         _run_with_timeout(_check_disk(), "disk", "Disk space"),
     ]
     jobs += [

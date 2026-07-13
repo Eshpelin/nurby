@@ -21,6 +21,7 @@ export function SecureAccountModal({ onClose }: { onClose: () => void }) {
   const [showPw, setShowPw] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [secured, setSecured] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,8 +32,14 @@ export function SecureAccountModal({ onClose }: { onClose: () => void }) {
     }
     setSubmitting(true);
     try {
-      await claimAccount(email.trim(), password, displayName.trim());
-      onClose();
+      const claimedEmail = email.trim();
+      await claimAccount(claimedEmail, password, displayName.trim());
+      // Show explicit confirmation before closing. Closing silently (or
+      // a remount clearing the fields) left users unsure whether the
+      // account was actually secured.
+      setSecured(claimedEmail);
+      setTimeout(onClose, 2000);
+      return;
     } catch (err) {
       const msg =
         err instanceof ApiError && err.status === 409
@@ -71,6 +78,16 @@ export function SecureAccountModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
+        {secured ? (
+          <div className="px-5 py-6 text-center space-y-2">
+            <div className="text-2xl">✓</div>
+            <p className="text-sm font-medium">Account secured</p>
+            <p className="text-xs text-muted-foreground">
+              You&apos;re signed in as {secured}. Use that email and your new
+              password next time.
+            </p>
+          </div>
+        ) : (
         <form onSubmit={submit} className="px-5 py-4 space-y-3">
           <div>
             <label className="block text-[11px] font-medium text-muted-foreground mb-1">
@@ -142,6 +159,7 @@ export function SecureAccountModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

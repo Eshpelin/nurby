@@ -1011,6 +1011,10 @@ class PerceptionPipeline:
             # fire_once_per="incident" can dedup against the incident lifetime.
             "incident_id": str(incident_id) if incident_id else None,
             "camera_id": camera_id,
+            # Human-readable name for action templates and webhook
+            # payloads. Without it, actions fall back to the camera UUID
+            # in "{camera_name}" substitutions.
+            "camera_name": (cam.name if cam else "") or "",
             "timestamp": timestamp.isoformat(),
             "motion_score": motion_score,
             "object_detections": {
