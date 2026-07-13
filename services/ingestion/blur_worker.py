@@ -131,6 +131,9 @@ def _process_sync(
     and NudeDetector all release the GIL for their heavy work.
     """
     import cv2
+
+    from services.ingestion.video_writer import create_segment_writer
+
     face_lib = None
     if protected_embs:
         try:
