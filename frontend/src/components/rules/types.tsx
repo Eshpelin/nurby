@@ -457,7 +457,11 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
     const pid = pattern.person_id as string | undefined;
     if (!pid) return "When any known face recognized";
     const person = personLookup.get(pid);
-    return person ? `When ${person} recognized` : `When person ${pid.slice(0, 8)} recognized`;
+    if (person) return `When ${person} recognized`;
+    // AI-generated rules can carry a hallucinated person_id; a raw slice of
+    // junk like "<person uuid>" reads as broken markup in the preview.
+    const short = /^[0-9a-f]{8}-/i.test(pid) ? pid.slice(0, 8) : "(not in your library)";
+    return `When person ${short} recognized`;
   }
   if (t === "face_unknown") return "When unknown face detected";
   if (t === "motion") {
@@ -517,6 +521,15 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
   return "Unknown trigger";
 }
 
+// Runtime template vars like {camera_name} only resolve when a rule fires;
+// in a preview they read as broken text. Show them as readable placeholders.
+export function humanizeTemplate(text: string): string {
+  return text.replace(/\{([a-z0-9_.]+)\}/gi, (_, key: string) => {
+    const tail = key.split(".").pop() || key;
+    return `[${tail.replace(/_/g, " ")}]`;
+  });
+}
+
 export function describeActions(actions: Record<string, unknown> | Record<string, unknown>[]): string {
   const list = Array.isArray(actions) ? actions : [actions];
   return list
@@ -531,7 +544,7 @@ export function describeActions(actions: Record<string, unknown> | Record<string
         return `${method} ${(a.url as string) || "..."}${hasAuth ? " (authenticated)" : ""}`;
       }
       if (a.type === "broadcast") return "Broadcast via WebSocket";
-      if (a.type === "notify") return `Notify. "${(a.message as string) || "..."}"`;
+      if (a.type === "notify") return `Notify. "${humanizeTemplate((a.message as string) || "...")}"`;
       if (a.type === "email") return `Email to ${(a.to as string) || "..."}`;
       if (a.type === "telegram") {
         const cid = (a.channel_id as string) || "";
