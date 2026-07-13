@@ -457,7 +457,11 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
     const pid = pattern.person_id as string | undefined;
     if (!pid) return "When any known face recognized";
     const person = personLookup.get(pid);
-    return person ? `When ${person} recognized` : `When person ${pid.slice(0, 8)} recognized`;
+    if (person) return `When ${person} recognized`;
+    // AI-generated rules can carry a hallucinated person_id; a raw slice of
+    // junk like "<person uuid>" reads as broken markup in the preview.
+    const short = /^[0-9a-f]{8}-/i.test(pid) ? pid.slice(0, 8) : "(not in your library)";
+    return `When person ${short} recognized`;
   }
   if (t === "face_unknown") return "When unknown face detected";
   if (t === "motion") {
@@ -518,14 +522,18 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
 }
 
 // Display-time substitution for the template tokens the backend renders
-// at fire time. Without this, the rule card / preview shows the literal
-// "Rule '{rule_name}' triggered" braces, which reads as broken.
-function previewTemplate(text: string, ruleName?: string): string {
+// at fire time. Known tokens get friendly names; any other {token} becomes
+// a readable bracketed placeholder instead of raw braces.
+export function humanizeTemplate(text: string, ruleName?: string): string {
   return text
     .replace(/\{\{?rule_name\}?\}/g, ruleName || "this rule")
     .replace(/\{\{?camera_name\}?\}/g, "the camera")
     .replace(/\{\{?camera_id\}?\}/g, "the camera")
-    .replace(/\{\{?timestamp(_local)?\}?\}/g, "the time");
+    .replace(/\{\{?timestamp(_local)?\}?\}/g, "the time")
+    .replace(/\{([a-z0-9_.]+)\}/gi, (_, key: string) => {
+      const tail = key.split(".").pop() || key;
+      return `[${tail.replace(/_/g, " ")}]`;
+    });
 }
 
 export function describeActions(actions: Record<string, unknown> | Record<string, unknown>[], ruleName?: string): string {
@@ -542,7 +550,7 @@ export function describeActions(actions: Record<string, unknown> | Record<string
         return `${method} ${(a.url as string) || "..."}${hasAuth ? " (authenticated)" : ""}`;
       }
       if (a.type === "broadcast") return "Broadcast via WebSocket";
-      if (a.type === "notify") return `Notify. "${previewTemplate((a.message as string) || "...", ruleName)}"`;
+      if (a.type === "notify") return `Notify. "${humanizeTemplate((a.message as string) || "...", ruleName)}"`;
       if (a.type === "email") return `Email to ${(a.to as string) || "..."}`;
       if (a.type === "telegram") {
         const cid = (a.channel_id as string) || "";

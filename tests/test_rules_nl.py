@@ -34,6 +34,94 @@ def test_system_prompt_contains_vocabulary_and_entities():
     assert "ONLY a JSON object" in prompt
 
 
+def test_system_prompt_maps_generic_person_to_object_detection():
+    prompt = nl.build_system_prompt(
+        build_schema(),
+        cameras=[(str(CAM), "Front Door")],
+        persons=[],
+        channels=[],
+    )
+    assert "CHOOSING THE TRIGGER" in prompt
+    assert 'object_detected with label "person"' in prompt
+    # The generic-person few-shot must be present.
+    assert '"notify me when a person shows up at the camera"' in prompt
+    # No angle-bracket placeholder hints the model could copy verbatim.
+    assert "<person uuid>" not in prompt
+
+
+def test_system_prompt_includes_named_person_example_only_when_people_exist():
+    with_people = nl.build_system_prompt(
+        build_schema(),
+        cameras=[],
+        persons=[("p1", "Mom")],
+        channels=[],
+    )
+    assert '"tell me when Mom gets home"' in with_people
+    assert '"person_id": "p1"' in with_people
+    without = nl.build_system_prompt(build_schema(), cameras=[], persons=[], channels=[])
+    assert "gets home" not in without
+
+
+# ---------------------------------------------------------------------------
+# Impossible face-trigger downgrade
+# ---------------------------------------------------------------------------
+
+
+def face_rule(person_id=None):
+    tp = {"type": "face_recognized"}
+    if person_id is not None:
+        tp["person_id"] = person_id
+    return {"trigger_pattern": tp}
+
+
+def test_coerce_face_trigger_with_empty_library():
+    rule = face_rule()
+    notes = nl.coerce_impossible_face_trigger(rule, persons=[])
+    assert rule["trigger_pattern"] == {"type": "object_detected", "label": "person"}
+    assert len(notes) == 1 and "person library is empty" in notes[0]
+
+
+def test_coerce_face_trigger_with_placeholder_person_id():
+    rule = face_rule("<person uuid>")
+    notes = nl.coerce_impossible_face_trigger(rule, persons=[("p1", "Mom")])
+    assert rule["trigger_pattern"] == {"type": "object_detected", "label": "person"}
+    assert len(notes) == 1 and "matches nobody" in notes[0]
+
+
+def test_coerce_keeps_valid_person_id():
+    rule = face_rule("p1")
+    notes = nl.coerce_impossible_face_trigger(rule, persons=[("p1", "Mom")])
+    assert rule["trigger_pattern"]["type"] == "face_recognized"
+    assert notes == []
+
+
+def test_coerce_keeps_any_known_face_when_library_nonempty():
+    rule = face_rule()
+    notes = nl.coerce_impossible_face_trigger(rule, persons=[("p1", "Mom")])
+    assert rule["trigger_pattern"]["type"] == "face_recognized"
+    assert notes == []
+
+
+def test_coerce_ignores_non_face_triggers():
+    rule = {"trigger_pattern": {"type": "object_detected", "label": "package"}}
+    assert nl.coerce_impossible_face_trigger(rule, persons=[]) == []
+    assert rule["trigger_pattern"]["label"] == "package"
+
+
+@pytest.mark.asyncio
+async def test_generate_downgrades_impossible_face_rule():
+    db = make_db()
+    impossible = dict(
+        VALID_RULE,
+        trigger_pattern={"type": "face_recognized", "person_id": "<person uuid>"},
+    )
+    with patch("services.agent.llm.llm_call", new=AsyncMock(return_value=llm_response(json.dumps(impossible)))), \
+         patch("services.api.routes.rules._stale_rule_refs", new=AsyncMock(return_value=[])):
+        out = await nl.generate_rule(nl.GenerateRuleRequest(prompt="a person shows up"), make_user(), db)
+    assert out.rule["trigger_pattern"] == {"type": "object_detected", "label": "person"}
+    assert any("Known face" in n for n in out.notes)
+
+
 # ---------------------------------------------------------------------------
 # JSON extraction
 # ---------------------------------------------------------------------------
