@@ -82,4 +82,14 @@ F67 | blocker | kevin-impatient-exec | frontend/auth | fixed
 Positive confirmations, so "what works" is data too. One line each:
 persona, flow, date.
 
-(none yet)
+- kevin-impatient-exec, 2026-07-16: auto-bootstrap drops a fresh visitor
+  straight onto the dashboard with a real onboarding modal, no signup
+  form, once the underlying DB/auth bugs (F66/F67) were fixed.
+- kevin-impatient-exec, 2026-07-16: "Do it all for me" magic setup adds
+  a demo camera and gracefully degrades to "no local model, here's a
+  one-command fix" instead of pretending success when the model pull
+  fails.
+- kevin-impatient-exec, 2026-07-16: "Secure your account" flow is
+  genuinely one-click-ish — pre-filled name, three fields, one submit.
+- kevin-impatient-exec, 2026-07-16: dashboard answers "did anything
+  happen today?" directly on load with no navigation required.
