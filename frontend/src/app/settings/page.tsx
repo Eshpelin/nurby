@@ -14,6 +14,7 @@ import { GroundingSettingsCard } from "@/components/settings/GroundingSettingsCa
 import { ALL_PROVIDERS, PROVIDER_KINDS } from "@/lib/provider-presets";
 import { ProviderFields } from "@/components/ProviderFields";
 import { timezoneOptions } from "@/lib/timezones";
+import { formatDateTime } from "@/lib/time";
 
 
 import type {
@@ -54,7 +55,10 @@ export default function SettingsPage() {
   const [inviteRole, setInviteRole] = useState("viewer");
   const [inviteCameraIds, setInviteCameraIds] = useState<string[]>([]);
   const [inviteMaxUses, setInviteMaxUses] = useState(1);
+  // Days until the new key expires. 0 = never.
+  const [inviteExpiryDays, setInviteExpiryDays] = useState(0);
   const [inviteCreating, setInviteCreating] = useState(false);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
 
   // Storage state
   const [storage, setStorage] = useState<StorageStats | null>(null);
@@ -473,17 +477,34 @@ export default function SettingsPage() {
     try {
       const body: Record<string, unknown> = { role: inviteRole, max_uses: inviteMaxUses };
       if (inviteCameraIds.length > 0) body.camera_ids = inviteCameraIds;
+      if (inviteExpiryDays > 0) {
+        body.expires_at = new Date(
+          Date.now() + inviteExpiryDays * 24 * 60 * 60 * 1000
+        ).toISOString();
+      }
       const res = await authFetch("/api/invites", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (res.ok) {
         setShowInviteModal(false);
-        setInviteRole("viewer"); setInviteCameraIds([]); setInviteMaxUses(1);
+        setInviteRole("viewer"); setInviteCameraIds([]); setInviteMaxUses(1); setInviteExpiryDays(0);
         fetchInviteKeys();
       }
     } catch { /* silent */ }
     finally { setInviteCreating(false); }
+  };
+
+  // Copy a ready-to-share redemption link. The raw key is still visible
+  // (select-all) for anyone who wants just the key.
+  const handleCopyInvite = async (ik: InviteKey) => {
+    try {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/invite?key=${ik.key}`
+      );
+      setCopiedInviteId(ik.id);
+      setTimeout(() => setCopiedInviteId((cur) => (cur === ik.id ? null : cur)), 2000);
+    } catch { /* clipboard unavailable (http, permissions). leave the key selectable */ }
   };
 
   const handleDeleteInvite = async (id: string) => {
@@ -1628,20 +1649,37 @@ export default function SettingsPage() {
             {/* Existing keys */}
             {inviteKeys.length > 0 && (
               <div className="space-y-2 mb-4">
-                {inviteKeys.map((ik) => (
-                  <div key={ik.id} className="rounded-md border border-border bg-background p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <code className="text-xs font-mono bg-muted px-2 py-1 rounded select-all truncate">{ik.key}</code>
-                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                        {ik.role} / {ik.use_count}/{ik.max_uses} uses
-                      </span>
+                {inviteKeys.map((ik) => {
+                  const expired = ik.expires_at !== null && new Date(ik.expires_at) < new Date();
+                  return (
+                    <div key={ik.id} className="rounded-md border border-border bg-background p-3 flex items-center justify-between">
+                      <div className="min-w-0 space-y-1">
+                        <code className="block text-xs font-mono bg-muted px-2 py-1 rounded select-all truncate">{ik.key}</code>
+                        <div className="text-[11px] text-muted-foreground">
+                          {ik.role} / {ik.use_count}/{ik.max_uses} uses /{" "}
+                          {ik.expires_at === null ? (
+                            "never expires"
+                          ) : expired ? (
+                            <span className="text-red-400">expired {formatDateTime(ik.expires_at)}</span>
+                          ) : (
+                            `expires ${formatDateTime(ik.expires_at)}`
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5 ml-2 flex-shrink-0">
+                        <button onClick={() => handleCopyInvite(ik)}
+                          title="Copy invite link"
+                          className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors">
+                          {copiedInviteId === ik.id ? "Copied" : "Copy link"}
+                        </button>
+                        <button onClick={() => handleDeleteInvite(ik.id)}
+                          className="px-2 py-1 text-xs rounded border border-red-800 text-red-400 hover:bg-red-900/30 transition-colors">
+                          Revoke
+                        </button>
+                      </div>
                     </div>
-                    <button onClick={() => handleDeleteInvite(ik.id)}
-                      className="px-2 py-1 text-xs rounded border border-red-800 text-red-400 hover:bg-red-900/30 transition-colors ml-2 flex-shrink-0">
-                      Revoke
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -1661,6 +1699,16 @@ export default function SettingsPage() {
                 <input type="number" min={1} max={100} value={inviteMaxUses}
                   onChange={(e) => setInviteMaxUses(Number(e.target.value))}
                   className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">Expires</label>
+                <select value={inviteExpiryDays} onChange={(e) => setInviteExpiryDays(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent">
+                  <option value={0}>Never</option>
+                  <option value={1}>1 day</option>
+                  <option value={7}>7 days</option>
+                  <option value={30}>30 days</option>
+                </select>
               </div>
               {cameras.length > 0 && (
                 <div>
