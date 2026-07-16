@@ -103,6 +103,15 @@ MODEL_BY_NAME = {m["name"]: m for m in VISION_MODELS}
 # Free space to keep after a pull, on top of the model download itself.
 _DISK_MARGIN_GB = 2.0
 
+# Families that a pull already told us this Ollama install can't serve
+# (e.g. "requires a newer version of Ollama" for a brand-new model like
+# Gemma 4). Ollama has no version-compatibility API to check up front, so
+# we learn this the first time a pull fails with that specific message and
+# remember it for the rest of the process instead of re-attempting (and
+# re-waiting on) the same doomed pull on every setup/retry.
+_unsupported_families: set[str] = set()
+_OLLAMA_TOO_OLD_MARKER = "requires a newer version of ollama"
+
 
 class OllamaStatus(BaseModel):
     installed: bool
@@ -161,10 +170,17 @@ def _get_system_ram_gb() -> float | None:
 
 
 def _recommend_model(ram_gb: float | None) -> str:
-    """Pick the best model that fits in available RAM."""
+    """Pick the best model that fits in available RAM.
+
+    Skips families this Ollama install has already told us it can't pull
+    (see ``_unsupported_families``), so a known-incompatible install stops
+    recommending Gemma 4 and goes straight to Gemma 3 instead of failing
+    the same way on every fresh setup attempt.
+    """
+    candidates = [m for m in VISION_MODELS if m["family"] not in _unsupported_families]
     if ram_gb is None:
         return "gemma3:4b"  # safe default
-    for model in VISION_MODELS:
+    for model in candidates:
         if ram_gb >= model["ram_gb"] * 1.5:  # leave headroom
             return model["name"]
     return "gemma3:1b"
@@ -340,9 +356,31 @@ async def _pull_via_cli(ollama_path: str, model: str, job: DeployJob) -> tuple[b
     finally:
         job.proc = None
     if proc.returncode != 0:
-        detail = tail.decode(errors="replace").strip().splitlines()
-        return False, f"Failed to pull {model}. {detail[-1] if detail else 'Unknown error'}"
+        return False, f"Failed to pull {model}. {_extract_cli_error(tail)}"
     return True, "ok"
+
+
+_ANSI_RE = _re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][A-Za-z0-9]")
+
+
+def _extract_cli_error(raw: bytes) -> str:
+    """Pull the actual error sentence out of `ollama pull`'s stderr.
+
+    stderr is a spinner animation (raw ANSI cursor-control codes) followed
+    by the real message, so the *last* printed line is reliably something
+    like a bare "https://..." URL rather than the sentence explaining why
+    the pull failed. Strip the ANSI noise and progress-spinner lines, then
+    return the longest remaining line, prose being the useful part.
+    """
+    text = _ANSI_RE.sub("", raw.decode(errors="replace"))
+    lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not _PERCENT_RE.search(line) and "pulling manifest" not in line
+    ]
+    if not lines:
+        return "Unknown error"
+    return max(lines, key=len)
 
 
 async def _register_provider(model_name: str, provider_url: str) -> str:
@@ -395,9 +433,20 @@ async def _run_deploy_job(job: DeployJob, ollama_path: str | None, remote_url: s
             ok, msg = await _pull_via_http(remote_url, job.model, job)
             provider_url = remote_url
         if not ok:
+            if _OLLAMA_TOO_OLD_MARKER in msg.lower():
+                entry = MODEL_BY_NAME.get(job.model)
+                if entry:
+                    _unsupported_families.add(entry["family"])
+                job.code = "ollama_outdated"
+                job.message = (
+                    f"This Ollama install can't pull {job.model} yet (needs a newer "
+                    "version of Ollama). Update Ollama from https://ollama.com/download, "
+                    "or pick a different model."
+                )
+            else:
+                job.code = "pull_failed"
+                job.message = msg
             job.stage = "error"
-            job.code = "pull_failed"
-            job.message = msg
             return
         job.stage = "registering"
         job.message = "Registering the provider"
@@ -456,6 +505,17 @@ def _preflight(model_name: str) -> DeployStatus | None:
     entry = MODEL_BY_NAME.get(model_name)
     if not entry:
         return None
+    if entry["family"] in _unsupported_families:
+        return DeployStatus(
+            stage="error",
+            code="ollama_outdated",
+            model=model_name,
+            message=(
+                f"This Ollama install can't pull {entry['family']} models yet "
+                "(needs a newer version of Ollama). Update Ollama from "
+                "https://ollama.com/download, or pick a different model."
+            ),
+        )
     ram_gb = _get_system_ram_gb()
     if ram_gb is not None and ram_gb < entry["ram_gb"]:
         return DeployStatus(
