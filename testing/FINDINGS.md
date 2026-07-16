@@ -46,6 +46,37 @@ F66 | blocker | kevin-impatient-exec | infra/migrations | fixed
   Fix: use `connectable.begin()` instead of `.connect()` so the
   transaction commits on a clean exit. commit 36483aa.
 
+F67 | blocker | kevin-impatient-exec | frontend/auth | fixed
+  What: after fresh login (or the auto-bootstrap flow), several core
+  surfaces permanently 401'd forever: the notification bell count, the
+  AI-provider health badge in the navbar, and the dashboard's camera
+  list. Concretely, the "Show me some magic" one-click onboarding wizard
+  got stuck forever on "Starting download of <model>" with a Cancel
+  button that never resolved anything, because the same bug also killed
+  its poll-for-progress loop. Confirmed via the network log: zero
+  `/api/ollama/deploy/status` polls were ever sent despite 35+ seconds
+  elapsed, while the backend job had already settled into a terminal
+  `error` stage within a second.
+  Repro: hit `/` on a fresh install so the auto-bootstrap effect fires
+  after mount, watch `/api/cameras`, `/api/providers`, `/api/providers/health`,
+  `/api/notifications/count` 401 on every poll cycle indefinitely.
+  Root cause: `frontend/src/lib/auth.tsx`'s `authFetch` closed over the
+  `token` state value directly, so its function identity changed every
+  time `token` changed. Multiple call sites across the app
+  (`navbar.tsx`'s `fetchProvider`/`fetchUnreadCount`, `page.tsx`'s
+  `fetchCameras`, and others) wrapped their own fetch logic in
+  `useCallback(..., [])` with an empty dependency array, freezing
+  whichever `authFetch` existed at first mount. On a fresh page load
+  that first mount happens before the token is hydrated from
+  localStorage (or before bootstrap issues one), so those closures
+  permanently held an unauthenticated `authFetch` and never picked up
+  the real token, even after login succeeded.
+  Fix: `authFetch` now reads the token through a ref (`tokenRef`,
+  kept in sync via a `useEffect` on `token`) instead of the `token`
+  closure variable, so its own identity is stable and every caller —
+  stale-closure or not — always sends the current token. commit
+  (this run; see git log).
+
 ## Working well
 
 Positive confirmations, so "what works" is data too. One line each:

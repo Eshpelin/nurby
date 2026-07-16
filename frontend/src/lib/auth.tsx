@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -105,6 +106,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // authFetch reads the token through this ref instead of closing over the
+  // `token` state directly. Several call sites across the app memoize their
+  // fetch wrappers with an empty useCallback dependency array, freezing
+  // whatever authFetch identity existed at first mount (often before login
+  // resolves). A ref keeps every one of those stale closures pointed at the
+  // current token instead of permanently sending unauthenticated requests.
+  const tokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem(TOKEN_KEY);
@@ -263,16 +274,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const authFetch = useCallback(
     async (url: string, init?: RequestInit): Promise<Response> => {
+      const currentToken = tokenRef.current;
       const headers = new Headers(init?.headers);
-      if (token) {
-        headers.set("Authorization", `Bearer ${token}`);
+      if (currentToken) {
+        headers.set("Authorization", `Bearer ${currentToken}`);
       }
       const res = await fetch(url, { ...init, headers });
       // Stale or invalid token. Clear auth and let the bootstrap effect
       // re-route. sending to "/" (not "/login") means an unclaimed
       // provisional install re-adopts the owner instead of stranding the
       // visitor on a sign-in form they have no credentials for.
-      if (res.status === 401 && token) {
+      if (res.status === 401 && currentToken) {
         setToken(null);
         setUser(null);
         localStorage.removeItem(TOKEN_KEY);
@@ -283,7 +295,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return res;
     },
-    [token, pathname, router]
+    [pathname, router]
   );
 
   const value = useMemo(
