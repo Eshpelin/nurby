@@ -53,14 +53,19 @@ give up, and that IS the finding.
 - Judge every step: unclear labels, missing affordances, dead ends,
   silent failures, missing feedback, ugly states, and also what works
   well.
-- Cameras: pick the feed that matches the persona's scene from
+- Cameras: pick the scene that matches the persona's story from
   `testing/harness/feeds.json` (looping RTSP paths like
-  `rtsp://localhost:8554/front-door`, `.../pets`, `.../indoor-room`).
+  `rtsp://localhost:8554/front-door`, `.../pets`, `.../guardian-room`).
   Margaret gets a porch, Sofia gets a dog, Carlos gets vehicles: the
-  feed must make the persona's rules plausibly fire. Name and describe
-  the camera the way the persona would ("Front door", not "front-door
-  feed"). The `sidewalk` feed has visible faces for face-recognition
-  flows.
+  feed must make the persona's rules plausibly fire. Each scene is a
+  pool of clips that rotates between runs, so a returning persona's
+  camera shows different footage than last time; that is intentional,
+  treat it as a new day. Notable pools: `sidewalk` and `indoor-room`
+  have visible faces for face-recognition flows; `guardian-room` has
+  fall-detection positives (person ends on the floor) and normal
+  daily-activity negatives; `lobby` includes bag-drop and fight clips
+  for incident/alert flows. Name and describe the camera the way the
+  persona would ("Front door", not "front-door feed").
 
 ## 3. Log findings
 

@@ -1,6 +1,6 @@
 {
-  "_comment": "UX-army camera-feed library. Each feed loops at rtsp://localhost:8554/<name>. Files live in dev/feeds/ (gitignored); run testing/harness/fetch_feeds.sh to (re)download. Personas pick the feed matching their scene; two personas may share a feed but should name/frame their cameras differently.",
-  "feeds": {
+  "_comment": "UX-army camera-feed library. Each scene is a POOL of clips in dev/feeds/<scene>/ (gitignored; testing/harness/fetch_feeds.sh downloads and YOLO-gates them). start_stack.sh publishes one variant per scene at rtsp://localhost:8554/<scene> and rotates variants by runs_completed, so a persistent camera sees different footage on different runs. Personas pick the scene matching their story; two personas may share a scene but should name/frame their cameras differently.",
+  "scenes": {
     "front-door": {
       "scene": "people approaching one at a time, entryway framing",
       "contains": ["person"],
@@ -17,13 +17,13 @@
       "personas": ["carlos-hobby-farmer", "victor-gym-owner", "nina-airbnb-host"]
     },
     "shop-aisle": {
-      "scene": "retail store aisle with shoppers",
+      "scene": "retail interior: store aisle with shoppers, produce counter",
       "contains": ["person"],
       "personas": ["elena-shop-owner", "victor-gym-owner"]
     },
     "indoor-room": {
-      "scene": "indoor room with people moving around",
-      "contains": ["person"],
+      "scene": "indoor room with people moving, plus close-range face material",
+      "contains": ["person", "face"],
       "personas": ["daniel-new-dad", "olga-professional-caregiver", "ahmed-remote-son", "ray-night-shift-nurse"]
     },
     "yard": {
@@ -32,9 +32,9 @@
       "personas": ["steve-diy-tinkerer", "dana-busy-parent", "june-hoa-manager"]
     },
     "lobby": {
-      "scene": "indoor communal room, several seated/moving people",
+      "scene": "fixed CCTV entrance hall (CAVIAR): walking, browsing, meetings, bag drops, fights. Incident-flavored variants are deliberate material for alert/review flows.",
       "contains": ["person"],
-      "personas": ["priya-landlord", "june-hoa-manager", "olga-professional-caregiver"]
+      "personas": ["priya-landlord", "june-hoa-manager", "victor-gym-owner", "tom-security-nerd"]
     },
     "sidewalk": {
       "scene": "pedestrians walking toward camera, faces visible (face-recognition material)",
@@ -45,6 +45,11 @@
       "scene": "dog indoors",
       "contains": ["dog"],
       "personas": ["sofia-pet-parent"]
+    },
+    "guardian-room": {
+      "scene": "indoor room, single occupant: UR Fall clips END WITH A PERSON ON THE FLOOR (fall detection positives), urfall-adl-* are normal daily activities (negatives), caviar-rest-* are slumping/lying variants. Core elder-care test material.",
+      "contains": ["person"],
+      "personas": ["margaret-retired-teacher", "ahmed-remote-son", "olga-professional-caregiver", "ray-night-shift-nurse"]
     },
     "uxcam": {
       "scene": "legacy looping CCTV street clip (dev/sample-cctv.mp4), kept for continuity with pre-library cameras",

@@ -40,21 +40,36 @@ if ! lsof -iTCP:$API_PORT -sTCP:LISTEN >/dev/null 2>&1; then
   echo "api starting on :$API_PORT"
 fi
 
-# Feed library: every clip in dev/feeds/ becomes its own looping RTSP
-# path (scene map in testing/harness/feeds.json). fetch_feeds.sh
-# downloads the library; the legacy uxcam path stays for old cameras.
-[ -s dev/feeds/street.mp4 ] || testing/harness/fetch_feeds.sh
+# Feed library: each scene pool dev/feeds/<scene>/ publishes ONE
+# looping variant at rtsp://localhost:8554/<scene>, and the variant
+# rotates with runs_completed so the same camera sees different footage
+# on different runs. Scene map in testing/harness/feeds.json;
+# fetch_feeds.sh (re)downloads and content-gates the library.
+[ -d dev/feeds/street ] || testing/harness/fetch_feeds.sh
+
+RUN_IDX=$(python3 -c "import json;print(json.load(open('testing/state.json'))['runs_completed'])" 2>/dev/null || echo 0)
+
 publish_loop() { # $1 = file, $2 = rtsp path name
-  pgrep -f "rtsp://localhost:8554/$2" >/dev/null 2>&1 && return 0
+  if pgrep -f "rtsp://localhost:8554/$2\$" >/dev/null 2>&1; then
+    # right variant already up -> leave it; wrong one -> replace
+    pgrep -f "[-]i $1 .*rtsp://localhost:8554/$2\$" \
+      >/dev/null 2>&1 && return 0
+    pkill -f "rtsp://localhost:8554/$2\$" 2>/dev/null || true
+    sleep 1
+  fi
   nohup ffmpeg -re -stream_loop -1 -i "$1" -c copy \
     -rtsp_transport tcp -f rtsp "rtsp://localhost:8554/$2" \
     >>testing/harness/ffmpeg.log 2>&1 &
-  echo "rtsp loop: rtsp://localhost:8554/$2"
+  echo "rtsp loop: $2 <- $(basename "$1")"
 }
+
 publish_loop dev/sample-cctv.mp4 uxcam
-for f in dev/feeds/*.mp4; do
-  [ -e "$f" ] || continue
-  publish_loop "$f" "$(basename "$f" .mp4)"
+for d in dev/feeds/*/; do
+  scene="$(basename "$d")"
+  [ "$scene" = ".rejected" ] && continue
+  variants=("$d"*.mp4)
+  [ -e "${variants[0]}" ] || continue
+  publish_loop "${variants[$((RUN_IDX % ${#variants[@]}))]}" "$scene"
 done
 
 for _ in $(seq 1 30); do
