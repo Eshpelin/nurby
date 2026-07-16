@@ -44,7 +44,7 @@ F66 | blocker | kevin-impatient-exec | infra/migrations | fixed
   connection issues an implicit ROLLBACK and every DDL statement in the
   migration chain is silently undone.
   Fix: use `connectable.begin()` instead of `.connect()` so the
-  transaction commits on a clean exit. commit 1a2b3c4 (see git log).
+  transaction commits on a clean exit. commit 36483aa.
 
 ## Working well
 
