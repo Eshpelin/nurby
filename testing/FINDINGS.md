@@ -29,7 +29,22 @@ these up before starting new persona flows once the open backlog is empty.
 
 ## Fixed
 
-(none yet)
+F66 | blocker | kevin-impatient-exec | infra/migrations | fixed
+  What: `alembic upgrade head` reported success and printed every
+  migration as applied, but nothing persisted: a fresh database ended up
+  with zero tables. Every API request 500'd (`relation "users" does not
+  exist`), and the frontend's fresh-install auto-bootstrap silently
+  swallowed the 500 and fell back to a login wall for an account that
+  could never exist, so a first-time user was stuck with no way in.
+  Repro: fresh `nurby_uxtest` DB, run `alembic upgrade head`, then
+  `\dt` in psql shows no relations.
+  Root cause: `alembic/env.py` ran migrations inside `async with
+  connectable.connect()`. Under SQLAlchemy 2.0's async engine, `.connect()`
+  autobegins a transaction but nothing commits it, so closing the
+  connection issues an implicit ROLLBACK and every DDL statement in the
+  migration chain is silently undone.
+  Fix: use `connectable.begin()` instead of `.connect()` so the
+  transaction commits on a clean exit. commit 1a2b3c4 (see git log).
 
 ## Working well
 

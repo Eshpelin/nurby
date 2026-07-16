@@ -58,7 +58,11 @@ async def run_async_migrations():
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    async with connectable.connect() as connection:
+    # engine.begin() (not .connect()) so the outer async transaction
+    # commits on a clean exit. With .connect(), SQLAlchemy 2.0's async
+    # connection autobegins a transaction but nothing commits it, so the
+    # whole migration silently rolls back on close (no error, no tables).
+    async with connectable.begin() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()
 
