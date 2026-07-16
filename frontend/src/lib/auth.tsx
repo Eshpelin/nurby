@@ -47,6 +47,13 @@ interface AuthContextValue {
     password: string,
     displayName: string
   ) => Promise<void>;
+  // Redeem an admin-issued invite key to create an account and log in.
+  redeemInvite: (
+    inviteKey: string,
+    email: string,
+    password: string,
+    displayName: string
+  ) => Promise<void>;
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;
 }
 
@@ -55,7 +62,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const TOKEN_KEY = "nurby_token";
 const USER_KEY = "nurby_user";
 
-const PUBLIC_PATHS = ["/login", "/setup", "/guardian/claim"];
+const PUBLIC_PATHS = ["/login", "/setup", "/invite", "/guardian/claim"];
 
 // /share/{token} pages are anonymous share-link viewers: never bounce a
 // visitor there through login/bootstrap, and never clear their (absent)
@@ -195,6 +202,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [saveAuth, router]
   );
 
+  const redeemInvite = useCallback(
+    async (
+      inviteKey: string,
+      email: string,
+      password: string,
+      displayName: string
+    ) => {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invite_key: inviteKey,
+          email,
+          password,
+          display_name: displayName,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new ApiError(
+          extractDetail(body, "Could not create account"),
+          res.status
+        );
+      }
+      const data: TokenResponse = await res.json();
+      saveAuth(data);
+      router.replace("/");
+    },
+    [saveAuth, router]
+  );
+
   const claimAccount = useCallback(
     async (email: string, password: string, displayName: string) => {
       const headers = new Headers({ "Content-Type": "application/json" });
@@ -249,8 +287,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ user, token, loading, login, logout, register, claimAccount, authFetch }),
-    [user, token, loading, login, logout, register, claimAccount, authFetch]
+    () => ({ user, token, loading, login, logout, register, claimAccount, redeemInvite, authFetch }),
+    [user, token, loading, login, logout, register, claimAccount, redeemInvite, authFetch]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
