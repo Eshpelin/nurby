@@ -75,7 +75,7 @@ F67 | blocker | kevin-impatient-exec | frontend/auth | fixed
   kept in sync via a `useEffect` on `token`) instead of the `token`
   closure variable, so its own identity is stable and every caller —
   stale-closure or not — always sends the current token. commit
-  (this run; see git log).
+  432764f.
 
 ## Working well
 
