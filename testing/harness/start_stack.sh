@@ -40,11 +40,22 @@ if ! lsof -iTCP:$API_PORT -sTCP:LISTEN >/dev/null 2>&1; then
   echo "api starting on :$API_PORT"
 fi
 
-if ! pgrep -f "sample-cctv.mp4" >/dev/null 2>&1; then
-  nohup ffmpeg -re -stream_loop -1 -i dev/sample-cctv.mp4 -c copy \
-    -f rtsp rtsp://localhost:8554/uxcam >testing/harness/ffmpeg.log 2>&1 &
-  echo "rtsp loop publishing at rtsp://localhost:8554/uxcam"
-fi
+# Feed library: every clip in dev/feeds/ becomes its own looping RTSP
+# path (scene map in testing/harness/feeds.json). fetch_feeds.sh
+# downloads the library; the legacy uxcam path stays for old cameras.
+[ -s dev/feeds/street.mp4 ] || testing/harness/fetch_feeds.sh
+publish_loop() { # $1 = file, $2 = rtsp path name
+  pgrep -f "rtsp://localhost:8554/$2" >/dev/null 2>&1 && return 0
+  nohup ffmpeg -re -stream_loop -1 -i "$1" -c copy \
+    -rtsp_transport tcp -f rtsp "rtsp://localhost:8554/$2" \
+    >>testing/harness/ffmpeg.log 2>&1 &
+  echo "rtsp loop: rtsp://localhost:8554/$2"
+}
+publish_loop dev/sample-cctv.mp4 uxcam
+for f in dev/feeds/*.mp4; do
+  [ -e "$f" ] || continue
+  publish_loop "$f" "$(basename "$f" .mp4)"
+done
 
 for _ in $(seq 1 30); do
   curl -sf "http://localhost:$API_PORT/api/health" >/dev/null 2>&1 && { echo "stack up"; exit 0; }

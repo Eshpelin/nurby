@@ -78,3 +78,5 @@ frontend/.claude/
 # ux-army harness runtime artifacts
 testing/harness/api.log
 testing/harness/ffmpeg.log
+testing/harness/users.md
+dev/feeds/

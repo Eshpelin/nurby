@@ -1,0 +1,55 @@
+{
+  "_comment": "UX-army camera-feed library. Each feed loops at rtsp://localhost:8554/<name>. Files live in dev/feeds/ (gitignored); run testing/harness/fetch_feeds.sh to (re)download. Personas pick the feed matching their scene; two personas may share a feed but should name/frame their cameras differently.",
+  "feeds": {
+    "front-door": {
+      "scene": "people approaching one at a time, entryway framing",
+      "contains": ["person"],
+      "personas": ["margaret-retired-teacher", "jamal-apartment-renter", "kevin-impatient-exec"]
+    },
+    "street": {
+      "scene": "street with pedestrians, a cyclist and cars passing",
+      "contains": ["person", "bicycle", "car"],
+      "personas": ["tom-security-nerd", "george-ai-skeptic", "mei-power-user"]
+    },
+    "parking": {
+      "scene": "road/parking view, vehicles passing",
+      "contains": ["car"],
+      "personas": ["carlos-hobby-farmer", "victor-gym-owner", "nina-airbnb-host"]
+    },
+    "shop-aisle": {
+      "scene": "retail store aisle with shoppers",
+      "contains": ["person"],
+      "personas": ["elena-shop-owner", "victor-gym-owner"]
+    },
+    "indoor-room": {
+      "scene": "indoor room with people moving around",
+      "contains": ["person"],
+      "personas": ["daniel-new-dad", "olga-professional-caregiver", "ahmed-remote-son", "ray-night-shift-nurse"]
+    },
+    "yard": {
+      "scene": "outdoor work zone, person moving through a yard-like area",
+      "contains": ["person"],
+      "personas": ["steve-diy-tinkerer", "dana-busy-parent", "june-hoa-manager"]
+    },
+    "lobby": {
+      "scene": "indoor communal room, several seated/moving people",
+      "contains": ["person"],
+      "personas": ["priya-landlord", "june-hoa-manager", "olga-professional-caregiver"]
+    },
+    "sidewalk": {
+      "scene": "pedestrians walking toward camera, faces visible (face-recognition material)",
+      "contains": ["person", "face"],
+      "personas": ["margaret-retired-teacher", "ahmed-remote-son", "lisa-privacy-first", "george-ai-skeptic"]
+    },
+    "pets": {
+      "scene": "dog indoors",
+      "contains": ["dog"],
+      "personas": ["sofia-pet-parent"]
+    },
+    "uxcam": {
+      "scene": "legacy looping CCTV street clip (dev/sample-cctv.mp4), kept for continuity with pre-library cameras",
+      "contains": ["person", "bicycle", "car"],
+      "personas": []
+    }
+  }
+}

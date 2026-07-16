@@ -52,8 +52,15 @@ give up, and that IS the finding.
   skimmed.
 - Judge every step: unclear labels, missing affordances, dead ends,
   silent failures, missing feedback, ugly states, and also what works
-  well. Cameras: use `rtsp://localhost:8554/uxcam` (looping CCTV with
-  cars/cyclists/pedestrians) when the persona adds a real stream.
+  well.
+- Cameras: pick the feed that matches the persona's scene from
+  `testing/harness/feeds.json` (looping RTSP paths like
+  `rtsp://localhost:8554/front-door`, `.../pets`, `.../indoor-room`).
+  Margaret gets a porch, Sofia gets a dog, Carlos gets vehicles: the
+  feed must make the persona's rules plausibly fire. Name and describe
+  the camera the way the persona would ("Front door", not "front-door
+  feed"). The `sidewalk` feed has visible faces for face-recognition
+  flows.
 
 ## 3. Log findings
 
