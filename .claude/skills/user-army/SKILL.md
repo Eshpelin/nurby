@@ -60,6 +60,18 @@ give up, and that IS the finding.
   (first impressions, confusing screens, anything broken). Budget:
   roughly 50 browser interactions, one flow lived deeply beats five
   skimmed.
+- Do NOT call `resize_window`. It breaks the pane's click-coordinate
+  mapping: afterwards clicks land at a multiplied offset (measured 8x
+  at 1280x800) and silently hit the wrong element or nothing at all,
+  which reads exactly like a product bug and burns budget chasing it.
+  Only the native size maps correctly. Prefer ref-based clicks from
+  `read_page`; if you must use raw coordinates, they are in
+  screenshot-pixel space (native pane: screenshot 640 wide = 320 CSS
+  px, so coordinate = CSS x 2). The pane is ~320 CSS px wide, so
+  personas are testing the mobile layout — judge it as such.
+- Before trusting "the click did nothing", verify with a
+  `javascript_tool` probe (e.g. `btn.click()`) before logging a
+  finding. A real dead control reproduces both ways.
 - Judge every step: unclear labels, missing affordances, dead ends,
   silent failures, missing feedback, ugly states, and also what works
   well.

@@ -1,5 +1,5 @@
 {
-  "cursor": 1,
+  "cursor": 2,
   "order": [
     "kevin-impatient-exec",
     "margaret-retired-teacher",
@@ -22,7 +22,7 @@
     "olga-professional-caregiver",
     "nina-airbnb-host"
   ],
-  "runs_completed": 1,
-  "last_run": "2026-07-16T11:06:41Z",
-  "last_run_persona": "kevin-impatient-exec"
+  "runs_completed": 2,
+  "last_run": "2026-07-17T10:25:00Z",
+  "last_run_persona": "margaret-retired-teacher"
 }
