@@ -76,8 +76,9 @@ frontend/.claude/
 .venv-test/
 
 # ux-army harness runtime artifacts
-testing/harness/api.log
-testing/harness/ffmpeg.log
+# Runtime logs from the ux-army harness stack (api, ffmpeg feeds,
+# ingestion, perception).
+testing/harness/*.log
 testing/harness/users.md
 dev/feeds/
 # Recordings/thumbnails/audio written by the ux-army harness stack.
