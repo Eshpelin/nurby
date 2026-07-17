@@ -16,6 +16,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.api.camera_probe import ERROR_HINTS, parse_target, probe_tcp
+from shared import heartbeat
 from shared.auth import require_admin
 from shared.config import settings
 from shared.database import get_db
@@ -85,6 +86,59 @@ async def _check_redis() -> DoctorCheck:
         )
 
 
+_WORKER_LABELS = {
+    heartbeat.INGESTION: (
+        "Video ingestion",
+        "Nothing is connecting to your cameras, so no video is being read, "
+        "no motion is detected and nothing is recorded. Cameras will sit at "
+        "OFFLINE no matter how healthy they are.",
+        "Start it with: docker compose up -d ingestion "
+        "(or check: docker compose logs ingestion)",
+    ),
+    heartbeat.PERCEPTION: (
+        "AI perception",
+        "Nothing is analysing your video, so no people, vehicles or objects "
+        "are detected and no events or alerts fire. The timeline will stay "
+        "empty even while cameras record normally.",
+        "Start it with: docker compose up -d perception "
+        "(or check: docker compose logs perception)",
+    ),
+}
+
+
+async def _check_worker(service: str) -> DoctorCheck:
+    """Is this worker actually running?
+
+    The single most misleading failure this product had: with a worker
+    stopped, every downstream symptom pointed at the user's camera. The
+    doctor told them to check their stream URL and credentials while the
+    real answer was that nothing was running at all.
+    """
+    label, dead_detail, hint = _WORKER_LABELS[service]
+    start = time.monotonic()
+    try:
+        beat = await heartbeat.last_beat(service)
+    except Exception as exc:
+        return DoctorCheck(
+            id=f"worker:{service}", label=label, status="warn",
+            detail=f"Can't tell: redis is unreachable ({str(exc)[:80]})",
+            hint="Fix Redis first; this check reads its heartbeat from there.",
+            latency_ms=_timed(start),
+        )
+    if beat is None:
+        return DoctorCheck(
+            id=f"worker:{service}", label=label, status="fail",
+            detail=f"Not running. {dead_detail}",
+            hint=hint,
+            latency_ms=_timed(start),
+        )
+    return DoctorCheck(
+        id=f"worker:{service}", label=label, status="ok",
+        detail=f"Running (last heartbeat {beat})",
+        latency_ms=_timed(start),
+    )
+
+
 async def _check_mediamtx() -> DoctorCheck:
     start = time.monotonic()
     url = settings.mediamtx_api_url.rstrip("/")
@@ -114,7 +168,7 @@ async def _check_mediamtx() -> DoctorCheck:
         )
 
 
-async def _check_camera(camera, sem: asyncio.Semaphore) -> DoctorCheck:
+async def _check_camera(camera, sem: asyncio.Semaphore, ingestion_alive: bool) -> DoctorCheck:
     cid = f"camera:{camera.id}"
     label = f"Camera: {camera.name}"
     if camera.stream_type in _UNPROBEABLE_TYPES:
@@ -139,6 +193,21 @@ async def _check_camera(camera, sem: asyncio.Semaphore) -> DoctorCheck:
         # "Everything looks healthy" while the wall shows OFFLINE.
         live_status = (camera.status or "").lower()
         if camera.enabled and live_status in ("offline", "error"):
+            # camera.status is only meaningful while ingestion is alive to
+            # maintain it. With the worker stopped it's just a stale row,
+            # and blaming the user's cabling/credentials for it sends them
+            # to debug a camera that is fine. Defer to the worker check.
+            if not ingestion_alive:
+                return DoctorCheck(
+                    id=cid, label=label, status="warn",
+                    detail=(
+                        f"{host}:{port} answers. Can't tell if this camera is "
+                        f"healthy: video ingestion is not running, so its "
+                        f"status ({live_status}) is stale."
+                    ),
+                    hint="Fix 'Video ingestion' above, then re-run the doctor.",
+                    latency_ms=_timed(start),
+                )
             return DoctorCheck(
                 id=cid, label=label, status="fail",
                 detail=(
@@ -293,6 +362,28 @@ async def run_doctor(
         (await db.execute(select(Provider).where(Provider.active.is_(True)))).scalars().all()
     )
 
+    # Resolve worker liveness before the camera checks: a camera's stored
+    # status is only trustworthy while ingestion is alive to maintain it,
+    # so the camera checks need this verdict to avoid blaming the user's
+    # camera for a stopped worker. It's one cheap redis GET.
+    worker_checks = list(
+        await asyncio.gather(
+            _run_with_timeout(
+                _check_worker(heartbeat.INGESTION),
+                f"worker:{heartbeat.INGESTION}",
+                _WORKER_LABELS[heartbeat.INGESTION][0],
+            ),
+            _run_with_timeout(
+                _check_worker(heartbeat.PERCEPTION),
+                f"worker:{heartbeat.PERCEPTION}",
+                _WORKER_LABELS[heartbeat.PERCEPTION][0],
+            ),
+        )
+    )
+    ingestion_alive = next(
+        c.status == "ok" for c in worker_checks if c.id == f"worker:{heartbeat.INGESTION}"
+    )
+
     sem = asyncio.Semaphore(_CAMERA_CONCURRENCY)
     jobs = [
         _run_with_timeout(_check_db(db), "db", "Database"),
@@ -303,11 +394,15 @@ async def run_doctor(
         _run_with_timeout(_check_disk(), "disk", "Disk space"),
     ]
     jobs += [
-        _run_with_timeout(_check_camera(c, sem), f"camera:{c.id}", f"Camera: {c.name}")
+        _run_with_timeout(
+            _check_camera(c, sem, ingestion_alive), f"camera:{c.id}", f"Camera: {c.name}"
+        )
         for c in cameras
     ]
     jobs += [
         _run_with_timeout(_check_provider(p), f"provider:{p.id}", f"AI provider: {p.name}")
         for p in providers
     ]
-    return list(await asyncio.gather(*jobs))
+    # Workers first: when one is down it is the cause of most of what
+    # follows, and it should be the first thing read.
+    return worker_checks + list(await asyncio.gather(*jobs))

@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.vlm_queue import get_vlm_stats
+from shared import heartbeat
 from shared.auth import get_current_user, require_admin
 from shared.config import settings
 from shared.database import get_db
@@ -145,10 +146,19 @@ async def get_health(_current_user: User = Depends(get_current_user)):
 
     gpus = _read_nvidia_smi()
 
+    # Worker liveness rides along on the poll the footer already makes, so
+    # the UI can say "nothing is running" instead of "nothing happened
+    # yet" - which is what it used to tell users while ingestion was dead.
+    workers = {
+        "ingestion": await heartbeat.is_alive(heartbeat.INGESTION),
+        "perception": await heartbeat.is_alive(heartbeat.PERCEPTION),
+    }
+
     return {
         "cpu_percent": round(cpu, 1),
         "cpu_count": psutil.cpu_count(logical=True),
         "load_avg": load_avg,
+        "workers": workers,
         "mem": {
             "total_bytes": mem.total,
             "used_bytes": mem.used,

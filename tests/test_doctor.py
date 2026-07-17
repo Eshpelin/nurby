@@ -52,7 +52,7 @@ async def test_check_camera_skips_file_type():
     cam.id = "x"
     cam.name = "Demo"
     cam.stream_type = "file"
-    result = await doctor._check_camera(cam, asyncio.Semaphore(1))
+    result = await doctor._check_camera(cam, asyncio.Semaphore(1), True)
     assert result.status == "skip"
 
 
@@ -67,7 +67,7 @@ async def test_check_camera_unreachable():
         doctor, "probe_tcp",
         return_value={"ok": False, "error_code": "dns", "detail": "Could not resolve front.local"},
     ):
-        result = await doctor._check_camera(cam, asyncio.Semaphore(1))
+        result = await doctor._check_camera(cam, asyncio.Semaphore(1), True)
     assert result.status == "fail"
     assert "resolve" in result.detail
     assert result.hint  # dns hint from ERROR_HINTS
@@ -98,3 +98,68 @@ async def test_check_provider_uses_shared_test():
     assert result.status == "fail"
     assert result.detail == "model missing"
     assert result.latency_ms == 12
+
+
+@pytest.mark.asyncio
+async def test_check_worker_reports_not_running():
+    with patch.object(doctor.heartbeat, "last_beat", new=AsyncMock(return_value=None)):
+        result = await doctor._check_worker(doctor.heartbeat.INGESTION)
+    assert result.status == "fail"
+    assert "Not running" in result.detail
+    # The hint must name the thing to start, not send the user to their camera.
+    assert "docker compose up -d ingestion" in result.hint
+
+
+@pytest.mark.asyncio
+async def test_check_worker_ok_when_beating():
+    with patch.object(
+        doctor.heartbeat, "last_beat", new=AsyncMock(return_value="2026-07-17T04:00:00+00:00")
+    ):
+        result = await doctor._check_worker(doctor.heartbeat.PERCEPTION)
+    assert result.status == "ok"
+
+
+@pytest.mark.asyncio
+async def test_check_worker_warns_when_redis_unreachable():
+    # Can't-tell must not read as "the worker is dead".
+    with patch.object(
+        doctor.heartbeat, "last_beat", new=AsyncMock(side_effect=RuntimeError("no redis"))
+    ):
+        result = await doctor._check_worker(doctor.heartbeat.INGESTION)
+    assert result.status == "warn"
+
+
+@pytest.mark.asyncio
+async def test_offline_camera_does_not_blame_user_when_ingestion_down():
+    """The regression that made margaret's run untestable: with ingestion
+    stopped, the doctor told the user to check their stream URL and
+    credentials for a camera that was perfectly fine."""
+    cam = MagicMock()
+    cam.id = "x"
+    cam.name = "Front Door"
+    cam.stream_type = "rtsp"
+    cam.stream_url = "rtsp://localhost:8554/front-door"
+    cam.enabled = True
+    cam.status = "offline"
+    with patch.object(doctor, "probe_tcp", return_value={"ok": True}):
+        result = await doctor._check_camera(cam, asyncio.Semaphore(1), ingestion_alive=False)
+    assert result.status == "warn"
+    assert "ingestion is not running" in result.detail
+    assert "credentials" not in (result.hint or "")
+
+
+@pytest.mark.asyncio
+async def test_offline_camera_still_blames_camera_when_ingestion_up():
+    """The flip side: with ingestion alive, an offline camera really is
+    the camera's problem and should still say so."""
+    cam = MagicMock()
+    cam.id = "x"
+    cam.name = "Front Door"
+    cam.stream_type = "rtsp"
+    cam.stream_url = "rtsp://localhost:8554/front-door"
+    cam.enabled = True
+    cam.status = "offline"
+    with patch.object(doctor, "probe_tcp", return_value={"ok": True}):
+        result = await doctor._check_camera(cam, asyncio.Semaphore(1), ingestion_alive=True)
+    assert result.status == "fail"
+    assert "credentials" in result.hint

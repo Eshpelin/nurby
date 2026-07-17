@@ -42,6 +42,37 @@ these up before starting new persona flows once the open backlog is empty.
 
 ## Fixed
 
+F72 | major | margaret-retired-teacher | product/observability | fixed
+  What: the PRODUCT half of F68, and the more important half. With a
+  background worker stopped, nothing anywhere said so. The dashboard
+  said "Nothing happened yet" — indistinguishable from a quiet day —
+  and, worse, "Some cameras are offline. Check their stream URLs or
+  credentials", actively sending the user to debug a camera that was
+  perfectly fine. The System doctor, whose entire job is answering "why
+  isn't this working?", had no check for ingestion or perception at
+  all: it reported the camera as the failure and told the user to
+  verify the stream path and credentials. A dead worker and a broken
+  camera were indistinguishable from every surface.
+  Repro: stop ingestion, load the dashboard, run the doctor. Nothing
+  mentions the worker; everything blames the camera.
+  Root cause: nothing ever asked whether the workers were alive.
+  camera.status is maintained BY ingestion, so with ingestion dead it's
+  just a stale row that the doctor read as fact.
+  Fix: `shared/heartbeat.py` — each worker writes a TTL key to Redis on
+  a timer, so a crashed OR hung worker stops beating and reads as down,
+  with no clock math. Doctor gains "Video ingestion" / "AI perception"
+  checks, listed first because a dead worker causes most of what
+  follows. The camera check now takes ingestion liveness and, when it's
+  down, warns that the camera's status is stale instead of blaming the
+  user's credentials. /api/system/health carries worker state on the
+  poll the footer already makes, and the dashboard shows a real banner
+  plus an honest "Nothing is running" empty state.
+  Credit: spotted by the user, who asked the right question about F68 —
+  "if the services aren't up there should be an error, right? It
+  shouldn't just say nothing happened yet." I had only fixed the
+  harness and missed that the product had the same blind spot.
+  commit (this run; see git log).
+
 F68 | blocker | margaret-retired-teacher | harness | fixed
   What: no camera could ever come online and no detection was ever
   produced, on any run, for any persona. The dashboard just said

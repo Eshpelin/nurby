@@ -27,6 +27,7 @@ import {
   type ObservationGroup as CoalesceGroup,
 } from "@/lib/observation-grouping";
 import { SystemHealthFooter } from "@/components/SystemHealthFooter";
+import { useWorkerHealth } from "@/lib/useWorkerHealth";
 import { LLMErrorToasts } from "@/components/LLMErrorToasts";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SetupChecklistCard } from "@/components/SetupChecklistCard";
@@ -628,6 +629,7 @@ const SEARCH_HINTS = [
 function DashboardContent() {
   const { authFetch, token } = useAuth();
   const { status: wsStatus } = useWebSocket();
+  const { down: workersDown } = useWorkerHealth();
   const searchParams = useSearchParams();
   const initialCamera = searchParams.get("camera");
   const [searchHint, setSearchHint] = useState(() => SEARCH_HINTS[Math.floor(Math.random() * SEARCH_HINTS.length)]);
@@ -1527,6 +1529,32 @@ function DashboardContent() {
       <div ref={dashboardWrapRef} className="flex flex-col lg:flex-row gap-4 lg:flex-1 lg:min-h-0 bg-background">
         {/* LEFT. Customizable camera wall (the main area). */}
         <div className="lg:flex-1 min-w-0 flex flex-col lg:min-h-0">
+          {/* A stopped worker means nothing is watching, however healthy
+              the cameras look. Say so loudly rather than letting the user
+              read an empty timeline as a quiet day. */}
+          {workersDown.length > 0 && (
+            <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 mb-4 flex items-start gap-2.5">
+              <span className="text-danger text-sm leading-none mt-0.5">⚠</span>
+              <div className="text-xs leading-relaxed">
+                <span className="font-semibold text-danger">
+                  {workersDown.join(" and ")} {workersDown.length > 1 ? "are" : "is"} not running.
+                </span>{" "}
+                <span className="text-muted-foreground">
+                  Nothing is being {workersDown.includes("video ingestion") ? "recorded" : "analysed"} right
+                  now, so the timeline stays empty and alerts will not fire — even
+                  though your cameras may be perfectly fine. Run{" "}
+                  <code className="px-1 py-0.5 rounded bg-muted font-mono">
+                    docker compose up -d {workersDown.includes("video ingestion") ? "ingestion" : "perception"}
+                  </code>
+                  , or open{" "}
+                  <Link href="/settings" className="text-accent hover:underline">
+                    System doctor
+                  </Link>{" "}
+                  to see the full picture.
+                </span>
+              </div>
+            </div>
+          )}
           <SetupChecklistCard onAddCamera={() => { setModalInitialType(undefined); setModalOpen(true); }} />
           <AskComposerCard />
           <CameraWall
@@ -2046,9 +2074,20 @@ function DashboardContent() {
                       <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                     </svg>
                   </div>
-                  <h3 className="text-sm font-semibold mb-1">Nothing happened yet</h3>
+                  <h3 className="text-sm font-semibold mb-1">
+                    {workersDown.length > 0 ? "Nothing is running" : "Nothing happened yet"}
+                  </h3>
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-4 leading-relaxed">
-                    {cameras.some((c) => c.status === "offline")
+                    {/* Worker state first: while a worker is down every camera
+                        looks broken, and telling the user to check stream URLs
+                        and credentials sends them to debug hardware that is
+                        fine. Only blame the camera once we know something is
+                        actually watching it. */}
+                    {workersDown.length > 0
+                      ? `This is not a quiet day: ${workersDown.join(" and ")} ${
+                          workersDown.length > 1 ? "are" : "is"
+                        } not running, so nothing can be detected. Your cameras may be fine.`
+                      : cameras.some((c) => c.status === "offline")
                       ? "Some cameras are offline. Check their stream URLs or credentials."
                       : "Cameras are connected and watching. Events will appear here as soon as something moves."}
                   </p>

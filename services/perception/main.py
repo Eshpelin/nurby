@@ -18,6 +18,7 @@ from services.perception.live_detector import LiveDetector
 from services.perception.pipeline import PerceptionPipeline
 from services.perception.summarizer import CameraSummarizer
 from services.perception.vlm_enrichment_worker import EnrichmentManager
+from shared import heartbeat
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
 logger = logging.getLogger("nurby.perception")
@@ -49,6 +50,10 @@ async def main():
     from services.perception import incident_tracker as _inc_mod
     _inc_mod.set_rule_event_sink(pipeline.rule_engine.evaluate)
     await asyncio.gather(
+        # Lets the doctor tell "this worker is dead" apart from "there is
+        # genuinely nothing to see". Without it, a stopped perception
+        # service looks exactly like a quiet day.
+        heartbeat.beat_forever(heartbeat.PERCEPTION),
         pipeline.run(),
         status_watcher.run(),
         live.run(),
