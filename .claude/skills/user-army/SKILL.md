@@ -22,10 +22,15 @@ scheduled run, so commit state early and often.
 5. Read `testing/state.json`, `testing/FINDINGS.md`, and the persona file
    `testing/personas/<order[cursor]>.md`. Read the persona's most recent
    report in `testing/runs/` if one exists, to avoid repeating goals.
-6. Credentials for existing test users are in `testing/harness/users.md`
-   (create it on first run). First run ever: complete product setup as
-   the admin persona. Later personas join via invite keys created by the
-   admin account, which dogfoods the invite flow every time.
+6. Every persona already has a real login — check
+   `testing/harness/users.md` for the email/password before doing
+   anything else. Just log in as the persona whose turn it is; don't
+   register or hunt for an invite key. (All 20 were seeded in one batch
+   via `testing/harness/seed_persona_accounts.py` on 2026-07-17, after
+   the first run's persona hit a login screen for an account that
+   didn't exist yet. If `users.md` is ever missing a persona for some
+   reason, re-run that script — it's idempotent — before falling back
+   to the invite flow.)
 
 ## 1. Inherited backlog first
 
@@ -44,8 +49,13 @@ Type realistic data at realistic speed. When the persona would give up,
 give up, and that IS the finding.
 
 - The DB persists across runs on purpose: returning personas find their
-  old cameras and rules; new personas register fresh via invite key.
-  Record any new credentials in `testing/harness/users.md`.
+  old cameras and rules. Everyone logs into their pre-seeded account
+  from `testing/harness/users.md` — no registration needed. Exception:
+  if a persona's own goals include creating a *second* account for
+  someone else (e.g. ahmed-remote-son inviting his mother as a
+  guardian), that invite-and-claim flow is still exactly what you
+  should test live; record whatever new credentials that produces in
+  `users.md`.
 - Navigate with `read_page` primarily; screenshot at judgment moments
   (first impressions, confusing screens, anything broken). Budget:
   roughly 50 browser interactions, one flow lived deeply beats five
