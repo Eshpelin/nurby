@@ -80,6 +80,8 @@ frontend/.claude/
 # ingestion, perception).
 testing/harness/*.log
 testing/harness/users.md
+# Generated persona logins. Never commit: the repo is public.
+testing/harness/credentials.json
 dev/feeds/
 # Recordings/thumbnails/audio written by the ux-army harness stack.
 dev/uxtest-data/

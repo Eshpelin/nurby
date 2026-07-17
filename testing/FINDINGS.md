@@ -18,28 +18,20 @@ F<id> | severity(blocker/major/minor/polish) | persona | area | status(open/fixe
 
 ## Open backlog
 
-F70 | minor | margaret-retired-teacher | frontend/add-camera | open
-  What: in Add Camera the Name field's placeholder is "Front Door" —
-  a plausible real answer, not an example — so it reads as already
-  filled in, while the submit button is disabled under the hint "Enter
-  a Name above to continue." A low-tech user sees a field that says
-  "Front Door" and a button insisting she enter a name.
-  Repro: dashboard → checklist "Add your own camera" → look at Name.
-  Fix: pending. Suggest a placeholder that can't be mistaken for a
-  value (e.g. "e.g. Front Door"), matching how Stream URL's placeholder
-  is obviously an example.
-
 F71 | polish | margaret-retired-teacher | frontend/add-camera | open
-  What: "Don't know your camera's URL? Pick your brand" opens a grid of
-  ~25 brands with no search box and no "I don't know / help me find it"
-  escape. It only helps a user who already knows their brand — but the
-  users who don't know their URL are disproportionately the ones who
-  didn't install the camera themselves (Margaret's daughter mounted
-  hers and left).
+  What: NOT "asking for a stream URL is bad" — asking is fine and
+  normal. The narrow point: the product already decided the raw URL is
+  a barrier for some users, which is why it ships both a brand picker
+  and a Scan Network tab. But the brand picker — the escape hatch —
+  opens a ~25-item grid with no filter box and no "I don't know my
+  brand" path, and never mentions Scan Network, which is the thing that
+  would actually solve it. So the one affordance built for the
+  don't-know-my-URL user dead-ends for the subset who also don't know
+  the brand (didn't install the camera themselves).
   Repro: Add Camera → Stream URL → Pick your brand → scroll.
-  Fix: pending. Suggest a filter box plus a fallback pointing at the
-  Scan Network tab, which already solves exactly this case but is not
-  referenced from here.
+  Fix: pending. A filter box, and a line pointing at Scan Network.
+  Low priority: Scan Network already exists and works; this is only
+  about discoverability from the brand list.
 
 ## Deferred features
 

@@ -24,15 +24,19 @@ Logged in cleanly. Dashboard greeted her with "Finish setting up Nurby
 do. Good.
 
 She clicked the first item, "Demo camera only. Add your own camera".
-The Add Camera modal opened, and the very first thing she read was a
-Name field showing **Front Door** — precisely the name she wanted —
-above a greyed-out button reading "Enter a Name above to continue."
-It's a placeholder, not a value (confirmed: `value === ""`). For a user
-who reads every word and trusts what's on screen, that's a direct
-contradiction: the field says Front Door, the button says enter a name.
-Logged as **F70**. Compare Stream URL, whose placeholder
-(`rtsp://192.168.1.100:554/stream1`) is unmistakably an example — the
-Name field should read the same way.
+The Add Camera modal opened.
+
+(I originally logged an F70 here claiming the Name field's "Front Door"
+placeholder reads as a filled value against a disabled "Enter a Name
+above to continue" button. **Retracted — it was wrong.** The field has a
+proper `<label>Name</label>` and the placeholder is styled
+`placeholder:text-muted-foreground`, i.e. dimmed and visually distinct
+from real input: the textbook-correct pattern. I called it off a
+320px-wide screenshot where the muted grey rendered brighter than it
+is, rather than checking the styling. Noting it here because the
+failure mode — inferring a UI defect from a bad screenshot instead of
+measuring — is the same one that nearly produced a bogus "checklist
+item does nothing" finding in this very run.)
 
 She typed the name, then hit the real wall: Stream URL. "RTSP", "HTTP
 MJPEG", "HLS", "ONVIF" — pure jargon, exactly what stops her. But the
@@ -92,10 +96,11 @@ the "detection works without AI" banner promises.
   every persona.
 - F69 (major, fixed): uxtest stack shared Redis db 0 with the main dev
   stack → perception replayed foreign keyframes into the uxtest DB.
-- F70 (minor, open): Add Camera's Name placeholder "Front Door" reads
-  as a filled value while the disabled button demands a name.
 - F71 (polish, open): brand picker is an unsearchable ~25-item grid
   with no "I don't know" escape, and never points at Scan Network.
+- F70: RETRACTED. Claimed the Name placeholder reads as a filled value;
+  the field is correctly labelled with a muted placeholder. My error,
+  from reading a low-res screenshot instead of the styling.
 
 ## What worked
 
@@ -124,8 +129,9 @@ effectively testing the mobile layout — worth knowing when judging
 
 ## Margaret's verdict
 
-"It told me exactly what to do next, which I appreciated. But it asked
-me for a name when the box already said Front Door, and then it wanted
-an address for the camera that I've never seen in my life — my daughter
-put it up. When I finally got it in, it did show me that someone came
-to the door, and that's really all I wanted."
+"It told me exactly what to do next, which I appreciated. Then it
+wanted an address for the camera — I've never seen such a thing in my
+life, my daughter put it up. It offered to let me pick the make
+instead, which was kind, but I don't know the make either. When I
+finally got it in, it did show me that someone came to the door, and
+that's really all I wanted."
