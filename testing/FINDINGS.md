@@ -18,7 +18,28 @@ F<id> | severity(blocker/major/minor/polish) | persona | area | status(open/fixe
 
 ## Open backlog
 
-(none yet)
+F70 | minor | margaret-retired-teacher | frontend/add-camera | open
+  What: in Add Camera the Name field's placeholder is "Front Door" —
+  a plausible real answer, not an example — so it reads as already
+  filled in, while the submit button is disabled under the hint "Enter
+  a Name above to continue." A low-tech user sees a field that says
+  "Front Door" and a button insisting she enter a name.
+  Repro: dashboard → checklist "Add your own camera" → look at Name.
+  Fix: pending. Suggest a placeholder that can't be mistaken for a
+  value (e.g. "e.g. Front Door"), matching how Stream URL's placeholder
+  is obviously an example.
+
+F71 | polish | margaret-retired-teacher | frontend/add-camera | open
+  What: "Don't know your camera's URL? Pick your brand" opens a grid of
+  ~25 brands with no search box and no "I don't know / help me find it"
+  escape. It only helps a user who already knows their brand — but the
+  users who don't know their URL are disproportionately the ones who
+  didn't install the camera themselves (Margaret's daughter mounted
+  hers and left).
+  Repro: Add Camera → Stream URL → Pick your brand → scroll.
+  Fix: pending. Suggest a filter box plus a fallback pointing at the
+  Scan Network tab, which already solves exactly this case but is not
+  referenced from here.
 
 ## Deferred features
 
@@ -28,6 +49,44 @@ these up before starting new persona flows once the open backlog is empty.
 (none yet)
 
 ## Fixed
+
+F68 | blocker | margaret-retired-teacher | harness | fixed
+  What: no camera could ever come online and no detection was ever
+  produced, on any run, for any persona. The dashboard just said
+  "Nothing happened yet" and "Some cameras are offline. Check their
+  stream URLs or credentials" forever. This silently made the core of
+  the product — did anyone come to the door, did a rule fire, who was
+  here yesterday — untestable for every persona in the rotation.
+  Repro: add a camera pointed at a harness feed, wait: status stays
+  "offline", /api/observations stays empty.
+  Root cause: `docker compose config --services` defines `ingestion`
+  and `perception`, but start_stack.sh only ever started `postgres
+  redis mediamtx` plus the API. Nothing consumed the RTSP feeds. The
+  compose definitions couldn't be used as-is either: they hardcode the
+  `nurby` database and resolve peers by compose service name
+  (postgres:5432, rtsp://mediamtx:8554), none of which points at the
+  uxtest stack, and rtsp://localhost:8554/... (what a persona actually
+  types into Add Camera) does not resolve from inside a container.
+  Fix: run both on the host from .venv-test, like the API already is,
+  with uxtest DB/Redis/media-path env. Verified: Front Door reaches
+  "recording", perception logs "Detections ... person", and the
+  dashboard digest reports "Activity was recorded on Demo Camera,
+  Front Door. Detections included car, person, bicycle." commit
+  (this run; see git log).
+
+F69 | major | margaret-retired-teacher | harness | fixed
+  What: uxtest perception wrote observations for cameras that don't
+  exist in nurby_uxtest — `Living Room` and `Backyard`, which are rows
+  in the main `nurby` dev database.
+  Repro: run perception against nurby_uxtest while the main dev stack
+  has previously run; watch it log keyframes for foreign camera ids.
+  Root cause: motion keyframes travel over the Redis STREAM
+  `nurby:motion`, and both stacks defaulted to redis://localhost:6379/0.
+  Streams persist, so uxtest perception woke up and replayed the dev
+  stack's leftover backlog into the uxtest DB.
+  Fix: pin the whole uxtest stack (API, ingestion, perception) to its
+  own Redis index, redis://localhost:6379/1. Verified: perception now
+  only logs the two uxtest camera ids. commit (this run; see git log).
 
 F66 | blocker | kevin-impatient-exec | infra/migrations | fixed
   What: `alembic upgrade head` reported success and printed every
@@ -93,3 +152,14 @@ persona, flow, date.
   genuinely one-click-ish — pre-filled name, three fields, one submit.
 - kevin-impatient-exec, 2026-07-16: dashboard answers "did anything
   happen today?" directly on load with no navigation required.
+  RETRACTED 2026-07-17: the honest "Nothing happened yet" Kevin saw was
+  only honest by accident — nothing had happened because the harness
+  never ran ingestion/perception at all (F68). The layout claim still
+  holds; the "it correctly reports quiet periods" implication doesn't,
+  and is now genuinely testable for the first time.
+- margaret-retired-teacher, 2026-07-17: with F68 fixed, the dashboard
+  earns that claim properly — the wall shows Front Door REC at
+  1280x720/15fps, the digest names real detections ("car, person,
+  bicycle"), and the timeline attributes "Person seen 1×" to the right
+  camera, all without configuring any AI provider. Matches the
+  "detection works without AI" promise the banner makes.

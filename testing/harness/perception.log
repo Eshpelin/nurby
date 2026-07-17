@@ -1,0 +1,1121 @@
+2026-07-17 10:24:35,622 [nurby.perception] INFO Starting Nurby perception service
+2026-07-17 10:24:35,625 [nurby.perception.summarizer] INFO summarizer started
+2026-07-17 10:24:35,626 [nurby.perception.conversation] INFO conversation finalizer started
+2026-07-17 10:24:35,626 [nurby.perception.incident] INFO incident finalizer started
+2026-07-17 10:24:35,627 [nurby.perception.journey] INFO journey finalizer started
+2026-07-17 10:24:35,627 [nurby.perception.daily_digest] INFO daily digest scheduler started
+2026-07-17 10:24:35,627 [nurby.perception.vlm_enrichment] INFO VLM enrichment worker started (idle backfill)
+2026-07-17 10:24:35,660 [nurby.perception.camera_status] INFO Watching camera availability on 'nurby:camera_status'
+2026-07-17 10:24:35,661 [nurby.perception.live_detector] INFO Live detector listening on 'nurby:live_motion'
+2026-07-17 10:24:35,736 [nurby.perception.pipeline] INFO VLM backlog wired (capacity=50, frame_ttl=1800s)
+2026-07-17 10:24:35,741 [nurby.events.engine] INFO Listening for rule invalidations on nurby:rules:invalidate
+2026-07-17 10:24:35,742 [nurby.perception.pipeline] INFO Consumer group 'perception' already exists
+2026-07-17 10:24:35,742 [nurby.perception.pipeline] INFO Listening for motion keyframes on 'nurby:motion'
+2026-07-17 10:24:37,534 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.032)
+2026-07-17 10:24:38,461 [nurby.perception.detector] INFO Loading YOLO model 'yolov8n.pt' (from services/perception/models/yolov8n.pt)
+2026-07-17 10:24:38,535 [nurby.perception.detector] INFO YOLO model 'yolov8n.pt' loaded and cached
+2026-07-17 10:24:39,189 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 4 cars, 3 bicycles
+2026-07-17 10:24:39,189 [nurby.perception.plates] WARNING easyocr not installed. License plate OCR disabled. Install with: pip install easyocr
+2026-07-17 10:24:39,198 [nurby.perception.vlm_gate] WARNING open_clip / torch not installed; CLIP gate disabled. VLM gate falls open. install open_clip_torch to enable.
+2026-07-17 10:24:39,601 [nurby.perception.faces] INFO InsightFace 'buffalo_l' loaded (CPU, 640x640 detection)
+2026-07-17 10:24:39,748 [nurby.perception.reid] WARNING torchreid not installed. Body re-identification disabled. Install with. pip install torchreid
+2026-07-17 10:24:39,847 [nurby.perception.pipeline] INFO Stored observation f5deaecb-355a-4bc1-9c82-b334747cb122 for camera 1218670d-6115-4286-b8c3-8e356ce52d27 with 16 detections
+2026-07-17 10:24:40,515 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.041)
+2026-07-17 10:24:40,563 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 10 cars
+2026-07-17 10:24:40,701 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:24:40,790 [nurby.perception.pipeline] INFO Stored observation 778be836-7e54-4ffb-ad36-800665213531 for camera 1218670d-6115-4286-b8c3-8e356ce52d27 with 10 detections
+2026-07-17 10:24:42,567 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.017)
+2026-07-17 10:24:42,608 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:24:42,800 [nurby.perception.pipeline] INFO Stored observation a0ae2787-e9fd-4ea2-a59f-955a0663c1c3 for camera 72ba9745-720a-43a9-95b9-ff759f517360 with 1 detections
+2026-07-17 10:24:43,513 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.034)
+2026-07-17 10:24:43,559 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 6 persons, 6 cars, 4 bicycles
+2026-07-17 10:24:43,749 [nurby.perception.pipeline] INFO Stored observation 2368df6e-a789-4594-9324-e195107b4b67 for camera 1218670d-6115-4286-b8c3-8e356ce52d27 with 16 detections
+2026-07-17 10:24:47,567 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.052)
+2026-07-17 10:24:47,603 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:24:47,726 [nurby.perception.pipeline] INFO Extended observation a0ae2787-e9fd-4ea2-a59f-955a0663c1c3 on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:24:50,670 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.094)
+2026-07-17 10:24:50,713 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 6 cars, 3 bicycles
+/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/insightface/utils/face_align.py:23: FutureWarning: `estimate` is deprecated since version 0.26 and will be removed in version 2.2. Please use `SimilarityTransform.from_estimate` class constructor instead.
+  tform.estimate(lmk, dst)
+2026-07-17 10:24:51,162 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:24:51,190 [nurby.perception.pipeline] INFO Extended observation 2368df6e-a789-4594-9324-e195107b4b67 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:24:53,679 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.045)
+2026-07-17 10:24:53,725 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 10 cars, person
+2026-07-17 10:24:53,896 [nurby.perception.pipeline] INFO Extended observation 2368df6e-a789-4594-9324-e195107b4b67 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, car,person)
+2026-07-17 10:24:55,635 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:24:56,681 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.025)
+2026-07-17 10:24:56,721 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 12 cars, 2 persons, bicycle
+2026-07-17 10:24:56,899 [nurby.perception.pipeline] INFO Extended observation 2368df6e-a789-4594-9324-e195107b4b67 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:25:01,909 [nurby.perception.pipeline] ERROR Error reading from Redis stream
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/pipeline.py", line 137, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:25:03,925 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.094)
+2026-07-17 10:25:03,967 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 6 cars, 3 bicycles
+2026-07-17 10:25:04,231 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:25:04,265 [nurby.perception.pipeline] INFO Extended observation 2368df6e-a789-4594-9324-e195107b4b67 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:25:06,403 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.024)
+2026-07-17 10:25:06,444 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 cars, person
+2026-07-17 10:25:06,612 [nurby.perception.pipeline] INFO Extended observation 2368df6e-a789-4594-9324-e195107b4b67 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, car,person)
+2026-07-17 10:25:07,895 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.032)
+2026-07-17 10:25:07,924 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:25:08,060 [nurby.perception.pipeline] INFO Extended observation a0ae2787-e9fd-4ea2-a59f-955a0663c1c3 on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:25:08,358 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:25:09,399 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.039)
+2026-07-17 10:25:09,448 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 cars, 6 persons, 2 bicycles
+2026-07-17 10:25:09,794 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:25:09,852 [nurby.perception.pipeline] INFO Extended observation 2368df6e-a789-4594-9324-e195107b4b67 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:25:14,892 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.012)
+2026-07-17 10:25:14,927 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. No relevant objects detected
+2026-07-17 10:25:15,092 [nurby.perception.pipeline] INFO Stored observation 1785a36a-e4b9-4c07-94af-522abd69a32a for camera 72ba9745-720a-43a9-95b9-ff759f517360 with 0 detections
+2026-07-17 10:25:16,532 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.094)
+2026-07-17 10:25:16,577 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 6 cars, 3 bicycles
+2026-07-17 10:25:16,780 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:25:16,810 [nurby.perception.pipeline] INFO Extended observation 2368df6e-a789-4594-9324-e195107b4b67 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:25:19,557 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.023)
+2026-07-17 10:25:19,587 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 11 cars
+2026-07-17 10:25:19,745 [nurby.perception.pipeline] INFO Stored observation 3d1109c3-bf9c-4155-9b66-cc539c1c47e8 for camera 1218670d-6115-4286-b8c3-8e356ce52d27 with 11 detections
+2026-07-17 10:25:21,496 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:25:23,575 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.011)
+2026-07-17 10:25:23,620 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 7 cars, bicycle, person
+2026-07-17 10:25:23,773 [nurby.perception.pipeline] INFO Stored observation ec41b3b6-5699-405b-a658-9be996fed8a2 for camera 1218670d-6115-4286-b8c3-8e356ce52d27 with 9 detections
+2026-07-17 10:25:24,226 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.027)
+2026-07-17 10:25:24,262 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:25:24,455 [nurby.perception.pipeline] INFO Stored observation d18d1ce8-6209-4d12-ab8d-8827150d28ff for camera 72ba9745-720a-43a9-95b9-ff759f517360 with 1 detections
+2026-07-17 10:25:27,246 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.010)
+2026-07-17 10:25:27,292 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:25:27,428 [nurby.perception.pipeline] INFO Extended observation d18d1ce8-6209-4d12-ab8d-8827150d28ff on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:25:31,662 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:25:31,856 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.094)
+2026-07-17 10:25:31,898 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 6 cars, 3 bicycles
+2026-07-17 10:25:32,128 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:25:32,159 [nurby.perception.pipeline] INFO Extended observation ec41b3b6-5699-405b-a658-9be996fed8a2 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:25:32,230 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.019)
+2026-07-17 10:25:32,271 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:25:32,438 [nurby.perception.pipeline] INFO Extended observation d18d1ce8-6209-4d12-ab8d-8827150d28ff on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:25:34,860 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.047)
+2026-07-17 10:25:34,898 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 8 cars, person
+2026-07-17 10:25:35,074 [nurby.perception.pipeline] INFO Extended observation ec41b3b6-5699-405b-a658-9be996fed8a2 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, car,person)
+2026-07-17 10:25:37,868 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.010)
+2026-07-17 10:25:37,911 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 cars, 2 persons
+2026-07-17 10:25:38,078 [nurby.perception.pipeline] INFO Extended observation ec41b3b6-5699-405b-a658-9be996fed8a2 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, car,person)
+2026-07-17 10:25:39,233 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.024)
+2026-07-17 10:25:39,276 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:25:39,454 [nurby.perception.pipeline] INFO Extended observation d18d1ce8-6209-4d12-ab8d-8827150d28ff on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:25:44,467 [nurby.perception.pipeline] ERROR Error reading from Redis stream
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/pipeline.py", line 137, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:25:45,306 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:25:46,481 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.094)
+2026-07-17 10:25:46,527 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 6 cars, 3 bicycles
+2026-07-17 10:25:46,793 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:25:46,827 [nurby.perception.pipeline] INFO Extended observation ec41b3b6-5699-405b-a658-9be996fed8a2 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:25:48,518 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.025)
+2026-07-17 10:25:48,597 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 10 cars
+2026-07-17 10:25:48,789 [nurby.perception.pipeline] INFO Stored observation fbebfb3b-5fa9-4841-aaa7-4b27aab55e8c for camera 1218670d-6115-4286-b8c3-8e356ce52d27 with 10 detections
+2026-07-17 10:25:49,227 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.020)
+2026-07-17 10:25:49,270 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:25:49,469 [nurby.perception.pipeline] INFO Extended observation d18d1ce8-6209-4d12-ab8d-8827150d28ff on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:25:51,569 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.011)
+2026-07-17 10:25:51,605 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 8 cars, 4 persons
+2026-07-17 10:25:51,840 [nurby.perception.pipeline] INFO Stored observation 6955a0e3-81d5-42fc-92fc-1fdfc1b0c656 for camera 1218670d-6115-4286-b8c3-8e356ce52d27 with 12 detections
+2026-07-17 10:25:52,235 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.024)
+2026-07-17 10:25:52,277 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. No relevant objects detected
+2026-07-17 10:25:52,450 [nurby.perception.pipeline] INFO Stored observation b6377405-92ab-4131-b0db-cef9a2c84af8 for camera 72ba9745-720a-43a9-95b9-ff759f517360 with 0 detections
+2026-07-17 10:25:56,893 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.030)
+2026-07-17 10:25:56,922 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:25:57,069 [nurby.perception.pipeline] INFO Stored observation f51afae1-3baf-4345-b5f7-0a3c1591c523 for camera 72ba9745-720a-43a9-95b9-ff759f517360 with 1 detections
+2026-07-17 10:25:58,977 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:25:59,179 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.094)
+2026-07-17 10:25:59,225 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 6 cars, 3 bicycles
+2026-07-17 10:25:59,501 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:25:59,540 [nurby.perception.pipeline] INFO Extended observation 6955a0e3-81d5-42fc-92fc-1fdfc1b0c656 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:25:59,910 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.014)
+2026-07-17 10:25:59,958 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:26:00,108 [nurby.perception.pipeline] INFO Extended observation f51afae1-3baf-4345-b5f7-0a3c1591c523 on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:26:02,190 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.035)
+2026-07-17 10:26:02,228 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 12 cars
+2026-07-17 10:26:02,419 [nurby.perception.pipeline] INFO Stored observation 45229b31-3542-4ad9-ad12-23e4ef074ada for camera 1218670d-6115-4286-b8c3-8e356ce52d27 with 12 detections
+2026-07-17 10:26:05,205 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.037)
+2026-07-17 10:26:05,257 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 7 cars, 7 persons, 4 bicycles
+2026-07-17 10:26:05,454 [nurby.perception.pipeline] INFO Stored observation 797053a7-74a7-4106-a1d2-9c6811f971f7 for camera 1218670d-6115-4286-b8c3-8e356ce52d27 with 18 detections
+2026-07-17 10:26:10,466 [nurby.perception.pipeline] ERROR Error reading from Redis stream
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/pipeline.py", line 137, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:26:12,077 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:26:12,486 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.094)
+2026-07-17 10:26:12,528 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 6 cars, 3 bicycles
+2026-07-17 10:26:12,750 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:26:12,806 [nurby.perception.pipeline] INFO Extended observation 797053a7-74a7-4106-a1d2-9c6811f971f7 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:26:15,323 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.022)
+2026-07-17 10:26:15,391 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 10 cars, person
+2026-07-17 10:26:15,613 [nurby.perception.pipeline] INFO Extended observation 797053a7-74a7-4106-a1d2-9c6811f971f7 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, car,person)
+2026-07-17 10:26:18,308 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.010)
+2026-07-17 10:26:18,352 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 10 cars, 3 persons
+2026-07-17 10:26:18,544 [nurby.perception.pipeline] INFO Extended observation 797053a7-74a7-4106-a1d2-9c6811f971f7 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, car,person)
+2026-07-17 10:26:22,561 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.056)
+2026-07-17 10:26:22,593 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:26:22,755 [nurby.perception.pipeline] INFO Extended observation f51afae1-3baf-4345-b5f7-0a3c1591c523 on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:26:25,948 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:26:26,142 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.094)
+2026-07-17 10:26:26,188 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 6 cars, 3 bicycles
+2026-07-17 10:26:26,406 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:26:26,437 [nurby.perception.pipeline] INFO Extended observation 797053a7-74a7-4106-a1d2-9c6811f971f7 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:26:28,230 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.029)
+2026-07-17 10:26:28,272 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:26:28,501 [nurby.perception.pipeline] INFO Extended observation f51afae1-3baf-4345-b5f7-0a3c1591c523 on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:26:29,145 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.048)
+2026-07-17 10:26:29,194 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 8 cars, person
+2026-07-17 10:26:29,397 [nurby.perception.pipeline] INFO Extended observation 797053a7-74a7-4106-a1d2-9c6811f971f7 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, car,person)
+2026-07-17 10:26:32,156 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.035)
+2026-07-17 10:26:32,190 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 14 cars, 4 persons, bicycle
+2026-07-17 10:26:32,435 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:26:32,459 [nurby.perception.pipeline] INFO Extended observation 797053a7-74a7-4106-a1d2-9c6811f971f7 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:26:37,478 [nurby.perception.pipeline] ERROR Error reading from Redis stream
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/pipeline.py", line 137, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:26:39,304 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:26:39,485 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.022)
+2026-07-17 10:26:39,531 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:26:39,703 [nurby.perception.pipeline] INFO Extended observation f51afae1-3baf-4345-b5f7-0a3c1591c523 on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:26:39,722 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.094)
+2026-07-17 10:26:39,766 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 6 cars, 3 bicycles
+2026-07-17 10:26:40,000 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:26:40,034 [nurby.perception.pipeline] INFO Extended observation 797053a7-74a7-4106-a1d2-9c6811f971f7 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:26:42,516 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.048)
+2026-07-17 10:26:42,558 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 13 cars
+2026-07-17 10:26:42,739 [nurby.perception.pipeline] INFO Stored observation 869f6155-e0a4-4c50-968e-1ef3b1a733e3 for camera 1218670d-6115-4286-b8c3-8e356ce52d27 with 13 detections
+2026-07-17 10:26:45,514 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.035)
+2026-07-17 10:26:45,554 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 12 cars, 5 persons, 2 bicycles
+2026-07-17 10:26:45,771 [nurby.perception.pipeline] INFO Stored observation 85c3d46d-a331-4bb9-b36f-86de3af85989 for camera 1218670d-6115-4286-b8c3-8e356ce52d27 with 19 detections
+2026-07-17 10:26:50,237 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.050)
+2026-07-17 10:26:50,279 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:26:50,404 [nurby.perception.pipeline] INFO Extended observation f51afae1-3baf-4345-b5f7-0a3c1591c523 on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:26:52,277 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:26:52,490 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.094)
+2026-07-17 10:26:52,537 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 6 cars, 3 bicycles
+2026-07-17 10:26:52,806 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:26:52,839 [nurby.perception.pipeline] INFO Extended observation 85c3d46d-a331-4bb9-b36f-86de3af85989 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:26:55,493 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.041)
+2026-07-17 10:26:55,538 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 cars, person
+2026-07-17 10:26:55,695 [nurby.perception.pipeline] INFO Extended observation 85c3d46d-a331-4bb9-b36f-86de3af85989 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, car,person)
+2026-07-17 10:26:58,523 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.026)
+2026-07-17 10:26:58,562 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 cars, 2 persons
+2026-07-17 10:26:58,723 [nurby.perception.pipeline] INFO Extended observation 85c3d46d-a331-4bb9-b36f-86de3af85989 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, car,person)
+2026-07-17 10:27:02,231 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.079)
+2026-07-17 10:27:02,273 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:27:02,411 [nurby.perception.pipeline] INFO Extended observation f51afae1-3baf-4345-b5f7-0a3c1591c523 on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:27:05,005 [nurby.perception.camera_status] ERROR camera status watcher loop error; retrying in 5s
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 755, in read_response
+    response = await self._parser.read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 185, in read_response
+    response = await self._read_response(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/resp3.py", line 197, in _read_response
+    raw = await self._readline()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/_parsers/base.py", line 578, in _readline
+    data = await self._stream.readline()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 566, in readline
+    line = await self.readuntil(sep)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 658, in readuntil
+    await self._wait_for_data('readuntil')
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 754, in read_response
+    async with async_timeout(read_timeout):
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ahmed.anough/Desktop/nurby-backend/services/perception/camera_status_watcher.py", line 72, in run
+    messages = await r.xreadgroup(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/commands/core.py", line 7791, in _record_and_return
+    actual_response = await response
+                      ^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 839, in execute_command
+    result = await conn.retry.call_with_retry(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 81, in call_with_retry
+    raise error
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/retry.py", line 69, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 780, in _send_command_parse_response
+    return await self.parse_response(conn, command_name, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/client.py", line 881, in parse_response
+    response = await connection.read_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ahmed.anough/Desktop/nurby-backend/.venv-test/lib/python3.11/site-packages/redis/asyncio/connection.py", line 778, in read_response
+    raise TimeoutError(f"Timeout reading from {host_error}")
+redis.exceptions.TimeoutError: Timeout reading from localhost:6379
+2026-07-17 10:27:05,219 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.094)
+2026-07-17 10:27:05,259 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 9 persons, 6 cars, 3 bicycles
+2026-07-17 10:27:05,522 [nurby.perception.pipeline] INFO Faces for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 1 detected, 0 matched
+2026-07-17 10:27:05,553 [nurby.perception.pipeline] INFO Extended observation 85c3d46d-a331-4bb9-b36f-86de3af85989 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, bicycle,car,person)
+2026-07-17 10:27:06,898 [nurby.perception.pipeline] INFO Processing keyframe from camera 72ba9745-720a-43a9-95b9-ff759f517360 (motion=0.024)
+2026-07-17 10:27:06,940 [nurby.perception.pipeline] INFO Detections for camera 72ba9745-720a-43a9-95b9-ff759f517360. person
+2026-07-17 10:27:07,119 [nurby.perception.pipeline] INFO Extended observation f51afae1-3baf-4345-b5f7-0a3c1591c523 on camera 72ba9745-720a-43a9-95b9-ff759f517360 (same scene, person)
+2026-07-17 10:27:08,221 [nurby.perception.pipeline] INFO Processing keyframe from camera 1218670d-6115-4286-b8c3-8e356ce52d27 (motion=0.053)
+2026-07-17 10:27:08,261 [nurby.perception.pipeline] INFO Detections for camera 1218670d-6115-4286-b8c3-8e356ce52d27. 14 cars, person
+2026-07-17 10:27:08,478 [nurby.perception.pipeline] INFO Extended observation 85c3d46d-a331-4bb9-b36f-86de3af85989 on camera 1218670d-6115-4286-b8c3-8e356ce52d27 (same scene, car,person)

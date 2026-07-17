@@ -80,3 +80,5 @@ testing/harness/api.log
 testing/harness/ffmpeg.log
 testing/harness/users.md
 dev/feeds/
+# Recordings/thumbnails/audio written by the ux-army harness stack.
+dev/uxtest-data/
