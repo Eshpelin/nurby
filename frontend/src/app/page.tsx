@@ -27,6 +27,7 @@ import {
   type ObservationGroup as CoalesceGroup,
 } from "@/lib/observation-grouping";
 import { SystemHealthFooter } from "@/components/SystemHealthFooter";
+import { PipelineDelayWidget } from "@/components/PipelineDelayWidget";
 import { useWorkerHealth } from "@/lib/useWorkerHealth";
 import { LLMErrorToasts } from "@/components/LLMErrorToasts";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -1481,6 +1482,8 @@ function DashboardContent() {
     <div className="px-4 py-4 lg:h-[calc(100vh-3.5rem)] flex flex-col">
 
       <VLMOptionalBanner />
+
+      <PipelineDelayWidget />
 
       {showLearningBanner && (
         <div className="mb-3 flex items-start gap-3 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">

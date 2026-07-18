@@ -106,6 +106,108 @@ async def get_vlm_queue_stats(_current_user: User = Depends(get_current_user)):
     return get_vlm_stats()
 
 
+@router.get("/system/pipeline-summary")
+async def get_pipeline_summary(
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fleet-wide VLM backlog rollup for the pipeline page + home widget.
+
+    Per-camera ``eta_seconds`` (from ``CameraVLMStats``) each assume that
+    camera drains alone. In the real deployment many cameras share one VLM,
+    so they contend for a single worker. The honest fleet ETA is therefore
+    the *serial* sum of every camera's own drain time, not the max. We keep
+    per-camera ETA untouched (it answers "if only this camera existed") and
+    compute the serial figure here.
+    """
+    stats = get_vlm_stats()  # {camera_id: to_dict()}
+
+    # Map ids -> names so the page/table need no second round-trip.
+    cam_rows = (await db.execute(select(Camera.id, Camera.name))).all()
+    names = {str(cid): name for cid, name in cam_rows}
+
+    cameras = []
+    total_queued = 0
+    total_high = 0
+    fleet_eta_seconds = 0.0
+    # Weighted mean latency: weight each camera's avg by its throughput so
+    # idle cameras with a stale EMA don't skew the fleet sec/frame.
+    weighted_latency_num = 0.0
+    weighted_latency_den = 0
+    status_counts: dict[str, int] = {}
+    active_calls = 0
+    total_errors = 0
+
+    for cam_id, s in stats.items():
+        backlog = s.get("backlog", {})
+        depth = int(backlog.get("total", 0))
+        high = int(backlog.get("high", 0))
+        avg = float(s.get("avg_latency", 0.0))
+        calls = int(s.get("total_calls", 0))
+
+        total_queued += depth
+        total_high += high
+        # Serial drain: this camera's frames each cost its own latency.
+        fleet_eta_seconds += depth * avg
+        if calls > 0 and avg > 0:
+            weighted_latency_num += avg * calls
+            weighted_latency_den += calls
+        status = s.get("status", "idle")
+        status_counts[status] = status_counts.get(status, 0) + 1
+        active_calls += calls
+        total_errors += int(s.get("total_errors", 0))
+
+        cameras.append(
+            {
+                "camera_id": cam_id,
+                "camera_name": names.get(str(cam_id), cam_id),
+                "backlog": depth,
+                "backlog_high": high,
+                "avg_latency": round(avg, 2),
+                "last_latency": round(float(s.get("last_latency", 0.0)), 2),
+                "eta_seconds": float(backlog.get("eta_seconds", 0.0)),
+                "status": status,
+                "total_dropped": int(s.get("total_dropped", 0)),
+                "total_errors": int(s.get("total_errors", 0)),
+                "reason": s.get("reason", ""),
+            }
+        )
+
+    # Worst offenders first: deepest backlog, then slowest.
+    cameras.sort(key=lambda c: (c["backlog"], c["avg_latency"]), reverse=True)
+
+    sec_per_frame = (
+        round(weighted_latency_num / weighted_latency_den, 2)
+        if weighted_latency_den
+        else 0.0
+    )
+    frames_per_min = round(60.0 / sec_per_frame, 1) if sec_per_frame > 0 else 0.0
+
+    # Health verdict drives the home-screen widget colour. "backlogged" is
+    # the case the user cares about: single VLM slowly catching up.
+    if any(c["status"] in ("stalled", "failed") for c in cameras):
+        health = "degraded"
+    elif fleet_eta_seconds > 120 or total_queued > 30:
+        health = "backlogged"
+    elif total_queued > 0:
+        health = "catching_up"
+    else:
+        health = "clear"
+
+    return {
+        "health": health,
+        "total_queued": total_queued,
+        "total_high_priority": total_high,
+        "fleet_eta_seconds": round(fleet_eta_seconds, 1),
+        "sec_per_frame": sec_per_frame,
+        "frames_per_min": frames_per_min,
+        "camera_count": len(cameras),
+        "total_errors": total_errors,
+        "status_counts": status_counts,
+        "cameras": cameras,
+    }
+
+
 @router.get("/system/health")
 async def get_health(_current_user: User = Depends(get_current_user)):
     """Lightweight host-level CPU / RAM / disk / GPU snapshot for the
