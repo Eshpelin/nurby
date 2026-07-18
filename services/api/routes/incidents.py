@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
+from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.database import get_db
 from shared.models import Incident, Observation, User
 
@@ -74,10 +75,15 @@ async def list_incidents(
     to: datetime | None = Query(default=None),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    q = select(Incident).order_by(Incident.last_seen_at.desc())
+    allowed = await allowed_camera_ids(current_user, db)
+    q = apply_camera_filter(
+        select(Incident).order_by(Incident.last_seen_at.desc()),
+        allowed,
+        Incident.camera_id,
+    )
     if camera_id:
         q = q.where(Incident.camera_id == camera_id)
     if finalized is not None:
@@ -92,15 +98,25 @@ async def list_incidents(
     return [_serialize(r) for r in rows]
 
 
-@router.get("/{incident_id}")
-async def get_incident(
-    incident_id: uuid.UUID,
-    _user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
+async def _get_incident_in_scope(
+    incident_id: uuid.UUID, current_user: User, db: AsyncSession
+) -> Incident:
     row = await db.get(Incident, incident_id)
     if row is None:
         raise HTTPException(status_code=404, detail="incident not found")
+    allowed = await allowed_camera_ids(current_user, db)
+    if allowed is not ALL and row.camera_id not in allowed:
+        raise HTTPException(status_code=404, detail="incident not found")
+    return row
+
+
+@router.get("/{incident_id}")
+async def get_incident(
+    incident_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await _get_incident_in_scope(incident_id, current_user, db)
     obs_rows: list[Observation] = []
     obs_ids = row.observation_ids or []
     parsed = []
@@ -133,13 +149,11 @@ class ReinterpretRequest(BaseModel):
 async def reinterpret_incident(
     incident_id: uuid.UUID,
     body: ReinterpretRequest | None = None,
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Re-interpret an incident with an optional model override."""
-    row = await db.get(Incident, incident_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="incident not found")
+    row = await _get_incident_in_scope(incident_id, current_user, db)
 
     from services.perception.incident_tracker import IncidentFinalizer
     from shared.models import Camera, Provider

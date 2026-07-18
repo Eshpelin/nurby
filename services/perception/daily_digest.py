@@ -272,12 +272,24 @@ async def _resolve_provider() -> Provider | None:
 
 
 async def _collect_facts(
-    window_start: datetime, window_end: datetime
+    window_start: datetime,
+    window_end: datetime,
+    camera_ids: set[Any] | None = None,
 ) -> dict[str, Any]:
     """Walk every signal table in the window and assemble the
     structured fact dict. All counts + lists. The LLM uses these as
     ground truth; the UI can also render them deterministically when
-    the LLM call fails or is offline."""
+    the LLM call fails or is offline.
+
+    ``camera_ids``, when given, restricts every per-camera source
+    (observations, incidents, audio, conversations) to that set — used
+    to build a digest scoped to a camera-restricted viewer's grants.
+    Vehicles and journeys are cross-camera by nature (a plate or a
+    subject's journey can span cameras outside the grant), so a scoped
+    digest omits them entirely rather than risk leaking another
+    camera's presence through them.
+    """
+    scoped = camera_ids is not None
     facts: dict[str, Any] = {
         "visitors": [],
         "unknown_visitors": 0,
@@ -293,19 +305,23 @@ async def _collect_facts(
     }
     async with async_session() as db:
         # Cameras for name lookup.
-        cams = (await db.execute(select(Camera))).scalars().all()
+        cam_q = select(Camera)
+        if scoped:
+            cam_q = cam_q.where(Camera.id.in_(camera_ids))
+        cams = (await db.execute(cam_q)).scalars().all()
         cam_name_by_id = {str(c.id): c.name or "unnamed" for c in cams}
 
         # Observations. count named persons + clusters; track top
         # objects (packages, vehicles).
-        obs_rows = (
-            await db.execute(
-                select(Observation.camera_id, Observation.started_at,
-                       Observation.person_detections, Observation.object_detections)
-                .where(Observation.started_at >= window_start)
-                .where(Observation.started_at <= window_end)
-            )
-        ).all()
+        obs_q = (
+            select(Observation.camera_id, Observation.started_at,
+                   Observation.person_detections, Observation.object_detections)
+            .where(Observation.started_at >= window_start)
+            .where(Observation.started_at <= window_end)
+        )
+        if scoped:
+            obs_q = obs_q.where(Observation.camera_id.in_(camera_ids))
+        obs_rows = (await db.execute(obs_q)).all()
         named: dict[str, int] = {}
         named_first: dict[str, str] = {}
         named_last: dict[str, str] = {}
@@ -355,45 +371,54 @@ async def _collect_facts(
         ]
 
         # Incidents in window.
-        inc_rows = (
-            await db.execute(
-                select(Incident)
-                .where(Incident.started_at >= window_start)
-                .where(Incident.started_at <= window_end)
-            )
-        ).scalars().all()
+        inc_q = (
+            select(Incident)
+            .where(Incident.started_at >= window_start)
+            .where(Incident.started_at <= window_end)
+        )
+        if scoped:
+            inc_q = inc_q.where(Incident.camera_id.in_(camera_ids))
+        inc_rows = (await db.execute(inc_q)).scalars().all()
         facts["incidents_count"] = len(inc_rows)
 
-        # Journeys in window.
-        jour_rows = (
-            await db.execute(
-                select(Journey)
-                .where(Journey.started_at >= window_start)
-                .where(Journey.started_at <= window_end)
-            )
-        ).scalars().all()
-        facts["journeys_count"] = len(jour_rows)
-        facts["journeys"] = [
-            {
-                "id": str(j.id),
-                "subject_kind": j.subject_kind,
-                "subject_key": j.subject_key,
-                "cameras_seen_count": j.cameras_seen_count,
-                "incidents_count": j.incidents_count,
-                "started_at": j.started_at.isoformat(),
-                "summary_text": j.summary_text,
-            }
-            for j in jour_rows[:20]
-        ]
+        # Journeys in window. Cross-camera by nature (a subject's
+        # journey can pass through cameras outside a scoped viewer's
+        # grant), so omitted entirely for scoped digests.
+        if scoped:
+            facts["journeys_count"] = 0
+            facts["journeys"] = []
+            jour_rows = []
+        else:
+            jour_rows = (
+                await db.execute(
+                    select(Journey)
+                    .where(Journey.started_at >= window_start)
+                    .where(Journey.started_at <= window_end)
+                )
+            ).scalars().all()
+            facts["journeys_count"] = len(jour_rows)
+            facts["journeys"] = [
+                {
+                    "id": str(j.id),
+                    "subject_kind": j.subject_kind,
+                    "subject_key": j.subject_key,
+                    "cameras_seen_count": j.cameras_seen_count,
+                    "incidents_count": j.incidents_count,
+                    "started_at": j.started_at.isoformat(),
+                    "summary_text": j.summary_text,
+                }
+                for j in jour_rows[:20]
+            ]
 
         # Conversations.
-        conv_rows = (
-            await db.execute(
-                select(Conversation)
-                .where(Conversation.started_at >= window_start)
-                .where(Conversation.started_at <= window_end)
-            )
-        ).scalars().all()
+        conv_q = (
+            select(Conversation)
+            .where(Conversation.started_at >= window_start)
+            .where(Conversation.started_at <= window_end)
+        )
+        if scoped:
+            conv_q = conv_q.where(Conversation.camera_id.in_(camera_ids))
+        conv_rows = (await db.execute(conv_q)).scalars().all()
         facts["conversations_count"] = len(conv_rows)
         facts["conversations"] = [
             {
@@ -406,13 +431,14 @@ async def _collect_facts(
         ][:10]
 
         # Audio detections by normalized label.
-        ad_rows = (
-            await db.execute(
-                select(AudioDetection.label, AudioDetection.detected_at, AudioDetection.camera_id)
-                .where(AudioDetection.detected_at >= window_start)
-                .where(AudioDetection.detected_at <= window_end)
-            )
-        ).all()
+        ad_q = (
+            select(AudioDetection.label, AudioDetection.detected_at, AudioDetection.camera_id)
+            .where(AudioDetection.detected_at >= window_start)
+            .where(AudioDetection.detected_at <= window_end)
+        )
+        if scoped:
+            ad_q = ad_q.where(AudioDetection.camera_id.in_(camera_ids))
+        ad_rows = (await db.execute(ad_q)).all()
         counts: Counter[str] = Counter()
         samples: dict[str, list[str]] = {}
         for lbl, ts, cam_id in ad_rows:
@@ -470,11 +496,17 @@ async def _collect_facts(
 
         # Vehicles identified in the window (by plate). describe them by
         # what they are plus the plate, e.g. "Red Nissan (ABC123) seen".
+        # Vehicle isn't tied to a single camera_id, so a scoped digest
+        # can't safely filter it and omits vehicles rather than leak.
         veh_rows = (
-            await db.execute(
-                select(Vehicle).where(Vehicle.last_seen_at >= window_start)
-            )
-        ).scalars().all()
+            []
+            if scoped
+            else (
+                await db.execute(
+                    select(Vehicle).where(Vehicle.last_seen_at >= window_start)
+                )
+            ).scalars().all()
+        )
         for v in veh_rows:
             first = v.first_seen_at
             if first and first < window_start:

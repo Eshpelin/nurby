@@ -322,7 +322,21 @@ export default function CameraAccessPage() {
                             </span>
                           )}
                           <button
-                            onClick={() => toggleCamera(cam.id, !granted)}
+                            onClick={() => {
+                              // Revoking the LAST grant doesn't restrict
+                              // this user further — it flips them back to
+                              // seeing every camera (see the policy note
+                              // above). That's the opposite of what
+                              // "revoke" usually means, so confirm before
+                              // doing it.
+                              if (granted && grantedCount === 1) {
+                                const ok = window.confirm(
+                                  `${cam.name} is ${selectedUser.display_name || selectedUser.email}'s only granted camera. Revoking it will NOT lock them out — with zero grants they'll see all ${cameras.length} cameras instead. Continue?`
+                                );
+                                if (!ok) return;
+                              }
+                              toggleCamera(cam.id, !granted);
+                            }}
                             disabled={busy}
                             aria-pressed={granted}
                             aria-label={
