@@ -18,23 +18,6 @@ F<id> | severity(blocker/major/minor/polish) | persona | area | status(open/fixe
 
 ## Open backlog
 
-F76 | minor | priya-landlord | frontend/dashboard | open
-  What: dashboard wall toolbar's "+ Camera" / "+ Widget" buttons are
-  intermittently unclickable — real mouse clicks miss 3/3 times in
-  this run. Root cause: `CameraWall`'s `flex-1 min-h-0` root collapses
-  to zero height when `SetupChecklistCard`/`AskComposerCard` above it
-  consume the viewport's available height, and with no
-  `overflow-hidden` anywhere in that chain the toolbar row visually
-  spills below its own box into the same screen region as
-  `SystemHealthFooter` (`app/page.tsx:2646-2648`), which wins the
-  hit-test since it's later in the DOM. Confirmed via
-  `elementFromPoint` at the button's own bounding-rect center
-  returning the footer element. Needs a real height-budget fix (bound
-  the mosaic grid's height and let `CameraWall.tsx:196-198`'s existing
-  `overflow-y-auto` absorb the shortage, or give the toolbar row
-  `overflow-hidden` at the wrapper level) — not a one-line patch,
-  left for the next run.
-
 Also noted, not filed as its own F#: the Invite Keys panel
 (Settings → Invite Keys → Manage) lists each key's role/uses/expiry
 but not which cameras it grants, so an audit-minded admin can't tell
@@ -49,6 +32,24 @@ these up before starting new persona flows once the open backlog is empty.
 (none yet)
 
 ## Fixed
+
+F76 | minor | priya-landlord | frontend/dashboard | fixed
+  What: dashboard wall toolbar's "+ Camera" / "+ Widget" buttons were
+  intermittently unclickable — real mouse clicks missed 3/3 times in
+  the priya-landlord run. Root cause: the left dashboard column
+  (`app/page.tsx:1534`) had no overflow handling, so when
+  `SetupChecklistCard`/`AskComposerCard` above it consumed the
+  viewport's available height, `CameraWall`'s toolbar row visually
+  spilled below its own box into the same screen region as
+  `SystemHealthFooter`, which won the hit-test since it's later in the
+  DOM.
+  Fix: `app/page.tsx:1534` left column gained `lg:overflow-y-auto`, so
+  when its content exceeds the available height the column scrolls
+  instead of letting the toolbar spill into the footer's hit-test
+  region. Verified: fresh Mei session, `elementFromPoint` at the
+  "+ Camera" button's own bounding-rect center now returns the button
+  itself, and clicking it via ref opens the Add Camera modal. commit
+  3a56b72.
 
 F75 | major | priya-landlord | frontend/security-ux | fixed
   What: revoking a user's ONLY camera grant in Settings → Camera
