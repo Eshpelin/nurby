@@ -1479,7 +1479,7 @@ function DashboardContent() {
   // internally). Below lg the columns stack, so the page must scroll
   // normally instead: no height cap, no collapsed flex children.
   return (
-    <div className="px-4 py-4 lg:h-[calc(100vh-3.5rem)] flex flex-col">
+    <div className="px-4 py-4 lg:h-[calc(100vh-3.5rem)] lg:overflow-y-auto scrollbar-thin flex flex-col">
 
       <VLMOptionalBanner />
 
@@ -1529,9 +1529,9 @@ function DashboardContent() {
         />
       )}
 
-      <div ref={dashboardWrapRef} className="flex flex-col lg:flex-row gap-4 lg:flex-1 lg:min-h-0 bg-background">
+      <div ref={dashboardWrapRef} className="flex flex-col lg:flex-row gap-4 lg:flex-1 lg:min-h-[50vh] bg-background">
         {/* LEFT. Customizable camera wall (the main area). */}
-        <div className="lg:flex-1 min-w-0 flex flex-col lg:min-h-0">
+        <div className="lg:flex-1 min-w-0 flex flex-col lg:min-h-0 lg:overflow-y-auto scrollbar-thin">
           {/* A stopped worker means nothing is watching, however healthy
               the cameras look. Say so loudly rather than letting the user
               read an empty timeline as a quiet day. */}
