@@ -18,7 +18,28 @@ F<id> | severity(blocker/major/minor/polish) | persona | area | status(open/fixe
 
 ## Open backlog
 
-(none)
+F76 | minor | priya-landlord | frontend/dashboard | open
+  What: dashboard wall toolbar's "+ Camera" / "+ Widget" buttons are
+  intermittently unclickable — real mouse clicks miss 3/3 times in
+  this run. Root cause: `CameraWall`'s `flex-1 min-h-0` root collapses
+  to zero height when `SetupChecklistCard`/`AskComposerCard` above it
+  consume the viewport's available height, and with no
+  `overflow-hidden` anywhere in that chain the toolbar row visually
+  spills below its own box into the same screen region as
+  `SystemHealthFooter` (`app/page.tsx:2646-2648`), which wins the
+  hit-test since it's later in the DOM. Confirmed via
+  `elementFromPoint` at the button's own bounding-rect center
+  returning the footer element. Needs a real height-budget fix (bound
+  the mosaic grid's height and let `CameraWall.tsx:196-198`'s existing
+  `overflow-y-auto` absorb the shortage, or give the toolbar row
+  `overflow-hidden` at the wrapper level) — not a one-line patch,
+  left for the next run.
+
+Also noted, not filed as its own F#: the Invite Keys panel
+(Settings → Invite Keys → Manage) lists each key's role/uses/expiry
+but not which cameras it grants, so an audit-minded admin can't tell
+a key's scope from the list without re-testing it. Minor; pick up
+alongside F76 or standalone.
 
 ## Deferred features
 
@@ -28,6 +49,62 @@ these up before starting new persona flows once the open backlog is empty.
 (none yet)
 
 ## Fixed
+
+F75 | major | priya-landlord | frontend/security-ux | fixed
+  What: revoking a user's ONLY camera grant in Settings → Camera
+  access didn't restrict them further — the product's own documented
+  policy (zero grants = sees all cameras) means it flipped them back
+  to seeing every camera, the opposite of what "revoke" reads as. An
+  admin trying to lock a tenant out by toggling off their last camera
+  would silently grant them everyone else's cameras instead.
+  Repro: grant a viewer exactly one camera, then revoke it; the panel
+  now reads "No grants · this user currently sees all cameras."
+  Fix: `frontend/src/app/settings/access/page.tsx` confirms before
+  toggling off a user's last grant, naming the camera, the user, and
+  stating plainly they'll see all N cameras instead of none. Verified
+  by stubbing `window.confirm` to inspect the message and cancel, then
+  confirming the grant was untouched. commit (this run; see git log).
+
+F74 | major | priya-landlord | product/security | fixed
+  What: the Morning Brief digest served the same household-wide
+  cached row to every user regardless of camera-access grants. A
+  viewer restricted to one camera still saw brief bullets naming other
+  cameras by name ("Demo Camera", "Front Door") they have no grant to.
+  Reproduced fresh (not a stale-cache artifact) by regenerating the
+  brief as the restricted user.
+  Root cause: `services/perception/daily_digest.py`'s
+  `_collect_facts()`/`build_daily_digest()` had no camera filter and
+  no per-user concept — one global digest, unlike every other
+  camera-scoped read surface.
+  Fix: `_collect_facts()` gained an optional `camera_ids` filter
+  applied to observations/incidents/audio/conversations/camera-name
+  lookup; vehicles and journeys are cross-camera by nature and are
+  omitted (not filtered) for a scoped digest to avoid leaking through
+  them. `services/api/routes/daily_digest.py`'s three routes now
+  branch on `allowed_camera_ids`: unrestricted/admin callers get the
+  existing persisted household digest unchanged (verified no
+  regression as an admin), restricted callers get a fresh unpersisted
+  facts-only digest scoped to their grants. commit (this run; see git
+  log).
+
+F73 | blocker | priya-landlord | api/security | fixed
+  What: `/api/incidents` (list, single-get, reinterpret) had zero
+  camera-access-grant filtering, unlike every other scoped endpoint.
+  A restricted viewer could see incident rows — including full
+  observation-id lists and thumbnail file paths — from cameras outside
+  their grant via the list endpoint, and could fetch or reinterpret
+  ANY incident by UUID regardless of scope via the single-get/
+  reinterpret endpoints (no ownership check existed at all).
+  Repro: grant a viewer one camera, hit `/api/incidents` as them,
+  observe camera_ids belonging to other cameras in the response.
+  Fix: `services/api/routes/incidents.py` now uses the same
+  `allowed_camera_ids`/`apply_camera_filter` helper as
+  `observations.py`/`cameras.py`/`events.py`/`recordings.py`. Added
+  `_get_incident_in_scope()`, shared by the single-get and reinterpret
+  routes, which 404s (not 403, to avoid confirming existence) for
+  incidents outside the caller's grant. Verified: as the restricted
+  viewer, `/api/incidents` now only returns rows for their granted
+  camera id. commit (this run; see git log).
 
 F71 | polish | margaret-retired-teacher | frontend/add-camera | fixed
   What: NOT "asking for a stream URL is bad" — asking is fine and
