@@ -47,6 +47,7 @@ const MENUS: MenuDef[] = [
     label: "Manage",
     links: [
       { label: "Rules", href: "/rules", hint: "Automations & alerts" },
+      { label: "Pipeline", href: "/pipeline", hint: "AI backlog & throughput" },
       { label: "Settings", href: "/settings", hint: "Cameras, AI, account" },
     ],
   },
