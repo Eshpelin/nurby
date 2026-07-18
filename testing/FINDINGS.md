@@ -43,13 +43,13 @@ F76 | minor | priya-landlord | frontend/dashboard | fixed
   spilled below its own box into the same screen region as
   `SystemHealthFooter`, which won the hit-test since it's later in the
   DOM.
-  Fix: `app/page.tsx:1534` left column gained `lg:overflow-y-auto`, so
-  when its content exceeds the available height the column scrolls
-  instead of letting the toolbar spill into the footer's hit-test
-  region. Verified: fresh Mei session, `elementFromPoint` at the
-  "+ Camera" button's own bounding-rect center now returns the button
-  itself, and clicking it via ref opens the Add Camera modal. commit
-  3a56b72.
+  Fix: landed independently as commit 0432757 (`app/page.tsx:1534`
+  left column gained `lg:overflow-y-auto scrollbar-thin`), then
+  broadened by c88c8bc to also let the outer shell scroll when the
+  banners/digest above the columns overflow a short viewport. Verified:
+  fresh Mei session, `elementFromPoint` at the "+ Camera" button's own
+  bounding-rect center now returns the button
+  itself, and clicking it via ref opens the Add Camera modal.
 
 F75 | major | priya-landlord | frontend/security-ux | fixed
   What: revoking a user's ONLY camera grant in Settings → Camera
