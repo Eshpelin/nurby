@@ -587,6 +587,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
                       setStreamType("rtsp");
                       setStreamUrl(url);
                     }}
+                    onSwitchToScan={() => setActiveTab("scan")}
                   />
                 </div>
               )}

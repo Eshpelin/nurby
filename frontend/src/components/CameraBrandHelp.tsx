@@ -16,6 +16,9 @@ interface Props {
   // Optional. Increment to force the panel open (e.g. after a connection
   // test fails with an error the brand guide can help with).
   forceOpenSignal?: number;
+  // Optional. Called when the user gives up on finding their brand and
+  // wants to try the Scan Network tab instead.
+  onSwitchToScan?: () => void;
 }
 
 const SUPPORT_BADGE: Record<RtspSupport, { label: string; cls: string }> = {
@@ -24,10 +27,14 @@ const SUPPORT_BADGE: Record<RtspSupport, { label: string; cls: string }> = {
   no: { label: "Cloud-locked", cls: "bg-rose-500/15 text-rose-400 border-rose-500/30" },
 };
 
-export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, forceOpenSignal = 0 }: Props) {
+export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, forceOpenSignal = 0, onSwitchToScan }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const [brandId, setBrandId] = useState<string>("");
+  const [filter, setFilter] = useState("");
   const brand = brandId ? findBrand(brandId) : undefined;
+  const filteredBrands = filter.trim()
+    ? CAMERA_BRANDS.filter((b) => b.name.toLowerCase().includes(filter.trim().toLowerCase()))
+    : CAMERA_BRANDS;
 
   useEffect(() => {
     if (forceOpenSignal > 0) setOpen(true);
@@ -59,9 +66,18 @@ export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, fo
 
       {open && (
         <div className="px-3 pb-3 space-y-3 border-t border-border/60 pt-3">
+          {/* Brand filter */}
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter brands..."
+            className="w-full px-2 py-1.5 text-[11px] rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+
           {/* Brand chips */}
           <div className="flex flex-wrap gap-1.5">
-            {CAMERA_BRANDS.map((b) => (
+            {filteredBrands.map((b) => (
               <button
                 key={b.id}
                 type="button"
@@ -75,13 +91,26 @@ export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, fo
                 {b.name}
               </button>
             ))}
+            {filteredBrands.length === 0 && (
+              <p className="text-[11px] text-muted-foreground">No brands match &quot;{filter}&quot;.</p>
+            )}
           </div>
 
           {!brand && (
             <p className="text-[11px] text-muted-foreground">
               Choose your camera maker for step-by-step instructions. Not
-              listed? Try <span className="text-foreground">Generic ONVIF</span>{" "}
-              or the Scan tab.
+              listed, or don&apos;t know which brand you have?{" "}
+              {onSwitchToScan ? (
+                <button
+                  type="button"
+                  onClick={onSwitchToScan}
+                  className="text-accent hover:underline"
+                >
+                  Scan your network instead
+                </button>
+              ) : (
+                <>Try the Scan Network tab.</>
+              )}
             </p>
           )}
 
