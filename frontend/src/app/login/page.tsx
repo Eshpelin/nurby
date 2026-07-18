@@ -4,6 +4,44 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 
+// Inline SVG glyphs. The frontend does not bundle lucide-react.
+function KeyIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4" />
+      <path d="m21 2-9.6 9.6" />
+      <circle cx="7.5" cy="15.5" r="5.5" />
+    </svg>
+  );
+}
+
+function ArrowRightIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  );
+}
+
 export default function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
@@ -135,12 +173,31 @@ export default function LoginPage() {
           </p>
         )}
 
-        <p className="text-center text-sm text-muted-foreground">
-          Have an invite key?{" "}
-          <Link href="/invite" className="text-accent hover:underline">
-            Create account
-          </Link>
-        </p>
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">
+            or
+          </span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
+        <Link
+          href="/invite"
+          className="group flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 transition-colors hover:border-accent/50 hover:bg-muted"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+            <KeyIcon className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-foreground">
+              Have an invite key?
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Redeem it to create your account
+            </span>
+          </span>
+          <ArrowRightIcon className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-accent" />
+        </Link>
       </div>
     </div>
   );
