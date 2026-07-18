@@ -68,12 +68,27 @@ export function DeepScanResults({
               className="relative rounded-md overflow-hidden border border-border group"
             >
               {token && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={`/api/observations/${r.observation_id}/thumbnail?token=${encodeURIComponent(token)}`}
-                  alt={r.boxes[0]?.label || "match"}
-                  className="w-full block"
-                />
+                r.started_at ? (
+                  <a
+                    href={`/recordings?at=${encodeURIComponent(r.started_at)}&camera=${r.camera_id}`}
+                    title="Open this moment in Recordings"
+                    className="block"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/api/observations/${r.observation_id}/thumbnail?token=${encodeURIComponent(token)}`}
+                      alt={r.boxes[0]?.label || "match"}
+                      className="w-full block"
+                    />
+                  </a>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`/api/observations/${r.observation_id}/thumbnail?token=${encodeURIComponent(token)}`}
+                    alt={r.boxes[0]?.label || "match"}
+                    className="w-full block"
+                  />
+                )
               )}
               <GroundingBoxOverlay boxes={r.boxes} />
               <button

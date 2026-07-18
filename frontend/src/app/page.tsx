@@ -15,6 +15,7 @@ import { AudioActiveDot } from "@/components/AudioActiveDot";
 import { VLMStatusBadge } from "@/components/VLMStatusBadge";
 import { VLMOptionalBanner } from "@/components/VLMOptionalBanner";
 import { SummarizeNowButton } from "@/components/SummarizeNowButton";
+import { FindNowButton } from "@/components/dashboard/FindNowButton";
 import { CameraStatsHover } from "@/components/CameraStatsHover";
 import { RefinedBadge } from "@/components/RefinedBadge";
 import { ObservationGroupCard } from "@/components/ObservationGroupCard";
@@ -323,6 +324,12 @@ function CameraSidebarCard({
         {/* Summarize now. Hover-revealed top-right control. */}
         {camera.status !== "offline" && (
           <SummarizeNowButton cameraId={camera.id} variant="tile" />
+        )}
+
+        {/* Find anything now. Hover-revealed magnifier: grounds a prompt
+            against this camera's latest frame. */}
+        {camera.status !== "offline" && (
+          <FindNowButton cameraId={camera.id} cameraName={camera.name} />
         )}
 
         {/* Stats hover. FPS / resolution / VLM latency / drops. Quiet

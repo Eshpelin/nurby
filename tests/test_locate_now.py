@@ -50,7 +50,7 @@ def _enable(monkeypatch, enabled=True):
 
 
 def _mock_grounding(monkeypatch, boxes, error=None):
-    box_objs = [SimpleNamespace(bbox_norm=b, label="chicken") for b in boxes]
+    box_objs = [SimpleNamespace(bbox_norm=b, is_point=False, label="chicken") for b in boxes]
 
     class _Client:
         async def ground(self, frame, prompt, interactive=False):

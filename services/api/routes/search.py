@@ -409,7 +409,10 @@ async def locate_now(
     if result.error:
         raise HTTPException(status_code=503, detail=f"grounding unavailable: {result.error}")
 
-    boxes = [{"bbox_norm": list(b.bbox_norm), "label": b.label} for b in result.boxes]
+    boxes = [
+        {"bbox_norm": list(b.bbox_norm), "is_point": b.is_point, "label": b.label}
+        for b in result.boxes
+    ]
     return LocateNowResponse(
         found=bool(boxes), boxes=boxes, observation_id=str(obs.id), camera_name=cam_name,
         thumbnail_path=obs.thumbnail_path, started_at=obs.started_at.isoformat(),
