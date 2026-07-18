@@ -18,20 +18,7 @@ F<id> | severity(blocker/major/minor/polish) | persona | area | status(open/fixe
 
 ## Open backlog
 
-F71 | polish | margaret-retired-teacher | frontend/add-camera | open
-  What: NOT "asking for a stream URL is bad" — asking is fine and
-  normal. The narrow point: the product already decided the raw URL is
-  a barrier for some users, which is why it ships both a brand picker
-  and a Scan Network tab. But the brand picker — the escape hatch —
-  opens a ~25-item grid with no filter box and no "I don't know my
-  brand" path, and never mentions Scan Network, which is the thing that
-  would actually solve it. So the one affordance built for the
-  don't-know-my-URL user dead-ends for the subset who also don't know
-  the brand (didn't install the camera themselves).
-  Repro: Add Camera → Stream URL → Pick your brand → scroll.
-  Fix: pending. A filter box, and a line pointing at Scan Network.
-  Low priority: Scan Network already exists and works; this is only
-  about discoverability from the brand list.
+(none)
 
 ## Deferred features
 
@@ -41,6 +28,24 @@ these up before starting new persona flows once the open backlog is empty.
 (none yet)
 
 ## Fixed
+
+F71 | polish | margaret-retired-teacher | frontend/add-camera | fixed
+  What: NOT "asking for a stream URL is bad" — asking is fine and
+  normal. The narrow point: the product already decided the raw URL is
+  a barrier for some users, which is why it ships both a brand picker
+  and a Scan Network tab. But the brand picker — the escape hatch —
+  opened a ~25-item grid with no filter box and no "I don't know my
+  brand" path, and never mentioned Scan Network, which is the thing that
+  would actually solve it. So the one affordance built for the
+  don't-know-my-URL user dead-ended for the subset who also didn't know
+  the brand (didn't install the camera themselves).
+  Repro: Add Camera → Stream URL → Pick your brand → scroll.
+  Fix: `CameraBrandHelp.tsx` gained a filter textbox above the brand
+  chips (filters by name, shows "No brands match" on empty), and the
+  no-brand-selected copy now reads "Not listed, or don't know which
+  brand you have? Scan your network instead" as a button that switches
+  `AddCameraModal`'s tab to Scan Network. commit 86b1aa3
+  (steve-diy-tinkerer run, 2026-07-18).
 
 F72 | major | margaret-retired-teacher | product/observability | fixed
   What: the PRODUCT half of F68, and the more important half. With a
@@ -186,3 +191,18 @@ persona, flow, date.
   bicycle"), and the timeline attributes "Person seen 1×" to the right
   camera, all without configuring any AI provider. Matches the
   "detection works without AI" promise the banner makes.
+- steve-diy-tinkerer, 2026-07-18: a deliberately wrong RTSP URL is
+  caught by the connect-test before saving, naming the exact
+  unreachable IP:port with a plain-English cause and fix hint, plus an
+  explicit "submit again to add anyway" escape hatch for cameras that
+  are just temporarily off.
+- steve-diy-tinkerer, 2026-07-18: System doctor's "Run checks" breaks
+  results down per-service (ingestion, perception, DB, Redis, relay,
+  email, alert delivery, disk) AND per-camera, each with a millisecond
+  timing, so a diagnostics-minded user can see exactly which piece is
+  broken instead of inferring it from one offline camera row.
+- steve-diy-tinkerer, 2026-07-18: raw-RTSP camera add reached live
+  detections (person 88-93% confidence) in under a minute end to end.
+- steve-diy-tinkerer, 2026-07-18: ONVIF Scan Network gives an honest,
+  specific "no ONVIF cameras found" message with troubleshooting steps
+  rather than hanging or silently returning empty.
