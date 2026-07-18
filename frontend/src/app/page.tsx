@@ -2807,9 +2807,8 @@ function LocalAIHintCard() {
         </button>
       </div>
       <p className="text-[11px] text-muted-foreground leading-snug mb-2">
-        Nurby is detecting motion and faces already. To get plain-language
-        scene captions and Ask Nurby, run a private local model. one command,
-        no API key.
+        Nurby already spots motion and faces. Want scene captions and Ask
+        Nurby? Run a local model. One command, no API key.
       </p>
       <div className="flex items-center gap-1.5 mb-2">
         <code className="flex-1 text-[10px] font-mono bg-background border border-border rounded px-2 py-1.5 overflow-x-auto whitespace-nowrap">
