@@ -174,6 +174,8 @@ services:
       MEDIAMTX_API_URL: http://mediamtx:9997
       THUMBNAILS_PATH: /data/thumbnails
       NURBY_MCP_TOKEN: ${NURBY_MCP_TOKEN:-}
+      # Must match the API's JWT_SECRET to unseal camera/telegram secrets.
+      JWT_SECRET: ${JWT_SECRET:-}
       # Set NURBY_MCP_HTTP=1 to serve over HTTP on port 4749 instead of
       # stdio (SDK permitting). stdio is the must-have default.
       NURBY_MCP_HTTP: ${NURBY_MCP_HTTP:-}
@@ -196,6 +198,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       MEDIAMTX_API_URL: http://mediamtx:9997
       MEDIAMTX_RTSP_URL: rtsp://mediamtx:8554
+      # Fernet key for camera credentials is derived from JWT_SECRET. Must
+      # match the API (which seals them) or unseal fails and the sealed
+      # ciphertext gets used as the password, 401ing every RTSP pull.
+      JWT_SECRET: ${JWT_SECRET:-}
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
       # USB and built-in cameras must be bridged on the host. Docker Desktop
@@ -210,6 +216,12 @@ services:
     volumes:
       - recordings:/data/recordings
       - thumbnails:/data/thumbnails
+      # Persist the audio ML model caches so they download once and survive
+      # image rebuilds. Without these, every rebuild loses the PANNs clap
+      # tagger data (/root/panns_data) and the faster-whisper model
+      # (/root/.cache/huggingface), silently disabling audio events + STT.
+      - panns_data:/root/panns_data
+      - hf_cache:/root/.cache/huggingface
     depends_on:
       postgres:
         condition: service_healthy
@@ -229,6 +241,9 @@ services:
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
       AUDIO_STORAGE_PATH: /data/audio
+      # Must match the API's JWT_SECRET so ptz_tracker can unseal camera
+      # credentials (Fernet key is derived from it).
+      JWT_SECRET: ${JWT_SECRET:-}
       # Reach the bundled Ollama service the same way the API does, so VLM
       # captions resolve the provider base_url on the compose network.
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
@@ -275,3 +290,5 @@ volumes:
   audio:
   ollama_models:
   grounding_models:
+  panns_data:
+  hf_cache:
