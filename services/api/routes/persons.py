@@ -8,8 +8,9 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel as PydanticBaseModel
-from sqlalchemy import and_, or_, select, text
+from sqlalchemy import Text, and_, or_, select, text
 from sqlalchemy import func as sa_func
+from sqlalchemy.orm.attributes import flag_modified
 
 
 def sa_lower(col):
@@ -192,6 +193,14 @@ async def name_cluster(
     cluster.person_id = person.id
     cluster.status = "named"
 
+    # Backfill past sightings. Observations detected before naming carry this
+    # cluster's face with a cluster_id but no person_id, so the new person
+    # would show zero history ("no recent sightings") even though they were
+    # just seen. Re-attribute those faces to the person.
+    backfilled = await _backfill_cluster_observations(
+        db, cluster_id, person.id, person.display_name
+    )
+
     await db.commit()
     await db.refresh(person)
 
@@ -200,7 +209,39 @@ async def name_cluster(
         "person_id": str(person.id),
         "display_name": person.display_name,
         "embeddings_linked": len(samples),
+        "observations_backfilled": backfilled,
     }
+
+
+async def _backfill_cluster_observations(
+    db: AsyncSession, cluster_id: uuid.UUID, person_id: uuid.UUID, person_name: str
+) -> int:
+    """Attribute a cluster's pre-naming observations to a person.
+
+    Finds observations whose person_detections still reference this cluster by
+    cluster_id (matched while the cluster was unnamed) and sets person_id /
+    person_name on those face entries. Returns the number updated.
+    """
+    cid = str(cluster_id)
+    result = await db.execute(
+        select(Observation).where(
+            Observation.person_detections.isnot(None),
+            Observation.person_detections.cast(Text).like(f"%{cid}%"),
+        )
+    )
+    updated = 0
+    for obs in result.scalars().all():
+        pd = obs.person_detections or {}
+        changed = False
+        for face in pd.get("faces", []):
+            if face.get("cluster_id") == cid and not face.get("person_id"):
+                face["person_id"] = str(person_id)
+                face["person_name"] = person_name
+                changed = True
+        if changed:
+            flag_modified(obs, "person_detections")
+            updated += 1
+    return updated
 
 
 @router.post("/suggestions/{cluster_id}/ignore")

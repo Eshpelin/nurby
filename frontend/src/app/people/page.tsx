@@ -529,10 +529,17 @@ export default function PeoplePage() {
                     <div>
                       <div className="text-sm font-medium">Unknown person</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        Seen {s.sighting_count} time
-                        {s.sighting_count !== 1 ? "s" : ""}
-                        {" · "}First {timeAgo(s.first_seen_at)} / Last{" "}
-                        {timeAgo(s.last_seen_at)}
+                        {s.sighting_count === 1 ? (
+                          // A single visit can still span time (one continuous
+                          // presence), so First/Last would read as multiple
+                          // sightings. Show it as one visit.
+                          <>Seen once · {timeAgo(s.last_seen_at)}</>
+                        ) : (
+                          <>
+                            Seen {s.sighting_count} times · First{" "}
+                            {timeAgo(s.first_seen_at)} / Last {timeAgo(s.last_seen_at)}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
