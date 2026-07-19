@@ -327,7 +327,10 @@ export function StarredStatusRow() {
                     "no recent sightings"
                   )}
                 </div>
-                <p className="mt-1 text-[11px] leading-snug text-foreground/80 line-clamp-2">
+                <p
+                  className="mt-1 text-[11px] leading-snug text-foreground/80 line-clamp-2 hover:line-clamp-none cursor-default"
+                  title={it.status || undefined}
+                >
                   {it.status}
                 </p>
               </div>

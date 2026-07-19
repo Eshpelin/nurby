@@ -105,6 +105,11 @@ export default function PeoplePage() {
   const [summaries, setSummaries] = useState<PersonSummary[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editPerson, setEditPerson] = useState<Person | null>(null);
+  // Merge flow: mergePerson is the source (gets absorbed + deleted); the user
+  // picks a target to merge it into.
+  const [mergePerson, setMergePerson] = useState<Person | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState<string>("");
+  const [merging, setMerging] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Expanded person activity
@@ -420,6 +425,31 @@ export default function PeoplePage() {
       toast.success("Person deleted");
     } catch {
       toast.error("Could not delete this person.");
+    }
+  };
+
+  const handleMerge = async () => {
+    if (!mergePerson || !mergeTargetId) return;
+    const target = persons.find((p) => p.id === mergeTargetId);
+    setMerging(true);
+    try {
+      const res = await authFetch(`/api/persons/${mergeTargetId}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_id: mergePerson.id }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(
+        `Merged "${mergePerson.display_name}" into "${target?.display_name ?? "the selected person"}".`
+      );
+      setMergePerson(null);
+      setMergeTargetId("");
+      fetchPersons();
+      fetchSummaries();
+    } catch {
+      toast.error("Could not merge these people.");
+    } finally {
+      setMerging(false);
     }
   };
 
@@ -864,6 +894,17 @@ export default function PeoplePage() {
                         >
                           Edit
                         </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMergePerson(p);
+                            setMergeTargetId("");
+                          }}
+                          className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
+                          title="Merge this person into another (same real person enrolled twice)"
+                        >
+                          Merge
+                        </button>
                         <div className="flex-1" />
                         <span
                           className={`w-2 h-2 rounded-full ${p.consent_given ? "bg-green-500" : "bg-yellow-500"}`}
@@ -971,6 +1012,59 @@ export default function PeoplePage() {
           </div>
         )}
       </div>
+
+      {/* Merge Modal */}
+      {mergePerson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => { if (!merging) setMergePerson(null); }}
+          />
+          <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md shadow-xl">
+            <h2 className="text-lg font-semibold mb-1">Merge person</h2>
+            <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+              All faces and sightings of{" "}
+              <span className="font-medium text-foreground">{mergePerson.display_name}</span>{" "}
+              move to the person you pick, and{" "}
+              <span className="font-medium text-foreground">{mergePerson.display_name}</span>{" "}
+              is deleted. Use this when the same real person was enrolled twice.
+              This cannot be undone.
+            </p>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">
+              Merge into
+            </label>
+            <select
+              value={mergeTargetId}
+              onChange={(e) => setMergeTargetId(e.target.value)}
+              className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
+              autoFocus
+            >
+              <option value="">Select a person</option>
+              {persons
+                .filter((p) => p.id !== mergePerson.id)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>{p.display_name}</option>
+                ))}
+            </select>
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setMergePerson(null)}
+                disabled={merging}
+                className="px-3 py-2 text-sm rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMerge}
+                disabled={!mergeTargetId || merging}
+                className="px-3 py-2 text-sm rounded-md bg-accent text-accent-foreground hover:bg-accent/90 transition-colors disabled:opacity-50"
+              >
+                {merging ? "Merging." : "Merge"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       {showModal && (
