@@ -492,6 +492,10 @@ class Observation(Base):
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     thumbnail_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     clip_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    # Unannotated frame (no detection boxes) for downstream visual grounding.
+    # Column added by migration a3f5c1e9d7b2; the mapped attribute was missing
+    # here, so every observation write raised a TypeError and nothing landed.
+    clean_frame_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     description_embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
     # Cascade history. When the refiner stage replaces the primary
     # text on this observation, the original primary output is moved
