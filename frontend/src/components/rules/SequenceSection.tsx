@@ -10,6 +10,7 @@ import {
   defaultSeqStep,
   describeSeqStep,
   SEQ_CORRELATE_OPTIONS,
+  SEQ_KINDS_NO_LABEL,
   type ActionDraft,
   type DeviceOption,
   type SeqCheckKind,
@@ -113,6 +114,9 @@ export function SequenceSection(props: SequenceSectionProps) {
                       <option value="object">Object detected</option>
                       <option value="locate">FindAnything (locate)</option>
                       <option value="verify">Verify (ask the AI)</option>
+                      <option value="motion">Motion</option>
+                      <option value="face">Face detected</option>
+                      <option value="audio">Audio event</option>
                     </select>
                     <button
                       type="button"
@@ -124,19 +128,39 @@ export function SequenceSection(props: SequenceSectionProps) {
                     </button>
                   </div>
 
-                  <input
-                    type="text"
-                    value={s.label}
-                    onChange={(e) => patchStep(i, { label: e.target.value })}
-                    placeholder={
-                      s.kind === "locate"
-                        ? 'e.g. "a key in the key box"'
-                        : s.kind === "verify"
-                          ? 'e.g. "is the garage door open?"'
-                          : "e.g. package"
-                    }
-                    className={`${INPUT_CLS} w-full`}
-                  />
+                  {!SEQ_KINDS_NO_LABEL.includes(s.kind) && (
+                    <input
+                      type="text"
+                      value={s.label}
+                      onChange={(e) => patchStep(i, { label: e.target.value })}
+                      placeholder={
+                        s.kind === "locate"
+                          ? 'e.g. "a key in the key box"'
+                          : s.kind === "verify"
+                            ? 'e.g. "is the garage door open?"'
+                            : s.kind === "audio"
+                              ? "e.g. baby_cry, glass_break, dog_bark"
+                              : "e.g. package"
+                      }
+                      className={`${INPUT_CLS} w-full`}
+                    />
+                  )}
+
+                  {s.kind === "verify" && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] text-muted-foreground">min confidence</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={s.minConfidence}
+                        onChange={(e) => patchStep(i, { minConfidence: e.target.value })}
+                        title="The AI must answer yes with at least this confidence (0-1) for the step to pass."
+                        className={`${INPUT_CLS} w-20`}
+                      />
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[11px] text-muted-foreground">within</span>

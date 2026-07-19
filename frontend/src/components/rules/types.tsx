@@ -1310,7 +1310,10 @@ export function buildRuleSummary(rule: Rule, cameras: Camera[]): string {
 // FindAnything (locate). on_complete reuses the rule's main action chain;
 // on_timeout is the absence alert that fires when a step never happens in time.
 
-export type SeqCheckKind = "object" | "locate" | "verify";
+export type SeqCheckKind = "object" | "locate" | "verify" | "motion" | "face" | "audio";
+
+// Step kinds that don't need a label/prompt/question text field.
+export const SEQ_KINDS_NO_LABEL: SeqCheckKind[] = ["motion", "face"];
 
 export interface SeqStepDraft {
   kind: SeqCheckKind;
@@ -1318,6 +1321,7 @@ export interface SeqStepDraft {
   withinSeconds: string;
   confirmFrames: string; // require N agreeing frames within the window (>1 cuts noise)
   negate: boolean; // match on ABSENCE (with ordering = a transition)
+  minConfidence: string; // verify only: pass threshold (0-1)
   preGateLabel: string; // locate only: object that must be present before grounding
   requireCorroboration: boolean; // locate only
 }
@@ -1331,7 +1335,10 @@ export const SEQ_CORRELATE_OPTIONS: { value: string; label: string; hint: string
 ];
 
 export function defaultSeqStep(kind: SeqCheckKind = "object"): SeqStepDraft {
-  return { kind, label: "", withinSeconds: "120", confirmFrames: "1", negate: false, preGateLabel: "", requireCorroboration: false };
+  return {
+    kind, label: "", withinSeconds: "120", confirmFrames: "1", negate: false,
+    minConfidence: "0.6", preGateLabel: "", requireCorroboration: false,
+  };
 }
 
 export function seqStepToDict(s: SeqStepDraft): Record<string, unknown> {
@@ -1340,13 +1347,30 @@ export function seqStepToDict(s: SeqStepDraft): Record<string, unknown> {
   const confirm = parseInt(s.confirmFrames) || 1;
   if (confirm > 1) step.confirm_frames = confirm;
   if (s.negate) step.negate = true;
-  if (s.kind === "locate") {
-    step.check = { type: "locate", prompt: s.label.trim(), require_corroboration: s.requireCorroboration };
-    if (s.preGateLabel.trim()) step.pre_gate = { type: "object_detected", label: s.preGateLabel.trim() };
-  } else if (s.kind === "verify") {
-    step.check = { type: "verify", question: s.label.trim() };
-  } else {
-    step.check = { type: "object_detected", label: s.label.trim() };
+  switch (s.kind) {
+    case "locate":
+      step.check = { type: "locate", prompt: s.label.trim(), require_corroboration: s.requireCorroboration };
+      if (s.preGateLabel.trim()) step.pre_gate = { type: "object_detected", label: s.preGateLabel.trim() };
+      break;
+    case "verify": {
+      const mc = parseFloat(s.minConfidence);
+      step.check = {
+        type: "verify", question: s.label.trim(),
+        ...(Number.isFinite(mc) ? { min_confidence: mc } : {}),
+      };
+      break;
+    }
+    case "motion":
+      step.check = { type: "motion" };
+      break;
+    case "face":
+      step.check = { type: "face_detected" };
+      break;
+    case "audio":
+      step.check = { type: "audio_event", label: s.label.trim() };
+      break;
+    default:
+      step.check = { type: "object_detected", label: s.label.trim() };
   }
   return step;
 }
@@ -1355,58 +1379,70 @@ export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
   const check = (raw.check as Record<string, unknown>) || {};
   const within = raw.within_seconds != null ? String(raw.within_seconds) : "120";
   const confirm = raw.confirm_frames != null ? String(raw.confirm_frames) : "1";
-  const negate = raw.negate === true;
-  if (check.type === "locate") {
-    const pre = (raw.pre_gate as Record<string, unknown>) || {};
-    return {
-      kind: "locate",
-      label: (check.prompt as string) || "",
-      withinSeconds: within,
-      confirmFrames: confirm,
-      negate,
-      preGateLabel: (pre.label as string) || "",
-      requireCorroboration: check.require_corroboration === true,
-    };
-  }
-  if (check.type === "verify") {
-    return {
-      kind: "verify",
-      label: (check.question as string) || "",
-      withinSeconds: within,
-      confirmFrames: confirm,
-      negate,
-      preGateLabel: "",
-      requireCorroboration: false,
-    };
-  }
-  return {
-    kind: "object",
-    label: (check.label as string) || "",
-    withinSeconds: within,
-    confirmFrames: confirm,
-    negate,
-    preGateLabel: "",
-    requireCorroboration: false,
+  const base = {
+    withinSeconds: within, confirmFrames: confirm, negate: raw.negate === true,
+    minConfidence: "0.6", preGateLabel: "", requireCorroboration: false,
   };
+  switch (check.type) {
+    case "locate": {
+      const pre = (raw.pre_gate as Record<string, unknown>) || {};
+      return {
+        ...base, kind: "locate", label: (check.prompt as string) || "",
+        preGateLabel: (pre.label as string) || "",
+        requireCorroboration: check.require_corroboration === true,
+      };
+    }
+    case "verify":
+      return {
+        ...base, kind: "verify", label: (check.question as string) || "",
+        minConfidence: check.min_confidence != null ? String(check.min_confidence) : "0.6",
+      };
+    case "motion":
+      return { ...base, kind: "motion", label: "" };
+    case "face_detected":
+      return { ...base, kind: "face", label: "" };
+    case "audio_event":
+      return { ...base, kind: "audio", label: (check.label as string) || "" };
+    default:
+      return { ...base, kind: "object", label: (check.label as string) || "" };
+  }
 }
 
 export function describeSeqStep(s: SeqStepDraft): string {
   const within = parseInt(s.withinSeconds) || 60;
-  if (s.kind === "locate") {
-    const pre = s.preGateLabel.trim() ? ` (when ${s.preGateLabel.trim()} present)` : "";
-    const verb = s.negate ? "do NOT find" : "find";
-    return `${verb} "${s.label.trim() || "…"}"${pre} within ${within}s`;
+  const not = s.negate;
+  switch (s.kind) {
+    case "locate": {
+      const pre = s.preGateLabel.trim() ? ` (when ${s.preGateLabel.trim()} present)` : "";
+      return `${not ? "do NOT find" : "find"} "${s.label.trim() || "…"}"${pre} within ${within}s`;
+    }
+    case "verify":
+      return `${not ? "AI says no to" : "AI confirms"} "${s.label.trim() || "…"}" within ${within}s`;
+    case "motion":
+      return `${not ? "no motion" : "motion"} within ${within}s`;
+    case "face":
+      return `${not ? "no face" : "a face"} within ${within}s`;
+    case "audio":
+      return `${not ? "no " : ""}${s.label.trim() || "sound"} within ${within}s`;
+    default: {
+      const obj = s.label.trim() || "object";
+      return not ? `no ${obj} within ${within}s` : `${obj} appears within ${within}s`;
+    }
   }
-  if (s.kind === "verify") {
-    const q = s.label.trim() || "…";
-    return `${s.negate ? "AI says no to" : "AI confirms"} "${q}" within ${within}s`;
-  }
-  const obj = s.label.trim() || "object";
-  return s.negate ? `no ${obj} within ${within}s` : `${obj} appears within ${within}s`;
 }
 
 export function validateSeqStep(s: SeqStepDraft): string | null {
-  if (!s.label.trim()) return s.kind === "locate" ? "Describe what to find" : "Object label is required";
+  const noLabel = SEQ_KINDS_NO_LABEL.includes(s.kind);
+  if (!noLabel && !s.label.trim()) {
+    return s.kind === "locate" ? "Describe what to find"
+      : s.kind === "verify" ? "Ask a yes/no question"
+      : s.kind === "audio" ? "Enter a sound label (e.g. baby_cry)"
+      : "Object label is required";
+  }
   if ((parseInt(s.withinSeconds) || 0) <= 0) return "Time window must be greater than 0";
+  if (s.kind === "verify") {
+    const mc = parseFloat(s.minConfidence);
+    if (!Number.isFinite(mc) || mc < 0 || mc > 1) return "Confidence must be between 0 and 1";
+  }
   return null;
 }
