@@ -13,6 +13,21 @@ export interface Provider {
   created_at: string;
 }
 
+export interface InviteCreator {
+  id: string;
+  email: string;
+  display_name: string | null;
+}
+
+export interface InviteRedemption {
+  user_id: string;
+  email: string;
+  display_name: string | null;
+  role: string;
+  is_active: boolean;
+  redeemed_at: string;
+}
+
 export interface InviteKey {
   id: string;
   key: string;
@@ -22,6 +37,18 @@ export interface InviteKey {
   use_count: number;
   expires_at: string | null;
   created_at: string;
+  created_by: InviteCreator | null;
+  redemptions: InviteRedemption[];
+}
+
+export type InviteKeyStatus = "active" | "expired" | "full";
+
+// Derive the lifecycle status of a key from its expiry and usage. Used to
+// render the status pill and to sort/emphasize keys in the manager.
+export function inviteKeyStatus(ik: InviteKey): InviteKeyStatus {
+  if (ik.expires_at !== null && new Date(ik.expires_at) < new Date()) return "expired";
+  if (ik.use_count >= ik.max_uses) return "full";
+  return "active";
 }
 
 export interface Camera {

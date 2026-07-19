@@ -8,7 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.auth import require_admin
 from shared.database import get_db
 from shared.models import InviteKey, User
-from shared.schemas import InviteKeyCreate, InviteKeyResponse
+from shared.schemas import (
+    InviteCreatorInfo,
+    InviteKeyCreate,
+    InviteKeyResponse,
+    InviteRedemptionInfo,
+)
 
 router = APIRouter()
 
@@ -18,9 +23,72 @@ async def list_invites(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all invite keys. Admin only."""
+    """List all invite keys with audit context. Admin only.
+
+    Each key carries who created it and the roster of accounts that redeemed
+    it (name, email, role, and when), so the Settings UI can show usage at a
+    glance instead of a bare ``used 2/5`` counter.
+    """
     result = await db.execute(select(InviteKey).order_by(InviteKey.created_at.desc()))
-    return result.scalars().all()
+    keys = result.scalars().all()
+    if not keys:
+        return []
+
+    # Resolve creators and redeemers in two batched queries rather than N
+    # lazy loads (async sessions can't lazy-load relationships anyway).
+    creator_ids = {k.created_by_id for k in keys}
+    creators = (
+        await db.execute(select(User).where(User.id.in_(creator_ids)))
+    ).scalars().all()
+    creator_by_id = {u.id: u for u in creators}
+
+    key_ids = [k.id for k in keys]
+    redeemers = (
+        await db.execute(
+            select(User)
+            .where(User.invite_key_id.in_(key_ids))
+            .order_by(User.created_at.asc())
+        )
+    ).scalars().all()
+    redemptions_by_key: dict[uuid.UUID, list[InviteRedemptionInfo]] = {}
+    for u in redeemers:
+        redemptions_by_key.setdefault(u.invite_key_id, []).append(
+            InviteRedemptionInfo(
+                user_id=u.id,
+                email=u.email,
+                display_name=u.display_name,
+                role=u.role,
+                is_active=u.is_active,
+                redeemed_at=u.created_at,
+            )
+        )
+
+    out: list[InviteKeyResponse] = []
+    for k in keys:
+        creator = creator_by_id.get(k.created_by_id)
+        out.append(
+            InviteKeyResponse(
+                id=k.id,
+                key=k.key,
+                role=k.role,
+                camera_ids=k.camera_ids,
+                max_uses=k.max_uses,
+                use_count=k.use_count,
+                expires_at=k.expires_at,
+                created_at=k.created_at,
+                created_by=(
+                    InviteCreatorInfo(
+                        id=creator.id,
+                        email=creator.email,
+                        display_name=creator.display_name,
+                    )
+                    if creator
+                    else None
+                ),
+                redemptions=redemptions_by_key.get(k.id, []),
+            )
+        )
+    return out
 
 
 @router.post("", response_model=InviteKeyResponse, status_code=201)

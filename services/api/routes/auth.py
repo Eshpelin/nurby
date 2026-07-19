@@ -205,6 +205,7 @@ async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
         password_hash=hash_password(body.password),
         role=invite.role,
         is_active=True,
+        invite_key_id=invite.id,
     )
     db.add(user)
 

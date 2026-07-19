@@ -14,9 +14,8 @@ import { GroundingSettingsCard } from "@/components/settings/GroundingSettingsCa
 import { ALL_PROVIDERS, PROVIDER_KINDS } from "@/lib/provider-presets";
 import { ProviderFields } from "@/components/ProviderFields";
 import { timezoneOptions } from "@/lib/timezones";
-import { formatDateTime } from "@/lib/time";
 
-
+import InviteKeysModal from "./InviteKeysModal";
 import type {
   Camera,
   CameraStorage,
@@ -27,6 +26,7 @@ import type {
 import {
   barColor,
   formatBytes,
+  inviteKeyStatus,
   retentionLabel,
   usagePercent,
 } from "./settings-helpers";
@@ -48,17 +48,11 @@ export default function SettingsPage() {
   const [showStorage, setShowStorage] = useState(false);
   const [showDoctor, setShowDoctor] = useState(false);
 
-  // Invite key state
+  // Invite key state. The manager modal owns create/copy/revoke; this page
+  // just holds the list (for the summary card) and toggles the modal.
   const [inviteKeys, setInviteKeys] = useState<InviteKey[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteRole, setInviteRole] = useState("viewer");
-  const [inviteCameraIds, setInviteCameraIds] = useState<string[]>([]);
-  const [inviteMaxUses, setInviteMaxUses] = useState(1);
-  // Days until the new key expires. 0 = never.
-  const [inviteExpiryDays, setInviteExpiryDays] = useState(0);
-  const [inviteCreating, setInviteCreating] = useState(false);
-  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
 
   // Storage state
   const [storage, setStorage] = useState<StorageStats | null>(null);
@@ -470,46 +464,6 @@ export default function SettingsPage() {
     } catch {
       setTestResult((prev) => ({ ...prev, [provider.id]: { ok: false, message: "Network error" } }));
     } finally { setTestingId(null); }
-  };
-
-  const handleCreateInvite = async () => {
-    setInviteCreating(true);
-    try {
-      const body: Record<string, unknown> = { role: inviteRole, max_uses: inviteMaxUses };
-      if (inviteCameraIds.length > 0) body.camera_ids = inviteCameraIds;
-      if (inviteExpiryDays > 0) {
-        body.expires_at = new Date(
-          Date.now() + inviteExpiryDays * 24 * 60 * 60 * 1000
-        ).toISOString();
-      }
-      const res = await authFetch("/api/invites", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        setShowInviteModal(false);
-        setInviteRole("viewer"); setInviteCameraIds([]); setInviteMaxUses(1); setInviteExpiryDays(0);
-        fetchInviteKeys();
-      }
-    } catch { /* silent */ }
-    finally { setInviteCreating(false); }
-  };
-
-  // Copy a ready-to-share redemption link. The raw key is still visible
-  // (select-all) for anyone who wants just the key.
-  const handleCopyInvite = async (ik: InviteKey) => {
-    try {
-      await navigator.clipboard.writeText(
-        `${window.location.origin}/invite?key=${ik.key}`
-      );
-      setCopiedInviteId(ik.id);
-      setTimeout(() => setCopiedInviteId((cur) => (cur === ik.id ? null : cur)), 2000);
-    } catch { /* clipboard unavailable (http, permissions). leave the key selectable */ }
-  };
-
-  const handleDeleteInvite = async (id: string) => {
-    try { await authFetch(`/api/invites/${id}`, { method: "DELETE" }); fetchInviteKeys(); }
-    catch { /* silent */ }
   };
 
   const handleSmtpTest = async () => {
@@ -1015,23 +969,36 @@ export default function SettingsPage() {
         <TelegramSection />
 
         {/* Invite Keys card */}
-        <div className="rounded-lg border border-border bg-card px-4 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${inviteKeys.length > 0 ? "bg-green-500" : "bg-muted-foreground/40"}`} />
-            <div>
-              <div className="text-sm font-medium">Invite Keys</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                {inviteKeys.length > 0
-                  ? `${inviteKeys.length} active key${inviteKeys.length !== 1 ? "s" : ""}`
-                  : "No invite keys created"}
+        {(() => {
+          const activeCount = inviteKeys.filter((ik) => inviteKeyStatus(ik) === "active").length;
+          const invitedCount = inviteKeys.reduce((n, ik) => n + ik.redemptions.length, 0);
+          const summary =
+            inviteKeys.length === 0
+              ? "No invite keys created"
+              : [
+                  `${activeCount} active key${activeCount !== 1 ? "s" : ""}`,
+                  invitedCount > 0
+                    ? `${invitedCount} ${invitedCount === 1 ? "person" : "people"} invited`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+          return (
+            <div className="rounded-lg border border-border bg-card px-4 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${activeCount > 0 ? "bg-green-500" : "bg-muted-foreground/40"}`} />
+                <div>
+                  <div className="text-sm font-medium">Invite Keys</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{summary}</div>
+                </div>
               </div>
+              <button onClick={() => setShowInviteModal(true)}
+                className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors">
+                Manage
+              </button>
             </div>
-          </div>
-          <button onClick={() => setShowInviteModal(true)}
-            className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors">
-            Manage
-          </button>
-        </div>
+          );
+        })()}
 
         {/* Privacy Blur card */}
         {(() => {
@@ -1639,107 +1606,14 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Invite Key Modal */}
+      {/* Invite Keys Modal */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowInviteModal(false)} />
-          <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md shadow-xl">
-            <h2 className="text-lg font-semibold mb-4">Invite Keys</h2>
-
-            {/* Existing keys */}
-            {inviteKeys.length > 0 && (
-              <div className="space-y-2 mb-4">
-                {inviteKeys.map((ik) => {
-                  const expired = ik.expires_at !== null && new Date(ik.expires_at) < new Date();
-                  return (
-                    <div key={ik.id} className="rounded-md border border-border bg-background p-3 flex items-center justify-between">
-                      <div className="min-w-0 space-y-1">
-                        <code className="block text-xs font-mono bg-muted px-2 py-1 rounded select-all truncate">{ik.key}</code>
-                        <div className="text-[11px] text-muted-foreground">
-                          {ik.role} / {ik.use_count}/{ik.max_uses} uses /{" "}
-                          {ik.expires_at === null ? (
-                            "never expires"
-                          ) : expired ? (
-                            <span className="text-red-400">expired {formatDateTime(ik.expires_at)}</span>
-                          ) : (
-                            `expires ${formatDateTime(ik.expires_at)}`
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-1.5 ml-2 flex-shrink-0">
-                        <button onClick={() => handleCopyInvite(ik)}
-                          title="Copy invite link"
-                          className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors">
-                          {copiedInviteId === ik.id ? "Copied" : "Copy link"}
-                        </button>
-                        <button onClick={() => handleDeleteInvite(ik.id)}
-                          className="px-2 py-1 text-xs rounded border border-red-800 text-red-400 hover:bg-red-900/30 transition-colors">
-                          Revoke
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Create new key form */}
-            <div className="border-t border-border pt-4 space-y-3">
-              <div className="text-xs font-medium text-muted-foreground">Create new key</div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Role</label>
-                <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent">
-                  <option value="viewer">Viewer</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Max Uses</label>
-                <input type="number" min={1} max={100} value={inviteMaxUses}
-                  onChange={(e) => setInviteMaxUses(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent" />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Expires</label>
-                <select value={inviteExpiryDays} onChange={(e) => setInviteExpiryDays(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent">
-                  <option value={0}>Never</option>
-                  <option value={1}>1 day</option>
-                  <option value={7}>7 days</option>
-                  <option value={30}>30 days</option>
-                </select>
-              </div>
-              {cameras.length > 0 && (
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Camera Access (optional)</label>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {cameras.map((cam) => (
-                      <label key={cam.id} className="flex items-center gap-2 cursor-pointer text-sm">
-                        <input type="checkbox" checked={inviteCameraIds.includes(cam.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) setInviteCameraIds([...inviteCameraIds, cam.id]);
-                            else setInviteCameraIds(inviteCameraIds.filter((id) => id !== cam.id));
-                          }} className="accent-accent" />
-                        {cam.name}
-                      </label>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">Leave empty to grant access to all cameras</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 mt-5">
-              <button onClick={() => setShowInviteModal(false)}
-                className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">Close</button>
-              <button onClick={handleCreateInvite} disabled={inviteCreating}
-                className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
-                {inviteCreating ? "Creating." : "Create key"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <InviteKeysModal
+          inviteKeys={inviteKeys}
+          cameras={cameras}
+          onClose={() => setShowInviteModal(false)}
+          onChanged={fetchInviteKeys}
+        />
       )}
     </div>
   );

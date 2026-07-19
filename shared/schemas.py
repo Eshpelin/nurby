@@ -1261,6 +1261,27 @@ class InviteKeyCreate(BaseModel):
     expires_at: datetime | None = None
 
 
+class InviteCreatorInfo(BaseModel):
+    """Minimal identity of the admin who created an invite key."""
+    id: uuid.UUID
+    email: str
+    display_name: str | None = None
+
+
+class InviteRedemptionInfo(BaseModel):
+    """One account that was created by redeeming an invite key.
+
+    ``redeemed_at`` is the user's account creation time, which is exactly the
+    moment they redeemed the key (accounts can only be born via redemption).
+    """
+    user_id: uuid.UUID
+    email: str
+    display_name: str | None = None
+    role: str
+    is_active: bool
+    redeemed_at: datetime
+
+
 class InviteKeyResponse(BaseModel):
     id: uuid.UUID
     key: str
@@ -1270,6 +1291,11 @@ class InviteKeyResponse(BaseModel):
     use_count: int
     expires_at: datetime | None
     created_at: datetime
+    # Audit context for the redesigned Invite Keys UI. Populated by the list
+    # route; both default empty/None so any code building a bare response
+    # (tests, the create route returning the ORM row) stays valid.
+    created_by: InviteCreatorInfo | None = None
+    redemptions: list[InviteRedemptionInfo] = []
 
     model_config = {"from_attributes": True}
 
