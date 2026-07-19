@@ -13,6 +13,7 @@ import {
   SEQ_KINDS_NO_LABEL,
   type ActionDraft,
   type DeviceOption,
+  type Person,
   type SeqCheckKind,
   type SeqStepDraft,
   type TelegramChannelOption,
@@ -34,6 +35,7 @@ export interface SequenceSectionProps {
   telegramChannels: TelegramChannelOption[];
   telegramChannelsLoading: boolean;
   devices: DeviceOption[];
+  persons: Person[];
 }
 
 const SELECT_CLS =
@@ -45,7 +47,7 @@ export function SequenceSection(props: SequenceSectionProps) {
   const {
     enabled, setEnabled, correlateBy, setCorrelateBy, onRefire, setOnRefire,
     maxActive, setMaxActive, steps, setSteps, timeoutActions, setTimeoutActions,
-    telegramChannels, telegramChannelsLoading, devices,
+    telegramChannels, telegramChannelsLoading, devices, persons,
   } = props;
 
   const patchStep = (i: number, patch: Partial<SeqStepDraft>) =>
@@ -116,6 +118,7 @@ export function SequenceSection(props: SequenceSectionProps) {
                       <option value="verify">Verify (ask the AI)</option>
                       <option value="motion">Motion</option>
                       <option value="face">Face detected</option>
+                      <option value="known_face">Known face</option>
                       <option value="audio">Audio event</option>
                     </select>
                     <button
@@ -144,6 +147,19 @@ export function SequenceSection(props: SequenceSectionProps) {
                       }
                       className={`${INPUT_CLS} w-full`}
                     />
+                  )}
+
+                  {s.kind === "known_face" && (
+                    <select
+                      value={s.personId}
+                      onChange={(e) => patchStep(i, { personId: e.target.value })}
+                      className={`${SELECT_CLS} w-full`}
+                    >
+                      <option value="">Anyone known</option>
+                      {persons.map((p) => (
+                        <option key={p.id} value={p.id}>{p.display_name}</option>
+                      ))}
+                    </select>
                   )}
 
                   {s.kind === "verify" && (

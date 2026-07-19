@@ -525,6 +525,19 @@ def test_schema_confirm_frames():
         ]})
 
 
+def test_schema_predicate_step_kinds():
+    # motion/face/audio/known-face predicates are valid step checks (the engine
+    # matches any trigger predicate as a step; the builder exposes these kinds).
+    for chk in (
+        {"type": "motion"},
+        {"type": "face_detected"},
+        {"type": "audio_event", "label": "baby_cry"},
+        {"type": "face_recognized"},
+        {"type": "face_recognized", "person_id": "sam"},
+    ):
+        _validate_sequence({"steps": [{"check": chk, "within_seconds": 30}]})
+
+
 def test_schema_verify_step():
     _validate_sequence({"steps": [
         {"check": {"type": "verify", "question": "is the door open?"}, "within_seconds": 5},

@@ -1310,10 +1310,11 @@ export function buildRuleSummary(rule: Rule, cameras: Camera[]): string {
 // FindAnything (locate). on_complete reuses the rule's main action chain;
 // on_timeout is the absence alert that fires when a step never happens in time.
 
-export type SeqCheckKind = "object" | "locate" | "verify" | "motion" | "face" | "audio";
+export type SeqCheckKind =
+  | "object" | "locate" | "verify" | "motion" | "face" | "audio" | "known_face";
 
 // Step kinds that don't need a label/prompt/question text field.
-export const SEQ_KINDS_NO_LABEL: SeqCheckKind[] = ["motion", "face"];
+export const SEQ_KINDS_NO_LABEL: SeqCheckKind[] = ["motion", "face", "known_face"];
 
 export interface SeqStepDraft {
   kind: SeqCheckKind;
@@ -1322,6 +1323,7 @@ export interface SeqStepDraft {
   confirmFrames: string; // require N agreeing frames within the window (>1 cuts noise)
   negate: boolean; // match on ABSENCE (with ordering = a transition)
   minConfidence: string; // verify only: pass threshold (0-1)
+  personId: string; // known_face only: "" = anyone known, else a specific person
   preGateLabel: string; // locate only: object that must be present before grounding
   requireCorroboration: boolean; // locate only
 }
@@ -1337,7 +1339,7 @@ export const SEQ_CORRELATE_OPTIONS: { value: string; label: string; hint: string
 export function defaultSeqStep(kind: SeqCheckKind = "object"): SeqStepDraft {
   return {
     kind, label: "", withinSeconds: "120", confirmFrames: "1", negate: false,
-    minConfidence: "0.6", preGateLabel: "", requireCorroboration: false,
+    minConfidence: "0.6", personId: "", preGateLabel: "", requireCorroboration: false,
   };
 }
 
@@ -1369,6 +1371,12 @@ export function seqStepToDict(s: SeqStepDraft): Record<string, unknown> {
     case "audio":
       step.check = { type: "audio_event", label: s.label.trim() };
       break;
+    case "known_face":
+      step.check = {
+        type: "face_recognized",
+        ...(s.personId.trim() ? { person_id: s.personId.trim() } : {}),
+      };
+      break;
     default:
       step.check = { type: "object_detected", label: s.label.trim() };
   }
@@ -1381,7 +1389,7 @@ export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
   const confirm = raw.confirm_frames != null ? String(raw.confirm_frames) : "1";
   const base = {
     withinSeconds: within, confirmFrames: confirm, negate: raw.negate === true,
-    minConfidence: "0.6", preGateLabel: "", requireCorroboration: false,
+    minConfidence: "0.6", personId: "", preGateLabel: "", requireCorroboration: false,
   };
   switch (check.type) {
     case "locate": {
@@ -1403,6 +1411,8 @@ export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
       return { ...base, kind: "face", label: "" };
     case "audio_event":
       return { ...base, kind: "audio", label: (check.label as string) || "" };
+    case "face_recognized":
+      return { ...base, kind: "known_face", label: "", personId: (check.person_id as string) || "" };
     default:
       return { ...base, kind: "object", label: (check.label as string) || "" };
   }
@@ -1424,6 +1434,8 @@ export function describeSeqStep(s: SeqStepDraft): string {
       return `${not ? "no face" : "a face"} within ${within}s`;
     case "audio":
       return `${not ? "no " : ""}${s.label.trim() || "sound"} within ${within}s`;
+    case "known_face":
+      return `${s.personId ? "that person" : "a known face"} ${not ? "does NOT appear" : "appears"} within ${within}s`;
     default: {
       const obj = s.label.trim() || "object";
       return not ? `no ${obj} within ${within}s` : `${obj} appears within ${within}s`;

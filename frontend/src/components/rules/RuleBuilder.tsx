@@ -725,6 +725,7 @@ export function RuleBuilder({
             telegramChannels={telegramChannels}
             telegramChannelsLoading={telegramChannelsLoading}
             devices={devices}
+            persons={persons}
           />
 
           <div className="border border-border rounded-md p-3">
