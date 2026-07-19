@@ -55,6 +55,9 @@ async def list_persons(_current_user: User = Depends(get_current_user), db: Asyn
 class NameClusterBody(PydanticBaseModel):
     display_name: str
     relationship: str | None = None
+    # When the name already exists, set true to add this cluster's face to that
+    # existing person instead of failing. The UI asks for confirmation first.
+    merge_into_existing: bool = False
 
 
 @router.get("/suggestions", response_model=list)
@@ -164,18 +167,42 @@ async def name_cluster(
     if cluster.status != "pending":
         raise HTTPException(status_code=400, detail="Cluster already processed")
 
-    await _ensure_unique_display_name(db, body.display_name)
-    # Create Person
-    person = Person(
-        display_name=body.display_name,
-        relationship=body.relationship,
-        consent_given=True,
-        photo_path=cluster.sample_thumbnail_path,
-    )
-    db.add(person)
-    await db.flush()
+    # If the name is already taken, this cluster is very likely another
+    # fragment of that same person (face clustering splits one face into
+    # several clusters). Offer to fold it into the existing person instead of
+    # erroring; the UI confirms before sending merge_into_existing.
+    name_norm = (body.display_name or "").strip().lower()
+    existing_person = (
+        await db.execute(
+            select(Person).where(sa_lower(Person.display_name) == name_norm).limit(1)
+        )
+    ).scalars().first() if name_norm else None
 
-    # Link all cluster sample embeddings to the new person
+    if existing_person is not None and not body.merge_into_existing:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"A person named '{existing_person.display_name}' already exists.",
+                "existing_person_id": str(existing_person.id),
+                "existing_name": existing_person.display_name,
+                "can_merge": True,
+            },
+        )
+
+    if existing_person is not None:
+        # Fold this cluster into the existing person.
+        person = existing_person
+    else:
+        person = Person(
+            display_name=body.display_name,
+            relationship=body.relationship,
+            consent_given=True,
+            photo_path=cluster.sample_thumbnail_path,
+        )
+        db.add(person)
+        await db.flush()
+
+    # Link all cluster sample embeddings to the person
     samples_result = await db.execute(
         select(FaceClusterSample).where(FaceClusterSample.cluster_id == cluster_id)
     )

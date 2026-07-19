@@ -6,6 +6,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
+
+// An observation older than this is not "what's on screen now", so its boxes
+// must not be painted on load (avoids stale Anuf/phone boxes flashing in).
+const OVERLAY_STALE_MS = 15000;
 import type { Observation } from "@/app/dashboard-types";
 
 // ── Detection Overlay ──
@@ -218,6 +222,10 @@ export function DetectionOverlay({ cameraId, visible, frameWidth, frameHeight }:
         if (cancelled || obs.length === 0) return;
 
         const latest = obs[0];
+        // Don't paint boxes from a stale observation (the last person who was
+        // here minutes ago). Without this the old boxes flash on load until a
+        // live frame arrives and clears them. Only overlay a recent one.
+        if (Date.now() - new Date(latest.started_at).getTime() > OVERLAY_STALE_MS) return;
         if (latest.id === lastObsIdRef.current) return;
         lastObsIdRef.current = latest.id;
 

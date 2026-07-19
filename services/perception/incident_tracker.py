@@ -32,6 +32,19 @@ from shared.models import Camera, Incident, Observation, Provider
 logger = logging.getLogger("nurby.perception.incident")
 
 
+def _humanize_duration(seconds: float) -> str:
+    """Human-readable duration. Avoids '1196-second period' in narratives."""
+    s = int(round(max(0.0, seconds)))
+    if s < 60:
+        return f"{s} second{'s' if s != 1 else ''}"
+    if s < 3600:
+        m = round(s / 60)
+        return f"{m} minute{'s' if m != 1 else ''}"
+    h = s / 3600
+    txt = f"{h:.1f}".rstrip("0").rstrip(".")
+    return f"{txt} hour{'s' if txt != '1' else ''}"
+
+
 INCIDENT_SUMMARY_PROMPT = (
     "You are a security camera analyst. You are given a series of"
     " observations of the same person or object on one camera that"
@@ -423,7 +436,7 @@ class IncidentFinalizer:
             f"Camera: {' / '.join(cam_bits) if cam_bits else 'unnamed'}.",
             f"Incident kind: {inc.signature_kind} ({inc.signature_key}).",
             f"Window: {inc.started_at.isoformat()} -> {inc.last_seen_at.isoformat()}"
-            f" ({int((inc.last_seen_at - inc.started_at).total_seconds())}s,"
+            f" (lasted {_humanize_duration((inc.last_seen_at - inc.started_at).total_seconds())},"
             f" {inc.occurrence_count} occurrences).",
             "",
             "Occurrences:",
@@ -438,7 +451,9 @@ class IncidentFinalizer:
         lines.append("")
         lines.append(
             "Write a single concise sentence summarizing what happened"
-            " across these occurrences. If nothing notable, return SKIP."
+            " across these occurrences. Express any duration in human-readable"
+            " terms (minutes or hours), never raw seconds. If nothing notable,"
+            " return SKIP."
         )
         prompt = "\n".join(lines)
         max_out = resolve_output_cap(

@@ -158,9 +158,6 @@ export function CameraWall({
       <div className="flex items-center justify-between gap-2 mb-2 flex-shrink-0">
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Wall</span>
-          <span className="text-[10px] text-muted-foreground/70 hidden sm:inline">
-            drag header to move · drag corner to resize · scroll to zoom · double-click for solo
-          </span>
         </div>
         <div className="flex items-center gap-2">
           {toolbarExtra}
