@@ -5,6 +5,7 @@ import { extractApiError } from "@/lib/api-error";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PersonaPicker } from "@/components/PersonaPicker";
+import { RetryCountdown } from "@/components/RetryCountdown";
 import type { PersonaPatch } from "@/lib/camera-personas";
 import { ConversationCard } from "@/components/ConversationCard";
 import { SummaryCard } from "@/components/SummaryCard";
@@ -96,6 +97,9 @@ interface Camera {
   ptz_profile_token: string;
   motion_zones: MotionZone[] | null;
   status: string;
+  status_reason?: string | null;
+  next_retry_at?: number | null;
+  retry_delay_seconds?: number | null;
   width: number | null;
   height: number | null;
   fps: number | null;
@@ -278,7 +282,7 @@ const inputClass =
   "w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent";
 
 export default function CameraConfigPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, loading: authLoading } = useAuth();
   const params = useParams();
   const router = useRouter();
   const cameraId = params.id as string;
@@ -477,8 +481,13 @@ export default function CameraConfigPage() {
   }, [cameraId]);
 
   useEffect(() => {
+    // Wait for auth to hydrate the token from localStorage before fetching.
+    // On a hard load / direct URL the token loads via effects one tick after
+    // mount; firing fetchData first sends an unauthenticated request that
+    // 401s and renders a false "Camera not found".
+    if (authLoading) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, authLoading]);
 
   // Fetch class names from the selected detection models. Falls back to
   // yolov8n.pt when the list is empty (matches backend fallback).
@@ -763,6 +772,13 @@ export default function CameraConfigPage() {
         <h1 className="text-lg font-semibold">{camera.name}</h1>
         <StatusDot status={camera.status} />
         <span className="text-xs text-muted-foreground capitalize">{camera.status}</span>
+        {camera.status === "offline" && (
+          <RetryCountdown
+            className="text-xs"
+            nextRetryAt={camera.next_retry_at}
+            reason={camera.status_reason}
+          />
+        )}
         <Link
           href={`/cameras/${cameraId}/audio`}
           className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground hover:border-foreground/30"
@@ -1025,8 +1041,14 @@ export default function CameraConfigPage() {
             description="Credentials for accessing the camera feed"
           >
             <FieldRow label="Username">
+              {/* autoComplete off + a non-login field name so the browser
+                  does not autofill the account email over the camera's own
+                  username. Autofill here silently corrupts the RTSP creds and
+                  the camera 401s. */}
               <input
                 type="text"
+                name="nurby-camera-username"
+                autoComplete="off"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="admin"
@@ -1035,8 +1057,12 @@ export default function CameraConfigPage() {
             </FieldRow>
 
             <FieldRow label="Password" hint="Leave blank to keep current">
+              {/* new-password stops the browser autofilling a saved login
+                  password over the camera credential. */}
               <input
                 type="password"
+                name="nurby-camera-password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
