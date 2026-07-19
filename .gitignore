@@ -82,6 +82,15 @@ testing/harness/*.log
 testing/harness/users.md
 # Generated persona logins. Never commit: the repo is public.
 testing/harness/credentials.json
+# Per-run bookkeeping. Local-only: the run reports, the findings ledger,
+# and the cursor are how each run resumes on THIS machine, not something
+# other people need in the public repo. Must be gitignored (not merely
+# untracked) so the ux-army worktree's `git clean -fd` / `reset --hard`
+# preserve them across runs. Persona files and harness scripts stay
+# tracked; only the mutable run outputs are ignored.
+testing/runs/
+testing/state.json
+testing/FINDINGS.md
 dev/feeds/
 # Recordings/thumbnails/audio written by the ux-army harness stack.
 dev/uxtest-data/

@@ -5,24 +5,61 @@ description: Execute one persona-driven UX test run against the local Nurby stac
 
 # User-army run protocol
 
-One invocation = one complete run: fix inherited backlog, live one
-persona's session in the browser, log findings, fix them, commit,
-advance. Designed to be killed at any point and resumed by the next
-scheduled run, so commit state early and often.
+One invocation = one complete run: deploy the latest repo fresh, fix the
+inherited backlog, live one persona's session in the browser, log
+findings, fix them, commit, advance. Designed to be killed at any point
+and resumed by the next scheduled run, so commit state early and often.
 
-## 0. Preflight
+Run fully autonomously. Never stop to ask for approval, confirmation, or
+a decision — there is no human watching a scheduled run. Make the
+reasonable call, note it in the run report, and keep going. The only
+thing that ends a run early is a stack that will not boot (see Budget
+rules), and even that ends with a committed blocker finding, not a
+question.
+
+## 0. Preflight — fresh worktree + net-new deploy
+
+The run works in a dedicated worktree checked out to the latest
+`origin/main`, never in the primary checkout. That way whatever
+uncommitted work is sitting in the primary checkout can never block or
+get clobbered, and the deploy always exercises the current committed
+code — which also tests that deployment itself still works.
 
 1. `cd /Users/ahmed.anough/Desktop/nurby-backend`
-2. `git checkout main && git pull --ff-only`. If the tree is dirty with
-   changes you did not make, stop and report instead of clobbering.
-3. `testing/harness/start_stack.sh` (idempotent: docker deps, nurby_uxtest
-   DB, API :8787, RTSP loop at `rtsp://localhost:8554/uxcam`).
-4. Start the frontend with the preview tool (`preview_start` name
-   `frontend`, port 3210, already pointed at :8787).
-5. Read `testing/state.json`, `testing/FINDINGS.md`, and the persona file
+2. `git fetch origin`.
+3. Prepare the persistent ux-army worktree at
+   `/Users/ahmed.anough/.claude/worktrees/ux-army`:
+   - If it does not exist:
+     `git worktree add -B ux-army /Users/ahmed.anough/.claude/worktrees/ux-army origin/main`
+   - If it exists, refresh it to latest without touching local
+     bookkeeping: `cd` into it, then
+     `git fetch origin && git reset --hard origin/main && git clean -fd`.
+     Use `git clean -fd`, **never** `-x`: the run bookkeeping
+     (`testing/state.json`, `testing/FINDINGS.md`, `testing/runs/`,
+     `testing/harness/users.md`) is gitignored and lives only in this
+     worktree; `-x` would wipe it and lose the resume trail.
+   - Do the rest of the run from inside this worktree.
+4. If the worktree is brand new (no `testing/state.json` in it yet),
+   seed its bookkeeping once from the primary checkout:
+   `cp /Users/ahmed.anough/Desktop/nurby-backend/testing/state.json .`
+   and likewise `testing/FINDINGS.md`, `testing/runs/`,
+   `testing/harness/users.md` if present. After the first run the
+   worktree owns them.
+5. Net-new deploy from the worktree:
+   `testing/harness/start_stack.sh --fresh`. This tears the compose
+   stack down, rebuilds its images, drops and re-migrates nurby_uxtest,
+   and restarts the host API/ingestion/perception on the current code
+   (docker deps, nurby_uxtest DB, API :8787, RTSP loop at
+   `rtsp://localhost:8554/uxcam`). Treat a deploy failure as a first-
+   class finding: if `--fresh` cannot bring the stack up, that is a
+   deployment regression worth logging, fixing if quick, or deferring.
+6. Start the frontend with the preview tool (`preview_start` name
+   `frontend`, port 3210, already pointed at :8787). The preview builds
+   from the worktree's frontend, so it too runs latest code.
+7. Read `testing/state.json`, `testing/FINDINGS.md`, and the persona file
    `testing/personas/<order[cursor]>.md`. Read the persona's most recent
    report in `testing/runs/` if one exists, to avoid repeating goals.
-6. Every persona already has a real login — check
+8. Every persona already has a real login — check
    `testing/harness/users.md` for the email/password before doing
    anything else. Just log in as the persona whose turn it is; don't
    register or hunt for an invite key. (All 20 were seeded in one batch
@@ -48,14 +85,16 @@ no source peeking, no URL surgery (unless the persona would, like Tom).
 Type realistic data at realistic speed. When the persona would give up,
 give up, and that IS the finding.
 
-- The DB persists across runs on purpose: returning personas find their
-  old cameras and rules. Everyone logs into their pre-seeded account
-  from `testing/harness/users.md` — no registration needed. Exception:
-  if a persona's own goals include creating a *second* account for
-  someone else (e.g. ahmed-remote-son inviting his mother as a
-  guardian), that invite-and-claim flow is still exactly what you
-  should test live; record whatever new credentials that produces in
-  `users.md`.
+- The DB is dropped and re-migrated on every run's fresh deploy, so it
+  starts empty each time — but personas' logins in `users.md` are
+  reseeded/persist, so a returning persona logs back into their account
+  and rebuilds their cameras and rules as part of the session. Everyone
+  logs into their pre-seeded account from `testing/harness/users.md` —
+  no registration needed. Exception: if a persona's own goals include
+  creating a *second* account for someone else (e.g. ahmed-remote-son
+  inviting his mother as a guardian), that invite-and-claim flow is
+  still exactly what you should test live; record whatever new
+  credentials that produces in `users.md`.
 - Navigate with `read_page` primarily; screenshot at judgment moments
   (first impressions, confusing screens, anything broken). Budget:
   roughly 50 browser interactions, one flow lived deeply beats five
@@ -89,14 +128,22 @@ give up, and that IS the finding.
   for incident/alert flows. Name and describe the camera the way the
   persona would ("Front door", not "front-door feed").
 
-## 3. Log findings
+## 3. Log findings (local only, never committed)
 
 Write `testing/runs/YYYY-MM-DD-HHMM-<persona>.md`: persona, goals
 attempted, step-by-step narrative with verdicts, findings list, what
 worked. Then merge findings into `testing/FINDINGS.md`: dedupe against
 every existing entry (including docs/ux-review-2026-07-12.md), continue
-the F-numbering, put positives under "Working well". Commit the report
-and ledger BEFORE starting fixes, so a dead session loses nothing.
+the F-numbering, put positives under "Working well".
+
+These bookkeeping files (`testing/runs/`, `testing/FINDINGS.md`,
+`testing/state.json`) are gitignored on purpose — they are a local
+resume trail, not something the public repo needs. Do NOT try to commit
+them, do NOT `git add -f` them, and do NOT treat their absence from a
+commit as a problem. They persist between runs because the worktree is
+persistent, not because they are in git. Save them to disk before
+starting fixes so a dead session loses nothing, but there is no ledger
+commit step anymore.
 
 ## 4. Fix everything found
 
@@ -107,11 +154,22 @@ entry to "Fixed" with the sha. Multi-day items go to "Deferred features"
 with a reason. If the session is running long, committing verified fixes
 beats starting new ones: never leave a half-applied fix uncommitted.
 
+Commit ONLY product code — source, tests, migrations, harness scripts.
+Because the bookkeeping is gitignored, a plain `git add -A && git commit`
+will already exclude it; do not fight that. Prefix every commit
+`ux-army:`. Push to `origin main` from the worktree
+(`git push origin ux-army:main`, or fast-forward push the branch). If a
+push is rejected because `origin/main` moved, `git fetch` and rebase the
+worktree branch onto `origin/main`, then push again. Never force-push.
+
 ## 5. Close out
 
 1. Update `testing/state.json`: cursor = (cursor+1) % len(order),
-   runs_completed += 1, last_run ISO timestamp, last_run_persona.
-2. Commit everything remaining, prefix `ux-army:`, push to main.
+   runs_completed += 1, last_run ISO timestamp, last_run_persona. (This
+   file is gitignored and stays in the worktree — updating it on disk is
+   the whole point; there is nothing to commit for it.)
+2. Ensure every verified product fix is committed and pushed to main.
+   Leave no half-applied fix in the worktree.
 3. Final message: persona, goals covered, findings found/fixed/deferred,
    one-line product verdict from the persona's mouth.
 
@@ -120,6 +178,9 @@ beats starting new ones: never leave a half-applied fix uncommitted.
 Runs fire every 3h on a limited token plan. Hard rules: one persona per
 run, no fix rabbit-holes past ~30 min without committing something,
 prefer read_page over screenshots, never re-verify the whole app (only
-what you touched). If the stack fails to boot after two repair attempts,
-log it in FINDINGS.md as a blocker finding, commit and stop; broken
-harness is itself a finding.
+what you touched). If the `--fresh` deploy fails to bring the stack up
+after two repair attempts, that is itself the finding: record it in
+`testing/FINDINGS.md` as a deployment blocker (on disk, local only),
+make sure any product fix you did land is committed and pushed, and
+stop. A broken deploy is a real result, not a reason to fall back to a
+stale stack.

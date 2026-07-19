@@ -6,8 +6,20 @@
 #
 #   testing/harness/start_stack.sh            # boot / repair
 #   testing/harness/start_stack.sh --reset    # drop nurby_uxtest first
+#   testing/harness/start_stack.sh --fresh    # net-new deploy: tear the
+#       stack down, rebuild compose images, drop the DB, and restart the
+#       host API/ingestion/perception on latest code. Every scheduled run
+#       uses this so it deploys the current repo, not a stale process.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+
+MODE="${1:-}"
+BUILD_FLAG=""
+if [ "$MODE" = "--fresh" ]; then
+  echo "fresh deploy: tearing down uxtest compose stack"
+  docker compose down --remove-orphans || true
+  BUILD_FLAG="--build"
+fi
 
 UXDB_URL="postgresql+asyncpg://nurby:nurby_dev@localhost:5433/nurby_uxtest"
 API_PORT=8787
@@ -33,7 +45,7 @@ mkdir -p "$UXDATA/recordings" "$UXDATA/thumbnails" "$UXDATA/audio"
 pkill -f "caffeinate -dims -t 12600" 2>/dev/null || true
 (caffeinate -dims -t 12600 >/dev/null 2>&1 &)
 
-docker compose up -d postgres redis mediamtx
+docker compose up -d $BUILD_FLAG postgres redis mediamtx
 
 echo "waiting for postgres..."
 for _ in $(seq 1 60); do
@@ -41,7 +53,7 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 
-if [ "${1:-}" = "--reset" ]; then
+if [ "$MODE" = "--reset" ] || [ "$MODE" = "--fresh" ]; then
   docker compose exec -T postgres psql -U nurby -d postgres \
     -c "DROP DATABASE IF EXISTS nurby_uxtest;"
 fi
@@ -68,6 +80,16 @@ ux_env() {
   # cameras are all RTSP anyway.
   export DISABLE_WEBCAM_BRIDGE=1
 }
+
+# A fresh deploy must run the current repo, so kill the long-lived host
+# processes first; the idempotent guards below then restart them on the
+# latest code instead of leaving a stale API/worker up.
+if [ "$MODE" = "--fresh" ]; then
+  pkill -f "uvicorn services.api.main:app" 2>/dev/null || true
+  pkill -f "services.ingestion.main" 2>/dev/null || true
+  pkill -f "services.perception.main" 2>/dev/null || true
+  sleep 1
+fi
 
 if ! lsof -iTCP:$API_PORT -sTCP:LISTEN >/dev/null 2>&1; then
   (ux_env; nohup .venv-test/bin/uvicorn services.api.main:app \
