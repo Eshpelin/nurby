@@ -31,18 +31,32 @@ SEGMENT_DURATION = 300  # 5-minute recording segments
 MOTION_FRAME_INTERVAL = 5  # Check motion every N frames
 RECONNECT_DELAY = 5  # Seconds before the first reconnection attempt
 RECONNECT_MAX_DELAY = 300  # Backoff cap. an unreachable camera retries every 5 min, not every 5 s
+# Repeated failures trip a lockout cooldown: a long window of TOTAL quiet.
+# Some cameras (e.g. TP-Link Tapo) block RTSP after a burst of failed
+# connects and RE-ARM that block on every further attempt, so only sustained
+# silence lets it clear. Escalating the normal backoff is not enough; the
+# camera must be left fully alone.
+FAILURE_THRESHOLD = 4  # consecutive failed connect cycles before a lockout cooldown
+LOCKOUT_COOLDOWN = 600  # seconds of quiet once a camera looks locked/unreachable
+# Hybrid retry policy: an "unreachable" camera (network/power) retries forever
+# at the cooldown cadence, but a "stream error" (reachable host, stream still
+# fails, i.e. bad credentials/URL) will not self-heal, so auto-retry pauses
+# after this many stream-error cooldowns and waits for the operator.
+STREAM_ERROR_GIVE_UP = 3
+CAMERA_RETRY_KEY_PREFIX = "nurby:camera_retry:"  # per-camera next-retry hint for the UI
 MOTION_THRESHOLD = 0.01  # Minimum motion score to trigger event
 MOTION_COOLDOWN = 3.0  # Seconds between motion keyframe publishes
 MOTION_RECORD_COOLDOWN = 10.0  # Seconds to keep recording after last motion
 OBJECT_RECORD_COOLDOWN = 15.0  # Seconds to keep recording after object trigger
 REDIS_STREAM_KEY = "nurby:motion"  # Redis stream for motion keyframes
 REDIS_STREAM_MAXLEN = 1000  # Max entries in stream
-# Camera availability edges (offline / back online) for the rule engine.
-# A stream rather than pubsub so a transition that happens while the
-# perception process is restarting is delivered when it comes back, not
-# lost. Tamper alerting cannot ride a fire-and-forget channel.
-CAMERA_STATUS_STREAM_KEY = "nurby:camera_status"
-CAMERA_STATUS_STREAM_MAXLEN = 500
+# Camera availability edges live in shared/ so the perception watcher can name
+# the same stream without importing this (OpenCV-heavy) module, which its image
+# does not even ship. Re-exported here for existing call sites.
+from shared.redis_keys import (  # noqa: E402
+    CAMERA_STATUS_STREAM_KEY,
+    CAMERA_STATUS_STREAM_MAXLEN,
+)
 
 
 def classify_status_transition(status: str, previous: str | None) -> str | None:
@@ -121,6 +135,11 @@ class StreamWorker:
         self._last_motion_publish = 0.0
         self._last_status: str | None = None
         self._connected_this_cycle = False
+        # Lockout-prevention state (see run()).
+        self._consecutive_failures = 0
+        self._stream_error_cooldowns = 0
+        self._paused = False  # auto-retry paused, waiting for operator (hybrid policy)
+        self._last_reason: str | None = None  # latest status reason, for the retry hint
         self._redis = None
         # Smart recording state
         self._frame_buffer: list[tuple[np.ndarray, datetime]] = []  # ring buffer for clip pre-buffer
@@ -187,6 +206,13 @@ class StreamWorker:
         """
         delay = RECONNECT_DELAY
         while self._running:
+            if self._paused:
+                # Auto-retry paused after repeated stream errors (bad creds /
+                # URL). Sit idle. The camera manager restarts this worker when
+                # the camera is re-enabled or edited, which is the resume
+                # signal, so we never hammer a camera that cannot connect.
+                await asyncio.sleep(LOCKOUT_COOLDOWN)
+                continue
             self._connected_this_cycle = False
             try:
                 if await self._ssrf_rejected():
@@ -201,12 +227,124 @@ class StreamWorker:
                     await self._process_stream()
             except Exception:
                 logger.exception("Stream error for camera %s", self.camera_id)
+
+            if not self._running:
+                break
+
             if self._connected_this_cycle:
+                self._consecutive_failures = 0
+                self._stream_error_cooldowns = 0
                 delay = RECONNECT_DELAY
+                await self._clear_retry_hint()
+            else:
+                self._consecutive_failures += 1
+                if self._consecutive_failures >= FAILURE_THRESHOLD:
+                    # Looks stuck. Enter a long, fully-quiet cooldown so a
+                    # device-side RTSP lockout can expire, and classify why
+                    # for the UI and the hybrid retry policy.
+                    classification, reason = await self._classify_failure()
+                    if classification == "stream_error":
+                        self._stream_error_cooldowns += 1
+                        if self._stream_error_cooldowns >= STREAM_ERROR_GIVE_UP:
+                            self._paused = True
+                            await self._update_camera_status(
+                                "offline",
+                                "stream error (check credentials or URL). "
+                                "auto-retry paused",
+                            )
+                            await self._clear_retry_hint()
+                            continue
+                    delay = LOCKOUT_COOLDOWN
+                    await self._update_camera_status("offline", reason)
+
             if self._running:
+                next_retry_at = time.time() + delay
+                await self._publish_retry_hint(next_retry_at, delay)
                 logger.info("Reconnecting to camera %s in %ds", self.camera_id, delay)
                 await asyncio.sleep(delay)
-                delay = min(delay * 2, RECONNECT_MAX_DELAY)
+                # Escalate the normal backoff only while below the lockout
+                # threshold; a cooldown stays pinned at LOCKOUT_COOLDOWN.
+                if (
+                    not self._connected_this_cycle
+                    and self._consecutive_failures < FAILURE_THRESHOLD
+                ):
+                    delay = min(delay * 2, RECONNECT_MAX_DELAY)
+
+    def _camera_host_port(self) -> tuple[str | None, int]:
+        try:
+            parsed = urlparse(self.stream_url)
+            default_port = 554 if parsed.scheme == "rtsp" else 80
+            return parsed.hostname, (parsed.port or default_port)
+        except Exception:
+            return None, 0
+
+    @staticmethod
+    def _tcp_reachable(host: str, port: int, timeout: float = 4.0) -> bool:
+        """Bare TCP connect. No RTSP request is sent, so this never counts as
+        a failed auth that would re-arm a device lockout."""
+        import socket
+
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True
+        except OSError:
+            return False
+
+    async def _classify_failure(self) -> tuple[str, str]:
+        """Classify why the stream will not open, for the UI and the hybrid
+        retry policy. A reachable host whose stream still fails means bad
+        credentials / wrong path / codec ("stream_error"); an unreachable host
+        means network or power ("unreachable")."""
+        host, port = self._camera_host_port()
+        if not host:
+            return "stream_error", "invalid stream URL"
+        try:
+            loop = asyncio.get_event_loop()
+            reachable = await loop.run_in_executor(
+                self._executor, self._tcp_reachable, host, port
+            )
+        except Exception:
+            logger.exception("TCP probe failed for camera %s", self.camera_id)
+            return "unreachable", "camera unreachable"
+        if reachable:
+            return (
+                "stream_error",
+                "reachable but stream failed (check credentials or URL)",
+            )
+        return "unreachable", "camera unreachable"
+
+    async def _publish_retry_hint(self, next_retry_at: float, delay: float) -> None:
+        """Record when the next reconnect attempt will fire so the UI can show
+        a live countdown. Expires just after the retry so a stale countdown
+        never lingers. Best-effort. a Redis hiccup must not stall reconnects."""
+        try:
+            import json
+
+            r = await self._get_redis()
+            await r.set(
+                f"{CAMERA_RETRY_KEY_PREFIX}{self.camera_id}",
+                json.dumps({
+                    "next_retry_at": next_retry_at,
+                    "delay_seconds": delay,
+                    "reason": self._last_reason,
+                }),
+                ex=int(delay) + 30,
+            )
+        except Exception:
+            logger.debug(
+                "Failed to publish retry hint for camera %s",
+                self.camera_id, exc_info=True,
+            )
+
+    async def _clear_retry_hint(self) -> None:
+        try:
+            r = await self._get_redis()
+            await r.delete(f"{CAMERA_RETRY_KEY_PREFIX}{self.camera_id}")
+        except Exception:
+            logger.debug(
+                "Failed to clear retry hint for camera %s",
+                self.camera_id, exc_info=True,
+            )
 
     async def _process_stream(self):
         loop = asyncio.get_event_loop()
@@ -621,6 +759,11 @@ class StreamWorker:
     async def _update_camera_status(self, status: str, reason: str | None = None):
         previous = self._last_status
         self._last_status = status
+        # Track the latest reason even when the status itself is unchanged
+        # (offline -> offline with a refined reason), so the retry hint can
+        # surface it. The status-log row below is only written on a real
+        # status transition.
+        self._last_reason = reason
         if status in ("live", "recording"):
             # Signal run() that this cycle reached the camera, resetting the
             # reconnect backoff.

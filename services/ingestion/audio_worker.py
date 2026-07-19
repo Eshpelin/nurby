@@ -40,6 +40,8 @@ logger = logging.getLogger("nurby.ingestion.audio")
 
 AUDIO_COOLDOWN = 8.0  # seconds between emissions of the same label
 RECONNECT_DELAY = 5
+RECONNECT_MAX_DELAY = 300  # backoff cap, mirrors the video StreamWorker
+CONNECTED_MIN_SECONDS = 30  # a call shorter than this never really opened
 REDIS_STREAM_KEY = "nurby:audio"
 REDIS_STREAM_MAXLEN = 500
 
@@ -77,17 +79,27 @@ class AudioWorker:
 
     async def run(self):
         # Respect runtime toggle. Re-checked on each reconnect attempt.
+        delay = RECONNECT_DELAY
         while self._running:
             try:
                 enabled = bool(await get_setting("audio_events", True))
                 if not enabled:
                     await asyncio.sleep(30)
                     continue
+                started = time.monotonic()
                 await self._process_audio()
+                # A short-lived call means the source never really opened
+                # (no audio track, or the source is failing). Back off with
+                # the same escalation as the video worker so we do not reopen
+                # the MediaMTX mux every 5s and re-arm a camera-side RTSP
+                # lockout. A long-lived call was a genuine connection: reset.
+                if time.monotonic() - started >= CONNECTED_MIN_SECONDS:
+                    delay = RECONNECT_DELAY
             except Exception:
                 logger.exception("Audio worker error for camera %s", self.camera_id)
             if self._running:
-                await asyncio.sleep(RECONNECT_DELAY)
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, RECONNECT_MAX_DELAY)
 
     async def _process_audio(self):
         loop = asyncio.get_event_loop()

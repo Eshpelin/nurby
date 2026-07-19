@@ -73,14 +73,24 @@ def _load():
     with _lock:
         if _tagger is not None or _disabled:
             return
+        from shared import component_health
         try:
             from panns_inference import AudioTagging, labels  # type: ignore
             _tagger = AudioTagging(checkpoint_path=None, device="cpu")
             _labels = labels
             logger.info("Loaded PANNs CNN14 audio tagger with %d classes", len(labels))
-        except Exception:
+            # Load-once verdict: no TTL, holds until the process restarts.
+            component_health.report_sync(
+                component_health.AUDIO_TAGGER, component_health.OK,
+                f"CNN14 loaded, {len(labels)} classes", ttl=None,
+            )
+        except Exception as exc:
             logger.exception("Failed to load PANNs audio tagger. audio events disabled")
             _disabled = True
+            component_health.report_sync(
+                component_health.AUDIO_TAGGER, component_health.FAIL,
+                f"model failed to load: {exc}. sound events (claps) disabled", ttl=None,
+            )
 
 
 def classify(waveform: np.ndarray, min_score: float = 0.2) -> list[dict]:

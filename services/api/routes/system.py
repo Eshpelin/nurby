@@ -256,7 +256,24 @@ async def get_health(_current_user: User = Depends(get_current_user)):
         "perception": await heartbeat.is_alive(heartbeat.PERCEPTION),
     }
 
+    # Functional component health rides along too: a worker can be alive while
+    # its pipeline is silently broken (model failed to load, every write
+    # crashing). Surface any component reporting FAIL so the dashboard can warn,
+    # not only the Settings doctor panel.
+    from shared import component_health
+
+    degraded = []
+    for comp, label in (
+        (component_health.OBSERVATION_WRITER, "Perception output"),
+        (component_health.AUDIO_TAGGER, "Sound events (claps)"),
+        (component_health.VLM, "AI captioning"),
+    ):
+        h = await component_health.get(comp)
+        if h and h.get("status") == component_health.FAIL:
+            degraded.append({"id": comp, "label": label, "detail": h.get("detail", "")})
+
     return {
+        "degraded": degraded,
         "cpu_percent": round(cpu, 1),
         "cpu_count": psutil.cpu_count(logical=True),
         "load_avg": load_avg,

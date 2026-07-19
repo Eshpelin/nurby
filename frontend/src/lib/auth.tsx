@@ -274,7 +274,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const authFetch = useCallback(
     async (url: string, init?: RequestInit): Promise<Response> => {
-      const currentToken = tokenRef.current;
+      // tokenRef is synced by an effect in this (parent) provider. On the
+      // first commit after hydration/login, a child page's effect runs
+      // BEFORE this parent effect, so the ref can still be null while the
+      // token is already persisted. Fall back to localStorage (synchronous,
+      // always current) so that first request is not sent unauthenticated.
+      const currentToken =
+        tokenRef.current ??
+        (typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null);
       const headers = new Headers(init?.headers);
       if (currentToken) {
         headers.set("Authorization", `Bearer ${currentToken}`);

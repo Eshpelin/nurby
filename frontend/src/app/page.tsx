@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { useWebcamPublisher, listVideoDevices } from "@/lib/webcam-publisher";
 import type { StreamType } from "@/lib/camera-types";
 import { AddCameraModal } from "@/components/AddCameraModal";
+import { RetryCountdown } from "@/components/RetryCountdown";
 import { StarredStatusRow } from "@/components/StarredStatusRow";
 import { LiveCaptionOverlay } from "@/components/LiveCaptionOverlay";
 import { CurrentActivityStrip } from "@/components/CurrentActivityStrip";
@@ -115,7 +116,17 @@ function CameraSidebarCard({
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [ptzOpen, setPtzOpen] = useState(false);
   const ptzCapable = camera.stream_type === "rtsp";
-  const streamName = extractStreamName(camera.stream_url);
+  // MediaMTX serves the muxed copy under a canonical slug (mux_slug on the
+  // backend), NOT the camera's own URL path. rtsp/hls pull-mux under
+  // cam-<id>; webcam/usb push under webcam-<id>. Using the URL's last path
+  // segment ("stream1") requests a path MediaMTX does not have, so the tile
+  // shows "stream not found".
+  const streamName =
+    camera.stream_type === "rtsp" || camera.stream_type === "hls"
+      ? `cam-${camera.id}`
+      : camera.stream_type === "webcam" || camera.stream_type === "usb"
+        ? `webcam-${camera.id}`
+        : extractStreamName(camera.stream_url);
   const iframeSrc = `${WEBRTC_URL}/${streamName}/`;
   // A remote-file camera (the demo, or any http(s) clip) is not muxed into
   // MediaMTX, so the WebRTC path would be empty and the tile black. The
@@ -267,6 +278,13 @@ function CameraSidebarCard({
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
             <span className="text-[10px] text-muted-foreground font-mono">OFFLINE</span>
+            {!isWebcam && (camera.status_reason || camera.next_retry_at) && (
+              <RetryCountdown
+                className="text-[10px] text-center px-2"
+                nextRetryAt={camera.next_retry_at}
+                reason={camera.status_reason}
+              />
+            )}
             {isWebcam && myPublisher?.status === "needs-permission" && (
               <button
                 onClick={(e) => { e.stopPropagation(); resumeIntent(camera.id); }}
@@ -637,7 +655,7 @@ const SEARCH_HINTS = [
 function DashboardContent() {
   const { authFetch, token } = useAuth();
   const { status: wsStatus } = useWebSocket();
-  const { down: workersDown } = useWorkerHealth();
+  const { down: workersDown, degraded: degradedComponents } = useWorkerHealth();
   const searchParams = useSearchParams();
   const initialCamera = searchParams.get("camera");
   const [searchHint, setSearchHint] = useState(() => SEARCH_HINTS[Math.floor(Math.random() * SEARCH_HINTS.length)]);
@@ -1561,6 +1579,35 @@ function DashboardContent() {
                     System doctor
                   </Link>{" "}
                   to see the full picture.
+                </span>
+              </div>
+            </div>
+          )}
+          {/* Functional degradation: the worker is alive but a pipeline
+              component is broken (model failed to load, writes crashing). The
+              worker-down banner would never catch this, so it is called out
+              separately with the specific component and reason. */}
+          {workersDown.length === 0 && degradedComponents.length > 0 && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 mb-4 flex items-start gap-2.5">
+              <span className="text-amber-500 text-sm leading-none mt-0.5">⚠</span>
+              <div className="text-xs leading-relaxed">
+                <span className="font-semibold text-amber-500">
+                  {degradedComponents.map((d) => d.label).join(", ")}{" "}
+                  {degradedComponents.length > 1 ? "are" : "is"} degraded.
+                </span>{" "}
+                <span className="text-muted-foreground">
+                  The worker is running, but this part of the pipeline is failing, so
+                  its results will be missing.{" "}
+                  {degradedComponents[0]?.detail && (
+                    <span className="text-muted-foreground/80">
+                      ({degradedComponents[0].detail})
+                    </span>
+                  )}{" "}
+                  Open{" "}
+                  <Link href="/settings" className="text-accent hover:underline">
+                    System doctor
+                  </Link>{" "}
+                  for details.
                 </span>
               </div>
             </div>

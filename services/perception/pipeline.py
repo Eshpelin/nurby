@@ -1343,9 +1343,22 @@ class PerceptionPipeline:
                         except Exception:
                             logger.exception("Failed to invalidate starred recaps")
 
+                from shared import component_health
+                await component_health.report(
+                    component_health.OBSERVATION_WRITER, component_health.OK,
+                    "observations writing",
+                )
                 return obs.id, assigned_incident_id
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to store observation")
+            # Surface a silently-broken write path (e.g. a model/DB drift that
+            # crashes every insert) so the doctor reports perception as
+            # degraded instead of green-but-producing-nothing.
+            from shared import component_health
+            await component_health.report(
+                component_health.OBSERVATION_WRITER, component_health.FAIL,
+                f"observation write failing: {exc}",
+            )
             return None, None
 
     async def _generate_and_store_embedding(

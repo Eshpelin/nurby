@@ -8,7 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel as PydanticBaseModel
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy import func as sa_func
 
 
@@ -775,6 +775,78 @@ async def delete_person(
         raise HTTPException(status_code=404, detail="Person not found")
     await db.delete(person)
     await db.commit()
+
+
+class PersonMerge(PydanticBaseModel):
+    source_id: uuid.UUID
+
+
+@router.post("/{target_id}/merge", response_model=PersonResponse)
+async def merge_person(
+    target_id: uuid.UUID,
+    body: PersonMerge,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Merge ``source_id`` into ``target_id``.
+
+    Used when the same real person was enrolled twice (two face clusters
+    named separately). Repoints every person-linked row (face embeddings,
+    clusters, body clusters, action segments, ...) from the source onto the
+    target, rewrites the denormalized person id inside past observation JSON
+    so old sightings keep the name, then deletes the source person.
+    """
+    if body.source_id == target_id:
+        raise HTTPException(status_code=400, detail="Cannot merge a person into itself")
+    target = await db.get(Person, target_id)
+    source = await db.get(Person, body.source_id)
+    if target is None or source is None:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    # Repoint every table with a foreign key to persons.id. Driven off the
+    # live schema so a newly added person-linked table is covered too.
+    fk_rows = (
+        await db.execute(
+            text(
+                """
+                SELECT tc.table_name AS table_name, kcu.column_name AS column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                  ON tc.constraint_name = kcu.constraint_name
+                 AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu
+                  ON tc.constraint_name = ccu.constraint_name
+                 AND tc.table_schema = ccu.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                  AND ccu.table_name = 'persons' AND ccu.column_name = 'id'
+                """
+            )
+        )
+    ).mappings().all()
+    for row in fk_rows:
+        tbl, col = row["table_name"], row["column_name"]
+        # Identifiers come from the catalog, not user input, so interpolation
+        # here is safe; the id values stay parameterized.
+        await db.execute(
+            text(f'UPDATE "{tbl}" SET "{col}" = :t WHERE "{col}" = :s'),
+            {"t": str(target_id), "s": str(body.source_id)},
+        )
+
+    # Rewrite the denormalized person id inside observation JSON (person_id is
+    # a 36-char UUID, so a plain string replace cannot collide with another id).
+    await db.execute(
+        text(
+            "UPDATE observations SET person_detections = "
+            "REPLACE(person_detections::text, :s, :t)::json "
+            "WHERE person_detections::text LIKE :like"
+        ),
+        {"s": str(body.source_id), "t": str(target_id), "like": f"%{body.source_id}%"},
+    )
+
+    await db.delete(source)
+    await db.commit()
+    await db.refresh(target)
+    return target
 
 
 @router.post("/{person_id}/face", response_model=dict)

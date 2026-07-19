@@ -10,6 +10,9 @@ export interface Camera {
   stream_type: StreamType;
   location_label: string | null;
   status: "offline" | "live" | "recording";
+  status_reason?: string | null;
+  next_retry_at?: number | null;
+  retry_delay_seconds?: number | null;
   width: number | null;
   height: number | null;
   fps: number | null;

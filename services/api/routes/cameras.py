@@ -62,6 +62,47 @@ def _camera_to_response(camera: Camera) -> dict:
     data.pop("auth_token", None)
     return data
 
+
+# Written by the ingestion stream worker while a camera is reconnecting.
+CAMERA_RETRY_KEY_PREFIX = "nurby:camera_retry:"
+
+
+async def _attach_retry_hints(responses: list[dict]) -> list[dict]:
+    """Attach ``next_retry_at`` / ``retry_delay_seconds`` from the ingestion
+    worker's Redis hint so the UI can show a live reconnect countdown for an
+    offline camera. Best-effort. a Redis hiccup just omits the countdown."""
+    for c in responses:
+        c.setdefault("next_retry_at", None)
+        c.setdefault("retry_delay_seconds", None)
+    if not responses:
+        return responses
+    try:
+        import json
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.redis_url)
+        keys = [f"{CAMERA_RETRY_KEY_PREFIX}{c['id']}" for c in responses]
+        vals = await r.mget(keys)
+        await r.aclose()
+        for c, v in zip(responses, vals):
+            if not v:
+                continue
+            try:
+                hint = json.loads(v)
+                c["next_retry_at"] = hint.get("next_retry_at")
+                c["retry_delay_seconds"] = hint.get("delay_seconds")
+                # The worker's live reason is fresher than the status-log row
+                # (which is only written on a status transition, so an
+                # offline -> offline reason refinement never lands there).
+                if hint.get("reason"):
+                    c["status_reason"] = hint["reason"]
+            except (ValueError, TypeError):
+                pass
+    except Exception:
+        logger.debug("Failed to attach camera retry hints", exc_info=True)
+    return responses
+
+
 router = APIRouter()
 
 _device_probe_pool = ThreadPoolExecutor(max_workers=4)
@@ -285,7 +326,9 @@ async def list_cameras(current_user: User = Depends(get_current_user), db: Async
         Camera.id,
     )
     result = await db.execute(query)
-    return [_camera_to_response(c) for c in result.scalars().all()]
+    return await _attach_retry_hints(
+        [_camera_to_response(c) for c in result.scalars().all()]
+    )
 
 
 @router.get("/{camera_id}/actions")
@@ -978,6 +1021,7 @@ async def get_camera(
     log_entry = latest_log.scalar_one_or_none()
     resp = _camera_to_response(camera)
     resp["status_reason"] = log_entry.reason if log_entry else None
+    await _attach_retry_hints([resp])
     return resp
 
 
