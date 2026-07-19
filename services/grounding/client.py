@@ -141,6 +141,105 @@ class GroundingClient:
         self._cache_put(cache_key, result)
         return result
 
+    async def ground_batch(
+        self,
+        frame: np.ndarray,
+        prompts: list[str],
+        *,
+        interactive: bool = True,
+        mode: str | None = None,
+        max_boxes: int | None = None,
+        timeout: float | None = None,
+    ) -> list[GroundingResult]:
+        """Locate several prompts in ONE frame with a single backend call.
+        Returns results aligned to ``prompts``. Per-prompt cache is honored (only
+        misses are sent). Never raises."""
+        prompts = [(p or "").strip() for p in (prompts or [])]
+        out: list[GroundingResult | None] = [None] * len(prompts)
+        if not prompts:
+            return []
+        if frame is None or getattr(frame, "size", 0) == 0:
+            return [GroundingResult(error="empty frame") for _ in prompts]
+        if not await is_enabled():
+            return [GroundingResult(error="grounding is disabled") for _ in prompts]
+        backend = await resolve_backend()
+        if backend.error:
+            return [GroundingResult(error=backend.error, backend=backend.kind) for _ in prompts]
+
+        max_boxes = max_boxes or settings.grounding_max_boxes
+        resolved_mode = await resolve_mode(mode)
+        try:
+            b64, width, height = self._encode(frame)
+        except Exception as exc:
+            return [GroundingResult(error=f"frame encode failed: {exc}", backend=backend.kind) for _ in prompts]
+
+        misses: list[tuple[int, str]] = []
+        for i, p in enumerate(prompts):
+            if not p:
+                out[i] = GroundingResult(error="empty prompt", backend=backend.kind)
+                continue
+            key = self._cache_key(b64, p, resolved_mode)
+            hit = self._cache.get(key)
+            if hit is not None:
+                self._cache.move_to_end(key)
+                out[i] = GroundingResult(
+                    found=hit.found, boxes=list(hit.boxes), raw=hit.raw,
+                    model_revision=hit.model_revision, backend=backend.kind,
+                    cached=True, leaves_privacy_boundary=backend.leaves_privacy_boundary,
+                )
+            else:
+                misses.append((i, p))
+
+        if misses:
+            try:
+                async with self._gate.slot(interactive=interactive):
+                    raws = await self._infer_batch(
+                        backend, b64, [p for _, p in misses], resolved_mode, frame, timeout,
+                    )
+            except httpx.HTTPError as exc:
+                logger.warning("grounding batch request failed (%s): %s", backend.kind, exc)
+                for i, _p in misses:
+                    out[i] = GroundingResult(error=f"grounding request failed: {exc}", backend=backend.kind)
+                return [r for r in out if r is not None]
+            except Exception as exc:
+                logger.exception("grounding batch errored")
+                for i, _p in misses:
+                    out[i] = GroundingResult(error=f"grounding error: {exc}", backend=backend.kind)
+                return [r for r in out if r is not None]
+            for (i, p), (raw, revision) in zip(misses, raws):
+                boxes = parse_grounding_output(raw, width, height, label=p, max_boxes=max_boxes)
+                res = GroundingResult(
+                    found=bool(boxes), boxes=boxes, raw=raw, model_revision=revision,
+                    backend=backend.kind, leaves_privacy_boundary=backend.leaves_privacy_boundary,
+                )
+                self._cache_put(self._cache_key(b64, p, resolved_mode), res)
+                out[i] = res
+        return [r for r in out if r is not None]
+
+    async def _infer_batch(
+        self, backend: GroundingBackend, b64: str, prompts: list[str],
+        mode: str, frame: np.ndarray, timeout: float | None,
+    ) -> list[tuple[str, str | None]]:
+        """Return ``(raw, model_revision)`` per prompt, in order."""
+        if self._responder is not None:
+            return [(self._responder(p, frame), "fake") for p in prompts]
+        http = await self._get_http()
+        payload = {
+            "image_b64": b64,
+            "prompts": prompts,
+            "mode": mode,
+            "max_new_tokens": settings.grounding_max_output_tokens,
+        }
+        resp = await http.post(
+            f"{backend.base_url}/ground_batch",
+            json=payload,
+            timeout=timeout or settings.grounding_request_timeout_s,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        rev = body.get("model_revision")
+        return [(r.get("raw", "") or "", rev) for r in (body.get("results") or [])]
+
     async def health(self) -> dict:
         """Best-effort health of the resolved backend for the navbar surface."""
         if not await is_enabled():

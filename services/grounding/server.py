@@ -73,6 +73,23 @@ class GroundResponse(BaseModel):
     model_revision: str | None = None
 
 
+class GroundBatchRequest(BaseModel):
+    image_b64: str
+    prompts: list[str]
+    mode: str = "hybrid"
+    max_new_tokens: int = 8192
+
+
+class GroundBatchItem(BaseModel):
+    prompt: str
+    raw: str
+
+
+class GroundBatchResponse(BaseModel):
+    results: list[GroundBatchItem]
+    model_revision: str | None = None
+
+
 @app.get("/health")
 async def health() -> dict:
     # Resolve the device even before the model loads so the UI can tell the
@@ -114,6 +131,32 @@ async def ground(req: GroundRequest) -> GroundResponse:
         _run_inference, image, req.prompt, req.mode, req.max_new_tokens,
     )
     return GroundResponse(raw=raw, model_revision=settings.grounding_model_revision)
+
+
+@app.post("/ground_batch", response_model=GroundBatchResponse)
+async def ground_batch(req: GroundBatchRequest) -> GroundBatchResponse:
+    """Ground several prompts against ONE frame in a single request: decode the
+    image once, hold the load once, run each prompt. Saves the HTTP round-trip,
+    the repeat decode, and lock churn vs N /ground calls. (A true single
+    forward-pass over batched prompts is a follow-up.)"""
+    prompts = [p.strip() for p in (req.prompts or []) if p and p.strip()]
+    if not prompts:
+        raise HTTPException(status_code=400, detail="no prompts")
+    try:
+        await _ensure_loaded()
+    except Exception as exc:
+        logger.exception("model load failed")
+        raise HTTPException(status_code=503, detail=f"model unavailable: {exc}") from exc
+    try:
+        image = _decode_image(req.image_b64)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"bad image: {exc}") from exc
+
+    items: list[GroundBatchItem] = []
+    for p in prompts:
+        raw = await asyncio.to_thread(_run_inference, image, p, req.mode, req.max_new_tokens)
+        items.append(GroundBatchItem(prompt=p, raw=raw))
+    return GroundBatchResponse(results=items, model_revision=settings.grounding_model_revision)
 
 
 @app.post("/warmup")

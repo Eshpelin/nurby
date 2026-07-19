@@ -164,6 +164,47 @@ async def test_client_disabled_returns_error(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ground_batch_via_responder(monkeypatch):
+    _patch_enabled(monkeypatch)
+
+    def responder(prompt, frame):
+        return "<box>100,100,500,500</box>" if prompt == "chicken" else "nothing"
+
+    c = client_mod.GroundingClient(responder=responder)
+    results = await c.ground_batch(_frame(), ["chicken", "zebra"])
+    assert len(results) == 2
+    assert results[0].found is True and results[0].boxes[0].label == "chicken"
+    assert results[1].found is False and results[1].error is None
+
+
+@pytest.mark.asyncio
+async def test_ground_batch_honors_cache(monkeypatch):
+    _patch_enabled(monkeypatch)
+    calls = {"n": 0}
+
+    def responder(prompt, frame):
+        calls["n"] += 1
+        return "<box>100,100,500,500</box>"
+
+    c = client_mod.GroundingClient(responder=responder)
+    frame = _frame()
+    await c.ground(frame, "chicken")  # prime the cache for one prompt
+    n = calls["n"]
+    results = await c.ground_batch(frame, ["chicken", "fox"])
+    assert calls["n"] == n + 1  # only the miss ("fox") was inferred
+    assert results[0].cached is True
+    assert len(results) == 2
+
+
+@pytest.mark.asyncio
+async def test_ground_batch_empty_frame(monkeypatch):
+    _patch_enabled(monkeypatch)
+    c = client_mod.GroundingClient(responder=lambda p, f: "<box>1,1,2,2</box>")
+    results = await c.ground_batch(np.zeros((0, 0, 3), dtype=np.uint8), ["a", "b"])
+    assert len(results) == 2 and all(r.error for r in results)
+
+
+@pytest.mark.asyncio
 async def test_client_warmup_responder_is_noop_ok(monkeypatch):
     _patch_enabled(monkeypatch)
     c = client_mod.GroundingClient(responder=lambda p, f: "<box>1,1,2,2</box>")
