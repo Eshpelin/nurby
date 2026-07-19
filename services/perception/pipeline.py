@@ -723,8 +723,10 @@ class PerceptionPipeline:
         except Exception:
             logger.exception("smart-track dispatch failed camera=%s", camera_id)
 
-        # Step 3. Save thumbnail
-        thumbnail_path = await self._save_thumbnail(camera_id, timestamp, frame, detections)
+        # Step 3. Save thumbnail (+ a clean copy for grounding)
+        thumbnail_path, clean_frame_path = await self._save_thumbnail(
+            camera_id, timestamp, frame, detections,
+        )
 
         # Step 4. Store observation in database (immediately, without waiting for VLM)
         # HAR identity binding. Hold tracker_id -> person_id across keyframes so a track
@@ -817,6 +819,7 @@ class PerceptionPipeline:
             vlm_provider=None,
             confidence=None,
             thumbnail_path=thumbnail_path,
+            clean_frame_path=clean_frame_path,
         )
 
         # Guardian named-zone enter/exit. A recognised person crossing into or
@@ -1057,6 +1060,11 @@ class PerceptionPipeline:
             # bbox pixels to frame-relative area.
             "frame_width": int(frame.shape[1]) if frame is not None else None,
             "frame_height": int(frame.shape[0]) if frame is not None else None,
+            # Frame paths so FindAnything (locate) steps/actions actually have a
+            # frame to inspect at live rule-eval time. clean_frame_path is the
+            # box-free copy; thumbnail_path is the fallback.
+            "thumbnail_path": thumbnail_path,
+            "clean_frame_path": clean_frame_path,
             "vlm_description": None,  # VLM runs async, not available at rule eval time
             "confidence": None,
         }
@@ -1115,9 +1123,22 @@ class PerceptionPipeline:
         timestamp: datetime,
         frame: np.ndarray,
         detections: list[dict],
-    ) -> str | None:
-        """Draw bounding boxes on frame and save as thumbnail."""
+    ) -> tuple[str | None, str | None]:
+        """Save the annotated thumbnail (boxes for the UI) and, when boxes were
+        drawn, a clean copy so FindAnything grounds on real pixels not a drawn
+        rectangle. Returns (thumbnail_path, clean_frame_path); clean falls back
+        to the thumbnail when nothing was drawn (they're then identical)."""
         try:
+            os.makedirs(THUMBNAIL_DIR, exist_ok=True)
+            base = f"{camera_id}_{timestamp.strftime('%Y%m%d_%H%M%S')}"
+            path = os.path.join(THUMBNAIL_DIR, base + ".jpg")
+
+            clean_path: str | None = None
+            if detections:
+                # Persist the clean frame before drawing boxes on it.
+                clean_path = os.path.join(THUMBNAIL_DIR, base + "_clean.jpg")
+                cv2.imwrite(clean_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+
             annotated = frame.copy()
             for det in detections:
                 x1, y1, x2, y2 = det["bbox"]
@@ -1132,14 +1153,11 @@ class PerceptionPipeline:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1,
                 )
 
-            os.makedirs(THUMBNAIL_DIR, exist_ok=True)
-            filename = f"{camera_id}_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg"
-            path = os.path.join(THUMBNAIL_DIR, filename)
             cv2.imwrite(path, annotated, [cv2.IMWRITE_JPEG_QUALITY, 90])
-            return path
+            return path, clean_path or path
         except Exception:
             logger.exception("Failed to save thumbnail")
-            return None
+            return None, None
 
     async def _store_observation(
         self,
@@ -1152,6 +1170,7 @@ class PerceptionPipeline:
         vlm_provider: str | None = None,
         confidence: float | None = None,
         thumbnail_path: str | None = None,
+        clean_frame_path: str | None = None,
     ) -> tuple[uuid.UUID | None, uuid.UUID | None]:
         """Store observation in Postgres.
 
@@ -1273,6 +1292,7 @@ class PerceptionPipeline:
                     vlm_provider=vlm_provider,
                     confidence=confidence,
                     thumbnail_path=thumbnail_path,
+                    clean_frame_path=clean_frame_path,
                 )
                 db.add(obs)
                 await db.flush()

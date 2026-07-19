@@ -1236,7 +1236,9 @@ def _load_locate_frame(observation_data: dict):
     from shared.config import settings as _settings
     from shared.paths import resolve_inside
 
-    path = observation_data.get("thumbnail_path")
+    # Prefer the clean (box-free) keyframe so grounding localizes real pixels;
+    # fall back to the annotated thumbnail.
+    path = observation_data.get("clean_frame_path") or observation_data.get("thumbnail_path")
     if path:
         safe = resolve_inside(path, _settings.thumbnails_path)
         if safe:

@@ -36,9 +36,9 @@ class _DB:
         return self._cam
 
 
-def _obs():
+def _obs(clean=None):
     return SimpleNamespace(
-        id=uuid.uuid4(), thumbnail_path="thumb.jpg",
+        id=uuid.uuid4(), thumbnail_path="thumb.jpg", clean_frame_path=clean,
         started_at=datetime(2026, 6, 22, tzinfo=timezone.utc),
     )
 
@@ -88,6 +88,26 @@ async def test_locate_now_not_found(monkeypatch):
     )
     assert resp.found is False and resp.boxes == []
     assert "No 'zebra'" in resp.summary
+
+
+@pytest.mark.asyncio
+async def test_locate_now_prefers_clean_frame(monkeypatch):
+    _enable(monkeypatch)
+    captured = {}
+
+    class _Client:
+        async def ground(self, frame, prompt, interactive=False):
+            return SimpleNamespace(boxes=[], error=None)
+
+    def _loader(path):
+        captured["path"] = path
+        return object()
+
+    monkeypatch.setattr("services.grounding.client.get_client", lambda: _Client())
+    monkeypatch.setattr("services.search.scan._default_frame_loader", _loader)
+    db = _DB(_obs(clean="clean.jpg"), SimpleNamespace(name="X"))
+    await locate_now(LocateNowRequest(camera_id=uuid.uuid4(), prompt="cat"), db=db, current_user=_USER)
+    assert captured["path"] == "clean.jpg"  # grounded on the box-free frame
 
 
 @pytest.mark.asyncio

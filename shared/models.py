@@ -277,6 +277,10 @@ class Recording(Base):
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     thumbnail_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    # Clean keyframe (no detection boxes burned in) for visual grounding, so
+    # FindAnything localizes real pixels, not a drawn rectangle. Null falls back
+    # to thumbnail_path. Only written when detections were drawn (else identical).
+    clean_frame_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     blur_status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
     blur_error: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
@@ -863,6 +867,13 @@ class User(Base):
     is_provisional: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The invite key this user redeemed to create their account, if any. Lets
+    # an admin see who each key brought in and when (the redeemed_at is this
+    # user's created_at). SET NULL on key delete so revoking a key never
+    # removes the accounts it created; the audit link just drops.
+    invite_key_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("invite_keys.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
 
 class InviteKey(Base):

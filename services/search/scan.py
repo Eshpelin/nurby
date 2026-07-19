@@ -296,7 +296,11 @@ async def run_scan(
 
             frame = None
             try:
-                frame = await asyncio.to_thread(frame_loader, cand.get("thumbnail_path"))
+                # Prefer the clean (box-free) keyframe so grounding localizes
+                # real pixels, not a drawn detection box; fall back to the thumb.
+                frame = await asyncio.to_thread(
+                    frame_loader, cand.get("clean_frame_path") or cand.get("thumbnail_path"),
+                )
             except Exception:
                 logger.debug("scan frame load failed for obs %s", obs_id, exc_info=True)
             if frame is None:

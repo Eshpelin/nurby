@@ -398,7 +398,7 @@ async def locate_now(
         return LocateNowResponse(found=False, boxes=[], camera_name=cam_name,
                                  summary="No recent frame for this camera yet.")
 
-    frame = await asyncio.to_thread(_default_frame_loader, obs.thumbnail_path)
+    frame = await asyncio.to_thread(_default_frame_loader, obs.clean_frame_path or obs.thumbnail_path)
     if frame is None:
         return LocateNowResponse(found=False, boxes=[], observation_id=str(obs.id),
                                  camera_name=cam_name, thumbnail_path=obs.thumbnail_path,

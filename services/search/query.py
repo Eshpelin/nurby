@@ -56,6 +56,7 @@ def _build_observation_dict(obs, camera_map: dict) -> dict:
         "vlm_description": obs.vlm_description,
         "confidence": obs.confidence,
         "thumbnail_path": obs.thumbnail_path,
+        "clean_frame_path": obs.clean_frame_path,
     }
     return result
 
