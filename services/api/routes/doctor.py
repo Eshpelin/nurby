@@ -16,7 +16,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.api.camera_probe import ERROR_HINTS, parse_target, probe_tcp
-from shared import heartbeat
+from shared import component_health, heartbeat
 from shared.auth import require_admin
 from shared.config import settings
 from shared.database import get_db
@@ -135,6 +135,38 @@ async def _check_worker(service: str) -> DoctorCheck:
     return DoctorCheck(
         id=f"worker:{service}", label=label, status="ok",
         detail=f"Running (last heartbeat {beat})",
+        latency_ms=_timed(start),
+    )
+
+
+async def _check_component_health(
+    component: str, label: str, fail_hint: str
+) -> DoctorCheck:
+    """Functional health of a pipeline component, beyond worker liveness.
+
+    A worker can heartbeat while a sub-component is silently broken (the clap
+    model failed to load, or every observation write crashes). Components
+    publish their real state via shared.component_health; this surfaces a FAIL
+    as a doctor failure instead of a green-but-producing-nothing worker.
+    """
+    start = time.monotonic()
+    cid = f"health:{component}"
+    health = await component_health.get(component)
+    if health is None:
+        # Never reported (or expired). Not evidence of breakage: the component
+        # may simply be idle (no audio, no motion) or disabled.
+        return DoctorCheck(
+            id=cid, label=label, status="skip",
+            detail="No recent activity to report on.", latency_ms=_timed(start),
+        )
+    detail = health.get("detail") or ""
+    if health.get("status") == component_health.OK:
+        return DoctorCheck(
+            id=cid, label=label, status="ok", detail=detail or "Working",
+            latency_ms=_timed(start),
+        )
+    return DoctorCheck(
+        id=cid, label=label, status="fail", detail=detail, hint=fail_hint,
         latency_ms=_timed(start),
     )
 
@@ -392,6 +424,23 @@ async def run_doctor(
         _run_with_timeout(_check_smtp(), "smtp", "Email (SMTP)"),
         _run_with_timeout(_check_alert_channels(), "alert_channels", "Alert delivery"),
         _run_with_timeout(_check_disk(), "disk", "Disk space"),
+        _run_with_timeout(
+            _check_component_health(
+                component_health.OBSERVATION_WRITER, "Perception output",
+                "Perception is running but cannot store observations, so the "
+                "timeline stays empty and no alerts fire. Check the perception logs.",
+            ),
+            f"health:{component_health.OBSERVATION_WRITER}", "Perception output",
+        ),
+        _run_with_timeout(
+            _check_component_health(
+                component_health.AUDIO_TAGGER, "Sound events (claps)",
+                "The audio (PANNs) model failed to load, so clap / sound-event "
+                "rules never fire. Check ingestion logs and that the panns_data "
+                "model cache is populated.",
+            ),
+            f"health:{component_health.AUDIO_TAGGER}", "Sound events (claps)",
+        ),
     ]
     jobs += [
         _run_with_timeout(
