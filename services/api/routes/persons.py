@@ -1004,6 +1004,120 @@ async def get_person_photo(
     return FileResponse(path, media_type="image/jpeg")
 
 
+@router.get("/{person_id}/photo-candidates")
+async def photo_candidates(
+    person_id: uuid.UUID,
+    limit: int = Query(default=40, ge=1, le=100),
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Face crops to choose a person's photo from.
+
+    Returns recent observations where this person's face was detected, each
+    with the face bbox and frame size so the UI can render a tight crop
+    (percentage-based, so it maps onto the scaled thumbnail). Lets the user
+    pick a better photo than whatever crop was auto-assigned.
+    """
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    pid = str(person_id)
+    # Face bboxes are in camera-resolution pixels, so the UI needs the camera
+    # frame size (not the observation, which has none) to place the crop.
+    cam_dims: dict[str, tuple[int, int]] = {
+        str(cid): (w or 0, h or 0)
+        for cid, w, h in (
+            await db.execute(select(Camera.id, Camera.width, Camera.height))
+        ).all()
+    }
+    result = await db.execute(
+        select(Observation)
+        .where(Observation.thumbnail_path.isnot(None))
+        .where(Observation.person_detections.cast(Text).like(f"%{pid}%"))
+        .order_by(Observation.started_at.desc())
+        .limit(limit)
+    )
+    out = []
+    for obs in result.scalars().all():
+        for f in (obs.person_detections or {}).get("faces", []) or []:
+            bbox = f.get("bbox")
+            if str(f.get("person_id")) == pid and bbox and len(bbox) == 4:
+                fw, fh = cam_dims.get(str(obs.camera_id), (0, 0))
+                out.append({
+                    "observation_id": str(obs.id),
+                    "bbox": bbox,
+                    "frame_width": fw,
+                    "frame_height": fh,
+                    "started_at": obs.started_at.isoformat(),
+                })
+                break
+    return out
+
+
+class SetPhotoBody(PydanticBaseModel):
+    observation_id: uuid.UUID
+
+
+@router.post("/{person_id}/photo-from-observation")
+async def set_photo_from_observation(
+    person_id: uuid.UUID,
+    body: SetPhotoBody,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Crop this person's face out of a chosen observation and use it as the
+    person's photo."""
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    obs = await db.get(Observation, body.observation_id)
+    if not obs or not obs.thumbnail_path:
+        raise HTTPException(status_code=404, detail="Observation thumbnail not found")
+
+    pid = str(person_id)
+    bbox = None
+    for f in (obs.person_detections or {}).get("faces", []) or []:
+        if str(f.get("person_id")) == pid and f.get("bbox"):
+            bbox = f["bbox"]
+            break
+    if bbox is None:
+        raise HTTPException(status_code=400, detail="This person is not in that observation")
+
+    src = resolve_inside(obs.thumbnail_path, settings.thumbnails_path)
+    if src is None or not os.path.exists(src):
+        raise HTTPException(status_code=404, detail="Thumbnail file not found")
+
+    cam = await db.get(Camera, obs.camera_id)
+    frame_w = cam.width if cam else None
+    frame_h = cam.height if cam else None
+    photo_path = os.path.join(PHOTOS_DIR, f"{person_id}.jpg")
+
+    def _crop_and_save() -> None:
+        from PIL import Image
+
+        os.makedirs(PHOTOS_DIR, exist_ok=True)
+        img = Image.open(src).convert("RGB")
+        tw, th = img.size
+        # bbox is in camera-frame coords; scale it onto the (smaller) thumbnail.
+        fw = frame_w or tw
+        fh = frame_h or th
+        sx, sy = tw / fw, th / fh
+        x1, y1, x2, y2 = bbox
+        # Pad the tight face box out to a friendlier head-and-shoulders portrait.
+        bw, bh = (x2 - x1), (y2 - y1)
+        px, py = bw * 0.4, bh * 0.5
+        left = max(0, int((x1 - px) * sx))
+        top = max(0, int((y1 - py) * sy))
+        right = min(tw, int((x2 + px) * sx))
+        bottom = min(th, int((y2 + py) * sy))
+        img.crop((left, top, right, bottom)).save(photo_path, "JPEG", quality=90)
+
+    await asyncio.to_thread(_crop_and_save)
+    person.photo_path = photo_path
+    await db.commit()
+    return {"status": "ok", "photo_path": photo_path}
+
+
 # ── Follow ("investigative timeline") endpoints ──────────────────────────
 
 
