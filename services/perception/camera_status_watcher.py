@@ -15,8 +15,9 @@ import asyncio
 import logging
 
 import redis.asyncio as aioredis
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
-from services.ingestion.stream import CAMERA_STATUS_STREAM_KEY
+from shared.redis_keys import CAMERA_STATUS_STREAM_KEY
 from shared.config import settings
 
 logger = logging.getLogger("nurby.perception.camera_status")
@@ -90,6 +91,11 @@ class CameraStatusWatcher:
                             await r.xack(CAMERA_STATUS_STREAM_KEY, CONSUMER_GROUP, msg_id)
             except asyncio.CancelledError:
                 raise
+            except (asyncio.TimeoutError, RedisTimeoutError):
+                # Expected idle case: the blocking read hit its socket timeout
+                # with no new status events. Not an error. Loop straight back
+                # into xreadgroup so a real event is still picked up promptly.
+                continue
             except Exception:
                 logger.exception("camera status watcher loop error; retrying in 5s")
                 await asyncio.sleep(5)
