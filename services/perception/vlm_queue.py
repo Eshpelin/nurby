@@ -110,6 +110,59 @@ def get_vlm_stats() -> dict[str, dict]:
     return {cid: s.to_dict() for cid, s in _global_stats.items()}
 
 
+# The VLM workers run in the perception process, so _global_stats is empty in
+# the API process that serves the pipeline page. Publish a snapshot to Redis so
+# the API can read a cross-process view instead of always showing "no activity".
+_VLM_STATS_REDIS_KEY = "nurby:vlm_stats"
+
+
+async def publish_stats_forever(interval: float = 3.0) -> None:
+    """Periodically mirror get_vlm_stats() into Redis for the API to read."""
+    import json
+
+    import redis.asyncio as aioredis
+
+    from shared.config import settings
+
+    client = aioredis.from_url(settings.redis_url)
+    try:
+        while True:
+            try:
+                await client.set(
+                    _VLM_STATS_REDIS_KEY,
+                    json.dumps(get_vlm_stats()),
+                    ex=int(interval) + 12,
+                )
+            except Exception:
+                logger.debug("vlm stats publish failed", exc_info=True)
+            await asyncio.sleep(interval)
+    finally:
+        await client.aclose()
+
+
+async def read_published_stats() -> dict[str, dict]:
+    """Read the perception-published VLM stats snapshot (API side). {} on miss."""
+    import json
+
+    import redis.asyncio as aioredis
+
+    from shared.config import settings
+
+    client = aioredis.from_url(settings.redis_url)
+    try:
+        raw = await client.get(_VLM_STATS_REDIS_KEY)
+    except Exception:
+        return {}
+    finally:
+        await client.aclose()
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return {}
+
+
 @dataclass
 class VLMJob:
     """A pending VLM call."""

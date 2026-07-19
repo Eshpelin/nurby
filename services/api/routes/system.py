@@ -120,7 +120,12 @@ async def get_pipeline_summary(
     per-camera ETA untouched (it answers "if only this camera existed") and
     compute the serial figure here.
     """
-    stats = get_vlm_stats()  # {camera_id: to_dict()}
+    # The VLM workers run in the perception process, so its stats live there,
+    # not in this API process. Read the Redis snapshot perception publishes;
+    # fall back to the (usually empty here) in-process view.
+    from services.perception.vlm_queue import read_published_stats
+
+    stats = await read_published_stats() or get_vlm_stats()
 
     # Map ids -> names so the page/table need no second round-trip.
     cam_rows = (await db.execute(select(Camera.id, Camera.name))).all()

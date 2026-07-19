@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import cv2
 import numpy as np
 import redis.asyncio as aioredis
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy import select
 
 from services.events.engine import RuleEngine
@@ -154,6 +155,12 @@ class PerceptionPipeline:
                         finally:
                             await r.xack(REDIS_STREAM_KEY, CONSUMER_GROUP, msg_id)
 
+            except (asyncio.TimeoutError, RedisTimeoutError):
+                # Expected idle case: the blocking read hit its socket timeout
+                # with no new motion. Loop straight back instead of logging an
+                # error and sleeping 2s (which spammed logs and throttled
+                # keyframe throughput on a busy camera).
+                continue
             except Exception:
                 logger.exception("Error reading from Redis stream")
                 await asyncio.sleep(2)

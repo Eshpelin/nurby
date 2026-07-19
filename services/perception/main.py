@@ -49,11 +49,16 @@ async def main():
     # incident_started / incident_ended rules fire with recap payloads.
     from services.perception import incident_tracker as _inc_mod
     _inc_mod.set_rule_event_sink(pipeline.rule_engine.evaluate)
+    from services.perception.vlm_queue import publish_stats_forever
+
     await asyncio.gather(
         # Lets the doctor tell "this worker is dead" apart from "there is
         # genuinely nothing to see". Without it, a stopped perception
         # service looks exactly like a quiet day.
         heartbeat.beat_forever(heartbeat.PERCEPTION),
+        # Mirror VLM throughput/backlog stats to Redis so the API-served
+        # pipeline page sees them (they live in this process's memory).
+        publish_stats_forever(),
         pipeline.run(),
         status_watcher.run(),
         live.run(),
