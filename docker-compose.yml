@@ -60,6 +60,10 @@ services:
     ports:
       - "4748:8000"
     environment:
+      # Installation timezone (from .env, derived from the host).
+      # Containers default to UTC, so without this every generated
+      # timestamp and digest sentence reads in the wrong zone.
+      TZ: ${TZ:-UTC}
       DATABASE_URL: postgresql+asyncpg://nurby:${POSTGRES_PASSWORD:-nurby_dev}@postgres:5432/nurby
       REDIS_URL: redis://redis:6379/0
       MEDIAMTX_API_URL: http://mediamtx:9997
@@ -169,6 +173,10 @@ services:
     ports:
       - "4749:4749"
     environment:
+      # Installation timezone (from .env, derived from the host).
+      # Containers default to UTC, so without this every generated
+      # timestamp and digest sentence reads in the wrong zone.
+      TZ: ${TZ:-UTC}
       DATABASE_URL: postgresql+asyncpg://nurby:${POSTGRES_PASSWORD:-nurby_dev}@postgres:5432/nurby
       REDIS_URL: redis://redis:6379/0
       MEDIAMTX_API_URL: http://mediamtx:9997
@@ -194,6 +202,10 @@ services:
       dockerfile: services/ingestion/Dockerfile
     restart: unless-stopped
     environment:
+      # Installation timezone (from .env, derived from the host).
+      # Containers default to UTC, so without this every generated
+      # timestamp and digest sentence reads in the wrong zone.
+      TZ: ${TZ:-UTC}
       DATABASE_URL: postgresql+asyncpg://nurby:${POSTGRES_PASSWORD:-nurby_dev}@postgres:5432/nurby
       REDIS_URL: redis://redis:6379/0
       MEDIAMTX_API_URL: http://mediamtx:9997
@@ -235,6 +247,10 @@ services:
       dockerfile: services/perception/Dockerfile
     restart: unless-stopped
     environment:
+      # Installation timezone (from .env, derived from the host).
+      # Containers default to UTC, so without this every generated
+      # timestamp and digest sentence reads in the wrong zone.
+      TZ: ${TZ:-UTC}
       DATABASE_URL: postgresql+asyncpg://nurby:${POSTGRES_PASSWORD:-nurby_dev}@postgres:5432/nurby
       REDIS_URL: redis://redis:6379/0
       MEDIAMTX_RTSP_URL: rtsp://mediamtx:8554
@@ -273,6 +289,10 @@ services:
     ports:
       - "4747:3000"
     environment:
+      # Installation timezone (from .env, derived from the host).
+      # Containers default to UTC, so without this every generated
+      # timestamp and digest sentence reads in the wrong zone.
+      TZ: ${TZ:-UTC}
       NEXT_PUBLIC_API_URL: http://localhost:4748
       NEXT_PUBLIC_WS_URL: ws://localhost:4748
       NEXT_PUBLIC_WEBRTC_URL: http://localhost:8889
