@@ -44,12 +44,12 @@ export function CameraStatsHover({ cameraId, fps, width, height }: Props) {
   );
 
   // Initial pull so the popover has something even before the first
-  // WS event lands. /api/system/vlm-stats returns a per-camera dict.
+  // WS event lands. /api/vlm-stats returns a per-camera dict.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/system/vlm-stats", {
+        const res = await fetch("/api/vlm-stats", {
           credentials: "include",
         });
         if (!res.ok) return;
