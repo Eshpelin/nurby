@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { EmptyState } from "@/components/EmptyState";
+import { formatWith } from "@/lib/time";
 
 // A merged activity item from GET /timeline (observation or transcript),
 // already interleaved newest-first by the backend.
@@ -47,11 +48,11 @@ function dayLabel(iso: string): string {
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   if (same(d, today)) return "Today";
   if (same(d, yest)) return "Yesterday";
-  return d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+  return formatWith(d, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
 }
 
 function clockLabel(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return formatWith(new Date(iso), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 // Distinct object labels (person handled separately, others become chips).

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { formatWith } from "@/lib/time";
 import {
   ShareRow,
   SHARE_KIND_LABEL,
@@ -16,7 +17,7 @@ const STATUS_STYLE: Record<ShareRow["status"], string> = {
 
 function fmt(ts: string | null): string {
   if (!ts) return "—";
-  return new Date(ts).toLocaleString(undefined, {
+  return formatWith(new Date(ts), {
     month: "short",
     day: "numeric",
     hour: "numeric",

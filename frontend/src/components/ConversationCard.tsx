@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
 import { ReinterpretButton } from "@/components/ReinterpretButton";
+import { formatWith } from "@/lib/time";
 
 interface ConversationTranscript {
   id: string;
@@ -246,7 +247,7 @@ export function ConversationCard(props: ConversationCardProps) {
           <span className="text-muted-foreground">{cameraName || "Camera"}</span>
           <span className="text-muted-foreground">·</span>
           <span className="text-muted-foreground font-mono">
-            {start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {formatWith(start, { hour: "2-digit", minute: "2-digit" })}
             {" · "}
             {durationLabel}
           </span>
@@ -393,7 +394,7 @@ function TranscriptLine({
   token: string | null;
 }) {
   const [showAudio, setShowAudio] = useState(false);
-  const ts = new Date(t.started_at).toLocaleTimeString();
+  const ts = formatWith(new Date(t.started_at), { hour: "numeric", minute: "2-digit", second: "2-digit" });
   const audioUrl = t.audio_capture_id && token
     ? `/api/audio/${t.audio_capture_id}?token=${encodeURIComponent(token)}`
     : null;

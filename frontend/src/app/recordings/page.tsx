@@ -8,6 +8,7 @@ import { RecordingDetectionOverlay } from "@/components/RecordingDetectionOverla
 import { MotionHeatstrip } from "@/components/MotionHeatstrip";
 import { MotionReviewItems } from "@/components/MotionReviewItems";
 import { ShareDialog } from "@/components/ShareDialog";
+import { formatWith } from "@/lib/time";
 
 // Objects people most often scrub for. Free of a fixed list otherwise.
 const COMMON_OBJECTS = ["person", "cat", "dog", "car", "truck", "bus", "bicycle", "motorcycle"];
@@ -94,7 +95,7 @@ function formatFileSize(bytes: number | null): string {
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
-  return `${d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return `${formatWith(d, { month: "short", day: "numeric", year: "numeric" })} ${formatWith(d, { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 // Seconds -> m:ss (or h:mm:ss), for clip in/out markers.

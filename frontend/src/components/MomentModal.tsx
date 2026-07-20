@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { RecordingModal } from "@/components/RecordingModal";
+import { formatWith } from "@/lib/time";
 
 // A single moment in time. opens when a user clicks a timestamp on an
 // incident/timeline card. Shows the exact analyzed frame for that camera +
@@ -116,7 +117,7 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
 
   const close = useCallback(() => onClose(), [onClose]);
 
-  const when = new Date(ts).toLocaleString([], {
+  const when = formatWith(new Date(ts), {
     month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
 
@@ -226,7 +227,7 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
                         )}
                         <span className="text-[10px] text-muted-foreground ml-auto font-mono">
                           {p.model || p.provider_name || ""}
-                          {p.created_at ? ` · ${new Date(p.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
+                          {p.created_at ? ` · ${formatWith(new Date(p.created_at), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
                         </span>
                       </div>
                       {p.description && (

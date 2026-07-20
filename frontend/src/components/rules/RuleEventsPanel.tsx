@@ -13,7 +13,7 @@ import {
 import { SummaryCard } from "./SummaryCard";
 import { EventNotesPanel } from "./EventNotesPanel";
 import { EventEvidence } from "@/components/EventEvidence";
-import { formatDateTime } from "@/lib/time";
+import { formatDateTime, formatWith } from "@/lib/time";
 
 export interface RuleEventsPanelProps {
   selectedRule: Rule | null;
@@ -213,7 +213,7 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                     <span className="text-muted-foreground text-xs">Notifications</span>
                     <div className="text-xs">
                       {snoozed
-                        ? `Snoozed until ${new Date(snoozedUntil!).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                        ? `Snoozed until ${formatWith(new Date(snoozedUntil!), { hour: "2-digit", minute: "2-digit" })}`
                         : "Active"}
                     </div>
                   </div>
@@ -322,7 +322,7 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                         )}
                         {ev.muted_until && new Date(ev.muted_until) > new Date() ? (
                           <span className="px-2 py-1 text-[11px] rounded-md bg-muted text-muted-foreground">
-                            🔕 Muted until {new Date(ev.muted_until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            🔕 Muted until {formatWith(new Date(ev.muted_until), { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         ) : (
                           <button

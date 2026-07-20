@@ -1,4 +1,5 @@
 import { timeAgo as timeAgoBase } from "./time";
+import { formatWith } from "@/lib/time";
 // Shared types + helpers for the Guardian Panel.
 
 export interface Entitlements {
@@ -52,11 +53,11 @@ export function dayLabel(iso: string): string {
   yest.setDate(today.getDate() - 1);
   if (d.toDateString() === today.toDateString()) return "Today";
   if (d.toDateString() === yest.toDateString()) return "Yesterday";
-  return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  return formatWith(d, { weekday: "long", month: "short", day: "numeric" });
 }
 
 export function clockTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return formatWith(new Date(iso), { hour: "numeric", minute: "2-digit" });
 }
 
 export const NOTIFY_CHANNELS: { key: string; label: string }[] = [

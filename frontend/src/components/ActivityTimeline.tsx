@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { formatWith } from "@/lib/time";
 
 interface Segment {
   id: string;
@@ -27,7 +28,7 @@ const ACTION_COLOR: Record<string, string> = {
 function fmt(ts?: string | null): string {
   if (!ts) return "";
   try {
-    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return formatWith(new Date(ts), { hour: "2-digit", minute: "2-digit" });
   } catch {
     return "";
   }

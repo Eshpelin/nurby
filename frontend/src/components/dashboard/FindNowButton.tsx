@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { GroundingBoxOverlay } from "@/components/search/GroundingBoxOverlay";
 import type { ScanBox } from "@/lib/useDeepScan";
+import { formatWith } from "@/lib/time";
 
 interface LocateNowResult {
   found: boolean;
@@ -142,7 +143,7 @@ export function FindNowButton({ cameraId, cameraName }: { cameraId: string; came
                 </div>
                 {result.started_at && (
                   <div className="text-[10px] text-muted-foreground">
-                    frame at {new Date(result.started_at).toLocaleString()}
+                    frame at {formatWith(new Date(result.started_at), { year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" })}
                   </div>
                 )}
               </div>

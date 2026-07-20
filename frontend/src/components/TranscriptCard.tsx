@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { formatWith } from "@/lib/time";
 
 // Inline SVG. The frontend does not bundle lucide-react.
 const Mic = ({ className }: { className?: string }) => (
@@ -53,7 +54,7 @@ export function TranscriptCard(props: TranscriptCardProps) {
     >
       <div className="flex items-center gap-2 text-xs text-zinc-400 mb-1.5">
         <Mic className="w-3.5 h-3.5 text-emerald-400" />
-        <span>{t.toLocaleTimeString()}</span>
+        <span>{formatWith(t, { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span>
         {provider ? <span className="text-zinc-500">· {provider}</span> : null}
         {language ? <span className="text-zinc-500">· {language}</span> : null}
       </div>

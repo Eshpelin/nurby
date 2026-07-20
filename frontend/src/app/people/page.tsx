@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { useToast, useConfirm } from "@/lib/feedback";
 import { extractApiError } from "@/lib/api-error";
-import { timeAgo as timeAgoBase } from "@/lib/time";
+import { timeAgo as timeAgoBase, formatWith } from "@/lib/time";
 
 interface Person {
   id: string;
@@ -83,7 +83,7 @@ const timeAgo = (iso: string | null) => timeAgoBase(iso, { fallback: "unknown" }
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return formatWith(d, { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDate(iso: string): string {
@@ -94,7 +94,7 @@ function formatDate(iso: string): string {
 
   if (d.toDateString() === today.toDateString()) return "Today";
   if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  return formatWith(d, { month: "short", day: "numeric" });
 }
 
 export default function PeoplePage() {

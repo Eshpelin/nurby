@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { setDisplayTimezone } from "@/lib/time";
 
 export interface User {
   id: string;
@@ -133,6 +134,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(TOKEN_KEY, data.access_token);
     localStorage.setItem(USER_KEY, JSON.stringify(data.user));
   }, []);
+
+  // Pin absolute timestamps to the installation's timezone rather than the
+  // viewer's, so events read as house time from anywhere and match the clock
+  // in backend-generated text. Cached in localStorage, so this refresh only
+  // corrects drift (e.g. after the operator changes the setting).
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/system/timezone", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled) setDisplayTimezone(data?.timezone);
+      } catch {
+        /* keep the cached zone; falls back to the viewer's */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   useEffect(() => {
     if (loading) return;

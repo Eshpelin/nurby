@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
-import { formatDateTime } from "@/lib/time";
+import { formatDateTime, formatWith } from "@/lib/time";
 
 interface Visitor {
   name: string;
@@ -112,7 +112,7 @@ export function DailyDigestCard() {
           Morning brief
         </span>
         <span className="text-[10px] text-muted-foreground font-mono">
-          {start.toLocaleDateString()} {start.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} → {end.toLocaleDateString() !== start.toLocaleDateString() ? `${end.toLocaleDateString()} ` : ""}{end.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}
+          {formatWith(start, { year: "numeric", month: "numeric", day: "numeric" })} {formatWith(start, {hour:"2-digit",minute:"2-digit"})} → {formatWith(end, { year: "numeric", month: "numeric", day: "numeric" }) !== formatWith(start, { year: "numeric", month: "numeric", day: "numeric" }) ? `${formatWith(end, { year: "numeric", month: "numeric", day: "numeric" })} ` : ""}{formatWith(end, {hour:"2-digit",minute:"2-digit"})}
         </span>
         <ChevronIcon
           className={`ml-auto w-3.5 h-3.5 text-muted-foreground transition-transform ${

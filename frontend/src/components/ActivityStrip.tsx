@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { RecordingModal } from "@/components/RecordingModal";
+import { formatWith } from "@/lib/time";
 
 // A presence + movement timeline for one camera: a heatmap of when activity
 // happened plus the faces of who was present, so you can scrub straight to the
@@ -38,7 +39,7 @@ const HOURS_OPTIONS = [1, 3, 12, 24];
 
 function fmtClock(iso: string): string {
   try {
-    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return formatWith(new Date(iso), { hour: "numeric", minute: "2-digit" });
   } catch {
     return "";
   }

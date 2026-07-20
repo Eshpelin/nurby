@@ -1,5 +1,7 @@
 "use client";
 
+import { formatWith } from "@/lib/time";
+
 interface PersonSeen {
   name: string;
   sightings: number;
@@ -85,7 +87,7 @@ export function SummaryCard(props: SummaryCardProps) {
           <span className="ml-auto flex items-center gap-1 text-muted-foreground">
             <ClockIcon className="w-3 h-3" />
             <span>
-              {start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {formatWith(start, { hour: "2-digit", minute: "2-digit" })}
               {" · "}
               {durationLabel}
             </span>

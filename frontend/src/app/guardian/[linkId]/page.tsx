@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { DependantAvatar } from "@/components/guardian-avatar";
+import { formatWith } from "@/lib/time";
 import {
   ALERT_KINDS,
   clockTime,
@@ -607,7 +608,7 @@ function TrendsPanel({ linkId }: { linkId: string }) {
           {data.days.map((d) => (
             <div key={d.date} className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">
-                {new Date(d.date).toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}
+                {formatWith(new Date(d.date), { weekday: "short", day: "numeric" })}
               </span>
               <span>
                 {d.first_seen ? clockTime(d.first_seen) : "-"} to{" "}

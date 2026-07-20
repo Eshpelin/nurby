@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
 import { ReinterpretButton } from "@/components/ReinterpretButton";
+import { formatWith } from "@/lib/time";
 
 interface Segment {
   camera_id: string;
@@ -199,7 +200,7 @@ function SegmentChip({
 }) {
   const thumb = segment.peak_observation_id;
   const t = new Date(segment.started_at);
-  const tStr = t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const tStr = formatWith(t, { hour: "2-digit", minute: "2-digit" });
   return (
     <div className="flex flex-col items-center gap-1 min-w-[6.5rem]">
       <div className="relative w-24 h-14 bg-black/50 rounded overflow-hidden border border-border/50">

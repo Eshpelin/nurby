@@ -213,6 +213,28 @@ async def get_pipeline_summary(
     }
 
 
+@router.get("/system/timezone")
+async def get_system_timezone(_current_user: User = Depends(get_current_user)):
+    """The installation timezone every surface should render timestamps in.
+
+    The browser would otherwise format in the *viewer's* zone, which disagrees
+    with backend-generated text (digests) and misreads events whenever the
+    viewer is not at the property.
+    """
+    from datetime import datetime, timedelta
+
+    from shared.timezone import effective_timezone, effective_timezone_name
+
+    name = await effective_timezone_name()
+    tz = await effective_timezone()
+    now = datetime.now(tz)
+    return {
+        "timezone": name,
+        "utc_offset_minutes": int((now.utcoffset() or timedelta(0)).total_seconds() // 60),
+        "server_now": now.isoformat(),
+    }
+
+
 @router.get("/system/health")
 async def get_health(_current_user: User = Depends(get_current_user)):
     """Lightweight host-level CPU / RAM / disk / GPU snapshot for the

@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useToast, useConfirm } from "@/lib/feedback";
 import { EmptyState } from "@/components/EmptyState";
-import { timeAgo } from "@/lib/time";
+import { timeAgo, formatWith } from "@/lib/time";
 
 interface PersonOption {
   id: string;
@@ -46,7 +46,7 @@ const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 function fmtTime(hour: number, minute: number): string {
   const d = new Date();
   d.setHours(hour, minute, 0, 0);
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return formatWith(d, { hour: "numeric", minute: "2-digit" });
 }
 
 export default function ReportsPage() {

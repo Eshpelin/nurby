@@ -1,13 +1,14 @@
 // Dashboard formatting + detection-summary helpers. Pure functions
 // extracted from page.tsx (no behavior change).
 import type { ActivityEvent, Observation } from "./dashboard-types";
+import { formatWith } from "@/lib/time";
 
 export function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return formatWith(new Date(iso), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  return formatWith(new Date(iso), { weekday: "short", month: "short", day: "numeric" });
 }
 
 export function hourBucketKey(iso: string): string {
@@ -22,11 +23,11 @@ export function formatHourBucket(iso: string): string {
   const today = new Date(now); today.setHours(0, 0, 0, 0);
   const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
   const bucketDay = new Date(d); bucketDay.setHours(0, 0, 0, 0);
-  const hr = d.toLocaleTimeString([], { hour: "numeric", hour12: true });
+  const hr = formatWith(d, { hour: "numeric", hour12: true });
   let day = "";
   if (bucketDay.getTime() === today.getTime()) day = "Today";
   else if (bucketDay.getTime() === yesterday.getTime()) day = "Yesterday";
-  else day = d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  else day = formatWith(d, { weekday: "short", month: "short", day: "numeric" });
   return `${day} \u00b7 ${hr}`;
 }
 

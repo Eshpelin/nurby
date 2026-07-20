@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import type { ScanStatus } from "@/lib/useDeepScan";
 import { GroundingBoxOverlay } from "./GroundingBoxOverlay";
+import { formatWith } from "@/lib/time";
 
 export function DeepScanResults({
   scan,
@@ -102,7 +103,7 @@ export function DeepScanResults({
               </button>
               <figcaption className="absolute bottom-0 inset-x-0 text-[10px] bg-black/60 text-white px-1 py-0.5 truncate">
                 {r.camera_name}
-                {r.started_at ? ` · ${new Date(r.started_at).toLocaleString()}` : ""}
+                {r.started_at ? ` · ${formatWith(new Date(r.started_at), { year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" })}` : ""}
               </figcaption>
             </figure>
           ))}

@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
 import { ReinterpretButton } from "@/components/ReinterpretButton";
 import { MomentModal } from "@/components/MomentModal";
-import { formatDateTime } from "@/lib/time";
+import { formatDateTime, formatWith } from "@/lib/time";
 
 interface IncidentObs {
   id: string;
@@ -281,7 +281,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
                   className={`text-[10px] font-mono ${accent}/80 px-1 py-0.5 rounded bg-violet-500/10 hover:bg-violet-500/25 hover:underline transition-colors cursor-pointer`}
                   title={`View this moment. ${formatDateTime(t.ts)}`}
                 >
-                  {new Date(t.ts).toLocaleTimeString([], {
+                  {formatWith(new Date(t.ts), {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
@@ -318,7 +318,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
               >
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
                   <span className="font-mono">
-                    {new Date(o.started_at).toLocaleTimeString()}
+                    {formatWith(new Date(o.started_at), { hour: "numeric", minute: "2-digit", second: "2-digit" })}
                   </span>
                   {o.refined_by_provider_name && (
                     <span className="text-sky-300">✨ refined</span>

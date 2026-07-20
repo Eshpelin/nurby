@@ -42,7 +42,7 @@ import { TranscriptCard } from "@/components/TranscriptCard";
 import { SummaryCard } from "@/components/SummaryCard";
 import { ConversationCard } from "@/components/ConversationCard";
 import { RecordingModal } from "@/components/RecordingModal";
-import { timeAgo } from "@/lib/time";
+import { timeAgo, formatWith } from "@/lib/time";
 
 const WEBRTC_URL =
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
@@ -568,9 +568,9 @@ function PersonActivityModal({ personId, personName, onClose, mode = "person" }:
                     <div className="px-3 py-2 border-b border-border/50 flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-xs font-semibold">
-                          {start.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}
+                          {formatWith(start, { weekday: "short", hour: "numeric", minute: "2-digit" })}
                           {" \u2192 "}
-                          {end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                          {formatWith(end, { hour: "numeric", minute: "2-digit" })}
                         </div>
                         <div className="text-[11px] text-muted-foreground">
                           {durMin} min \u00b7 {camNames.join(", ")}
@@ -2048,7 +2048,7 @@ function DashboardContent() {
                   <span>Rule fired · {t.label}</span>
                   {t.camera && <span className="text-[10px] text-muted-foreground">{t.camera}</span>}
                   <span className="ml-auto text-[10px] text-muted-foreground font-mono">
-                    {new Date(t.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    {formatWith(new Date(t.ts), { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                   </span>
                 </Link>
               ))}
@@ -2577,7 +2577,7 @@ function DashboardContent() {
                                   <div className="rounded border border-border/60 bg-card/40 p-2 text-xs">
                                     <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
                                       <span className="font-mono">
-                                        {new Date(o.started_at).toLocaleTimeString()}
+                                        {formatWith(new Date(o.started_at), { hour: "numeric", minute: "2-digit", second: "2-digit" })}
                                       </span>
                                       {o.refined_by_provider_name && (
                                         <span className="text-sky-300">
