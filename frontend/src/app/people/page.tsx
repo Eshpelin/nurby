@@ -110,6 +110,17 @@ export default function PeoplePage() {
   const [mergePerson, setMergePerson] = useState<Person | null>(null);
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
   const [merging, setMerging] = useState(false);
+  // Confirm folding a newly-named cluster into an existing same-name person.
+  const [nameMergeConfirm, setNameMergeConfirm] = useState<
+    { clusterId: string; existingName: string } | null
+  >(null);
+  // Photo picker: choose a person's photo from their detected faces.
+  const [photoPickerPerson, setPhotoPickerPerson] = useState<Person | null>(null);
+  const [photoCandidates, setPhotoCandidates] = useState<
+    { observation_id: string; bbox: number[]; frame_width: number; frame_height: number }[]
+  >([]);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [settingPhoto, setSettingPhoto] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Expanded person activity
@@ -453,7 +464,47 @@ export default function PeoplePage() {
     }
   };
 
-  const handleNameSuggestion = async (clusterId: string) => {
+  const openPhotoPicker = async (p: Person) => {
+    setPhotoPickerPerson(p);
+    setPhotoCandidates([]);
+    setPhotoLoading(true);
+    try {
+      const res = await authFetch(`/api/persons/${p.id}/photo-candidates`);
+      if (res.ok) setPhotoCandidates(await res.json());
+    } catch {
+      /* silent */
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
+
+  const choosePhoto = async (observationId: string) => {
+    if (!photoPickerPerson) return;
+    setSettingPhoto(true);
+    try {
+      const res = await authFetch(
+        `/api/persons/${photoPickerPerson.id}/photo-from-observation`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ observation_id: observationId }),
+        },
+      );
+      if (!res.ok) throw new Error();
+      toast.success("Photo updated.");
+      setPhotoPickerPerson(null);
+      fetchPersons();
+    } catch {
+      toast.error("Could not set the photo.");
+    } finally {
+      setSettingPhoto(false);
+    }
+  };
+
+  const handleNameSuggestion = async (
+    clusterId: string,
+    mergeIntoExisting = false,
+  ) => {
     const name = nameInputs[clusterId]?.trim();
     if (!name) return;
 
@@ -465,15 +516,29 @@ export default function PeoplePage() {
         body: JSON.stringify({
           display_name: name,
           relationship: relationshipInputs[clusterId]?.trim() || null,
+          merge_into_existing: mergeIntoExisting,
         }),
       });
       if (res.ok) {
+        setNameMergeConfirm(null);
         fetchSuggestions();
         fetchPersons();
         fetchSummaries();
+        return;
+      }
+      if (res.status === 409) {
+        // The name is taken. The backend says this is very likely the same
+        // person (a second face cluster). Ask before folding it in.
+        const body = await res.json().catch(() => null);
+        const detail = body?.detail;
+        if (detail && typeof detail === "object" && detail.can_merge) {
+          setNameMergeConfirm({ clusterId, existingName: detail.existing_name || name });
+          return;
+        }
+        toast.error(typeof detail === "string" ? detail : "That name is already taken.");
       }
     } catch {
-      /* silent */
+      toast.error("Could not name this person.");
     } finally {
       setNamingSubmitting(null);
     }
@@ -529,10 +594,17 @@ export default function PeoplePage() {
                     <div>
                       <div className="text-sm font-medium">Unknown person</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        Seen {s.sighting_count} time
-                        {s.sighting_count !== 1 ? "s" : ""}
-                        {" · "}First {timeAgo(s.first_seen_at)} / Last{" "}
-                        {timeAgo(s.last_seen_at)}
+                        {s.sighting_count === 1 ? (
+                          // A single visit can still span time (one continuous
+                          // presence), so First/Last would read as multiple
+                          // sightings. Show it as one visit.
+                          <>Seen once · {timeAgo(s.last_seen_at)}</>
+                        ) : (
+                          <>
+                            Seen {s.sighting_count} times · First{" "}
+                            {timeAgo(s.first_seen_at)} / Last {timeAgo(s.last_seen_at)}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -905,6 +977,16 @@ export default function PeoplePage() {
                         >
                           Merge
                         </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openPhotoPicker(p);
+                          }}
+                          className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
+                          title="Choose this person's photo from their detected faces"
+                        >
+                          Photo
+                        </button>
                         <div className="flex-1" />
                         <span
                           className={`w-2 h-2 rounded-full ${p.consent_given ? "bg-green-500" : "bg-yellow-500"}`}
@@ -1012,6 +1094,104 @@ export default function PeoplePage() {
           </div>
         )}
       </div>
+
+      {/* Photo picker */}
+      {photoPickerPerson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => { if (!settingPhoto) setPhotoPickerPerson(null); }}
+          />
+          <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-2xl shadow-xl max-h-[85vh] overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-1">
+              Choose a photo for {photoPickerPerson.display_name}
+            </h2>
+            <p className="text-xs text-muted-foreground mb-4">
+              Pick the clearest face from recent detections. It becomes their profile photo.
+            </p>
+            {photoLoading ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">Loading faces.</div>
+            ) : photoCandidates.length === 0 ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                No detected faces yet for this person.
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                {photoCandidates.map((c, i) => {
+                  const fw = c.frame_width || 1;
+                  const fh = c.frame_height || 1;
+                  const cx = (((c.bbox[0] + c.bbox[2]) / 2) / fw) * 100;
+                  const cy = (((c.bbox[1] + c.bbox[3]) / 2) / fh) * 100;
+                  return (
+                    <button
+                      key={`${c.observation_id}-${i}`}
+                      onClick={() => choosePhoto(c.observation_id)}
+                      disabled={settingPhoto}
+                      className="relative aspect-square rounded-md overflow-hidden border border-border hover:border-accent focus:border-accent transition-colors disabled:opacity-50"
+                      title="Use this photo"
+                    >
+                      <img
+                        src={`/api/observations/${c.observation_id}/thumbnail${token ? `?token=${token}` : ""}`}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        style={{ objectPosition: `${cx}% ${cy}%` }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex justify-end mt-5">
+              <button
+                onClick={() => setPhotoPickerPerson(null)}
+                disabled={settingPhoto}
+                className="px-3 py-2 text-sm rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                {settingPhoto ? "Saving." : "Close"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Name-clash merge confirm */}
+      {nameMergeConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setNameMergeConfirm(null)}
+          />
+          <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md shadow-xl">
+            <h2 className="text-lg font-semibold mb-1">Add to existing person?</h2>
+            <p className="text-xs text-muted-foreground mb-5 leading-relaxed">
+              A person named{" "}
+              <span className="font-medium text-foreground">{nameMergeConfirm.existingName}</span>{" "}
+              already exists. This is usually the same person picked up as a
+              separate face. Add this face to{" "}
+              <span className="font-medium text-foreground">{nameMergeConfirm.existingName}</span>{" "}
+              so their sightings stay together?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setNameMergeConfirm(null)}
+                disabled={namingSubmitting === nameMergeConfirm.clusterId}
+                className="px-3 py-2 text-sm rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleNameSuggestion(nameMergeConfirm.clusterId, true)}
+                disabled={namingSubmitting === nameMergeConfirm.clusterId}
+                className="px-3 py-2 text-sm rounded-md bg-accent text-accent-foreground hover:bg-accent/90 transition-colors disabled:opacity-50"
+              >
+                {namingSubmitting === nameMergeConfirm.clusterId
+                  ? "Adding."
+                  : `Add to ${nameMergeConfirm.existingName}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Merge Modal */}
       {mergePerson && (

@@ -8,8 +8,9 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel as PydanticBaseModel
-from sqlalchemy import and_, or_, select, text
+from sqlalchemy import Text, and_, or_, select, text
 from sqlalchemy import func as sa_func
+from sqlalchemy.orm.attributes import flag_modified
 
 
 def sa_lower(col):
@@ -54,6 +55,9 @@ async def list_persons(_current_user: User = Depends(get_current_user), db: Asyn
 class NameClusterBody(PydanticBaseModel):
     display_name: str
     relationship: str | None = None
+    # When the name already exists, set true to add this cluster's face to that
+    # existing person instead of failing. The UI asks for confirmation first.
+    merge_into_existing: bool = False
 
 
 @router.get("/suggestions", response_model=list)
@@ -163,18 +167,42 @@ async def name_cluster(
     if cluster.status != "pending":
         raise HTTPException(status_code=400, detail="Cluster already processed")
 
-    await _ensure_unique_display_name(db, body.display_name)
-    # Create Person
-    person = Person(
-        display_name=body.display_name,
-        relationship=body.relationship,
-        consent_given=True,
-        photo_path=cluster.sample_thumbnail_path,
-    )
-    db.add(person)
-    await db.flush()
+    # If the name is already taken, this cluster is very likely another
+    # fragment of that same person (face clustering splits one face into
+    # several clusters). Offer to fold it into the existing person instead of
+    # erroring; the UI confirms before sending merge_into_existing.
+    name_norm = (body.display_name or "").strip().lower()
+    existing_person = (
+        await db.execute(
+            select(Person).where(sa_lower(Person.display_name) == name_norm).limit(1)
+        )
+    ).scalars().first() if name_norm else None
 
-    # Link all cluster sample embeddings to the new person
+    if existing_person is not None and not body.merge_into_existing:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"A person named '{existing_person.display_name}' already exists.",
+                "existing_person_id": str(existing_person.id),
+                "existing_name": existing_person.display_name,
+                "can_merge": True,
+            },
+        )
+
+    if existing_person is not None:
+        # Fold this cluster into the existing person.
+        person = existing_person
+    else:
+        person = Person(
+            display_name=body.display_name,
+            relationship=body.relationship,
+            consent_given=True,
+            photo_path=cluster.sample_thumbnail_path,
+        )
+        db.add(person)
+        await db.flush()
+
+    # Link all cluster sample embeddings to the person
     samples_result = await db.execute(
         select(FaceClusterSample).where(FaceClusterSample.cluster_id == cluster_id)
     )
@@ -192,6 +220,14 @@ async def name_cluster(
     cluster.person_id = person.id
     cluster.status = "named"
 
+    # Backfill past sightings. Observations detected before naming carry this
+    # cluster's face with a cluster_id but no person_id, so the new person
+    # would show zero history ("no recent sightings") even though they were
+    # just seen. Re-attribute those faces to the person.
+    backfilled = await _backfill_cluster_observations(
+        db, cluster_id, person.id, person.display_name
+    )
+
     await db.commit()
     await db.refresh(person)
 
@@ -200,7 +236,39 @@ async def name_cluster(
         "person_id": str(person.id),
         "display_name": person.display_name,
         "embeddings_linked": len(samples),
+        "observations_backfilled": backfilled,
     }
+
+
+async def _backfill_cluster_observations(
+    db: AsyncSession, cluster_id: uuid.UUID, person_id: uuid.UUID, person_name: str
+) -> int:
+    """Attribute a cluster's pre-naming observations to a person.
+
+    Finds observations whose person_detections still reference this cluster by
+    cluster_id (matched while the cluster was unnamed) and sets person_id /
+    person_name on those face entries. Returns the number updated.
+    """
+    cid = str(cluster_id)
+    result = await db.execute(
+        select(Observation).where(
+            Observation.person_detections.isnot(None),
+            Observation.person_detections.cast(Text).like(f"%{cid}%"),
+        )
+    )
+    updated = 0
+    for obs in result.scalars().all():
+        pd = obs.person_detections or {}
+        changed = False
+        for face in pd.get("faces", []):
+            if face.get("cluster_id") == cid and not face.get("person_id"):
+                face["person_id"] = str(person_id)
+                face["person_name"] = person_name
+                changed = True
+        if changed:
+            flag_modified(obs, "person_detections")
+            updated += 1
+    return updated
 
 
 @router.post("/suggestions/{cluster_id}/ignore")
@@ -934,6 +1002,120 @@ async def get_person_photo(
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Photo file not found")
     return FileResponse(path, media_type="image/jpeg")
+
+
+@router.get("/{person_id}/photo-candidates")
+async def photo_candidates(
+    person_id: uuid.UUID,
+    limit: int = Query(default=40, ge=1, le=100),
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Face crops to choose a person's photo from.
+
+    Returns recent observations where this person's face was detected, each
+    with the face bbox and frame size so the UI can render a tight crop
+    (percentage-based, so it maps onto the scaled thumbnail). Lets the user
+    pick a better photo than whatever crop was auto-assigned.
+    """
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    pid = str(person_id)
+    # Face bboxes are in camera-resolution pixels, so the UI needs the camera
+    # frame size (not the observation, which has none) to place the crop.
+    cam_dims: dict[str, tuple[int, int]] = {
+        str(cid): (w or 0, h or 0)
+        for cid, w, h in (
+            await db.execute(select(Camera.id, Camera.width, Camera.height))
+        ).all()
+    }
+    result = await db.execute(
+        select(Observation)
+        .where(Observation.thumbnail_path.isnot(None))
+        .where(Observation.person_detections.cast(Text).like(f"%{pid}%"))
+        .order_by(Observation.started_at.desc())
+        .limit(limit)
+    )
+    out = []
+    for obs in result.scalars().all():
+        for f in (obs.person_detections or {}).get("faces", []) or []:
+            bbox = f.get("bbox")
+            if str(f.get("person_id")) == pid and bbox and len(bbox) == 4:
+                fw, fh = cam_dims.get(str(obs.camera_id), (0, 0))
+                out.append({
+                    "observation_id": str(obs.id),
+                    "bbox": bbox,
+                    "frame_width": fw,
+                    "frame_height": fh,
+                    "started_at": obs.started_at.isoformat(),
+                })
+                break
+    return out
+
+
+class SetPhotoBody(PydanticBaseModel):
+    observation_id: uuid.UUID
+
+
+@router.post("/{person_id}/photo-from-observation")
+async def set_photo_from_observation(
+    person_id: uuid.UUID,
+    body: SetPhotoBody,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Crop this person's face out of a chosen observation and use it as the
+    person's photo."""
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    obs = await db.get(Observation, body.observation_id)
+    if not obs or not obs.thumbnail_path:
+        raise HTTPException(status_code=404, detail="Observation thumbnail not found")
+
+    pid = str(person_id)
+    bbox = None
+    for f in (obs.person_detections or {}).get("faces", []) or []:
+        if str(f.get("person_id")) == pid and f.get("bbox"):
+            bbox = f["bbox"]
+            break
+    if bbox is None:
+        raise HTTPException(status_code=400, detail="This person is not in that observation")
+
+    src = resolve_inside(obs.thumbnail_path, settings.thumbnails_path)
+    if src is None or not os.path.exists(src):
+        raise HTTPException(status_code=404, detail="Thumbnail file not found")
+
+    cam = await db.get(Camera, obs.camera_id)
+    frame_w = cam.width if cam else None
+    frame_h = cam.height if cam else None
+    photo_path = os.path.join(PHOTOS_DIR, f"{person_id}.jpg")
+
+    def _crop_and_save() -> None:
+        from PIL import Image
+
+        os.makedirs(PHOTOS_DIR, exist_ok=True)
+        img = Image.open(src).convert("RGB")
+        tw, th = img.size
+        # bbox is in camera-frame coords; scale it onto the (smaller) thumbnail.
+        fw = frame_w or tw
+        fh = frame_h or th
+        sx, sy = tw / fw, th / fh
+        x1, y1, x2, y2 = bbox
+        # Pad the tight face box out to a friendlier head-and-shoulders portrait.
+        bw, bh = (x2 - x1), (y2 - y1)
+        px, py = bw * 0.4, bh * 0.5
+        left = max(0, int((x1 - px) * sx))
+        top = max(0, int((y1 - py) * sy))
+        right = min(tw, int((x2 + px) * sx))
+        bottom = min(th, int((y2 + py) * sy))
+        img.crop((left, top, right, bottom)).save(photo_path, "JPEG", quality=90)
+
+    await asyncio.to_thread(_crop_and_save)
+    person.photo_path = photo_path
+    await db.commit()
+    return {"status": "ok", "photo_path": photo_path}
 
 
 # ── Follow ("investigative timeline") endpoints ──────────────────────────

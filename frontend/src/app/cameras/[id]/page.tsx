@@ -11,6 +11,7 @@ import { ConversationCard } from "@/components/ConversationCard";
 import { SummaryCard } from "@/components/SummaryCard";
 import { PrivacyZonesSection } from "@/components/PrivacyZonesSection";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
+import { ActivityStrip } from "@/components/ActivityStrip";
 import type { MotionZone } from "@/components/camera/types";
 import { ZoneEditorCanvas } from "@/components/camera/ZoneEditorCanvas";
 import { PTZControlPanel } from "@/components/camera/PTZControlPanel";
@@ -792,6 +793,13 @@ export default function CameraConfigPage() {
           </svg>
           Audio
         </Link>
+      </div>
+
+      {/* Presence + movement strip: when activity happened and who was there,
+          clickable straight into the covering recording. Sits above the HAR
+          timeline, which stays empty until action recognition is enabled. */}
+      <div className="mb-4">
+        <ActivityStrip cameraId={cameraId} cameraName={camera.name} />
       </div>
 
       {/* HAR activity timeline. Empty until human action recognition is enabled. */}

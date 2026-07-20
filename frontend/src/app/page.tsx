@@ -23,6 +23,7 @@ import { ObservationGroupCard } from "@/components/ObservationGroupCard";
 import { IncidentCard } from "@/components/IncidentCard";
 import { JourneyCard, type Journey } from "@/components/JourneyCard";
 import { DailyDigestCard } from "@/components/DailyDigestCard";
+import { MomentModal } from "@/components/MomentModal";
 import {
   coalesceObservations,
   isObservationGroup,
@@ -720,6 +721,10 @@ function DashboardContent() {
   const [persons, setPersons] = useState<Person[]>([]);
   const [activeEntry, setActiveEntry] = useState<string | null>(null);
   const [modalRecording, setModalRecording] = useState<Recording | null>(null);
+  // Timeline event opened in the moment detail modal (full text + recording).
+  const [momentEvent, setMomentEvent] = useState<
+    { observationId: string; cameraId: string; cameraName: string | null; ts: string } | null
+  >(null);
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [eventFilters, setEventFilters] = useState<Set<EventFilter>>(new Set(["recordings", "observations", "status", "conversations", "summaries"]));
   // Observation coalescing window in seconds. 0 disables grouping.
@@ -2602,7 +2607,12 @@ function DashboardContent() {
                         const plates = obs.object_detections?.objects?.filter((d) => d.label === "license_plate" && d.plate_text) || [];
 
                         return (
-                          <div key={entry.id} className="rounded-lg border border-border hover:border-accent/50 hover:bg-card/50 overflow-hidden transition-colors">
+                          <div
+                            key={entry.id}
+                            onClick={() => setMomentEvent({ observationId: obs.id, cameraId: obs.camera_id, cameraName: cam?.name ?? null, ts: obs.started_at })}
+                            title="Click to see the full description and recording"
+                            className="rounded-lg border border-border hover:border-accent/50 hover:bg-card/50 overflow-hidden transition-colors cursor-pointer"
+                          >
                             <div className="flex gap-3">
                               {/* Inline thumbnail */}
                               {hasThumb && (
@@ -2729,6 +2739,15 @@ function DashboardContent() {
         cameraName={modalRecording ? cameras.find((c) => c.id === modalRecording.camera_id)?.name : null}
         onClose={() => setModalRecording(null)}
       />
+      {momentEvent && (
+        <MomentModal
+          observationId={momentEvent.observationId}
+          cameraId={momentEvent.cameraId}
+          cameraName={momentEvent.cameraName}
+          ts={momentEvent.ts}
+          onClose={() => setMomentEvent(null)}
+        />
+      )}
       <LLMErrorToasts />
       <SecureAccountNudge hasFootage={cameras.length > 0} />
       {cameras.length > 0 && <LocalAIHintCard />}

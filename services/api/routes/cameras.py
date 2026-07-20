@@ -355,6 +355,108 @@ async def camera_action_timeline(
     return {"items": items, "count": len(items), "hours": hours}
 
 
+@router.get("/{camera_id}/activity-strip")
+async def camera_activity_strip(
+    camera_id: uuid.UUID,
+    hours: float = Query(default=3.0, ge=0.5, le=48.0),
+    buckets: int = Query(default=90, ge=10, le=300),
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Activity heatmap + who-was-present for a camera's recent window.
+
+    Powers the video presence/seek strip: each bucket carries a 0..1 activity
+    level (from observation density, since motion_samples may be empty) and the
+    set of people seen in it, plus the list of people in the window and the
+    recording segments so the UI can scrub to a moment.
+    """
+    from datetime import timedelta
+
+    from shared.models import Observation, Person, Recording
+
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(hours=hours)
+    span = (end - start).total_seconds()
+    bucket_s = span / buckets
+
+    obs_rows = (
+        await db.execute(
+            select(Observation)
+            .where(Observation.camera_id == camera_id)
+            .where(Observation.started_at >= start)
+            .order_by(Observation.started_at.asc())
+        )
+    ).scalars().all()
+
+    counts = [0] * buckets
+    bucket_pids: list[set[str]] = [set() for _ in range(buckets)]
+    person_seen: dict[str, dict] = {}
+    for o in obs_rows:
+        started = o.started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        idx = min(buckets - 1, max(0, int((started - start).total_seconds() / bucket_s)))
+        counts[idx] += 1
+        for f in (o.person_detections or {}).get("faces", []) or []:
+            pid = f.get("person_id")
+            if not pid:
+                continue
+            pid = str(pid)
+            bucket_pids[idx].add(pid)
+            e = person_seen.setdefault(
+                pid, {"id": pid, "name": f.get("person_name"), "first": started, "last": started}
+            )
+            e["last"] = started
+            if not e.get("name"):
+                e["name"] = f.get("person_name")
+
+    peak = max(counts) or 1
+    bucket_list = [
+        {
+            "t": (start + timedelta(seconds=bucket_s * i)).isoformat(),
+            "activity": round(counts[i] / peak, 3),
+            "person_ids": sorted(bucket_pids[i]),
+        }
+        for i in range(buckets)
+    ]
+
+    persons = [
+        {
+            "id": e["id"],
+            "name": e["name"],
+            "first_seen": e["first"].isoformat(),
+            "last_seen": e["last"].isoformat(),
+        }
+        for e in sorted(person_seen.values(), key=lambda x: x["first"])
+    ]
+
+    rec_rows = (
+        await db.execute(
+            select(Recording)
+            .where(Recording.camera_id == camera_id)
+            .where(Recording.ended_at >= start)
+            .order_by(Recording.started_at.asc())
+        )
+    ).scalars().all()
+    recordings = [
+        {
+            "id": str(r.id),
+            "started_at": r.started_at.isoformat(),
+            "ended_at": r.ended_at.isoformat() if r.ended_at else None,
+        }
+        for r in rec_rows
+    ]
+
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "hours": hours,
+        "buckets": bucket_list,
+        "persons": persons,
+        "recordings": recordings,
+    }
+
+
 @router.get("/{camera_id}/motion")
 async def camera_motion_activity(
     camera_id: uuid.UUID,
