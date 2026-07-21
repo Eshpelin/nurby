@@ -47,12 +47,41 @@ interface DailyDigest {
  * Updates live via the ``daily_digest_ready`` WS event so a manual
  * regen or the next scheduled run shows up without a refresh.
  */
+
+const BRIEF_COLLAPSED_KEY = "nurby.morningBrief.collapsed";
+// Shown before "show more". Enough to be useful at a glance without pushing
+// the camera wall off screen.
+const PREVIEW_BULLETS = 3;
+
 export function DailyDigestCard() {
   const { authFetch } = useAuth();
   const [digest, setDigest] = useState<DailyDigest | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  // The brief sits above everything else on the dashboard, so it defaults to a
+  // condensed form (a couple of lines + the top few events) and remembers being
+  // collapsed. Otherwise it pushed the camera wall below the fold on every load.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(BRIEF_COLLAPSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [showAll, setShowAll] = useState(false);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((v) => {
+      const next = !v;
+      try {
+        window.localStorage.setItem(BRIEF_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        /* private mode: this session only */
+      }
+      return next;
+    });
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -104,8 +133,8 @@ export function DailyDigestCard() {
     <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 overflow-hidden">
       <button
         type="button"
-        onClick={() => setCollapsed((v) => !v)}
-        className="w-full px-3 py-2 flex items-center gap-2 text-left"
+        onClick={toggleCollapsed}
+        className="w-full px-3 py-1.5 flex items-center gap-2 text-left"
       >
         <SunIcon className="w-4 h-4 text-amber-400" />
         <span className="text-xs font-medium uppercase tracking-wider text-amber-300">
@@ -121,15 +150,19 @@ export function DailyDigestCard() {
         />
       </button>
       {!collapsed && (
-        <div className="px-3 pb-3 space-y-2">
+        <div className="px-3 pb-2 space-y-1.5">
           {digest.summary_text && (
-            <p className="text-sm leading-relaxed text-foreground whitespace-pre-line">
+            <p
+              className={`text-sm leading-relaxed text-foreground whitespace-pre-line ${
+                showAll ? "" : "line-clamp-2"
+              }`}
+            >
               {digest.summary_text}
             </p>
           )}
           {bullets.length > 0 && (
-            <ul className="text-xs space-y-1">
-              {bullets.map((b, i) => (
+            <ul className="text-xs space-y-0.5">
+              {(showAll ? bullets : bullets.slice(0, PREVIEW_BULLETS)).map((b, i) => (
                 <li key={i} className="flex items-start gap-2">
                   <span className="text-amber-400/60 mt-1 flex-shrink-0">•</span>
                   <span>{b}</span>
@@ -137,6 +170,22 @@ export function DailyDigestCard() {
               ))}
             </ul>
           )}
+          {(bullets.length > PREVIEW_BULLETS || (digest.summary_text?.length ?? 0) > 160) && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="text-[11px] text-amber-300/90 hover:text-amber-200"
+            >
+              {showAll
+                ? "Show less"
+                : bullets.length > PREVIEW_BULLETS
+                  ? `Show ${bullets.length - PREVIEW_BULLETS} more`
+                  : "Show more"}
+            </button>
+          )}
+          {/* Provenance and the regenerate control are only worth the row once
+              you have chosen to read the whole thing. */}
+          {showAll && (
           <div className="flex items-center gap-2 pt-1 text-[10px] text-muted-foreground/70">
             <span>
               {digest.provider_name
@@ -154,6 +203,7 @@ export function DailyDigestCard() {
               {busy ? "Re-running." : "Regenerate"}
             </button>
           </div>
+          )}
         </div>
       )}
     </div>
