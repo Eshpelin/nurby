@@ -33,6 +33,10 @@ interface Props {
   recording: RecordingLike | null;
   cameraName?: string | null;
   onClose: () => void;
+  /** Wall-clock moment to open at (ISO). Converted to an offset into this
+   * recording so a scrubber click lands on the moment you picked instead of
+   * restarting the clip. Ignored when it falls outside the recording. */
+  seekTo?: string | null;
 }
 
 function fmtDateTime(iso: string): string {
@@ -57,9 +61,27 @@ function fmtSize(b: number | null | undefined): string {
   return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-export function RecordingModal({ recording, cameraName, onClose }: Props) {
+export function RecordingModal({ recording, cameraName, onClose, seekTo }: Props) {
   const { token } = useAuth();
   const tq = token ? `?token=${token}` : "";
+  // Offset into the file for the requested wall-clock moment. Clamped to the
+  // clip, and only applied once metadata is loaded (currentTime is ignored
+  // before the browser knows the duration).
+  const seekOffset = (() => {
+    if (!recording || !seekTo) return null;
+    const target = new Date(seekTo).getTime();
+    const begin = new Date(recording.started_at).getTime();
+    if (Number.isNaN(target) || Number.isNaN(begin)) return null;
+    const offset = (target - begin) / 1000;
+    if (offset <= 0) return null;
+    const dur =
+      recording.duration_seconds ??
+      (recording.ended_at
+        ? (new Date(recording.ended_at).getTime() - begin) / 1000
+        : null);
+    if (dur != null && offset > dur) return null;
+    return offset;
+  })();
   const [ann, setAnn] = useState<AnnOpts>(loadAnn);
   useEffect(() => {
     try { localStorage.setItem(ANN_KEY, JSON.stringify(ann)); } catch { /* ignore */ }
@@ -132,11 +154,20 @@ export function RecordingModal({ recording, cameraName, onClose }: Props) {
         </div>
         <div className="p-4 space-y-3">
           <video
-            key={recording.id}
+            key={`${recording.id}:${seekTo ?? ""}`}
             controls
             autoPlay
             className="w-full max-h-[60vh] rounded bg-black"
             src={`/api/recordings/${recording.id}/stream${tq}`}
+            onLoadedMetadata={(e) => {
+              if (seekOffset == null) return;
+              const v = e.currentTarget;
+              try {
+                v.currentTime = Math.min(seekOffset, Math.max(0, (v.duration || seekOffset) - 0.1));
+              } catch {
+                /* seeking unsupported for this source; plays from the start */
+              }
+            }}
           />
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-1.5 flex-wrap">
