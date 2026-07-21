@@ -11,7 +11,7 @@ import { AddCameraModal } from "@/components/AddCameraModal";
 import { RetryCountdown } from "@/components/RetryCountdown";
 import { StarredStatusRow } from "@/components/StarredStatusRow";
 import { LiveCaptionOverlay } from "@/components/LiveCaptionOverlay";
-import { CurrentActivityStrip } from "@/components/CurrentActivityStrip";
+import { ActivityStrip } from "@/components/ActivityStrip";
 import { AudioActiveDot } from "@/components/AudioActiveDot";
 import { VLMStatusBadge } from "@/components/VLMStatusBadge";
 import { VLMOptionalBanner } from "@/components/VLMOptionalBanner";
@@ -324,11 +324,10 @@ function CameraSidebarCard({
           <LiveCaptionOverlay cameraId={camera.id} position="bottom" />
         )}
 
-        {/* HAR live current-activity strip. Renders only when person_actions
-            arrive (HAR enabled), so it is invisible otherwise. */}
-        {camera.status !== "offline" && (
-          <CurrentActivityStrip cameraId={camera.id} position="top" />
-        )}
+        {/* The HAR live current-activity strip used to sit here. It only ever
+            rendered when person_actions arrived (HAR is off by default), so it
+            was invisible while occupying the tile's activity slot. The seeker
+            at the bottom of the tile is the one activity surface now. */}
 
         {/* Audio active dot + VLM thinking badge. Stack top-left so the
             two are visually grouped and out of the way of overlay
@@ -427,8 +426,17 @@ function CameraSidebarCard({
           </div>
         )}
 
-        {/* Status + name overlay at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2.5 pb-2 pt-6">
+        {/* Seeker + status/name overlay at the bottom of the video. The strip
+            sits directly above the name so the tile has one bottom bar: when
+            movement happened (blue), when a person was there (green), and who,
+            clickable straight into the covering recording. */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/85 to-transparent px-2.5 pb-2 pt-6 z-10">
+          <ActivityStrip
+            cameraId={camera.id}
+            cameraName={camera.name}
+            variant="compact"
+            hours={3}
+          />
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-white truncate">{camera.name}</span>
             <span className="inline-flex items-center gap-1 text-[10px] text-white/70">

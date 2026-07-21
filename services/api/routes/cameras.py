@@ -363,21 +363,33 @@ async def camera_activity_strip(
     _current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Activity heatmap + who-was-present for a camera's recent window.
+    """Two-channel activity strip + who-was-present for a camera's window.
 
-    Powers the video presence/seek strip: each bucket carries a 0..1 activity
-    level (from observation density, since motion_samples may be empty) and the
-    set of people seen in it, plus the list of people in the window and the
-    recording segments so the UI can scrub to a moment.
+    Powers the seeker under each video. Each bucket carries two independent
+    0..1 levels so the UI can colour them differently:
+
+    - ``motion``: raw movement from the motion series. Fires on anything -- a
+      pet, headlights, a shadow -- so it answers "the camera saw something".
+    - ``person``: observations that actually contained a person detection, so it
+      answers the different question "a human was here".
+
+    Each is normalised against its own peak in the window, because absolute
+    motion scores are tiny and would render invisible. Also returns the people
+    seen and the covering recordings so the UI can scrub to a moment.
     """
     from datetime import timedelta
 
-    from shared.models import Observation, Person, Recording
+    from shared.models import MotionSample, Observation, Person, Recording
 
     end = datetime.now(timezone.utc)
     start = end - timedelta(hours=hours)
     span = (end - start).total_seconds()
     bucket_s = span / buckets
+
+    def _idx(ts) -> int:
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return min(buckets - 1, max(0, int((ts - start).total_seconds() / bucket_s)))
 
     obs_rows = (
         await db.execute(
@@ -388,16 +400,20 @@ async def camera_activity_strip(
         )
     ).scalars().all()
 
-    counts = [0] * buckets
+    person_counts = [0] * buckets
     bucket_pids: list[set[str]] = [set() for _ in range(buckets)]
     person_seen: dict[str, dict] = {}
     for o in obs_rows:
         started = o.started_at
         if started.tzinfo is None:
             started = started.replace(tzinfo=timezone.utc)
-        idx = min(buckets - 1, max(0, int((started - start).total_seconds() / bucket_s)))
-        counts[idx] += 1
-        for f in (o.person_detections or {}).get("faces", []) or []:
+        idx = _idx(started)
+        faces = (o.person_detections or {}).get("faces", []) or []
+        # A person channel means "a human was here", not "an observation
+        # existed" -- an observation can be a parcel or a car.
+        if faces:
+            person_counts[idx] += 1
+        for f in faces:
             pid = f.get("person_id")
             if not pid:
                 continue
@@ -410,11 +426,28 @@ async def camera_activity_strip(
             if not e.get("name"):
                 e["name"] = f.get("person_name")
 
-    peak = max(counts) or 1
+    # Raw movement, independent of whether anything was recognised.
+    motion_rows = (
+        await db.execute(
+            select(MotionSample.bucket, MotionSample.score)
+            .where(MotionSample.camera_id == camera_id)
+            .where(MotionSample.bucket >= start)
+        )
+    ).all()
+    motion_peaks = [0.0] * buckets
+    for bucket_ts, score in motion_rows:
+        i = _idx(bucket_ts)
+        motion_peaks[i] = max(motion_peaks[i], float(score or 0.0))
+
+    peak = max(person_counts) or 1
+    motion_peak = max(motion_peaks) or 1.0
     bucket_list = [
         {
             "t": (start + timedelta(seconds=bucket_s * i)).isoformat(),
-            "activity": round(counts[i] / peak, 3),
+            "motion": round(motion_peaks[i] / motion_peak, 3),
+            "person": round(person_counts[i] / peak, 3),
+            # Kept so an older client still renders something sensible.
+            "activity": round(person_counts[i] / peak, 3),
             "person_ids": sorted(bucket_pids[i]),
         }
         for i in range(buckets)

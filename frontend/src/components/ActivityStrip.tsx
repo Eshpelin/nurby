@@ -5,14 +5,21 @@ import { useAuth } from "@/lib/auth";
 import { RecordingModal } from "@/components/RecordingModal";
 import { formatWith } from "@/lib/time";
 
-// A presence + movement timeline for one camera: a heatmap of when activity
-// happened plus the faces of who was present, so you can scrub straight to the
-// interesting moments instead of scrubbing through hours of footage. Clicking a
-// slot opens the recording that covers it.
+// A seeker for one camera: when movement happened, when a *person* was there,
+// and who. Two channels are drawn in one strip because they answer different
+// questions -- a blue wash means the camera saw something (pet, headlights,
+// shadow), a green mark means a human was actually there. Faces sit at the time
+// they first appeared. Clicking scrubs into the recording covering that moment,
+// so you can skip straight to what matters instead of scrubbing hours.
+//
+// `compact` is the always-on bar pinned under each video tile on the wall;
+// `full` adds the window selector, a faces row and a time axis for the camera
+// detail page.
 
 interface Bucket {
   t: string;
-  activity: number; // 0..1
+  motion: number; // 0..1 raw movement
+  person: number; // 0..1 human presence
   person_ids: string[];
 }
 interface StripPerson {
@@ -45,35 +52,34 @@ function fmtClock(iso: string): string {
   }
 }
 
-function activityColor(a: number): string {
-  if (a <= 0) return "transparent";
-  // low -> muted green, high -> amber, so busy stretches stand out.
-  if (a < 0.34) return `rgba(34,197,94,${0.25 + a})`;
-  if (a < 0.67) return `rgba(132,204,22,${0.35 + a * 0.5})`;
-  return `rgba(245,158,11,${0.5 + a * 0.4})`;
-}
-
 export function ActivityStrip({
   cameraId,
   cameraName,
+  variant = "full",
+  hours: fixedHours,
 }: {
   cameraId: string;
   cameraName?: string | null;
+  variant?: "full" | "compact";
+  hours?: number;
 }) {
   const { authFetch, token } = useAuth();
-  const [hours, setHours] = useState(3);
+  const compact = variant === "compact";
+  const [hours, setHours] = useState(fixedHours ?? (compact ? 3 : 3));
   const [data, setData] = useState<StripData | null>(null);
-  const [openRec, setOpenRec] = useState<StripRec & { camera_id: string } | null>(null);
+  const [openRec, setOpenRec] = useState<(StripRec & { camera_id: string }) | null>(null);
   const [hover, setHover] = useState<{ index: number; leftPct: number } | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await authFetch(`/api/cameras/${cameraId}/activity-strip?hours=${hours}`);
+      const res = await authFetch(
+        `/api/cameras/${cameraId}/activity-strip?hours=${hours}&buckets=${compact ? 60 : 90}`
+      );
       if (res.ok) setData(await res.json());
     } catch {
       /* keep last */
     }
-  }, [authFetch, cameraId, hours]);
+  }, [authFetch, cameraId, hours, compact]);
 
   useEffect(() => {
     load();
@@ -102,7 +108,110 @@ export function ActivityStrip({
     if (rec) setOpenRec({ ...rec, camera_id: cameraId });
   };
 
-  const hasAny = !!data && data.buckets.some((b) => b.activity > 0);
+  const hasAny =
+    !!data && data.buckets.some((b) => b.motion > 0 || b.person > 0);
+
+  // The bar itself: motion as a blue wash behind, human presence as a solid
+  // green bar in front, so the two read apart at a glance.
+  const bar = (
+    <div
+      className={`relative flex ${compact ? "h-4" : "h-9"} rounded overflow-hidden bg-black/40 cursor-pointer`}
+      onMouseLeave={() => setHover(null)}
+    >
+      {data?.buckets.map((b, i) => (
+        <div
+          key={b.t}
+          className="relative flex-1 h-full hover:brightness-150"
+          onMouseEnter={() =>
+            setHover({ index: i, leftPct: (i / (data.buckets.length - 1 || 1)) * 100 })
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+            openCovering(b.t);
+          }}
+        >
+          {b.motion > 0 && (
+            <div
+              className="absolute inset-0"
+              style={{ backgroundColor: `rgba(56,189,248,${0.15 + b.motion * 0.5})` }}
+            />
+          )}
+          {b.person > 0 && (
+            <div
+              className="absolute inset-x-0 bottom-0"
+              style={{
+                height: `${Math.max(25, b.person * 100)}%`,
+                backgroundColor: `rgba(34,197,94,${0.55 + b.person * 0.45})`,
+              }}
+            />
+          )}
+        </div>
+      ))}
+      {!hasAny && (
+        <div className="absolute inset-0 flex items-center justify-center text-[9px] text-muted-foreground">
+          No activity in the last {hours}h
+        </div>
+      )}
+      {hover && data && (
+        <div
+          className="absolute -top-8 -translate-x-1/2 z-20 whitespace-nowrap px-2 py-1 rounded bg-popover border border-border text-[10px] shadow-lg pointer-events-none"
+          style={{ left: `${hover.leftPct}%` }}
+        >
+          <span className="font-mono">{fmtClock(data.buckets[hover.index].t)}</span>
+          {data.buckets[hover.index].person_ids.length > 0 ? (
+            <span className="ml-1 text-green-400">
+              {data.buckets[hover.index].person_ids
+                .map((id) => personById[id]?.name || "Unknown")
+                .join(", ")}
+            </span>
+          ) : data.buckets[hover.index].motion > 0 ? (
+            <span className="ml-1 text-sky-400">movement</span>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+
+  // Faces pinned at when each person first appeared.
+  const faces = (size: string) => (
+    <div className={`relative ${compact ? "h-5" : "h-8"} mb-0.5`}>
+      {data?.persons.map((p) => (
+        <div
+          key={p.id}
+          className="absolute -translate-x-1/2"
+          style={{ left: `${pctOf(p.first_seen)}%` }}
+          title={`${p.name || "Unknown"} · ${fmtClock(p.first_seen)}–${fmtClock(p.last_seen)}`}
+        >
+          {p.name ? (
+            <img
+              src={`/api/persons/${p.id}/photo${token ? `?token=${token}` : ""}`}
+              alt={p.name}
+              className={`${size} rounded-full object-cover border border-green-500/80 bg-muted`}
+              onError={(e) => ((e.currentTarget as HTMLImageElement).style.visibility = "hidden")}
+            />
+          ) : (
+            <div className={`${size} rounded-full border border-yellow-500/80 bg-muted`} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <div className="w-full px-1.5 pb-1" onClick={(e) => e.stopPropagation()}>
+        {faces("w-5 h-5")}
+        {bar}
+        {openRec && (
+          <RecordingModal
+            recording={openRec}
+            cameraName={cameraName}
+            onClose={() => setOpenRec(null)}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-border bg-card/50 p-3">
@@ -110,88 +219,34 @@ export function ActivityStrip({
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Activity
         </span>
-        <div className="flex items-center gap-1">
-          {HOURS_OPTIONS.map((h) => (
-            <button
-              key={h}
-              onClick={() => setHours(h)}
-              className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
-                hours === h
-                  ? "bg-accent/15 text-accent-foreground border border-accent/30"
-                  : "text-muted-foreground border border-transparent hover:bg-muted"
-              }`}
-            >
-              {h}h
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
+            <span className="w-2 h-2 rounded-sm bg-sky-400/70" /> movement
+            <span className="w-2 h-2 rounded-sm bg-green-500/80 ml-1.5" /> person
+          </span>
+          <div className="flex items-center gap-1">
+            {HOURS_OPTIONS.map((h) => (
+              <button
+                key={h}
+                onClick={() => setHours(h)}
+                className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
+                  hours === h
+                    ? "bg-accent/15 text-accent-foreground border border-accent/30"
+                    : "text-muted-foreground border border-transparent hover:bg-muted"
+                }`}
+              >
+                {h}h
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-
-      {/* Faces present in this window, placed at when they first appeared. */}
-      <div className="relative h-8 mb-1">
-        {data?.persons.map((p) => (
-          <div
-            key={p.id}
-            className="absolute -translate-x-1/2 group"
-            style={{ left: `${pctOf(p.first_seen)}%` }}
-            title={`${p.name || "Unknown"} · ${fmtClock(p.first_seen)}–${fmtClock(p.last_seen)}`}
-          >
-            {p.name ? (
-              <img
-                src={`/api/persons/${p.id}/photo${token ? `?token=${token}` : ""}`}
-                alt={p.name}
-                className="w-7 h-7 rounded-full object-cover border-2 border-green-500/70 bg-muted"
-                onError={(e) => ((e.currentTarget as HTMLImageElement).style.visibility = "hidden")}
-              />
-            ) : (
-              <div className="w-7 h-7 rounded-full border-2 border-yellow-500/70 bg-muted" />
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Heatmap of activity across the window. */}
-      <div
-        className="relative flex h-9 rounded overflow-hidden bg-muted/30 cursor-pointer"
-        onMouseLeave={() => setHover(null)}
-      >
-        {data?.buckets.map((b, i) => (
-          <div
-            key={b.t}
-            className="flex-1 h-full hover:brightness-125"
-            style={{ backgroundColor: activityColor(b.activity) }}
-            onMouseEnter={() => setHover({ index: i, leftPct: (i / (data.buckets.length - 1 || 1)) * 100 })}
-            onClick={() => openCovering(b.t)}
-          />
-        ))}
-        {!hasAny && (
-          <div className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground">
-            No activity in the last {hours}h
-          </div>
-        )}
-        {hover && data && (
-          <div
-            className="absolute -top-9 -translate-x-1/2 z-10 whitespace-nowrap px-2 py-1 rounded bg-popover border border-border text-[10px] shadow-lg pointer-events-none"
-            style={{ left: `${hover.leftPct}%` }}
-          >
-            <span className="font-mono">{fmtClock(data.buckets[hover.index].t)}</span>
-            {data.buckets[hover.index].person_ids.length > 0 && (
-              <span className="ml-1 text-green-400">
-                {data.buckets[hover.index].person_ids
-                  .map((id) => personById[id]?.name || "Unknown")
-                  .join(", ")}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Time axis. */}
+      {faces("w-7 h-7")}
+      {bar}
       <div className="flex justify-between mt-1 text-[9px] text-muted-foreground font-mono">
         <span>{data ? fmtClock(data.start) : ""}</span>
         <span>{data ? fmtClock(data.end) : "now"}</span>
       </div>
-
       {openRec && (
         <RecordingModal
           recording={openRec}
