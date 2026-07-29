@@ -8,6 +8,7 @@ keyframes to Redis for the perception pipeline.
 import asyncio
 import logging
 import os
+import shutil
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -143,7 +144,18 @@ class StreamWorker:
         self._last_reason: str | None = None  # latest status reason, for the retry hint
         self._redis = None
         # Smart recording state
-        self._frame_buffer: list[tuple[np.ndarray, datetime]] = []  # pre-capture ring buffer (clip/on_motion/on_object)
+        # Pre-capture (pre-roll) is kept on disk as rolling H.264 segments, not
+        # as decoded frames in RAM: a full-resolution frame ring costs ~0.7 GB
+        # per idle 1080p camera, which is untenable across a fleet. While idle
+        # in a record-on-trigger mode we continuously write short temp segments
+        # and keep only enough to cover recording_clip_pre seconds; when a
+        # trigger fires those segments are promoted to real recordings so the
+        # clip includes the lead-in (they render contiguously with the burst,
+        # since the timeline already stitches consecutive segments).
+        self._preroll_writer = None  # active idle segment writer (H264SegmentWriter | None)
+        self._preroll_path: str | None = None  # temp path of the active idle segment
+        self._preroll_start: datetime | None = None  # start time of the active idle segment
+        self._preroll_done: list[tuple[str, datetime, datetime]] = []  # finalized (path, start, end), oldest first
         self._clip_recording = False  # currently recording a clip
         self._clip_end_time: datetime | None = None  # when to stop current clip
         self._motion_end_time: float = 0  # when motion/object recording should stop (monotonic)
@@ -383,6 +395,10 @@ class StreamWorker:
         segment_path = None
         frame_count = 0
 
+        # Drop any pre-roll temp segments left behind by a prior crash so they
+        # cannot leak (they live outside the DB-keyed retention sweep).
+        self._clear_preroll_dir()
+
         try:
             while self._running:
                 # Bound cap.read so a silently-dead RTSP stream cannot hang
@@ -440,28 +456,19 @@ class StreamWorker:
                 # Recording (based on recording mode)
                 should_record = self._should_record(motion_score)
 
-                # Flush the pre-capture buffer at the start of a recording burst
-                # so the segment begins recording_clip_pre seconds BEFORE the
-                # trigger fired (Frigate's pre_capture). Applies to every
-                # record-on-trigger mode -- clip, on_motion, on_object -- so the
-                # moment that caused the recording is never lost. `always` never
-                # fills the buffer, so it is unaffected. The buffer holds only
-                # pre-trigger frames (it is filled after the write step below),
-                # and the current frame is written once by the should_record
-                # block, so there is no duplicated frame at the seam.
+                # At the start of a recording burst, promote the retained
+                # pre-roll segments so the clip includes recording_clip_pre
+                # seconds of lead-in (Frigate's pre_capture). Applies to every
+                # record-on-trigger mode -- clip, on_motion, on_object. `always`
+                # never fills the pre-roll, so it is unaffected. The promoted
+                # segments end at ~now and the main burst segment starts at now
+                # (below), so they render contiguously with no duplicated frame.
                 if (
                     self.recording_mode in ("on_motion", "on_object", "clip")
                     and should_record
                     and writer is None
-                    and self._frame_buffer
                 ):
-                    segment_start = self._frame_buffer[0][1]
-                    segment_path = self._segment_path(segment_start)
-                    os.makedirs(os.path.dirname(segment_path), exist_ok=True)
-                    writer = create_segment_writer(segment_path, fps, width, height)
-                    for buf_frame, _ in self._frame_buffer:
-                        writer.write(buf_frame)
-                    self._frame_buffer.clear()
+                    await self._promote_preroll(loop)
 
                 # Handle clip end
                 if self.recording_mode == "clip" and self._clip_recording:
@@ -505,18 +512,17 @@ class StreamWorker:
                     await self._save_recording(segment_path, segment_start, datetime.now(timezone.utc))
                     writer = None
 
-                # Maintain the pre-capture buffer for record-on-trigger modes.
-                # Only buffer while idle (writer is None): once a segment writer
-                # is open we are already capturing live frames, so buffering then
-                # would just waste memory (a full-resolution decoded-frame ring
-                # is not cheap). Filling it here, AFTER the write step, keeps the
-                # current frame out of the next burst's pre-roll flush and so
-                # avoids writing it twice at the seam.
+                # Maintain the on-disk pre-roll while idle (writer is None): keep
+                # rolling short H.264 segments on disk so a future burst can
+                # prepend the lead-in, without holding decoded frames in RAM.
+                # Once the main writer is open we are already capturing live, so
+                # the pre-roll pauses. Best-effort: a pre-roll failure must never
+                # break the main recording path.
                 if self.recording_mode in ("on_motion", "on_object", "clip") and writer is None:
-                    max_buffer = max(1, int(self.recording_clip_pre * fps))
-                    self._frame_buffer.append((frame.copy(), datetime.now(timezone.utc)))
-                    if len(self._frame_buffer) > max_buffer:
-                        self._frame_buffer = self._frame_buffer[-max_buffer:]
+                    try:
+                        await self._preroll_write(loop, frame, fps, width, height)
+                    except Exception:
+                        logger.debug("pre-roll write failed for %s", self.camera_id, exc_info=True)
 
                 # Yield control to event loop
                 await asyncio.sleep(0)
@@ -529,7 +535,7 @@ class StreamWorker:
                         segment_path, segment_start, datetime.now(timezone.utc)
                     )
             cap.release()
-            self._frame_buffer.clear()
+            await self._discard_preroll()
             if self._redis:
                 await self._redis.aclose()
                 self._redis = None
@@ -782,6 +788,129 @@ class StreamWorker:
         date_dir = start.strftime("%Y-%m-%d")
         filename = f"{self.camera_id}_{start.strftime('%H%M%S')}.mp4"
         return os.path.join(settings.recordings_path, str(self.camera_id), date_dir, filename)
+
+    # ── Pre-capture (pre-roll) on-disk rolling segments ──
+    #
+    # While idle in a record-on-trigger mode we keep short H.264 segments on
+    # disk (never decoded frames in RAM) and retain just enough to cover
+    # recording_clip_pre seconds. On a trigger they are promoted to real
+    # Recording rows so the clip has lead-in. Staged under a per-camera
+    # `.preroll` dir so orphans (from a crash) are trivial to wipe and never
+    # pollute the dated recording dirs.
+
+    def _preroll_dir(self) -> str:
+        return os.path.join(settings.recordings_path, str(self.camera_id), ".preroll")
+
+    def _preroll_temp_path(self, start: datetime) -> str:
+        # microseconds keep temp names unique even for sub-second rotations
+        return os.path.join(self._preroll_dir(), f"{start.strftime('%H%M%S_%f')}.mp4")
+
+    def _clear_preroll_dir(self) -> None:
+        """Remove all staged pre-roll temp segments for this camera."""
+        try:
+            shutil.rmtree(self._preroll_dir(), ignore_errors=True)
+        except Exception:
+            logger.debug("failed clearing pre-roll dir for %s", self.camera_id, exc_info=True)
+
+    @staticmethod
+    def _unlink_quiet(path: str | None) -> None:
+        if not path:
+            return
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+    def _preroll_trim(self, now: datetime) -> None:
+        """Drop finalized pre-roll segments no longer needed to cover
+        recording_clip_pre seconds of lead-in, deleting their files.
+
+        Keeps the minimal newest suffix whose oldest segment still starts at or
+        before ``now - recording_clip_pre`` (so coverage stays >= the configured
+        pre-roll), which bounds over-capture to under one rotation interval.
+        """
+        while len(self._preroll_done) >= 2:
+            second_start = self._preroll_done[1][1]
+            if (now - second_start).total_seconds() >= self.recording_clip_pre:
+                old = self._preroll_done.pop(0)
+                self._unlink_quiet(old[0])
+            else:
+                break
+
+    async def _preroll_write(self, loop, frame, fps: float, width: int, height: int) -> None:
+        """Write one idle frame into the rolling pre-roll segment, rotating every
+        recording_clip_pre seconds."""
+        now = datetime.now(timezone.utc)
+        if self._preroll_writer is None:
+            os.makedirs(self._preroll_dir(), exist_ok=True)
+            self._preroll_start = now
+            self._preroll_path = self._preroll_temp_path(now)
+            self._preroll_writer = create_segment_writer(self._preroll_path, fps, width, height)
+        self._preroll_writer.write(frame)
+
+        rotate_after = max(1, int(self.recording_clip_pre))
+        if self._preroll_start and (now - self._preroll_start).total_seconds() >= rotate_after:
+            writer, path, start = self._preroll_writer, self._preroll_path, self._preroll_start
+            self._preroll_writer = None
+            self._preroll_path = None
+            self._preroll_start = None
+            await loop.run_in_executor(None, writer.release)
+            if path and start:
+                self._preroll_done.append((path, start, now))
+                self._preroll_trim(now)
+
+    async def _promote_preroll(self, loop) -> None:
+        """Promote retained pre-roll segments to real recordings at burst start.
+
+        Best-effort: any failure here just costs lead-in, never the burst. The
+        promoted segments end at ~now, and the main writer starts at now, so
+        they play contiguously with the burst.
+        """
+        try:
+            # Finalize the in-progress idle segment first.
+            if self._preroll_writer is not None:
+                now = datetime.now(timezone.utc)
+                writer, path, start = self._preroll_writer, self._preroll_path, self._preroll_start
+                self._preroll_writer = None
+                self._preroll_path = None
+                self._preroll_start = None
+                await loop.run_in_executor(None, writer.release)
+                if path and start:
+                    self._preroll_done.append((path, start, now))
+
+            # Promote oldest -> newest so recordings are chronological.
+            for path, start, end in self._preroll_done:
+                dest = self._segment_path(start)
+                try:
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    os.replace(path, dest)  # atomic within the recordings mount
+                    await self._save_recording(dest, start, end)
+                except Exception:
+                    logger.debug("failed promoting pre-roll segment %s", path, exc_info=True)
+                    self._unlink_quiet(path)
+        finally:
+            self._preroll_done.clear()
+
+    async def _discard_preroll(self) -> None:
+        """Tear down pre-roll state without promoting (stream ending). Drops the
+        active writer and every staged temp file."""
+        try:
+            if self._preroll_writer is not None:
+                writer = self._preroll_writer
+                self._preroll_writer = None
+                try:
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, writer.release)
+                except Exception:
+                    pass
+            for path, _s, _e in self._preroll_done:
+                self._unlink_quiet(path)
+            self._unlink_quiet(self._preroll_path)
+        finally:
+            self._preroll_done.clear()
+            self._preroll_path = None
+            self._preroll_start = None
+            self._clear_preroll_dir()
 
     async def _update_camera_status(self, status: str, reason: str | None = None):
         previous = self._last_status
