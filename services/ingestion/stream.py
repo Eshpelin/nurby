@@ -46,8 +46,9 @@ STREAM_ERROR_GIVE_UP = 3
 CAMERA_RETRY_KEY_PREFIX = "nurby:camera_retry:"  # per-camera next-retry hint for the UI
 MOTION_THRESHOLD = 0.01  # Minimum motion score to trigger event
 MOTION_COOLDOWN = 3.0  # Seconds between motion keyframe publishes
-MOTION_RECORD_COOLDOWN = 10.0  # Seconds to keep recording after last motion
-OBJECT_RECORD_COOLDOWN = 15.0  # Seconds to keep recording after object trigger
+# Post-capture (post-roll) is per-camera and configurable via
+# Camera.recording_clip_post; on_motion/on_object hold the recording open that
+# many seconds past the last trigger. See _should_record / _check_and_update_trigger.
 REDIS_STREAM_KEY = "nurby:motion"  # Redis stream for motion keyframes
 REDIS_STREAM_MAXLEN = 1000  # Max entries in stream
 # Camera availability edges live in shared/ so the perception watcher can name
@@ -142,7 +143,7 @@ class StreamWorker:
         self._last_reason: str | None = None  # latest status reason, for the retry hint
         self._redis = None
         # Smart recording state
-        self._frame_buffer: list[tuple[np.ndarray, datetime]] = []  # ring buffer for clip pre-buffer
+        self._frame_buffer: list[tuple[np.ndarray, datetime]] = []  # pre-capture ring buffer (clip/on_motion/on_object)
         self._clip_recording = False  # currently recording a clip
         self._clip_end_time: datetime | None = None  # when to stop current clip
         self._motion_end_time: float = 0  # when motion/object recording should stop (monotonic)
@@ -439,15 +440,21 @@ class StreamWorker:
                 # Recording (based on recording mode)
                 should_record = self._should_record(motion_score)
 
-                # Maintain pre-buffer for clip mode
-                if self.recording_mode == "clip":
-                    max_buffer = int(self.recording_clip_pre * fps)
-                    self._frame_buffer.append((frame.copy(), datetime.now(timezone.utc)))
-                    if len(self._frame_buffer) > max_buffer:
-                        self._frame_buffer = self._frame_buffer[-max_buffer:]
-
-                # Handle clip mode flush of pre-buffer
-                if self.recording_mode == "clip" and self._clip_recording and writer is None and self._frame_buffer:
+                # Flush the pre-capture buffer at the start of a recording burst
+                # so the segment begins recording_clip_pre seconds BEFORE the
+                # trigger fired (Frigate's pre_capture). Applies to every
+                # record-on-trigger mode -- clip, on_motion, on_object -- so the
+                # moment that caused the recording is never lost. `always` never
+                # fills the buffer, so it is unaffected. The buffer holds only
+                # pre-trigger frames (it is filled after the write step below),
+                # and the current frame is written once by the should_record
+                # block, so there is no duplicated frame at the seam.
+                if (
+                    self.recording_mode in ("on_motion", "on_object", "clip")
+                    and should_record
+                    and writer is None
+                    and self._frame_buffer
+                ):
                     segment_start = self._frame_buffer[0][1]
                     segment_path = self._segment_path(segment_start)
                     os.makedirs(os.path.dirname(segment_path), exist_ok=True)
@@ -490,10 +497,26 @@ class StreamWorker:
 
                     writer.write(frame)
                 elif self.recording_mode in ("on_motion", "on_object") and writer is not None:
-                    # Stop recording when trigger condition ends
+                    # Stop recording when the post-capture window ends (the
+                    # post-roll is applied in _should_record / the trigger
+                    # handler by holding should_record true for
+                    # recording_clip_post seconds after the last trigger).
                     await loop.run_in_executor(None, writer.release)
                     await self._save_recording(segment_path, segment_start, datetime.now(timezone.utc))
                     writer = None
+
+                # Maintain the pre-capture buffer for record-on-trigger modes.
+                # Only buffer while idle (writer is None): once a segment writer
+                # is open we are already capturing live frames, so buffering then
+                # would just waste memory (a full-resolution decoded-frame ring
+                # is not cheap). Filling it here, AFTER the write step, keeps the
+                # current frame out of the next burst's pre-roll flush and so
+                # avoids writing it twice at the seam.
+                if self.recording_mode in ("on_motion", "on_object", "clip") and writer is None:
+                    max_buffer = max(1, int(self.recording_clip_pre * fps))
+                    self._frame_buffer.append((frame.copy(), datetime.now(timezone.utc)))
+                    if len(self._frame_buffer) > max_buffer:
+                        self._frame_buffer = self._frame_buffer[-max_buffer:]
 
                 # Yield control to event loop
                 await asyncio.sleep(0)
@@ -674,7 +697,9 @@ class StreamWorker:
 
         if self.recording_mode == "on_motion":
             if motion_score is not None and motion_score > MOTION_THRESHOLD:
-                self._motion_end_time = time.monotonic() + MOTION_RECORD_COOLDOWN
+                # Hold the recording open for recording_clip_post seconds after
+                # the last motion frame (Frigate's post_capture / post-roll).
+                self._motion_end_time = time.monotonic() + self.recording_clip_post
             return time.monotonic() < self._motion_end_time
 
         if self.recording_mode in ("on_object",):
@@ -705,7 +730,9 @@ class StreamWorker:
             return
 
         if self.recording_mode == "on_object":
-            self._motion_end_time = time.monotonic() + OBJECT_RECORD_COOLDOWN
+            # Post-roll: keep recording recording_clip_post seconds past the
+            # last object trigger (Frigate's post_capture).
+            self._motion_end_time = time.monotonic() + self.recording_clip_post
 
         elif self.recording_mode == "clip" and not self._clip_recording:
             self._clip_recording = True

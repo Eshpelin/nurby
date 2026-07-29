@@ -986,7 +986,7 @@ export default function CameraConfigPage() {
             </FieldRow>
           )}
 
-          {recordingMode === "clip" && (
+          {["clip", "on_motion", "on_object"].includes(recordingMode) && (
             <>
               <FieldRow label="Pre-buffer" hint="Seconds of footage to keep before the trigger event">
                 <div className="flex items-center gap-3">

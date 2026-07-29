@@ -49,8 +49,8 @@ class Camera(Base):
     recording_enabled: Mapped[bool] = mapped_column(Boolean, default=True)  # deprecated, use recording_mode
     recording_mode: Mapped[str] = mapped_column(String(16), default="always")  # off, always, on_motion, on_object, clip
     recording_trigger_objects: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # labels for on_object mode
-    recording_clip_pre: Mapped[int] = mapped_column(Integer, default=5)  # pre-buffer seconds for clip mode
-    recording_clip_post: Mapped[int] = mapped_column(Integer, default=10)  # post-buffer seconds for clip mode
+    recording_clip_pre: Mapped[int] = mapped_column(Integer, default=5)  # pre-capture (pre-roll) seconds for record-on-trigger modes (clip/on_motion/on_object)
+    recording_clip_post: Mapped[int] = mapped_column(Integer, default=10)  # post-capture (post-roll) seconds for record-on-trigger modes (clip/on_motion/on_object)
     # Per-camera perception config
     vlm_provider_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True, index=True
