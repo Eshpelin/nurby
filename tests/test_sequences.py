@@ -538,6 +538,16 @@ def test_schema_predicate_step_kinds():
         _validate_sequence({"steps": [{"check": chk, "within_seconds": 30}]})
 
 
+def test_schema_zone_and_loiter_steps():
+    # geometry-lite step checks: object-in-a-named-zone and loitering-in-a-zone.
+    _validate_sequence({"steps": [
+        {"check": {"type": "object_detected", "zones": ["driveway"], "label": "person"},
+         "within_seconds": 30},
+        {"check": {"type": "loitering", "zone_name": "porch", "threshold_seconds": 60},
+         "within_seconds": 120},
+    ]})
+
+
 def test_schema_verify_step():
     _validate_sequence({"steps": [
         {"check": {"type": "verify", "question": "is the door open?"}, "within_seconds": 5},

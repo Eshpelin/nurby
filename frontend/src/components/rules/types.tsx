@@ -1319,10 +1319,11 @@ export function buildRuleSummary(rule: Rule, cameras: Camera[]): string {
 // on_timeout is the absence alert that fires when a step never happens in time.
 
 export type SeqCheckKind =
-  | "object" | "locate" | "verify" | "motion" | "face" | "audio" | "known_face";
+  | "object" | "locate" | "verify" | "motion" | "face" | "audio" | "known_face"
+  | "zone" | "loiter";
 
 // Step kinds that don't need a label/prompt/question text field.
-export const SEQ_KINDS_NO_LABEL: SeqCheckKind[] = ["motion", "face", "known_face"];
+export const SEQ_KINDS_NO_LABEL: SeqCheckKind[] = ["motion", "face", "known_face", "loiter"];
 
 export interface SeqStepDraft {
   kind: SeqCheckKind;
@@ -1333,6 +1334,8 @@ export interface SeqStepDraft {
   minConfidence: string; // verify only: pass threshold (0-1)
   providerId: string; // verify only: "" = camera's default VLM, else a specific provider
   personId: string; // known_face only: "" = anyone known, else a specific person
+  zoneName: string; // zone/loiter only: the named area
+  dwellSeconds: string; // loiter only: dwell time before it counts
   preGateLabel: string; // locate only: object that must be present before grounding
   requireCorroboration: boolean; // locate only
 }
@@ -1348,7 +1351,8 @@ export const SEQ_CORRELATE_OPTIONS: { value: string; label: string; hint: string
 export function defaultSeqStep(kind: SeqCheckKind = "object"): SeqStepDraft {
   return {
     kind, label: "", withinSeconds: "120", confirmFrames: "1", negate: false,
-    minConfidence: "0.6", providerId: "", personId: "", preGateLabel: "", requireCorroboration: false,
+    minConfidence: "0.6", providerId: "", personId: "", zoneName: "", dwellSeconds: "30",
+    preGateLabel: "", requireCorroboration: false,
   };
 }
 
@@ -1387,6 +1391,20 @@ export function seqStepToDict(s: SeqStepDraft): Record<string, unknown> {
         ...(s.personId.trim() ? { person_id: s.personId.trim() } : {}),
       };
       break;
+    case "zone":
+      step.check = {
+        type: "object_detected",
+        zones: s.zoneName.trim() ? [s.zoneName.trim()] : [],
+        ...(s.label.trim() ? { label: s.label.trim() } : {}),
+      };
+      break;
+    case "loiter":
+      step.check = {
+        type: "loitering",
+        zone_name: s.zoneName.trim(),
+        threshold_seconds: parseInt(s.dwellSeconds) || 30,
+      };
+      break;
     default:
       step.check = { type: "object_detected", label: s.label.trim() };
   }
@@ -1399,7 +1417,8 @@ export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
   const confirm = raw.confirm_frames != null ? String(raw.confirm_frames) : "1";
   const base = {
     withinSeconds: within, confirmFrames: confirm, negate: raw.negate === true,
-    minConfidence: "0.6", providerId: "", personId: "", preGateLabel: "", requireCorroboration: false,
+    minConfidence: "0.6", providerId: "", personId: "", zoneName: "", dwellSeconds: "30",
+    preGateLabel: "", requireCorroboration: false,
   };
   switch (check.type) {
     case "locate": {
@@ -1424,6 +1443,19 @@ export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
       return { ...base, kind: "audio", label: (check.label as string) || "" };
     case "face_recognized":
       return { ...base, kind: "known_face", label: "", personId: (check.person_id as string) || "" };
+    case "loitering":
+      return {
+        ...base, kind: "loiter", label: "",
+        zoneName: (check.zone_name as string) || "",
+        dwellSeconds: check.threshold_seconds != null ? String(check.threshold_seconds) : "30",
+      };
+    case "object_detected": {
+      const zones = (check.zones as string[]) || [];
+      if (zones.length > 0) {
+        return { ...base, kind: "zone", label: (check.label as string) || "", zoneName: zones[0] || "" };
+      }
+      return { ...base, kind: "object", label: (check.label as string) || "" };
+    }
     default:
       return { ...base, kind: "object", label: (check.label as string) || "" };
   }
@@ -1447,6 +1479,10 @@ export function describeSeqStep(s: SeqStepDraft): string {
       return `${not ? "no " : ""}${s.label.trim() || "sound"} within ${within}s`;
     case "known_face":
       return `${s.personId ? "that person" : "a known face"} ${not ? "does NOT appear" : "appears"} within ${within}s`;
+    case "zone":
+      return `${not ? "no " : ""}${s.label.trim() || "anything"} in ${s.zoneName || "an area"} within ${within}s`;
+    case "loiter":
+      return `${not ? "nobody loiters" : "loiters"} in ${s.zoneName || "an area"} for ${parseInt(s.dwellSeconds) || 30}s`;
     default: {
       const obj = s.label.trim() || "object";
       return not ? `no ${obj} within ${within}s` : `${obj} appears within ${within}s`;
@@ -1456,7 +1492,8 @@ export function describeSeqStep(s: SeqStepDraft): string {
 
 export function validateSeqStep(s: SeqStepDraft): string | null {
   const noLabel = SEQ_KINDS_NO_LABEL.includes(s.kind);
-  if (!noLabel && !s.label.trim()) {
+  // "zone" shows an optional object label, so it doesn't require one.
+  if (!noLabel && s.kind !== "zone" && !s.label.trim()) {
     return s.kind === "locate" ? "Describe what to find"
       : s.kind === "verify" ? "Ask a yes/no question"
       : s.kind === "audio" ? "Enter a sound label (e.g. baby_cry)"
@@ -1467,5 +1504,7 @@ export function validateSeqStep(s: SeqStepDraft): string | null {
     const mc = parseFloat(s.minConfidence);
     if (!Number.isFinite(mc) || mc < 0 || mc > 1) return "Confidence must be between 0 and 1";
   }
+  if ((s.kind === "zone" || s.kind === "loiter") && !s.zoneName.trim()) return "Pick a named area";
+  if (s.kind === "loiter" && (parseInt(s.dwellSeconds) || 0) <= 0) return "Dwell time must be greater than 0";
   return null;
 }

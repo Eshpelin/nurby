@@ -12,6 +12,7 @@ import {
   SEQ_CORRELATE_OPTIONS,
   SEQ_KINDS_NO_LABEL,
   type ActionDraft,
+  type Camera,
   type DeviceOption,
   type Person,
   type ProviderOption,
@@ -38,6 +39,7 @@ export interface SequenceSectionProps {
   devices: DeviceOption[];
   persons: Person[];
   providers: ProviderOption[];
+  cameras: Camera[];
 }
 
 const SELECT_CLS =
@@ -49,8 +51,20 @@ export function SequenceSection(props: SequenceSectionProps) {
   const {
     enabled, setEnabled, correlateBy, setCorrelateBy, onRefire, setOnRefire,
     maxActive, setMaxActive, steps, setSteps, timeoutActions, setTimeoutActions,
-    telegramChannels, telegramChannelsLoading, devices, persons, providers,
+    telegramChannels, telegramChannelsLoading, devices, persons, providers, cameras,
   } = props;
+
+  // Named areas drawn on any camera (Settings → Zones), for zone/loiter steps.
+  const areaNames = [
+    ...new Set(
+      cameras.flatMap((c) =>
+        ((c as { motion_zones?: { type?: string; name?: string }[] }).motion_zones || [])
+          .filter((z) => z.type === "zone" || z.type === "loiter")
+          .map((z) => z.name || "")
+          .filter(Boolean),
+      ),
+    ),
+  ];
 
   const patchStep = (i: number, patch: Partial<SeqStepDraft>) =>
     setSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
@@ -122,6 +136,8 @@ export function SequenceSection(props: SequenceSectionProps) {
                       <option value="face">Face detected</option>
                       <option value="known_face">Known face</option>
                       <option value="audio">Audio event</option>
+                      <option value="zone">In a named area</option>
+                      <option value="loiter">Loiters in an area</option>
                     </select>
                     <button
                       type="button"
@@ -145,10 +161,46 @@ export function SequenceSection(props: SequenceSectionProps) {
                             ? 'e.g. "is the garage door open?"'
                             : s.kind === "audio"
                               ? "e.g. baby_cry, glass_break, dog_bark"
-                              : "e.g. package"
+                              : s.kind === "zone"
+                                ? "any object (optional, e.g. person)"
+                                : "e.g. package"
                       }
                       className={`${INPUT_CLS} w-full`}
                     />
+                  )}
+
+                  {(s.kind === "zone" || s.kind === "loiter") && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {areaNames.length === 0 ? (
+                        <span className="text-[11px] text-amber-400/90">
+                          No named areas yet — draw one in a camera&apos;s settings (Zones).
+                        </span>
+                      ) : (
+                        <select
+                          value={s.zoneName}
+                          onChange={(e) => patchStep(i, { zoneName: e.target.value })}
+                          className={SELECT_CLS}
+                        >
+                          <option value="">Pick an area…</option>
+                          {areaNames.map((name) => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </select>
+                      )}
+                      {s.kind === "loiter" && (
+                        <>
+                          <span className="text-[11px] text-muted-foreground">for</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={s.dwellSeconds}
+                            onChange={(e) => patchStep(i, { dwellSeconds: e.target.value })}
+                            className={`${INPUT_CLS} w-20`}
+                          />
+                          <span className="text-[11px] text-muted-foreground">seconds</span>
+                        </>
+                      )}
+                    </div>
                   )}
 
                   {s.kind === "known_face" && (

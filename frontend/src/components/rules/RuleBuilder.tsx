@@ -749,6 +749,7 @@ export function RuleBuilder({
             devices={devices}
             providers={providers}
             persons={persons}
+            cameras={cameras}
           />
 
           <div className="border border-border rounded-md p-3">
