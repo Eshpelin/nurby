@@ -477,7 +477,7 @@ class StreamWorker:
                         self._clip_end_time = None
                         if writer is not None:
                             await loop.run_in_executor(None, writer.release)
-                            await self._save_recording(segment_path, segment_start, datetime.now(timezone.utc))
+                            await self._save_recording(segment_path, segment_start, datetime.now(timezone.utc), writer)
                             writer = None
                         should_record = False
 
@@ -492,7 +492,7 @@ class StreamWorker:
                         # Finalize previous segment
                         if writer is not None:
                             await loop.run_in_executor(None, writer.release)
-                            await self._save_recording(segment_path, segment_start, now)
+                            await self._save_recording(segment_path, segment_start, now, writer)
 
                         segment_start = now
                         segment_path = self._segment_path(now)
@@ -502,14 +502,34 @@ class StreamWorker:
                             segment_path, fps, width, height
                         )
 
-                    writer.write(frame)
+                    # Bound the write. stdin.write to ffmpeg blocks when the
+                    # encoder stalls (slow disk, hung ffmpeg); left unbounded it
+                    # freezes this whole loop, so a segment runs minutes past
+                    # SEGMENT_DURATION while capturing almost nothing. On timeout
+                    # drop the segment and reconnect instead of hanging.
+                    try:
+                        await asyncio.wait_for(
+                            loop.run_in_executor(self._executor, writer.write, frame),
+                            timeout=15.0,
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "Recording writer stalled for camera %s; closing segment",
+                            self.camera_id,
+                        )
+                        await loop.run_in_executor(None, writer.release)
+                        await self._save_recording(
+                            segment_path, segment_start, datetime.now(timezone.utc), writer
+                        )
+                        writer = None
+                        break
                 elif self.recording_mode in ("on_motion", "on_object") and writer is not None:
                     # Stop recording when the post-capture window ends (the
                     # post-roll is applied in _should_record / the trigger
                     # handler by holding should_record true for
                     # recording_clip_post seconds after the last trigger).
                     await loop.run_in_executor(None, writer.release)
-                    await self._save_recording(segment_path, segment_start, datetime.now(timezone.utc))
+                    await self._save_recording(segment_path, segment_start, datetime.now(timezone.utc), writer)
                     writer = None
 
                 # Maintain the on-disk pre-roll while idle (writer is None): keep
@@ -532,7 +552,7 @@ class StreamWorker:
                 writer.release()
                 if segment_path and segment_start:
                     await self._save_recording(
-                        segment_path, segment_start, datetime.now(timezone.utc)
+                        segment_path, segment_start, datetime.now(timezone.utc), writer
                     )
             cap.release()
             await self._discard_preroll()
@@ -1030,11 +1050,25 @@ class StreamWorker:
             logger.exception("Thumbnail extraction failed for %s", file_path)
             return None
 
-    async def _save_recording(self, file_path: str, started_at: datetime, ended_at: datetime):
+    async def _save_recording(
+        self, file_path: str, started_at: datetime, ended_at: datetime, writer=None
+    ):
         try:
             _sz = safe_getsize(file_path)
             file_size = _sz if _sz else None
-            duration = (ended_at - started_at).total_seconds()
+            # Prefer the real encoded length (frames / fps) over wall-clock. A
+            # stalled or slow stream can hold a segment open far longer than the
+            # video it actually captured, and a wall-clock duration then makes
+            # the DB claim minutes of footage for a few seconds of file -- which
+            # breaks the scrubber and makes moments impossible to find. Derive
+            # ended_at from the real duration too, so the timeline geometry
+            # matches the file.
+            encoded = getattr(writer, "encoded_seconds", None)
+            if encoded and encoded > 0:
+                duration = float(encoded)
+                ended_at = started_at + timedelta(seconds=duration)
+            else:
+                duration = (ended_at - started_at).total_seconds()
             loop = asyncio.get_running_loop()
             thumbnail_path = await loop.run_in_executor(
                 None, self._write_thumbnail, file_path

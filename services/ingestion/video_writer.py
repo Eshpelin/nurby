@@ -69,6 +69,16 @@ class H264SegmentWriter:
         )
         self._path = path
         self._failed = False
+        # The output is encoded at a fixed rate, so its real duration is
+        # frames_written / fps -- not wall-clock. A stream that delivers frames
+        # slower than fps (a flaky camera) yields a file shorter than the time
+        # it spanned. Callers store the honest duration from these.
+        self.fps = fps
+        self.frames_written = 0
+
+    @property
+    def encoded_seconds(self) -> float:
+        return self.frames_written / self.fps if self.fps else 0.0
 
     def isOpened(self) -> bool:  # noqa: N802 - mirrors cv2.VideoWriter
         return not self._failed and self._proc.poll() is None
@@ -78,6 +88,7 @@ class H264SegmentWriter:
             return
         try:
             self._proc.stdin.write(frame.tobytes())
+            self.frames_written += 1
         except (BrokenPipeError, OSError):
             # Encoder died mid-segment. Capture stderr once on release.
             self._failed = True
@@ -113,6 +124,31 @@ class H264SegmentWriter:
             )
 
 
+class _CountingCv2Writer:
+    """cv2.VideoWriter with the same frames_written / encoded_seconds surface
+    as H264SegmentWriter, so the recording duration is honest on the fallback
+    path too."""
+
+    def __init__(self, writer, fps: float):
+        self._w = writer
+        self.fps = fps
+        self.frames_written = 0
+
+    @property
+    def encoded_seconds(self) -> float:
+        return self.frames_written / self.fps if self.fps else 0.0
+
+    def isOpened(self) -> bool:  # noqa: N802
+        return self._w.isOpened()
+
+    def write(self, frame) -> None:
+        self._w.write(frame)
+        self.frames_written += 1
+
+    def release(self) -> None:
+        self._w.release()
+
+
 def create_segment_writer(path: str, fps: float, width: int, height: int):
     """Return the best available segment writer for ``path``.
 
@@ -132,4 +168,4 @@ def create_segment_writer(path: str, fps: float, width: int, height: int):
             )
             _fallback_warned = True
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        return cv2.VideoWriter(path, fourcc, fps, (width, height))
+        return _CountingCv2Writer(cv2.VideoWriter(path, fourcc, fps, (width, height)), fps)
