@@ -16,6 +16,7 @@ import {
   type LocateDraft,
   type DeviceDraft,
   type DeviceOption,
+  type ProviderOption,
   type TelegramChannelOption,
 } from "../types";
 import { useSortable } from "@dnd-kit/sortable";
@@ -46,6 +47,7 @@ export interface ActionCardProps {
   telegramChannels: TelegramChannelOption[];
   telegramChannelsLoading: boolean;
   devices: DeviceOption[];
+  providers: ProviderOption[];
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
 }
@@ -64,6 +66,7 @@ export function ActionCard({
   telegramChannels,
   telegramChannelsLoading,
   devices,
+  providers,
   isCollapsed,
   onToggleCollapsed,
 }: ActionCardProps) {
@@ -220,6 +223,7 @@ export function ActionCard({
             <VerifyEditor
               draft={draft as VerifyDraft}
               onChange={(next) => onReplace(next)}
+              providers={providers}
             />
           )}
           {draft.type === "locate" && (

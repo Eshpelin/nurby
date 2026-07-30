@@ -1,14 +1,15 @@
 "use client";
 
-import { type VerifyDraft } from "../types";
+import { type ProviderOption, type VerifyDraft } from "../types";
 import { StyledSelect } from "../StyledSelect";
 
 export interface VerifyEditorProps {
   draft: VerifyDraft;
   onChange: (next: VerifyDraft) => void;
+  providers: ProviderOption[];
 }
 
-export function VerifyEditor({ draft, onChange }: VerifyEditorProps) {
+export function VerifyEditor({ draft, onChange, providers }: VerifyEditorProps) {
   const d = draft;
   const set = (patch: Partial<VerifyDraft>) => onChange({ ...d, ...patch });
   return (
@@ -61,18 +62,20 @@ export function VerifyEditor({ draft, onChange }: VerifyEditorProps) {
       </div>
       <div>
         <label className="text-xs text-muted-foreground block mb-1">
-          Provider id (optional)
+          AI provider (optional)
         </label>
-        {/* TODO. Swap for a provider dropdown once the rule builder
-            exposes the configured VLM provider list. A raw uuid is
-            accepted for v1; blank uses the camera or global default. */}
-        <input
-          type="text"
+        <StyledSelect
           value={d.providerId || ""}
-          onChange={(e) => set({ providerId: e.target.value })}
-          className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono"
-          placeholder="defaults to the camera's VLM provider"
+          options={[
+            { value: "", label: "Default (the camera's VLM)" },
+            ...providers.map((p) => ({ value: p.id, label: `${p.name} (${p.kind})` })),
+          ]}
+          onChange={(v) => set({ providerId: v })}
         />
+        <div className="text-[10px] text-muted-foreground">
+          Which model answers this check. Leave default unless you want a
+          specific one (e.g. a sharper cloud model for a critical confirmation).
+        </div>
       </div>
     </div>
   );

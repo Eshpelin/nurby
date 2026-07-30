@@ -63,6 +63,14 @@ export interface Person {
   photo_path: string | null;
 }
 
+// Minimal configured-VLM-provider shape for the builder's provider dropdowns
+// (verify action + verify sequence step). Populated from GET /api/providers.
+export interface ProviderOption {
+  id: string;
+  name: string;
+  kind: string;
+}
+
 // Registered device instance (GET /api/devices/instances), trimmed to
 // what the rule builder needs for the device action picker.
 export interface DeviceOption {
@@ -1323,6 +1331,7 @@ export interface SeqStepDraft {
   confirmFrames: string; // require N agreeing frames within the window (>1 cuts noise)
   negate: boolean; // match on ABSENCE (with ordering = a transition)
   minConfidence: string; // verify only: pass threshold (0-1)
+  providerId: string; // verify only: "" = camera's default VLM, else a specific provider
   personId: string; // known_face only: "" = anyone known, else a specific person
   preGateLabel: string; // locate only: object that must be present before grounding
   requireCorroboration: boolean; // locate only
@@ -1339,7 +1348,7 @@ export const SEQ_CORRELATE_OPTIONS: { value: string; label: string; hint: string
 export function defaultSeqStep(kind: SeqCheckKind = "object"): SeqStepDraft {
   return {
     kind, label: "", withinSeconds: "120", confirmFrames: "1", negate: false,
-    minConfidence: "0.6", personId: "", preGateLabel: "", requireCorroboration: false,
+    minConfidence: "0.6", providerId: "", personId: "", preGateLabel: "", requireCorroboration: false,
   };
 }
 
@@ -1359,6 +1368,7 @@ export function seqStepToDict(s: SeqStepDraft): Record<string, unknown> {
       step.check = {
         type: "verify", question: s.label.trim(),
         ...(Number.isFinite(mc) ? { min_confidence: mc } : {}),
+        ...(s.providerId.trim() ? { provider_id: s.providerId.trim() } : {}),
       };
       break;
     }
@@ -1389,7 +1399,7 @@ export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
   const confirm = raw.confirm_frames != null ? String(raw.confirm_frames) : "1";
   const base = {
     withinSeconds: within, confirmFrames: confirm, negate: raw.negate === true,
-    minConfidence: "0.6", personId: "", preGateLabel: "", requireCorroboration: false,
+    minConfidence: "0.6", providerId: "", personId: "", preGateLabel: "", requireCorroboration: false,
   };
   switch (check.type) {
     case "locate": {
@@ -1404,6 +1414,7 @@ export function seqStepFromDict(raw: Record<string, unknown>): SeqStepDraft {
       return {
         ...base, kind: "verify", label: (check.question as string) || "",
         minConfidence: check.min_confidence != null ? String(check.min_confidence) : "0.6",
+        providerId: (check.provider_id as string) || "",
       };
     case "motion":
       return { ...base, kind: "motion", label: "" };

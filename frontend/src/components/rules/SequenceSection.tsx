@@ -14,6 +14,7 @@ import {
   type ActionDraft,
   type DeviceOption,
   type Person,
+  type ProviderOption,
   type SeqCheckKind,
   type SeqStepDraft,
   type TelegramChannelOption,
@@ -36,6 +37,7 @@ export interface SequenceSectionProps {
   telegramChannelsLoading: boolean;
   devices: DeviceOption[];
   persons: Person[];
+  providers: ProviderOption[];
 }
 
 const SELECT_CLS =
@@ -47,7 +49,7 @@ export function SequenceSection(props: SequenceSectionProps) {
   const {
     enabled, setEnabled, correlateBy, setCorrelateBy, onRefire, setOnRefire,
     maxActive, setMaxActive, steps, setSteps, timeoutActions, setTimeoutActions,
-    telegramChannels, telegramChannelsLoading, devices, persons,
+    telegramChannels, telegramChannelsLoading, devices, persons, providers,
   } = props;
 
   const patchStep = (i: number, patch: Partial<SeqStepDraft>) =>
@@ -175,6 +177,17 @@ export function SequenceSection(props: SequenceSectionProps) {
                         title="The AI must answer yes with at least this confidence (0-1) for the step to pass."
                         className={`${INPUT_CLS} w-20`}
                       />
+                      <select
+                        value={s.providerId}
+                        onChange={(e) => patchStep(i, { providerId: e.target.value })}
+                        title="Which AI model answers. Default = the camera's VLM."
+                        className={SELECT_CLS}
+                      >
+                        <option value="">Default model</option>
+                        {providers.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name} ({p.kind})</option>
+                        ))}
+                      </select>
                     </div>
                   )}
 
@@ -289,6 +302,7 @@ export function SequenceSection(props: SequenceSectionProps) {
               telegramChannels={telegramChannels}
               telegramChannelsLoading={telegramChannelsLoading}
               devices={devices}
+              providers={providers}
               formActions={timeoutActions}
               setFormActions={setTimeoutActions}
               cardErrors={{}}

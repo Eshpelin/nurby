@@ -17,6 +17,7 @@ import {
   type Camera,
   type DeviceOption,
   type Person,
+  type ProviderOption,
   type Rule,
   type TelegramChannelOption,
 } from "./types";
@@ -110,6 +111,8 @@ export function RuleBuilder({
   const [systemTz, setSystemTz] = useState<string>("");
   const [systemTzIsFallback, setSystemTzIsFallback] = useState(false);
   const [cardErrors, setCardErrors] = useState<Record<number, string>>({});
+  // Configured VLM providers, for the verify action/step provider dropdowns.
+  const [providers, setProviders] = useState<ProviderOption[]>([]);
 
   const activeModels = useMemo(() => {
     const scoped =
@@ -161,6 +164,24 @@ export function RuleBuilder({
     setCardErrors({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    authFetch("/api/providers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !Array.isArray(data)) return;
+        setProviders(
+          data
+            .filter((p) => p?.active !== false)
+            .map((p) => ({ id: p.id, name: p.name, kind: p.kind })),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -704,6 +725,7 @@ export function RuleBuilder({
             telegramChannels={telegramChannels}
             telegramChannelsLoading={telegramChannelsLoading}
             devices={devices}
+            providers={providers}
             formActions={state.formActions}
             setFormActions={updaterFor("formActions")}
             cardErrors={cardErrors}
@@ -725,6 +747,7 @@ export function RuleBuilder({
             telegramChannels={telegramChannels}
             telegramChannelsLoading={telegramChannelsLoading}
             devices={devices}
+            providers={providers}
             persons={persons}
           />
 
