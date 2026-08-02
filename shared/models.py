@@ -2234,6 +2234,21 @@ class SpeechEvent(Base):
     event_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL"), nullable=True
     )
+    # Which spoken exchange this line belonged to, when it belonged to
+    # one. Without it a transcript would have to be reassembled from
+    # camera plus time window, which silently interleaves two sessions
+    # that happen back to back at the same door.
+    session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("voice_sessions.id", ondelete="CASCADE"),
+        nullable=True, index=True,
+    )
+    # Which agent run decided to say this. The Ask agent carries the
+    # household orientation block, so an utterance it initiated is the
+    # one most worth being able to trace back to a question.
+    agent_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_runs.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
     # rule | agent | manual | conversation
     trigger: Mapped[str] = mapped_column(String(16), nullable=False, default="rule")
     text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -2250,3 +2265,47 @@ class SpeechEvent(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
     played_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class VoiceSession(Base):
+    """One spoken exchange at a camera (issue #157).
+
+    A session is opened when someone speaks near a camera whose policy
+    allows conversation, and closed by a hard stop: the visitor leaves,
+    the turn or time budget runs out, or a person takes over.
+
+    ``handed_off_to_user_id`` is the outcome to design for rather than
+    the exception. The agent's job is to hold the line politely for a few
+    seconds while a push reaches the household, not to represent them; a
+    session that ends in a handoff is the feature working, not failing.
+    """
+
+    __tablename__ = "voice_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    camera_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("cameras.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    # Links the spoken exchange to the transcript rows it came from, so
+    # the timeline can show both halves of the conversation together.
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # visitor_silent | max_turns | max_seconds | handed_off | policy |
+    # error | camera_disabled
+    ended_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    turns: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    handed_off_to_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    handed_off_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Every refusal the disclosure filter made this session. Kept so a
+    # household can see what their camera declined to say, which is the
+    # audit that matters most for a talking agent.
+    refusals: Mapped[dict | None] = mapped_column(JSON, nullable=True)
