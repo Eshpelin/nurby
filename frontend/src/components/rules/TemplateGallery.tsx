@@ -49,6 +49,13 @@ function TemplateCard({
         <div className="text-2xl mb-1">{template.icon}</div>
         <div className="font-medium text-sm">{template.title}</div>
         <div className="text-[11px] text-muted-foreground mt-1">{template.blurb}</div>
+        {template.needsGeometry && (
+          // Loitering / tripwire rules cannot save without a drawn zone, so
+          // say it here instead of letting the save fail.
+          <div className="mt-2 inline-flex items-center gap-1 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            ✏️ You draw the zone next
+          </div>
+        )}
       </div>
       {visibleParams.map((param) => (
         <StyledSelect

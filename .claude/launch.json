@@ -18,6 +18,14 @@
         "NEXT_PUBLIC_WS_URL": "ws://localhost:8787"
       },
       "autoPort": true
+    },
+    {
+      "name": "nurby-landing",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3002,
+      "autoPort": true,
+      "cwd": "/Users/ahmed.anough/Desktop/nurby-landing-page"
     }
   ]
 }
