@@ -104,6 +104,8 @@ async def speak(
     trigger: str = "rule",
     rule_id=None,
     event_id=None,
+    session_id=None,
+    agent_run_id=None,
     voice: str | None = None,
     volume: int | None = None,
     now: datetime | None = None,
@@ -112,6 +114,7 @@ async def speak(
     now = now or datetime.now(timezone.utc)
     record = SpeechEvent(
         camera_id=camera.id, rule_id=rule_id, event_id=event_id,
+        session_id=session_id, agent_run_id=agent_run_id,
         trigger=trigger, text=(text or "")[:4000],
         voice=voice or getattr(camera, "speaker_voice", None),
         status="queued",

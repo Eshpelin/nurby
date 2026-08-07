@@ -183,6 +183,17 @@ async def _write(
             )
         except Exception:
             logger.exception("rule engine failed for transcript")
+        # Answer the visitor, when this camera is allowed to hold a
+        # conversation. Outside the DB session and fully guarded: a
+        # doorbell failing must never cost the household their
+        # transcript (issue #157).
+        try:
+            from services.voice.listener import on_transcript
+
+            await on_transcript(camera_id, result.text)
+        except Exception:
+            logger.exception("voice listener dispatch failed")
+
         # Schedule VLM re-enrichment for any observations this transcript
         # overlaps. Debounced inside the enrichment module so multiple
         # transcripts on the same observation do not amplify VLM load.

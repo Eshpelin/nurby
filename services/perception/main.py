@@ -10,6 +10,7 @@ import asyncio
 import logging
 
 from services.agent.curator import Curator
+from services.voice.listener import SilenceSweeper
 from services.perception.associator import Associator
 from services.perception.camera_status_watcher import CameraStatusWatcher
 from services.perception.conversation_finalizer import ConversationFinalizer
@@ -45,6 +46,7 @@ async def main():
     daily_digest = DailyDigestScheduler()
     associator = Associator()
     curator = Curator()
+    voice_sweeper = SilenceSweeper()
     enricher = EnrichmentManager()
     # Shares the pipeline's rule engine so camera_offline/online rules use
     # the same cache, invalidation listener, and cooldown state.
@@ -79,6 +81,7 @@ async def main():
         enricher.run(),
         associator.run(),
         curator.run(),
+        voice_sweeper.run(),
     )
 
 

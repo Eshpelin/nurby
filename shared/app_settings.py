@@ -46,6 +46,17 @@ DEFAULTS: dict[str, Any] = {
     "voice_conversation_enabled": False,
     "voice_session_max_seconds": 120,
     "voice_session_max_turns": 10,
+    # Disclosure allowlist. Empty by default: the agent confirms nothing
+    # about the household unless a person explicitly turns a key on.
+    # Absence, access and impersonation are absolute and are NOT
+    # unlockable from here (see services/voice/disclosure.py).
+    "voice_may_confirm": [],
+    # Household-authored phrases the camera must never say.
+    "voice_never_say": [],
+    # Whether the Ask agent may choose to speak through a camera.
+    # Default off and gated separately from conversation: a rule's words
+    # can be read and previewed before they play, and an agent's cannot.
+    "voice_agent_tool_enabled": False,
     # Curator: distils durable household facts from counted evidence.
     # Idle-triggered, archives rather than deletes, never touches a fact
     # a person wrote, pinned or rejected.
