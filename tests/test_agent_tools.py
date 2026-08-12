@@ -647,6 +647,7 @@ def test_registry_lookup():
         "get_events",
         "get_associations",
         "get_vehicles",
+        "speak_on_camera",
         "summarize_activity",
         "summarize_window",
         "query_relationships",

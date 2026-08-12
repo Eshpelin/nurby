@@ -23,11 +23,35 @@ def test_new_tools_registered_with_side_effects():
     assert registry_entry("get_rule_schema")["side_effect"] == "read"
 
 
-def test_no_write_tools_in_registry():
-    # The chat agent must not be able to mutate anything. Rule creation
-    # deliberately lives on the Rules page, not in chat (UX F35/F38).
-    assert all(t["side_effect"] == "read" for t in TOOL_REGISTRY)
+def test_the_agent_cannot_mutate_household_configuration():
+    # The chat agent must not be able to change how the household is set
+    # up. Rule creation deliberately lives on the Rules page, not in
+    # chat (UX F35/F38).
     assert "create_rule" not in {t["name"] for t in TOOL_REGISTRY}
+    # Nothing writes to the database through a tool.
+    assert not [t for t in TOOL_REGISTRY if t["side_effect"] == "write"]
+
+
+def test_speaking_is_the_only_tool_that_leaves_the_database():
+    # This assertion used to be "every tool is read-only", and it was
+    # loosened deliberately for speak_on_camera (issue #158), which acts
+    # on a room rather than on stored state. It is narrowed rather than
+    # deleted so a second physical tool cannot be added without someone
+    # reading this and deciding it is acceptable.
+    physical = [t["name"] for t in TOOL_REGISTRY if t["side_effect"] != "read"]
+    assert physical == ["speak_on_camera"]
+
+
+def test_the_physical_tool_is_never_exposed_over_mcp():
+    # MCP is a remote surface. Reading household data over it is the
+    # point; making a speaker talk in someone's house is not.
+    assert "speak_on_camera" not in read_tool_names()
+
+
+def test_the_physical_tool_ships_disabled():
+    from shared.app_settings import DEFAULTS
+
+    assert DEFAULTS["voice_agent_tool_enabled"] is False
 
 
 def test_mcp_excludes_write_tools():
