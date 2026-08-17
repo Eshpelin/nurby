@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.auth import get_current_user, require_query_token
 from shared.config import settings
 from shared.database import get_db
-from shared.models import Conversation, Transcript, User
+from shared.models import Conversation, Person, Transcript, User
 from shared.paths import resolve_inside
 
 router = APIRouter()
@@ -48,9 +48,17 @@ def _serialize(c: Conversation) -> dict[str, Any]:
     }
 
 
-def _serialize_tx(t: Transcript) -> dict[str, Any]:
+def _serialize_tx(t: Transcript, names: dict[uuid.UUID, str] | None = None) -> dict[str, Any]:
+    names = names or {}
     return {
         "id": str(t.id),
+        # The live caption stream already carries a name, so the stored
+        # transcript should read the same way once the card is reopened.
+        # Without this a line only ever has an id, and every client has
+        # to fetch the whole household to render one label.
+        "speaker_name": (
+            names.get(t.speaker_person_id) if t.speaker_person_id else None
+        ),
         "started_at": t.started_at.isoformat(),
         "ended_at": t.ended_at.isoformat(),
         "text": t.text,
@@ -210,6 +218,15 @@ async def get_conversation(
             .order_by(Transcript.started_at.asc())
         )
     ).scalars().all()
+    person_ids = {t.speaker_person_id for t in tx_rows if t.speaker_person_id}
+    names: dict[uuid.UUID, str] = {}
+    if person_ids:
+        people = (
+            await db.execute(select(Person).where(Person.id.in_(person_ids)))
+        ).scalars().all()
+        # Nickname wins wherever a household reads a name, per the rest
+        # of the API.
+        names = {p.id: p.nickname or p.display_name for p in people}
     payload = _serialize(row)
-    payload["transcripts"] = [_serialize_tx(t) for t in tx_rows]
+    payload["transcripts"] = [_serialize_tx(t, names) for t in tx_rows]
     return payload

@@ -50,6 +50,7 @@ from services.api.routes import (
     users,
     vehicles,
     webhook_subscriptions,
+    voice,
 )
 from services.api.ws import router as ws_router
 from services.digest.scheduler import run_digest_loop
@@ -215,6 +216,7 @@ app.include_router(guardian.router, prefix="/api/guardian", tags=["guardian"])
 app.include_router(system.router, prefix="/api", tags=["system"])
 app.include_router(doctor.router, prefix="/api", tags=["doctor"])
 app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
+app.include_router(voice.router, prefix="/api/voice", tags=["voice"])
 app.include_router(detection_models.router, prefix="/api/detection-models", tags=["detection-models"])
 app.include_router(recordings.router, prefix="/api/recordings", tags=["recordings"])
 app.include_router(shares.router, prefix="/api/shares", tags=["shares"])
