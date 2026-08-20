@@ -214,10 +214,15 @@ async def rules_health(
     """Per-rule health aggregate for the rules list: last fire, 7-day fire
     count, latest action outcome, and stale references (camera/person/
     channel ids that no longer exist). Supersedes /last-fired, which is
-    kept for compatibility."""
+    kept for compatibility.
+
+    Also returns the 7-day "completed work" counts the rule card shows:
+    how many fires actually ran their actions, how many resolved to a
+    saved clip, and how many are backed by an embedded observation and so
+    are reachable from Ask/search."""
     from sqlalchemy import func as sa_func
 
-    from shared.models import Event
+    from shared.models import Event, Observation
 
     rules = (await db.execute(select(Rule))).scalars().all()
 
@@ -236,6 +241,49 @@ async def rules_health(
             await db.execute(
                 select(Event.rule_id, sa_func.count())
                 .where(Event.rule_id.is_not(None), Event.fired_at >= week_ago)
+                .group_by(Event.rule_id)
+            )
+        ).all()
+    )
+    # "Completed work", same 7-day window as fires_7d: actions that ran to
+    # success, fires whose footage resolved to a stored recording, and fires
+    # whose observation carries a description embedding (what Ask searches).
+    acted_7d = dict(
+        (
+            await db.execute(
+                select(Event.rule_id, sa_func.count())
+                .where(
+                    Event.rule_id.is_not(None),
+                    Event.fired_at >= week_ago,
+                    Event.action_status == "success",
+                )
+                .group_by(Event.rule_id)
+            )
+        ).all()
+    )
+    clips_7d = dict(
+        (
+            await db.execute(
+                select(Event.rule_id, sa_func.count())
+                .where(
+                    Event.rule_id.is_not(None),
+                    Event.fired_at >= week_ago,
+                    Event.recording_id.is_not(None),
+                )
+                .group_by(Event.rule_id)
+            )
+        ).all()
+    )
+    indexed_7d = dict(
+        (
+            await db.execute(
+                select(Event.rule_id, sa_func.count())
+                .join(Observation, Observation.id == Event.observation_id)
+                .where(
+                    Event.rule_id.is_not(None),
+                    Event.fired_at >= week_ago,
+                    Observation.description_embedding.is_not(None),
+                )
                 .group_by(Event.rule_id)
             )
         ).all()
@@ -264,6 +312,9 @@ async def rules_health(
             "fires_7d": int(fires_7d.get(rule.id, 0)),
             "last_action_status": status,
             "last_action_error": error,
+            "acted_7d": int(acted_7d.get(rule.id, 0)),
+            "clips_7d": int(clips_7d.get(rule.id, 0)),
+            "indexed_7d": int(indexed_7d.get(rule.id, 0)),
             "stale_refs": stale,
         }
     return out

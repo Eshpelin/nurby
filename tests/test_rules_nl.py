@@ -1,6 +1,7 @@
 """Tests for POST /api/rules/generate (NL rule creation)."""
 
 import json
+import re
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -60,6 +61,75 @@ def test_system_prompt_includes_named_person_example_only_when_people_exist():
     assert '"person_id": "p1"' in with_people
     without = nl.build_system_prompt(build_schema(), cameras=[], persons=[], channels=[])
     assert "gets home" not in without
+
+
+def test_system_prompt_carries_sequence_and_industrial_vocabulary():
+    prompt = nl.build_system_prompt(
+        build_schema(),
+        cameras=[(str(CAM), "Dock")],
+        persons=[],
+        channels=[],
+    )
+    # The sequence block is documented, so "X and then Y" is expressible.
+    assert "SEQUENCE" in prompt
+    assert "on_timeout" in prompt
+    assert "negate" in prompt
+    # Floor vocabulary maps onto shipped primitives.
+    assert "WORKPLACE AND INDUSTRIAL WORDS" in prompt
+    for word in ("forklift", "Tailgating", "hard hat", "plate_list", "api_call"):
+        assert word in prompt
+    # And the unsupported asks are named as unsupported.
+    assert "Cycle time" in prompt
+    # findanything is banned outright: it is a builder shortcut, not a trigger.
+    assert "findanything is a builder shortcut" in prompt
+
+
+def test_industrial_examples_are_valid_rules():
+    """Every worked example in the prompt must survive RuleCreate."""
+    from shared.schemas import RuleCreate
+
+    prompt = nl.build_system_prompt(build_schema(), cameras=[], persons=[], channels=[])
+    examples = re.findall(r'^User: ".*?" -> (\{.*\})$', prompt, re.MULTILINE)
+    assert len(examples) >= 7
+    for raw in examples:
+        RuleCreate(**json.loads(raw))
+
+
+# ---------------------------------------------------------------------------
+# FindAnything shortcut compilation
+# ---------------------------------------------------------------------------
+
+
+def test_coerce_findanything_compiles_to_motion_plus_locate():
+    rule = {
+        "trigger_pattern": {"type": "findanything", "prompt": "a pallet in the wrong rack"},
+        "actions": [{"type": "notify", "message": "hi", "severity": "info"}],
+    }
+    notes = nl.coerce_findanything_trigger(rule)
+    assert rule["trigger_pattern"] == {"type": "motion"}
+    assert rule["actions"][0] == {
+        "type": "locate",
+        "prompt": "a pallet in the wrong rack",
+        "on_fail": "stop",
+    }
+    assert rule["actions"][1]["type"] == "notify"
+    assert notes and "FindAnything" in notes[0]
+
+
+def test_coerce_findanything_keeps_camera_and_existing_locate():
+    rule = {
+        "trigger_pattern": {"type": "findanything", "prompt": "x", "camera_id": str(CAM)},
+        "actions": [{"type": "locate", "prompt": "already here", "on_fail": "stop"}],
+    }
+    nl.coerce_findanything_trigger(rule)
+    assert rule["trigger_pattern"] == {"type": "motion", "camera_id": str(CAM)}
+    assert len(rule["actions"]) == 1
+
+
+def test_coerce_findanything_ignores_other_triggers():
+    rule = {"trigger_pattern": {"type": "motion"}, "actions": []}
+    assert nl.coerce_findanything_trigger(rule) == []
+    assert rule["actions"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -252,3 +322,20 @@ async def test_generate_409_without_provider():
     with pytest.raises(HTTPException) as exc:
         await nl.generate_rule(nl.GenerateRuleRequest(prompt="packages"), make_user(), db)
     assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_generate_compiles_findanything_trigger():
+    db = make_db()
+    shortcut = dict(
+        VALID_RULE,
+        trigger_pattern={"type": "findanything", "prompt": "a pallet in the wrong rack"},
+    )
+    with patch("services.agent.llm.llm_call", new=AsyncMock(return_value=llm_response(json.dumps(shortcut)))), \
+         patch("services.api.routes.rules._stale_rule_refs", new=AsyncMock(return_value=[])):
+        out = await nl.generate_rule(
+            nl.GenerateRuleRequest(prompt="flag a mis-slotted pallet"), make_user(), db
+        )
+    assert out.rule["trigger_pattern"] == {"type": "motion"}
+    assert out.rule["actions"][0]["type"] == "locate"
+    assert any("FindAnything" in n for n in out.notes)

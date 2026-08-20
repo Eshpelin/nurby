@@ -8,6 +8,10 @@ export interface RuleHealth {
   fires_7d: number;
   last_action_status: string | null;
   last_action_error: string | null;
+  // 7-day "completed work" counts, same window as fires_7d.
+  acted_7d?: number;
+  clips_7d?: number;
+  indexed_7d?: number;
   stale_refs: string[];
 }
 
@@ -73,6 +77,20 @@ export function RuleCard({
   const quiet14d =
     rule.enabled && olderThan14d && !neverFired && health != null && health.fires_7d === 0 &&
     !!health.last_fired_at && Date.now() - new Date(health.last_fired_at).getTime() > 14 * 24 * 3600 * 1000;
+
+  // "Completed work" strip: what the rule actually did this week, from the
+  // health aggregate. Every number is a real count, so the strip only shows
+  // when the rule has fires to describe.
+  const fires = health?.fires_7d ?? 0;
+  const work =
+    health && fires > 0
+      ? [
+          { label: "acted", count: health.acted_7d ?? 0, title: "Fires whose action chain ran to success" },
+          { label: "logged", count: fires, title: "Events recorded for this rule" },
+          { label: "clips saved", count: health.clips_7d ?? 0, title: "Fires that resolved to a stored recording" },
+          { label: "searchable", count: health.indexed_7d ?? 0, title: "Fires backed by an indexed observation, reachable from Ask" },
+        ]
+      : null;
 
   return (
     <div
@@ -205,6 +223,22 @@ export function RuleCard({
       <div className="mt-2 text-xs italic text-muted-foreground/80 leading-relaxed">
         {buildRuleSummary(rule, cameras)}
       </div>
+      {work && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+          <span className="text-muted-foreground/60">Last 7 days:</span>
+          {work.map((w, i) => (
+            <span key={w.label} className="flex items-center gap-2">
+              {i > 0 && <span className="text-muted-foreground/30">·</span>}
+              <span
+                className={w.count > 0 ? "text-muted-foreground" : "text-muted-foreground/40"}
+                title={w.title}
+              >
+                <span className="font-mono">{w.count}</span> {w.label}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

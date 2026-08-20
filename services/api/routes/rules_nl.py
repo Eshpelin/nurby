@@ -149,6 +149,64 @@ def build_system_prompt(
         "- Never output a placeholder value like \"person uuid here\"; omit an "
         "optional field entirely when you have no real UUID for it."
     )
+    lines.append(
+        "- findanything is a builder shortcut, NOT an engine trigger. Never emit "
+        'it: use {"type": "motion"} plus a locate action carrying the description.'
+    )
+    lines.append("")
+    seq_schema = schema.get("sequence")
+    if seq_schema:
+        lines.append('SEQUENCE ("X and then Y", "within N minutes", "never happens"):')
+        lines.append("  " + seq_schema["description"])
+        lines.append("  sequence fields: " + _compact_fields(seq_schema["fields"]))
+        lines.append("  step fields: " + _compact_fields(seq_schema["step_fields"]))
+        lines.append(
+            "  Put the block on trigger_pattern as \"sequence\". The base trigger is "
+            "step 0. Use negate on a step for \"and then nothing\", and on_timeout "
+            "for the alert that fires when a step never happens in time."
+        )
+        lines.append("")
+    lines.append("WORKPLACE AND INDUSTRIAL WORDS (map floor vocabulary onto primitives):")
+    for bullet in (
+        "- Only YOLO classes work as object_detected labels. A forklift or pallet "
+        'jack is closest to label "truck". A pallet, box, crate, tote, spill, hard '
+        "hat, hi-vis vest or tool is NOT a YOLO class: trigger on motion or on the "
+        "person/truck that moves it, then use a locate action (visual grounding) "
+        "for \"is the thing there\" or verify for a yes/no question about the frame.",
+        "- PPE words (hard hat, helmet, hi-vis, vest, gloves, goggles, mask) -> "
+        'object_detected label "person", then a verify action asking the question. '
+        "on_fail stop means the chain only continues when the answer is yes, so "
+        "phrase the question for the case you want to alert on "
+        '("is this person NOT wearing a hard hat?").',
+        "- Aisle, bay, dock, rack, cell, line, hazard or exclusion zone = a drawn "
+        "zone. Only use zones=[...] on object_detected when the user names a zone "
+        "that already exists; otherwise leave zones off and say nothing about it.",
+        '- "too long", "dwells", "sits", "blocked", "occupied for N minutes" -> '
+        "loitering with threshold_seconds. loitering and line_cross need geometry "
+        "the user has not drawn yet, so prefer object_detected plus a sequence when "
+        "no zone_name exists.",
+        '- Tailgating, piggybacking, "two people on one badge" -> sequence: base '
+        'object_detected(person) plus one step {check: {type: object_detected, '
+        'label: "person"}, within_seconds: 5}, correlate_by "camera".',
+        '- "and then", "followed by", "within N minutes" -> sequence steps. '
+        '"line stopped", "downtime", "no forklift for 10 minutes", "nobody at the '
+        'desk" -> a sequence step with negate true, or on_timeout for the absence '
+        "alert.",
+        "- Shift hours, business hours, after hours -> conditions.time_after / "
+        "time_before, plus conditions.days for weekdays only.",
+        "- WMS, ERP, CRM, POS, ACS, badge system, SCADA, ticketing tool -> the "
+        "api_call action, but ONLY when the user gives a URL. With no URL, use "
+        "notify instead of inventing an endpoint.",
+        "- E-stop, beacon, stack light, horn, siren, gate relay, door strike -> the "
+        "device action with a UUID from the Devices list above. If Devices is none, "
+        "use notify.",
+        "- An unlisted or unauthorized vehicle at a gate -> plate_list with mode "
+        '"whitelist" and the allowed plates.',
+        "- Cycle time, throughput, OEE, downtime minutes, counts per hour and any "
+        '"report at 6pm" ask are NOT supported: there is no scheduled or aggregate '
+        "trigger. Emit the closest single-event rule and invent nothing.",
+    ):
+        lines.append(bullet)
     lines.append("")
     lines.append("EXAMPLES:")
     lines.append(
@@ -182,6 +240,42 @@ def build_system_prompt(
         '"conditions": {"time_after": "22:00", "time_before": "06:00"}, '
         '"actions": [{"type": "notify", "message": "Unknown face on {camera_name}", "severity": "warning"}], '
         '"cooldown_seconds": 300, "severity": "alert"}'
+    )
+    lines.append(
+        'User: "flag a mis-slotted pallet in aisle 7" -> '
+        '{"name": "Pallet in the wrong rack", "enabled": true, '
+        '"trigger_pattern": {"type": "motion"}, "conditions": null, '
+        '"actions": [{"type": "locate", "prompt": "a pallet resting in the wrong rack slot", "on_fail": "stop"}, '
+        '{"type": "notify", "message": "Possible mis-slotted pallet on {camera_name}", "severity": "warning"}], '
+        '"cooldown_seconds": 600, "severity": "detection"}'
+    )
+    lines.append(
+        'User: "tell me when someone walks onto the line without a hard hat" -> '
+        '{"name": "PPE check at the line", "enabled": true, '
+        '"trigger_pattern": {"type": "object_detected", "label": "person"}, "conditions": null, '
+        '"actions": [{"type": "verify", "question": "Is this person NOT wearing a hard hat?", "on_fail": "stop"}, '
+        '{"type": "notify", "message": "Person without a hard hat on {camera_name}", "severity": "warning"}], '
+        '"cooldown_seconds": 300, "severity": "alert"}'
+    )
+    lines.append(
+        'User: "alert me if two people go through the badge door on one swipe" -> '
+        '{"name": "Tailgating at the badge door", "enabled": true, '
+        '"trigger_pattern": {"type": "object_detected", "label": "person", '
+        '"sequence": {"correlate_by": "camera", "on_refire": "ignore", '
+        '"steps": [{"check": {"type": "object_detected", "label": "person"}, "within_seconds": 5}]}}, '
+        '"conditions": null, '
+        '"actions": [{"type": "notify", "message": "Possible tailgating at {camera_name}", "severity": "warning"}], '
+        '"cooldown_seconds": 300, "severity": "alert"}'
+    )
+    lines.append(
+        'User: "let me know if the conveyor stops for 10 minutes during the shift" -> '
+        '{"name": "Line stopped", "enabled": true, '
+        '"trigger_pattern": {"type": "object_detected", "label": "person", '
+        '"sequence": {"correlate_by": "camera", "on_refire": "restart", '
+        '"steps": [{"check": {"type": "object_detected", "label": "person"}, "within_seconds": 600}], '
+        '"on_timeout": [{"type": "notify", "message": "No activity on {camera_name} for 10 minutes", "severity": "warning"}]}}, '
+        '"conditions": {"time_after": "06:00", "time_before": "18:00", "days": ["mon", "tue", "wed", "thu", "fri"]}, '
+        '"actions": [], "cooldown_seconds": 600, "severity": "alert"}'
     )
     return "\n".join(lines)
 
@@ -229,6 +323,36 @@ def coerce_impossible_face_trigger(
         'Changed the trigger from "Known face" to object detection of a person: '
         f"{reason}, so the rule could never fire. Add people under People and "
         "switch the trigger back if you meant a specific person."
+    ]
+
+
+def coerce_findanything_trigger(rule: dict) -> list[str]:
+    """Compile a `findanything` trigger into motion + a locate action.
+
+    findanything is a builder shortcut, not an engine trigger: nothing in
+    services/events dispatches it, so a saved rule carrying it would never
+    fire. RuleBuilder.tsx compiles it on *select*, which a prefilled rule
+    never goes through, so do the same rewrite here. Mutates ``rule``;
+    returns notes. Pure, for tests."""
+    tp = rule.get("trigger_pattern") or {}
+    if tp.get("type") != "findanything":
+        return []
+    prompt = (tp.get("prompt") or "").strip()
+    new_tp = {"type": "motion"}
+    for carry in ("camera_id", "sequence"):
+        if tp.get(carry) is not None:
+            new_tp[carry] = tp[carry]
+    rule["trigger_pattern"] = new_tp
+    actions = rule.get("actions")
+    actions = list(actions) if isinstance(actions, list) else [actions] if actions else []
+    if not any(isinstance(a, dict) and a.get("type") == "locate" for a in actions):
+        actions.insert(0, {"type": "locate", "prompt": prompt or "the thing to look for",
+                           "on_fail": "stop"})
+    rule["actions"] = actions
+    return [
+        'Compiled the "FindAnything" trigger into a motion trigger plus a '
+        "visual-condition (locate) action, which is how the builder ships it. "
+        + ("" if prompt else "Fill in what to look for before saving.")
     ]
 
 
@@ -340,6 +464,7 @@ async def generate_rule(
         )
 
     notes.extend(coerce_impossible_face_trigger(candidate, persons))
+    notes.extend(coerce_findanything_trigger(candidate))
 
     warnings = await _stale_rule_refs(
         db, candidate.get("trigger_pattern"), candidate.get("conditions"), candidate.get("actions")
