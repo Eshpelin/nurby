@@ -91,6 +91,21 @@ VERIFY_PROMPT = (
     "wording."
 )
 
+REPAIR_PROMPT = (
+    "A previous summary of these observations was rejected for containing a "
+    "detail none of them support. Rewrite it, two sentences at most, keeping "
+    "only what the observations actually state and dropping the rejected "
+    "detail entirely. No preamble, no markdown, no apology, no mention of the "
+    "rejection."
+)
+
+# When a summary cannot be repaired we fall back to one raw pass verbatim.
+# Raw passes are single-source descriptions of the frame, so they cannot be
+# unsupported the way a synthesis can. Ordered most to least informative;
+# `anomaly` is last because its common answer carries no scene detail.
+FALLBACK_LENS_ORDER = ("attributes", "temporal", "anomaly")
+_EMPTY_ANOMALY = "nothing unusual"
+
 _COLORS = {
     "red", "orange", "yellow", "green", "blue", "purple", "pink", "brown",
     "black", "white", "gray", "grey", "silver", "gold", "tan", "beige",
@@ -143,6 +158,27 @@ def next_lens(existing: set[str], has_recording: bool, summary_stale: bool) -> s
     raw_done = any(lens in existing for lens in RAW_LENSES)
     if raw_done and summary_stale:
         return "summary"
+    return None
+
+
+def pick_fallback_pass(passes) -> tuple[str, str] | None:
+    """Pick the raw pass to publish when a synthesis fails its own check.
+
+    ``passes`` is the ``(pass_no, lens, description)`` list for one
+    observation. Returns ``(lens, text)`` for the most informative usable raw
+    pass, or None when there is nothing worth publishing. Pure, for tests."""
+    best: dict[str, str] = {}
+    for _, lens, desc in passes or []:
+        text = (desc or "").strip()
+        if not text or lens not in FALLBACK_LENS_ORDER:
+            continue
+        if lens == "anomaly" and text.lower().rstrip(".") == _EMPTY_ANOMALY:
+            continue
+        # Later passes of a lens are newer; keep the newest.
+        best[lens] = text
+    for lens in FALLBACK_LENS_ORDER:
+        if lens in best:
+            return lens, best[lens]
     return None
 
 
@@ -352,12 +388,65 @@ class EnrichmentManager:
         if not summary:
             return False
         verdict = await self._verify(summary, body, provider)
+
+        # A summary the model itself just called unsupported must not become
+        # the caption or the search embedding. Try one targeted repair, then
+        # fall back to a raw pass, which is single-source and so cannot be
+        # unsupported the way a synthesis can.
+        if verdict.get("status") == "unsupported":
+            summary, verdict = await self._repair_summary(
+                summary, body, verdict, frame, detections, provider
+            )
+            if summary is None:
+                fallback = pick_fallback_pass(passes)
+                if fallback is None:
+                    # Nothing publishable. Record the attempt as a
+                    # non-authoritative summary pass so the caption is left
+                    # alone AND the observation stops looking summary-stale,
+                    # which would otherwise re-run these calls every cooldown.
+                    await self._append_pass(
+                        obs_id, "summary", provider, None, {"verify": verdict}
+                    )
+                    logger.info(
+                        "summary for %s failed verification with no usable raw "
+                        "pass to fall back to. leaving the caption alone.", obs_id
+                    )
+                    return True
+                lens, summary = fallback
+                verdict = dict(verdict, downgraded_to=lens)
+
         embedding = await self._embed(summary)
         attrs = build_attributes(summary, detections)
         attrs["verify"] = verdict
         await self._write_summary(obs_id, summary, attrs, embedding, provider)
         logger.info("summarized %s [%s]. %s", obs_id, verdict.get("status"), summary[:70])
         return True
+
+    async def _repair_summary(self, summary, body, verdict, frame, detections,
+                              provider) -> tuple[str | None, dict]:
+        """One repair round for a summary that failed verification.
+
+        Returns ``(text, verdict)`` when the rewrite passes (or at least stops
+        being flagged), and ``(None, verdict)`` when it does not, leaving the
+        caller to fall back. The returned verdict always records that a repair
+        was attempted so the failure is visible in `attributes.verify`."""
+        note = verdict.get("note") or ""
+        rewritten = await self._vlm.describe(
+            frame, detections, provider,
+            system_prompt=REPAIR_PROMPT,
+            extra_context=(
+                f"OBSERVATIONS:\n{body}\n\nREJECTED SUMMARY:\n{summary}\n\n"
+                f"REJECTION:\n{note}"
+            ),
+            max_tokens=160,
+        )
+        rewritten = (rewritten or "").strip()
+        if not rewritten:
+            return None, dict(verdict, repair="failed")
+        recheck = await self._verify(rewritten, body, provider)
+        if recheck.get("status") == "unsupported":
+            return None, dict(recheck, repair="failed")
+        return rewritten, dict(recheck, repair="ok")
 
     async def _verify(self, summary: str, body: str, provider) -> dict:
         """Cheap anti-hallucination check. ask the model whether the summary
