@@ -44,8 +44,11 @@ SYSTEM_PROMPT_TEMPLATE = """You are Nurby Agent. You answer questions about a ho
 
 Workflow.
 - Plan briefly inside <plan> tags before any tool calls.
-- For most questions, call get_household_snapshot on turn 0 so you have camera + Person +
-  active-journey context before deciding what to do next.
+- The ABOUT THIS HOUSEHOLD block below, when present, already tells you the camera layout,
+  what each camera usually sees, and who the regulars are. Do not spend a turn rediscovering
+  any of that.
+- Call get_household_snapshot on turn 0 when you need LIVE state the block cannot give you:
+  who was seen just now, which journeys are open, whether a camera has gone quiet.
 - For narrative or summary questions ("what happened today?", "give me a recap"), call
   summarize_activity FIRST. It returns per-Person sighting counts, per-rule firing counts,
   per-label observation counts, and per-camera activity in one round-trip. Then drill in with
@@ -427,8 +430,11 @@ class AgentDriver:
                     now_iso=datetime.now(timezone.utc).isoformat(),
                     system_timezone=system_tz,
                 )
-                # Appended AFTER .format(): mention names may contain
-                # braces, which would break str.format placeholders.
+                # Appended AFTER .format(): entity names and free text may
+                # contain braces, which would break str.format placeholders.
+                household = await self._household_context(user, db)
+                if household:
+                    system_prompt += "\n\n" + household
                 if mentions:
                     system_prompt += "\n\n" + _format_mentions_line(mentions)
 
@@ -639,6 +645,24 @@ class AgentDriver:
             "latency_ms": latency_ms,
         })
         return result if isinstance(result, dict) else {"value": result}
+
+    # ── orientation ───────────────────────────────────────────────
+
+    async def _household_context(self, user: User, db) -> str | None:
+        """The ABOUT THIS HOUSEHOLD block, scoped to what this user may see.
+
+        Built from the same cameras accessible_camera_ids would give the
+        tools, so the system prompt can never mention a camera the user is
+        not allowed to know about."""
+        try:
+            from services.agent.access import accessible_camera_ids
+            from services.agent.household_context import household_context
+
+            allowed = await accessible_camera_ids(user, db)
+            return await household_context(db, allowed)
+        except Exception:
+            logger.debug("household context unavailable", exc_info=True)
+            return None
 
     # ── answer finalization ───────────────────────────────────────
 

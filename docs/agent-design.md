@@ -182,6 +182,29 @@ Rejected. In-process state only. Loses the run on any restart. Unacceptable beca
 
 ---
 
+## 3.5 Household orientation block (added Aug 2026, issue #131)
+
+Before the first LLM call, the driver appends an `ABOUT THIS HOUSEHOLD` block
+to the system prompt (`services/agent/household_context.py`). It names the
+cameras, what each one usually sees and when it is busiest, the people in the
+library and where they normally turn up, and the known vehicles. Deterministic
+and query-only: no LLM call, no new table, no worker. Built from the last 14
+days of observations and cached in process for 6 hours.
+
+Two properties matter more than the content:
+
+1. **It is scoped to the asking user's cameras.** The block is built from the
+   same `accessible_camera_ids` set the tools use, and cached under that set as
+   the key, because the system prompt is the one place a per-user access
+   boundary would leak invisibly. It is not one global document.
+2. **It is orientation, not evidence.** The block says so itself, in its last
+   line. Claims in an answer must still come from a cited tool result. The
+   block only stops the agent spending turn 0 rediscovering the layout.
+
+`get_household_snapshot` remains the tool for LIVE state (who was just seen,
+which journeys are open, which camera has gone quiet); the prompt now points at
+it for that and away from it for layout.
+
 ## 4. Tool taxonomy
 
 The original brief listed 12 candidate tools. We ship 5 in Phase 1, trading per-tool simplicity for fewer round-trips through the loop, which reduces orchestration token cost and reduces the surface area the LLM has to reason about. A small, rich registry consistently outperforms a large, granular one in production agent systems.

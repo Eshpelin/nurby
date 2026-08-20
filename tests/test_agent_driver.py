@@ -16,12 +16,24 @@ from dataclasses import dataclass
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from services.agent import driver as driver_mod
 from services.agent.llm import LLMResponse, LLMToolUse
 
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+@pytest.fixture(autouse=True)
+def _no_household_context(monkeypatch):
+    """The orientation block runs real access queries against the stub db.
+    Tests that care about it patch it themselves (see the injection test)."""
+    async def _none(self, user, db):
+        return None
+
+    monkeypatch.setattr(driver_mod.AgentDriver, "_household_context", _none)
 
 
 # ── Fakes ──────────────────────────────────────────────────────────
@@ -553,3 +565,67 @@ def test_driver_strips_citations_the_tools_never_returned(monkeypatch):
     assert stripped[0]["citations"] == [f"obs:{OBS_B}"]
     # And the surviving citation is still reported on the done event.
     assert done["citations"] == [{"kind": "obs", "id": OBS_A}]
+
+
+# ── household orientation block (G5, issue #131) ───────────────────
+
+
+def test_driver_injects_the_household_block_into_the_system_prompt(monkeypatch):
+    run_id = uuid.uuid4()
+    run_row = _FakeRunRow()
+    factory, db = _fake_db_session(run_row)
+    _patch_runs(monkeypatch, run_row)
+    _patch_budget(monkeypatch, [_BudgetOk(), _BudgetOk()])
+    _patch_get_setting(monkeypatch)
+
+    async def _block(self, user, db):
+        return "ABOUT THIS HOUSEHOLD: two cameras, one cat."
+
+    monkeypatch.setattr(driver_mod.AgentDriver, "_household_context", _block)
+
+    seen = {}
+
+    async def _llm_call(**kwargs):
+        seen["system_prompt"] = kwargs.get("system_prompt")
+        return LLMResponse(stop_reason="end_turn", text="Nothing to report.",
+                           tool_uses=[], tokens_in=10, tokens_out=5)
+
+    monkeypatch.setattr(driver_mod, "llm_call", _llm_call)
+
+    driver = driver_mod.AgentDriver(db_factory=factory, broadcast=None)
+    _run(driver.run(
+        run_id=run_id,
+        user=_FakeUser(),
+        question="anything happening?",
+        provider=_FakeProvider(kind="anthropic"),
+        model="claude-sonnet-4",
+        parent_run_id=None,
+    ))
+
+    assert "ABOUT THIS HOUSEHOLD: two cameras, one cat." in seen["system_prompt"]
+    # The block is appended after .format(), so braces in entity names cannot
+    # break the template.
+    assert "You are Nurby Agent" in seen["system_prompt"]
+
+
+def test_driver_runs_fine_without_a_household_block(monkeypatch):
+    run_id = uuid.uuid4()
+    run_row = _FakeRunRow()
+    factory, db = _fake_db_session(run_row)
+    _patch_runs(monkeypatch, run_row)
+    _patch_budget(monkeypatch, [_BudgetOk(), _BudgetOk()])
+    _patch_get_setting(monkeypatch)
+    _scripted_llm(monkeypatch, [
+        LLMResponse(stop_reason="end_turn", text="All quiet.", tool_uses=[]),
+    ])
+
+    driver = driver_mod.AgentDriver(db_factory=factory, broadcast=None)
+    _run(driver.run(
+        run_id=run_id,
+        user=_FakeUser(),
+        question="anything happening?",
+        provider=_FakeProvider(kind="anthropic"),
+        model="claude-sonnet-4",
+        parent_run_id=None,
+    ))
+    assert run_row.final_answer == "All quiet."
