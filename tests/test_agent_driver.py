@@ -27,13 +27,18 @@ def _run(coro):
 
 
 @pytest.fixture(autouse=True)
-def _no_household_context(monkeypatch):
-    """The orientation block runs real access queries against the stub db.
-    Tests that care about it patch it themselves (see the injection test)."""
-    async def _none(self, user, db):
+def _no_db_lookups(monkeypatch):
+    """The orientation block and the escalation lookup both run real queries
+    against the stub db. Tests that care about either patch it themselves
+    (see the injection and escalation tests)."""
+    async def _no_context(self, user, db):
         return None
 
-    monkeypatch.setattr(driver_mod.AgentDriver, "_household_context", _none)
+    async def _no_escalation(self, db, current):
+        return None
+
+    monkeypatch.setattr(driver_mod.AgentDriver, "_household_context", _no_context)
+    monkeypatch.setattr(driver_mod.AgentDriver, "_stronger_provider", _no_escalation)
 
 
 # ── Fakes ──────────────────────────────────────────────────────────
@@ -629,3 +634,89 @@ def test_driver_runs_fine_without_a_household_block(monkeypatch):
         parent_run_id=None,
     ))
     assert run_row.final_answer == "All quiet."
+
+
+# ── mid-run model escalation (G6, issue #132) ──────────────────────
+
+
+def _escalation_run(monkeypatch, *, exhaust_budget: bool, stronger):
+    """Drive the loop to a forced synthesis and report what it called with."""
+    run_id = uuid.uuid4()
+    run_row = _FakeRunRow()
+    factory, db = _fake_db_session(run_row)
+    _patch_runs(monkeypatch, run_row)
+    if exhaust_budget:
+        _patch_budget(monkeypatch, [_BudgetOk(), _BudgetExhausted()])
+    else:
+        _patch_budget(monkeypatch, [_BudgetOk()] * 50)
+    _patch_get_setting(monkeypatch, agent_max_turns_per_run=1)
+
+    async def _stronger(self, db_, current):
+        return stronger
+
+    monkeypatch.setattr(driver_mod.AgentDriver, "_stronger_provider", _stronger)
+
+    used: list[tuple] = []
+
+    async def _llm_call(**kwargs):
+        used.append((kwargs.get("provider"), kwargs.get("model")))
+        if len(used) == 1:
+            return LLMResponse(
+                stop_reason="tool_use", text="",
+                tool_uses=[LLMToolUse(id="t0", name="query_observations",
+                                      arguments={"query": "x", "hours": 1})],
+            )
+        return LLMResponse(stop_reason="end_turn", text="partial summary", tool_uses=[])
+
+    monkeypatch.setattr(driver_mod, "llm_call", _llm_call)
+
+    async def _fake(ctx, **kw):
+        return {"count": 0, "observations": []}
+
+    import services.agent.tools as tools_mod
+    original = tools_mod._REGISTRY_BY_NAME["query_observations"]["fn"]
+    tools_mod._REGISTRY_BY_NAME["query_observations"]["fn"] = _fake
+
+    events: list[dict] = []
+
+    async def _broadcast(rid, ev):
+        events.append(ev)
+
+    try:
+        driver = driver_mod.AgentDriver(db_factory=factory, broadcast=_broadcast)
+        _run(driver.run(
+            run_id=run_id, user=_FakeUser(), question="q",
+            provider=_FakeProvider(kind="ollama", default_model="gemma3:4b"),
+            model="gemma3:4b", parent_run_id=None,
+        ))
+    finally:
+        tools_mod._REGISTRY_BY_NAME["query_observations"]["fn"] = original
+    return used, events
+
+
+def test_max_turns_synthesis_escalates_to_a_stronger_model(monkeypatch):
+    strong = _FakeProvider(kind="anthropic", default_model="claude-sonnet-4")
+    used, events = _escalation_run(monkeypatch, exhaust_budget=False, stronger=strong)
+
+    # Loop ran on the weak model; the final synthesis ran on the strong one.
+    assert used[0][1] == "gemma3:4b"
+    assert used[-1] == (strong, "claude-sonnet-4")
+    escalated = [e for e in events if e["type"] == "model_escalated"]
+    assert escalated and escalated[0]["reason"] == "max_turns_reached"
+    assert escalated[0]["from"] == "ollama/gemma3:4b"
+    assert escalated[0]["to"] == "anthropic/claude-sonnet-4"
+
+
+def test_max_turns_synthesis_stays_put_when_nothing_is_stronger(monkeypatch):
+    used, events = _escalation_run(monkeypatch, exhaust_budget=False, stronger=None)
+    assert used[-1][1] == "gemma3:4b"
+    assert not [e for e in events if e["type"] == "model_escalated"]
+
+
+def test_budget_exhaustion_never_escalates(monkeypatch):
+    """Out of money is not a quality signal, and a pricier model is the last
+    thing that situation needs."""
+    strong = _FakeProvider(kind="anthropic", default_model="claude-sonnet-4")
+    used, events = _escalation_run(monkeypatch, exhaust_budget=True, stronger=strong)
+    assert all(model == "gemma3:4b" for _, model in used)
+    assert not [e for e in events if e["type"] == "model_escalated"]

@@ -98,6 +98,12 @@ DEFAULTS: dict[str, Any] = {
     # Default orchestration provider for agent runs. Null = the user
     # picks one each ask (or the UI defaults to the user's last pick).
     "agent_default_provider_id": None,
+    # Retry a failed step on a stronger model (issue #132). Null = use the
+    # built-in capability ranking to find one; set a provider id to force a
+    # specific escalation target. Only ever used after a step has already
+    # failed its own quality check, never speculatively.
+    "agent_escalation_provider_id": None,
+    "enrichment_escalation_provider_id": None,
     # Soft warning threshold (% of either daily token or cost budget).
     # The driver emits a banner to the user once usage crosses this
     # line; runs are still allowed up to 100%.

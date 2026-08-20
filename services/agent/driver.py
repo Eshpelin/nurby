@@ -537,7 +537,10 @@ class AgentDriver:
                 await self._emit(state, run_id, {"type": "error",
                                                   "message": "max_turns_reached",
                                                   "recoverable": False})
-                final_text = await self._forced_synthesis(provider, model, system_prompt, messages, state, run_id)
+                final_text = await self._forced_synthesis(
+                    provider, model, system_prompt, messages, state, run_id,
+                    db=db, escalate=True,
+                )
                 final_text = await self._finalize_answer(final_text, state, run_id)
                 run_row = await runs_mod.update_run(run_id, db,
                                                    status="completed",
@@ -648,6 +651,12 @@ class AgentDriver:
 
     # ── orientation ───────────────────────────────────────────────
 
+    async def _stronger_provider(self, db, current):
+        """A better provider to retry a failed synthesis on, or None."""
+        from services.escalation import escalation_provider
+
+        return await escalation_provider(db, current, "agent_escalation_provider_id")
+
     async def _household_context(self, user: User, db) -> str | None:
         """The ABOUT THIS HOUSEHOLD block, scoped to what this user may see.
 
@@ -681,8 +690,25 @@ class AgentDriver:
 
     # ── forced synthesis ──────────────────────────────────────────
 
-    async def _forced_synthesis(self, provider, model, system_prompt, messages, state, run_id) -> str:
-        """One final non-tool LLM call asking for a partial summary."""
+    async def _forced_synthesis(self, provider, model, system_prompt, messages,
+                                state, run_id, *, db=None, escalate: bool = False) -> str:
+        """One final non-tool LLM call asking for a partial summary.
+
+        ``escalate`` retries this last call on a stronger model (issue #132).
+        It is passed only from the max-turns path, where the failure signal is
+        "this model did not converge". The budget-exhausted path never
+        escalates: the user is out of money, and a pricier model is the last
+        thing that situation needs."""
+        if escalate and db is not None:
+            stronger = await self._stronger_provider(db, provider)
+            if stronger is not None:
+                await self._emit(state, run_id, {
+                    "type": "model_escalated",
+                    "from": f"{provider.kind}/{model}",
+                    "to": f"{stronger.kind}/{stronger.default_model}",
+                    "reason": "max_turns_reached",
+                })
+                provider, model = stronger, stronger.default_model
         prompt = (
             system_prompt
             + "\n\nIMPORTANT. You are out of budget or turns. Summarize what you know"

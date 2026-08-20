@@ -396,6 +396,15 @@ class EnrichmentManager:
         logger.info("enriched %s lens=%s. %s", obs_id, lens, (text or "")[:70])
         return True
 
+    async def _stronger_provider(self, current):
+        """A better provider to retry a failed summary on, or None."""
+        from services.escalation import escalation_provider
+
+        async with async_session() as db:
+            return await escalation_provider(
+                db, current, "enrichment_escalation_provider_id"
+            )
+
     async def _episode_context(self, obs_id, camera_id, ts) -> str | None:
         """Incident/journey arc block for the temporal lens, or None."""
         from services.perception.episode import episode_context
@@ -475,8 +484,13 @@ class EnrichmentManager:
         caller to fall back. The returned verdict always records that a repair
         was attempted so the failure is visible in `attributes.verify`."""
         note = verdict.get("note") or ""
+        # A model that just hallucinated is not the best candidate to fix its
+        # own output, so run the repair on something stronger when one is
+        # configured (issue #132). None means keep the current provider.
+        stronger = await self._stronger_provider(provider)
+        repair_provider = stronger or provider
         rewritten = await self._vlm.describe(
-            frame, detections, provider,
+            frame, detections, repair_provider,
             system_prompt=REPAIR_PROMPT,
             extra_context=(
                 f"OBSERVATIONS:\n{body}\n\nREJECTED SUMMARY:\n{summary}\n\n"
@@ -485,12 +499,15 @@ class EnrichmentManager:
             max_tokens=160,
         )
         rewritten = (rewritten or "").strip()
+        escalated = getattr(stronger, "name", None)
         if not rewritten:
-            return None, dict(verdict, repair="failed")
-        recheck = await self._verify(rewritten, body, provider)
+            return None, dict(verdict, repair="failed", escalated_to=escalated)
+        # Verify on the same model that wrote the repair, so the check is not
+        # the weaker model grading the stronger one's work.
+        recheck = await self._verify(rewritten, body, repair_provider)
         if recheck.get("status") == "unsupported":
-            return None, dict(recheck, repair="failed")
-        return rewritten, dict(recheck, repair="ok")
+            return None, dict(recheck, repair="failed", escalated_to=escalated)
+        return rewritten, dict(recheck, repair="ok", escalated_to=escalated)
 
     async def _verify(self, summary: str, body: str, provider) -> dict:
         """Cheap anti-hallucination check. ask the model whether the summary

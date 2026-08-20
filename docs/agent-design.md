@@ -205,6 +205,28 @@ Two properties matter more than the content:
 which journeys are open, which camera has gone quiet); the prompt now points at
 it for that and away from it for layout.
 
+## 3.6 Model escalation (added Aug 2026, issue #132)
+
+A run picks one provider and used to be stuck with it. Two places now retry a
+single failed step on something stronger (`services/escalation.py`):
+
+- the agent's **max-turns synthesis**, where the signal is "this model did not
+  converge in the turns it had";
+- the enrichment worker's **summary repair round**, where the signal is "this
+  model failed its own verify check" (see docs/vlm-enrichment-design.md).
+
+The **budget-exhausted** synthesis path deliberately does not escalate. Out of
+money is not a quality signal, and a pricier model is the last thing that
+situation needs.
+
+Target selection: the `agent_escalation_provider_id` /
+`enrichment_escalation_provider_id` settings force a specific provider when an
+admin sets one; otherwise the strongest active provider above the current one
+by a built-in capability ranking wins. Equal tiers do not count, because
+retrying the same tier is a second roll of the same dice. When nothing better
+is configured the caller keeps the result it already has. Escalations emit a
+`model_escalated` event carrying from, to, and reason.
+
 ## 4. Tool taxonomy
 
 The original brief listed 12 candidate tools. We ship 5 in Phase 1, trading per-tool simplicity for fewer round-trips through the loop, which reduces orchestration token cost and reduces the surface area the LLM has to reason about. A small, rich registry consistently outperforms a large, granular one in production agent systems.

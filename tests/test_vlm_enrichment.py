@@ -7,6 +7,8 @@ deterministic attribute extraction.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -144,9 +146,13 @@ def _manager(replies, monkeypatch):
     async def _embed(text):
         return [0.0]
 
+    async def _stronger_provider(current):
+        return None  # tests that escalate override this
+
     mgr._write_summary = _write_summary
     mgr._append_pass = _append_pass
     mgr._embed = _embed
+    mgr._stronger_provider = _stronger_provider
     return mgr, writes, appends
 
 
@@ -183,7 +189,9 @@ async def test_unsupported_summary_is_repaired_and_the_repair_is_published(monke
     assert len(writes) == 1
     # The rejected text never reaches the caption.
     assert writes[0]["summary"] == "A red van sits at the curb."
-    assert writes[0]["attributes"]["verify"] == {"status": "ok", "repair": "ok"}
+    assert writes[0]["attributes"]["verify"] == {
+        "status": "ok", "repair": "ok", "escalated_to": None
+    }
     # And the repair round was actually a repair prompt, not a re-summary.
     import services.perception.vlm_enrichment_worker as w
 
@@ -413,3 +421,70 @@ async def test_no_montage_means_no_episode_lookup(monkeypatch):
     assert await mgr._run_raw_lens("temporal", "obs", "cam", "ts", "t.jpg", [],
                                    object(), None, None) is True
     assert appends[0] == {"lens": "temporal", "description": None, "attributes": None}
+
+
+# ---- repair escalates to a stronger model (G6, #132) --------------------
+
+
+@pytest.mark.asyncio
+async def test_repair_runs_on_the_stronger_provider_when_one_exists(monkeypatch):
+    mgr, writes, appends = _manager(
+        [
+            "A red van and a waving driver.",  # summary, weak model
+            "UNSUPPORTED the waving",          # verify, weak model
+            "A red van at the curb.",          # repair, strong model
+            "OK",                              # re-verify, strong model
+        ],
+        monkeypatch,
+    )
+    strong = SimpleNamespace(id="p2", name="Claude", kind="anthropic",
+                             default_model="claude-sonnet-4")
+
+    async def _stronger(current):
+        return strong
+
+    mgr._stronger_provider = _stronger
+
+    providers_used = []
+    real_describe = mgr._vlm.describe
+
+    async def _describe(frame, detections, provider, **kw):
+        providers_used.append(provider)
+        return await real_describe(frame, detections, provider, **kw)
+
+    mgr._vlm.describe = _describe
+
+    weak = SimpleNamespace(id="p1", name="Local", kind="ollama", default_model="gemma3:4b")
+    assert await mgr._run_summary("obs", "t.jpg", [], PASSES, weak) is True
+
+    # summary + verify on the weak model, repair + re-verify on the strong one.
+    assert providers_used[0] is weak
+    assert providers_used[1] is weak
+    assert providers_used[2] is strong
+    assert providers_used[3] is strong
+    assert writes[0]["summary"] == "A red van at the curb."
+    assert writes[0]["attributes"]["verify"]["escalated_to"] == "Claude"
+
+
+@pytest.mark.asyncio
+async def test_failed_escalated_repair_records_where_it_went(monkeypatch):
+    mgr, writes, appends = _manager(
+        [
+            "A red van and a waving driver.",
+            "UNSUPPORTED the waving",
+            "Still a waving driver.",
+            "UNSUPPORTED still",
+        ],
+        monkeypatch,
+    )
+
+    async def _stronger(current):
+        return SimpleNamespace(id="p2", name="Claude", kind="anthropic",
+                               default_model="claude-sonnet-4")
+
+    mgr._stronger_provider = _stronger
+    assert await mgr._run_summary("obs", "t.jpg", [], PASSES, object()) is True
+    verify = writes[0]["attributes"]["verify"]
+    assert verify["repair"] == "failed"
+    assert verify["escalated_to"] == "Claude"
+    assert verify["downgraded_to"] == "attributes"

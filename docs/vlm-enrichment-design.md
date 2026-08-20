@@ -171,8 +171,12 @@ Guards:
 - **v2.3** `reduce` + `verify` reconciliation to fight hallucination.
 - **v2.4** the verify verdict gains teeth (repair round, then fall back to a raw
   pass; never embed a summary that failed its own check, issue #127), the
-  `anomaly` lens gains the per-camera baseline (issue #129), and the `temporal`
-  lens gains the incident/journey arc (issue #130). The theme of the version:
+  `anomaly` lens gains the per-camera baseline (issue #129), the `temporal`
+  lens gains the incident/journey arc (issue #130), and the repair round runs
+  on a stronger provider when one is configured (issue #132), since the model
+  that just hallucinated is a poor candidate to fix its own output. The
+  re-verify runs on whichever model wrote the repair, so the check is never the
+  weaker model grading the stronger one's work. The theme of the version:
   every round the worker already ran is now wired to the context or the
   consequence it was missing.
 
