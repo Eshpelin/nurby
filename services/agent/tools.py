@@ -58,6 +58,19 @@ _MAX_WINDOW_HOURS = 720  # 30 days, matches docs/agent-design.md
 _MIN_WINDOW_HOURS = 1
 
 
+# The escalation ladder behind the prompt's "widen-then-fail" rule. Kept in
+# code because a small local model reads the instruction and skips it, then
+# answers "not seen" off one empty 24h window (issue #128).
+WIDEN_LADDER = (168, 720)  # 7 days, then 30 days
+
+
+def widen_ladder(hours: int) -> list[int]:
+    """Windows to retry, widest last, for a search that found nothing at
+    ``hours``. Empty when the caller already asked for the widest window.
+    Pure, for tests."""
+    return [h for h in WIDEN_LADDER if h > hours]
+
+
 def _clamp_hours(hours: int | None) -> int:
     if hours is None:
         return 24
@@ -260,9 +273,8 @@ async def query_observations(
     user = ctx["user"]
     db = ctx["db"]
 
-    hours = _clamp_hours(hours)
+    requested_hours = _clamp_hours(hours)
     limit = _clamp_limit(limit, default=20, max_=100)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     allowed = await accessible_camera_ids(user, db)
     if not allowed:
@@ -276,108 +288,143 @@ async def query_observations(
     else:
         effective_cams = allowed
 
-    filters = [
-        Observation.started_at >= cutoff,
-        Observation.camera_id.in_(effective_cams),
-    ]
-
     requested_persons = _to_uuid_set(person_ids)
-    if requested_persons:
-        # Person UUIDs are embedded in the person_detections JSON blob
-        # as the ``person_id`` field on each detected face. We match via
-        # a substring scan since the column is JSON, not JSONB indexed.
-        person_conditions = [
-            cast(Observation.person_detections, SAString).ilike(f"%{str(pid)}%")
-            for pid in requested_persons
-        ]
-        filters.append(or_(*person_conditions))
-
-    if labels:
-        label_conditions = []
-        for lbl in labels:
-            if not lbl:
-                continue
-            label_conditions.append(
-                cast(Observation.object_detections, SAString).ilike(f"%\"{lbl}\"%")
-            )
-        if label_conditions:
-            filters.append(or_(*label_conditions))
-
-    rows: list[tuple[Observation, float | None]] = []
+    # Embedded once and reused across widened retries: the text does not
+    # change, only the window does.
     query_embedding = await _embed_query(query) if query else None
-
-    if query_embedding is not None:
-        vec_filters = list(filters) + [Observation.description_embedding.isnot(None)]
-        cosine = Observation.description_embedding.cosine_distance(query_embedding)
-        stmt = (
-            select(Observation, cosine.label("distance"))
-            .where(and_(*vec_filters))
-            .order_by(cosine.asc())
-            .limit(limit * 2)
-        )
-        result = await db.execute(stmt)
-        for obs, dist in result.all():
-            rows.append((obs, float(dist) if dist is not None else None))
-        # threshold low-similarity matches
-        rows = [(o, d) for (o, d) in rows if d is None or d <= 0.85][:limit]
-
-    if not rows:
-        # Keyword fallback. ILIKE the vlm_description so even a
-        # missing-embedding deployment returns sensible results.
-        kw = query.strip()
-        kw_filter = (
-            Observation.vlm_description.ilike(f"%{kw}%") if kw else None
-        )
-        stmt = (
-            select(Observation)
-            .where(and_(*filters, kw_filter) if kw_filter is not None else and_(*filters))
-            .order_by(Observation.started_at.desc())
-            .limit(limit)
-        )
-        result = await db.execute(stmt)
-        rows = [(o, None) for o in result.scalars().all()]
-
-    observations: list[Observation] = [o for o, _ in rows]
-
-    # Resolve camera names in one shot.
-    camera_map: dict[uuid.UUID, str] = {}
-    if observations:
-        cam_rows = await db.execute(
-            select(Camera.id, Camera.name).where(
-                Camera.id.in_({o.camera_id for o in observations})
-            )
-        )
-        camera_map = {cid: cname for cid, cname in cam_rows.all()}
-
     amap = await _alias_map(db)
-    out_rows: list[dict[str, Any]] = []
-    for (obs, dist) in rows:
-        if obs.camera_id not in allowed:
-            # Belt-and-braces. effective_cams should already enforce
-            # this but a stale cache or race could slip a row through.
-            continue
-        person_names: list[str] = []
-        pd = obs.person_detections or {}
-        for face in pd.get("faces", []) or []:
-            name = face.get("person_name")
-            if name:
-                person_names.append(name)
-        person_names = alias_names(person_names, amap)
-        out_rows.append(
-            {
-                "id": str(obs.id),
-                "camera_id": str(obs.camera_id),
-                "camera_name": camera_map.get(obs.camera_id, "Unknown"),
-                "timestamp": obs.started_at.isoformat(),
-                "description": obs.vlm_description,
-                "thumbnail_url": _thumbnail_url(obs.thumbnail_path),
-                "detections": obs.object_detections,
-                "person_names": person_names,
-                "similarity_score": (1.0 - dist) if dist is not None else None,
-            }
-        )
 
-    return {"count": len(out_rows), "observations": out_rows}
+    async def _search(window_hours: int) -> list[dict[str, Any]]:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+        filters = [
+            Observation.started_at >= cutoff,
+            Observation.camera_id.in_(effective_cams),
+        ]
+
+        if requested_persons:
+            # Person UUIDs are embedded in the person_detections JSON blob
+            # as the ``person_id`` field on each detected face. We match via
+            # a substring scan since the column is JSON, not JSONB indexed.
+            person_conditions = [
+                cast(Observation.person_detections, SAString).ilike(f"%{str(pid)}%")
+                for pid in requested_persons
+            ]
+            filters.append(or_(*person_conditions))
+
+        if labels:
+            label_conditions = []
+            for lbl in labels:
+                if not lbl:
+                    continue
+                label_conditions.append(
+                    cast(Observation.object_detections, SAString).ilike(f"%\"{lbl}\"%")
+                )
+            if label_conditions:
+                filters.append(or_(*label_conditions))
+
+        rows: list[tuple[Observation, float | None]] = []
+
+        if query_embedding is not None:
+            vec_filters = list(filters) + [Observation.description_embedding.isnot(None)]
+            cosine = Observation.description_embedding.cosine_distance(query_embedding)
+            stmt = (
+                select(Observation, cosine.label("distance"))
+                .where(and_(*vec_filters))
+                .order_by(cosine.asc())
+                .limit(limit * 2)
+            )
+            result = await db.execute(stmt)
+            for obs, dist in result.all():
+                rows.append((obs, float(dist) if dist is not None else None))
+            # threshold low-similarity matches
+            rows = [(o, d) for (o, d) in rows if d is None or d <= 0.85][:limit]
+
+        if not rows:
+            # Keyword fallback. ILIKE the vlm_description so even a
+            # missing-embedding deployment returns sensible results.
+            kw = query.strip()
+            kw_filter = (
+                Observation.vlm_description.ilike(f"%{kw}%") if kw else None
+            )
+            stmt = (
+                select(Observation)
+                .where(and_(*filters, kw_filter) if kw_filter is not None else and_(*filters))
+                .order_by(Observation.started_at.desc())
+                .limit(limit)
+            )
+            result = await db.execute(stmt)
+            rows = [(o, None) for o in result.scalars().all()]
+
+        observations: list[Observation] = [o for o, _ in rows]
+
+        # Resolve camera names in one shot.
+        camera_map: dict[uuid.UUID, str] = {}
+        if observations:
+            cam_rows = await db.execute(
+                select(Camera.id, Camera.name).where(
+                    Camera.id.in_({o.camera_id for o in observations})
+                )
+            )
+            camera_map = {cid: cname for cid, cname in cam_rows.all()}
+
+        out_rows: list[dict[str, Any]] = []
+        for (obs, dist) in rows:
+            if obs.camera_id not in allowed:
+                # Belt-and-braces. effective_cams should already enforce
+                # this but a stale cache or race could slip a row through.
+                continue
+            person_names: list[str] = []
+            pd = obs.person_detections or {}
+            for face in pd.get("faces", []) or []:
+                name = face.get("person_name")
+                if name:
+                    person_names.append(name)
+            person_names = alias_names(person_names, amap)
+            out_rows.append(
+                {
+                    "id": str(obs.id),
+                    "camera_id": str(obs.camera_id),
+                    "camera_name": camera_map.get(obs.camera_id, "Unknown"),
+                    "timestamp": obs.started_at.isoformat(),
+                    "description": obs.vlm_description,
+                    "thumbnail_url": _thumbnail_url(obs.thumbnail_path),
+                    "detections": obs.object_detections,
+                    "person_names": person_names,
+                    "similarity_score": (1.0 - dist) if dist is not None else None,
+                }
+            )
+        return out_rows
+
+    out_rows = await _search(requested_hours)
+
+    # Widen-then-fail, enforced here rather than asked for in the prompt.
+    widened_to: int | None = None
+    if not out_rows:
+        for wider in widen_ladder(requested_hours):
+            out_rows = await _search(wider)
+            if out_rows:
+                widened_to = wider
+                break
+
+    payload: dict[str, Any] = {"count": len(out_rows), "observations": out_rows}
+    if widened_to is not None:
+        payload["requested_hours"] = requested_hours
+        payload["widened_to"] = widened_to
+        payload["note"] = (
+            f"Nothing matched in the requested {requested_hours}h window. These "
+            f"rows come from a widened {widened_to}h window. Lead your answer "
+            f"with the fact that there was nothing in the {requested_hours}h "
+            "window, then give what you did find and when."
+        )
+    elif not out_rows and widen_ladder(requested_hours):
+        payload["requested_hours"] = requested_hours
+        payload["searched_up_to_hours"] = WIDEN_LADDER[-1]
+        payload["note"] = (
+            f"Nothing matched in the requested {requested_hours}h window, and "
+            f"nothing matched after widening to {WIDEN_LADDER[-1]}h either. "
+            "Absence is now well evidenced; you may say there is no record."
+        )
+    return payload
 
 
 # ── Tool 2. get_journeys ──────────────────────────────────────────────

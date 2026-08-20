@@ -1058,3 +1058,105 @@ async def test_get_last_sightings_label_path_uses_started_at(monkeypatch):
     seen = [lb for lb in out["labels"] if lb["last_seen_at"]]
     assert seen, "expected at least one label with a last_seen_at"
     assert seen[0]["last_camera_name"] == "Front Door"
+
+
+# ── widen-then-fail is enforced in code (G4, issue #128) ────────────
+
+
+def test_widen_ladder_steps_up_and_stops_at_the_top():
+    assert tools_mod.widen_ladder(24) == [168, 720]
+    assert tools_mod.widen_ladder(168) == [720]
+    assert tools_mod.widen_ladder(720) == []
+    # A window between rungs only gets the rungs above it.
+    assert tools_mod.widen_ladder(200) == [720]
+
+
+def _widening_ctx(monkeypatch, obs_rows_per_call):
+    """A ctx whose observations query returns the next canned row list on
+    each call, so successive widened windows can return different results."""
+    cam_id = uuid.uuid4()
+    obs = SimpleNamespace(
+        id=uuid.uuid4(),
+        camera_id=cam_id,
+        started_at=datetime.now(timezone.utc),
+        vlm_description="a cat on the step",
+        thumbnail_path=None,
+        object_detections=None,
+        person_detections=None,
+    )
+
+    async def fake_access(user, db):
+        return {cam_id}
+
+    async def fake_embed(text):
+        return None  # keyword path: exactly one observations query per window
+
+    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_mod, "_embed_query", fake_embed)
+
+    calls = {"observations": 0}
+
+    def responder(stmt: str):
+        s = stmt.lower()
+        if "from observations" in s:
+            idx = calls["observations"]
+            calls["observations"] += 1
+            found = obs_rows_per_call[idx] if idx < len(obs_rows_per_call) else False
+            return [(obs,)] if found else []
+        if "from cameras" in s:
+            return [(cam_id, "Back Door")]
+        return []
+
+    db = FakeDB(responder)
+    return {"user": _user("admin"), "run_id": None, "db": db}, calls
+
+
+@pytest.mark.asyncio
+async def test_query_observations_widens_when_the_asked_window_is_empty(monkeypatch):
+    # empty at 24h, a hit at 7 days.
+    ctx, calls = _widening_ctx(monkeypatch, [False, True])
+    out = await query_observations(ctx, query="cat", hours=24)
+    assert out["count"] == 1
+    assert out["requested_hours"] == 24
+    assert out["widened_to"] == 168
+    assert "24h window" in out["note"]
+    assert calls["observations"] == 2
+
+
+@pytest.mark.asyncio
+async def test_query_observations_climbs_the_whole_ladder(monkeypatch):
+    ctx, calls = _widening_ctx(monkeypatch, [False, False, True])
+    out = await query_observations(ctx, query="cat", hours=24)
+    assert out["widened_to"] == 720
+    assert calls["observations"] == 3
+
+
+@pytest.mark.asyncio
+async def test_query_observations_reports_a_well_evidenced_absence(monkeypatch):
+    ctx, calls = _widening_ctx(monkeypatch, [False, False, False])
+    out = await query_observations(ctx, query="cat", hours=24)
+    assert out["count"] == 0
+    assert "widened_to" not in out
+    assert out["searched_up_to_hours"] == 720
+    assert "no record" in out["note"]
+    assert calls["observations"] == 3
+
+
+@pytest.mark.asyncio
+async def test_query_observations_does_not_widen_when_the_window_had_hits(monkeypatch):
+    ctx, calls = _widening_ctx(monkeypatch, [True])
+    out = await query_observations(ctx, query="cat", hours=24)
+    assert out["count"] == 1
+    assert "widened_to" not in out
+    assert "note" not in out
+    assert calls["observations"] == 1
+
+
+@pytest.mark.asyncio
+async def test_query_observations_at_max_window_has_nowhere_to_widen(monkeypatch):
+    ctx, calls = _widening_ctx(monkeypatch, [False])
+    out = await query_observations(ctx, query="cat", hours=720)
+    assert out["count"] == 0
+    assert "widened_to" not in out
+    assert "note" not in out
+    assert calls["observations"] == 1

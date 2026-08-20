@@ -438,3 +438,118 @@ def test_format_evidence_preamble_renders_tool_calls():
 def test_format_evidence_preamble_empty_when_no_rows():
     from services.agent.driver import _format_evidence_preamble
     assert _format_evidence_preamble([]) == ""
+
+
+# ── Citation verification (G4, issue #128) ─────────────────────────
+
+
+OBS_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+OBS_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+
+def test_collect_ids_finds_uuids_at_any_depth():
+    payload = {"observations": [{"id": OBS_A, "nested": {"journey_id": OBS_B}}]}
+    assert driver_mod.collect_ids(payload) == {OBS_A, OBS_B}
+
+
+def test_collect_ids_is_case_insensitive():
+    assert driver_mod.collect_ids({"id": OBS_A.upper()}) == {OBS_A}
+
+
+def test_collect_ids_survives_unserializable_payloads():
+    assert driver_mod.collect_ids({"obj": object(), "id": OBS_A}) == {OBS_A}
+
+
+def test_verify_citations_keeps_ids_a_tool_returned():
+    text = f"The van arrived [obs:{OBS_A}]."
+    cleaned, removed = driver_mod.verify_citations(text, {OBS_A})
+    assert cleaned == text
+    assert removed == []
+
+
+def test_verify_citations_strips_invented_ids():
+    text = f"The van arrived [obs:{OBS_A}] and left again [obs:{OBS_B}]."
+    cleaned, removed = driver_mod.verify_citations(text, {OBS_A})
+    assert f"[obs:{OBS_A}]" in cleaned
+    assert OBS_B not in cleaned
+    # The claim survives; only the fake evidence marker goes.
+    assert "left again" in cleaned
+    assert removed == [f"obs:{OBS_B}"]
+
+
+def test_verify_citations_covers_every_citation_kind():
+    text = (
+        f"a [journey:{OBS_B}] b [vlm:{OBS_B}] c [recording:{OBS_B}] d [obs:{OBS_B}]"
+    )
+    cleaned, removed = driver_mod.verify_citations(text, set())
+    assert OBS_B not in cleaned
+    assert [r.split(":")[0] for r in removed] == ["journey", "vlm", "recording", "obs"]
+
+
+def test_verify_citations_tidies_the_space_it_leaves():
+    text = f"The van arrived [obs:{OBS_B}] , then left ."
+    cleaned, _ = driver_mod.verify_citations(text, set())
+    assert cleaned == "The van arrived, then left."
+
+
+def test_verify_citations_on_empty_text_is_a_noop():
+    assert driver_mod.verify_citations("", {OBS_A}) == ("", [])
+
+
+def test_driver_strips_citations_the_tools_never_returned(monkeypatch):
+    run_id = uuid.uuid4()
+    run_row = _FakeRunRow()
+    factory, db = _fake_db_session(run_row)
+    _patch_runs(monkeypatch, run_row)
+    _patch_budget(monkeypatch, [_BudgetOk(), _BudgetOk(), _BudgetOk()])
+    _patch_get_setting(monkeypatch)
+
+    tool_use = LLMToolUse(id="t1", name="query_observations",
+                          arguments={"query": "van", "hours": 24})
+    _scripted_llm(monkeypatch, [
+        LLMResponse(stop_reason="tool_use", text="", tool_uses=[tool_use],
+                    tokens_in=100, tokens_out=20),
+        LLMResponse(
+            stop_reason="end_turn",
+            # One real citation, one the model made up.
+            text=f"A van arrived [obs:{OBS_A}] and a second one followed [obs:{OBS_B}].",
+            tool_uses=[], tokens_in=50, tokens_out=10,
+        ),
+    ])
+
+    async def _fake_query_observations(ctx, **kw):
+        return {"count": 1, "observations": [{"id": OBS_A, "description": "a van"}]}
+
+    import services.agent.tools as tools_mod
+    original = tools_mod._REGISTRY_BY_NAME["query_observations"]["fn"]
+    tools_mod._REGISTRY_BY_NAME["query_observations"]["fn"] = _fake_query_observations
+    try:
+        events: list[dict] = []
+
+        async def _broadcast(rid, ev):
+            events.append(ev)
+
+        driver = driver_mod.AgentDriver(db_factory=factory, broadcast=_broadcast)
+        _run(driver.run(
+            run_id=run_id,
+            user=_FakeUser(),
+            question="how many vans?",
+            provider=_FakeProvider(kind="anthropic"),
+            model="claude-sonnet-4",
+            parent_run_id=None,
+        ))
+    finally:
+        tools_mod._REGISTRY_BY_NAME["query_observations"]["fn"] = original
+
+    done = events[-1]
+    assert done["type"] == "done"
+    assert OBS_A in done["final_answer"]
+    assert OBS_B not in done["final_answer"]
+    # Stored answer matches what the user is shown.
+    assert run_row.final_answer == done["final_answer"]
+    # The strip is auditable, not silent.
+    stripped = [e for e in events if e["type"] == "citations_stripped"]
+    assert stripped and stripped[0]["count"] == 1
+    assert stripped[0]["citations"] == [f"obs:{OBS_B}"]
+    # And the surviving citation is still reported on the done event.
+    assert done["citations"] == [{"kind": "obs", "id": OBS_A}]

@@ -16,6 +16,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
 import uuid
 from collections import deque
@@ -66,9 +67,13 @@ Workflow.
 Widen-then-fail rule (important).
 - The cheap query tools default to a 24-hour window. If your first query returns ZERO results
   for an entity the user asked about, do NOT immediately answer "not seen".
-- Instead, escalate the window. Call again with hours=168 (7 days). If still empty, hours=720
-  (30 days). If still empty, call get_last_sightings with the default 30-day window before
-  declaring absence.
+- query_observations widens the window for you: when nothing matches, it retries at 7 days and
+  then 30 days on its own. If the result carries "widened_to" and a "note", the rows you got
+  are from OUTSIDE the window you asked for. Follow the note. say plainly that the requested
+  window was empty, then give what was found and when.
+- The other query tools do not widen themselves. Escalate them by hand. Call again with
+  hours=168 (7 days). If still empty, hours=720 (30 days). If still empty, call
+  get_last_sightings with the default 30-day window before declaring absence.
 - When you DO find a sighting in a widened window, lead your answer with what you found AND
   when. Example. "I haven't seen the cat in the last 24 hours, but I last saw her 19 hours ago
   at the back door [obs:abc123]." That is the right shape of answer for an absence-with-history
@@ -78,6 +83,9 @@ Widen-then-fail rule (important).
 Citations.
 - Cite every load-bearing claim by observation_id, journey_id, or vlm_call_id.
 - Inline citation format. [obs:<uuid>] or [journey:<uuid>] or [vlm:<uuid>].
+- Only cite an id a tool actually returned to you in this conversation. Citations pointing at
+  anything else are stripped from your answer before the user sees it, which leaves the claim
+  standing with no evidence behind it. Never reconstruct or guess a uuid.
 
 Automation rules.
 - You can look up existing rules (list_rules) and their firings (get_events), but you CANNOT
@@ -130,6 +138,10 @@ class _LoopState:
     seq: int = 0
     vlm_calls_made: int = 0
     started_at: float = field(default_factory=time.time)
+    # Every uuid any tool actually returned this run. The citation check
+    # below is only as good as this set, so it is filled from the raw
+    # serialized result rather than from per-tool knowledge of id fields.
+    seen_ids: set = field(default_factory=set)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -173,6 +185,54 @@ def _result_summary(name: str, result: dict) -> str:
     # generic
     keys = ", ".join(sorted(list(result.keys()))[:6])
     return f"{name} -> {{{keys}}}"
+
+
+_UUID_RE = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
+_CITATION_RE = re.compile(rf"\[(obs|journey|vlm|recording):({_UUID_RE.pattern})\]")
+
+
+def collect_ids(payload) -> set[str]:
+    """Every uuid appearing anywhere in a tool result, lowercased.
+
+    Deliberately shape-blind: tools return ids under many different keys
+    (``id``, ``observation_id``, ``journey_id``, nested rows), and a check
+    that only knew about some of them would flag real citations as fake.
+    Pure, for tests."""
+    try:
+        blob = json.dumps(payload, default=str)
+    except (TypeError, ValueError):
+        blob = str(payload)
+    return {m.group(0).lower() for m in _UUID_RE.finditer(blob)}
+
+
+def verify_citations(text: str, seen_ids: set[str]) -> tuple[str, list[str]]:
+    """Strip citations pointing at ids no tool ever returned.
+
+    The system prompt tells the model to cite every load-bearing claim as
+    ``[obs:<uuid>]``. Nothing stopped it from inventing the uuid, and a
+    fabricated citation reads to the user as evidence. Returns the cleaned
+    text and the bogus ids, newest-first order preserved. Pure, for tests."""
+    if not text:
+        return text, []
+    removed: list[str] = []
+
+    def _sub(m: re.Match) -> str:
+        cid = m.group(2).lower()
+        if cid in seen_ids:
+            return m.group(0)
+        removed.append(f"{m.group(1)}:{cid}")
+        return ""
+
+    cleaned = _CITATION_RE.sub(_sub, text)
+    if removed:
+        # Tidy the spacing the removal leaves behind, without touching
+        # anything else about the model's prose.
+        cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+        cleaned = re.sub(r" +([.,;:!?])", r"\1", cleaned)
+        cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+    return cleaned.strip(), removed
 
 
 # ── Conversation memory ─────────────────────────────────────────────
@@ -425,6 +485,7 @@ class AgentDriver:
                         final_text = await self._forced_synthesis(
                             provider, model, system_prompt, messages, state, run_id
                         )
+                        final_text = await self._finalize_answer(final_text, state, run_id)
                         await runs_mod.update_run(run_id, db,
                                                   status="budget_exhausted",
                                                   final_answer=final_text,
@@ -435,6 +496,7 @@ class AgentDriver:
                     # text or end_turn => final answer.
                     if response.stop_reason in {"end_turn", "stop"} or not response.tool_uses:
                         final_text = response.text or "".join(streamed_text_parts)
+                        final_text = await self._finalize_answer(final_text, state, run_id)
                         await runs_mod.update_run(run_id, db,
                                                   status="completed",
                                                   final_answer=final_text,
@@ -470,6 +532,7 @@ class AgentDriver:
                                                   "message": "max_turns_reached",
                                                   "recoverable": False})
                 final_text = await self._forced_synthesis(provider, model, system_prompt, messages, state, run_id)
+                final_text = await self._finalize_answer(final_text, state, run_id)
                 run_row = await runs_mod.update_run(run_id, db,
                                                    status="completed",
                                                    final_answer=final_text,
@@ -565,6 +628,7 @@ class AgentDriver:
             logger.debug("complete_tool_call failed", exc_info=True)
 
         state.tool_call_history.append({"turn": state.turn_index, "hash": h, "name": name})
+        state.seen_ids |= collect_ids(result)
 
         await self._emit(state, run_id, {
             "type": "tool_result",
@@ -575,6 +639,21 @@ class AgentDriver:
             "latency_ms": latency_ms,
         })
         return result if isinstance(result, dict) else {"value": result}
+
+    # ── answer finalization ───────────────────────────────────────
+
+    async def _finalize_answer(self, text: str, state: _LoopState, run_id: uuid.UUID) -> str:
+        """Strip fabricated citations before the answer is stored or shown."""
+        cleaned, removed = verify_citations(text, state.seen_ids)
+        if removed:
+            logger.info("run %s cited %d ids no tool returned: %s",
+                        run_id, len(removed), removed[:5])
+            await self._emit(state, run_id, {
+                "type": "citations_stripped",
+                "count": len(removed),
+                "citations": removed[:10],
+            })
+        return cleaned
 
     # ── forced synthesis ──────────────────────────────────────────
 
@@ -636,14 +715,11 @@ class AgentDriver:
 # ── Citation extractor ───────────────────────────────────────────────
 
 
-import re as _re
-
-_CIT_RE = _re.compile(r"\[(obs|journey|vlm|recording):([0-9a-fA-F-]{36})\]")
-
-
 def _extract_citations(text: str) -> list[dict]:
+    """Citations still standing in a finalized answer. Shares _CITATION_RE
+    with verify_citations so the two can never disagree about what counts."""
     out: list[dict] = []
-    for m in _CIT_RE.finditer(text or ""):
+    for m in _CITATION_RE.finditer(text or ""):
         out.append({"kind": m.group(1), "id": m.group(2)})
     return out
 
