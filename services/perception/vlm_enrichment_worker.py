@@ -78,7 +78,11 @@ LENS_PROMPTS = {
         "a few seconds apart. Describe what changed between them and what any "
         "person or vehicle is doing. approaching, leaving, loitering, picking "
         "something up, dropping something off. Reply with one or two plain "
-        "sentences only, no preamble. Do not invent details you cannot see."
+        "sentences only, no preamble. Do not invent details you cannot see. "
+        "When a THIS FRAME CONTINUES AN EPISODE block is provided, it is what "
+        "already happened in the minutes before these frames. Use it to say "
+        "what the subject is doing now in that arc, not to describe events "
+        "you cannot see in the frames themselves."
     ),
     "summary": (
         "Below are independent observations of the SAME security-camera "
@@ -369,6 +373,10 @@ class EnrichmentManager:
                 await self._append_pass(obs_id, lens, provider, None, None)
                 return True
             frame = montage
+            # Three frames is seconds of memory. The pipeline has already
+            # grouped this observation into an incident, and possibly a
+            # cross-camera journey; hand the lens that arc (issue #130).
+            extra_context = await self._episode_context(obs_id, camera_id, ts)
         elif lens == "anomaly":
             # "Unusual" is meaningless without a sense of usual, so give the
             # lens this camera's own history to compare against (issue #129).
@@ -387,6 +395,13 @@ class EnrichmentManager:
         await self._append_pass(obs_id, lens, provider, text or None, attrs)
         logger.info("enriched %s lens=%s. %s", obs_id, lens, (text or "")[:70])
         return True
+
+    async def _episode_context(self, obs_id, camera_id, ts) -> str | None:
+        """Incident/journey arc block for the temporal lens, or None."""
+        from services.perception.episode import episode_context
+
+        async with async_session() as db:
+            return await episode_context(db, obs_id, camera_id, ts)
 
     async def _anomaly_context(self, camera_id, ts, objects_blob, persons_blob,
                                obs_id) -> str | None:

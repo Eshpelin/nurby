@@ -335,3 +335,81 @@ async def test_attributes_lens_gets_no_baseline_context(monkeypatch):
                                    object(), None, None) is True
     assert captured["extra_context"] is None
     assert appends[0]["attributes"]["source"] == "attributes-pass-v1"
+
+
+# ---- the temporal lens gets the episode arc (G3, #130) -----------------
+
+
+@pytest.mark.asyncio
+async def test_temporal_lens_receives_the_episode_context(monkeypatch):
+    mgr, writes, appends = _manager(["The man carries a box to the door."], monkeypatch)
+
+    async def _montage(camera_id, ts, frame):
+        return frame
+
+    async def _episode(obs_id, camera_id, ts):
+        return "THIS FRAME CONTINUES AN EPISODE already in progress on this camera."
+
+    mgr._temporal_montage = _montage
+    mgr._episode_context = _episode
+
+    captured = {}
+
+    async def _describe(frame, detections, provider, system_prompt=None,
+                        extra_context=None, max_tokens=None, **kw):
+        captured["extra_context"] = extra_context
+        return "The man carries a box to the door."
+
+    mgr._vlm.describe = _describe
+
+    assert await mgr._run_raw_lens("temporal", "obs", "cam", "ts", "t.jpg", [],
+                                   object(), None, None) is True
+    assert captured["extra_context"].startswith("THIS FRAME CONTINUES AN EPISODE")
+    assert appends[0]["lens"] == "temporal"
+
+
+@pytest.mark.asyncio
+async def test_temporal_lens_runs_unchanged_for_a_standalone_frame(monkeypatch):
+    mgr, writes, appends = _manager(["A cat crosses the step."], monkeypatch)
+
+    async def _montage(camera_id, ts, frame):
+        return frame
+
+    async def _episode(obs_id, camera_id, ts):
+        return None
+
+    mgr._temporal_montage = _montage
+    mgr._episode_context = _episode
+
+    captured = {}
+
+    async def _describe(frame, detections, provider, system_prompt=None,
+                        extra_context=None, max_tokens=None, **kw):
+        captured["extra_context"] = extra_context
+        return "A cat crosses the step."
+
+    mgr._vlm.describe = _describe
+
+    assert await mgr._run_raw_lens("temporal", "obs", "cam", "ts", "t.jpg", [],
+                                   object(), None, None) is True
+    assert captured["extra_context"] is None
+
+
+@pytest.mark.asyncio
+async def test_no_montage_means_no_episode_lookup(monkeypatch):
+    """A temporal pass with no neighbouring frames is recorded empty, and must
+    not pay for an episode query it will never use."""
+    mgr, writes, appends = _manager([], monkeypatch)
+
+    async def _montage(camera_id, ts, frame):
+        return None
+
+    async def _boom(*a, **kw):
+        raise AssertionError("no episode lookup without a montage")
+
+    mgr._temporal_montage = _montage
+    mgr._episode_context = _boom
+
+    assert await mgr._run_raw_lens("temporal", "obs", "cam", "ts", "t.jpg", [],
+                                   object(), None, None) is True
+    assert appends[0] == {"lens": "temporal", "description": None, "attributes": None}

@@ -111,7 +111,14 @@ and later passes get more context.
 
 1. **`live`** (pass 1, already exists): fast "what's happening".
 2. **`attributes`**: exhaustive extraction. every object, read any text / plates / signage, clothing colors, people count, time-of-day cues. Writes structured `attributes`, which directly improves search and rules.
-3. **`temporal`**: feed the adjacent frames (sliced from an overlapping recording if present) so the model reasons about motion and intent. approached or left, loitering, carrying something out.
+3. **`temporal`**: feed the adjacent frames (sliced from an overlapping recording if present) so the model reasons about motion and intent. approached or left, loitering, carrying something out. Since **v2.4** the lens also
+   receives the episode the frame belongs to (`services/perception/episode.py`):
+   how long the incident has been open, which sighting this is, the incident
+   summary so far, the first captions in it, and, when the incident is bound to
+   a Journey, which other cameras saw the same subject and how long ago. Three
+   frames is seconds of memory; the pipeline already knew the arc and the lens
+   was not being told (issue #130). Frames that belong to no incident get no
+   block and the lens behaves as before.
 4. **`anomaly`**: a safety/oddity lens. "anything unusual or worth flagging that earlier passes missed." Since **v2.4** this lens is given a
    per-camera baseline (`services/perception/baseline.py`) as context: what
    this camera normally sees at this time of day, drawn from the last 28 days
@@ -163,8 +170,11 @@ Guards:
 - **v2.2** `temporal` adjacent-frame reasoning + agentic follow-ups (complete a plate, chase a face).
 - **v2.3** `reduce` + `verify` reconciliation to fight hallucination.
 - **v2.4** the verify verdict gains teeth (repair round, then fall back to a raw
-  pass; never embed a summary that failed its own check, issue #127) and the
-  `anomaly` lens gains the per-camera baseline (issue #129).
+  pass; never embed a summary that failed its own check, issue #127), the
+  `anomaly` lens gains the per-camera baseline (issue #129), and the `temporal`
+  lens gains the incident/journey arc (issue #130). The theme of the version:
+  every round the worker already ran is now wired to the context or the
+  consequence it was missing.
 
 ## API / UI surface
 
