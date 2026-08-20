@@ -253,3 +253,85 @@ async def test_unclear_verdict_is_still_published(monkeypatch):
     assert await mgr._run_summary("obs", "t.jpg", [], PASSES, object()) is True
     assert writes[0]["attributes"]["verify"]["status"] == "unclear"
     assert "repair" not in writes[0]["attributes"]["verify"]
+
+
+# ---- the anomaly lens gets a baseline to compare against (G2, #129) -----
+
+
+@pytest.mark.asyncio
+async def test_anomaly_lens_receives_the_baseline_context(monkeypatch):
+    mgr, writes, appends = _manager(["The side gate is standing open."], monkeypatch)
+    seen = {}
+
+    async def _ctx(camera_id, ts, objects_blob, persons_blob, obs_id):
+        seen["args"] = (camera_id, obs_id)
+        return "NORMAL FOR THIS CAMERA at this time of day, from 40 past frames:"
+
+    mgr._anomaly_context = _ctx
+
+    captured = {}
+    real_describe = mgr._vlm.describe
+
+    async def _describe(frame, detections, provider, system_prompt=None,
+                        extra_context=None, max_tokens=None, **kw):
+        captured["extra_context"] = extra_context
+        return await real_describe(frame, detections, provider,
+                                   system_prompt=system_prompt,
+                                   extra_context=extra_context,
+                                   max_tokens=max_tokens, **kw)
+
+    mgr._vlm.describe = _describe
+
+    ok = await mgr._run_raw_lens("anomaly", "obs", "cam", "ts", "t.jpg", [],
+                                 object(), {"objects": []}, {"faces": []})
+    assert ok is True
+    assert captured["extra_context"].startswith("NORMAL FOR THIS CAMERA")
+    assert seen["args"] == ("cam", "obs")
+    assert appends[0]["lens"] == "anomaly"
+
+
+@pytest.mark.asyncio
+async def test_anomaly_lens_runs_unchanged_when_there_is_no_baseline(monkeypatch):
+    mgr, writes, appends = _manager(["Nothing unusual."], monkeypatch)
+
+    async def _ctx(*a, **kw):
+        return None
+
+    mgr._anomaly_context = _ctx
+
+    captured = {}
+
+    async def _describe(frame, detections, provider, system_prompt=None,
+                        extra_context=None, max_tokens=None, **kw):
+        captured["extra_context"] = extra_context
+        return "Nothing unusual."
+
+    mgr._vlm.describe = _describe
+
+    assert await mgr._run_raw_lens("anomaly", "obs", "cam", "ts", "t.jpg", [],
+                                   object(), None, None) is True
+    assert captured["extra_context"] is None
+
+
+@pytest.mark.asyncio
+async def test_attributes_lens_gets_no_baseline_context(monkeypatch):
+    mgr, writes, appends = _manager(["A red van at the curb."], monkeypatch)
+
+    async def _boom(*a, **kw):
+        raise AssertionError("the baseline is for the anomaly lens only")
+
+    mgr._anomaly_context = _boom
+
+    captured = {}
+
+    async def _describe(frame, detections, provider, system_prompt=None,
+                        extra_context=None, max_tokens=None, **kw):
+        captured["extra_context"] = extra_context
+        return "A red van at the curb."
+
+    mgr._vlm.describe = _describe
+
+    assert await mgr._run_raw_lens("attributes", "obs", "cam", "ts", "t.jpg", [],
+                                   object(), None, None) is True
+    assert captured["extra_context"] is None
+    assert appends[0]["attributes"]["source"] == "attributes-pass-v1"

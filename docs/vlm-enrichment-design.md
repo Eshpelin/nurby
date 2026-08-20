@@ -112,7 +112,15 @@ and later passes get more context.
 1. **`live`** (pass 1, already exists): fast "what's happening".
 2. **`attributes`**: exhaustive extraction. every object, read any text / plates / signage, clothing colors, people count, time-of-day cues. Writes structured `attributes`, which directly improves search and rules.
 3. **`temporal`**: feed the adjacent frames (sliced from an overlapping recording if present) so the model reasons about motion and intent. approached or left, loitering, carrying something out.
-4. **`anomaly`**: a safety/oddity lens. "anything unusual or worth flagging that earlier passes missed."
+4. **`anomaly`**: a safety/oddity lens. "anything unusual or worth flagging that earlier passes missed." Since **v2.4** this lens is given a
+   per-camera baseline (`services/perception/baseline.py`) as context: what
+   this camera normally sees at this time of day, drawn from the last 28 days
+   of its own observations, next to what is in this frame. Without it the lens
+   was judging "unusual" with no notion of usual (issue #129). The baseline is
+   deterministic and query-only, bucketed by hour-of-day +/- 1 on the same kind
+   of day (weekday vs weekend), suppressed below 12 samples, and cached in
+   process for an hour. A camera too new to have history gets no context block
+   and the lens behaves exactly as it did before.
 5. **`reduce`**: reconcile all passes into one authoritative description + confidence, set `Observation.vlm_description` to it, mark superseded passes.
 
 Stop early when a pass adds no new entities (delta-based), or at `max_passes`.
@@ -133,7 +141,13 @@ reported a "Christmas tree" and a "drone" that may not have been there).
 Guards:
 - passes are **append-only**; a later pass never silently rewrites an earlier one.
 - the `reduce` step is conservative. it only promotes a detail to authoritative if it appears consistently or with high confidence.
-- optional **verify** pass: a second model/prompt tries to refute a new claim before it is promoted (reuse the agent's adversarial-verify pattern). Majority-refute kills it.
+- **verify** pass: a second prompt asks whether every concrete detail in the
+  summary is supported by the source passes. As of v2.4 the verdict is
+  enforced, not just recorded. `unsupported` triggers one repair round that
+  names the rejected detail, and a summary that still fails is replaced by a
+  single raw pass verbatim (raw passes are single-source, so they cannot be
+  unsupported the way a synthesis can). Nothing that failed its own check ever
+  reaches `Observation.vlm_description` or the search embedding.
 - keep the original `live` caption forever so any enrichment is reversible.
 
 ## Privacy + retention
@@ -148,6 +162,9 @@ Guards:
 - **v2.1** structured `attributes` feeding search and rules. a "VLM history" view in the observation detail UI showing the passes.
 - **v2.2** `temporal` adjacent-frame reasoning + agentic follow-ups (complete a plate, chase a face).
 - **v2.3** `reduce` + `verify` reconciliation to fight hallucination.
+- **v2.4** the verify verdict gains teeth (repair round, then fall back to a raw
+  pass; never embed a summary that failed its own check, issue #127) and the
+  `anomaly` lens gains the per-camera baseline (issue #129).
 
 ## API / UI surface
 

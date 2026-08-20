@@ -65,7 +65,13 @@ LENS_PROMPTS = {
         "would not expect them, an open door or gate, something left behind, "
         "signs of forced entry, an obscured face. Reply with one or two plain "
         "sentences only, no preamble. If nothing is unusual, reply exactly "
-        "'Nothing unusual.'"
+        "'Nothing unusual.' "
+        "When a NORMAL FOR THIS CAMERA block is provided, judge against it: "
+        "what this camera usually sees at this time of day is not unusual no "
+        "matter how it looks, and a departure from it is worth reporting even "
+        "if the frame looks ordinary. Do not restate the numbers back at me, "
+        "and do not call something unusual only because the counts differ "
+        "slightly."
     ),
     "temporal": (
         "These are sequential frames from one security camera, left to right, "
@@ -270,7 +276,8 @@ class EnrichmentManager:
                 return None
             o = rows[0]
             return (o.id, o.camera_id, o.started_at, o.thumbnail_path,
-                    (o.object_detections or {}).get("objects", []))
+                    (o.object_detections or {}).get("objects", []),
+                    o.object_detections, o.person_detections)
 
     async def _passes_for(self, obs_id: uuid.UUID):
         async with async_session() as db:
@@ -310,7 +317,7 @@ class EnrichmentManager:
         )
         if cand is None:
             return False
-        obs_id, camera_id, ts, thumb, detections = cand
+        obs_id, camera_id, ts, thumb, detections, objects_blob, persons_blob = cand
 
         passes = await self._passes_for(obs_id)
         existing_lenses = {lens for _, lens, _ in passes}
@@ -336,7 +343,8 @@ class EnrichmentManager:
                 ok = await self._run_summary(obs_id, thumb, detections, passes, provider)
             else:
                 ok = await self._run_raw_lens(lens, obs_id, camera_id, ts, thumb,
-                                              detections, provider)
+                                              detections, provider,
+                                              objects_blob, persons_blob)
         except Exception:
             logger.debug("enrichment lens %s failed for %s", lens, obs_id, exc_info=True)
             await self._touch(obs_id)
@@ -347,10 +355,12 @@ class EnrichmentManager:
         return True
 
     async def _run_raw_lens(self, lens, obs_id, camera_id, ts, thumb,
-                            detections, provider) -> bool:
+                            detections, provider, objects_blob=None,
+                            persons_blob=None) -> bool:
         frame = _load_frame(thumb)
         if frame is None:
             return False
+        extra_context = None
         if lens == "temporal":
             montage = await self._temporal_montage(camera_id, ts, frame)
             if montage is None:
@@ -359,15 +369,34 @@ class EnrichmentManager:
                 await self._append_pass(obs_id, lens, provider, None, None)
                 return True
             frame = montage
+        elif lens == "anomaly":
+            # "Unusual" is meaningless without a sense of usual, so give the
+            # lens this camera's own history to compare against (issue #129).
+            # None when the camera is too new to have one; the lens then runs
+            # exactly as it did before.
+            extra_context = await self._anomaly_context(
+                camera_id, ts, objects_blob, persons_blob, obs_id
+            )
         text = await self._vlm.describe(
             frame, detections, provider,
-            system_prompt=LENS_PROMPTS[lens], max_tokens=160,
+            system_prompt=LENS_PROMPTS[lens], extra_context=extra_context,
+            max_tokens=160,
         )
         text = (text or "").strip()
         attrs = build_attributes(text, detections) if lens == "attributes" else None
         await self._append_pass(obs_id, lens, provider, text or None, attrs)
         logger.info("enriched %s lens=%s. %s", obs_id, lens, (text or "")[:70])
         return True
+
+    async def _anomaly_context(self, camera_id, ts, objects_blob, persons_blob,
+                               obs_id) -> str | None:
+        """Baseline comparison block for the anomaly lens, or None."""
+        from services.perception.baseline import anomaly_context
+
+        async with async_session() as db:
+            return await anomaly_context(
+                db, camera_id, ts, objects_blob, persons_blob, exclude_id=obs_id
+            )
 
     async def _run_summary(self, obs_id, thumb, detections, passes, provider) -> bool:
         frame = _load_frame(thumb)
