@@ -1,6 +1,6 @@
 # Agent reasoning gaps — the "does it actually think?" audit
 
-Status: findings, 2026-08-20. Scope: the two loops that turn frames into
+Status: **all six shipped, 2026-08-20** (see the per-gap notes). Findings dated 2026-08-20. Scope: the two loops that turn frames into
 understanding — the idle-time enrichment loop
 (`services/perception/vlm_enrichment_worker.py`) and the Ask/agent tool-use loop
 (`services/agent/driver.py`).
@@ -38,7 +38,7 @@ in the prompt. If the retry is also unsupported, fall back to the highest-signal
 raw pass text rather than the synthesis, and record the downgrade. Never embed a
 summary that failed its own check.
 
-Size: half a day. Highest value per hour in the whole system. Issue #127.
+Size: half a day. Highest value per hour in the whole system. Issue #127. SHIPPED: repair round, then fall back to a raw pass; nothing that fails its own check is embedded.
 
 ## G2. The anomaly lens has no history
 
@@ -58,7 +58,7 @@ The lens then does grounded comparison instead of vibes. The same table unlocks
 `docs/industrial-automation-plan.md` §4L (rule proposals from observed patterns)
 and part of §4I (metric primitives).
 
-Size: 2-3 days. Biggest single quality lever available. Issue #129.
+Size: 2-3 days. Biggest single quality lever available. Issue #129. SHIPPED: services/perception/baseline.py, suppressed below 12 samples.
 
 ## G3. Temporal context is three frames wide
 
@@ -70,7 +70,7 @@ Fix: pass the incident/journey the observation belongs to as lens context, so
 the temporal lens sees "this is minute 4 of an incident that started with a van
 stopping at the curb" rather than three near-identical stills.
 
-Size: 1-2 days. Data already exists; this is plumbing. Issue #130.
+Size: 1-2 days. Data already exists; this is plumbing. Issue #130. SHIPPED: services/perception/episode.py, incident + journey arc.
 
 ## G4. Widen-then-fail is prompt-only, and citations are unchecked
 
@@ -89,7 +89,7 @@ final pass verifies every `[obs:...]` / `[journey:...]` / `[vlm:...]` in the
 answer against the run's tool results, and strips or flags the ones that were
 never returned.
 
-Size: 1 day for both. Issue #128.
+Size: 1 day for both. Issue #128. SHIPPED: widen_ladder in tools.py, verify_citations in driver.py.
 
 ## G5. No persistent household context (borrowed from crush)
 
@@ -107,7 +107,7 @@ Fix: a periodically regenerated household context document, persisted and
 injected into the system prompt. It subsumes the turn-0 snapshot call for most
 questions and shares its source data with the G2 baseline table.
 
-Size: 2-3 days, and it should be built after G2 so the two share one table. Issue #131.
+Size: 2-3 days, and it should be built after G2 so the two share one table. Issue #131. SHIPPED: services/agent/household_context.py, scoped per accessible-camera set, not one global doc.
 
 ## G6. No mid-run model escalation (borrowed from crush)
 
@@ -121,7 +121,7 @@ the enrichment verify round (G1) and the agent's forced-synthesis path. Retry th
 failed step once on the household's strongest configured provider, record which
 model produced the kept answer.
 
-Size: 1-2 days, depends on G1. Issue #132.
+Size: 1-2 days, depends on G1. Issue #132. SHIPPED: services/escalation.py, wired to the enrichment repair and the max-turns synthesis only.
 
 ## What the coding agents did NOT have worth taking
 
@@ -144,5 +144,15 @@ either already present here or do not apply:
 
 ## Order
 
-G1 -> G4 -> G2 -> G3 -> G5 -> G6. G1 and G4 are self-contained and land in a
-session each. G2 is the one that changes what the system can notice.
+Built in the planned order: G1 -> G4 -> G2 -> G3 -> G5 -> G6, all six in one
+session on 2026-08-20.
+
+## What is still open after this
+
+- `_forced_synthesis` never calls `record_usage`, so neither synthesis call
+  lands in the budget ledger. Pre-existing, and escalation (G6) makes the miss
+  slightly more expensive.
+- The baseline (G2) and the household block (G5) each run their own aggregate
+  over the same observations. They were built to share a table and do not yet.
+- 12 tests fail on a clean main from stale SimpleNamespace fixtures missing
+  newer Observation columns. Unrelated to this work.
