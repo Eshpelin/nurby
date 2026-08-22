@@ -228,7 +228,8 @@ export interface TimelineEntry {
     | "notification"
     | "transcript"
     | "summary"
-    | "conversation";
+    | "conversation"
+    | "speech";
   camera_id: string;
   timestamp: string;
   data:
@@ -242,7 +243,8 @@ export interface TimelineEntry {
     | Notification
     | Transcript
     | Summary
-    | Conversation;
+    | Conversation
+    | SpeechEvent;
 }
 
 export interface ActivityEvent {
@@ -264,4 +266,20 @@ export interface Notification {
 }
 
 export type TimeRange = "today" | "7d" | "30d";
-export type EventFilter = "recordings" | "observations" | "status" | "transcripts" | "conversations" | "summaries";
+export type EventFilter = "recordings" | "observations" | "status" | "transcripts" | "conversations" | "summaries" | "speech";
+
+// Something a camera was asked to say. Suppressed attempts are included
+// deliberately: a rule quietly muted by quiet hours for a month is
+// otherwise indistinguishable from one that never fired.
+export interface SpeechEvent {
+  id: string;
+  camera_id: string;
+  trigger: string;
+  text: string;
+  status: string;
+  suppressed_reason: string | null;
+  transport: string | null;
+  error_message: string | null;
+  created_at: string;
+  played_at: string | null;
+}
