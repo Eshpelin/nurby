@@ -503,9 +503,14 @@ class Observation(Base):
     primary_vlm_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     refined_by_provider_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     refined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # Incident link. Set by the perception pipeline at insert time
-    # when incident tracking is enabled on the camera. Null means the
-    # observation stands alone or tracking was off when it landed.
+    # Primary incident link. Set by the perception pipeline at insert
+    # time when incident tracking is enabled on the camera. Null means
+    # the observation stands alone or tracking was off when it landed.
+    #
+    # An observation with several subjects in frame belongs to one
+    # incident per subject; this column holds the strongest-rung one
+    # (see incident_tracker.IDENTITY_LADDER). The full set lives in
+    # ``observation_incidents``.
     incident_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -1204,6 +1209,52 @@ class Incident(Base):
     embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ObservationIncident(Base):
+    """One observation's membership in one subject's incident.
+
+    An observation can show several subjects at once. Before this table
+    they were joined into a single signature ("Ahmed,Sara"), which is a
+    different subject than "Ahmed" and therefore fragmented both people's
+    history the moment they walked together (issue #145). Now each
+    subject gets its own incident and this table records the membership.
+
+    ``Observation.incident_id`` survives as the primary link, holding the
+    strongest-rung subject, so every existing query keeps working
+    unchanged. Read this table when you need all of them.
+
+    ``subject_kind`` / ``subject_key`` duplicate the incident's signature
+    on purpose: they record what this observation contributed, which stays
+    true even if the incident is later merged or re-keyed. ``bound_by``
+    carries the evidence rung (face / held / face_cluster / body).
+    """
+
+    __tablename__ = "observation_incidents"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    observation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("observations.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    incident_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    subject_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    subject_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    bound_by: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # True for the row mirrored into Observation.incident_id.
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "observation_id", "incident_id", name="uq_observation_incident"
+        ),
     )
 
 

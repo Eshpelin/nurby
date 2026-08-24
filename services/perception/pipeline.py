@@ -1311,14 +1311,18 @@ class PerceptionPipeline:
                 # returned to the caller for fire-once-per-incident dedup.
                 assigned_incident_id: uuid.UUID | None = None
                 try:
-                    from services.perception.incident_tracker import assign_incident
+                    from services.perception.incident_tracker import assign_incidents
 
                     cam_for_inc = await db.get(Camera, camera_id)
                     if cam_for_inc is not None:
-                        inc_id = await assign_incident(db, cam_for_inc, obs)
-                        if inc_id is not None:
-                            obs.incident_id = inc_id
-                            assigned_incident_id = inc_id
+                        # One incident per subject in frame. The first is the
+                        # strongest identity rung and is mirrored onto the
+                        # observation; the rest are reachable through
+                        # observation_incidents.
+                        inc_ids = await assign_incidents(db, cam_for_inc, obs)
+                        if inc_ids:
+                            obs.incident_id = inc_ids[0]
+                            assigned_incident_id = inc_ids[0]
                 except Exception:
                     logger.exception("incident assignment failed obs=%s", obs.id)
                 await db.commit()

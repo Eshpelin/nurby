@@ -27,7 +27,13 @@ from services.perception.token_budget import resolve_output_cap
 from services.perception.vlm import get_active_provider
 from services.search.embeddings import generate_embedding, get_embedding_provider
 from shared.database import async_session
-from shared.models import Camera, Incident, Observation, Provider
+from shared.models import (
+    Camera,
+    Incident,
+    Observation,
+    ObservationIncident,
+    Provider,
+)
 
 logger = logging.getLogger("nurby.perception.incident")
 
@@ -182,12 +188,13 @@ def compute_signature(
     bodies > unknown faces > top YOLO labels > motion. Mirrors the frontend
     coalescer so the two layers agree on what counts as 'the same thing'.
 
-    Grouping caveat, tracked separately as issue #145. When several
-    subjects share a frame their keys are joined, so "Ahmed,Sara" is a
-    different signature than "Ahmed" and a person's history still
-    fragments when they are with someone. Fixing that means one incident
-    per subject, which is a schema change; this function is written to
-    make that a small step by resolving subjects individually first.
+    Joins the keys when several subjects share a frame, which is what
+    made a person's history fragment as soon as they walked with someone
+    ("Ahmed,Sara" is not "Ahmed"). Assignment no longer goes through here
+    for that reason. Use :func:`observation_signatures`, which returns one
+    signature per subject. This is kept as the single-signature view of an
+    observation for callers that genuinely want one string, and for the
+    object / motion fallback.
     """
     kind, key, _bound_by = compute_signature_detail(
         person_detections, object_detections
@@ -239,24 +246,92 @@ def compute_signature_detail(
 # ---- assignment ----------------------------------------------------------
 
 
+def observation_signatures(
+    person_detections: dict | None,
+    object_detections: dict | None,
+) -> list[tuple[str, str, str | None]]:
+    """Every signature an observation belongs to, strongest rung first.
+
+    One entry per subject in frame. Two people walking together produce
+    two signatures, not the joined ``"Ahmed,Sara"`` that used to fragment
+    both of their histories (issue #145).
+
+    Falls back to the single object / motion / unknown signature when no
+    subject was resolved, so a scene with no people behaves exactly as it
+    always has. Pure, for tests.
+    """
+    subjects = resolve_subjects(person_detections)
+    if subjects:
+        return [(s["kind"], s["key"], s["bound_by"]) for s in subjects]
+    return [compute_signature_detail(person_detections, object_detections)]
+
+
+async def assign_incidents(
+    db: AsyncSession,
+    cam: Camera,
+    observation: Observation,
+) -> list[uuid.UUID]:
+    """Link an observation into one incident per subject in frame.
+
+    Returns the linked incident ids, strongest identity rung first, so the
+    caller can mirror the first one onto ``Observation.incident_id``. Empty
+    when incident tracking is off for the camera.
+
+    Runs inside the same session as the observation insert so the
+    membership rows and the incidents' occurrence_count bumps land
+    atomically with the observation itself.
+    """
+    if not getattr(cam, "incident_tracking_enabled", False):
+        return []
+
+    linked: list[uuid.UUID] = []
+    for kind, key, bound_by in observation_signatures(
+        observation.person_detections, observation.object_detections
+    ):
+        inc_id = await _assign_one(db, cam, observation, kind, key, bound_by)
+        if inc_id is None:
+            continue
+        db.add(
+            ObservationIncident(
+                observation_id=observation.id,
+                incident_id=inc_id,
+                subject_kind=kind,
+                subject_key=key,
+                bound_by=bound_by,
+                # The first subject that actually linked is the one
+                # mirrored onto Observation.incident_id, so primary
+                # follows what linked rather than what was attempted.
+                is_primary=not linked,
+            )
+        )
+        linked.append(inc_id)
+    return linked
+
+
 async def assign_incident(
     db: AsyncSession,
     cam: Camera,
     observation: Observation,
 ) -> uuid.UUID | None:
-    """Find an open incident for this signature on the camera within
-    the camera's idle window, and either append or open a new one.
-    Returns the linked incident id (or None when tracking is off).
+    """The primary incident for an observation, or None.
 
-    Runs inside the same session as the observation insert so the
-    observation.incident_id assignment lands atomically with the
-    incident's occurrence_count bump.
+    Compatibility wrapper over :func:`assign_incidents` for callers that
+    only care about the strongest-rung subject.
     """
-    if not getattr(cam, "incident_tracking_enabled", False):
-        return None
-    kind, key, bound_by = compute_signature_detail(
-        observation.person_detections, observation.object_detections
-    )
+    linked = await assign_incidents(db, cam, observation)
+    return linked[0] if linked else None
+
+
+async def _assign_one(
+    db: AsyncSession,
+    cam: Camera,
+    observation: Observation,
+    kind: str,
+    key: str,
+    bound_by: str | None,
+) -> uuid.UUID | None:
+    """Find an open incident for one signature on the camera within the
+    camera's idle window, and either append to it or open a new one."""
     idle_s = max(30, int(getattr(cam, "incident_idle_seconds", 600) or 600))
     cutoff = observation.started_at - timedelta(seconds=idle_s)
 
