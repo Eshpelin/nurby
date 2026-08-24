@@ -358,6 +358,9 @@ function formatSignature(kind: string, key: string): string {
     const short = key.split(",")[0]?.slice(0, 8) ?? "stranger";
     return `Recurring stranger ${short}`;
   }
+  // Matched by body appearance, no face this time. Say so plainly rather
+  // than claiming a recognition we did not make.
+  if (kind === "body") return "Unrecognized person (matched by appearance)";
   if (kind === "unknown") return "Unknown person";
   if (kind === "object") {
     const labels = key.split(",");
