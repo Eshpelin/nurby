@@ -1365,7 +1365,7 @@ function DashboardContent() {
 
     const humanizeSig = (kind: string, key: string): string => {
       if (kind === "person") return `${key} seen`;
-      if (kind === "cluster" || kind === "unknown") return "Unrecognized person";
+      if (kind === "cluster" || kind === "unknown" || kind === "body") return "Unrecognized person";
       if (kind === "object") return key.split(",").map((s) => s.trim()).filter(Boolean).join(" + ");
       return key || "Activity";
     };
@@ -1386,7 +1386,7 @@ function DashboardContent() {
         const occ = inc.occurrence_count > 1 ? ` (${inc.occurrence_count}×)` : "";
         const label = inc.summary_text?.trim() || `${humanizeSig(inc.signature_kind, inc.signature_key)}${occ}`;
         eventHighlights.push({
-          tone: inc.signature_kind === "person" ? "person" : inc.signature_kind === "unknown" || inc.signature_kind === "cluster" ? "unknown" : "object",
+          tone: inc.signature_kind === "person" ? "person" : inc.signature_kind === "unknown" || inc.signature_kind === "cluster" || inc.signature_kind === "body" ? "unknown" : "object",
           text: label,
           camName,
           thumbnailObsId: thumb,

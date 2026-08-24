@@ -71,7 +71,11 @@ JOURNEY_SUMMARY_PROMPT = (
 # ---- assignment ----------------------------------------------------------
 
 
-_TRACKABLE_KINDS = {"person", "cluster"}
+# Signature kinds that name a subject we can follow across cameras.
+# ``body`` joins the set with issue #144: a body re-identification cluster is
+# cross-camera by construction, so a subject whose face is never visible on a
+# camera still gets a continuous journey instead of decaying into motion.
+_TRACKABLE_KINDS = {"person", "cluster", "body"}
 
 
 async def assign_journey(

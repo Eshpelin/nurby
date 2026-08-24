@@ -91,29 +91,135 @@ async def _emit_rule_event(payload: dict) -> None:
         logger.exception("incident rule-event sink failed")
 
 
+# Identity ladder, strongest rung first. A subject is keyed by the best
+# evidence available for it, and the rung is carried alongside so callers
+# can tell a face-derived identity from an appearance-derived one.
+#
+# Ordering note. Face clusters outrank body clusters deliberately. A face
+# cluster survives a change of clothes; an OSNet appearance embedding does
+# not, so it is the fallback that keeps a subject continuous *through
+# occlusion*, not a cross-day identity. See resolve_subjects.
+IDENTITY_LADDER = ("person", "cluster", "body")
+
+
+def resolve_subjects(person_detections: dict | None) -> list[dict]:
+    """Every distinct person-subject in an observation, best identity first.
+
+    Returns ``[{"kind", "key", "name", "bound_by"}]`` where ``kind`` is one
+    of ``person`` | ``cluster`` | ``body`` and ``bound_by`` records which
+    evidence produced it (``face`` | ``held`` | ``face_cluster`` | ``body``).
+
+    The pipeline resolves identity per track long before this runs. It
+    stamps ``person_detections["tracks"]`` with a held ``person_id`` that
+    survives the face going out of view, and ``body_cluster_id`` from
+    cross-camera body re-identification. Both were previously dropped on
+    the floor here, which is why a subject stopped being the same subject
+    the moment they turned their head (issue #144).
+
+    Pure, for tests. Tolerant of pre-``tracks`` observation payloads, which
+    carry only ``faces`` and ``bodies``.
+    """
+    pd = person_detections or {}
+    tracks = pd.get("tracks") or []
+    faces = pd.get("faces") or []
+
+    out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def _add(kind: str, key: str | None, name: str | None, bound_by: str) -> None:
+        if not key:
+            return
+        ident = (kind, str(key))
+        if ident in seen:
+            return
+        seen.add(ident)
+        out.append(
+            {"kind": kind, "key": str(key), "name": name, "bound_by": bound_by}
+        )
+
+    # Rung 1. A track the binder resolved to a real Person. This is the
+    # rung that survives face occlusion, and the whole point of the fix.
+    for t in tracks:
+        if t.get("state") != "person":
+            continue
+        name = t.get("person_name")
+        # A held binding with no name is still a person we know; fall back
+        # to the id so the subject stays stable rather than collapsing to
+        # "unknown" for want of a display string.
+        _add("person", name or t.get("person_id"), name, "held")
+
+    # Rung 1b. Faces matched this frame. Redundant with the tracks above
+    # whenever the pipeline ran the binder, but observations written before
+    # tracks existed (and any path that skips tracking) still land here.
+    for f in faces:
+        _add("person", f.get("person_name"), f.get("person_name"), "face")
+
+    # Rung 2. Recurring unknown faces. A face cluster is durable across
+    # days, so it outranks appearance.
+    for f in faces:
+        _add("cluster", f.get("cluster_id"), None, "face_cluster")
+
+    # Rung 3. Body re-identification. No face this frame, but the body
+    # matched a cross-camera appearance cluster, so the subject stays
+    # continuous instead of decaying into "motion".
+    for t in tracks:
+        _add("body", t.get("body_cluster_id"), None, "body")
+    for b in pd.get("bodies") or []:
+        _add("body", b.get("body_cluster_id"), None, "body")
+
+    order = {kind: i for i, kind in enumerate(IDENTITY_LADDER)}
+    out.sort(key=lambda s: (order.get(s["kind"], len(order)), s["key"]))
+    return out
+
+
 def compute_signature(
     person_detections: dict | None,
     object_detections: dict | None,
 ) -> tuple[str, str]:
     """Return (signature_kind, signature_key) for an observation.
 
-    Priority. named persons > recurring unknown clusters > unknown
-    faces > top YOLO labels > motion. Mirrors the frontend coalescer
-    so the two layers agree on what counts as 'the same thing'.
+    Priority. named persons > recurring unknown clusters > re-identified
+    bodies > unknown faces > top YOLO labels > motion. Mirrors the frontend
+    coalescer so the two layers agree on what counts as 'the same thing'.
+
+    Grouping caveat, tracked separately as issue #145. When several
+    subjects share a frame their keys are joined, so "Ahmed,Sara" is a
+    different signature than "Ahmed" and a person's history still
+    fragments when they are with someone. Fixing that means one incident
+    per subject, which is a schema change; this function is written to
+    make that a small step by resolving subjects individually first.
+    """
+    kind, key, _bound_by = compute_signature_detail(
+        person_detections, object_detections
+    )
+    return kind, key
+
+
+def compute_signature_detail(
+    person_detections: dict | None,
+    object_detections: dict | None,
+) -> tuple[str, str, str | None]:
+    """:func:`compute_signature` plus the evidence rung that produced it.
+
+    ``bound_by`` is ``None`` for the object and motion signatures, which
+    are not identities at all. It is not persisted on ``Incident`` yet; it
+    rides along on the WS and rule-event payloads so the confidence behind
+    a signature is visible without a migration. The persisted form lands
+    with the per-subject journey work.
     """
     faces = (person_detections or {}).get("faces") or []
-    named = sorted(
-        {f.get("person_name") for f in faces if f.get("person_name")}
-    )
-    if named:
-        return "person", ",".join(named)
-    clusters = sorted(
-        {f.get("cluster_id") for f in faces if f.get("cluster_id")}
-    )
-    if clusters:
-        return "cluster", ",".join(clusters)
+    subjects = resolve_subjects(person_detections)
+
+    for kind in IDENTITY_LADDER:
+        matching = [s for s in subjects if s["kind"] == kind]
+        if not matching:
+            continue
+        keys = sorted({s["key"] for s in matching})
+        bound_by = matching[0]["bound_by"]
+        return kind, ",".join(keys), bound_by
+
     if faces:
-        return "unknown", "unknown"
+        return "unknown", "unknown", "face"
     objs = (object_detections or {}).get("objects") or []
     # Only meaningful subjects form an "object" incident. a clock or couch
     # seen N times is noise, not an event.
@@ -125,9 +231,9 @@ def compute_signature(
         }
     )
     if labels:
-        return "object", ",".join(labels[:3])
+        return "object", ",".join(labels[:3]), None
     # Inert-only or empty scene. group as ambient motion, not a subject.
-    return "motion", "motion"
+    return "motion", "motion", None
 
 
 # ---- assignment ----------------------------------------------------------
@@ -148,7 +254,7 @@ async def assign_incident(
     """
     if not getattr(cam, "incident_tracking_enabled", False):
         return None
-    kind, key = compute_signature(
+    kind, key, bound_by = compute_signature_detail(
         observation.person_detections, observation.object_detections
     )
     idle_s = max(30, int(getattr(cam, "incident_idle_seconds", 600) or 600))
@@ -255,6 +361,10 @@ async def assign_incident(
             "camera_name": cam.name if cam else "",
             "signature_kind": new_inc.signature_kind,
             "who_or_what": new_inc.signature_key,
+            # Which evidence rung bound this identity (face / held / body).
+            # Lets a rule distinguish "recognised by face" from "matched by
+            # appearance" without inspecting the observation payload.
+            "bound_by": bound_by,
             "timestamp": new_inc.started_at.isoformat(),
             "occurrence_count": new_inc.occurrence_count,
         }
