@@ -1350,6 +1350,10 @@ class EntityAssociation(Base):
     # 8am" is answerable without rescanning history.
     hour_histogram: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     dow_histogram: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Where the pairing usually happens, keyed by camera id. "Someone else
+    # is parked in your spot" is a claim about a place, so the edge has to
+    # remember one.
+    camera_histogram: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

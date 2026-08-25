@@ -51,6 +51,11 @@ async def main():
     # incident_started / incident_ended rules fire with recap payloads.
     from services.perception import incident_tracker as _inc_mod
     _inc_mod.set_rule_event_sink(pipeline.rule_engine.evaluate)
+    # Association deviations (habit broken, unauthorized use) go to the
+    # same engine, so they inherit cooldowns, notification routing, and
+    # the whole action vocabulary rather than growing their own.
+    from services.perception import deviations as _dev_mod
+    _dev_mod.set_rule_event_sink(pipeline.rule_engine.evaluate)
     from services.perception.vlm_queue import publish_stats_forever
 
     await asyncio.gather(

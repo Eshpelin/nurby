@@ -216,6 +216,39 @@ TRIGGER_TYPES: list[dict] = [
         ],
     },
     {
+        "type": "association_deviation",
+        "label": "Breaks a known pattern",
+        "description": (
+            "A learned habit is broken: a different vehicle is where one "
+            "usually is, a pairing happens at an odd hour, or one that "
+            "normally happens by now has not."
+        ),
+        "group": "system",
+        "fields": [
+            dict(_CAMERA_FILTER),
+            {"name": "deviation", "type": "enum", "required": False,
+             "enum": ["unexpected_object", "wrong_time", "expected_absent"],
+             "description": "Only this kind of deviation. Omit for any."},
+            {"name": "subject_key", "type": "string", "required": False,
+             "description": "Only patterns belonging to this person."},
+        ],
+    },
+    {
+        "type": "association_unauthorized",
+        "label": "Unauthorized use",
+        "description": (
+            "Someone used something restricted to declared operators. "
+            "Requires an authorization to have been declared for it; "
+            "nothing is inferred."
+        ),
+        "group": "system",
+        "fields": [
+            dict(_CAMERA_FILTER),
+            {"name": "subject_key", "type": "string", "required": False,
+             "description": "Only this person."},
+        ],
+    },
+    {
         "type": "incident_started",
         "label": "Incident begins",
         "description": "A new cluster of repeat sightings opens (same person/vehicle keeps appearing).",

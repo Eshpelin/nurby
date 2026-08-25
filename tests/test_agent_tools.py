@@ -645,6 +645,7 @@ def test_registry_lookup():
         "get_household_snapshot",
         "get_last_sightings",
         "get_events",
+        "get_associations",
         "get_vehicles",
         "summarize_activity",
         "summarize_window",

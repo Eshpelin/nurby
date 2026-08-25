@@ -203,6 +203,8 @@ export const TRIGGER_TYPES: TriggerType[] = [
   { value: "camera_online",   label: "Camera recovered", icon: Icon.camOff,    desc: "A camera comes back after being offline.",        accent: "green",  group: "system" },
   { value: "incident_started", label: "Incident begins", icon: Icon.clock,     desc: "A new cluster of repeat sightings opens (same person/vehicle keeps appearing).", accent: "amber", group: "system" },
   { value: "incident_ended",  label: "Incident recap",  icon: Icon.clock,      desc: "An incident closes: fires once with duration, count, and an AI recap.", accent: "indigo", group: "system" },
+  { value: "association_deviation", label: "Breaks a known pattern", icon: Icon.clock, desc: "A learned habit is broken: a different vehicle where one usually is, an odd hour, or one that normally happened by now has not.", accent: "amber", group: "system" },
+  { value: "association_unauthorized", label: "Unauthorized use", icon: Icon.car, desc: "Someone used something restricted to declared operators. Nothing is inferred: an authorization has to have been declared.", accent: "rose", group: "system" },
   { value: "plate_list",      label: "Plate list",      icon: Icon.car,       desc: "Allow-list (alert on strangers) or block-list (alert on banned plates). Garage access control.", accent: "amber", group: "traffic" },
   { value: "parking_violation", label: "Parking spot",   icon: Icon.parking,   desc: "Reserve a spot for your plate. Alarm when anyone else parks there.", accent: "amber", group: "traffic" },
   { value: "wrong_way",       label: "Wrong way",       icon: Icon.reverse,   desc: "A vehicle drives against the allowed direction over a lane line.", accent: "rose", group: "traffic" },
