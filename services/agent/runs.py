@@ -40,7 +40,15 @@ _ALLOWED_RUN_PATCH = {
 }
 
 
-_TERMINAL_STATUSES = {"completed", "failed", "cancelled", "budget_exhausted"}
+_TERMINAL_STATUSES = {
+    "completed",
+    "failed",
+    "cancelled",
+    "budget_exhausted",
+    # The model produced nothing usable. Distinct from "failed" (something
+    # broke) and never "completed" (issue #137).
+    "no_answer",
+}
 
 
 async def create_run(

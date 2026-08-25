@@ -7,7 +7,10 @@ export type RunStatus =
   | "completed"
   | "failed"
   | "cancelled"
-  | "budget_exhausted";
+  | "budget_exhausted"
+  // The model produced nothing usable. Distinct from "failed" (something
+  // broke) and never reported as "completed".
+  | "no_answer";
 
 export interface AgentRunSummary {
   id: string;
