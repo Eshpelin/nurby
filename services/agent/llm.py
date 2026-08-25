@@ -28,6 +28,7 @@ is awaited once per text delta.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -36,6 +37,7 @@ from typing import Any, Awaitable, Callable
 
 import httpx
 
+from shared.app_settings import get_setting
 from shared.models import Provider
 from shared.reasoning import (
     anthropic_thinking_params,
@@ -648,7 +650,78 @@ async def llm_call(
     appends a new assistant message (text + tool_use blocks) on each
     response. Tool results are appended as user messages with
     ``tool_result`` blocks.
+
+    Transient failures are retried here with backoff (issue #133).
+    Anything retrying cannot fix is raised as
+    :class:`~services.agent.failure.LLMCallError`, which carries the
+    classification so the driver can switch provider or explain itself
+    rather than surfacing a stack trace.
     """
+    from services.agent.failure import (
+        Action,
+        LLMCallError,
+        backoff_delay,
+        classify,
+    )
+
+    max_attempts = max(1, int(await get_setting("agent_llm_max_attempts", 3) or 3))
+    attempt = 0
+    last: Exception | None = None
+
+    while attempt < max_attempts:
+        attempt += 1
+        # A retry re-runs the whole request, so anything already streamed
+        # to the user would be sent twice. Count emissions and refuse to
+        # retry once the answer has started arriving: a duplicated half
+        # answer is worse than a clean failure.
+        emitted = 0
+
+        cb = stream_callback
+        if cb is not None:
+            async def cb(delta: str, _inner=stream_callback) -> None:
+                nonlocal emitted
+                emitted += 1
+                await _inner(delta)
+
+        try:
+            return await _dispatch(
+                provider, model, system_prompt, messages, tools,
+                max_tokens, stream, cb,
+            )
+        except Exception as exc:  # noqa: BLE001 - classified immediately
+            last = exc
+            failure = classify(exc)
+            if failure.action is not Action.retry or attempt >= max_attempts:
+                raise LLMCallError(failure, attempt) from exc
+            if emitted:
+                logger.warning(
+                    "not retrying %s after %d streamed tokens: %s",
+                    provider.kind, emitted, failure.kind.value,
+                )
+                raise LLMCallError(failure, attempt) from exc
+            delay = backoff_delay(attempt, failure.retry_after)
+            logger.warning(
+                "llm call failed (%s, attempt %d/%d), retrying in %.1fs",
+                failure.kind.value, attempt, max_attempts, delay,
+            )
+            await asyncio.sleep(delay)
+
+    # Unreachable: the loop either returns or raises. Kept so a future
+    # edit to the bounds cannot silently fall through to None.
+    raise LLMCallError(classify(last or RuntimeError("no attempt ran")), attempt)
+
+
+async def _dispatch(
+    provider: Provider,
+    model: str,
+    system_prompt: str,
+    messages: list[dict],
+    tools: list[dict],
+    max_tokens: int,
+    stream: bool,
+    stream_callback: Callable[[str], Awaitable[None]] | None,
+) -> LLMResponse:
+    """Route one attempt to the right provider adapter."""
     kind = _normalize_kind(provider.kind)
     if kind == "anthropic":
         return await _call_anthropic(
