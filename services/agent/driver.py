@@ -28,6 +28,7 @@ import jsonschema
 
 from services.agent import runs as runs_mod
 from services.agent.budget import check_budget, estimate_cost, record_usage
+from services.agent.failure import LLMCallError
 from services.agent.llm import LLMResponse, LLMToolUse, llm_call
 from services.agent.tools import all_tools_for_provider, get_tool
 from shared.app_settings import get_setting
@@ -131,6 +132,7 @@ DEFAULT_MAX_TURNS = 12
 DEFAULT_MAX_VLM_CALLS = 8
 DEFAULT_MAX_TOKENS_PER_CALL = 2048
 DEDUPE_LOOKBACK_TURNS = 2
+MAX_PROVIDER_SWITCHES = 2
 PARENT_CONTEXT_MAX_DEPTH = 3  # cap ancestor walk for conversation memory
 
 
@@ -145,6 +147,10 @@ class _LoopState:
     # below is only as good as this set, so it is filled from the raw
     # serialized result rather than from per-tool knowledge of id fields.
     seen_ids: set = field(default_factory=set)
+    # Provider switches this run. A fallback does not consume a turn, and
+    # the escalation ladder is finite, but a cap means a misconfigured
+    # ladder cannot spin here instead of answering.
+    provider_switches: int = 0
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -459,16 +465,34 @@ class AgentDriver:
                         streamed_text_parts.append(delta)
                         await self._emit(state, run_id, {"type": "synthesis_token", "delta": delta})
 
-                    response: LLMResponse = await llm_call(
-                        provider=provider,
-                        model=model,
-                        system_prompt=system_prompt,
-                        messages=messages,
-                        tools=tools,
-                        max_tokens=DEFAULT_MAX_TOKENS_PER_CALL,
-                        stream=True,
-                        stream_callback=_on_token,
-                    )
+                    try:
+                        response: LLMResponse = await llm_call(
+                            provider=provider,
+                            model=model,
+                            system_prompt=system_prompt,
+                            messages=messages,
+                            tools=tools,
+                            max_tokens=DEFAULT_MAX_TOKENS_PER_CALL,
+                            stream=True,
+                            stream_callback=_on_token,
+                        )
+                    except LLMCallError as exc:
+                        switched = await self._handle_call_failure(
+                            exc, provider, model, state, run_id, db
+                        )
+                        if switched is None:
+                            # Nothing left to try. Salvage whatever the run
+                            # already gathered rather than losing the tool
+                            # results it has paid for.
+                            await runs_mod.update_run(
+                                run_id, db,
+                                status="failed",
+                                error_message=f"{exc.kind.value}: {exc.failure.message}",
+                                ended_at=datetime.now(timezone.utc),
+                            )
+                            return
+                        provider, model = switched
+                        continue
 
                     # cost accounting + per-run rollup
                     call_cost = estimate_cost(provider.kind, model, response.tokens_in, response.tokens_out)
@@ -648,6 +672,53 @@ class AgentDriver:
             "latency_ms": latency_ms,
         })
         return result if isinstance(result, dict) else {"value": result}
+
+    # ── provider failure handling ─────────────────────────────────
+
+    async def _handle_call_failure(
+        self, exc, provider, model, state: _LoopState, run_id: uuid.UUID, db
+    ):
+        """Decide what a failed provider call means for this run.
+
+        Returns ``(provider, model)`` to retry the turn on, or None when
+        the run cannot continue. Retrying transient failures already
+        happened inside ``llm_call``; by the time we are here, either a
+        different provider is needed or nothing will help (issue #133).
+
+        The user-facing event carries the classified sentence rather than
+        the exception text: a provider's error body can be an HTML page or
+        carry a fragment of the API key.
+        """
+        from services.agent.failure import Action
+
+        failure = exc.failure
+        if failure.action is Action.fallback and state.provider_switches < MAX_PROVIDER_SWITCHES:
+            stronger = await self._stronger_provider(db, provider)
+            if stronger is not None:
+                state.provider_switches += 1
+                await self._emit(state, run_id, {
+                    "type": "model_escalated",
+                    "from": f"{provider.kind}/{model}",
+                    "to": f"{stronger.kind}/{stronger.default_model}",
+                    "reason": failure.kind.value,
+                })
+                return stronger, stronger.default_model
+
+        await self._emit(state, run_id, {
+            "type": "error",
+            "message": failure.message,
+            "failure_kind": failure.kind.value,
+            # Recoverable means "something other than the user could still
+            # fix this", which is what the frontend keys its retry affordance
+            # off. A bad API key is not recoverable by retrying.
+            "recoverable": failure.recoverable,
+            "attempts": exc.attempts,
+        })
+        logger.warning(
+            "run %s giving up after %d attempts: %s (%s)",
+            run_id, exc.attempts, failure.kind.value, failure.message,
+        )
+        return None
 
     # ── orientation ───────────────────────────────────────────────
 

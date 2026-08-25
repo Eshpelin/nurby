@@ -23,6 +23,10 @@ DEFAULTS: dict[str, Any] = {
     # journeys into person-to-vehicle edges. Promotion gates on distinct
     # DAYS, not sighting count: repetition inside one morning is a
     # coincidence, repetition across days is a habit.
+    # Agent provider calls. How many attempts one turn gets before the
+    # driver is told to switch provider or give up. Transient only:
+    # an auth or billing failure never retries.
+    "agent_llm_max_attempts": 3,
     "associations_enabled": True,
     "association_min_distinct_days": 3,
     # Household-wide daily AI digest.

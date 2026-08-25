@@ -720,3 +720,123 @@ def test_budget_exhaustion_never_escalates(monkeypatch):
     used, events = _escalation_run(monkeypatch, exhaust_budget=True, stronger=strong)
     assert all(model == "gemma3:4b" for _, model in used)
     assert not [e for e in events if e["type"] == "model_escalated"]
+
+
+# ── Provider failure handling (issue #133) ─────────────────────────
+
+
+def _failing_llm(monkeypatch, failures: list):
+    """Raise the given exceptions in order, then answer normally."""
+    it = iter(failures)
+
+    async def _llm_call(**kwargs):
+        try:
+            raise next(it)
+        except StopIteration:
+            return LLMResponse(stop_reason="end_turn", text="Recovered answer.",
+                               tool_uses=[], tokens_in=10, tokens_out=5)
+
+    monkeypatch.setattr(driver_mod, "llm_call", _llm_call)
+
+
+def _call_error(kind_name, action_name, message="nope"):
+    from services.agent.failure import Action, Failure, FailureKind, LLMCallError
+
+    return LLMCallError(
+        Failure(
+            kind=getattr(FailureKind, kind_name),
+            action=getattr(Action, action_name),
+            message=message,
+        ),
+        attempts=3,
+    )
+
+
+def _driver_run(monkeypatch, llm_exceptions, escalate_to=None):
+    run_id = uuid.uuid4()
+    run_row = _FakeRunRow()
+    factory, db = _fake_db_session(run_row)
+    _patch_runs(monkeypatch, run_row)
+    _patch_budget(monkeypatch, [_BudgetOk()] * 6)
+    _patch_get_setting(monkeypatch)
+    _failing_llm(monkeypatch, llm_exceptions)
+
+    if escalate_to is not None:
+        async def _escalate(self, db_, current):
+            return escalate_to
+        monkeypatch.setattr(driver_mod.AgentDriver, "_stronger_provider", _escalate)
+
+    events: list[dict] = []
+
+    async def _broadcast(rid, ev):
+        events.append(ev)
+
+    drv = driver_mod.AgentDriver(db_factory=factory, broadcast=_broadcast)
+    _run(drv.run(run_id=run_id, user=_FakeUser(), question="where is the cat?",
+                 provider=_FakeProvider(), model="m", parent_run_id=None))
+    return events, run_row
+
+
+def test_a_terminal_provider_failure_explains_itself(monkeypatch):
+    """The user gets a sentence they can act on, not a stack trace."""
+    events, run_row = _driver_run(
+        monkeypatch,
+        [_call_error("auth", "abort", "the provider rejected the API key")],
+    )
+
+    errors = [e for e in events if e["type"] == "error"]
+    assert len(errors) == 1
+    assert errors[0]["message"] == "the provider rejected the API key"
+    assert errors[0]["failure_kind"] == "auth"
+    assert errors[0]["recoverable"] is False
+    assert errors[0]["attempts"] == 3
+    assert run_row.status == "failed"
+
+
+def test_an_upstream_failure_switches_provider_and_finishes(monkeypatch):
+    """A run must not be lost because one model was busy."""
+    stronger = _FakeProvider(kind="openai")
+    stronger.default_model = "gpt-strong"
+
+    events, run_row = _driver_run(
+        monkeypatch,
+        [_call_error("upstream_rate_limit", "fallback")],
+        escalate_to=stronger,
+    )
+
+    escalations = [e for e in events if e["type"] == "model_escalated"]
+    assert len(escalations) == 1
+    assert escalations[0]["reason"] == "upstream_rate_limit"
+    assert escalations[0]["to"] == "openai/gpt-strong"
+    assert run_row.status == "completed"
+    assert run_row.final_answer == "Recovered answer."
+
+
+def test_a_fallback_with_nowhere_to_go_reports_the_failure(monkeypatch):
+    """No stronger provider configured. Say so rather than looping."""
+    events, run_row = _driver_run(
+        monkeypatch, [_call_error("upstream_rate_limit", "fallback")],
+    )
+
+    errors = [e for e in events if e["type"] == "error"]
+    assert errors and errors[0]["failure_kind"] == "upstream_rate_limit"
+    # Recoverable: a different provider could still fix this, unlike a bad key.
+    assert errors[0]["recoverable"] is True
+    assert run_row.status == "failed"
+
+
+def test_provider_switching_is_capped(monkeypatch):
+    """A misconfigured escalation ladder must not spin instead of
+    answering."""
+    stronger = _FakeProvider(kind="openai")
+    stronger.default_model = "gpt-strong"
+
+    events, run_row = _driver_run(
+        monkeypatch,
+        [_call_error("upstream_rate_limit", "fallback") for _ in range(6)],
+        escalate_to=stronger,
+    )
+
+    escalations = [e for e in events if e["type"] == "model_escalated"]
+    assert len(escalations) == driver_mod.MAX_PROVIDER_SWITCHES
+    assert run_row.status == "failed"
