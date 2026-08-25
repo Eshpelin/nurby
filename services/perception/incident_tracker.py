@@ -152,7 +152,7 @@ def resolve_subjects(person_detections: dict | None) -> list[dict]:
         # A held binding with no name is still a person we know; fall back
         # to the id so the subject stays stable rather than collapsing to
         # "unknown" for want of a display string.
-        _add("person", name or t.get("person_id"), name, "held")
+        _add("person", name or t.get("person_id"), name, t.get("bound_by") or "held")
 
     # Rung 1b. Faces matched this frame. Redundant with the tracks above
     # whenever the pipeline ran the binder, but observations written before

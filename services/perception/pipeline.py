@@ -757,6 +757,7 @@ class PerceptionPipeline:
             d["bound_person_id"] = ident.get("person_id")
             d["bound_person_name"] = ident.get("person_name")
             d["identity_state"] = ident.get("state")
+            d["identity_bound_by"] = ident.get("bound_by")
             tracks_payload.append({
                 "tracker_id": int(tid),
                 "bbox": d.get("bbox"),
@@ -764,6 +765,10 @@ class PerceptionPipeline:
                 "person_name": ident.get("person_name"),
                 "body_cluster_id": ident.get("body_cluster_id"),
                 "state": ident.get("state"),
+                # face | held | body. Which evidence produced the identity,
+                # carried so a consumer can weigh an appearance match
+                # differently from a face match.
+                "bound_by": ident.get("bound_by"),
             })
 
         # Cross-service HAR identity map. When the keyframe carries the ingestion HAR
