@@ -19,6 +19,12 @@ DEFAULTS: dict[str, Any] = {
     # Cross-camera journey idle window. Formerly hardcoded
     # JOURNEY_IDLE_SECONDS = 300 in journey_tracker.py.
     "journey_idle_seconds": 300,
+    # Entity associations. The background associator folds finalized
+    # journeys into person-to-vehicle edges. Promotion gates on distinct
+    # DAYS, not sighting count: repetition inside one morning is a
+    # coincidence, repetition across days is a habit.
+    "associations_enabled": True,
+    "association_min_distinct_days": 3,
     # Household-wide daily AI digest.
     "daily_digest_enabled": True,
     "daily_digest_hour": 7,  # 0-23 local time
