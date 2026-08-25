@@ -465,6 +465,34 @@ class RuleEngine:
         if trigger_type in ("incident_started", "incident_ended"):
             return False
 
+        # Association deviations: synthetic payloads from the associator
+        # when something breaks a learned habit, or when a controlled
+        # object is used by someone with no declared authorization. These
+        # carry a "reason" the notification can show, which is the whole
+        # point: a generic unknown-vehicle alert cannot say why it fired.
+        if data.get("event_kind") == "association":
+            is_unauthorized = data.get("deviation") == "unauthorized"
+            if trigger_type == "association_unauthorized":
+                if not is_unauthorized:
+                    return False
+            elif trigger_type == "association_deviation":
+                if is_unauthorized:
+                    return False
+                want = pattern.get("deviation")
+                if want and want != data.get("deviation"):
+                    return False
+            else:
+                return False
+            cam_filter = pattern.get("camera_id")
+            if cam_filter and str(cam_filter) != str(data.get("camera_id")):
+                return False
+            subject = pattern.get("subject_key")
+            if subject and str(subject) != str(data.get("subject_key")):
+                return False
+            return True
+        if trigger_type in ("association_deviation", "association_unauthorized"):
+            return False
+
         if trigger_type == "object_detected":
             label = pattern.get("label")
             detections = data.get("object_detections", {}).get("objects", [])

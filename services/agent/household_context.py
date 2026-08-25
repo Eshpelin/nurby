@@ -24,7 +24,13 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from shared.models import Camera, Observation, Person, Vehicle
+from shared.models import (
+    Camera,
+    EntityAssociation,
+    Observation,
+    Person,
+    Vehicle,
+)
 
 logger = logging.getLogger("nurby.agent.household_context")
 
@@ -34,6 +40,7 @@ CACHE_TTL_SECONDS = 6 * 3600
 MAX_CAMERAS = 12
 MAX_PEOPLE = 10
 MAX_VEHICLES = 8
+MAX_PATTERNS = 8
 MAX_LABELS_PER_CAMERA = 3
 # A camera with less than this in the window gets listed without a habit line
 # rather than one built from two frames.
@@ -102,7 +109,8 @@ def _camera_line(name: str, role: str, location: str | None, habits: dict | None
 
 
 def format_household_context(cameras: list[dict], people: list[dict],
-                             vehicles: list[dict]) -> str | None:
+                             vehicles: list[dict],
+                             patterns: list[dict] | None = None) -> str | None:
     """Render the block. None when there is nothing worth saying yet.
     Pure, for tests."""
     if not cameras:
@@ -137,6 +145,18 @@ def format_household_context(cameras: list[dict], people: list[dict],
             if v.get("plate"):
                 label += f" (plate {v['plate']})"
             lines.append("  - " + label)
+
+    if patterns:
+        lines.append("Established patterns (observed habits, not rules):")
+        for p in patterns[:MAX_PATTERNS]:
+            hours = p.get("usual_hours") or []
+            when = ""
+            if hours:
+                when = " around " + ", ".join(f"{h:02d}:00" for h in hours[:3])
+            lines.append(
+                f"  - {p['subject']} usually {p['relation']} {p['object']}"
+                f"{when} ({p['distinct_days']} separate days)."
+            )
 
     lines.append(
         "Treat all of the above as orientation only. It is a summary of the "
@@ -222,7 +242,30 @@ async def build_household_context(db, allowed_camera_ids) -> str | None:
         {"name": v.display_name, "plate": v.license_plate} for v in vehicle_rows
     ]
 
-    return format_household_context(cameras, people, vehicles)
+    # Established habits. Learned only: a declared authorization is policy
+    # and belongs in an answer about permissions, not in a block describing
+    # what usually happens.
+    pattern_rows = (await db.execute(
+        select(EntityAssociation)
+        .where(EntityAssociation.status == "established")
+        .where(EntityAssociation.source == "learned")
+        .order_by(EntityAssociation.distinct_days.desc())
+        .limit(MAX_PATTERNS)
+    )).scalars().all()
+    patterns = [
+        {
+            "subject": a.subject_key,
+            "relation": a.relation,
+            "object": a.object_label or a.object_key,
+            "distinct_days": int(a.distinct_days or 0),
+            "usual_hours": sorted(
+                int(h) for h, c in (a.hour_histogram or {}).items() if int(c) > 0
+            ),
+        }
+        for a in pattern_rows
+    ]
+
+    return format_household_context(cameras, people, vehicles, patterns)
 
 
 async def household_context(db, allowed_camera_ids) -> str | None:

@@ -114,7 +114,22 @@ def next_status(
     return "candidate"
 
 
-def fold(assoc: EntityAssociation, when: datetime, tz_name: str, min_days: int) -> bool:
+def bump_key(histogram: dict | None, key: str | None) -> dict:
+    """Increment a string-keyed counter, e.g. camera id. Pure, for tests."""
+    out = dict(histogram or {})
+    if not key:
+        return out
+    out[str(key)] = int(out.get(str(key), 0)) + 1
+    return out
+
+
+def fold(
+    assoc: EntityAssociation,
+    when: datetime,
+    tz_name: str,
+    min_days: int,
+    camera_id: str | None = None,
+) -> bool:
     """Fold one co-presence event into an edge, in place.
 
     Returns True when the edge was updated, False when it was skipped
@@ -133,6 +148,8 @@ def fold(assoc: EntityAssociation, when: datetime, tz_name: str, min_days: int) 
         assoc.last_day = day_key
     assoc.hour_histogram = bump(assoc.hour_histogram, hour, 24)
     assoc.dow_histogram = bump(assoc.dow_histogram, weekday, 7)
+    if camera_id:
+        assoc.camera_histogram = bump_key(assoc.camera_histogram, camera_id)
     if assoc.first_seen_at is None or when < assoc.first_seen_at:
         assoc.first_seen_at = when
     if assoc.last_seen_at is None or when > assoc.last_seen_at:
@@ -167,21 +184,30 @@ def journey_camera_ids(journey: Journey) -> list[uuid.UUID]:
     return out
 
 
-def vehicles_in(observations) -> dict[str, str | None]:
-    """``{vehicle_id: label}`` for vehicles identified in observations.
+def vehicles_in(observations) -> dict[str, dict]:
+    """``{vehicle_id: {"label", "camera_id"}}`` for identified vehicles.
 
     Only vehicles that resolved to a Vehicle row count. An unmatched
     detection is a box around something car-shaped, which is not an
-    identity and cannot carry an association. Pure, for tests.
+    identity and cannot carry an association. The first camera a vehicle
+    was seen on within the window is kept, which is where the pairing
+    happened. Pure, for tests.
     """
-    out: dict[str, str | None] = {}
+    out: dict[str, dict] = {}
     for obs in observations or []:
         payload = getattr(obs, "vehicle_detections", None) or {}
         for entry in payload.get("vehicles") or []:
             vid = entry.get("vehicle_id")
             if not vid:
                 continue
-            out.setdefault(str(vid), entry.get("identity_key"))
+            cam = getattr(obs, "camera_id", None)
+            out.setdefault(
+                str(vid),
+                {
+                    "label": entry.get("identity_key"),
+                    "camera_id": str(cam) if cam else None,
+                },
+            )
     return out
 
 
@@ -200,6 +226,7 @@ async def record_pairing(
     when: datetime,
     tz_name: str,
     min_days: int,
+    camera_id: str | None = None,
 ) -> EntityAssociation | None:
     """Fold one co-presence event into its edge, creating it if needed.
 
@@ -237,7 +264,7 @@ async def record_pairing(
     elif object_label and existing.object_label != object_label:
         existing.object_label = object_label
 
-    if not fold(existing, when, tz_name, min_days):
+    if not fold(existing, when, tz_name, min_days, camera_id=camera_id):
         return None
     return existing
 
@@ -265,13 +292,18 @@ async def process_journey(
         )
     ).scalars().all()
 
+    seen_vehicles = vehicles_in(rows)
+    await _check_deviations(
+        db, journey, seen_vehicles, when=start, tz_name=tz_name
+    )
+
     touched = 0
-    for vehicle_id, identity_key in vehicles_in(rows).items():
-        label = identity_key
+    for vehicle_id, seen in seen_vehicles.items():
+        label = seen.get("label")
         try:
             vehicle = await db.get(Vehicle, uuid.UUID(vehicle_id))
             if vehicle is not None:
-                label = vehicle.nickname or vehicle.display_name or identity_key
+                label = vehicle.nickname or vehicle.display_name or label
         except (ValueError, AttributeError, TypeError):
             vehicle = None
         edge = await record_pairing(
@@ -285,10 +317,112 @@ async def process_journey(
             when=start,
             tz_name=tz_name,
             min_days=min_days,
+            camera_id=seen.get("camera_id"),
         )
         if edge is not None:
             touched += 1
     return touched
+
+
+async def _check_deviations(
+    db: AsyncSession,
+    journey: Journey,
+    seen_vehicles: dict[str, dict],
+    *,
+    when: datetime,
+    tz_name: str,
+) -> None:
+    """Compare this journey against what the subject's edges expect.
+
+    Runs BEFORE the journey is folded in, so today's evidence has not yet
+    moved the expectation the comparison is made against. Never raises: a
+    missed alert must not cost the association it was derived from.
+
+    Detection latency is journey-finalization plus one tick, so an alert
+    lands minutes after the fact rather than instantly. That is the right
+    trade here: the alert is a statement about a completed visit, and
+    firing on a partial one would mean retracting it.
+    """
+    try:
+        from services.perception import deviations
+
+        edges = (
+            await db.execute(
+                select(EntityAssociation)
+                .where(EntityAssociation.subject_kind == journey.subject_kind)
+                .where(EntityAssociation.subject_key == journey.subject_key)
+                .where(EntityAssociation.relation == "uses")
+            )
+        ).scalars().all()
+        if not edges:
+            return
+        learned = [e for e in edges if e.source == "learned"]
+        cameras = [str(c) for c in journey_camera_ids(journey)]
+        present = set(seen_vehicles)
+
+        for edge in learned:
+            if not deviations.is_alertable(edge):
+                continue
+
+            if str(edge.object_key) in present:
+                # The expected pairing happened. Only its timing can be odd.
+                seen = seen_vehicles.get(str(edge.object_key)) or {}
+                event = deviations.detect_wrong_time(
+                    edge,
+                    camera_id=seen.get("camera_id") or (cameras[0] if cameras else None),
+                    when=when,
+                    tz_name=tz_name,
+                )
+                if event:
+                    await deviations.emit(event)
+                continue
+
+            # A different object where this one usually is.
+            for vehicle_id, seen in seen_vehicles.items():
+                event = deviations.detect_unexpected_object(
+                    edge,
+                    present_object_key=vehicle_id,
+                    camera_id=seen.get("camera_id") or "",
+                    when=when,
+                    tz_name=tz_name,
+                )
+                if event:
+                    await deviations.emit(event)
+
+        # Policy, not habit. Any use of a controlled object by someone with
+        # no declared authorization for it, regardless of how established
+        # the habit is.
+        declared = await _declared_for(db, list(present))
+        if declared:
+            for vehicle_id, seen in seen_vehicles.items():
+                probe = EntityAssociation(
+                    subject_kind=journey.subject_kind,
+                    subject_key=journey.subject_key,
+                    object_kind="vehicle",
+                    object_key=vehicle_id,
+                    object_label=seen.get("label"),
+                    relation="uses",
+                    source="learned",
+                )
+                event = deviations.detect_unauthorized(probe, declared)
+                if event:
+                    await deviations.emit(event)
+    except Exception:
+        logger.exception("deviation check failed for journey %s", journey.id)
+
+
+async def _declared_for(db: AsyncSession, object_keys: list[str]):
+    """Every declared authorized_for edge over these objects."""
+    if not object_keys:
+        return []
+    return (
+        await db.execute(
+            select(EntityAssociation)
+            .where(EntityAssociation.relation == "authorized_for")
+            .where(EntityAssociation.source == "declared")
+            .where(EntityAssociation.object_key.in_(object_keys))
+        )
+    ).scalars().all()
 
 
 # ---- worker --------------------------------------------------------------
@@ -307,6 +441,9 @@ class Associator:
 
     def __init__(self) -> None:
         self._stopping = asyncio.Event()
+        # (edge_id, local_day) pairs already alerted on, so an absence
+        # fires once a day rather than on every tick until midnight.
+        self._absence_fired: set[tuple[str, str]] = set()
 
     def stop(self) -> None:
         self._stopping.set()
@@ -328,6 +465,46 @@ class Associator:
         finally:
             logger.info("associator stopped")
 
+
+    async def _sweep_absences(self, tz_name: str) -> None:
+        """Fire for habits that should have happened by now and have not.
+
+        Absence has no event to hang off, so it needs a sweep. Each edge
+        fires at most once per local day: detect_expected_absent checks
+        last_day, and _absence_fired keeps the tick from repeating the
+        same alert every five minutes until midnight.
+        """
+        try:
+            from services.perception import deviations
+
+            now = datetime.now(timezone.utc)
+            today, _, _ = local_buckets(now, tz_name)
+            async with async_session() as db:
+                edges = (
+                    await db.execute(
+                        select(EntityAssociation)
+                        .where(EntityAssociation.status == "established")
+                        .where(EntityAssociation.source == "learned")
+                        .limit(500)
+                    )
+                ).scalars().all()
+            for edge in edges:
+                marker = (str(edge.id), today)
+                if marker in self._absence_fired:
+                    continue
+                event = deviations.detect_expected_absent(
+                    edge, now=now, tz_name=tz_name
+                )
+                if event:
+                    await deviations.emit(event)
+                    self._absence_fired.add(marker)
+            # Yesterday's markers are dead weight; a day key never repeats.
+            self._absence_fired = {
+                m for m in self._absence_fired if m[1] == today
+            }
+        except Exception:
+            logger.exception("absence sweep failed")
+
     async def _tick(self) -> None:
         if not bool(await get_setting("associations_enabled", True)):
             return
@@ -335,6 +512,7 @@ class Associator:
         min_days = int(
             await get_setting("association_min_distinct_days", DEFAULT_MIN_DISTINCT_DAYS)
         )
+        await self._sweep_absences(tz_name)
         async with async_session() as db:
             pending = (
                 await db.execute(

@@ -38,6 +38,7 @@ from services.agent.access import accessible_camera_ids
 from shared.models import (
     Camera,
     DailyDigest,
+    EntityAssociation,
     Event,
     Incident,
     Journey,
@@ -1478,6 +1479,100 @@ _QUERY_RELATIONSHIPS_SCHEMA = {
 }
 
 
+
+_GET_ASSOCIATIONS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "subject": {
+            "type": "string",
+            "description": (
+                "Person name to look up patterns for. Omit to list every "
+                "established pattern in the household."
+            ),
+        },
+        "relation": {
+            "type": "string",
+            "enum": ["uses", "accompanies", "arrives_with", "authorized_for"],
+            "description": "Only this kind of relationship. Omit for any.",
+        },
+        "include_candidates": {
+            "type": "boolean",
+            "description": (
+                "Include patterns that have not recurred on enough separate "
+                "days to be established yet. Default false."
+            ),
+        },
+    },
+    "required": [],
+    "additionalProperties": False,
+}
+
+
+async def get_associations(
+    ctx: dict,
+    *,
+    subject: str | None = None,
+    relation: str | None = None,
+    include_candidates: bool = False,
+) -> dict:
+    """Learned habits and declared authorizations between identities.
+
+    Answers "which car does Ahmed use" directly, instead of the agent
+    stitching journeys together and guessing. Each row carries how often
+    the pairing has been seen, over how many separate days, and the hours
+    it usually happens at, so the answer can be honest about how strong
+    the pattern is.
+    """
+    db = ctx["db"]
+    q = select(EntityAssociation)
+    if subject:
+        q = q.where(EntityAssociation.subject_key.ilike(subject))
+    if relation:
+        q = q.where(EntityAssociation.relation == relation)
+    if include_candidates:
+        q = q.where(EntityAssociation.status.in_(("established", "candidate")))
+    else:
+        q = q.where(EntityAssociation.status == "established")
+    q = q.order_by(
+        EntityAssociation.distinct_days.desc(),
+        EntityAssociation.evidence_count.desc(),
+    ).limit(50)
+
+    rows = (await db.execute(q)).scalars().all()
+    out = []
+    for r in rows:
+        hours = sorted(
+            (int(h) for h, c in (r.hour_histogram or {}).items() if int(c) > 0)
+        )
+        out.append({
+            "association_id": str(r.id),
+            "subject": r.subject_key,
+            "subject_kind": r.subject_kind,
+            "relation": r.relation,
+            "object": r.object_label or r.object_key,
+            "object_kind": r.object_kind,
+            # learned = observed habit, declared = asserted by an admin.
+            # The agent must not present the first as a rule or the second
+            # as a pattern.
+            "source": r.source,
+            "status": r.status,
+            "times_seen": int(r.evidence_count or 0),
+            "distinct_days": int(r.distinct_days or 0),
+            "usual_hours": hours,
+            "first_seen": r.first_seen_at.isoformat() if r.first_seen_at else None,
+            "last_seen": r.last_seen_at.isoformat() if r.last_seen_at else None,
+        })
+    return {
+        "associations": out,
+        "count": len(out),
+        "note": (
+            "learned rows are observed habits and may be wrong; declared "
+            "rows are authorizations set by an administrator. Never state a "
+            "learned habit as a rule."
+        ),
+    }
+
+
 def _looks_like_uuid(value: str) -> bool:
     return bool(_UUID_RE.match(value.strip()))
 
@@ -2884,6 +2979,21 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
         ),
         "input_schema": _GET_VEHICLES_SCHEMA,
         "fn": get_vehicles,
+        "side_effect": "read",
+        "cost_class": "cheap",
+    },
+    {
+        "name": "get_associations",
+        "description": (
+            "Learned habits and declared authorizations between "
+            "identities. Answers 'which car does Ahmed use', 'who drives "
+            "the Harrier', 'who is authorized for forklift 3', 'what time "
+            "does he usually leave'. Each row says how many separate DAYS "
+            "the pattern held, which is what makes it a habit rather than "
+            "a coincidence. Cheap; one indexed lookup."
+        ),
+        "input_schema": _GET_ASSOCIATIONS_SCHEMA,
+        "fn": get_associations,
         "side_effect": "read",
         "cost_class": "cheap",
     },

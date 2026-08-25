@@ -169,7 +169,7 @@ def test_bump_ignores_out_of_range_slots():
 def test_vehicles_in_ignores_unidentified_detections():
     """A box around something car-shaped is not an identity."""
     rows = [
-        SimpleNamespace(vehicle_detections={"vehicles": [
+        SimpleNamespace(camera_id=None, vehicle_detections={"vehicles": [
             {"vehicle_id": None, "identity_key": None},
             {"vehicle_id": "v-1", "identity_key": "ABC123"},
         ]}),
@@ -178,7 +178,9 @@ def test_vehicles_in_ignores_unidentified_detections():
         ]}),
         SimpleNamespace(vehicle_detections=None),
     ]
-    assert vehicles_in(rows) == {"v-1": "ABC123"}
+    assert vehicles_in(rows) == {
+        "v-1": {"label": "ABC123", "camera_id": None}
+    }
 
 
 def test_journey_camera_ids_dedupes_and_skips_junk():
