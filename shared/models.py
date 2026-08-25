@@ -1283,8 +1283,85 @@ class Journey(Base):
     summary_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_provider_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
+    # When the associator folded this journey into entity associations.
+    # Null means not yet processed. A column rather than a cursor so the
+    # pass is idempotent and cannot skip a journey by drifting.
+    associations_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class EntityAssociation(Base):
+    """A learned or declared edge between two identities.
+
+    Nothing in the schema recorded that two identities keep showing up
+    together, so "which car does Ahmed use" and "is this operator
+    authorized for that forklift" were unanswerable even though Person
+    and Vehicle both carry stable identities (issue #148).
+
+    Subjects are keyed the way journeys key them (``subject_kind`` /
+    ``subject_key``, e.g. ``person`` / ``"Ahmed"``) so an edge joins
+    straight onto the journey history it was derived from. Person display
+    names carry a case-insensitive unique index, so that key is stable.
+    Objects are keyed by row id, with ``object_label`` denormalized for
+    display, so renaming a vehicle does not orphan its edges.
+
+    ``source`` is the load-bearing field. A ``learned`` edge is inferred
+    from co-presence and is a statement about habit. A ``declared`` edge
+    is asserted by an administrator and is a statement about policy. They
+    must never be conflated: an authorization is not something to infer
+    from someone having driven a forklift twice.
+
+    Promotion gates on ``distinct_days``, not ``evidence_count``. A van
+    idling beside someone for twenty consecutive keyframes is one event,
+    and counting observations would mint a permanent fact out of a single
+    morning.
+
+    Curator invariants, shared with the household-facts work: never
+    auto-delete, only archive; the user can confirm or reject; a rejected
+    edge is never revived by later evidence.
+    """
+
+    __tablename__ = "entity_associations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    subject_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    subject_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    object_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    object_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    object_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # uses | accompanies | arrives_with | authorized_for
+    relation: Mapped[str] = mapped_column(String(32), nullable=False, default="uses")
+    # learned (inferred from co-presence) | declared (asserted by an admin)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="learned")
+    # candidate | established | archived | rejected
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="candidate")
+    user_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    evidence_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    distinct_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Last local calendar date folded in, as YYYY-MM-DD in household time.
+    # Guards distinct_days against a second sighting the same day counting
+    # as a second day.
+    last_day: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # 24 and 7 slot counters, in household-local time, so "he leaves around
+    # 8am" is answerable without rescanning history.
+    hour_histogram: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    dow_histogram: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "subject_kind", "subject_key", "object_kind", "object_key",
+            "relation", "source",
+            name="uq_entity_association",
+        ),
     )
 
 
