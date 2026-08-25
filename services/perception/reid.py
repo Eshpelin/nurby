@@ -37,7 +37,7 @@ from sqlalchemy import select
 
 from shared.config import settings
 from shared.database import async_session
-from shared.models import BodyCluster, BodyClusterSample, FaceCluster
+from shared.models import BodyCluster, BodyClusterSample, FaceCluster, Person
 
 logger = logging.getLogger("nurby.perception.reid")
 
@@ -339,10 +339,19 @@ class BodyReID:
             # Stamp Person identity on the detection when we can. Lets
             # downstream (Smart Track identity gate, UI) treat body
             # matches as first-class identity hits.
-            resolved_pid = person_id or await self._cluster_person_id(best_id)
-            if resolved_pid is not None:
-                det["person_id"] = str(resolved_pid)
-                det.setdefault("person_via", "face" if person_id else "body")
+            if person_id is not None:
+                det["person_id"] = str(person_id)
+                det.setdefault("person_via", "face")
+            else:
+                # No face this frame, but this cluster was face-confirmed
+                # to a Person on some earlier frame. Carry the name too:
+                # without it the identity binder can hold the id but has
+                # nothing to render or key a subject on (issue #146).
+                resolved_pid, resolved_name = await self._cluster_person(best_id)
+                if resolved_pid is not None:
+                    det["person_id"] = str(resolved_pid)
+                    det.setdefault("person_name", resolved_name)
+                    det.setdefault("person_via", "body")
             return best_id
 
         new_id = await self._create_cluster(
@@ -355,8 +364,21 @@ class BodyReID:
             det.setdefault("person_via", "face")
         return new_id
 
-    async def _cluster_person_id(self, cluster_id: uuid.UUID) -> uuid.UUID | None:
-        """Small cached lookup of cluster -> person_id."""
+    async def _cluster_person(
+        self, cluster_id: uuid.UUID
+    ) -> tuple[uuid.UUID | None, str | None]:
+        """Cached lookup of body cluster -> (person_id, display_name).
+
+        Runs on the keyframe path, so the cache matters: without it every
+        body detection of a known person would be a database round-trip.
+
+        A miss is cached too, since most clusters never get named and
+        re-asking on every frame would be the common case. That means a
+        cluster named while perception is running keeps resolving to None
+        until the cache is cleared. TTL invalidation is the honest fix and
+        is worth doing when cluster naming becomes routine; today naming
+        is rare enough that a restart covers it.
+        """
         cache = getattr(self, "_pid_cache", None)
         if cache is None:
             cache = {}
@@ -367,16 +389,18 @@ class BodyReID:
             async with async_session() as db:
                 row = (
                     await db.execute(
-                        select(BodyCluster.person_id).where(BodyCluster.id == cluster_id)
+                        select(BodyCluster.person_id, Person.display_name)
+                        .join(Person, Person.id == BodyCluster.person_id, isouter=True)
+                        .where(BodyCluster.id == cluster_id)
                     )
                 ).first()
-                pid = row[0] if row else None
+                resolved = (row[0], row[1]) if row else (None, None)
                 if len(cache) > 2000:
                     cache.clear()
-                cache[cluster_id] = pid
-                return pid
+                cache[cluster_id] = resolved
+                return resolved
         except Exception:
-            return None
+            return (None, None)
 
     # ------------------------------------------------------------------
     # Internals

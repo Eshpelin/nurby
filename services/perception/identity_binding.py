@@ -20,8 +20,17 @@ v1 weakness this fixes. Identity has three honest states, never invented:
 - ``body_cluster_id`` only (a re-identified body with no confirmed Person),
 - neither (an unknown, transient person).
 
+A track can reach the first state two ways, and ``bound_by`` says which: ``face`` (a face
+matched on this very frame), ``held`` (a face matched earlier on this track), or ``body``
+(no face at all, but body re-identification resolved the track's appearance cluster to a
+Person it was face-confirmed against previously). The three are the same *state* and
+distinctly different *claims*, so the rung travels with the identity rather than being
+flattened away.
+
 Guardian-facing surfaces must only show actions for the ``person_id`` state; the other two
-are stored without identity or dropped, never shown to a family.
+are stored without identity or dropped, never shown to a family. Guardian's own HAR path
+binds through :func:`bind_faces_to_tracks` directly, which is face-only, so a body-derived
+identity never reaches it.
 
 The module is pure and side-effect free (state is an in-memory dict keyed by camera) so the
 binding contract is unit-testable without a pipeline, a tracker, or a database. The same
@@ -157,6 +166,10 @@ class IdentityBinder:
         present_ids: set[int] = set()
         present_track_box: dict[int, list] = {}
         present_body: dict[int, str] = {}
+        # Tracks whose Person identity came from body re-identification
+        # rather than from a face this frame. reid stamps these onto the
+        # detection as person_id + person_via="body".
+        present_body_person: dict[int, dict] = {}
         for t in person_tracks or []:
             tid = t.get("tracker_id")
             if tid is None or not _valid_box(t.get("bbox")):
@@ -166,6 +179,13 @@ class IdentityBinder:
             present_track_box[tid] = t["bbox"]
             if t.get("body_cluster_id"):
                 present_body[tid] = str(t["body_cluster_id"])
+            if t.get("person_via") == "body" and t.get("person_id"):
+                present_body_person[tid] = {
+                    "person_id": str(t["person_id"]),
+                    "person_name": (
+                        str(t["person_name"]) if t.get("person_name") else None
+                    ),
+                }
 
         # 1. Apply this frame's face->track bindings (closer match can overwrite).
         fresh = bind_faces_to_tracks(person_tracks, faces)
@@ -203,6 +223,31 @@ class IdentityBinder:
                     "person_name": b.person_name,
                     "body_cluster_id": present_body.get(tid),
                     "state": "person",
+                    # A face landed on this track THIS frame, versus a
+                    # binding held from an earlier one. Same claim, made
+                    # at different distances from the evidence.
+                    "bound_by": "face" if tid in fresh else "held",
+                }
+                continue
+
+            # 4b. No face binding, but body re-identification resolved this
+            # track's cluster to a Person on an earlier frame. That is a
+            # real identity claim and was being thrown away (issue #146):
+            # reid stamps person_id on the detection and the binder
+            # reported state="body", person_id=None.
+            #
+            # Deliberately NOT written into ``held``. A face binding is
+            # authoritative and persists; this one is recomputed from the
+            # body evidence on every frame, so it disappears the moment the
+            # appearance match does rather than outliving it.
+            via_body = present_body_person.get(tid)
+            if via_body is not None:
+                result[tid] = {
+                    "person_id": via_body["person_id"],
+                    "person_name": via_body["person_name"],
+                    "body_cluster_id": present_body.get(tid),
+                    "state": "person",
+                    "bound_by": "body",
                 }
             elif tid in present_body:
                 result[tid] = {
@@ -210,6 +255,7 @@ class IdentityBinder:
                     "person_name": None,
                     "body_cluster_id": present_body[tid],
                     "state": "body",
+                    "bound_by": "body",
                 }
             else:
                 result[tid] = {
@@ -217,16 +263,25 @@ class IdentityBinder:
                     "person_name": None,
                     "body_cluster_id": None,
                     "state": "unknown",
+                    "bound_by": None,
                 }
         return result
 
     def identity_for(self, camera_id, tracker_id) -> dict | None:
         """The held identity for a track, or None if unbound. Does not expire here; call
-        ``update`` to drive expiry."""
+        ``update`` to drive expiry.
+
+        Face-derived only. Body-derived identities are recomputed per frame inside
+        ``update`` and are deliberately not held, so they never appear here."""
         b = self._state.get(str(camera_id), {}).get(int(tracker_id))
         if b is None:
             return None
-        return {"person_id": b.person_id, "person_name": b.person_name, "state": "person"}
+        return {
+            "person_id": b.person_id,
+            "person_name": b.person_name,
+            "state": "person",
+            "bound_by": "held",
+        }
 
     def reset(self, camera_id=None) -> None:
         if camera_id is None:
