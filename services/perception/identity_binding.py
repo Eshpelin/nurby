@@ -20,12 +20,17 @@ v1 weakness this fixes. Identity has three honest states, never invented:
 - ``body_cluster_id`` only (a re-identified body with no confirmed Person),
 - neither (an unknown, transient person).
 
-A track can reach the first state two ways, and ``bound_by`` says which: ``face`` (a face
-matched on this very frame), ``held`` (a face matched earlier on this track), or ``body``
-(no face at all, but body re-identification resolved the track's appearance cluster to a
-Person it was face-confirmed against previously). The three are the same *state* and
-distinctly different *claims*, so the rung travels with the identity rather than being
-flattened away.
+A track can reach the first state four ways, and ``bound_by`` says which:
+- ``face``: a face matched on this very frame.
+- ``held``: a face matched earlier on this track, held through occlusion.
+- ``body``: no face at all, but body re-identification resolved this track's appearance
+  cluster to a Person it was face-confirmed against previously.
+- ``handoff``: no face and no local binding, but this body cluster was bound to a Person
+  recently on another camera (or before a restart). See
+  :mod:`services.perception.identity_handoff`.
+
+They are the same *state* and meaningfully different *claims*, so the rung travels with
+the identity rather than being flattened away.
 
 Guardian-facing surfaces must only show actions for the ``person_id`` state; the other two
 are stored without identity or dropped, never shown to a family. Guardian's own HAR path
@@ -33,9 +38,11 @@ binds through :func:`bind_faces_to_tracks` directly, which is face-only, so a bo
 identity never reaches it.
 
 The module is pure and side-effect free (state is an in-memory dict keyed by camera) so the
-binding contract is unit-testable without a pipeline, a tracker, or a database. The same
-logic serves keyframe binding in perception and, later, dense-track binding in ingestion via
-a shared Redis map; only the source of the track boxes differs.
+binding contract is unit-testable without a pipeline, a tracker, or a database. The
+cross-camera hand-off map is passed *into* ``update`` and the entries it may publish come
+back out of :func:`writes_for`, so Redis stays on the caller's side of the boundary and
+this file keeps its no-IO property. The same logic serves keyframe binding in perception
+and dense-track binding in ingestion; only the source of the track boxes differs.
 """
 
 from __future__ import annotations
@@ -154,11 +161,25 @@ class IdentityBinder:
         # camera_id -> {tracker_id -> Binding}
         self._state: dict[str, dict[int, Binding]] = {}
 
-    def update(self, camera_id, person_tracks, faces, *, now: float | None = None) -> dict[int, dict]:
+    def update(
+        self,
+        camera_id,
+        person_tracks,
+        faces,
+        *,
+        now: float | None = None,
+        handoff: dict[str, dict] | None = None,
+    ) -> dict[int, dict]:
         """Fold this keyframe's face hits into the held bindings and expire stale ones.
         Returns the current ``{tracker_id: identity}`` for tracks present this frame, where
-        identity is ``{person_id, person_name, body_cluster_id, state}`` and ``state`` is one
-        of ``person`` | ``body`` | ``unknown``."""
+        identity is ``{person_id, person_name, body_cluster_id, state, bound_by}`` and
+        ``state`` is one of ``person`` | ``body`` | ``unknown``.
+
+        ``handoff`` is an optional ``{body_cluster_id: {person_id, person_name}}`` map
+        resolved elsewhere (see :mod:`services.perception.identity_handoff`), used to
+        recover the identity of a track arriving on a camera it has no local binding on.
+        Passed in rather than fetched here so this class stays synchronous and pure: the
+        binding contract remains testable without Redis, a pipeline, or a database."""
         now = time.monotonic() if now is None else now
         cam = str(camera_id)
         held = self._state.setdefault(cam, {})
@@ -240,7 +261,29 @@ class IdentityBinder:
             # authoritative and persists; this one is recomputed from the
             # body evidence on every frame, so it disappears the moment the
             # appearance match does rather than outliving it.
+            # 4c. Nothing local, but this track's body cluster was bound to a
+            # Person on another camera (or before a restart) recently enough
+            # to still be the same visit. This is the cross-camera hand-off:
+            # a lookup instead of waiting for a fresh face (issue #147).
+            #
+            # Ranked below 4b because reid's cluster link is a deliberate,
+            # face-confirmed database record, while this is a recent binding
+            # that happens to still be inside its TTL. They agree in every
+            # ordinary case; when they disagree, prefer the recorded one.
             via_body = present_body_person.get(tid)
+            if via_body is None:
+                bc = present_body.get(tid)
+                handed = (handoff or {}).get(bc) if bc else None
+                if handed and handed.get("person_id"):
+                    result[tid] = {
+                        "person_id": str(handed["person_id"]),
+                        "person_name": handed.get("person_name"),
+                        "body_cluster_id": bc,
+                        "state": "person",
+                        "bound_by": "handoff",
+                    }
+                    continue
+
             if via_body is not None:
                 result[tid] = {
                     "person_id": via_body["person_id"],
@@ -288,3 +331,35 @@ class IdentityBinder:
             self._state.clear()
         else:
             self._state.pop(str(camera_id), None)
+
+
+# The rungs whose identity came from a face, directly or held from an earlier
+# frame on the same track. Only these may be published to the cross-camera
+# hand-off map. A binding recovered FROM the map ("handoff") or inferred from
+# appearance alone ("body") is excluded on purpose: if a lookup could write
+# itself back, an identity would refresh its own TTL every time it was read and
+# would never expire, which is exactly how a wrong identity becomes permanent.
+PUBLISHABLE_RUNGS = frozenset({"face", "held"})
+
+
+def writes_for(identities) -> dict[str, dict]:
+    """The hand-off entries a frame's identities may publish.
+
+    Takes the ``{tracker_id: identity}`` mapping ``IdentityBinder.update``
+    returns and produces ``{body_cluster_id: {person_id, person_name}}`` for
+    the face-derived bindings that carry a body cluster. Pure, for tests."""
+    out: dict[str, dict] = {}
+    for ident in (identities or {}).values():
+        if not ident:
+            continue
+        if ident.get("bound_by") not in PUBLISHABLE_RUNGS:
+            continue
+        bc = ident.get("body_cluster_id")
+        pid = ident.get("person_id")
+        if not bc or not pid:
+            continue
+        out[str(bc)] = {
+            "person_id": str(pid),
+            "person_name": ident.get("person_name"),
+        }
+    return out

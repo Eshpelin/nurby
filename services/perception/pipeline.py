@@ -747,7 +747,41 @@ class PerceptionPipeline:
         if binder is None:
             binder = self._IdentityBinder()
             self._binders[camera_id] = binder
-        track_identity = binder.update(camera_id, person_dets, faces)
+        # Cross-camera hand-off. A tracker_id means nothing on a camera the
+        # subject just walked onto, but their body cluster does, so look up
+        # what that cluster was bound to elsewhere before deciding identity.
+        # Best-effort: no hand-off just means we wait for a face, which is
+        # the behaviour that predates it.
+        handoff_map: dict[str, dict] = {}
+        try:
+            from services.perception import identity_handoff
+
+            frame_clusters = [
+                d.get("body_cluster_id") for d in person_dets if d.get("body_cluster_id")
+            ]
+            if frame_clusters:
+                handoff_map = await identity_handoff.lookup(
+                    await self._get_redis(), frame_clusters
+                )
+        except Exception:
+            logger.debug("identity hand-off lookup failed", exc_info=True)
+
+        track_identity = binder.update(
+            camera_id, person_dets, faces, handoff=handoff_map
+        )
+
+        # Publish this frame's face-derived identities so the next camera can
+        # pick them up. writes_for filters to face evidence only, so a
+        # recovered hand-off can never refresh its own TTL.
+        try:
+            from services.perception import identity_handoff as _handoff
+            from services.perception.identity_binding import writes_for
+
+            writes = writes_for(track_identity)
+            if writes:
+                await _handoff.publish(await self._get_redis(), writes)
+        except Exception:
+            logger.debug("identity hand-off publish failed", exc_info=True)
         tracks_payload = []
         for d in person_dets:
             tid = d.get("tracker_id")
