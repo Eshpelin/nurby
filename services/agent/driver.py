@@ -26,6 +26,7 @@ from typing import Any, Awaitable, Callable
 
 import jsonschema
 
+from services.agent import empty_guard
 from services.agent import runs as runs_mod
 from services.agent.budget import check_budget, estimate_cost, record_usage
 from services.agent.failure import LLMCallError
@@ -133,6 +134,10 @@ DEFAULT_MAX_VLM_CALLS = 8
 DEFAULT_MAX_TOKENS_PER_CALL = 2048
 DEDUPE_LOOKBACK_TURNS = 2
 MAX_PROVIDER_SWITCHES = 2
+# What forced synthesis renders when the model produced nothing either.
+# It is a status line, not an answer, so a caller deciding whether a run
+# actually said something must not count it (see _is_real_answer).
+NO_SYNTHESIS_TEXT = "(no answer produced; investigation halted before synthesis)"
 PARENT_CONTEXT_MAX_DEPTH = 3  # cap ancestor walk for conversation memory
 
 
@@ -151,6 +156,10 @@ class _LoopState:
     # the escalation ladder is finite, but a cap means a misconfigured
     # ladder cannot spin here instead of answering.
     provider_switches: int = 0
+    # Consecutive empty completions, and what they have cost. Cleared by
+    # any real answer: one empty reply then an answer is noise.
+    empty_attempts: list = field(default_factory=list)
+    empty_streak_cost_cents: int = 0
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -526,6 +535,68 @@ class AgentDriver:
                     # text or end_turn => final answer.
                     if response.stop_reason in {"end_turn", "stop"} or not response.tool_uses:
                         final_text = response.text or "".join(streamed_text_parts)
+
+                        if empty_guard.is_empty_answer(final_text, response.tool_uses):
+                            # Storing this as a completed run would look like
+                            # success to the user and to every metric over
+                            # run status (issue #137).
+                            state.empty_attempts.append(empty_guard.EmptyAttempt(
+                                provider=provider.kind,
+                                model=model,
+                                stop_reason=response.stop_reason or "",
+                            ))
+                            state.empty_streak_cost_cents += call_cost
+                            await self._emit(state, run_id, {
+                                "type": "empty_response",
+                                "attempt": len(state.empty_attempts),
+                                "stop_reason": response.stop_reason,
+                            })
+                            if empty_guard.should_retry(
+                                state.empty_attempts, state.empty_streak_cost_cents
+                            ):
+                                messages.append({
+                                    "role": "user",
+                                    "content": empty_guard.nudge_for(state.empty_attempts),
+                                })
+                                state.turn_index += 1
+                                continue
+                            # Out of retries. Try once for a partial answer
+                            # off the evidence already gathered, and never
+                            # record silence as an answer.
+                            final_text = await self._forced_synthesis(
+                                provider, model, system_prompt, messages, state, run_id,
+                                db=db, escalate=True,
+                            )
+                            final_text = await self._finalize_answer(
+                                final_text, state, run_id
+                            )
+                            salvaged = _is_real_answer(final_text)
+                            await runs_mod.update_run(
+                                run_id, db,
+                                status="completed" if salvaged else "no_answer",
+                                final_answer=final_text,
+                                error_message=None if salvaged else empty_guard.describe(
+                                    state.empty_attempts
+                                ),
+                                ended_at=datetime.now(timezone.utc),
+                                latency_ms=int((time.time() - state.started_at) * 1000),
+                            )
+                            if not salvaged:
+                                await self._emit(state, run_id, {
+                                    "type": "error",
+                                    "message": empty_guard.describe(state.empty_attempts),
+                                    "failure_kind": "no_answer",
+                                    "recoverable": True,
+                                })
+                            await self._emit_done(
+                                state, run_id, final_text, run_row, partial=True
+                            )
+                            return
+
+                        # A real answer clears the streak: one empty reply
+                        # followed by an answer is noise, not a pattern.
+                        state.empty_attempts.clear()
+                        state.empty_streak_cost_cents = 0
                         final_text = await self._finalize_answer(final_text, state, run_id)
                         await runs_mod.update_run(run_id, db,
                                                   status="completed",
@@ -798,7 +869,7 @@ class AgentDriver:
                 max_tokens=DEFAULT_MAX_TOKENS_PER_CALL,
                 stream=False,
             )
-            text = resp.text or "(no answer produced; investigation halted before synthesis)"
+            text = resp.text or NO_SYNTHESIS_TEXT
         except Exception as exc:
             logger.exception("forced synthesis failed")
             text = f"(investigation halted: {exc})"
@@ -831,6 +902,19 @@ class AgentDriver:
         if which == "cost":
             return int(row.cost_cents or 0)
         return 0
+
+
+def _is_real_answer(text: str | None) -> bool:
+    """Whether a finalized answer actually says something.
+
+    Forced synthesis substitutes a status line when the model produced
+    nothing, and a run whose entire output is that line has not answered
+    anything. Counting it as an answer would recreate the bug this guard
+    exists to fix, one layer further down. Pure, for tests."""
+    body = (text or "").strip()
+    if not body:
+        return False
+    return body != NO_SYNTHESIS_TEXT and not body.startswith("(investigation halted")
 
 
 # ── Citation extractor ───────────────────────────────────────────────

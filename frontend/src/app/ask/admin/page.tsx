@@ -16,6 +16,7 @@ const STATUS_PILL: Record<RunStatus, string> = {
   failed: "bg-red-500/20 text-red-400 border-red-500/30",
   cancelled: "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
   budget_exhausted: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+  no_answer: "bg-amber-500/20 text-amber-300 border-amber-500/30",
 };
 
 function fmtCents(c: number): string { return `$${(c / 100).toFixed(2)}`; }

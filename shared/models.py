@@ -1676,7 +1676,8 @@ class AgentRun(Base):
     )
     question: Mapped[str] = mapped_column(Text, nullable=False)
     plan: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # status in {running, completed, failed, cancelled, budget_exhausted}
+    # status in {running, completed, failed, cancelled, budget_exhausted,
+    #            no_answer}
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
     final_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
     provider_id: Mapped[uuid.UUID | None] = mapped_column(
