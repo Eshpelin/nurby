@@ -33,6 +33,7 @@ export interface ActionsSectionProps {
   telegramChannelsLoading: boolean;
   devices: DeviceOption[];
   providers: ProviderOption[];
+  cameras: { id: string; name: string }[];
 
   formActions: ActionDraft[];
   setFormActions: (updater: ActionDraft[] | ((prev: ActionDraft[]) => ActionDraft[])) => void;
@@ -42,7 +43,7 @@ export interface ActionsSectionProps {
 }
 
 export function ActionsSection(props: ActionsSectionProps) {
-  const { telegramChannels, telegramChannelsLoading, devices, providers, formActions, setFormActions, cardErrors } =
+  const { telegramChannels, telegramChannelsLoading, devices, providers, cameras, formActions, setFormActions, cardErrors } =
     props;
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
 
@@ -129,6 +130,7 @@ export function ActionsSection(props: ActionsSectionProps) {
                 telegramChannelsLoading={telegramChannelsLoading}
                 devices={devices}
                 providers={providers}
+                cameras={cameras}
                 isCollapsed={!!collapsed[i]}
                 onToggleCollapsed={() =>
                   setCollapsed((m) => ({ ...m, [i]: !m[i] }))

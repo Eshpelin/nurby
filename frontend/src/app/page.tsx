@@ -31,6 +31,7 @@ import {
 } from "@/lib/observation-grouping";
 import { SystemHealthFooter } from "@/components/SystemHealthFooter";
 import { PipelineDelayWidget } from "@/components/PipelineDelayWidget";
+import { LiveConversationCard } from "@/components/voice/LiveConversationCard";
 import { useWorkerHealth } from "@/lib/useWorkerHealth";
 import { LLMErrorToasts } from "@/components/LLMErrorToasts";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -70,6 +71,7 @@ import type {
   TimeRange,
   TimelineEntry,
   Transcript,
+  SpeechEvent,
 } from "./dashboard-types";
 
 // ── Helpers ──
@@ -724,6 +726,7 @@ function DashboardContent() {
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [speechEvents, setSpeechEvents] = useState<SpeechEvent[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
@@ -734,7 +737,7 @@ function DashboardContent() {
     { observationId: string; cameraId: string; cameraName: string | null; ts: string } | null
   >(null);
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
-  const [eventFilters, setEventFilters] = useState<Set<EventFilter>>(new Set(["recordings", "observations", "status", "conversations", "summaries"]));
+  const [eventFilters, setEventFilters] = useState<Set<EventFilter>>(new Set(["recordings", "observations", "status", "conversations", "summaries", "speech"]));
   // Observation coalescing window in seconds. 0 disables grouping.
   // Persisted in localStorage so the user's choice survives reload.
   const [groupWindowSeconds, setGroupWindowSeconds] = useState<number>(() => {
@@ -990,7 +993,7 @@ function DashboardContent() {
       const statusParams = new URLSearchParams({ limit: "100" });
       if (selectedCamera) statusParams.set("camera_id", selectedCamera);
 
-      const [recRes, obsRes, statusRes, notifRes, tlRes, sumRes, convRes, incRes, jourRes] = await Promise.all([
+      const [recRes, obsRes, statusRes, notifRes, tlRes, sumRes, convRes, incRes, jourRes, speechRes] = await Promise.all([
         authFetch(`/api/recordings?${params}`),
         authFetch(`/api/observations?${params}`),
         authFetch(`/api/cameras/status-logs?${statusParams}`),
@@ -1000,6 +1003,7 @@ function DashboardContent() {
         authFetch(`/api/conversations?${params}`),
         authFetch(`/api/incidents?${params}`),
         authFetch(`/api/journeys?${params}`),
+        authFetch(`/api/voice/events?limit=200`),
       ]);
 
       const now = Date.now();
@@ -1019,6 +1023,13 @@ function DashboardContent() {
           (Array.isArray(all) ? all : []).filter(
             (s) => new Date(s.started_at).getTime() >= cutoff
           )
+        );
+      }
+      if (speechRes.ok) {
+        const body = await speechRes.json();
+        const all: SpeechEvent[] = Array.isArray(body?.events) ? body.events : [];
+        setSpeechEvents(
+          all.filter((e) => new Date(e.created_at).getTime() >= cutoff)
         );
       }
       if (convRes.ok) {
@@ -1151,7 +1162,7 @@ function DashboardContent() {
 
   const clearAllFilters = () => {
     setTimeRange("7d");
-    setEventFilters(new Set(["recordings", "observations", "status", "conversations", "summaries"]));
+    setEventFilters(new Set(["recordings", "observations", "status", "conversations", "summaries", "speech"]));
     setFilterPerson("");
     setFilterObject("");
     setSelectedCamera(null);
@@ -1309,6 +1320,7 @@ function DashboardContent() {
     if (eventFilters.has("conversations")) entries.push(...conversations.map((c) => ({ id: `conv-${c.id}`, type: "conversation" as const, camera_id: c.camera_id, timestamp: c.ended_at_provisional, data: c })));
     if (eventFilters.has("transcripts")) entries.push(...transcripts.map((t) => ({ id: `tx-${t.id}`, type: "transcript" as const, camera_id: t.camera_id, timestamp: t.started_at, data: t })));
     if (eventFilters.has("summaries")) entries.push(...summaries.map((s) => ({ id: `sum-${s.id}`, type: "summary" as const, camera_id: s.camera_id, timestamp: s.ended_at, data: s })));
+    if (eventFilters.has("speech")) entries.push(...speechEvents.map((e) => ({ id: `say-${e.id}`, type: "speech" as const, camera_id: e.camera_id, timestamp: e.created_at, data: e })));
     // Always include notifications. They are explicit rule fires and deserve
     // priority in the digest even when the "status" filter is off.
     entries.push(...notifications.map((n) => ({
@@ -1521,6 +1533,13 @@ function DashboardContent() {
 
       <VLMOptionalBanner />
 
+      {/* A live doorstep exchange outranks everything else on this
+          screen: it is the one thing here with someone waiting on the
+          other end. Renders nothing when no session is open. */}
+      <LiveConversationCard
+        cameraNames={Object.fromEntries(cameras.map((c) => [c.id, c.name]))}
+      />
+
       <PipelineDelayWidget />
 
       {showLearningBanner && (
@@ -1712,7 +1731,7 @@ function DashboardContent() {
                 <div>
                   <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">Event Types</span>
                   <div className="flex flex-col gap-1">
-                    {([["recordings", "Recordings"], ["observations", "AI Observations"], ["conversations", "Conversations"], ["transcripts", "Raw Transcripts"], ["summaries", "Summaries"], ["status", "Status Changes"]] as [EventFilter, string][]).map(([value, label]) => (
+                    {([["recordings", "Recordings"], ["observations", "AI Observations"], ["conversations", "Conversations"], ["transcripts", "Raw Transcripts"], ["summaries", "Summaries"], ["speech", "Camera Speech"], ["status", "Status Changes"]] as [EventFilter, string][]).map(([value, label]) => (
                       <label key={value} className="flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
                         <input type="checkbox" checked={eventFilters.has(value)} onChange={() => toggleEventFilter(value)}
                           className="w-3.5 h-3.5 rounded border-border accent-accent" />
@@ -2483,6 +2502,50 @@ function DashboardContent() {
                               summaryProviderName={c.summary_provider_name}
                               hasClip={c.has_clip}
                             />
+                          );
+                        }
+
+                        if (entry.type === "speech") {
+                          const say = entry.data as SpeechEvent;
+                          const played = say.status === "played";
+                          // Suppressed is not failure. A camera that
+                          // correctly stayed quiet at 3am did its job,
+                          // and colouring that red teaches people to
+                          // ignore red.
+                          const tone = played
+                            ? "border-emerald-500/30 bg-emerald-500/5"
+                            : say.status === "failed"
+                              ? "border-red-500/30 bg-red-500/5"
+                              : "border-border bg-card";
+                          return (
+                            <div
+                              key={entry.id}
+                              className={`rounded-lg border px-3 py-2 ${tone}`}
+                            >
+                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                </svg>
+                                <span>{cam?.name ?? "Camera"}</span>
+                                <span>·</span>
+                                <span>
+                                  {played
+                                    ? "said"
+                                    : say.status === "failed"
+                                      ? "could not say"
+                                      : "held back"}
+                                </span>
+                                {say.suppressed_reason && (
+                                  <span className="opacity-70">
+                                    ({say.suppressed_reason.replace(/_/g, " ")})
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-1 text-sm text-foreground">
+                                &ldquo;{say.text}&rdquo;
+                              </p>
+                            </div>
                           );
                         }
 

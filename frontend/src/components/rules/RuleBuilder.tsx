@@ -726,6 +726,7 @@ export function RuleBuilder({
             telegramChannelsLoading={telegramChannelsLoading}
             devices={devices}
             providers={providers}
+            cameras={cameras}
             formActions={state.formActions}
             setFormActions={updaterFor("formActions")}
             cardErrors={cardErrors}

@@ -15,6 +15,7 @@ import {
   type VerifyDraft,
   type LocateDraft,
   type DeviceDraft,
+  type SpeakDraft,
   type DeviceOption,
   type ProviderOption,
   type TelegramChannelOption,
@@ -31,6 +32,7 @@ import { VlmCallEditor } from "./VlmCallEditor";
 import { VerifyEditor } from "./VerifyEditor";
 import { LocateEditor } from "./LocateEditor";
 import { DeviceEditor } from "./DeviceEditor";
+import { SpeakEditor } from "./SpeakEditor";
 import { type VarSpec } from "./VarInserter";
 
 export interface ActionCardProps {
@@ -47,6 +49,7 @@ export interface ActionCardProps {
   telegramChannels: TelegramChannelOption[];
   telegramChannelsLoading: boolean;
   devices: DeviceOption[];
+  cameras: { id: string; name: string }[];
   providers: ProviderOption[];
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
@@ -66,6 +69,7 @@ export function ActionCard({
   telegramChannels,
   telegramChannelsLoading,
   devices,
+  cameras,
   providers,
   isCollapsed,
   onToggleCollapsed,
@@ -229,6 +233,14 @@ export function ActionCard({
           {draft.type === "locate" && (
             <LocateEditor
               draft={draft as LocateDraft}
+              onChange={(next) => onReplace(next)}
+            />
+          )}
+          {draft.type === "speak" && (
+            <SpeakEditor
+              draft={draft as SpeakDraft}
+              cameras={cameras}
+              availableVars={availableVars}
               onChange={(next) => onReplace(next)}
             />
           )}

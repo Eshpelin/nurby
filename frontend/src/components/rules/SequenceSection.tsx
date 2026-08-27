@@ -355,6 +355,7 @@ export function SequenceSection(props: SequenceSectionProps) {
               telegramChannelsLoading={telegramChannelsLoading}
               devices={devices}
               providers={providers}
+              cameras={cameras}
               formActions={timeoutActions}
               setFormActions={setTimeoutActions}
               cardErrors={{}}

@@ -576,6 +576,12 @@ export function describeActions(actions: Record<string, unknown> | Record<string
         if (!did) return "fire device (none selected)";
         return `fire device ${deviceLookup.get(did) || did.slice(0, 8)}`;
       }
+      if (a.type === "speak") {
+        const text = ((a.text as string) || "").trim();
+        if (!text) return "speak (nothing set)";
+        const short = text.length > 40 ? `${text.slice(0, 40)}...` : text;
+        return `say "${short}"`;
+      }
       return String(a.type);
     })
     .join(", ");
@@ -700,7 +706,8 @@ export type ActionType =
   | "vlm_call"
   | "verify"
   | "locate"
-  | "device";
+  | "device"
+  | "speak";
 
 export interface WebhookDraft {
   type: "webhook" | "api_call";
@@ -791,6 +798,17 @@ export interface DeviceDraft {
   extrasError: string;
 }
 
+// A camera saying something out loud. camera_id empty means "whichever
+// camera triggered the rule", which is what a household almost always
+// wants and saves picking the same camera twice.
+export interface SpeakDraft {
+  type: "speak";
+  camera_id: string;
+  text: string;
+  voice: string;
+  volume: string;
+}
+
 export type ActionDraft =
   | WebhookDraft
   | BroadcastDraft
@@ -800,7 +818,8 @@ export type ActionDraft =
   | VlmCallDraft
   | VerifyDraft
   | LocateDraft
-  | DeviceDraft;
+  | DeviceDraft
+  | SpeakDraft;
 
 export const MAX_ACTIONS_PER_RULE = 8;
 
@@ -875,6 +894,8 @@ export function defaultDraftForType(type: ActionType): ActionDraft {
       };
     case "device":
       return { type, device_id: "", extrasJson: "", extrasError: "" };
+    case "speak":
+      return { type, camera_id: "", text: "", voice: "", volume: "" };
   }
 }
 
@@ -980,6 +1001,15 @@ export function dictToDraft(raw: Record<string, unknown>): ActionDraft {
         requireCorroboration: raw.require_corroboration === true,
         minOverlap: typeof mo === "number" ? mo : 0.1,
         output: (raw.output as string) || "loc",
+      };
+    }
+    case "speak": {
+      return {
+        type: "speak",
+        camera_id: (raw.camera_id as string) || "",
+        text: (raw.text as string) || "",
+        voice: (raw.voice as string) || "",
+        volume: raw.volume === undefined || raw.volume === null ? "" : String(raw.volume),
       };
     }
     case "device": {
@@ -1119,6 +1149,15 @@ export function draftToDict(d: ActionDraft): Record<string, unknown> {
       output: d.output || "loc",
     };
   }
+  if (d.type === "speak") {
+    const action: Record<string, unknown> = { type: "speak", text: d.text };
+    // Omitted rather than sent empty: the backend reads a missing
+    // camera_id as "the camera that triggered the rule".
+    if (d.camera_id) action.camera_id = d.camera_id;
+    if (d.voice) action.voice = d.voice;
+    if (d.volume.trim()) action.volume = Number(d.volume);
+    return action;
+  }
   if (d.type === "device") {
     const action: Record<string, unknown> = {
       type: "device",
@@ -1251,6 +1290,14 @@ export function validateActionDraft(d: ActionDraft): string | null {
   }
   if (d.type === "locate") {
     if (!d.prompt.trim()) return "Describe what to locate";
+    return null;
+  }
+  if (d.type === "speak") {
+    if (!d.text.trim()) return "Write what the camera should say";
+    if (d.volume.trim()) {
+      const v = Number(d.volume);
+      if (!Number.isFinite(v) || v < 1 || v > 100) return "Volume must be 1-100";
+    }
     return null;
   }
   if (d.type === "device") {
