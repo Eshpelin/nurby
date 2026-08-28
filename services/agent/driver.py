@@ -32,6 +32,12 @@ from services.agent.budget import check_budget, estimate_cost, record_usage
 from services.agent.compaction import compact_messages
 from services.agent.failure import LLMCallError
 from services.agent.llm import LLMResponse, LLMToolUse, llm_call
+from services.agent.progress import (
+    call_signature,
+    made_progress,
+    nudge_text as progress_nudge,
+    verdict as progress_verdict,
+)
 from services.agent.result_shaping import shape_tool_result
 from services.agent.tools import all_tools_for_provider, get_tool
 from shared.app_settings import get_setting
@@ -161,6 +167,11 @@ class _LoopState:
     # any real answer: one empty reply then an answer is noise.
     empty_attempts: list = field(default_factory=list)
     empty_streak_cost_cents: int = 0
+    # Consecutive turns that produced no new evidence, and every tool
+    # name called so far. Together these say whether the run is getting
+    # anywhere (issue #138).
+    zero_gain_turns: int = 0
+    tools_seen: set = field(default_factory=set)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -636,8 +647,11 @@ class AgentDriver:
                     messages.append({"role": "assistant", "content": asst_blocks})
 
                     # execute each tool use, append tool_result blocks
+                    ids_before = len(state.seen_ids)
+                    tools_called: set[str] = set()
                     tool_result_blocks: list[dict] = []
                     for tu in response.tool_uses:
+                        tools_called.add(tu.name)
                         result = await self._exec_tool(tu, state, run_id, user, db, max_vlm)
                         tool_result_blocks.append({
                             "type": "tool_result",
@@ -649,6 +663,52 @@ class AgentDriver:
                             "content": shape_tool_result(tu.name, result),
                         })
                     messages.append({"role": "user", "content": tool_result_blocks})
+
+                    # Did this turn learn anything? The seen_ids set is
+                    # already maintained for the citation check, so its
+                    # growth is a free progress signal, and it catches the
+                    # semantic spinning that argument hashing cannot.
+                    if made_progress(
+                        ids_before, len(state.seen_ids), tools_called, state.tools_seen
+                    ):
+                        state.zero_gain_turns = 0
+                    else:
+                        state.zero_gain_turns += 1
+                    state.tools_seen |= tools_called
+
+                    call = progress_verdict(state.zero_gain_turns)
+                    if call != "ok":
+                        await self._emit(state, run_id, {
+                            "type": "no_progress",
+                            "turns": state.zero_gain_turns,
+                            "action": call,
+                        })
+                    if call == "halt":
+                        # Spending the remaining turns the same way only
+                        # costs money. Answer with what is already known.
+                        final_text = await self._forced_synthesis(
+                            provider, model, system_prompt, messages, state, run_id,
+                            db=db, escalate=True,
+                        )
+                        final_text = await self._finalize_answer(
+                            final_text, state, run_id
+                        )
+                        await runs_mod.update_run(
+                            run_id, db,
+                            status="completed",
+                            final_answer=final_text,
+                            ended_at=datetime.now(timezone.utc),
+                            latency_ms=int((time.time() - state.started_at) * 1000),
+                        )
+                        await self._emit_done(
+                            state, run_id, final_text, run_row, partial=True
+                        )
+                        return
+                    if call == "nudge":
+                        messages.append({
+                            "role": "user",
+                            "content": progress_nudge(state.zero_gain_turns),
+                        })
 
                     # Condense older tool results to their one-line summary
                     # plus their citable ids. The history grew monotonically
@@ -705,7 +765,9 @@ class AgentDriver:
     ) -> dict:
         name = tu.name
         args = tu.arguments or {}
-        h = _args_hash(name, args)
+        # Normalized, so hours=24 and hours=25 are the same call while the
+        # widen ladder (24 -> 168 -> 720) stays distinct.
+        h = call_signature(name, args)
 
         # dedupe within last DEDUPE_LOOKBACK_TURNS
         recent = [e for e in state.tool_call_history if e["turn"] >= state.turn_index - DEDUPE_LOOKBACK_TURNS]
