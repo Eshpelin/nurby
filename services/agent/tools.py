@@ -1686,22 +1686,40 @@ async def _resolve_subject(
     return {"type": "unresolved"}
 
 
+def _token_match(column, token: str):
+    """Match ``token`` as a whole comma-separated entry in ``column``.
+
+    Journeys written before per-subject fan-out carry a comma-joined
+    subject_key ("Ahmed,Sara"), so a person's history genuinely does live
+    inside those rows and has to be found there. A plain ILIKE would find
+    it, but it also matches substrings: searching for Ann returns
+    Anna's journeys, and searching for a one-word name returns anyone
+    whose name contains it. This anchors on the entry boundaries instead.
+    """
+    escaped = token.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    text = cast(column, SAString)
+    return or_(
+        text.ilike(escaped, escape="\\"),
+        text.ilike(f"{escaped},%", escape="\\"),
+        text.ilike(f"%,{escaped}", escape="\\"),
+        text.ilike(f"%,{escaped},%", escape="\\"),
+    )
+
+
 def _subject_journey_filter(subject: dict[str, Any]) -> list[Any]:
     """SQLAlchemy filters selecting the journeys that belong to a
-    resolved subject. Person journeys match by display_name inside the
-    comma-joined subject_key; label journeys match subject_kind=='object'
-    with the label inside subject_key."""
+    resolved subject. Person journeys match their display_name as a whole
+    entry in the comma-joined subject_key; label journeys match
+    subject_kind=='object' with the label as a whole entry."""
     if subject["type"] == "person":
         return [
             Journey.subject_kind == "person",
-            cast(Journey.subject_key, SAString).ilike(
-                f"%{subject['display_name']}%"
-            ),
+            _token_match(Journey.subject_key, subject["display_name"]),
         ]
     if subject["type"] == "label":
         return [
             Journey.subject_kind == "object",
-            cast(Journey.subject_key, SAString).ilike(f"%{subject['label']}%"),
+            _token_match(Journey.subject_key, subject["label"]),
         ]
     return [select(Journey.id).where(False)]  # never matches
 
