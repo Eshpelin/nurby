@@ -31,6 +31,21 @@ DEFAULTS: dict[str, Any] = {
     # bound time, so a slow provider could hold a live WS channel for
     # many minutes.
     "agent_max_run_seconds": 300,
+    # Voice output (#152). Household-wide default OFF: a camera that can
+    # talk is a camera that can leak, so speaking is opt-in.
+    "voice_enabled": False,
+    "voice_tts_provider": "piper",
+    "voice_default": "en_US-amy-medium",
+    "voice_cache_enabled": True,
+    "voice_max_volume": 70,
+    "voice_quiet_hours_start": "22:00",
+    "voice_quiet_hours_end": "07:00",
+    # Separate from voice_enabled on purpose. Wanting a deterrent
+    # announcement is not consent to an agent holding conversations at
+    # your door, and collapsing the two would be a dark pattern.
+    "voice_conversation_enabled": False,
+    "voice_session_max_seconds": 120,
+    "voice_session_max_turns": 10,
     # Curator: distils durable household facts from counted evidence.
     # Idle-triggered, archives rather than deletes, never touches a fact
     # a person wrote, pinned or rejected.
