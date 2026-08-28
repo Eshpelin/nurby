@@ -27,6 +27,7 @@ from sqlalchemy import select
 from shared.models import (
     Camera,
     EntityAssociation,
+    HouseholdFact,
     Observation,
     Person,
     Vehicle,
@@ -41,6 +42,7 @@ MAX_CAMERAS = 12
 MAX_PEOPLE = 10
 MAX_VEHICLES = 8
 MAX_PATTERNS = 8
+MAX_FACTS = 8
 MAX_LABELS_PER_CAMERA = 3
 # A camera with less than this in the window gets listed without a habit line
 # rather than one built from two frames.
@@ -110,7 +112,8 @@ def _camera_line(name: str, role: str, location: str | None, habits: dict | None
 
 def format_household_context(cameras: list[dict], people: list[dict],
                              vehicles: list[dict],
-                             patterns: list[dict] | None = None) -> str | None:
+                             patterns: list[dict] | None = None,
+                             facts: list[str] | None = None) -> str | None:
     """Render the block. None when there is nothing worth saying yet.
     Pure, for tests."""
     if not cameras:
@@ -145,6 +148,11 @@ def format_household_context(cameras: list[dict], people: list[dict],
             if v.get("plate"):
                 label += f" (plate {v['plate']})"
             lines.append("  - " + label)
+
+    if facts:
+        lines.append("Learned about this household (distilled, may be stale):")
+        for f in facts[:MAX_FACTS]:
+            lines.append("  - " + f)
 
     if patterns:
         lines.append("Established patterns (observed habits, not rules):")
@@ -265,7 +273,17 @@ async def build_household_context(db, allowed_camera_ids) -> str | None:
         for a in pattern_rows
     ]
 
-    return format_household_context(cameras, people, vehicles, patterns)
+    # Curated facts. Established only, and agent-created or user-written
+    # alike: both are things the household has accepted as true.
+    fact_rows = (await db.execute(
+        select(HouseholdFact)
+        .where(HouseholdFact.status == "established")
+        .order_by(HouseholdFact.pinned.desc(), HouseholdFact.evidence_count.desc())
+        .limit(MAX_FACTS)
+    )).scalars().all()
+    facts = [f.text for f in fact_rows]
+
+    return format_household_context(cameras, people, vehicles, patterns, facts)
 
 
 async def household_context(db, allowed_camera_ids) -> str | None:

@@ -2093,3 +2093,57 @@ class DashboardWidget(Base):
     last_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class HouseholdFact(Base):
+    """A durable, distilled fact about how this household usually works.
+
+    The orientation block is built fresh from live state on every run, so
+    it can only state what a query returns right now. It cannot hold
+    something like "the cat is usually on the Back Door camera between
+    2am and 5am", which is exactly the kind of knowledge that prevents a
+    whole class of wrong answer (issue #141).
+
+    Curator invariants, shared with EntityAssociation and enforced in
+    ``services.agent.curator``:
+
+    - Only ``source="agent"`` rows are ever auto-modified. A fact a person
+      wrote is theirs, and the curator does not touch it.
+    - Nothing is auto-deleted. A fact that stops matching is archived, and
+      archive is recoverable.
+    - ``pinned`` bypasses every automatic transition.
+    - ``rejected`` is permanent. A rejected fact is never proposed again,
+      which is the difference between a system that learns and one that
+      nags.
+    """
+
+    __tablename__ = "household_facts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # The fact itself, one sentence, in plain language.
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    # A stable key for the thing the fact is about, so a re-derived fact
+    # updates its row instead of creating a near-duplicate.
+    subject_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, default="habit")
+    # agent (distilled) | user (written by a person)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="agent")
+    # candidate | established | archived | rejected
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="candidate")
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    evidence_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Set when the curator last saw evidence for this fact. Staleness is
+    # measured from here, never from created_at.
+    last_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("subject_key", "kind", "source", name="uq_household_fact"),
+    )
