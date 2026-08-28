@@ -114,8 +114,7 @@ Identity disambiguation.
 - Never silently pick between equally-scored candidates.
 
 Grounding.
-- Current time. {now_iso}
-- Household timezone. {system_timezone}
+- The current time and the household timezone are given with the question below.
 - Treat "today" / "yesterday" / "last night" relative to that timezone.
 
 When you have enough evidence, write your final answer as plain prose. Do not call any more tools."""
@@ -252,6 +251,19 @@ def verify_citations(text: str, seen_ids: set[str]) -> tuple[str, list[str]]:
         cleaned = re.sub(r" +([.,;:!?])", r"\1", cleaned)
         cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
     return cleaned.strip(), removed
+
+
+def _ground_question(question: str, system_timezone: str) -> str:
+    """The question with its time context attached.
+
+    Lives on the question rather than in the system prompt so the system
+    prompt stays byte-identical between runs and can be cached. Pure, for
+    tests."""
+    return (
+        f"Current time: {datetime.now(timezone.utc).isoformat()}\n"
+        f"Household timezone: {system_timezone}\n\n"
+        f"{question}"
+    )
 
 
 # ── Conversation memory ─────────────────────────────────────────────
@@ -442,10 +454,14 @@ class AgentDriver:
                         "remaining_cents": budget.remaining_cost_cents,
                     })
 
-                system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-                    now_iso=datetime.now(timezone.utc).isoformat(),
-                    system_timezone=system_tz,
-                )
+                # No timestamp in here on purpose. The system prompt plus
+                # the tool schemas are the cacheable prefix, and a per-run
+                # ISO timestamp changed the first bytes of every request,
+                # so nothing could ever hit the cache across runs (#136).
+                # Grounding moved onto the question, where it belongs
+                # anyway: it is context for this question, not a standing
+                # instruction.
+                system_prompt = SYSTEM_PROMPT_TEMPLATE
                 # Appended AFTER .format(): entity names and free text may
                 # contain braces, which would break str.format placeholders.
                 household = await self._household_context(user, db)
@@ -457,7 +473,10 @@ class AgentDriver:
                 messages: list[dict] = []
                 if parent_run_id is not None:
                     messages.extend(await _load_parent_chain(parent_run_id, db))
-                messages.append({"role": "user", "content": question})
+                messages.append({
+                    "role": "user",
+                    "content": _ground_question(question, system_tz),
+                })
 
                 tools = all_tools_for_provider(provider.kind)
 
