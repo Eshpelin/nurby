@@ -178,6 +178,8 @@ class _LoopState:
     # anywhere (issue #138).
     zero_gain_turns: int = 0
     tools_seen: set = field(default_factory=set)
+    # One re-grounding round per run, at most (issue #142).
+    regrounded: bool = False
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -281,6 +283,39 @@ def _ground_question(question: str, system_timezone: str) -> str:
         f"Current time: {datetime.now(timezone.utc).isoformat()}\n"
         f"Household timezone: {system_timezone}\n\n"
         f"{question}"
+    )
+
+
+def sentences_losing_support(text: str, removed: list[str]) -> list[str]:
+    """Sentences that had a citation stripped out of them.
+
+    Stripping a fabricated citation leaves the claim standing with no
+    evidence behind it, which reads to a user as an unsupported assertion
+    they have no way to check. These are the sentences worth asking the
+    model to re-ground or retract. Pure, for tests."""
+    if not text or not removed:
+        return []
+    wanted = {r.split(":")[-1].lower() for r in removed}
+    out: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        ids = {m.group(2).lower() for m in _CITATION_RE.finditer(sentence)}
+        if ids & wanted and sentence.strip() not in out:
+            out.append(sentence.strip())
+    return out
+
+
+def reground_prompt(sentences: list[str]) -> str:
+    """The single follow-up asking for evidence or a retraction. Pure."""
+    listed = "\n".join(f"- {s}" for s in sentences[:5])
+    return (
+        "Some citations in your answer pointed at ids no tool returned, so"
+        " they were removed. These claims now have no evidence behind"
+        " them:\n"
+        f"{listed}\n\n"
+        "Rewrite your answer. For each of those claims, either cite an id"
+        " a tool actually returned in this conversation, or drop the claim"
+        " and say plainly what you could not confirm. Do not invent ids."
+        " Do not call any tools."
     )
 
 
@@ -691,7 +726,11 @@ class AgentDriver:
                         # followed by an answer is noise, not a pattern.
                         state.empty_attempts.clear()
                         state.empty_streak_cost_cents = 0
-                        final_text = await self._finalize_answer(final_text, state, run_id)
+                        final_text = await self._finalize_and_reground(
+                            final_text, state, run_id,
+                            provider=provider, model=model,
+                            system_prompt=system_prompt, messages=messages,
+                        )
                         await runs_mod.update_run(run_id, db,
                                                   status="completed",
                                                   final_answer=final_text,
@@ -977,6 +1016,81 @@ class AgentDriver:
             return None
 
     # ── answer finalization ───────────────────────────────────────
+
+    async def _finalize_and_reground(
+        self, text: str, state: _LoopState, run_id: uuid.UUID,
+        *, provider, model, system_prompt, messages,
+    ) -> str:
+        """Finalize, and spend one bounded turn recovering lost support.
+
+        Stripping a fabricated citation is honest but incomplete: the
+        claim stays in the answer with nothing behind it. This asks the
+        model once to either cite something real or retract, then strips
+        whatever still fails (issue #142).
+
+        Bounded deliberately. One round per run, only when the run has
+        real evidence to cite, and never when the deadline has passed. A
+        question whose answer is legitimately uncitable ("how many
+        cameras do I have") produces no evidence ids, so it is skipped by
+        the same condition rather than by a list of special cases.
+        """
+        cleaned, removed = verify_citations(text, state.seen_ids)
+        if removed:
+            await self._emit(state, run_id, {
+                "type": "citations_stripped",
+                "count": len(removed),
+                "citations": removed[:10],
+            })
+        if not removed or state.regrounded or not state.seen_ids:
+            return cleaned
+
+        losing = sentences_losing_support(text, removed)
+        if not losing:
+            return cleaned
+
+        state.regrounded = True
+        await self._emit(state, run_id, {
+            "type": "reground_started",
+            "claims": len(losing),
+        })
+        try:
+            resp = await llm_call(
+                provider=provider,
+                model=model,
+                system_prompt=system_prompt,
+                messages=messages + [
+                    {"role": "assistant", "content": text},
+                    {"role": "user", "content": reground_prompt(losing)},
+                ],
+                tools=[],
+                max_tokens=DEFAULT_MAX_TOKENS_PER_CALL,
+                stream=False,
+            )
+        except Exception:
+            logger.debug("re-grounding call failed", exc_info=True)
+            return cleaned
+
+        retry_text = (resp.text or "").strip()
+        if not retry_text:
+            return cleaned
+
+        regrounded, still_bad = verify_citations(retry_text, state.seen_ids)
+
+        # Only take the rewrite if it is actually better. It must invent
+        # fewer ids AND keep the evidence the first answer had: a reply
+        # that drops every citation would "fix" the problem by deleting
+        # the answer's support, which is the failure this exists to
+        # prevent rather than a cure for it.
+        kept_before = len(_extract_citations(cleaned))
+        kept_after = len(_extract_citations(regrounded))
+        improved = len(still_bad) < len(removed) and kept_after >= kept_before
+        await self._emit(state, run_id, {
+            "type": "reground_finished",
+            "accepted": improved,
+            "recovered": max(0, len(removed) - len(still_bad)) if improved else 0,
+            "still_unsupported": len(still_bad) if improved else len(removed),
+        })
+        return regrounded if (improved and regrounded) else cleaned
 
     async def _finalize_answer(self, text: str, state: _LoopState, run_id: uuid.UUID) -> str:
         """Strip fabricated citations before the answer is stored or shown."""
