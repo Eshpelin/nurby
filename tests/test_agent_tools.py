@@ -1161,3 +1161,41 @@ async def test_query_observations_at_max_window_has_nowhere_to_widen(monkeypatch
     assert "widened_to" not in out
     assert "note" not in out
     assert calls["observations"] == 1
+
+
+# ── Subject matching against comma-joined legacy keys (issue #151) ──
+
+
+def test_token_match_anchors_on_entry_boundaries():
+    """Journeys written before per-subject fan-out carry keys like
+    "Ahmed,Sara". A person's history really does live in those rows, so
+    they have to be searched, but a plain substring match returns Anna's
+    journeys when asked about Ann."""
+    from sqlalchemy import Column, String, and_, select as _select
+    from sqlalchemy.dialects import postgresql
+    from services.agent.tools import _token_match
+    from shared.models import Journey
+
+    clause = _token_match(Journey.subject_key, "Ann")
+    sql = str(clause.compile(dialect=postgresql.dialect(),
+                             compile_kwargs={"literal_binds": True}))
+
+    # Exact, first, last, and middle of a joined key. Never a bare %Ann%.
+    # literal_binds doubles % for the driver, hence %%.
+    assert "'Ann'" in sql
+    assert "'Ann,%%'" in sql
+    assert "'%%,Ann'" in sql
+    assert "'%%,Ann,%%'" in sql
+    # The bug being fixed: never a bare substring match.
+    assert "'%%Ann%%'" not in sql
+
+
+def test_token_match_escapes_wildcards_in_a_name():
+    """A person named with an underscore must not become a wildcard."""
+    from sqlalchemy.dialects import postgresql
+    from services.agent.tools import _token_match
+    from shared.models import Journey
+
+    sql = str(_token_match(Journey.subject_key, "a_b").compile(
+        dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    assert r"a\\_b" in sql
