@@ -29,6 +29,7 @@ import jsonschema
 from services.agent import empty_guard
 from services.agent import runs as runs_mod
 from services.agent.budget import check_budget, estimate_cost, record_usage
+from services.agent.compaction import compact_messages
 from services.agent.failure import LLMCallError
 from services.agent.llm import LLMResponse, LLMToolUse, llm_call
 from services.agent.result_shaping import shape_tool_result
@@ -648,6 +649,19 @@ class AgentDriver:
                             "content": shape_tool_result(tu.name, result),
                         })
                     messages.append({"role": "user", "content": tool_result_blocks})
+
+                    # Condense older tool results to their one-line summary
+                    # plus their citable ids. The history grew monotonically
+                    # for up to twelve turns and was re-sent whole on each
+                    # one, so cost grew quadratically and a small context
+                    # window simply overflowed (issue #135).
+                    messages, condensed = compact_messages(
+                        messages, _result_summary
+                    )
+                    if condensed:
+                        logger.debug(
+                            "run %s condensed %d stale tool results", run_id, condensed
+                        )
 
                     state.turn_index += 1
 
