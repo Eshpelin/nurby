@@ -111,6 +111,48 @@ def _flatten_text(content: Any) -> str:
     return "\n".join(p for p in parts if p)
 
 
+# ── Prompt caching ───────────────────────────────────────────────────
+
+
+# Anthropic charges full price for every input token on every turn unless
+# a stable prefix is marked cacheable. The agent re-sends the system
+# prompt, ~20 tool schemas, and the whole growing history on each turn of
+# a run, so the same prefix was being paid for a dozen times (issue #136).
+#
+# Two breakpoints cover it. The tools array is identical for every run in
+# the household, and the system prompt is identical for every run by the
+# same user. Marking the last tool caches the whole tools array; marking
+# the system prompt caches it plus everything before it.
+_CACHE_CONTROL = {"type": "ephemeral"}
+
+
+def apply_system_cache(system_prompt: str):
+    """Anthropic system field with a cache breakpoint. Pure, for tests."""
+    if not system_prompt:
+        return system_prompt
+    return [
+        {
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": dict(_CACHE_CONTROL),
+        }
+    ]
+
+
+def apply_tools_cache(tools: list[dict]) -> list[dict]:
+    """Tools with a cache breakpoint on the last one. Pure, for tests.
+
+    Only the final entry is marked: a breakpoint caches everything up to
+    and including itself, so one on the last tool covers the array. The
+    input list is not mutated, since the caller reuses it across turns.
+    """
+    if not tools:
+        return tools
+    out = [dict(t) for t in tools]
+    out[-1]["cache_control"] = dict(_CACHE_CONTROL)
+    return out
+
+
 # ── Anthropic ────────────────────────────────────────────────────────
 
 
@@ -134,11 +176,11 @@ async def _call_anthropic(
     body: dict[str, Any] = {
         "model": model,
         "max_tokens": max_tokens,
-        "system": system_prompt,
+        "system": apply_system_cache(system_prompt),
         "messages": messages,
     }
     if tools:
-        body["tools"] = tools
+        body["tools"] = apply_tools_cache(tools)
     # Opt-in extended/adaptive thinking (off by default). Reasoning
     # tokens land in usage.output_tokens, so budget accounting downstream
     # already counts them — see record_usage in the driver.
