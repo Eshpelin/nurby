@@ -31,6 +31,12 @@ DEFAULTS: dict[str, Any] = {
     # bound time, so a slow provider could hold a live WS channel for
     # many minutes.
     "agent_max_run_seconds": 300,
+    # Curator: distils durable household facts from counted evidence.
+    # Idle-triggered, archives rather than deletes, never touches a fact
+    # a person wrote, pinned or rejected.
+    "curator_enabled": True,
+    "curator_interval_hours": 12,
+    "fact_stale_days": 45,
     "associations_enabled": True,
     "association_min_distinct_days": 3,
     # Household-wide daily AI digest.
