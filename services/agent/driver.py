@@ -31,6 +31,7 @@ from services.agent import runs as runs_mod
 from services.agent.budget import check_budget, estimate_cost, record_usage
 from services.agent.failure import LLMCallError
 from services.agent.llm import LLMResponse, LLMToolUse, llm_call
+from services.agent.result_shaping import shape_tool_result
 from services.agent.tools import all_tools_for_provider, get_tool
 from shared.app_settings import get_setting
 from shared.database import async_session
@@ -622,7 +623,10 @@ class AgentDriver:
                             "type": "tool_result",
                             "tool_use_id": tu.id,
                             "tool_name": tu.name,
-                            "content": json.dumps(result)[:8000],
+                            # Structural truncation. A sliced JSON string
+                            # left the model unable to tell a cut payload
+                            # from a short one (issue #134).
+                            "content": shape_tool_result(tu.name, result),
                         })
                     messages.append({"role": "user", "content": tool_result_blocks})
 
