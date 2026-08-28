@@ -100,10 +100,17 @@ phase 1 ships one vendor driver, three, or a go2rtc dependency. Any plan
 that commits to a transport before that probe is guessing.
 
 Second gap, smaller: cameras generally want **G.711 μ-law, 8 kHz, mono**
-on the backchannel, while Piper emits 16-bit PCM at 22.05 kHz. Resample
-and encode with PyAV, which is already a dependency, not `audioop` —
-that module is gone in Python 3.13 and this repo already has 3.13
-bytecode in `__pycache__`.
+on the backchannel, while Piper emits 16-bit PCM at 22.05 kHz.
+
+*(Amended after building phase 1. This originally said to use PyAV.
+That was wrong: PyAV is a runtime dependency but is absent from the test
+environment, so anything routed through it would be untestable. `audioop`
+would have been simplest and is gone in 3.13. G.711 is implemented
+directly in `services/voice/audio.py`, with ffmpeg as the escape hatch
+for other codecs. Note for anyone touching that file: the encoders are
+derived from the decoders by nearest-code inversion rather than
+transcribed from the ITU tables, because a hand-transcribed encoder
+round-trips cleanly while being wrong at segment boundaries. See #154.)*
 
 ## Data model
 
