@@ -38,6 +38,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared import estop
 from shared.app_settings import get_setting
 from shared.database import async_session
 from shared.models import EntityAssociation, Journey, Observation, Vehicle
@@ -507,6 +508,11 @@ class Associator:
 
     async def _tick(self) -> None:
         if not bool(await get_setting("associations_enabled", True)):
+            return
+        if estop.is_engaged():
+            # Household-wide pause. This is background work by
+            # definition, so skipping a tick costs nothing: the journeys
+            # stay unstamped and are folded in on the next one.
             return
         tz_name = await get_setting("system_timezone") or "UTC"
         min_days = int(

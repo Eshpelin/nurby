@@ -27,6 +27,10 @@ DEFAULTS: dict[str, Any] = {
     # driver is told to switch provider or give up. Transient only:
     # an auth or billing failure never retries.
     "agent_llm_max_attempts": 3,
+    # Wall-clock cap on one agent run. Turns, tokens and cost do not
+    # bound time, so a slow provider could hold a live WS channel for
+    # many minutes.
+    "agent_max_run_seconds": 300,
     "associations_enabled": True,
     "association_min_distinct_days": 3,
     # Household-wide daily AI digest.
