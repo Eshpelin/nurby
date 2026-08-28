@@ -41,6 +41,7 @@ from services.agent.progress import (
 from services.agent.result_shaping import shape_tool_result
 from services.agent.tools import all_tools_for_provider, get_tool
 from shared.app_settings import get_setting
+from shared import estop
 from shared.database import async_session
 from shared.models import AgentRun, Provider, User
 
@@ -138,6 +139,11 @@ BroadcastFn = Callable[[str, dict], Awaitable[None]]
 
 DEFAULT_MAX_TURNS = 12
 DEFAULT_MAX_VLM_CALLS = 8
+# Wall-clock cap. The other budgets (turns, tokens, cost, VLM calls) do
+# not bound time at all, so a slow or wedged provider could hold a run —
+# and the WS channel a user is watching — for 12 turns times the 120s
+# HTTP timeout (issue #139).
+DEFAULT_MAX_RUN_SECONDS = 300
 DEFAULT_MAX_TOKENS_PER_CALL = 2048
 DEDUPE_LOOKBACK_TURNS = 2
 MAX_PROVIDER_SWITCHES = 2
@@ -434,6 +440,14 @@ class AgentDriver:
         state = _LoopState()
         max_turns = int(await get_setting("agent_max_turns_per_run") or DEFAULT_MAX_TURNS)
         max_vlm = int(await get_setting("agent_max_vlm_calls_per_run") or DEFAULT_MAX_VLM_CALLS)
+        # Explicit None check rather than `or`: a configured 0 is a
+        # legitimate value (it means "stop immediately", useful for
+        # tests and for wedging a household on purpose) and `or` would
+        # silently swap it for the default.
+        configured_seconds = await get_setting("agent_max_run_seconds")
+        max_seconds = float(
+            DEFAULT_MAX_RUN_SECONDS if configured_seconds is None else configured_seconds
+        )
         system_tz = await get_setting("system_timezone") or "UTC"
 
         async with self.db_factory() as db:
@@ -443,6 +457,23 @@ class AgentDriver:
                     "provider": provider.kind,
                     "model": model,
                 })
+
+                if estop.is_engaged():
+                    # Household-wide pause. Refuse to START work; nothing
+                    # already running is touched (issue #139).
+                    why = estop.reason() or "an administrator paused Nurby"
+                    await self._emit(state, run_id, {
+                        "type": "error",
+                        "message": f"Nurby is paused: {why}",
+                        "failure_kind": "paused",
+                        "recoverable": True,
+                    })
+                    await runs_mod.update_run(
+                        run_id, db, status="cancelled",
+                        error_message=f"estop engaged: {why}",
+                        ended_at=datetime.now(timezone.utc),
+                    )
+                    return
 
                 budget = await check_budget(user.id, db)
                 if not budget.ok:
@@ -493,8 +524,39 @@ class AgentDriver:
                 tools = all_tools_for_provider(provider.kind)
 
                 final_text = ""
+                # Bound before the loop: the deadline and pause paths can
+                # finish a run before any turn has assigned it, and
+                # _emit_done reads it defensively.
+                run_row = None
 
                 while state.turn_index < max_turns:
+                    elapsed = time.time() - state.started_at
+                    if elapsed >= max_seconds:
+                        # Out of time. Answer with what the run already
+                        # gathered rather than holding the channel open.
+                        await self._emit(state, run_id, {
+                            "type": "error",
+                            "message": "this took too long, answering with what was found",
+                            "failure_kind": "deadline",
+                            "recoverable": True,
+                        })
+                        final_text = await self._forced_synthesis(
+                            provider, model, system_prompt, messages, state, run_id,
+                        )
+                        final_text = await self._finalize_answer(
+                            final_text, state, run_id
+                        )
+                        await runs_mod.update_run(
+                            run_id, db,
+                            status="completed",
+                            final_answer=final_text,
+                            ended_at=datetime.now(timezone.utc),
+                            latency_ms=int(elapsed * 1000),
+                        )
+                        await self._emit_done(
+                            state, run_id, final_text, run_row, partial=True
+                        )
+                        return
                     if self._stop_event.is_set():
                         await self._emit(state, run_id, {"type": "cancelled", "reason": "user_cancelled"})
                         await runs_mod.cancel_run(run_id, "user_cancelled", db)
