@@ -18,6 +18,10 @@ import 'features/guardian/guardian_screen.dart';
 import 'features/more/more_screen.dart';
 import 'features/notifications/notifications_screen.dart';
 import 'features/people/people_screen.dart';
+import 'features/conversations/conversations_screen.dart';
+import 'features/digests/digests_screen.dart';
+import 'features/incidents/incidents_screen.dart';
+import 'features/journeys/journeys_screen.dart';
 import 'features/recordings/recordings_screen.dart';
 import 'features/rules/rule_editor_screen.dart';
 import 'features/rules/rules_screen.dart';
@@ -144,6 +148,16 @@ final _routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(path: 'people', builder: (_, __) => const PeopleScreen()),
                 GoRoute(
                     path: 'vehicles', builder: (_, __) => const VehiclesScreen()),
+                GoRoute(
+                    path: 'incidents',
+                    builder: (_, __) => const IncidentsScreen()),
+                GoRoute(
+                    path: 'journeys', builder: (_, __) => const JourneysScreen()),
+                GoRoute(
+                    path: 'conversations',
+                    builder: (_, __) => const ConversationsScreen()),
+                GoRoute(
+                    path: 'digests', builder: (_, __) => const DigestsScreen()),
                 GoRoute(
                     path: 'recordings',
                     builder: (_, __) => const RecordingsScreen()),

@@ -484,3 +484,127 @@ class SystemRepository {
   Future<Map<String, dynamic>> storage() async =>
       (await _api.getJson('/api/storage') as Map).cast<String, dynamic>();
 }
+
+/// Camera voice: live conversations, taking over, and speaking.
+///
+/// The doorstep case is the one that matters on a phone. Somebody is at
+/// a camera, a push arrives, and the household wants to see what is
+/// being said and say something back without opening a laptop.
+class VoiceRepository {
+  VoiceRepository(this._api);
+  final ApiClient _api;
+
+  /// Conversations still open. At most one per camera, and usually zero.
+  Future<List<Map<String, dynamic>>> liveSessions() async {
+    final j = await _api.getJson('/api/voice/sessions',
+        query: {'active': true, 'limit': 5});
+    final items = (j as Map)['sessions'] as List? ?? [];
+    return items.whereType<Map>().map((s) => s.cast<String, dynamic>()).toList();
+  }
+
+  /// One exchange with both halves of the conversation interleaved.
+  Future<Map<String, dynamic>> session(String id) async =>
+      (await _api.getJson('/api/voice/sessions/$id') as Map)
+          .cast<String, dynamic>();
+
+  /// Take the conversation. The camera stops answering immediately.
+  Future<Map<String, dynamic>> takeOver(String id) async =>
+      (await _api.postJson('/api/voice/sessions/$id/handoff') as Map)
+          .cast<String, dynamic>();
+
+  /// Say something in your own words. Not run through the disclosure
+  /// filter: that exists to stop a model leaking the household's
+  /// information, not to police what a household says to its own
+  /// visitor.
+  Future<Map<String, dynamic>> say(String id, String text) async =>
+      (await _api.postJson('/api/voice/sessions/$id/say',
+              body: {'text': text}) as Map)
+          .cast<String, dynamic>();
+}
+
+/// Incidents: repeat sightings of one subject on one camera, grouped.
+class IncidentRepository {
+  IncidentRepository(this._api);
+  final ApiClient _api;
+
+  Future<List<Incident>> list({String? cameraId, bool? finalized, int limit = 50}) async {
+    final j = await _api.getJson('/api/incidents', query: {
+      'limit': limit,
+      if (cameraId != null) 'camera_id': cameraId,
+      if (finalized != null) 'finalized': finalized,
+    }) as List;
+    return j
+        .whereType<Map>()
+        .map((i) => Incident.fromJson(i.cast<String, dynamic>()))
+        .toList();
+  }
+
+  Future<Incident> get(String id) async => Incident.fromJson(
+      await _api.getJson('/api/incidents/$id') as Map<String, dynamic>);
+}
+
+/// Journeys: one subject's path across cameras.
+class JourneyRepository {
+  JourneyRepository(this._api);
+  final ApiClient _api;
+
+  Future<List<Journey>> list({bool? finalized, int limit = 50}) async {
+    final j = await _api.getJson('/api/journeys', query: {
+      'limit': limit,
+      if (finalized != null) 'finalized': finalized,
+    }) as List;
+    return j
+        .whereType<Map>()
+        .map((x) => Journey.fromJson(x.cast<String, dynamic>()))
+        .toList();
+  }
+
+  Future<Journey> get(String id) async => Journey.fromJson(
+      await _api.getJson('/api/journeys/$id') as Map<String, dynamic>);
+}
+
+/// Conversations: speech near a camera, grouped from transcripts.
+class ConversationRepository {
+  ConversationRepository(this._api);
+  final ApiClient _api;
+
+  Future<List<Conversation>> list({String? cameraId, int limit = 50}) async {
+    final j = await _api.getJson('/api/conversations', query: {
+      'limit': limit,
+      if (cameraId != null) 'camera_id': cameraId,
+    }) as List;
+    return j
+        .whereType<Map>()
+        .map((c) => Conversation.fromJson(c.cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// The conversation plus the lines it was built from. Only the detail
+  /// endpoint carries transcripts, so the list stays cheap.
+  Future<(Conversation, List<ConversationTranscript>)> get(String id) async {
+    final j = (await _api.getJson('/api/conversations/$id') as Map)
+        .cast<String, dynamic>();
+    final lines = (j['transcripts'] as List? ?? [])
+        .whereType<Map>()
+        .map((t) => ConversationTranscript.fromJson(t.cast<String, dynamic>()))
+        .toList();
+    return (Conversation.fromJson(j), lines);
+  }
+}
+
+/// Digests: periodic written summaries of what a camera saw.
+class DigestRepository {
+  DigestRepository(this._api);
+  final ApiClient _api;
+
+  Future<List<DigestEntry>> list({String? cameraId, int limit = 50}) async {
+    final j = await _api.getJson('/api/digests', query: {
+      'limit': limit,
+      if (cameraId != null) 'camera_id': cameraId,
+    }) as List;
+    return j
+        .whereType<Map>()
+        .map((d) => DigestEntry.fromJson(d.cast<String, dynamic>()))
+        .toList();
+  }
+}

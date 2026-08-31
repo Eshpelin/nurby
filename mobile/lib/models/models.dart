@@ -469,3 +469,222 @@ class SystemStatus {
   final int camerasRecording;
   final double? uptimeSeconds;
 }
+
+/// A cluster of repeat sightings of the same subject on one camera.
+///
+/// The backend groups observations into incidents so a person pacing in
+/// front of a door is one thing to look at rather than forty.
+class Incident {
+  Incident({
+    required this.id,
+    required this.cameraId,
+    required this.signatureKind,
+    required this.signatureKey,
+    required this.startedAt,
+    required this.lastSeenAt,
+    this.endedAt,
+    this.finalized = false,
+    this.occurrenceCount = 0,
+    this.summaryText,
+    this.thumbnails = const [],
+    this.peakObservationId,
+  });
+
+  factory Incident.fromJson(Map<String, dynamic> j) => Incident(
+        id: j['id'] as String,
+        cameraId: j['camera_id'] as String? ?? '',
+        signatureKind: j['signature_kind'] as String? ?? 'motion',
+        signatureKey: j['signature_key'] as String? ?? '',
+        startedAt: _date(j['started_at']) ?? DateTime.now(),
+        lastSeenAt: _date(j['last_seen_at']) ?? DateTime.now(),
+        endedAt: _date(j['ended_at']),
+        finalized: j['finalized'] as bool? ?? false,
+        occurrenceCount: (j['occurrence_count'] as num?)?.toInt() ?? 0,
+        summaryText: j['summary_text'] as String?,
+        thumbnails: (j['thumbnails'] as List? ?? [])
+            .whereType<Map>()
+            .map((t) => t.cast<String, dynamic>())
+            .toList(),
+        peakObservationId: j['peak_observation_id'] as String?,
+      );
+
+  final String id;
+  final String cameraId;
+
+  /// person | cluster | body | object | unknown | motion. Decides how the
+  /// key should be read: a name, an id, or a label.
+  final String signatureKind;
+  final String signatureKey;
+  final DateTime startedAt;
+  final DateTime lastSeenAt;
+  final DateTime? endedAt;
+  final bool finalized;
+  final int occurrenceCount;
+  final String? summaryText;
+  final List<Map<String, dynamic>> thumbnails;
+  final String? peakObservationId;
+
+  Duration get duration => lastSeenAt.difference(startedAt);
+}
+
+/// One subject's path across cameras.
+class Journey {
+  Journey({
+    required this.id,
+    required this.subjectKind,
+    required this.subjectKey,
+    required this.startedAt,
+    required this.lastSeenAt,
+    this.endedAt,
+    this.finalized = false,
+    this.camerasSeenCount = 0,
+    this.incidentsCount = 0,
+    this.summaryText,
+    this.segments = const [],
+  });
+
+  factory Journey.fromJson(Map<String, dynamic> j) => Journey(
+        id: j['id'] as String,
+        subjectKind: j['subject_kind'] as String? ?? 'person',
+        subjectKey: j['subject_key'] as String? ?? '',
+        startedAt: _date(j['started_at']) ?? DateTime.now(),
+        lastSeenAt: _date(j['last_seen_at']) ?? DateTime.now(),
+        endedAt: _date(j['ended_at']),
+        finalized: j['finalized'] as bool? ?? false,
+        camerasSeenCount: (j['cameras_seen_count'] as num?)?.toInt() ?? 0,
+        incidentsCount: (j['incidents_count'] as num?)?.toInt() ?? 0,
+        summaryText: j['summary_text'] as String?,
+        segments: (j['segments'] as List? ?? [])
+            .whereType<Map>()
+            .map((s) => s.cast<String, dynamic>())
+            .toList(),
+      );
+
+  final String id;
+  final String subjectKind;
+  final String subjectKey;
+  final DateTime startedAt;
+  final DateTime lastSeenAt;
+  final DateTime? endedAt;
+  final bool finalized;
+  final int camerasSeenCount;
+  final int incidentsCount;
+  final String? summaryText;
+  final List<Map<String, dynamic>> segments;
+
+  /// Camera names in the order the subject passed them, deduplicated so
+  /// pacing between two rooms does not read as a ten-camera journey.
+  List<String> get cameraPath {
+    final out = <String>[];
+    for (final s in segments) {
+      final name = s['camera_name'] as String?;
+      if (name != null && name.isNotEmpty && (out.isEmpty || out.last != name)) {
+        out.add(name);
+      }
+    }
+    return out;
+  }
+}
+
+/// A stretch of speech near a camera, grouped from transcripts.
+class Conversation {
+  Conversation({
+    required this.id,
+    required this.cameraId,
+    required this.startedAt,
+    required this.endedAtProvisional,
+    this.endedAt,
+    this.transcriptCount = 0,
+    this.finalized = false,
+    this.summaryText,
+    this.cleanedText,
+    this.speakersSeen = const [],
+    this.hasClip = false,
+  });
+
+  factory Conversation.fromJson(Map<String, dynamic> j) => Conversation(
+        id: j['id'] as String,
+        cameraId: j['camera_id'] as String? ?? '',
+        startedAt: _date(j['started_at']) ?? DateTime.now(),
+        endedAtProvisional:
+            _date(j['ended_at_provisional']) ?? DateTime.now(),
+        endedAt: _date(j['ended_at']),
+        transcriptCount: (j['transcript_count'] as num?)?.toInt() ?? 0,
+        finalized: j['finalized'] as bool? ?? false,
+        summaryText: j['summary_text'] as String?,
+        cleanedText: j['cleaned_text'] as String?,
+        speakersSeen: (j['speakers_seen'] as List? ?? [])
+            .map((s) => s.toString())
+            .toList(),
+        hasClip: j['has_clip'] as bool? ?? false,
+      );
+
+  final String id;
+  final String cameraId;
+  final DateTime startedAt;
+  final DateTime endedAtProvisional;
+  final DateTime? endedAt;
+  final int transcriptCount;
+  final bool finalized;
+  final String? summaryText;
+  final String? cleanedText;
+  final List<String> speakersSeen;
+  final bool hasClip;
+}
+
+/// One line of speech inside a conversation.
+class ConversationTranscript {
+  ConversationTranscript({
+    required this.id,
+    required this.startedAt,
+    required this.text,
+    this.speakerName,
+  });
+
+  factory ConversationTranscript.fromJson(Map<String, dynamic> j) =>
+      ConversationTranscript(
+        id: j['id'] as String,
+        startedAt: _date(j['started_at']) ?? DateTime.now(),
+        text: j['text'] as String? ?? '',
+        speakerName: j['speaker_name'] as String?,
+      );
+
+  final String id;
+  final DateTime startedAt;
+  final String text;
+  final String? speakerName;
+}
+
+/// A periodic written summary of what a camera saw.
+class DigestEntry {
+  DigestEntry({
+    required this.id,
+    required this.period,
+    required this.summary,
+    required this.generatedAt,
+    this.cameraId,
+    this.highlights = const [],
+    this.totalObservations = 0,
+  });
+
+  factory DigestEntry.fromJson(Map<String, dynamic> j) => DigestEntry(
+        id: j['id'] as String,
+        period: j['period'] as String? ?? '',
+        summary: j['summary'] as String? ?? '',
+        generatedAt: _date(j['generated_at']) ?? DateTime.now(),
+        cameraId: j['camera_id'] as String?,
+        highlights:
+            (j['highlights'] as List? ?? []).map((h) => h.toString()).toList(),
+        totalObservations: (j['total_observations'] as num?)?.toInt() ?? 0,
+      );
+
+  final String id;
+  final String period;
+  final String summary;
+  final DateTime generatedAt;
+
+  /// Null means the digest covers every camera.
+  final String? cameraId;
+  final List<String> highlights;
+  final int totalObservations;
+}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { extractApiError } from "@/lib/api-error";
 import TelegramSection from "@/components/TelegramSection";
+import { VoiceSettingsCard } from "@/components/voice/VoiceSettingsCard";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
 import { PairMobileCard } from "@/components/PairMobileCard";
 import { ShareLinksCard } from "@/components/ShareLinksCard";
@@ -999,6 +1000,10 @@ export default function SettingsPage() {
             </div>
           );
         })()}
+
+        {/* Camera Voice card. Self-contained: trigger and modal live in
+            the component so this page keeps one line for it. */}
+        <VoiceSettingsCard />
 
         {/* Privacy Blur card */}
         {(() => {

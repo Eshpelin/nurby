@@ -210,6 +210,16 @@ final shareRepoProvider =
 final notificationRepoProvider = Provider((ref) => NotificationRepository(
     ref.watch(apiClientProvider),
     outbox: ref.watch(outboxProvider)));
+final incidentRepoProvider =
+    Provider((ref) => IncidentRepository(ref.watch(apiClientProvider)));
+final journeyRepoProvider =
+    Provider((ref) => JourneyRepository(ref.watch(apiClientProvider)));
+final conversationRepoProvider =
+    Provider((ref) => ConversationRepository(ref.watch(apiClientProvider)));
+final digestRepoProvider =
+    Provider((ref) => DigestRepository(ref.watch(apiClientProvider)));
+final voiceRepoProvider =
+    Provider((ref) => VoiceRepository(ref.watch(apiClientProvider)));
 final systemRepoProvider =
     Provider((ref) => SystemRepository(ref.watch(apiClientProvider)));
 

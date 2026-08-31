@@ -6,6 +6,7 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
+import '../voice/live_conversation_card.dart';
 
 const _pageSize = 50;
 
@@ -137,6 +138,10 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
       appBar: AppBar(title: const Text('Timeline')),
       body: Column(
         children: [
+          // A live doorstep exchange outranks the timeline below it: it
+          // is the one thing on this screen with somebody waiting on the
+          // other end. Renders nothing when no conversation is open.
+          const LiveConversationCard(),
           _filterBar(cameras),
           Expanded(
             child: firstPage.when(
