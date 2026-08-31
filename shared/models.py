@@ -2147,3 +2147,44 @@ class HouseholdFact(Base):
     __table_args__ = (
         UniqueConstraint("subject_key", "kind", "source", name="uq_household_fact"),
     )
+
+
+class SpeakerCapability(Base):
+    """What a camera can actually be made to say, as probed (issue #153).
+
+    Deliberately its own table rather than columns on ``Camera``. This is
+    *discovered*, not configured, and conflating the two makes it
+    impossible to tell "we have not looked yet" (no row) from "we looked
+    and it cannot" (``supported=False``) from "it can but the household
+    turned it off" (``Camera.speaker_enabled``). Those three need
+    different words in the UI.
+
+    A row is written whether the probe succeeds or fails. A failed probe
+    is a finding, not an absence, and ``detail`` keeps the raw evidence so
+    a later look does not have to re-run against hardware to know what was
+    seen.
+    """
+
+    __tablename__ = "speaker_capabilities"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    camera_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("cameras.id", ondelete="CASCADE"),
+        nullable=False, unique=True, index=True,
+    )
+    # onvif_backchannel | hikvision | dahua | reolink | tapo |
+    # http_device | none
+    transport: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
+    supported: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # RTP payload name the camera offered: pcmu, pcma, l16, aac.
+    codec: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    channels: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Where to send audio, when the probe found a specific endpoint.
+    endpoint: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    vendor: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    probed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    probe_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
