@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import 'core/providers.dart';
 import 'core/theme.dart';
+import 'features/admin/admin_screens.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/qr_pair_screen.dart';
 import 'features/auth/server_screen.dart';
@@ -14,15 +15,20 @@ import 'features/ask/ask_screen.dart';
 import 'features/cameras/camera_detail_screen.dart';
 import 'features/cameras/cameras_screen.dart';
 import 'features/events/events_screen.dart';
+import 'features/guardian/guardian_admin_screen.dart';
+import 'features/guardian/guardian_claim_screen.dart';
+import 'features/guardian/guardian_notifications_screen.dart';
 import 'features/guardian/guardian_screen.dart';
 import 'features/more/more_screen.dart';
 import 'features/notifications/notifications_screen.dart';
 import 'features/people/people_screen.dart';
 import 'features/conversations/conversations_screen.dart';
 import 'features/digests/digests_screen.dart';
+import 'features/follow/follow_screen.dart';
 import 'features/incidents/incidents_screen.dart';
 import 'features/journeys/journeys_screen.dart';
 import 'features/recordings/recordings_screen.dart';
+import 'features/reports/reports_screen.dart';
 import 'features/rules/rule_editor_screen.dart';
 import 'features/rules/rules_screen.dart';
 import 'features/search/search_screen.dart';
@@ -79,6 +85,10 @@ final _routerProvider = Provider<GoRouter>((ref) {
           loc == '/setup' ||
           loc == '/checking' ||
           loc == '/pair';
+      // Accepting a guardian invite happens before an account exists:
+      // the magic-link token in the invite is the credential. Redirecting
+      // it to /login would make the invite impossible to accept.
+      final isClaim = loc.startsWith('/guardian/claim');
       switch (phase) {
         case AuthPhase.noServer:
           return (loc == '/server' || loc == '/pair') ? null : '/server';
@@ -87,7 +97,10 @@ final _routerProvider = Provider<GoRouter>((ref) {
         case AuthPhase.needsSetup:
           return loc == '/setup' ? null : '/setup';
         case AuthPhase.loggedOut:
-          return (loc == '/login' || loc == '/server' || loc == '/pair')
+          return (loc == '/login' ||
+                  loc == '/server' ||
+                  loc == '/pair' ||
+                  isClaim)
               ? null
               : '/login';
         case AuthPhase.loggedIn:
@@ -99,6 +112,11 @@ final _routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/pair', builder: (_, __) => const QrPairScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/setup', builder: (_, __) => const SetupScreen()),
+      GoRoute(
+        path: '/guardian/claim',
+        builder: (_, state) => GuardianClaimScreen(
+            token: state.uri.queryParameters['token']),
+      ),
       GoRoute(
         path: '/checking',
         builder: (_, __) => const Scaffold(
@@ -145,7 +163,21 @@ final _routerProvider = Provider<GoRouter>((ref) {
                   builder: (_, state) =>
                       RuleEditorScreen(ruleId: state.pathParameters['id']),
                 ),
-                GoRoute(path: 'people', builder: (_, __) => const PeopleScreen()),
+                GoRoute(
+                  path: 'people',
+                  builder: (_, __) => const PeopleScreen(),
+                  routes: [
+                    // kind is person or cluster: the two follow endpoints
+                    // are keyed differently but return the same bundle.
+                    GoRoute(
+                      path: 'follow/:kind/:id',
+                      builder: (_, state) => FollowScreen(
+                        kind: state.pathParameters['kind'] ?? 'person',
+                        id: state.pathParameters['id']!,
+                      ),
+                    ),
+                  ],
+                ),
                 GoRoute(
                     path: 'vehicles', builder: (_, __) => const VehiclesScreen()),
                 GoRoute(
@@ -159,6 +191,14 @@ final _routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(
                     path: 'digests', builder: (_, __) => const DigestsScreen()),
                 GoRoute(
+                    path: 'reports', builder: (_, __) => const ReportsScreen()),
+                GoRoute(
+                    path: 'access', builder: (_, __) => const CameraAccessScreen()),
+                GoRoute(
+                    path: 'pipeline', builder: (_, __) => const PipelineScreen()),
+                GoRoute(
+                    path: 'ask-admin', builder: (_, __) => const AskAdminScreen()),
+                GoRoute(
                     path: 'recordings',
                     builder: (_, __) => const RecordingsScreen()),
                 GoRoute(path: 'search', builder: (_, __) => const SearchScreen()),
@@ -167,7 +207,19 @@ final _routerProvider = Provider<GoRouter>((ref) {
                     path: 'notifications',
                     builder: (_, __) => const NotificationsScreen()),
                 GoRoute(
-                    path: 'guardian', builder: (_, __) => const GuardianScreen()),
+                  path: 'guardian',
+                  builder: (_, __) => const GuardianScreen(),
+                  routes: [
+                    GoRoute(
+                      path: 'notifications',
+                      builder: (_, __) => const GuardianNotificationsScreen(),
+                    ),
+                    GoRoute(
+                      path: 'admin',
+                      builder: (_, __) => const GuardianAdminScreen(),
+                    ),
+                  ],
+                ),
                 GoRoute(
                     path: 'settings', builder: (_, __) => const SettingsScreen()),
               ],

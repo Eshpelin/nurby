@@ -210,6 +210,27 @@ final shareRepoProvider =
 final notificationRepoProvider = Provider((ref) => NotificationRepository(
     ref.watch(apiClientProvider),
     outbox: ref.watch(outboxProvider)));
+final transcriptRepoProvider = Provider<TranscriptRepository>(
+    (ref) => TranscriptRepository(ref.watch(apiClientProvider)));
+
+final bodyClusterRepoProvider = Provider<BodyClusterRepository>(
+    (ref) => BodyClusterRepository(ref.watch(apiClientProvider)));
+
+final reportRepoProvider =
+    Provider<ReportRepository>((ref) => ReportRepository(ref.watch(apiClientProvider)));
+
+final guardianRepoProvider = Provider<GuardianRepository>(
+    (ref) => GuardianRepository(ref.watch(apiClientProvider)));
+
+final privacyZoneRepoProvider = Provider<PrivacyZoneRepository>(
+    (ref) => PrivacyZoneRepository(ref.watch(apiClientProvider)));
+
+final ptzRepoProvider =
+    Provider<PtzRepository>((ref) => PtzRepository(ref.watch(apiClientProvider)));
+
+final followRepoProvider =
+    Provider<FollowRepository>((ref) => FollowRepository(ref.watch(apiClientProvider)));
+
 final incidentRepoProvider =
     Provider((ref) => IncidentRepository(ref.watch(apiClientProvider)));
 final journeyRepoProvider =

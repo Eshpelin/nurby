@@ -639,6 +639,7 @@ class ConversationTranscript {
     required this.startedAt,
     required this.text,
     this.speakerName,
+    this.originalText,
   });
 
   factory ConversationTranscript.fromJson(Map<String, dynamic> j) =>
@@ -647,12 +648,19 @@ class ConversationTranscript {
         startedAt: _date(j['started_at']) ?? DateTime.now(),
         text: j['text'] as String? ?? '',
         speakerName: j['speaker_name'] as String?,
+        originalText: j['original_text'] as String?,
       );
 
   final String id;
   final DateTime startedAt;
   final String text;
   final String? speakerName;
+
+  /// What was actually heard, kept once a line is corrected. Null means
+  /// the line has never been edited.
+  final String? originalText;
+
+  bool get edited => originalText != null && originalText != text;
 }
 
 /// A periodic written summary of what a camera saw.
@@ -687,4 +695,250 @@ class DigestEntry {
   final String? cameraId;
   final List<String> highlights;
   final int totalObservations;
+}
+
+// --- Follow feed (issue #163) ------------------------------------------
+//
+// Everything about one subject in one bundle: who they are, aggregate
+// stats, and a single time-ordered feed mixing observations, incidents,
+// conversations, transcripts and recordings.
+
+/// Who a follow feed is about. A person carries a name; a cluster carries
+/// an auto label and an appearance description, because nobody has told
+/// us a name for them yet.
+class FollowSubject {
+  FollowSubject({
+    required this.kind,
+    required this.id,
+    this.displayName,
+    this.relationship,
+    this.photoPath,
+    this.autoLabel,
+    this.autoLabelNumber,
+    this.appearanceDescription,
+    this.sampleThumbnailPath,
+  });
+
+  factory FollowSubject.fromJson(Map<String, dynamic> j) => FollowSubject(
+        kind: j['kind'] as String? ?? 'person',
+        id: j['id'] as String? ?? '',
+        displayName: j['display_name'] as String?,
+        relationship: j['relationship'] as String?,
+        photoPath: j['photo_path'] as String?,
+        autoLabel: j['auto_label'] as String?,
+        autoLabelNumber: (j['auto_label_number'] as num?)?.toInt(),
+        appearanceDescription: j['appearance_description'] as String?,
+        sampleThumbnailPath: j['sample_thumbnail_path'] as String?,
+      );
+
+  final String kind; // person | cluster
+  final String id;
+  final String? displayName;
+  final String? relationship;
+  final String? photoPath;
+  final String? autoLabel;
+  final int? autoLabelNumber;
+  final String? appearanceDescription;
+  final String? sampleThumbnailPath;
+
+  /// What to put at the top of the screen. A cluster has no name, and
+  /// showing its uuid would be worse than saying plainly that this is
+  /// someone the household has not identified.
+  String get title {
+    if (kind == 'person') {
+      return (displayName?.isNotEmpty ?? false) ? displayName! : 'Unnamed';
+    }
+    if (autoLabel?.isNotEmpty ?? false) return autoLabel!;
+    if (autoLabelNumber != null) return 'Unknown person $autoLabelNumber';
+    return 'Unknown person';
+  }
+
+  String? get subtitle =>
+      kind == 'person' ? relationship : appearanceDescription;
+}
+
+/// One camera the subject was seen on, with when and how often.
+class FollowCamera {
+  FollowCamera({
+    required this.id,
+    required this.name,
+    required this.count,
+    this.firstSeenAt,
+    this.lastSeenAt,
+  });
+
+  factory FollowCamera.fromJson(Map<String, dynamic> j) => FollowCamera(
+        id: j['id'] as String? ?? '',
+        name: j['name'] as String? ?? 'Unknown',
+        count: (j['count'] as num?)?.toInt() ?? 0,
+        firstSeenAt: _date(j['first_seen_at']),
+        lastSeenAt: _date(j['last_seen_at']),
+      );
+
+  final String id;
+  final String name;
+  final int count;
+  final DateTime? firstSeenAt;
+  final DateTime? lastSeenAt;
+}
+
+class FollowStats {
+  FollowStats({
+    required this.totalSightings,
+    required this.camerasSeen,
+    required this.hourBuckets,
+    this.firstSeenAt,
+    this.lastSeenAt,
+    this.incidentsCount = 0,
+    this.conversationsCount = 0,
+    this.recordingsCount = 0,
+  });
+
+  factory FollowStats.fromJson(Map<String, dynamic> j) => FollowStats(
+        totalSightings: (j['total_sightings'] as num?)?.toInt() ?? 0,
+        firstSeenAt: _date(j['first_seen_at']),
+        lastSeenAt: _date(j['last_seen_at']),
+        camerasSeen: (j['cameras_seen'] as List? ?? [])
+            .whereType<Map>()
+            .map((c) => FollowCamera.fromJson(c.cast<String, dynamic>()))
+            .toList(),
+        // Keys are two-digit hours as strings ("00" to "23").
+        hourBuckets: {
+          for (final e in (j['hour_buckets'] as Map? ?? {}).entries)
+            '${e.key}': (e.value as num?)?.toInt() ?? 0,
+        },
+        incidentsCount: (j['incidents_count'] as num?)?.toInt() ?? 0,
+        conversationsCount: (j['conversations_count'] as num?)?.toInt() ?? 0,
+        recordingsCount: (j['recordings_count'] as num?)?.toInt() ?? 0,
+      );
+
+  final int totalSightings;
+  final DateTime? firstSeenAt;
+  final DateTime? lastSeenAt;
+  final List<FollowCamera> camerasSeen;
+  final Map<String, int> hourBuckets;
+  final int incidentsCount;
+  final int conversationsCount;
+  final int recordingsCount;
+
+  /// Sightings per hour of day, 0 to 23, zero-filled. The API only sends
+  /// hours that actually have sightings, so a heatmap built straight from
+  /// the map would silently omit quiet hours and misread the day.
+  List<int> get hoursOfDay => [
+        for (var h = 0; h < 24; h++)
+          hourBuckets[h.toString().padLeft(2, '0')] ?? 0,
+      ];
+}
+
+/// One entry in the unified feed. The kinds carry different fields, so
+/// the shared ones are typed and the rest stay in [raw].
+class FollowItem {
+  FollowItem({
+    required this.kind,
+    required this.id,
+    required this.at,
+    required this.raw,
+    this.cameraId,
+    this.cameraName,
+  });
+
+  factory FollowItem.fromJson(Map<String, dynamic> j) => FollowItem(
+        kind: j['kind'] as String? ?? 'observation',
+        id: j['id'] as String? ?? '',
+        at: _date(j['ts']) ?? DateTime.now(),
+        cameraId: j['camera_id'] as String?,
+        cameraName: j['camera_name'] as String?,
+        raw: j,
+      );
+
+  final String kind; // observation | incident | conversation | transcript | recording
+  final String id;
+  final DateTime at;
+  final String? cameraId;
+  final String? cameraName;
+  final Map<String, dynamic> raw;
+}
+
+class FollowBundle {
+  FollowBundle({
+    required this.subject,
+    required this.stats,
+    required this.feed,
+  });
+
+  factory FollowBundle.fromJson(Map<String, dynamic> j) => FollowBundle(
+        subject: FollowSubject.fromJson(
+            (j['subject'] as Map? ?? {}).cast<String, dynamic>()),
+        stats: FollowStats.fromJson(
+            (j['stats'] as Map? ?? {}).cast<String, dynamic>()),
+        feed: (j['feed'] as List? ?? [])
+            .whereType<Map>()
+            .map((f) => FollowItem.fromJson(f.cast<String, dynamic>()))
+            .toList(),
+      );
+
+  final FollowSubject subject;
+  final FollowStats stats;
+  final List<FollowItem> feed;
+}
+
+// --- Scheduled reports (issue #166) -------------------------------------
+
+/// A saved Ask question on a clock. Distinct from the morning digest (one
+/// fixed household recap) and from per-camera digests (periodic
+/// summaries): each report is any question, optionally about one person.
+class ScheduledReport {
+  ScheduledReport({
+    required this.id,
+    required this.name,
+    required this.prompt,
+    required this.hour,
+    required this.minute,
+    required this.enabled,
+    this.personId,
+    this.days,
+    this.delivery = const {},
+    this.providerId,
+    this.lastRunAt,
+    this.lastStatus,
+    this.lastOutput,
+  });
+
+  factory ScheduledReport.fromJson(Map<String, dynamic> j) => ScheduledReport(
+        id: j['id'] as String,
+        name: j['name'] as String? ?? '',
+        prompt: j['prompt'] as String? ?? '',
+        hour: (j['hour'] as num?)?.toInt() ?? 19,
+        minute: (j['minute'] as num?)?.toInt() ?? 0,
+        enabled: j['enabled'] as bool? ?? true,
+        personId: j['person_id'] as String?,
+        days: (j['days'] as List?)?.map((d) => d.toString()).toList(),
+        delivery: (j['delivery'] as Map? ?? {}).cast<String, dynamic>(),
+        providerId: j['provider_id'] as String?,
+        lastRunAt: _date(j['last_run_at']),
+        lastStatus: j['last_status'] as String?,
+        lastOutput: j['last_output'] as String?,
+      );
+
+  final String id;
+  final String name;
+  final String prompt;
+  final int hour;
+  final int minute;
+  final bool enabled;
+  final String? personId;
+
+  /// Null or empty means every day. The server normalises an empty list
+  /// to null, so both are treated the same here.
+  final List<String>? days;
+  final Map<String, dynamic> delivery;
+  final String? providerId;
+  final DateTime? lastRunAt;
+  final String? lastStatus;
+  final String? lastOutput;
+
+  bool get everyDay => days == null || days!.isEmpty;
+
+  String get timeLabel =>
+      '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
 }
