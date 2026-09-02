@@ -5,6 +5,22 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 
+/// How a discovered camera should read in the scan results.
+///
+/// Most cameras report an ONVIF name like "IPCamera", which tells a
+/// household nothing when three of them answer the same scan. The
+/// manufacturer and model are what distinguish them.
+String discoveredTitle(Map<String, dynamic> device) {
+  final made = [device['manufacturer'], device['model']]
+      .whereType<String>()
+      .map((x) => x.trim())
+      .where((x) => x.isNotEmpty)
+      .join(' ');
+  if (made.isNotEmpty) return made;
+  final name = (device['name'] as String?)?.trim() ?? '';
+  return name.isEmpty ? 'Camera' : name;
+}
+
 void showAddCameraSheet(BuildContext context, WidgetRef ref) {
   showModalBottomSheet<void>(
     context: context,
@@ -34,6 +50,12 @@ class _AddCameraSheetState extends ConsumerState<_AddCameraSheet> {
   String? _error;
   String? _testResult;
 
+  // Discovery state. `_scanned` distinguishes "not scanned yet" from
+  // "scanned and found nothing", which want different words on screen.
+  bool _scanning = false;
+  bool _scanned = false;
+  List<Map<String, dynamic>> _found = const [];
+
   @override
   void dispose() {
     _name.dispose();
@@ -50,6 +72,41 @@ class _AddCameraSheetState extends ConsumerState<_AddCameraSheet> {
         if (_username.text.isNotEmpty) 'username': _username.text,
         if (_password.text.isNotEmpty) 'password': _password.text,
       };
+
+  Future<void> _scan() async {
+    setState(() {
+      _scanning = true;
+      _error = null;
+    });
+    try {
+      final found = await ref.read(cameraRepoProvider).discover();
+      if (!mounted) return;
+      setState(() {
+        _found = found;
+        _scanned = true;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = apiErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  /// Fill the form from a discovered device. Credentials are deliberately
+  /// left blank: ONVIF discovery reports whether a camera wants them but
+  /// never what they are, and a prefilled username nobody typed would be
+  /// a guess presented as a fact.
+  void _useDiscovered(Map<String, dynamic> d) {
+    setState(() {
+      _name.text = discoveredTitle(d);
+      _url.text = d['stream_url'] as String? ?? '';
+      _type = 'rtsp';
+      _testResult = null;
+      _error = null;
+      _found = const [];
+      _scanned = false;
+    });
+  }
 
   Future<void> _test() async {
     setState(() {
@@ -132,6 +189,39 @@ class _AddCameraSheetState extends ConsumerState<_AddCameraSheet> {
                   style: TextStyle(color: NurbyColors.accent)),
               onPressed: _busy ? null : _createDemo,
             ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: _scanning
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.wifi_find_outlined),
+              label: Text(_scanning ? 'Scanning' : 'Scan for cameras'),
+              onPressed: _busy || _scanning ? null : _scan,
+            ),
+            if (_found.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              for (final d in _found) DiscoveredTile(
+                device: d,
+                onUse: () => _useDiscovered(d),
+              ),
+            ] else if (_scanned) ...[
+              const SizedBox(height: 8),
+              const Text(
+                // Discovery is WS-Discovery multicast from the Nurby
+                // server, so a camera the phone can reach is not
+                // necessarily one the server found. Saying where the scan
+                // ran from is the difference between a useful message and
+                // a dead end.
+                'No cameras answered. The scan runs from the Nurby server, '
+                'so the camera has to be on the same network as it. Cameras '
+                'with ONVIF turned off will not answer either. You can '
+                'still add one by hand below.',
+                style: TextStyle(
+                    color: NurbyColors.mutedForeground, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 8),
             const Row(children: [
               Expanded(child: Divider()),
@@ -229,6 +319,48 @@ class _AddCameraSheetState extends ConsumerState<_AddCameraSheet> {
             ]),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+/// One camera the scan turned up.
+class DiscoveredTile extends StatelessWidget {
+  const DiscoveredTile({super.key, required this.device, required this.onUse});
+
+  final Map<String, dynamic> device;
+  final VoidCallback onUse;
+
+  @override
+  Widget build(BuildContext context) {
+    final already = device['already_added'] == true;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 6),
+      child: ListTile(
+        dense: true,
+        title: Text(discoveredTitle(device),
+            style: const TextStyle(fontSize: 13)),
+        subtitle: Text(
+          [
+            '${device['ip']}:${device['port']}',
+            if ((device['resolution'] as String?)?.isNotEmpty ?? false)
+              '${device['resolution']}',
+            if (device['auth_required'] == true) 'needs a login',
+          ].join(' · '),
+          style: const TextStyle(
+              color: NurbyColors.mutedForeground, fontSize: 11),
+        ),
+        // A camera already in the household is shown rather than hidden,
+        // so someone hunting for a camera they just plugged in can tell
+        // "already added" from "not found".
+        trailing: already
+            ? const Text('Added',
+                style: TextStyle(
+                    color: NurbyColors.mutedForeground, fontSize: 11))
+            : const Icon(Icons.add, size: 18, color: NurbyColors.accent),
+        onTap: already ? null : onUse,
       ),
     );
   }

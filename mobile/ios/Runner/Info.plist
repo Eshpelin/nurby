@@ -51,7 +51,9 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Nurby connects to your self-hosted camera server on the local network.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Required by the video engine for two-way audio features.</string>
+	<string>Used for two-way audio, and to use this phone as a microphone for one of your cameras.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Used to add a face sample for a person from a photo you choose.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Required by the video engine; Nurby does not record from this device by default.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
