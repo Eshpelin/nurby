@@ -9,6 +9,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
+import 'ask_extras.dart';
 
 enum _ItemKind { user, assistant, tool, error }
 
@@ -39,6 +40,21 @@ class _AskScreenState extends ConsumerState<AskScreen> {
 
   /// Assistant bubble currently receiving streamed deltas.
   _ChatItem? _current;
+
+  // Issue #170: mentions picked in this composer, the chosen model, and
+  // the run id of the last answer so it can be inspected.
+  final List<Mention> _picked = [];
+  ModelChoice? _model;
+  String? _lastRunId;
+
+  @override
+  void initState() {
+    super.initState();
+    loadModelChoice().then((c) {
+      if (mounted) setState(() => _model = c);
+    });
+    _composer.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
@@ -80,8 +96,17 @@ class _AskScreenState extends ConsumerState<AskScreen> {
 
     try {
       final api = ref.read(apiClientProvider);
-      final j = await api.postJson('/api/agent/ask',
-          body: {'question': question}) as Map;
+      final mentions = mentionsStillPresent(question, _picked);
+      final j = await api.postJson('/api/agent/ask', body: {
+        'question': question,
+        if (_model != null) 'provider_id': _model!.providerId,
+        if (_model != null) 'model': _model!.model,
+        if (mentions.isNotEmpty)
+          'mentions': [for (final m in mentions) m.toRef()],
+      }) as Map;
+      _picked.clear();
+      _lastRunId = j['run_id'] as String?;
+      ref.invalidate(usageTodayProvider);
       final wsUrl =
           j['ws_url'] as String? ?? '/ws/agent/${j['run_id'] as String? ?? ''}';
       final wsBase = ref.read(serverConfigProvider).wsBaseUrl;
@@ -308,12 +333,32 @@ class _AskScreenState extends ConsumerState<AskScreen> {
     );
   }
 
+  Future<void> _inspectRun(String id) async {
+    try {
+      final j = (await ref.read(apiClientProvider).getJson('/api/agent/runs/$id')
+              as Map)
+          .cast<String, dynamic>();
+      if (!mounted) return;
+      showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: NurbyColors.cardElevated,
+        isScrollControlled: true,
+        builder: (_) => RunInspection(run: j),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+    }
+  }
+
   Future<void> _loadRun(String id) async {
     if (id.isEmpty) return;
     try {
       final j = await ref.read(apiClientProvider).getJson('/api/agent/runs/$id')
           as Map;
       if (!mounted) return;
+      _lastRunId = id;
       final question = j['question'] as String? ?? '';
       final answer = j['answer'] as String? ??
           j['final_answer'] as String? ??
@@ -342,6 +387,25 @@ class _AskScreenState extends ConsumerState<AskScreen> {
       appBar: AppBar(
         title: const Text('Ask Nurby'),
         actions: [
+          const UsageChip(),
+          // What the last answer actually looked at. Only once there is
+          // a run to inspect; a greyed button on an empty chat is noise.
+          if (_lastRunId != null && !_running)
+            IconButton(
+              tooltip: 'What did that run look at?',
+              icon: const Icon(Icons.manage_search),
+              onPressed: () => _inspectRun(_lastRunId!),
+            ),
+          IconButton(
+            tooltip: _model == null ? 'Server default model' : _model!.model,
+            icon: Icon(Icons.auto_awesome,
+                color: _model == null ? null : NurbyColors.accent),
+            onPressed: () async {
+              final c = await pickModel(context, _model);
+              await saveModelChoice(c);
+              if (mounted) setState(() => _model = c);
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: 'Past runs',
@@ -368,6 +432,33 @@ class _AskScreenState extends ConsumerState<AskScreen> {
   }
 
   Widget _composerBar() {
+    final query = activeMentionQuery(
+        _composer.text, _composer.selection.baseOffset);
+    final all = ref.watch(mentionsProvider).value ?? const <Mention>[];
+    final candidates =
+        query == null ? const <Mention>[] : matchMentions(all, query);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        MentionStrip(
+          candidates: candidates,
+          onPick: (m) {
+            final r = insertMention(
+                _composer.text, _composer.selection.baseOffset, m.name);
+            _composer.value = TextEditingValue(
+              text: r.text,
+              selection: TextSelection.collapsed(offset: r.cursor),
+            );
+            if (!_picked.any((p) => p.id == m.id)) _picked.add(m);
+          },
+        ),
+        _composerInput(),
+      ],
+    );
+  }
+
+  Widget _composerInput() {
     return Container(
       decoration: const BoxDecoration(
         color: NurbyColors.card,
