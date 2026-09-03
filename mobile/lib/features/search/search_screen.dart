@@ -51,6 +51,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   String? _error;
   List<Observation> _results = const [];
 
+  /// Spoken matches (issue #176). Searched in parallel with what was
+  /// seen, since "who mentioned the parcel" is as much a search as "who
+  /// carried one".
+  List<Map<String, dynamic>> _spoken = const [];
+
   bool _askLoading = false;
   String? _askAnswer;
   String? _askNote;
@@ -88,12 +93,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       _askNote = null;
     });
     try {
-      final results = await ref
-          .read(searchRepoProvider)
-          .search(_query, cameraId: _cameraId);
+      final seen = ref.read(searchRepoProvider).search(_query, cameraId: _cameraId);
+      // Transcript search is secondary. If it fails the visual results
+      // still show, so its error is swallowed rather than sinking both.
+      final heard = ref
+          .read(transcriptRepoProvider)
+          .search(_query, cameraId: _cameraId)
+          .catchError((_) => const <Map<String, dynamic>>[]);
+      final results = await seen;
+      final spoken = await heard;
       if (!mounted || seq != _seq) return;
       setState(() {
         _results = results;
+        _spoken = spoken;
         _loading = false;
         _searched = true;
       });
@@ -229,7 +241,44 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ),
           ),
-        if (results.isEmpty)
+        if (_spoken.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            sliver: SliverList.list(children: [
+              const Padding(
+                padding: EdgeInsets.only(bottom: 6, left: 4),
+                child: Text('SAID',
+                    style: TextStyle(
+                        fontFamily: 'Menlo',
+                        fontSize: 10,
+                        letterSpacing: 1.4,
+                        color: NurbyColors.accent,
+                        fontWeight: FontWeight.w600)),
+              ),
+              for (final t in _spoken.take(8))
+                Card(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  child: ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.record_voice_over_outlined,
+                        size: 18, color: NurbyColors.mutedForeground),
+                    title: Text('${t['text']}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13)),
+                    subtitle: t['started_at'] == null
+                        ? null
+                        : Text(
+                            DateFormat('MMM d, HH:mm').format(
+                                DateTime.parse('${t['started_at']}').toLocal()),
+                            style: const TextStyle(
+                                fontSize: 11,
+                                color: NurbyColors.mutedForeground)),
+                  ),
+                ),
+            ]),
+          ),
+        if (results.isEmpty && _spoken.isEmpty)
           const SliverFillRemaining(
             hasScrollBody: false,
             child: _EmptyHint(
@@ -238,7 +287,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               subtitle: 'Try different words or a wider time range.',
             ),
           )
-        else
+        else if (results.isNotEmpty)
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
             sliver: SliverGrid(

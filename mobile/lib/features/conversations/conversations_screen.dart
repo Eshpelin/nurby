@@ -164,34 +164,151 @@ class _Transcripts extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: lines
-              .map((line) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: RichText(
-                      text: TextSpan(
-                        style: DefaultTextStyle.of(context)
-                            .style
-                            .copyWith(fontSize: 12),
-                        children: [
-                          TextSpan(
-                            text:
-                                '${DateFormat('HH:mm:ss').format(line.startedAt)}  ',
-                            style: const TextStyle(
-                                color: NurbyColors.mutedForeground),
-                          ),
-                          if (line.speakerName != null)
-                            TextSpan(
-                              text: '${line.speakerName}: ',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600),
-                            ),
-                          TextSpan(text: line.text),
-                        ],
-                      ),
-                    ),
+              .map((line) => _TranscriptLine(
+                    line: line,
+                    conversationId: conversationId,
                   ))
               .toList(),
         );
       },
     );
   }
+}
+
+
+/// One line, with correction and deletion on long-press (issue #176).
+///
+/// Correction matters because STT gets names and addresses wrong, and a
+/// wrong line feeds summaries, incidents and agent answers. Deletion
+/// matters because a transcript is a recording of someone speaking near
+/// a house. Both belong here, on the line, not in a separate manager.
+class _TranscriptLine extends ConsumerWidget {
+  const _TranscriptLine({required this.line, required this.conversationId});
+
+  final ConversationTranscript line;
+  final String conversationId;
+
+  Future<void> _menu(BuildContext context, WidgetRef ref) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: NurbyColors.cardElevated,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('"${line.text}"',
+                  style: const TextStyle(
+                      fontSize: 13, fontStyle: FontStyle.italic)),
+            ),
+            if (line.edited)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text('Heard as: "${line.originalText}"',
+                    style: const TextStyle(
+                        fontSize: 12, color: NurbyColors.mutedForeground)),
+              ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Correct this line'),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: NurbyColors.danger),
+              title: const Text('Delete this line',
+                  style: TextStyle(color: NurbyColors.danger)),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+    final repo = ref.read(transcriptRepoProvider);
+    try {
+      if (choice == 'edit') {
+        final controller = TextEditingController(text: line.text);
+        final text = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: NurbyColors.cardElevated,
+            title: const Text('Correct the line'),
+            content: TextField(controller: controller, maxLines: 3, autofocus: true),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                  child: const Text('Save')),
+            ],
+          ),
+        );
+        if (text == null || text.isEmpty || text == line.text) return;
+        await repo.correct(line.id, text);
+      } else {
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: NurbyColors.cardElevated,
+            title: const Text('Delete this line?'),
+            content: const Text(
+                'It is removed from the transcript for good. Summaries '
+                'already written from it are not rewritten.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Delete',
+                    style: TextStyle(color: NurbyColors.danger)),
+              ),
+            ],
+          ),
+        );
+        if (ok != true) return;
+        await repo.remove(line.id);
+      }
+      ref.invalidate(conversationDetailProvider(conversationId));
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => InkWell(
+        onLongPress: () => _menu(context, ref),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: RichText(
+            text: TextSpan(
+              style: DefaultTextStyle.of(context).style.copyWith(fontSize: 12),
+              children: [
+                TextSpan(
+                  text: '${DateFormat('HH:mm:ss').format(line.startedAt)}  ',
+                  style: const TextStyle(color: NurbyColors.mutedForeground),
+                ),
+                if (line.speakerName != null)
+                  TextSpan(
+                    text: '${line.speakerName}: ',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                TextSpan(text: line.text),
+                // A corrected line says so. Showing the fixed text as if
+                // that is what was heard would be a quiet lie.
+                if (line.edited)
+                  const TextSpan(
+                    text: '  (corrected)',
+                    style: TextStyle(
+                        fontSize: 11, color: NurbyColors.mutedForeground),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
 }

@@ -7,6 +7,7 @@ import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
 import '../voice/live_conversation_card.dart';
+import 'morning_recap_card.dart';
 
 const _pageSize = 50;
 
@@ -142,6 +143,9 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
           // is the one thing on this screen with somebody waiting on the
           // other end. Renders nothing when no conversation is open.
           const LiveConversationCard(),
+          // The daily recap sits under the live card: something happening
+          // right now outranks a summary of yesterday.
+          const MorningRecapCard(),
           _filterBar(cameras),
           Expanded(
             child: firstPage.when(
