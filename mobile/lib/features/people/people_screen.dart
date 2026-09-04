@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
+import 'person_actions.dart';
 
 final _peopleProvider = FutureProvider<List<Person>>((ref) async {
   final repo = ref.watch(personRepoProvider);
@@ -18,6 +20,12 @@ final _peopleProvider = FutureProvider<List<Person>>((ref) async {
 
 final _suggestionsProvider = FutureProvider<List<FaceClusterSuggestion>>(
     (ref) => ref.watch(personRepoProvider).suggestions());
+
+/// Appearance-based clusters: someone seen often whose face was never
+/// clear enough to cluster. Tentative until a face co-verifies them.
+final _bodySuggestionsProvider =
+    FutureProvider<List<Map<String, dynamic>>>(
+        (ref) => ref.watch(bodyClusterRepoProvider).suggestions());
 
 final _personActivityProvider =
     FutureProvider.family<List<Map<String, dynamic>>, String>((ref, id) async {
@@ -44,6 +52,7 @@ class PeopleScreen extends ConsumerWidget {
 
   Future<void> _refresh(WidgetRef ref) {
     ref.invalidate(_suggestionsProvider);
+    ref.invalidate(_bodySuggestionsProvider);
     return ref.refresh(_peopleProvider.future);
   }
 
@@ -121,6 +130,8 @@ class PeopleScreen extends ConsumerWidget {
                       ),
                     ),
             ),
+            _sectionLabel('SEEN OFTEN, FACE UNCLEAR'),
+            _BodySuggestions(),
             const SizedBox(height: 24),
           ],
         ),
@@ -222,6 +233,38 @@ class _PersonActivitySheet extends ConsumerWidget {
   const _PersonActivitySheet({required this.person});
   final Person person;
 
+  Future<void> _action(BuildContext context, WidgetRef ref, String what) async {
+    switch (what) {
+      case 'photo':
+        final changed = await showModalBottomSheet<bool>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: NurbyColors.cardElevated,
+          builder: (_) => PhotoCandidatesSheet(person: person),
+        );
+        if (changed == true) ref.invalidate(_peopleProvider);
+      case 'face':
+        await addFaceFromLibrary(context, ref, person);
+      case 'merge':
+        final others = (ref.read(_peopleProvider).value ?? const <Person>[])
+            .where((p) => p.id != person.id)
+            .toList();
+        if (others.isEmpty) return;
+        if (!context.mounted) return;
+        final target = await showModalBottomSheet<Person>(
+          context: context,
+          backgroundColor: NurbyColors.cardElevated,
+          builder: (_) => MergePickerSheet(source: person, others: others),
+        );
+        if (target == null || !context.mounted) return;
+        final merged = await confirmMerge(context, ref, target, person);
+        if (merged && context.mounted) {
+          Navigator.pop(context);
+          ref.invalidate(_peopleProvider);
+        }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activityAsync = ref.watch(_personActivityProvider(person.id));
@@ -239,10 +282,40 @@ class _PersonActivitySheet extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('${person.displayName} recent activity',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 16)),
+              padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text('${person.displayName} recent activity',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 16)),
+                  ),
+                  // This sheet is the quick look. The follow feed is the
+                  // investigation: every observation, incident,
+                  // conversation, transcript and recording this person
+                  // appears in, not just the recent ones.
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.push('/more/people/follow/person/${person.id}');
+                    },
+                    child: const Text('See everything'),
+                  ),
+                  PopupMenuButton<String>(
+                    color: NurbyColors.cardElevated,
+                    onSelected: (v) => _action(context, ref, v),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                          value: 'photo', child: Text('Choose a photo')),
+                      PopupMenuItem(
+                          value: 'face', child: Text('Add a face sample')),
+                      PopupMenuItem(
+                          value: 'merge',
+                          child: Text('Merge into another person')),
+                    ],
+                  ),
+                ],
+              ),
             ),
             const Divider(height: 1),
             Expanded(
@@ -447,5 +520,196 @@ class _ClusterCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+
+/// Body-cluster suggestions (issue #171).
+class _BodySuggestions extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_bodySuggestionsProvider);
+    final repo = ref.read(bodyClusterRepoProvider);
+
+    return async.when(
+      loading: () => const Padding(
+          padding: EdgeInsets.all(12), child: LinearProgressIndicator()),
+      error: (e, _) => Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(apiErrorMessage(e),
+            style: const TextStyle(color: NurbyColors.mutedForeground)),
+      ),
+      data: (rows) {
+        // Only clusters still waiting on a decision. One already linked
+        // to a person is a person now, and lives in the list above.
+        final pending = rows.where((c) => c['person_id'] == null).toList();
+        if (pending.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text(
+              'Nobody recurring without a clear face.',
+              style: TextStyle(color: NurbyColors.mutedForeground),
+            ),
+          );
+        }
+        return SizedBox(
+          height: 230,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: pending.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final c = pending[i];
+              final id = c['id'] as String;
+              final confirmed = c['status'] == 'confirmed';
+              return SizedBox(
+                width: 160,
+                child: Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(12)),
+                          child: Image.network(
+                            repo.thumbnailUrl(id),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const ColoredBox(
+                              color: NurbyColors.cardElevated,
+                              child: Icon(Icons.accessibility_new,
+                                  color: NurbyColors.mutedForeground),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              c['auto_label'] as String? ??
+                                  'Unknown person ${c['auto_label_number'] ?? ''}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            Text(
+                              [
+                                '${c['sighting_count'] ?? 0}x',
+                                // Confirmed means a face co-verified this
+                                // body on the same frame. Tentative means
+                                // appearance only, which is weaker and
+                                // worth saying.
+                                confirmed ? 'face confirmed' : 'appearance only',
+                              ].join(' · '),
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  color: NurbyColors.mutedForeground),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => _name(context, ref, id),
+                            child: const Text('Name'),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              await repo.ignore(id);
+                              ref.invalidate(_bodySuggestionsProvider);
+                            },
+                            child: const Text('Ignore',
+                                style: TextStyle(
+                                    color: NurbyColors.mutedForeground)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  /// Name a new person, or link to one who already exists. Linking is
+  /// the common case for a body cluster: the person usually has a face
+  /// cluster already, and this is the same person seen from behind.
+  Future<void> _name(BuildContext context, WidgetRef ref, String clusterId) async {
+    final people = ref.read(_peopleProvider).value ?? const <Person>[];
+    final repo = ref.read(bodyClusterRepoProvider);
+    final controller = TextEditingController();
+    final result = await showDialog<Object>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: NurbyColors.cardElevated,
+        title: const Text('Who is this?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (people.isNotEmpty) ...[
+              const Text('Someone already known',
+                  style: TextStyle(
+                      fontSize: 12, color: NurbyColors.mutedForeground)),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final p in people.take(8))
+                    ActionChip(
+                      label: Text(p.displayName,
+                          style: const TextStyle(fontSize: 12)),
+                      onPressed: () => Navigator.pop(ctx, p),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text('Or a new name',
+                  style: TextStyle(
+                      fontSize: 12, color: NurbyColors.mutedForeground)),
+            ],
+            TextField(
+              controller: controller,
+              autofocus: people.isEmpty,
+              decoration: const InputDecoration(hintText: 'Name'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (result == null) return;
+    try {
+      if (result is Person) {
+        await repo.link(clusterId, result.id);
+      } else if (result is String && result.isNotEmpty) {
+        await repo.name(clusterId, result);
+      } else {
+        return;
+      }
+      ref.invalidate(_bodySuggestionsProvider);
+      ref.invalidate(_peopleProvider);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      }
+    }
   }
 }
