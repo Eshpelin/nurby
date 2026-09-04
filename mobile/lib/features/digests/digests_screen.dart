@@ -20,7 +20,10 @@ class DigestsScreen extends ConsumerWidget {
     final names = {for (final c in cameras) c.id: c.name};
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Digests')),
+      // Called "camera summaries" on screen, not "digests": the morning
+      // recap on the home tab is also a digest, and two features under
+      // one word is how a household concludes one of them is broken.
+      appBar: AppBar(title: const Text('Camera summaries')),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(digestsListProvider),
         child: list.when(
@@ -47,7 +50,7 @@ class DigestsScreen extends ConsumerWidget {
                       size: 40, color: NurbyColors.mutedForeground),
                   SizedBox(height: 12),
                   Center(
-                      child: Text('No digests yet',
+                      child: Text('No summaries yet',
                           style: TextStyle(fontWeight: FontWeight.w600))),
                   SizedBox(height: 6),
                   Padding(

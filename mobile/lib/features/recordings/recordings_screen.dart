@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/api_client.dart';
@@ -45,6 +46,11 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
   _TimeRange _range = _TimeRange.all;
 
   final List<Recording> _items = [];
+
+  /// Per-recording activity, keyed by recording id. Filled a page at a
+  /// time after the page itself lands, so the list is never blocked on
+  /// it: a row without facets is a row, not a spinner.
+  final Map<String, Map<String, dynamic>> _facets = {};
   final _scroll = ScrollController();
   bool _loading = false;
   bool _loadingMore = false;
@@ -93,12 +99,16 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
           );
       if (!mounted) return;
       setState(() {
-        if (reset) _items.clear();
+        if (reset) {
+          _items.clear();
+          _facets.clear();
+        }
         _items.addAll(page);
         _hasMore = page.length == _pageSize;
         _loading = false;
         _loadingMore = false;
       });
+      _loadFacets([for (final r in page) r.id]);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -231,12 +241,103 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
           return _RecordingRow(
             recording: rec,
             cameraName: cameraName,
+            facets: _facets[rec.id],
+            thumbnailUrl: ref.read(recordingRepoProvider).thumbnailUrl(rec.id),
             onTap: () => _openPlayer(rec, cameraName),
-            onLongPress: () => _shareRecording(rec, cameraName),
+            onLongPress: () => _showActions(rec, cameraName),
           );
         },
       ),
     );
+  }
+
+  Future<void> _loadFacets(List<String> ids) async {
+    try {
+      final f = await ref.read(recordingRepoProvider).facets(ids);
+      if (mounted) setState(() => _facets.addAll(f));
+    } catch (_) {
+      // Facets are decoration. A failure here must not surface as an
+      // error on a list that is otherwise fine.
+    }
+  }
+
+  void _showActions(Recording rec, String cameraName) {
+    final repo = ref.read(recordingRepoProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: NurbyColors.cardElevated,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.ios_share),
+              title: const Text('Share a link'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _shareRecording(rec, cameraName);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.download_outlined),
+              title: const Text('Download the whole file'),
+              subtitle: Text(_size(rec), style: const TextStyle(fontSize: 12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _download(repo.downloadUrl(rec.id));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.content_cut),
+              title: const Text('Download a clip'),
+              subtitle: const Text('Pick a start and end',
+                  style: TextStyle(fontSize: 12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickClip(rec);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _size(Recording rec) {
+    final b = rec.fileSizeBytes;
+    return b == null ? '' : '${(b / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  /// Hand the URL to the OS. Where the file ends up is the platform's
+  /// business: on iOS that is Files, on Android the Downloads folder.
+  /// The app deliberately does not try to own that.
+  Future<void> _download(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Nothing on this device could open that.')));
+      }
+    }
+  }
+
+  Future<void> _pickClip(Recording rec) async {
+    final total = rec.durationSeconds?.round() ?? 0;
+    if (total < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('That recording is too short to clip.')));
+      return;
+    }
+    final range = await showDialog<RangeValues>(
+      context: context,
+      builder: (ctx) => _ClipDialog(totalSeconds: total),
+    );
+    if (range == null) return;
+    _download(ref.read(recordingRepoProvider).clipUrl(
+          rec.id,
+          start: Duration(seconds: range.start.round()),
+          end: Duration(seconds: range.end.round()),
+        ));
   }
 
   void _shareRecording(Recording rec, String cameraName) {
@@ -268,10 +369,28 @@ class _RecordingRow extends StatelessWidget {
     required this.cameraName,
     required this.onTap,
     required this.onLongPress,
+    this.facets,
+    this.thumbnailUrl,
   });
 
   final Recording recording;
   final String cameraName;
+  final Map<String, dynamic>? facets;
+  final String? thumbnailUrl;
+
+  /// One line saying what was in it. Empty when facets have not landed
+  /// or found nothing, and the row simply has no such line.
+  String get _activity {
+    final f = facets;
+    if (f == null) return '';
+    final parts = <String>[
+      ...(f['persons'] as List? ?? const []).map((p) => '$p'),
+      ...(f['objects'] as List? ?? const []).map((o) => '$o'),
+      ...(f['vehicles'] as List? ?? const []).map((v) => '$v'),
+    ];
+    if (f['has_audio'] == true) parts.add('speech');
+    return parts.join(', ');
+  }
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
@@ -301,16 +420,22 @@ class _RecordingRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: NurbyColors.cardElevated,
-                  border: Border.all(color: NurbyColors.border),
-                  borderRadius: BorderRadius.circular(10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SizedBox(
+                  width: 64,
+                  height: 42,
+                  child: thumbnailUrl == null
+                      ? const _PlayGlyph()
+                      : Image.network(
+                          thumbnailUrl!,
+                          fit: BoxFit.cover,
+                          // No thumbnail is normal for a recording still
+                          // being written. Fall back to the glyph rather
+                          // than a broken-image icon.
+                          errorBuilder: (_, __, ___) => const _PlayGlyph(),
+                        ),
                 ),
-                child: const Icon(Icons.play_arrow,
-                    color: NurbyColors.accent, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -327,6 +452,15 @@ class _RecordingRow extends StatelessWidget {
                           .format(recording.startedAt),
                       style: monoStyle,
                     ),
+                    if (_activity.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(_activity,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: NurbyColors.mutedForeground)),
+                    ],
                   ],
                 ),
               ),
@@ -538,4 +672,74 @@ class _RecordingPlayerPageState extends State<_RecordingPlayerPage> {
       ),
     );
   }
+}
+
+
+class _PlayGlyph extends StatelessWidget {
+  const _PlayGlyph();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(
+          color: NurbyColors.cardElevated,
+          border: Border.all(color: NurbyColors.border),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Icon(Icons.play_arrow,
+            color: NurbyColors.accent, size: 22),
+      );
+}
+
+/// Pick a start and end inside a recording.
+class _ClipDialog extends StatefulWidget {
+  const _ClipDialog({required this.totalSeconds});
+
+  final int totalSeconds;
+
+  @override
+  State<_ClipDialog> createState() => _ClipDialogState();
+}
+
+class _ClipDialogState extends State<_ClipDialog> {
+  late RangeValues _range =
+      RangeValues(0, widget.totalSeconds.clamp(1, 60).toDouble());
+
+  String _fmt(double s) {
+    final d = Duration(seconds: s.round());
+    return '${d.inMinutes.toString().padLeft(2, '0')}:'
+        '${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        backgroundColor: NurbyColors.cardElevated,
+        title: const Text('Clip'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${_fmt(_range.start)} to ${_fmt(_range.end)}',
+                style: const TextStyle(fontFamily: 'Menlo')),
+            RangeSlider(
+              values: _range,
+              min: 0,
+              max: widget.totalSeconds.toDouble(),
+              activeColor: NurbyColors.accent,
+              onChanged: (v) {
+                // Keep at least a second between the handles, or the
+                // server is asked for an empty clip.
+                if (v.end - v.start < 1) return;
+                setState(() => _range = v);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, _range),
+              child: const Text('Download')),
+        ],
+      );
 }

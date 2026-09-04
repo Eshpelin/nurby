@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
+import 'event_notes.dart';
 import '../../models/models.dart';
 import '../shares/share_sheet.dart';
 
@@ -363,10 +364,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       backgroundColor: NurbyColors.card,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-          child: Column(
+          padding: EdgeInsets.fromLTRB(
+              20, 18, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -382,6 +386,27 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                     '${event.actionType}'
                     '${event.actionStatus != null ? ' · ${event.actionStatus}' : ''}'),
               _kv('STATUS', event.acked ? 'acknowledged' : 'unreviewed'),
+              const SizedBox(height: 12),
+              // Ack says "I saw this". Mute says "stop telling me". On a
+              // phone, where the alert actually lands, the second is the
+              // more urgent of the two.
+              Wrap(
+                spacing: 6,
+                children: [
+                  for (final (d, label) in kMuteChoices)
+                    ActionChip(
+                      avatar: const Icon(Icons.notifications_off_outlined,
+                          size: 14),
+                      label: Text(label, style: const TextStyle(fontSize: 12)),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _mute(event, d);
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              EventNotes(eventId: event.id),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -421,9 +446,22 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
               ),
             ],
           ),
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _mute(Event event, Duration d) async {
+    try {
+      await ref.read(eventRepoProvider).mute(event.id, duration: d);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Muted.')));
+      }
+    } catch (e) {
+      if (mounted) _showMutationError(e);
+    }
   }
 
   Widget _kv(String label, String value) {
