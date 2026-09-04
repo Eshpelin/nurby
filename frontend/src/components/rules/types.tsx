@@ -252,6 +252,7 @@ export const ACTION_TYPES = [
   { value: "verify", label: "Verify with AI" },
   { value: "locate", label: "Visual condition (FindAnything)" },
   { value: "device", label: "Device" },
+  { value: "speak", label: "Speak on camera" },
 ];
 
 export const TELEGRAM_TEMPLATE_VARS = [

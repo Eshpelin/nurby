@@ -444,7 +444,7 @@ class NotificationResponse(BaseModel):
 
 _VALID_ACTION_TYPES = {
     "webhook", "api_call", "broadcast", "notify", "email", "vlm_call", "telegram",
-    "verify", "locate", "device",
+    "verify", "locate", "device", "speak",
 }
 
 # The shape a `locate` action binds into vars, so {{vars.<output>.found}} etc.
