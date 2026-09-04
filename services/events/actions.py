@@ -355,6 +355,8 @@ async def execute_action(
         await _execute_locate(action, observation_data, rule, event_id, ctx)
     elif action_type == "device":
         await _execute_device(action, observation_data, rule, event_id, ctx)
+    elif action_type == "speak":
+        await _execute_speak(action, observation_data, rule, event_id, ctx)
     else:
         logger.warning("Unknown action type '%s' in rule '%s'", action_type, rule.name)
         await _update_event_status(event_id, action_type or "unknown", "failed", f"Unknown action type '{action_type}'")
@@ -388,6 +390,66 @@ def render_payload(template, ctx: dict):
         return value
 
     return expand(render(template, ctx, strict=False))
+
+
+async def _execute_speak(action, observation_data, rule, event_id, ctx):
+    """Say something through a camera's speaker (issue #155).
+
+    The physical-world sibling of _execute_device. Everything that
+    decides whether the camera actually makes a noise lives in
+    services/voice/policy.py, and the outcome is recorded as a
+    SpeechEvent either way, so a rule suppressed by quiet hours for a
+    month is visible rather than merely silent.
+
+    A suppression is not an action failure. A rule that correctly stayed
+    quiet at 3am has done its job, and marking the event failed would
+    train people to ignore failures.
+    """
+    from services.voice.speaker import speak
+    from shared.database import async_session
+    from shared.models import Camera
+
+    raw_id = action.get("camera_id") or observation_data.get("camera_id")
+    try:
+        camera_uuid = uuid.UUID(str(raw_id))
+    except (ValueError, TypeError):
+        await _update_event_status(event_id, "speak", "failed", "Missing or invalid 'camera_id'")
+        return
+
+    text = render_payload(action.get("text") or "", ctx)
+    if isinstance(text, str):
+        text = text.strip()
+    if not text:
+        await _update_event_status(event_id, "speak", "failed", "Empty 'text' after rendering")
+        return
+
+    async with async_session() as db:
+        camera = await db.get(Camera, camera_uuid)
+        if camera is None:
+            await _update_event_status(event_id, "speak", "failed", "Camera not found")
+            return
+
+        outcome = await speak(
+            db, camera, text,
+            trigger="rule",
+            rule_id=getattr(rule, "id", None),
+            event_id=event_id,
+            voice=action.get("voice"),
+            volume=action.get("volume"),
+        )
+        await db.commit()
+
+    if outcome.spoken:
+        await _update_event_status(event_id, "speak", "success", None)
+    elif outcome.status == "suppressed":
+        await _update_event_status(
+            event_id, "speak", "skipped",
+            f"{outcome.reason}: {outcome.detail}" if outcome.detail else outcome.reason,
+        )
+    else:
+        await _update_event_status(
+            event_id, "speak", "failed", outcome.detail or outcome.reason
+        )
 
 
 async def _execute_device(action, observation_data, rule, event_id, ctx):

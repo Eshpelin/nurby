@@ -154,6 +154,23 @@ class Camera(Base):
     transcript_store: Mapped[str] = mapped_column(String(16), default="full", nullable=False)
     audio_language: Mapped[str] = mapped_column(String(8), default="en", nullable=False)
     audio_retention_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    # Voice output (#155). Default off: a camera that can talk is a
+    # camera that can leak, so speaking is opt-in per camera even once
+    # the household has enabled it globally.
+    speaker_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Overrides the probed transport when a household knows better than
+    # the probe did. Null means "use whatever was probed".
+    speaker_transport: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    speaker_voice: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    speaker_volume: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    # Per-camera override of the household quiet hours, "HH:MM" local.
+    speaker_quiet_start: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    speaker_quiet_end: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    speaker_cooldown_seconds: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    speaker_daily_cap: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Endpoint for the http_device transport: an external speaker that is
+    # not the camera. Sealed, since it can carry a token.
+    speaker_endpoint: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     transcript_retention_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     stt_provider_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True, index=True
@@ -2188,3 +2205,48 @@ class SpeakerCapability(Base):
     )
     probe_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class SpeechEvent(Base):
+    """Every utterance a camera was asked to make, played or not (#155).
+
+    Written for suppressed attempts as well as successful ones. A
+    household must be able to read back both what their house said and
+    what it decided not to say, and the second is often the more
+    interesting audit: a rule that has been silently suppressed by quiet
+    hours for a month looks identical to one that never fired, unless the
+    suppression is recorded.
+
+    ``text`` is the rendered utterance, not the template, because the
+    template is safe and the render is what was actually spoken.
+    """
+
+    __tablename__ = "speech_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    camera_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("cameras.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    rule_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rules.id", ondelete="SET NULL"), nullable=True
+    )
+    event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL"), nullable=True
+    )
+    # rule | agent | manual | conversation
+    trigger: Mapped[str] = mapped_column(String(16), nullable=False, default="rule")
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    voice: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    transport: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # queued | played | failed | suppressed
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
+    # quiet_hours | cooldown | daily_cap | policy | estop | disabled |
+    # unsupported | empty_text | volume
+    suppressed_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    played_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

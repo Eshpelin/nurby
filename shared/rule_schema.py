@@ -497,6 +497,26 @@ ACTION_TYPES: list[dict] = [
         ],
     },
     {
+        "type": "speak",
+        "label": "Speak on camera",
+        "group": "delivery",
+        "description": (
+            "Say something out loud through a camera's speaker. Respects "
+            "quiet hours, per-camera cooldown and the daily cap, and every "
+            "utterance is recorded whether it played or was suppressed."
+        ),
+        "fields": [
+            {"name": "camera_id", "type": "uuid", "required": False, "ref": "camera",
+             "description": "Which camera speaks. Defaults to the camera that triggered the rule."},
+            {"name": "text", "type": "string", "required": True,
+             "description": "What to say. Supports {{tokens}} like other actions."},
+            {"name": "voice", "type": "string", "required": False,
+             "description": "Voice to use. Defaults to the camera's, then the household's."},
+            {"name": "volume", "type": "number", "required": False,
+             "description": "0-100. Capped by the camera and household ceilings."},
+        ],
+    },
+    {
         "type": "vlm_call",
         "label": "VLM Call",
         "description": "Ask a vision-language model about the frame and bind the answer to a variable.",
