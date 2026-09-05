@@ -31,7 +31,8 @@ class MoreScreen extends ConsumerWidget {
         _NavItem('Incidents', Icons.inbox_outlined, '/more/incidents'),
         _NavItem('Journeys', Icons.route_outlined, '/more/journeys'),
         _NavItem('Conversations', Icons.forum_outlined, '/more/conversations'),
-        _NavItem('Digests', Icons.article_outlined, '/more/digests'),
+        _NavItem('Camera summaries', Icons.article_outlined, '/more/digests'),
+        _NavItem('Reports', Icons.schedule_send_outlined, '/more/reports'),
         _NavItem('Recordings', Icons.video_library_outlined, '/more/recordings'),
         _NavItem('Search', Icons.search, '/more/search'),
         _NavItem('Share links', Icons.link, '/more/shares'),
@@ -39,6 +40,14 @@ class MoreScreen extends ConsumerWidget {
             'Notifications', Icons.notifications_none, '/more/notifications'),
       ],
       _NavItem('Guardian', Icons.shield_outlined, '/more/guardian'),
+      // Admin-only. All three are behind require_admin server-side.
+      if (user?.isAdmin ?? false) ...[
+        _NavItem('Camera access', Icons.admin_panel_settings_outlined,
+            '/more/access'),
+        _NavItem('AI backlog', Icons.speed_outlined, '/more/pipeline'),
+        _NavItem("Everyone's questions", Icons.question_answer_outlined,
+            '/more/ask-admin'),
+      ],
       if (!isGuardian)
         _NavItem('Settings', Icons.settings_outlined, '/more/settings'),
     ];

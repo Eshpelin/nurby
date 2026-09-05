@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
+import 'guardian_cards.dart';
 
 // ---- Data providers ----
 
@@ -131,7 +133,21 @@ class GuardianScreen extends ConsumerWidget {
     final links = ref.watch(_linksProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Guardian')),
+      appBar: AppBar(
+        title: const Text('Guardian'),
+        actions: [
+          IconButton(
+            tooltip: 'What I have been told',
+            icon: const Icon(Icons.notifications_none),
+            onPressed: () => context.push('/more/guardian/notifications'),
+          ),
+          IconButton(
+            tooltip: 'Who can watch us',
+            icon: const Icon(Icons.shield_outlined),
+            onPressed: () => context.push('/more/guardian/admin'),
+          ),
+        ],
+      ),
       body: links.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) {
@@ -334,6 +350,11 @@ class _GuardianLinkDetailScreen extends ConsumerWidget {
         onRefresh: () async {
           ref.invalidate(_linkStatusProvider(id));
           ref.invalidate(_linkTimelineProvider(id));
+          ref.invalidate(wellbeingProvider(id));
+          ref.invalidate(trendsProvider(id));
+          ref.invalidate(guardianEventsProvider(id));
+          ref.invalidate(guardianActionsProvider(id));
+          ref.invalidate(liveProvider(id));
           await ref.read(_linkTimelineProvider(id).future);
         },
         child: ListView(
@@ -396,6 +417,22 @@ class _GuardianLinkDetailScreen extends ConsumerWidget {
                   },
                 ),
               ),
+            ),
+            // The three cards a guardian actually opens the app for:
+            // is anything wrong, what has this week looked like, and
+            // what have I been told about (issue #165).
+            LiveCard(linkId: id),
+            WellbeingCard(linkId: id),
+            TrendsCard(linkId: id),
+            GuardianEventsCard(linkId: id),
+            ActionsCard(linkId: id),
+            GuardianSearchCard(linkId: id, name: name),
+            AlertPrefsCard(
+              linkId: id,
+              alertPrefs:
+                  (link['alert_prefs'] as Map? ?? {}).cast<String, dynamic>(),
+              notifyChannels: (link['notify_channels'] as Map? ?? {})
+                  .cast<String, dynamic>(),
             ),
             const Padding(
               padding: EdgeInsets.only(top: 18, bottom: 8, left: 4),
