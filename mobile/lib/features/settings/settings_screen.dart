@@ -7,6 +7,9 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
+import '../voice/voice_settings_card.dart';
+import 'household_settings.dart';
+import 'webhooks_section.dart';
 
 // ---- Section data providers (invalidated locally after mutations) ----
 
@@ -304,7 +307,13 @@ class SettingsScreen extends ConsumerWidget {
           const _ProvidersSection(),
           const _StorageSection(),
           const _NotificationChannelsSection(),
+          HouseholdSettingsSection(isAdmin: isAdmin),
+          if (isAdmin) const LocalAiSection(),
+          WebhooksSection(isAdmin: isAdmin),
           const _SystemSettingsSection(),
+          // Admin-only: every /api/voice/settings endpoint is behind
+          // require_admin, so a non-admin would only ever see a 403.
+          if (isAdmin) const VoiceSettingsCard(),
           if (isAdmin) const _AccessSection(),
           const _ApiKeysSection(),
           const _ServerSection(),
@@ -1114,7 +1123,11 @@ class _SystemSettingsSection extends ConsumerWidget {
       children: [
         _async(settings, (map) {
           if (map.isEmpty) return _emptyNote('No settings exposed');
-          final entries = map.entries.toList()
+          // Keys the Household section owns with proper labels and
+          // bounds are hidden here, so a setting never appears twice.
+          final entries = map.entries
+              .where((e) => !kCuratedSettingKeys.contains(e.key))
+              .toList()
             ..sort((a, b) => a.key.compareTo(b.key));
           return Column(children: [
             for (final e in entries)

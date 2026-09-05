@@ -9,12 +9,50 @@ import '../../models/models.dart';
 import 'add_camera_sheet.dart';
 import 'live_view.dart';
 
+/// Apply a ReorderableListView drag.
+///
+/// The framework reports `to` as an index in the list *before* the
+/// dragged item is removed, so moving an item downwards lands one slot
+/// short unless that is accounted for. Pure, so the off-by-one is
+/// testable without a gesture.
+List<T> reorderList<T>(List<T> items, int from, int to) {
+  final next = [...items];
+  final item = next.removeAt(from);
+  next.insert(from < to ? to - 1 : to, item);
+  return next;
+}
+
 /// Home tab: live camera wall (mirrors the web dashboard grid).
-class CamerasScreen extends ConsumerWidget {
+class CamerasScreen extends ConsumerStatefulWidget {
   const CamerasScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CamerasScreen> createState() => _CamerasScreenState();
+}
+
+class _CamerasScreenState extends ConsumerState<CamerasScreen> {
+  bool _reordering = false;
+
+  /// Order held locally while reordering, so a drag is not fighting a
+  /// refresh from the server mid-gesture.
+  List<Camera>? _draft;
+
+  Future<void> _saveOrder(List<Camera> ordered) async {
+    try {
+      await ref
+          .read(cameraRepoProvider)
+          .reorder([for (final c in ordered) c.id]);
+      ref.invalidate(camerasProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final cameras = ref.watch(camerasProvider);
 
     return Scaffold(
@@ -31,6 +69,18 @@ class CamerasScreen extends ConsumerWidget {
                 ),
               ),
             ),
+          if ((cameras.value?.length ?? 0) > 1)
+            IconButton(
+              tooltip: _reordering ? 'Done' : 'Reorder',
+              icon: Icon(_reordering ? Icons.check : Icons.swap_vert),
+              onPressed: () {
+                if (_reordering && _draft != null) _saveOrder(_draft!);
+                setState(() {
+                  _reordering = !_reordering;
+                  _draft = null;
+                });
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () => showAddCameraSheet(context, ref),
@@ -45,8 +95,30 @@ class CamerasScreen extends ConsumerWidget {
         ),
         data: (list) {
           if (list.isEmpty) return _EmptyState(ref: ref);
-          final sorted = [...list]..sort((a, b) =>
-              (a.displayOrder ?? 999).compareTo(b.displayOrder ?? 999));
+          final sorted = _draft ??
+              ([...list]..sort((a, b) =>
+                  (a.displayOrder ?? 999).compareTo(b.displayOrder ?? 999)));
+          if (_reordering) {
+            // Live tiles are replaced by plain rows while dragging: a
+            // grid of moving video is unreadable, and the only question
+            // here is which camera goes where.
+            return ReorderableListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: sorted.length,
+              onReorder: (from, to) {
+                setState(() => _draft = reorderList(sorted, from, to));
+              },
+              itemBuilder: (context, i) => Card(
+                key: ValueKey(sorted[i].id),
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: const Icon(Icons.drag_handle,
+                      color: NurbyColors.mutedForeground),
+                  title: Text(sorted[i].name),
+                ),
+              ),
+            );
+          }
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(camerasProvider),
             child: ListView.separated(
