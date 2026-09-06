@@ -23,23 +23,17 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN --mount=type=cache,target=/root/.cache/pip pip install .
 
 COPY shared/ shared/
-COPY services/api/ services/api/
+# One copy of the whole services tree. The previous per-package
+# list drifted from what those packages import: services/voice was
+# never added and the image could not start (#181). The packages are
+# pure Python and this image already carried most of them, so the
+# cost is a slightly larger layer against a whole class of bug.
+COPY services/ services/
 # Several api routes pull helpers from sibling services. Ship them so
 # the api process can import them. Each module is light at import time;
 # heavy paths (torch/torchreid/insightface) only load when their
 # functions are called.
-COPY services/perception/ services/perception/
-COPY services/notify/ services/notify/
-COPY services/events/ services/events/
-COPY services/search/ services/search/
 # FindAnything grounding: search/scan.py and events/actions.py import it.
-COPY services/grounding/ services/grounding/
-COPY services/digest/ services/digest/
-COPY services/discovery/ services/discovery/
-COPY services/agent/ services/agent/
-COPY services/guardian/ services/guardian/
-COPY services/recap.py services/recap.py
-COPY services/__init__.py services/__init__.py
 # Device alert presets. routes/devices.py imports integrations.devices.
 COPY integrations/ integrations/
 COPY alembic/ alembic/

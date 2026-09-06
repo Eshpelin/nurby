@@ -1,0 +1,59 @@
+# What the image builds do NOT need.
+#
+# Every service except the frontend builds from the repo root, so without
+# this file `docker compose build` ships the entire working tree as build
+# context. That was 53GB here (dev/uxtest-data alone is 42GB), which does
+# not fail loudly: BuildKit stalls, the classic builder streams gigabytes
+# for many minutes, and the stale image stays in place while the build
+# reports success.
+#
+# Keep in mind when editing: the five root-context Dockerfiles copy
+# VERSION, alembic.ini, alembic/, integrations/, pyproject.toml,
+# services/ and shared/. In particular services/perception/models/ holds
+# the YOLO, easyocr and insightface weights and must stay in the context.
+
+# Version control and editor state
+.git
+.gitignore
+.github
+.idea
+.vscode
+
+# Python local environments and caches
+.venv
+.venv-*
+venv
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# Other apps that build from their own context, or not at all
+frontend
+mobile
+
+# Test and development fixtures. dev/uxtest-data is written by the
+# ux-army scheduled runs and grows without bound.
+tests
+dev
+docs
+
+# Runtime data written by a running stack, never an input to a build
+recordings
+thumbnails
+logs
+data
+*.log
+
+# Local config and secrets
+.env
+.env.*
+!.env.example
+
+# OS noise
+.DS_Store
+Thumbs.db

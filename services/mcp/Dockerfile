@@ -16,15 +16,12 @@ COPY shared/ shared/
 # subtrees the api image does so every tool the registry can dispatch
 # resolves. Heavy paths (torch/insightface/clip) only load when an
 # analyze_* tool is actually called.
-COPY services/agent/ services/agent/
-COPY services/perception/ services/perception/
-COPY services/search/ services/search/
+# One copy of the whole services tree. The previous per-package
+# list drifted from what those packages import: services/voice was
+# never added and the image could not start (#181). The packages are
+# pure Python and this image already carried most of them, so the
+# cost is a slightly larger layer against a whole class of bug.
+COPY services/ services/
 # FindAnything grounding: search/events import it at runtime.
-COPY services/grounding/ services/grounding/
-COPY services/events/ services/events/
-COPY services/notify/ services/notify/
-COPY services/mcp/ services/mcp/
-COPY services/guardian/ services/guardian/
-COPY services/__init__.py services/__init__.py
 
 CMD ["python", "-m", "services.mcp.server"]

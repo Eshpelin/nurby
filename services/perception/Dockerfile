@@ -63,19 +63,15 @@ RUN --mount=type=cache,target=/root/.cache/pip pip install easyocr
 COPY services/perception/models/easyocr/ /root/.EasyOCR/model/
 
 COPY shared/ shared/
-COPY services/__init__.py services/__init__.py
-COPY services/perception/ services/perception/
-COPY services/search/ services/search/
-COPY services/api/ services/api/
+# One copy of the whole services tree. The previous per-package
+# list drifted from what those packages import: services/voice was
+# never added and the image could not start (#181). The packages are
+# pure Python and this image already carried most of them, so the
+# cost is a slightly larger layer against a whole class of bug.
+COPY services/ services/
 # The pipeline and audio path import the rule engine and these siblings.
 # Ship them so imports resolve at startup. heavy paths load lazily.
-COPY services/events/ services/events/
 # FindAnything grounding: the events `locate` action imports it at runtime.
-COPY services/grounding/ services/grounding/
-COPY services/discovery/ services/discovery/
-COPY services/notify/ services/notify/
-COPY services/guardian/ services/guardian/
-COPY services/recap.py services/recap.py
 COPY integrations/ integrations/
 
 CMD ["python", "-m", "services.perception.main"]

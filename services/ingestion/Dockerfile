@@ -27,18 +27,15 @@ RUN --mount=type=cache,target=/root/.cache/pip pip install faster-whisper
 RUN PYTHONHTTPSVERIFY=0 python -c "from faster_whisper import WhisperModel; WhisperModel('small.en', device='cpu', compute_type='int8')" || echo "prebake skipped (downloads at first runtime use)"
 
 COPY shared/ shared/
-COPY services/__init__.py services/__init__.py
-COPY services/ingestion/ services/ingestion/
+# One copy of the whole services tree. The previous per-package
+# list drifted from what those packages import: services/voice was
+# never added and the image could not start (#181). The packages are
+# pure Python and this image already carried most of them, so the
+# cost is a slightly larger layer against a whole class of bug.
+COPY services/ services/
 # The audio worker and manager pull the rule engine and the perception
 # audio pipeline, which transitively import these siblings. Ship them so
 # imports resolve at startup. heavy paths load lazily when called.
-COPY services/events/ services/events/
-COPY services/perception/ services/perception/
-COPY services/search/ services/search/
-COPY services/discovery/ services/discovery/
-COPY services/notify/ services/notify/
-COPY services/api/ services/api/
-COPY services/recap.py services/recap.py
 COPY integrations/ integrations/
 
 CMD ["python", "-m", "services.ingestion.main"]

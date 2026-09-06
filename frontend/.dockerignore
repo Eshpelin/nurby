@@ -1,0 +1,12 @@
+# The frontend builds from ./frontend as its context. node_modules is
+# reinstalled inside the image and .next is rebuilt, so shipping either
+# only slows the build down and risks a stale artifact leaking in.
+node_modules
+.next
+out
+.git
+.env
+.env.*
+!.env.example
+npm-debug.log*
+.DS_Store
