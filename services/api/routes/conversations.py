@@ -59,6 +59,11 @@ def _serialize_tx(t: Transcript, names: dict[uuid.UUID, str] | None = None) -> d
         "speaker_name": (
             names.get(t.speaker_person_id) if t.speaker_person_id else None
         ),
+        # Set once on first edit and never changed after (see
+        # routes/transcripts.py). A client that can correct a line has to
+        # be able to show that it was corrected, or a fixed transcript
+        # reads as if that is what was heard.
+        "original_text": t.original_text,
         "started_at": t.started_at.isoformat(),
         "ended_at": t.ended_at.isoformat(),
         "text": t.text,

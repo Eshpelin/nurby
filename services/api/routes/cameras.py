@@ -238,6 +238,23 @@ class DiscoveredOnvifDevice(BaseModel):
     already_added: bool = False
 
 
+@router.get("/personas")
+async def list_personas(_current_user: User = Depends(get_current_user)) -> dict:
+    """Camera personas, for both clients (see shared/camera_personas.py).
+
+    Registered ahead of /{camera_id}, like /discover, so the literal path
+    is not parsed as a uuid.
+    """
+    from shared.camera_personas import AUDIO_FIELDS, CAMERA_PERSONAS
+
+    return {
+        "personas": CAMERA_PERSONAS,
+        # So a client can split the patch without a second source of
+        # truth for which fields belong to the audio endpoint.
+        "audio_fields": sorted(AUDIO_FIELDS),
+    }
+
+
 @router.get("/discover", response_model=list[DiscoveredOnvifDevice])
 async def discover_onvif(
     timeout: int = Query(default=5, ge=1, le=15),

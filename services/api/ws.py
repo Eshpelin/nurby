@@ -238,6 +238,34 @@ async def broadcast_person_actions(
 _mic_sessions: dict[str, "_MicSession"] = {}
 
 
+_PCM_RATES = frozenset({8000, 16000, 22050, 24000, 44100, 48000})
+
+
+def mic_input_args(fmt: str | None, rate: int | None, channels: int | None) -> tuple[str, ...]:
+    """ffmpeg input flags for a mic publisher's declared format. Pure.
+
+    ``None``/``"container"`` means "probe it", the browser case. ``"pcm"``
+    is signed 16-bit little-endian, which is what every native recorder
+    can stream and which ffmpeg cannot probe, so the rate and channel
+    count travel with it. Anything else is rejected rather than guessed:
+    a wrong format here does not fail loudly, it produces garbage audio
+    that the STT path then confidently transcribes.
+    """
+    if fmt is None or fmt == "container":
+        return ()
+    if fmt != "pcm":
+        raise ValueError(f"unsupported mic format {fmt!r}")
+    # `is None`, not `or`: a client sending rate=0 must be refused,
+    # not quietly upgraded to the default.
+    r = 16000 if rate is None else rate
+    c = 1 if channels is None else channels
+    if r not in _PCM_RATES:
+        raise ValueError(f"unsupported pcm rate {r}")
+    if c not in (1, 2):
+        raise ValueError(f"unsupported channel count {c}")
+    return ("-f", "s16le", "-ar", str(r), "-ac", str(c))
+
+
 class _MicSession:
     """Bridges a browser MediaRecorder stream into a TCP listener that
     the existing AudioWorker can consume.
@@ -253,22 +281,27 @@ class _MicSession:
     reconnect after a tab refresh always hits the same listener.
     """
 
-    def __init__(self, camera_id: str) -> None:
+    def __init__(self, camera_id: str, input_args: tuple[str, ...] = ()) -> None:
         self.camera_id = camera_id
         self.port = _port_for_camera(camera_id)
         self.process: asyncio.subprocess.Process | None = None
         self._stdin_lock = asyncio.Lock()
+        # What ffmpeg is told about stdin. Empty means probe the container,
+        # which is right for webm/opus from a browser. A native app sends
+        # raw PCM, which has no header to probe, so it declares itself.
+        self.input_args = input_args
 
     async def start(self) -> None:
         if self.process is not None and self.process.returncode is None:
             return
-        # webm/opus in on stdin, mpegts mux out to a TCP listen socket.
+        # Input on stdin, mpegts mux out to a TCP listen socket.
         # AudioWorker av.open("tcp://127.0.0.1:<port>?listen=0") connects
         # to this. listen=1 on ffmpeg makes it the server.
         cmd = [
             "ffmpeg",
             "-hide_banner", "-loglevel", "warning",
             "-fflags", "+genpts",
+            *self.input_args,
             "-i", "pipe:0",
             "-acodec", "libopus", "-b:a", "32k",
             "-f", "mpegts",
@@ -344,6 +377,9 @@ async def mic_websocket(
     ws: WebSocket,
     camera_id: str,
     token: str = Query(...),
+    format: str | None = Query(default=None),
+    rate: int | None = Query(default=None),
+    channels: int | None = Query(default=None),
 ):
     """Browser-mic publisher endpoint.
 
@@ -357,10 +393,21 @@ async def mic_websocket(
     if not decode_access_token(token):
         await ws.close(code=4401)
         return
+    try:
+        input_args = mic_input_args(format, rate, channels)
+    except ValueError:
+        await ws.close(code=4400)
+        return
     await ws.accept()
     session = _mic_sessions.get(camera_id)
+    # A session started for one input format cannot take another: ffmpeg
+    # was told what stdin is when it launched. A native app taking over
+    # from a browser tab (or the reverse) gets a fresh encoder.
+    if session is not None and session.input_args != input_args:
+        await session.stop()
+        session = None
     if session is None:
-        session = _MicSession(camera_id)
+        session = _MicSession(camera_id, input_args)
         _mic_sessions[camera_id] = session
     await session.start()
     if session.process is None:

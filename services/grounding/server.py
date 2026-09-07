@@ -29,6 +29,7 @@ from pydantic import BaseModel
 
 from shared.config import settings
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
 logger = logging.getLogger("nurby.grounding.server")
 
 app = FastAPI(title="Nurby Grounding", version="0.1.0")

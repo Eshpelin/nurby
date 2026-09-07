@@ -56,6 +56,18 @@ from services.api.ws import router as ws_router
 from services.digest.scheduler import run_digest_loop
 from shared.config import settings
 
+# Application loggers need a handler. Uvicorn configures only its own
+# `uvicorn*` loggers, so without this every `logger.*` call in the app
+# propagated to a root logger with nowhere to go and was dropped. The
+# most expensive place that bit was a failed migration at startup: the
+# container exited 3 with no reason in `docker logs` (#180). Same format
+# as the perception and ingestion services so one `docker compose logs`
+# reads as a single stream. `force=False` so a host that configured
+# logging first (tests, a parent process) keeps its own setup.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 START_TIME = time.time()
@@ -80,6 +92,17 @@ def _run_migrations() -> None:
         logger.info("Migrations up to date")
     except Exception as exc:
         logger.exception("Auto-migration failed: %s", exc)
+        # Also to stderr directly. This path decides whether the process
+        # lives, and it must not depend on logging being wired correctly
+        # to say why it died.
+        import sys
+        import traceback
+        print(
+            f"FATAL: database migration failed, refusing to start: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
+        traceback.print_exc(file=sys.stderr)
         raise
 
 
