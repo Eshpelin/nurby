@@ -142,4 +142,39 @@ void main() {
       expect(c.speakersSeen, ['Sam']);
     });
   });
+
+  group('ConversationTranscript.edited', () {
+    test('a never-edited line is not marked corrected', () {
+      final t = ConversationTranscript.fromJson({
+        'id': 't1',
+        'started_at': '2026-09-08T10:00:00Z',
+        'text': 'hello',
+        'original_text': null,
+      });
+      expect(t.edited, isFalse);
+    });
+
+    test('a corrected line is marked, and keeps what was heard', () {
+      // Showing the fixed text as if that is what was heard would be a
+      // quiet lie. The original has to survive the round trip.
+      final t = ConversationTranscript.fromJson({
+        'id': 't1',
+        'started_at': '2026-09-08T10:00:00Z',
+        'text': 'Simon',
+        'original_text': 'salmon',
+      });
+      expect(t.edited, isTrue);
+      expect(t.originalText, 'salmon');
+    });
+
+    test('an edit that restored the original is not marked', () {
+      final t = ConversationTranscript.fromJson({
+        'id': 't1',
+        'started_at': '2026-09-08T10:00:00Z',
+        'text': 'hello',
+        'original_text': 'hello',
+      });
+      expect(t.edited, isFalse);
+    });
+  });
 }

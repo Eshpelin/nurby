@@ -53,6 +53,9 @@ dependencies:
   # which does not compile with Xcode 16.
   connectivity_plus: ^6.1.0
   mobile_scanner: ^7.1.2
+  url_launcher: ^6.3.2
+  image_picker: ^1.2.1
+  record: ^6.2.1
 
 dev_dependencies:
   flutter_test:
