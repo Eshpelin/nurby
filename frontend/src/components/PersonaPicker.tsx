@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CAMERA_PERSONAS, type Persona, type PersonaPatch } from "@/lib/camera-personas";
+import { usePersonas, type Persona, type PersonaPatch } from "@/lib/camera-personas";
 
 interface Props {
   // Called with the merged patch when the user confirms a persona.
@@ -23,6 +23,7 @@ export function PersonaPicker({
   title = "Quick setup",
 }: Props) {
   const [previewing, setPreviewing] = useState<Persona | null>(null);
+  const CAMERA_PERSONAS = usePersonas();
 
   if (variant === "compact") {
     return (
