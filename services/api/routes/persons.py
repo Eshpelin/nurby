@@ -22,6 +22,7 @@ from services.recap import generate_recap
 from shared.auth import get_current_user, require_admin, require_query_token
 from shared.config import settings
 from shared.database import get_db
+from shared.subject_keys import subject_key_has
 from shared.models import (
     Camera,
     Conversation,
@@ -1299,21 +1300,21 @@ async def _follow_bundle(
 
     # Incidents matching the subject signature.
     inc_q = select(Incident).order_by(Incident.last_seen_at.desc()).limit(limit)
+    # Exact on each element of the key, so a legacy joined key such as
+    # "Ahmed,Sara" is found for Sara, and Sam does not match Samantha
+    # (#151). The previous ILIKE '%name%' did the second by accident.
     if cluster_id is not None:
         inc_q = inc_q.where(
             and_(
                 Incident.signature_kind == "cluster",
-                Incident.signature_key.ilike(f"%{cluster_id}%"),
+                subject_key_has(Incident.signature_key, str(cluster_id)),
             )
         )
     elif display_name:
         inc_q = inc_q.where(
             and_(
                 Incident.signature_kind == "person",
-                or_(
-                    Incident.signature_key == display_name,
-                    Incident.signature_key.ilike(f"%{display_name}%"),
-                ),
+                subject_key_has(Incident.signature_key, display_name),
             )
         )
     else:

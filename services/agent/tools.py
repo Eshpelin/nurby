@@ -35,6 +35,7 @@ from sqlalchemy import String as SAString
 from sqlalchemy import and_, cast, func, or_, select
 
 from services.agent.access import accessible_camera_ids
+from shared.subject_keys import subject_key_has
 from shared.models import (
     Camera,
     DailyDigest,
@@ -182,7 +183,7 @@ async def _person_journeys(
     stmt = (
         select(Journey)
         .where(Journey.subject_kind == "person")
-        .where(Journey.subject_key.ilike(f"%{display_name}%"))
+        .where(subject_key_has(Journey.subject_key, display_name))
     )
     if since is not None:
         stmt = stmt.where(Journey.last_seen_at >= since)
@@ -530,11 +531,11 @@ async def get_journeys(
         Journey.subject_kind == "person",
         Journey.last_seen_at >= cutoff,
     ]
-    # Coarse SQL prefilter on the name-signature. The precise
-    # exact-token check happens in Python below so "Ann" does not match
-    # a journey for "Anna".
+    # Exact per-element match in SQL (#151). The Python token check below
+    # is kept as belt and braces, but it no longer has to discard
+    # substring hits, so the overfetch is cheaper.
     if resolved_name is not None:
-        filters.append(Journey.subject_key.ilike(f"%{resolved_name}%"))
+        filters.append(subject_key_has(Journey.subject_key, resolved_name))
 
     # When name-filtering, overfetch so the Python token filter still
     # has enough candidates after dropping coincidental substring hits.
