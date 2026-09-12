@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
+import '../../models/models.dart';
+import 'zone_editor_screen.dart';
 
 /// Motion zones and tripwires, read-only plus remove (#182, first slice).
 ///
@@ -42,10 +44,16 @@ class MotionZonesSection extends StatelessWidget {
     required this.isAdmin,
     required this.sectionLabel,
     required this.onPatch,
+    required this.camera,
+    required this.onChanged,
   });
 
   final List<Map<String, dynamic>> zones;
   final String frameUrl;
+  final Camera camera;
+
+  /// Called after the editor saved, so the page reloads the camera.
+  final VoidCallback onChanged;
   final bool isAdmin;
   final Widget Function(String) sectionLabel;
   final Future<void> Function(Map<String, dynamic>) onPatch;
@@ -83,9 +91,16 @@ class MotionZonesSection extends StatelessWidget {
     await onPatch({'motion_zones': next});
   }
 
+  Future<void> _edit(BuildContext context, int? index) async {
+    final saved = await Navigator.of(context).push<bool>(MaterialPageRoute(
+      builder: (_) => ZoneEditorScreen(camera: camera, zones: zones, editIndex: index),
+    ));
+    if (saved == true) onChanged();
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (zones.isEmpty) return const SizedBox.shrink();
+    // Shown even with no zones now that they can be created here.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -94,7 +109,8 @@ class MotionZonesSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipRRect(
+              if (zones.isNotEmpty)
+                ClipRRect(
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(12)),
                 child: AspectRatio(
@@ -116,6 +132,7 @@ class MotionZonesSection extends StatelessWidget {
               for (var i = 0; i < zones.length; i++)
                 ListTile(
                   dense: true,
+                  onTap: isAdmin ? () => _edit(context, i) : null,
                   leading: Container(
                     width: 12,
                     height: 12,
@@ -150,14 +167,24 @@ class MotionZonesSection extends StatelessWidget {
                         )
                       : null,
                 ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Text(
-                  'Zones are drawn on the web app. Here you can see them and remove one.',
-                  style: TextStyle(
-                      fontSize: 11, color: NurbyColors.mutedForeground),
+              if (zones.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Text(
+                    'No zones yet. A zone is an area rules can refer to, '
+                    'or an area to ignore.',
+                    style: TextStyle(fontSize: 12, color: NurbyColors.mutedForeground),
+                  ),
                 ),
-              ),
+              if (isAdmin)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                  child: OutlinedButton.icon(
+                    onPressed: () => _edit(context, null),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Draw a zone or tripwire'),
+                  ),
+                ),
             ],
           ),
         ),

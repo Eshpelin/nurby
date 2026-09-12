@@ -293,9 +293,14 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
                 .map((z) => z.cast<String, dynamic>())
                 .toList(),
             frameUrl: ref.read(cameraRepoProvider).frameUrl(camera.id),
+            camera: camera,
             isAdmin: isAdmin,
             sectionLabel: _sectionLabel,
             onPatch: _patch,
+            onChanged: () {
+              ref.invalidate(_cameraProvider(camera.id));
+              ref.invalidate(camerasProvider);
+            },
           ),
           CameraSummariesSection(
               cameraId: camera.id, sectionLabel: _sectionLabel),
