@@ -28,7 +28,7 @@ logger = logging.getLogger("nurby.voice.piper")
 SYNTHESIS_TIMEOUT_SECONDS = 30.0
 
 
-class PiperUnavailable(RuntimeError):
+class PiperUnavailableError(RuntimeError):
     """Piper is not installed, or its model is missing."""
 
 
@@ -81,7 +81,7 @@ class PiperProvider:
 
     async def synthesize(self, text: str, voice: str | None = None) -> AudioClip:
         if not self.available():
-            raise PiperUnavailable(
+            raise PiperUnavailableError(
                 f"{self.binary!r} is not on PATH. install Piper, or configure "
                 "another voice_tts_provider"
             )
@@ -99,7 +99,7 @@ class PiperProvider:
                 stderr=asyncio.subprocess.PIPE,
             )
         except OSError as exc:
-            raise PiperUnavailable(f"could not start {self.binary!r}: {exc}") from exc
+            raise PiperUnavailableError(f"could not start {self.binary!r}: {exc}") from exc
 
         try:
             stdout, stderr = await asyncio.wait_for(
@@ -109,10 +109,10 @@ class PiperProvider:
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            raise PiperUnavailable("piper timed out") from None
+            raise PiperUnavailableError("piper timed out") from None
 
         if proc.returncode != 0:
             detail = (stderr or b"").decode("utf-8", "replace").strip()[:200]
-            raise PiperUnavailable(f"piper exited {proc.returncode}: {detail}")
+            raise PiperUnavailableError(f"piper exited {proc.returncode}: {detail}")
 
         return parse_wav(stdout)

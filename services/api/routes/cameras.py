@@ -396,7 +396,7 @@ async def camera_activity_strip(
     """
     from datetime import timedelta
 
-    from shared.models import MotionSample, Observation, Person, Recording
+    from shared.models import MotionSample, Observation, Recording
 
     end = datetime.now(timezone.utc)
     start = end - timedelta(hours=hours)

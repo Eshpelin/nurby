@@ -23,7 +23,6 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.dialects import postgresql
 
-import services.api.routes.shares as shares_mod
 from services.api.routes.shares import (
     ShareCreate,
     _share_status,

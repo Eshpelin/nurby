@@ -8,9 +8,7 @@ blank reply and every metric over run status counted a success.
 
 import uuid
 
-import pytest
 
-from services.agent import empty_guard
 from services.agent.empty_guard import (
     DEFAULT_COST_THRESHOLD_CENTS,
     DEFAULT_EMPTY_RETRY_BUDGET,

@@ -12,7 +12,6 @@ import asyncio
 import uuid
 from types import SimpleNamespace
 
-import pytest
 
 import services.agent.tools as tools_mod
 from services.agent.tools import get_tool, speak_on_camera

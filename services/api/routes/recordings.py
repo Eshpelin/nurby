@@ -23,7 +23,7 @@ from shared.ffmpeg_safe import (
     DisallowedFfmpegArgError,
     assert_allowed_args,
 )
-from shared.models import Camera, Observation, Person, Recording, Transcript, User, Vehicle
+from shared.models import Camera, Observation, Person, Recording, Transcript, User
 from shared.paths import escape_like, resolve_inside, safe_getsize
 from shared.schemas import RecordingResponse
 

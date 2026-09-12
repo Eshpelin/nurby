@@ -17,7 +17,7 @@ import logging
 
 import httpx
 
-from services.voice.transport import TransportError, TransportUnsupported
+from services.voice.transport import TransportError, TransportUnsupportedError
 
 logger = logging.getLogger("nurby.voice.transport.device")
 
@@ -33,7 +33,7 @@ class HttpDeviceTransport:
 
         endpoint = getattr(camera, "speaker_endpoint", None)
         if not endpoint:
-            raise TransportUnsupported(
+            raise TransportUnsupportedError(
                 "no external speaker endpoint configured for this camera"
             )
         try:

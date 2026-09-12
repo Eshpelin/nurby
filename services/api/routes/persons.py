@@ -8,7 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel as PydanticBaseModel
-from sqlalchemy import Text, and_, or_, select, text
+from sqlalchemy import Text, and_, select, text
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm.attributes import flag_modified
 

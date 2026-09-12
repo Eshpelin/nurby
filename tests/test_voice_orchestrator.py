@@ -8,7 +8,6 @@ speaks, and a handoff stops the agent mid-budget.
 import asyncio
 from types import SimpleNamespace
 
-import pytest
 
 from services.voice import conversation, orchestrator, session as session_mod
 from services.voice.disclosure import SAFE_FALLBACK

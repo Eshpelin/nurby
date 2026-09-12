@@ -14,7 +14,7 @@ work with its own hardware requirement.
 
 from __future__ import annotations
 
-from services.voice.transport import TransportUnsupported, register_factory
+from services.voice.transport import TransportUnsupportedError, register_factory
 
 
 class TapoTransport:
@@ -24,7 +24,7 @@ class TapoTransport:
     async def speak(self, camera, payload: bytes, *, codec: str,
                     sample_rate: int, volume: int = 70,
                     timeout: float = 15.0) -> None:
-        raise TransportUnsupported(
+        raise TransportUnsupportedError(
             "Tapo two-way audio uses a proprietary API that Nurby does not "
             "speak yet. Point this camera at an external speaker endpoint "
             "instead, or use a camera with an ONVIF backchannel."

@@ -1172,7 +1172,6 @@ def test_token_match_anchors_on_entry_boundaries():
     "Ahmed,Sara". A person's history really does live in those rows, so
     they have to be searched, but a plain substring match returns Anna's
     journeys when asked about Ann."""
-    from sqlalchemy import Column, String, and_, select as _select
     from sqlalchemy.dialects import postgresql
     from services.agent.tools import _token_match
     from shared.models import Journey

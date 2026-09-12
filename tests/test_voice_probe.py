@@ -14,7 +14,6 @@ way.
 import asyncio
 from types import SimpleNamespace
 
-import pytest
 
 from services.voice.probe import (
     ONVIF_BACKCHANNEL,

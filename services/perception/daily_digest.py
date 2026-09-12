@@ -26,7 +26,6 @@ import logging
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 

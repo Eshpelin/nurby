@@ -8,7 +8,6 @@ the API, which drops every unrelated in-flight request too.
 """
 
 import json
-import os
 import uuid
 
 import pytest

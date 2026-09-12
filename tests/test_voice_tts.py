@@ -353,10 +353,10 @@ def test_piper_reports_absence_rather_than_crashing():
 
 @pytest.mark.asyncio
 async def test_piper_raises_a_typed_error_when_missing():
-    from services.voice.providers.piper_provider import PiperUnavailable
+    from services.voice.providers.piper_provider import PiperUnavailableError
 
     provider = PiperProvider(binary="definitely-not-installed")
-    with pytest.raises(PiperUnavailable):
+    with pytest.raises(PiperUnavailableError):
         await provider.synthesize("hello")
 
 

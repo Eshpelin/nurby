@@ -9,7 +9,6 @@ hangs off.
 import asyncio
 from types import SimpleNamespace
 
-import pytest
 
 from services.voice import listener, orchestrator, session as session_mod
 

@@ -247,10 +247,10 @@ def test_every_transport_kind_can_be_built():
 
 
 def test_tapo_says_what_to_do_instead_rather_than_failing_blankly():
-    from services.voice.transport import TransportUnsupported
+    from services.voice.transport import TransportUnsupportedError
 
     transport = asyncio.run(build_transport("tapo"))
-    with pytest.raises(TransportUnsupported) as caught:
+    with pytest.raises(TransportUnsupportedError) as caught:
         asyncio.run(transport.speak(_camera(), b"x", codec="pcmu", sample_rate=8000))
 
     assert "external speaker" in str(caught.value)
@@ -382,7 +382,7 @@ def test_the_vendor_http_base_is_derived_from_the_stream_url():
 
 
 def test_a_camera_with_no_host_is_unsupported_rather_than_a_crash():
-    from services.voice.transport import TransportUnsupported
+    from services.voice.transport import TransportUnsupportedError
 
-    with pytest.raises(TransportUnsupported):
+    with pytest.raises(TransportUnsupportedError):
         camera_base_url(_camera(stream_url="not-a-url"))

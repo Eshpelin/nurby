@@ -34,7 +34,7 @@ class TransportError(RuntimeError):
     """A transport could not deliver audio. Carries a human sentence."""
 
 
-class TransportUnsupported(TransportError):
+class TransportUnsupportedError(TransportError):
     """This camera cannot be spoken through by this driver.
 
     Distinct from a delivery failure on purpose: unsupported is a
@@ -52,7 +52,7 @@ def register_factory(kind: str, factory: Callable[..., Awaitable[SpeakerTranspor
 
 async def build_transport(kind: str, **kwargs) -> SpeakerTransport:
     if kind not in _FACTORIES:
-        raise TransportUnsupported(f"no speaker transport for {kind!r}")
+        raise TransportUnsupportedError(f"no speaker transport for {kind!r}")
     return await _FACTORIES[kind](**kwargs)
 
 

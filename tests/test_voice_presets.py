@@ -9,7 +9,6 @@ implies we know something we do not.
 from types import SimpleNamespace
 
 from services.api.routes.voice import _camera_view, _capability_view
-from services.voice import presets as presets_mod
 from services.voice.presets import (
     CONCIERGE,
     CUSTOM,

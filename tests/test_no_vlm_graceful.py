@@ -162,7 +162,7 @@ def test_incident_reinterpret_no_provider_returns_graceful_payload(monkeypatch):
 
     out = _run(
         incident_routes.reinterpret_incident(
-            incident_id=row.id, body=None, _user=SimpleNamespace(), db=db
+            incident_id=row.id, body=None, current_user=SimpleNamespace(role="admin", id=uuid.uuid4()), db=db
         )
     )
     assert out["ai_synthesis"] is False
@@ -176,7 +176,7 @@ def test_incident_reinterpret_missing_incident_still_404(monkeypatch):
     with pytest.raises(Exception) as exc:
         _run(
             incident_routes.reinterpret_incident(
-                incident_id=uuid.uuid4(), body=None, _user=SimpleNamespace(), db=db
+                incident_id=uuid.uuid4(), body=None, current_user=SimpleNamespace(role="admin", id=uuid.uuid4()), db=db
             )
         )
     assert "404" in str(exc.value) or "not found" in str(exc.value)

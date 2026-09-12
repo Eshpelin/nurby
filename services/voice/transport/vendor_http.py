@@ -19,7 +19,7 @@ import logging
 import httpx
 
 from services.voice.auth import digest_response, parse_challenge
-from services.voice.transport import TransportError, TransportUnsupported
+from services.voice.transport import TransportError, TransportUnsupportedError
 
 logger = logging.getLogger("nurby.voice.transport.vendor")
 
@@ -38,7 +38,7 @@ def camera_base_url(camera) -> str:
     parsed = urlparse(getattr(camera, "stream_url", "") or "")
     host = parsed.hostname
     if not host:
-        raise TransportUnsupported("camera has no resolvable host")
+        raise TransportUnsupportedError("camera has no resolvable host")
     port = getattr(camera, "http_port", None) or 80
     scheme = "https" if int(port) == 443 else "http"
     return f"{scheme}://{host}:{int(port)}"
@@ -117,7 +117,7 @@ class _VendorTransport:
         if response.status_code == 401:
             raise TransportError("camera rejected our credentials")
         if response.status_code == 404:
-            raise TransportUnsupported(
+            raise TransportUnsupportedError(
                 f"{self.name} endpoint not present on this camera"
             )
         if response.status_code >= 400:

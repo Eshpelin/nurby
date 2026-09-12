@@ -17,13 +17,13 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 
 from services.voice import policy as policy_mod
 from services.voice.audio import for_backchannel
-from services.voice.transport import TransportError, TransportUnsupported, build_transport
+from services.voice.transport import TransportError, TransportUnsupportedError, build_transport
 from shared import estop
 from shared.app_settings import get_setting
 from shared.models import Camera, SpeakerCapability, SpeechEvent
@@ -203,7 +203,7 @@ async def speak(
         )
         return finish(SpeakOutcome(True, "played", transport=kind, duration_ms=elapsed))
 
-    except TransportUnsupported as exc:
+    except TransportUnsupportedError as exc:
         return finish(SpeakOutcome(False, "suppressed", "unsupported", str(exc)))
     except TransportError as exc:
         return finish(SpeakOutcome(False, "failed", "transport", str(exc)))

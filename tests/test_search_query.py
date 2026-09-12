@@ -35,6 +35,7 @@ def _obs(**kw):
         vlm_description="a quiet porch",
         confidence=0.7,
         thumbnail_path=None,
+        clean_frame_path=None,
     )
     defaults.update(kw)
     return SimpleNamespace(**defaults)

@@ -49,7 +49,7 @@ from services.voice.probe import (
     rtsp_status,
     split_response,
 )
-from services.voice.transport import TransportError, TransportUnsupported
+from services.voice.transport import TransportError, TransportUnsupportedError
 
 logger = logging.getLogger("nurby.voice.transport.onvif")
 
@@ -180,7 +180,7 @@ class OnvifBackchannelTransport:
 
         url = getattr(camera, "stream_url", None) or ""
         if not url.lower().startswith("rtsp"):
-            raise TransportUnsupported("camera is not an RTSP source")
+            raise TransportUnsupportedError("camera is not an RTSP source")
 
         try:
             password = unseal(getattr(camera, "password", None))
@@ -200,7 +200,7 @@ class OnvifBackchannelTransport:
 
             channel = parse_backchannel_sdp(body)
             if channel is None:
-                raise TransportUnsupported(
+                raise TransportUnsupportedError(
                     "camera advertises no audio backchannel"
                 )
 

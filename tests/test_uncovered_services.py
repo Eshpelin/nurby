@@ -41,6 +41,7 @@ def test_build_observation_dict_resolves_camera_name():
         vlm_description="a quiet porch",
         confidence=0.7,
         thumbnail_path=None,
+        clean_frame_path=None,
     )
     out = _build_observation_dict(obs, {cam_id: "Porch"})
     assert out["camera_name"] == "Porch"

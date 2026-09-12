@@ -6,7 +6,7 @@ reached the right camera, and none of them need a speaker.
 
 from __future__ import annotations
 
-from services.voice.transport import SpeakerTransport, TransportError
+from services.voice.transport import TransportError
 
 
 class MockTransport:
