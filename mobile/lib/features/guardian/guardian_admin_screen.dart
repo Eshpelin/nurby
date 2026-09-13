@@ -284,6 +284,15 @@ class _AccessLogTab extends ConsumerWidget {
 class _FacilitiesTab extends ConsumerWidget {
   const _FacilitiesTab();
 
+  void _editFacility(BuildContext context, Map<String, dynamic>? existing) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: NurbyColors.cardElevated,
+      builder: (_) => _FacilityForm(existing: existing),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(facilitiesProvider);
@@ -295,12 +304,20 @@ class _FacilitiesTab extends ConsumerWidget {
         onRetry: () => ref.invalidate(facilitiesProvider),
       ),
       data: (rows) => rows.isEmpty
-          ? const _Empty(
-              icon: Icons.apartment_outlined,
-              title: 'No places configured',
-              detail: 'A place groups guardian links, for a school or a '
-                  'care home rather than a single household.',
-            )
+          ? ListView(children: [
+              const _Empty(
+                icon: Icons.apartment_outlined,
+                title: 'No places configured',
+                detail: 'A place groups guardian links, for a school or a '
+                    'care home rather than a single household.',
+              ),
+              Center(
+                child: OutlinedButton(
+                  onPressed: () => _editFacility(context, null),
+                  child: const Text('Add a place'),
+                ),
+              ),
+            ])
           : ListView(
               padding: const EdgeInsets.all(12),
               children: [
@@ -320,8 +337,16 @@ class _FacilitiesTab extends ConsumerWidget {
                         style: const TextStyle(
                             color: NurbyColors.mutedForeground, fontSize: 12),
                       ),
+                      trailing: const Icon(Icons.edit_outlined,
+                          size: 18, color: NurbyColors.mutedForeground),
+                      onTap: () => _editFacility(context, f),
                     ),
                   ),
+                OutlinedButton.icon(
+                  onPressed: () => _editFacility(context, null),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add a place'),
+                ),
               ],
             ),
     );
@@ -560,5 +585,149 @@ class _Retry extends StatelessWidget {
                 OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
           ),
         ],
+      );
+}
+
+
+/// Create or edit a facility. Slug is set on create only; the API does
+/// not accept it on PATCH, since links already reference it.
+class _FacilityForm extends ConsumerStatefulWidget {
+  const _FacilityForm({required this.existing});
+  final Map<String, dynamic>? existing;
+
+  @override
+  ConsumerState<_FacilityForm> createState() => _FacilityFormState();
+}
+
+class _FacilityFormState extends ConsumerState<_FacilityForm> {
+  late final _name = TextEditingController(text: widget.existing?['name'] as String? ?? '');
+  late final _slug = TextEditingController(text: widget.existing?['slug'] as String? ?? '');
+  late final _tz = TextEditingController(text: widget.existing?['timezone'] as String? ?? '');
+  late double _reveal = ((widget.existing?['reveal_min_confidence'] as num?)?.toDouble() ?? 0.8).clamp(0.5, 1.0);
+  late int _maxCams = (widget.existing?['max_cameras_per_person'] as num?)?.toInt() ?? 4;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _slug.dispose();
+    _tz.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_name.text.trim().isEmpty) {
+      setState(() => _error = 'Give it a name.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final repo = ref.read(guardianRepoProvider);
+    final body = {
+      'name': _name.text.trim(),
+      if (_tz.text.trim().isNotEmpty) 'timezone': _tz.text.trim(),
+      'reveal_min_confidence': double.parse(_reveal.toStringAsFixed(2)),
+      'max_cameras_per_person': _maxCams,
+    };
+    try {
+      if (widget.existing == null) {
+        await repo.createFacility({
+          ...body,
+          if (_slug.text.trim().isNotEmpty) 'slug': _slug.text.trim(),
+        });
+      } else {
+        await repo.updateFacility(widget.existing!['id'] as String, body);
+      }
+      ref.invalidate(facilitiesProvider);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) setState(() => _error = apiErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: EdgeInsets.only(
+          left: 20, right: 20, top: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(widget.existing == null ? 'New place' : 'Edit place',
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _name,
+                decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder()),
+              ),
+              if (widget.existing == null) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _slug,
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    labelText: 'Short id (optional)',
+                    helperText: 'Used in links. Cannot be changed later.',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: _tz,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                    labelText: 'Timezone', hintText: 'Europe/London', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 16),
+              Text('Name someone only when ${(_reveal * 100).round()}% sure',
+                  style: const TextStyle(fontSize: 13)),
+              // Below this confidence a guardian sees "someone" rather than
+              // a name. Higher is safer for the people being watched.
+              Slider(
+                value: _reveal, min: 0.5, max: 1.0, divisions: 10,
+                activeColor: NurbyColors.accent,
+                onChanged: (v) => setState(() => _reveal = v),
+              ),
+              Row(
+                children: [
+                  const Expanded(child: Text('Cameras per person', style: TextStyle(fontSize: 13))),
+                  IconButton(
+                    icon: const Icon(Icons.remove, size: 18),
+                    onPressed: _maxCams > 1 ? () => setState(() => _maxCams--) : null,
+                  ),
+                  Text('$_maxCams', style: const TextStyle(fontFamily: 'Menlo')),
+                  IconButton(
+                    icon: const Icon(Icons.add, size: 18),
+                    onPressed: _maxCams < 1000 ? () => setState(() => _maxCams++) : null,
+                  ),
+                ],
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(_error!, style: const TextStyle(color: NurbyColors.danger, fontSize: 13)),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                      onPressed: _busy ? null : _save,
+                      child: Text(widget.existing == null ? 'Create' : 'Save')),
+                ],
+              ),
+            ],
+          ),
+        ),
       );
 }

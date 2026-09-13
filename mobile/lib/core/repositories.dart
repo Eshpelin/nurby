@@ -910,6 +910,15 @@ class GuardianRepository {
     return j.whereType<Map>().map((f) => f.cast<String, dynamic>()).toList();
   }
 
+  Future<Map<String, dynamic>> createFacility(Map<String, dynamic> body) async =>
+      (await _api.postJson('/api/guardian/facilities', body: body) as Map)
+          .cast<String, dynamic>();
+
+  Future<Map<String, dynamic>> updateFacility(
+          String id, Map<String, dynamic> patch) async =>
+      (await _api.patchJson('/api/guardian/facilities/$id', body: patch) as Map)
+          .cast<String, dynamic>();
+
   /// Links the household has granted, as opposed to /me which is the
   /// links granted *to* the caller.
   Future<List<Map<String, dynamic>>> allLinks({String? personId}) async {

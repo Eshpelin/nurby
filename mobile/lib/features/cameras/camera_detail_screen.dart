@@ -11,6 +11,7 @@ import 'camera_summaries_section.dart';
 import 'camera_zones_section.dart';
 import 'config_tiles.dart';
 import 'detection_models_editor.dart';
+import 'motion_zones_section.dart';
 import 'personas_section.dart';
 import 'phone_mic_screen.dart';
 import 'live_view.dart';
@@ -282,6 +283,16 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
           CameraZonesSection(
             cameraId: camera.id,
             raw: raw,
+            isAdmin: isAdmin,
+            sectionLabel: _sectionLabel,
+            onPatch: _patch,
+          ),
+          MotionZonesSection(
+            zones: (raw['motion_zones'] as List? ?? const [])
+                .whereType<Map>()
+                .map((z) => z.cast<String, dynamic>())
+                .toList(),
+            frameUrl: ref.read(cameraRepoProvider).frameUrl(camera.id),
             isAdmin: isAdmin,
             sectionLabel: _sectionLabel,
             onPatch: _patch,
