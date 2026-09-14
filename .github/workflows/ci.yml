@@ -90,3 +90,58 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+  mobile-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # Pinned to the version the app is developed against. Flutter
+          # moves fast enough that "stable" silently changes the analyzer
+          # and the widget-test framework under us.
+          flutter-version: "3.29.3"
+          channel: stable
+          cache: true
+
+      - name: Install
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: mobile
+        # lib and test only. integration_test needs a device and is run
+        # by hand against a simulator.
+        run: flutter analyze lib test
+
+      - name: Test
+        working-directory: mobile
+        run: flutter test
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Test
+        working-directory: frontend
+        run: npm test -- --run
