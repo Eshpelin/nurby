@@ -4,7 +4,6 @@ These are data, not builders, so both clients offer the same four. A
 starter that produced an unfireable rule would look like it worked and
 never alert, which is worse than no starter at all.
 """
-import pytest
 from fastapi.testclient import TestClient
 
 from services.api.main import app

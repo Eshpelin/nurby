@@ -311,6 +311,25 @@ class RuleRepository {
   RuleRepository(this._api);
   final ApiClient _api;
 
+  /// Starter rules for the first-run flow. Data from the backend, so
+  /// mobile offers the same four as web without a copy of the template
+  /// library.
+  Future<List<Map<String, dynamic>>> starters() async {
+    final j = await _api.getJson('/api/rules/starters') as Map;
+    return (j['starters'] as List? ?? const [])
+        .whereType<Map>()
+        .map((s) => s.cast<String, dynamic>())
+        .toList();
+  }
+
+  /// One tap: the server builds the rule and saves it.
+  Future<Map<String, dynamic>> createFromStarter(String key, {String? cameraId}) async =>
+      (await _api.postJson('/api/rules/starters', body: {
+        'key': key,
+        if (cameraId != null) 'camera_id': cameraId,
+      }) as Map)
+          .cast<String, dynamic>();
+
   Future<List<Rule>> list() async {
     final j = await _api.getJson('/api/rules') as List;
     return j

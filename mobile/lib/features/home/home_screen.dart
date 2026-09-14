@@ -9,6 +9,7 @@ import '../../core/theme.dart';
 import '../../models/models.dart';
 import '../timeline/morning_recap_card.dart';
 import '../voice/live_conversation_card.dart';
+import 'first_run_card.dart';
 
 /// Home: is everything all right?
 ///
@@ -51,6 +52,8 @@ class HomeScreen extends ConsumerWidget {
             // Happening now. The live card renders nothing when nothing
             // is live, which is most of the time.
             const LiveConversationCard(),
+            // Shown only until the household has a camera and a rule.
+            const FirstRunCard(),
 
             // Cameras, as a strip. Tapping one goes to it; the header
             // goes to the grid.
