@@ -1,5 +1,7 @@
 "use client";
 
+import { ActivityFilterBar } from "@/components/activity/ActivityFilterBar";
+
 /**
  * Alerts review center. Every fired event across the deployment in one
  * place: filter by camera, rule, reviewed state, and time range; expand
@@ -204,6 +206,7 @@ export default function EventsPage() {
           Export CSV
         </button>
       </div>
+        <div className="mb-4"><ActivityFilterBar /></div>
 
       <div className="flex items-center gap-1 mb-3">
         {([

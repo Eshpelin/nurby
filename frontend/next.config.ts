@@ -10,6 +10,15 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
+  async redirects() {
+    // Old destinations keep resolving (docs/ia-rollout.md). Only
+    // /timeline moves; Alerts and Recordings keep their pages and gain
+    // the Activity filter bar instead.
+    return [
+      { source: "/timeline", destination: "/activity", permanent: false },
+      { source: "/pipeline", missing: [{ type: "query", key: "direct" }], destination: "/settings#admin", permanent: false },
+    ];
+  },
   async rewrites() {
     // Server-side rewrite runs inside the frontend container, so
     // localhost = the container itself. Prefer NEXT_INTERNAL_API_URL

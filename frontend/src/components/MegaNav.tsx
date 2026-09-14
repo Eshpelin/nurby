@@ -17,49 +17,52 @@ type LinkDef = { label: string; href: string; hint: string };
 type MenuDef = { id: string; label: string; links: LinkDef[] };
 
 const MENUS: MenuDef[] = [
+  // The five places (docs/ia-rollout.md). Each is the question it
+  // answers. Home and Cameras are plain links; the other three keep the
+  // glance-able panel because that is where the live state is useful.
   {
-    id: "review",
-    label: "Review",
+    id: "activity",
+    label: "Activity",
     links: [
+      { label: "Everything", href: "/activity", hint: "What happened, newest first" },
+      { label: "Alerts", href: "/events", hint: "What your rules raised" },
+      { label: "Incidents", href: "/activity?kind=incidents", hint: "Repeat sightings, grouped" },
+      { label: "Journeys", href: "/activity?kind=journeys", hint: "One subject across cameras" },
+      { label: "Conversations", href: "/activity?kind=conversations", hint: "Speech near a camera" },
       { label: "Recordings", href: "/recordings", hint: "Browse & filter footage" },
-      { label: "Timeline", href: "/timeline", hint: "Everything, in order" },
-      { label: "Alerts", href: "/events", hint: "Rule-triggered events" },
+      { label: "Camera recaps", href: "/activity?kind=recaps", hint: "What each camera concluded" },
     ],
   },
   {
-    id: "directory",
-    label: "Directory",
+    id: "ask",
+    label: "Ask",
+    links: [
+      { label: "Ask Nurby", href: "/ask", hint: "Question your footage" },
+      { label: "Scheduled questions", href: "/reports", hint: "Questions answered on a clock" },
+    ],
+  },
+  {
+    id: "people",
+    label: "People",
     links: [
       { label: "People", href: "/people", hint: "Faces & identities" },
       { label: "Vehicles", href: "/vehicles", hint: "Plates & re-ID" },
     ],
   },
-  {
-    id: "insights",
-    label: "Insights",
-    links: [
-      { label: "Ask Nurby", href: "/ask", hint: "Question your footage" },
-      { label: "Reports", href: "/reports", hint: "Scheduled digests" },
-    ],
-  },
-  {
-    id: "manage",
-    label: "Manage",
-    links: [
-      { label: "Rules", href: "/rules", hint: "Automations & alerts" },
-      { label: "Pipeline", href: "/pipeline", hint: "AI backlog & throughput" },
-      { label: "Settings", href: "/settings", hint: "Cameras, AI, account" },
-    ],
-  },
+];
+
+/** Plain links that need no panel. */
+const PLAIN: LinkDef[] = [
+  { label: "Home", href: "/", hint: "Is everything all right" },
+  { label: "Cameras", href: "/cameras", hint: "Show me" },
 ];
 
 // Panel width per menu (px). The shared card transitions between these, which
 // is what gives the morph its feel; keep them distinct but not jarring.
 const PANEL_WIDTH: Record<string, number> = {
-  review: 560,
-  directory: 600,
-  insights: 480,
-  manage: 460,
+  activity: 620,
+  ask: 480,
+  people: 600,
 };
 
 function timeAgo(iso?: string | null): string {
@@ -162,14 +165,14 @@ export function useNavData(): NavData {
     if (fetched.current[id]) return;
     fetched.current[id] = true;
     try {
-      if (id === "review") {
+      if (id === "activity") {
         const [a, rec] = await Promise.all([
           authFetch("/api/events/history?acked=false&limit=3"),
           authFetch("/api/recordings?limit=1"),
         ]);
         if (a.ok) setRecentAlerts(await a.json());
         if (rec.ok) { const list = await rec.json(); setLatestRec(list[0] ?? null); }
-      } else if (id === "directory") {
+      } else if (id === "people") {
         const [p, v, s] = await Promise.all([
           authFetch("/api/persons/activity/summary"),
           authFetch("/api/vehicles/activity/summary"),
@@ -178,9 +181,6 @@ export function useNavData(): NavData {
         if (p.ok) setPeople((await p.json()).slice(0, 4));
         if (v.ok) setVehicles((await v.json()).slice(0, 3));
         if (s.ok) setFacesToName((await s.json()).length);
-      } else if (id === "manage") {
-        const r = await authFetch("/api/rules");
-        if (r.ok) setRules(await r.json());
       }
     } catch {
       fetched.current[id] = false; // allow a retry on the next open
@@ -263,19 +263,25 @@ export function MegaNav() {
     <div ref={wrapRef} className="relative hidden md:block" onMouseLeave={onTriggerLeave}>
       {/* Trigger row */}
       <nav className="flex items-center gap-1">
-        <Link
-          href="/"
-          className={`px-3 py-1.5 rounded-md text-sm transition-colors whitespace-nowrap ${
-            pathname === "/" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Dashboard
-        </Link>
+        {PLAIN.map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            title={l.hint}
+            className={`px-3 py-1.5 rounded-md text-sm transition-colors whitespace-nowrap ${
+              (l.href === "/" ? pathname === "/" : pathname.startsWith(l.href))
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {l.label}
+          </Link>
+        ))}
 
         {MENUS.map((m) => {
           const on = active === m.id;
           const routeActive = isMenuActive(m);
-          const showAlertBadge = m.id === "review" && (alertCount ?? 0) > 0;
+          const showAlertBadge = m.id === "activity" && (alertCount ?? 0) > 0;
           return (
             <button
               key={m.id}
@@ -308,14 +314,6 @@ export function MegaNav() {
           );
         })}
 
-        <Link
-          href="/guardian"
-          className={`px-3 py-1.5 rounded-md text-sm transition-colors whitespace-nowrap ${
-            pathname.startsWith("/guardian") ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Guardian
-        </Link>
       </nav>
 
       {/* Shared morphing panel */}
@@ -341,20 +339,19 @@ export function MegaNav() {
             <div className="mega-grid pointer-events-none absolute inset-0 opacity-[0.5]" />
 
             <div key={active} className="relative p-3">
-              {active === "review" && (
+              {active === "activity" && (
                 <ReviewPanel
                   cams={cams} alertCount={alertCount} recentAlerts={recentAlerts}
                   latestRec={latestRec} tq={tq} onNavigate={() => setActive(null)}
                 />
               )}
-              {active === "directory" && (
+              {active === "people" && (
                 <DirectoryPanel
                   people={people} vehicles={vehicles} facesToName={facesToName}
                   tq={tq} onNavigate={() => setActive(null)}
                 />
               )}
-              {active === "insights" && <InsightsPanel onNavigate={() => setActive(null)} />}
-              {active === "manage" && <ManagePanel rules={rules} onNavigate={() => setActive(null)} />}
+              {active === "ask" && <InsightsPanel onNavigate={() => setActive(null)} />}
             </div>
           </div>
         </div>
@@ -557,7 +554,7 @@ function DirectoryPanel({
           </div>
         </div>
       </div>
-      <PanelLinks links={MENUS[1].links} onNavigate={onNavigate} />
+      <PanelLinks links={MENUS[2].links} onNavigate={onNavigate} />
     </div>
   );
 }
@@ -596,46 +593,13 @@ function InsightsPanel({ onNavigate }: { onNavigate: () => void }) {
           </Link>
         ))}
       </div>
-      <PanelLinks links={MENUS[2].links} onNavigate={onNavigate} />
+      <PanelLinks links={MENUS[1].links} onNavigate={onNavigate} />
     </div>
   );
 }
 
-function ManagePanel({ rules, onNavigate }: { rules: RuleRow[]; onNavigate: () => void }) {
-  const active = rules.filter((r) => r.enabled).length;
-  return (
-    <div>
-      <SectionLabel>Automations</SectionLabel>
-      <Link
-        href="/rules"
-        onClick={onNavigate}
-        className="mega-item block rounded-lg border border-border bg-card p-2.5 hover:border-accent/50 transition-colors"
-        style={{ animationDelay: "40ms" }}
-      >
-        <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-semibold tabular-nums">{active}</span>
-          <span className="text-xs text-muted-foreground">rule{active === 1 ? "" : "s"} active</span>
-          {rules.length > active && <span className="ml-auto text-[10px] text-muted-foreground">{rules.length - active} off</span>}
-        </div>
-        <ul className="mt-1.5 space-y-1">
-          {rules.slice(0, 3).map((r, i) => (
-            <li key={r.id} className="mega-item flex items-center gap-2 text-[11px]" style={{ animationDelay: `${110 + i * 45}ms` }}>
-              <span className={`w-1.5 h-1.5 rounded-full ${r.enabled ? "bg-accent" : "bg-muted-foreground/40"}`} />
-              <span className="text-foreground truncate">{r.name}</span>
-              {r.severity === "alert" && <span className="ml-auto text-[9px] font-mono uppercase text-danger/80">alert</span>}
-            </li>
-          ))}
-          {rules.length === 0 && <li className="text-[11px] text-muted-foreground">No rules yet.</li>}
-        </ul>
-      </Link>
-      <PanelLinks links={MENUS[3].links} onNavigate={onNavigate} />
-    </div>
-  );
-}
-
-// Render a menu's panel by id, compact, for the mobile accordion.
 function PanelFor({ id, nav, onNavigate }: { id: string; nav: NavData; onNavigate: () => void }) {
-  if (id === "review") {
+  if (id === "activity") {
     return (
       <ReviewPanel
         compact cams={nav.cams} alertCount={nav.alertCount} recentAlerts={nav.recentAlerts}
@@ -643,7 +607,7 @@ function PanelFor({ id, nav, onNavigate }: { id: string; nav: NavData; onNavigat
       />
     );
   }
-  if (id === "directory") {
+  if (id === "people") {
     return (
       <DirectoryPanel
         compact people={nav.people} vehicles={nav.vehicles} facesToName={nav.facesToName}
@@ -651,8 +615,8 @@ function PanelFor({ id, nav, onNavigate }: { id: string; nav: NavData; onNavigat
       />
     );
   }
-  if (id === "insights") return <InsightsPanel onNavigate={onNavigate} />;
-  return <ManagePanel rules={nav.rules} onNavigate={onNavigate} />;
+  if (id === "ask") return <InsightsPanel onNavigate={onNavigate} />;
+  return null;
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -694,7 +658,7 @@ export function MegaNavMobile({ open, onClose }: { open: boolean; onClose: () =>
         {MENUS.map((m) => {
           const isOpen = expanded === m.id;
           const routeActive = m.links.some((l) => pathname === l.href);
-          const showBadge = m.id === "review" && (nav.alertCount ?? 0) > 0;
+          const showBadge = m.id === "activity" && (nav.alertCount ?? 0) > 0;
           return (
             <div key={m.id} className="rounded-lg border border-border-subtle overflow-hidden">
               <button
@@ -726,15 +690,7 @@ export function MegaNavMobile({ open, onClose }: { open: boolean; onClose: () =>
           );
         })}
 
-        <Link
-          href="/guardian"
-          onClick={onClose}
-          className={`block rounded-lg px-3 py-2.5 text-sm ${
-            pathname.startsWith("/guardian") ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Guardian
-        </Link>
+        
       </div>
     </nav>
   );

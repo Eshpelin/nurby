@@ -32,6 +32,8 @@ import {
   usagePercent,
 } from "./settings-helpers";
 
+const pillClass = "px-3 py-1.5 rounded-md border border-border text-sm hover:bg-muted transition-colors";
+
 export default function SettingsPage() {
   const { user, authFetch, token } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -559,17 +561,46 @@ export default function SettingsPage() {
 
   return (
     <div className="px-6 py-6 max-w-3xl">
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        {user?.role === "admin" && (
-          <Link
-            href="/settings/access"
-            className="px-3 py-1.5 rounded-md border border-border text-sm hover:bg-muted transition-colors"
-          >
-            Camera access
-          </Link>
-        )}
       </div>
+
+      {/* Alerts and Admin moved here from the navigation (docs/ia-rollout.md).
+          Rules are the most powerful thing in the product and the least
+          discoverable; putting them beside the other alert configuration is
+          the fix. */}
+      <div className="mb-6 rounded-lg border border-border bg-card">
+        <div className="px-4 py-3 border-b border-border">
+          <h2 className="text-sm font-medium">Alerts</h2>
+          <p className="text-xs text-muted-foreground">What should I be told about?</p>
+        </div>
+        <div className="flex flex-wrap gap-2 px-4 py-3">
+          <Link href="/rules" className={pillClass}>Alert rules</Link>
+          <Link href="/reports" className={pillClass}>Scheduled questions</Link>
+        </div>
+      </div>
+      <div className="mb-6 rounded-lg border border-border bg-card">
+        <div className="px-4 py-3 border-b border-border">
+          <h2 className="text-sm font-medium">Sharing</h2>
+          <p className="text-xs text-muted-foreground">Who outside the household can see what</p>
+        </div>
+        <div className="flex flex-wrap gap-2 px-4 py-3">
+          <Link href="/guardian/admin" className={pillClass}>Guardians</Link>
+          <Link href="/settings#shares" className={pillClass}>Share links</Link>
+        </div>
+      </div>
+      {user?.role === "admin" && (
+        <div id="admin" className="mb-6 rounded-lg border border-border bg-card">
+          <div className="px-4 py-3 border-b border-border">
+            <h2 className="text-sm font-medium">Admin</h2>
+          </div>
+          <div className="flex flex-wrap gap-2 px-4 py-3">
+            <Link href="/settings/access" className={pillClass}>Who sees which cameras</Link>
+            <Link href="/pipeline?direct=1" className={pillClass}>AI backlog</Link>
+            <Link href="/ask/admin" className={pillClass}>Everyone&apos;s questions</Link>
+          </div>
+        </div>
+      )}
 
       <div className="mb-6">
         <SoftwareUpdateCard />
@@ -593,7 +624,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${activeProvider ? "bg-green-500" : "bg-yellow-500"}`} />
               <div>
-                <div className="text-sm font-medium">AI Providers</div>
+                <div className="text-sm font-medium">AI models</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {loading ? "Loading." : activeProvider
                     ? activeProvider.name.includes(`(${activeProvider.default_model})`)
@@ -1381,7 +1412,7 @@ export default function SettingsPage() {
             <div className="space-y-3">
               {/* Kind */}
               <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Provider type</label>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">Model type</label>
                 <div className="grid grid-cols-4 gap-1">
                   {PROVIDER_KINDS.map((pk) => (
                     <button key={pk.value} onClick={() => handleKindChange(pk.value)}

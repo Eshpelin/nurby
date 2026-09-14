@@ -1,5 +1,7 @@
 "use client";
 
+import { ActivityFilterBar } from "@/components/activity/ActivityFilterBar";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
@@ -483,6 +485,7 @@ export default function RecordingsPage() {
             on this page
           </p>
         </div>
+        <div className="mb-4"><ActivityFilterBar /></div>
       </div>
 
       <div className="space-y-3 mb-6">

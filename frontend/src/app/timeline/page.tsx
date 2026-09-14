@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { ActivityFilterBar } from "@/components/activity/ActivityFilterBar";
 import { EmptyState } from "@/components/EmptyState";
 import { formatWith } from "@/lib/time";
 
@@ -179,10 +180,13 @@ export default function TimelinePage() {
   return (
     <div className="px-6 py-6 max-w-4xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Timeline</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Activity</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Everything that happened, newest first. Click any moment to watch it.
         </p>
+        <div className="mt-4">
+          <ActivityFilterBar />
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
