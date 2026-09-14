@@ -11,7 +11,10 @@ final digestsListProvider = FutureProvider<List<DigestEntry>>(
     (ref) => ref.watch(digestRepoProvider).list());
 
 class DigestsScreen extends ConsumerWidget {
-  const DigestsScreen({super.key});
+  const DigestsScreen({super.key, this.embedded = false});
+
+  /// Rendered inside the Activity screen: no Scaffold, no app bar.
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -19,12 +22,7 @@ class DigestsScreen extends ConsumerWidget {
     final cameras = ref.watch(camerasProvider).value ?? const <Camera>[];
     final names = {for (final c in cameras) c.id: c.name};
 
-    return Scaffold(
-      // Called "camera summaries" on screen, not "digests": the morning
-      // recap on the home tab is also a digest, and two features under
-      // one word is how a household concludes one of them is broken.
-      appBar: AppBar(title: const Text('Camera summaries')),
-      body: RefreshIndicator(
+    final body = RefreshIndicator(
         onRefresh: () async => ref.invalidate(digestsListProvider),
         child: list.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -50,13 +48,13 @@ class DigestsScreen extends ConsumerWidget {
                       size: 40, color: NurbyColors.mutedForeground),
                   SizedBox(height: 12),
                   Center(
-                      child: Text('No summaries yet',
+                      child: Text('No recaps yet',
                           style: TextStyle(fontWeight: FontWeight.w600))),
                   SizedBox(height: 6),
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 40),
                     child: Text(
-                      'Nurby writes a periodic summary of what each camera saw. '
+                      'Nurby writes a periodic recap of what each camera saw. '
                       'The first one appears after a full period has passed.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -75,7 +73,14 @@ class DigestsScreen extends ConsumerWidget {
                   ),
                 ),
         ),
-      ),
+      );
+    if (embedded) return body;
+    return Scaffold(
+      // Called "camera summaries" on screen, not "digests": the morning
+      // recap on the home tab is also a digest, and two features under
+      // one word is how a household concludes one of them is broken.
+      appBar: AppBar(title: const Text('Camera recaps')),
+      body: body,
     );
   }
 }

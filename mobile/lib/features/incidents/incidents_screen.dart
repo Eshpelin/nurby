@@ -51,7 +51,10 @@ String formatDuration(Duration d) {
 }
 
 class IncidentsScreen extends ConsumerStatefulWidget {
-  const IncidentsScreen({super.key});
+  const IncidentsScreen({super.key, this.embedded = false});
+
+  /// Rendered inside the Activity screen: no Scaffold, no app bar.
+  final bool embedded;
 
   @override
   ConsumerState<IncidentsScreen> createState() => _IncidentsScreenState();
@@ -66,18 +69,7 @@ class _IncidentsScreenState extends ConsumerState<IncidentsScreen> {
     final cameras = ref.watch(camerasProvider).value ?? const <Camera>[];
     final names = {for (final c in cameras) c.id: c.name};
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Incidents'),
-        actions: [
-          IconButton(
-            tooltip: _openOnly ? 'Showing open only' : 'Showing all',
-            icon: Icon(_openOnly ? Icons.filter_alt : Icons.filter_alt_outlined),
-            onPressed: () => setState(() => _openOnly = !_openOnly),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
+    final body = RefreshIndicator(
         onRefresh: () async => ref.invalidate(incidentsListProvider(_openOnly)),
         child: list.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -99,7 +91,20 @@ class _IncidentsScreenState extends ConsumerState<IncidentsScreen> {
                       _IncidentTile(items[i], names[items[i].cameraId]),
                 ),
         ),
+      );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Incidents'),
+        actions: [
+          IconButton(
+            tooltip: _openOnly ? 'Showing open only' : 'Showing all',
+            icon: Icon(_openOnly ? Icons.filter_alt : Icons.filter_alt_outlined),
+            onPressed: () => setState(() => _openOnly = !_openOnly),
+          ),
+        ],
       ),
+      body: body,
     );
   }
 }

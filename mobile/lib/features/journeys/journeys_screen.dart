@@ -31,15 +31,16 @@ String journeySubject(Journey j) {
 }
 
 class JourneysScreen extends ConsumerWidget {
-  const JourneysScreen({super.key});
+  const JourneysScreen({super.key, this.embedded = false});
+
+  /// Rendered inside the Activity screen: no Scaffold, no app bar.
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final list = ref.watch(journeysListProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Journeys')),
-      body: RefreshIndicator(
+    final body = RefreshIndicator(
         onRefresh: () async => ref.invalidate(journeysListProvider),
         child: list.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -83,7 +84,11 @@ class JourneysScreen extends ConsumerWidget {
                   itemBuilder: (_, i) => _JourneyTile(items[i]),
                 ),
         ),
-      ),
+      );
+    if (embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Journeys')),
+      body: body,
     );
   }
 }

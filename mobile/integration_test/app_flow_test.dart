@@ -16,6 +16,16 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.instance;
 
   testWidgets('server -> login -> tabs walk-through', (tester) async {
+    // Thumbnails 404 when no ingestion worker is running against the
+    // test API. The widgets fall back on errorBuilder; the harness must
+    // not count those as failures or Home can never pass without video.
+    final prior = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (details.exception is NetworkImageLoadException) return;
+      prior?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = prior);
+
     Future<void> shot(String name) async {
       try {
         await binding.takeScreenshot(name);
@@ -81,17 +91,32 @@ void main() {
       fail('$label tab: "$expectText" not found');
     }
 
-    await goTab('Timeline', 'Timeline');
-    await shot('02_timeline');
-    await goTab('Alerts', 'Alerts');
-    await shot('03_alerts');
+    // The five places, in tab order (docs/ia-rollout.md).
+    await goTab('Home', 'Needs attention');
+    await shot('02_home');
+    await goTab('Activity', 'Activity');
+    await shot('03_activity');
+    // Alerts is a filter on Activity now, not a tab.
+    await tester.tap(find.descendant(
+      of: find.byType(ChoiceChip),
+      matching: find.text('Alerts'),
+    ));
+    await tester.pump(const Duration(milliseconds: 500));
+    await shot('04_activity_alerts');
     await goTab('Ask', 'Ask Nurby');
-    await shot('04_ask');
-    await goTab('More', 'Settings');
-    await shot('05_more');
+    await shot('05_ask');
+    await goTab('People', 'People');
+    await shot('06_people');
 
-    // Open Rules from More
-    await tester.tap(find.text('Rules'));
+    // Settings is the gear on Home; Rules live under Settings > Alerts.
+    await goTab('Home', 'Needs attention');
+    await tester.tap(find.byTooltip('Settings'));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 500));
+      if (find.text('Alert rules').evaluate().isNotEmpty) break;
+    }
+    await shot('07_settings');
+    await tester.tap(find.text('Alert rules'));
     for (var i = 0; i < 20; i++) {
       await tester.pump(const Duration(milliseconds: 500));
       if (find.text('Rules').evaluate().isNotEmpty) break;

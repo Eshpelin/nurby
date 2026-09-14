@@ -28,7 +28,10 @@ final _observationProvider = FutureProvider.family<Observation, String>(
 
 /// Alerts tab: rule-fired event history with ack workflow.
 class EventsScreen extends ConsumerStatefulWidget {
-  const EventsScreen({super.key});
+  const EventsScreen({super.key, this.embedded = false});
+
+  /// Rendered inside the Activity screen: no Scaffold, no app bar.
+  final bool embedded;
 
   @override
   ConsumerState<EventsScreen> createState() => _EventsScreenState();
@@ -151,6 +154,22 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     final visible = [...?firstPage.value, ..._extra];
     final hasUnacked = visible.any((e) => !e.acked);
 
+    final body = Column(
+        children: [
+          _filterBar(cameras),
+          Expanded(
+            child: firstPage.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => _ErrorRetry(
+                message: apiErrorMessage(e),
+                onRetry: () => ref.invalidate(eventsProvider(_query)),
+              ),
+              data: (items) => _list([...items, ..._extra]),
+            ),
+          ),
+        ],
+      );
+    if (widget.embedded) return body;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Alerts'),
@@ -166,21 +185,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
             ),
         ],
       ),
-      body: Column(
-        children: [
-          _filterBar(cameras),
-          Expanded(
-            child: firstPage.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => _ErrorRetry(
-                message: apiErrorMessage(e),
-                onRetry: () => ref.invalidate(eventsProvider(_query)),
-              ),
-              data: (items) => _list([...items, ..._extra]),
-            ),
-          ),
-        ],
-      ),
+      body: body,
     );
   }
 
@@ -413,7 +418,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                   if (event.observationId != null) ...[
                     OutlinedButton.icon(
                       icon: const Icon(Icons.image_outlined, size: 18),
-                      label: const Text('View observation'),
+                      label: const Text('View sighting'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: NurbyColors.foreground,
                         side: const BorderSide(color: NurbyColors.border),

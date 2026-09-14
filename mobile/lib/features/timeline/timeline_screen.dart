@@ -33,7 +33,14 @@ final timelineProvider =
 /// Timeline tab: merged activity feed grouped under hour headers,
 /// mirroring the web dashboard.
 class TimelineScreen extends ConsumerStatefulWidget {
-  const TimelineScreen({super.key});
+  const TimelineScreen({super.key, this.embedded = false, this.sightingsOnly = false});
+
+  /// Rendered inside the Activity screen: no Scaffold, no app bar.
+  final bool embedded;
+
+  /// The Sightings filter: only what a camera saw, no transcripts. The
+  /// stream endpoint mixes both, so this is a client-side filter.
+  final bool sightingsOnly;
 
   @override
   ConsumerState<TimelineScreen> createState() => _TimelineScreenState();
@@ -135,9 +142,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
     final cameras = ref.watch(camerasProvider).value ?? const <Camera>[];
     final cameraNames = {for (final c in cameras) c.id: c.name};
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Timeline')),
-      body: Column(
+    final body = Column(
         children: [
           // A live doorstep exchange outranks the timeline below it: it
           // is the one thing on this screen with somebody waiting on the
@@ -158,7 +163,11 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
             ),
           ),
         ],
-      ),
+      );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Activity')),
+      body: body,
     );
   }
 
@@ -206,7 +215,10 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   }
 
   Widget _list(List<TimelineItem> firstPage, Map<String, String> names) {
-    final all = [...firstPage, ..._extra];
+    var all = [...firstPage, ..._extra];
+    if (widget.sightingsOnly) {
+      all = all.where((i) => i.kind == 'observation').toList();
+    }
     if (all.isEmpty) {
       return RefreshIndicator(
         onRefresh: _refresh,
@@ -292,7 +304,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
     final text = item.text?.trim();
     final display = (text == null || text.isEmpty)
         ? (isObservation
-            ? (item.observation?.labels.join(', ') ?? 'Observation')
+            ? (item.observation?.labels.join(', ') ?? 'Sighting')
             : 'Transcript')
         : text;
 

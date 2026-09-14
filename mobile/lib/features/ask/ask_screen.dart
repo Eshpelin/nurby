@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -388,6 +389,11 @@ class _AskScreenState extends ConsumerState<AskScreen> {
         title: const Text('Ask Nurby'),
         actions: [
           const UsageChip(),
+          IconButton(
+            tooltip: 'Scheduled questions',
+            icon: const Icon(Icons.schedule_send_outlined),
+            onPressed: () => context.push('/ask/scheduled'),
+          ),
           // What the last answer actually looked at. Only once there is
           // a run to inspect; a greyed button on an empty chat is noise.
           if (_lastRunId != null && !_running)

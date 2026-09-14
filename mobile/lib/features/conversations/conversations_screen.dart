@@ -18,7 +18,10 @@ final conversationDetailProvider = FutureProvider.family<
     String>((ref, id) => ref.watch(conversationRepoProvider).get(id));
 
 class ConversationsScreen extends ConsumerWidget {
-  const ConversationsScreen({super.key});
+  const ConversationsScreen({super.key, this.embedded = false});
+
+  /// Rendered inside the Activity screen: no Scaffold, no app bar.
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -26,9 +29,7 @@ class ConversationsScreen extends ConsumerWidget {
     final cameras = ref.watch(camerasProvider).value ?? const <Camera>[];
     final names = {for (final c in cameras) c.id: c.name};
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Conversations')),
-      body: RefreshIndicator(
+    final body = RefreshIndicator(
         onRefresh: () async => ref.invalidate(conversationsListProvider),
         child: list.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -76,7 +77,11 @@ class ConversationsScreen extends ConsumerWidget {
                   ),
                 ),
         ),
-      ),
+      );
+    if (embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Conversations')),
+      body: body,
     );
   }
 }
@@ -253,7 +258,7 @@ class _TranscriptLine extends ConsumerWidget {
             backgroundColor: NurbyColors.cardElevated,
             title: const Text('Delete this line?'),
             content: const Text(
-                'It is removed from the transcript for good. Summaries '
+                'It is removed from the transcript for good. Recaps '
                 'already written from it are not rewritten.'),
             actions: [
               TextButton(

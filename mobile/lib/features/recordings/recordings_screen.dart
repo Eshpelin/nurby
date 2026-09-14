@@ -33,7 +33,10 @@ enum _TimeRange {
 
 /// Paginated recording browser with an in-app player.
 class RecordingsScreen extends ConsumerStatefulWidget {
-  const RecordingsScreen({super.key});
+  const RecordingsScreen({super.key, this.embedded = false});
+
+  /// Rendered inside the Activity screen: no Scaffold, no app bar.
+  final bool embedded;
 
   @override
   ConsumerState<RecordingsScreen> createState() => _RecordingsScreenState();
@@ -129,9 +132,7 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
     final cameras = ref.watch(camerasProvider).value ?? const <Camera>[];
     final cameraNames = {for (final c in cameras) c.id: c.name};
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Recordings')),
-      body: Column(
+    final body = Column(
         children: [
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -164,7 +165,11 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
           ),
           Expanded(child: _body(cameraNames)),
         ],
-      ),
+      );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Recordings')),
+      body: body,
     );
   }
 

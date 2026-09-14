@@ -62,7 +62,16 @@ class PeopleScreen extends ConsumerWidget {
     final suggestionsAsync = ref.watch(_suggestionsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('People')),
+      appBar: AppBar(
+        title: const Text('People'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => context.push('/people/vehicles'),
+            icon: const Icon(Icons.directions_car_outlined, size: 18),
+            label: const Text('Vehicles'),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () => _refresh(ref),
         child: ListView(
@@ -297,7 +306,7 @@ class _PersonActivitySheet extends ConsumerWidget {
                   TextButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      context.push('/more/people/follow/person/${person.id}');
+                      context.push('/people/follow/person/${person.id}');
                     },
                     child: const Text('See everything'),
                   ),

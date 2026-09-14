@@ -120,7 +120,25 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
         ),
         height: 64,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        // The five places, in the order of the questions they answer.
+        // The unread-alert badge sits on Home, since that is where
+        // "is everything all right" is answered.
         destinations: [
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: unreviewed > 0,
+              backgroundColor: NurbyColors.danger,
+              label: Text('$unreviewed'),
+              child: const Icon(Icons.home_outlined),
+            ),
+            selectedIcon: Badge(
+              isLabelVisible: unreviewed > 0,
+              backgroundColor: NurbyColors.danger,
+              label: Text('$unreviewed'),
+              child: const Icon(Icons.home),
+            ),
+            label: 'Home',
+          ),
           const NavigationDestination(
             icon: Icon(Icons.videocam_outlined),
             selectedIcon: Icon(Icons.videocam),
@@ -129,31 +147,17 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
           const NavigationDestination(
             icon: Icon(Icons.view_timeline_outlined),
             selectedIcon: Icon(Icons.view_timeline),
-            label: 'Timeline',
+            label: 'Activity',
           ),
           const NavigationDestination(
             icon: Icon(Icons.auto_awesome_outlined),
             selectedIcon: Icon(Icons.auto_awesome),
             label: 'Ask',
           ),
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unreviewed > 0,
-              backgroundColor: NurbyColors.danger,
-              label: Text('$unreviewed'),
-              child: const Icon(Icons.notifications_outlined),
-            ),
-            selectedIcon: Badge(
-              isLabelVisible: unreviewed > 0,
-              backgroundColor: NurbyColors.danger,
-              label: Text('$unreviewed'),
-              child: const Icon(Icons.notifications),
-            ),
-            label: 'Alerts',
-          ),
           const NavigationDestination(
-            icon: Icon(Icons.menu),
-            label: 'More',
+            icon: Icon(Icons.people_outline),
+            selectedIcon: Icon(Icons.people),
+            label: 'People',
           ),
         ],
       ),

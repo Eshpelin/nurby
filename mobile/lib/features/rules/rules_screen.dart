@@ -23,7 +23,7 @@ class RulesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Rules')),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.go('/more/rules/new'),
+        onPressed: () => context.push('/settings/rules/new'),
         icon: const Icon(Icons.add),
         label: const Text('New rule'),
       ),
@@ -175,7 +175,7 @@ class _RuleRow extends ConsumerWidget {
         margin: const EdgeInsets.only(bottom: 8),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => context.go('/more/rules/${rule.id}/edit'),
+          onTap: () => context.push('/settings/rules/${rule.id}/edit'),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
             child: Row(

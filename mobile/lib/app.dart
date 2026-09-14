@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'core/providers.dart';
 import 'core/theme.dart';
 import 'features/admin/admin_screens.dart';
+import 'features/activity/activity_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/qr_pair_screen.dart';
 import 'features/auth/server_screen.dart';
@@ -14,28 +15,23 @@ import 'features/auth/setup_screen.dart';
 import 'features/ask/ask_screen.dart';
 import 'features/cameras/camera_detail_screen.dart';
 import 'features/cameras/cameras_screen.dart';
-import 'features/events/events_screen.dart';
 import 'features/guardian/guardian_admin_screen.dart';
 import 'features/guardian/guardian_claim_screen.dart';
 import 'features/guardian/guardian_notifications_screen.dart';
 import 'features/guardian/guardian_screen.dart';
-import 'features/more/more_screen.dart';
+import 'features/guardian/guardian_shell.dart';
+import 'features/home/home_screen.dart';
 import 'features/notifications/notifications_screen.dart';
 import 'features/people/people_screen.dart';
-import 'features/conversations/conversations_screen.dart';
-import 'features/digests/digests_screen.dart';
 import 'features/follow/follow_screen.dart';
-import 'features/incidents/incidents_screen.dart';
-import 'features/journeys/journeys_screen.dart';
-import 'features/recordings/recordings_screen.dart';
 import 'features/reports/reports_screen.dart';
 import 'features/rules/rule_editor_screen.dart';
 import 'features/rules/rules_screen.dart';
 import 'features/search/search_screen.dart';
+import 'features/settings/settings_hub_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/shares/shares_screen.dart';
 import 'features/shell/shell_screen.dart';
-import 'features/timeline/timeline_screen.dart';
 import 'features/vehicles/vehicles_screen.dart';
 
 class NurbyApp extends ConsumerWidget {
@@ -75,7 +71,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(notifier.dispose);
 
   return GoRouter(
-    initialLocation: '/cameras',
+    initialLocation: '/home',
     refreshListenable: notifier,
     redirect: (context, state) {
       final phase = ref.read(authProvider).phase;
@@ -104,7 +100,15 @@ final _routerProvider = Provider<GoRouter>((ref) {
               ? null
               : '/login';
         case AuthPhase.loggedIn:
-          return onAuthPage ? '/cameras' : null;
+          // Guardian mode: a guardian-role user has exactly two places
+          // and none of the household's. Keep them there. Everyone else
+          // goes to Home; the household side of guardian lives under
+          // Settings > Sharing.
+          final isGuardian = ref.read(authProvider).user?.role == 'guardian';
+          if (isGuardian) {
+            return loc.startsWith('/guardian') ? null : '/guardian';
+          }
+          return onAuthPage ? '/home' : null;
       }
     },
     routes: [
@@ -112,6 +116,11 @@ final _routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/pair', builder: (_, __) => const QrPairScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/setup', builder: (_, __) => const SetupScreen()),
+      GoRoute(
+        path: '/guardian',
+        builder: (_, state) => GuardianShell(
+            initialTab: state.uri.queryParameters['tab'] == 'updates' ? 1 : 0),
+      ),
       GoRoute(
         path: '/guardian/claim',
         builder: (_, state) => GuardianClaimScreen(
@@ -126,6 +135,12 @@ final _routerProvider = Provider<GoRouter>((ref) {
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => ShellScreen(shell: shell),
         branches: [
+          // The five places (docs/ia-rollout.md). Each is a question:
+          // Home is everything all right, Cameras show me, Activity what
+          // happened, Ask tell me, People who is that.
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
+          ]),
           StatefulShellBranch(routes: [
             GoRoute(
               path: '/cameras',
@@ -140,92 +155,85 @@ final _routerProvider = Provider<GoRouter>((ref) {
             ),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/timeline', builder: (_, __) => const TimelineScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/ask', builder: (_, __) => const AskScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/alerts', builder: (_, __) => const EventsScreen()),
+            GoRoute(
+              path: '/activity',
+              builder: (_, state) => ActivityScreen(
+                  initialKind:
+                      ActivityKind.fromSlug(state.uri.queryParameters['kind'])),
+            ),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
-              path: '/more',
-              builder: (_, __) => const MoreScreen(),
+              path: '/ask',
+              builder: (_, __) => const AskScreen(),
               routes: [
-                GoRoute(path: 'rules', builder: (_, __) => const RulesScreen()),
                 GoRoute(
-                  path: 'rules/new',
-                  builder: (_, __) => const RuleEditorScreen(),
-                ),
+                    path: 'scheduled', builder: (_, __) => const ReportsScreen()),
+              ],
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/people',
+              builder: (_, __) => const PeopleScreen(),
+              routes: [
                 GoRoute(
-                  path: 'rules/:id/edit',
-                  builder: (_, state) =>
-                      RuleEditorScreen(ruleId: state.pathParameters['id']),
-                ),
-                GoRoute(
-                  path: 'people',
-                  builder: (_, __) => const PeopleScreen(),
-                  routes: [
-                    // kind is person or cluster: the two follow endpoints
-                    // are keyed differently but return the same bundle.
-                    GoRoute(
-                      path: 'follow/:kind/:id',
-                      builder: (_, state) => FollowScreen(
-                        kind: state.pathParameters['kind'] ?? 'person',
-                        id: state.pathParameters['id']!,
-                      ),
-                    ),
-                  ],
+                  path: 'follow/:kind/:id',
+                  builder: (_, state) => FollowScreen(
+                    kind: state.pathParameters['kind'] ?? 'person',
+                    id: state.pathParameters['id']!,
+                  ),
                 ),
                 GoRoute(
                     path: 'vehicles', builder: (_, __) => const VehiclesScreen()),
-                GoRoute(
-                    path: 'incidents',
-                    builder: (_, __) => const IncidentsScreen()),
-                GoRoute(
-                    path: 'journeys', builder: (_, __) => const JourneysScreen()),
-                GoRoute(
-                    path: 'conversations',
-                    builder: (_, __) => const ConversationsScreen()),
-                GoRoute(
-                    path: 'digests', builder: (_, __) => const DigestsScreen()),
-                GoRoute(
-                    path: 'reports', builder: (_, __) => const ReportsScreen()),
-                GoRoute(
-                    path: 'access', builder: (_, __) => const CameraAccessScreen()),
-                GoRoute(
-                    path: 'pipeline', builder: (_, __) => const PipelineScreen()),
-                GoRoute(
-                    path: 'ask-admin', builder: (_, __) => const AskAdminScreen()),
-                GoRoute(
-                    path: 'recordings',
-                    builder: (_, __) => const RecordingsScreen()),
-                GoRoute(path: 'search', builder: (_, __) => const SearchScreen()),
-                GoRoute(path: 'shares', builder: (_, __) => const SharesScreen()),
-                GoRoute(
-                    path: 'notifications',
-                    builder: (_, __) => const NotificationsScreen()),
-                GoRoute(
-                  path: 'guardian',
-                  builder: (_, __) => const GuardianScreen(),
-                  routes: [
-                    GoRoute(
-                      path: 'notifications',
-                      builder: (_, __) => const GuardianNotificationsScreen(),
-                    ),
-                    GoRoute(
-                      path: 'admin',
-                      builder: (_, __) => const GuardianAdminScreen(),
-                    ),
-                  ],
-                ),
-                GoRoute(
-                    path: 'settings', builder: (_, __) => const SettingsScreen()),
               ],
             ),
           ]),
         ],
+      ),
+      // Settings hub and everything that used to live under /more.
+      GoRoute(
+        path: '/settings',
+        builder: (_, __) => const SettingsHubScreen(),
+        routes: [
+          GoRoute(path: 'general', builder: (_, __) => const SettingsScreen()),
+          GoRoute(path: 'rules', builder: (_, __) => const RulesScreen()),
+          GoRoute(path: 'rules/new', builder: (_, __) => const RuleEditorScreen()),
+          GoRoute(
+            path: 'rules/:id/edit',
+            builder: (_, state) =>
+                RuleEditorScreen(ruleId: state.pathParameters['id']),
+          ),
+          GoRoute(path: 'reports', builder: (_, __) => const ReportsScreen()),
+          GoRoute(
+              path: 'notifications',
+              builder: (_, __) => const NotificationsScreen()),
+          GoRoute(path: 'shares', builder: (_, __) => const SharesScreen()),
+          GoRoute(
+            path: 'guardian',
+            builder: (_, __) => const GuardianScreen(),
+            routes: [
+              GoRoute(
+                  path: 'notifications',
+                  builder: (_, __) => const GuardianNotificationsScreen()),
+              GoRoute(path: 'admin', builder: (_, __) => const GuardianAdminScreen()),
+            ],
+          ),
+          GoRoute(path: 'access', builder: (_, __) => const CameraAccessScreen()),
+          GoRoute(path: 'pipeline', builder: (_, __) => const PipelineScreen()),
+          GoRoute(path: 'ask-admin', builder: (_, __) => const AskAdminScreen()),
+        ],
+      ),
+      GoRoute(path: '/search', builder: (_, __) => const SearchScreen()),
+
+      // Old routes keep resolving. Anything bookmarked, deep-linked from
+      // a push, or hard-coded in a test lands where it now lives.
+      GoRoute(path: '/timeline', redirect: (_, __) => '/activity'),
+      GoRoute(path: '/alerts', redirect: (_, __) => '/activity?kind=alerts'),
+      GoRoute(path: '/more', redirect: (_, __) => '/settings'),
+      GoRoute(
+        path: '/more/:rest(.*)',
+        redirect: (_, state) => legacyMorePath(state.pathParameters['rest'] ?? ''),
       ),
     ],
   );
@@ -242,4 +250,24 @@ class _AuthChangeNotifier extends ChangeNotifier {
     _sub.close();
     super.dispose();
   }
+}
+
+
+/// Where each old /more/... path went. Activity kinds become filters;
+/// the rest moved under /settings or /people unchanged.
+String legacyMorePath(String rest) {
+  const kinds = {
+    'incidents': 'incidents',
+    'journeys': 'journeys',
+    'conversations': 'conversations',
+    'digests': 'recaps',
+    'recordings': 'recordings',
+  };
+  final head = rest.split('/').first;
+  if (kinds.containsKey(head)) return '/activity?kind=${kinds[head]}';
+  if (head == 'people') return '/people${rest.substring('people'.length)}';
+  if (head == 'vehicles') return '/people/vehicles';
+  if (head == 'search') return '/search';
+  if (head == 'settings') return '/settings/general';
+  return '/settings/$rest';
 }
