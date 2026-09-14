@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -194,6 +195,43 @@ async def rules_last_fired(
         )
     ).all()
     return {str(rule_id): fired_at.isoformat() for rule_id, fired_at in rows}
+
+
+@router.get("/starters")
+async def list_starters(_current_user: User = Depends(get_current_user)) -> dict:
+    """Starter rules for the first-run flow (shared/rule_starters.py).
+
+    Registered before /{rule_id} so the literal path is not parsed as a
+    uuid. Data, not builders, so both clients offer the same four.
+    """
+    from shared.rule_starters import STARTERS
+
+    return {"starters": [{k: v for k, v in s.items() if k != "rule"} for s in STARTERS]}
+
+
+class StarterCreate(BaseModel):
+    key: str
+    camera_id: uuid.UUID | None = None
+
+
+@router.post("/starters", response_model=RuleResponse)
+async def create_from_starter(
+    body: StarterCreate,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create one starter rule. One call, so a first-run flow is one tap
+    rather than a trip through the builder."""
+    from shared.rule_starters import starter_rule
+
+    payload = starter_rule(body.key, str(body.camera_id) if body.camera_id else None)
+    if payload is None:
+        raise HTTPException(status_code=404, detail=f"Unknown starter {body.key!r}")
+    rule = Rule(**payload)
+    db.add(rule)
+    await db.commit()
+    await db.refresh(rule)
+    return rule
 
 
 @router.get("/schema")
