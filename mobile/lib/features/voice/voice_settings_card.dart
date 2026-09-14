@@ -146,6 +146,8 @@ class _CardState extends ConsumerState<_Card> {
             enabled: enabled,
             onChanged: (v) => _save({'voice_conversation_enabled': v}),
           ),
+
+          AdvancedFold(children: [
           ConfigNumber(
             title: 'Maximum volume',
             value: s['voice_max_volume'] as int? ?? 70,
@@ -154,6 +156,7 @@ class _CardState extends ConsumerState<_Card> {
             enabled: enabled,
             onChanged: (v) => _save({'voice_max_volume': v}),
           ),
+
           ConfigNumber(
             title: 'End a conversation after',
             value: s['voice_session_max_turns'] as int? ?? 6,
@@ -163,6 +166,7 @@ class _CardState extends ConsumerState<_Card> {
             enabled: enabled,
             onChanged: (v) => _save({'voice_session_max_turns': v}),
           ),
+
           ConfigNumber(
             title: 'Or after',
             value: s['voice_session_max_seconds'] as int? ?? 120,
@@ -172,6 +176,7 @@ class _CardState extends ConsumerState<_Card> {
             enabled: enabled,
             onChanged: (v) => _save({'voice_session_max_seconds': v}),
           ),
+          ]),
           _QuietHours(
             start: s['voice_quiet_hours_start'] as String?,
             end: s['voice_quiet_hours_end'] as String?,

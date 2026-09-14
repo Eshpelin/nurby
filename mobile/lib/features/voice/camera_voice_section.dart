@@ -158,11 +158,18 @@ class _CameraVoiceSectionState extends ConsumerState<CameraVoiceSection> {
           title: 'Voice',
           value: v['speaker_voice'] as String?,
           placeholder: 'household default',
-          hintText: 'Voice name from your TTS provider',
+          hintText: 'Voice name from your speech engine',
           maxLines: 1,
           enabled: enabled,
           onChanged: (val) => _patch({'speaker_voice': val}),
         ),
+
+        // The server only requires >= 0 on these two. The upper bounds
+        // are the app's own: a cooldown longer than a day, or more than
+        // ten thousand announcements in one, are not settings anyone
+        // means. Do not "correct" them to match the server.
+
+        AdvancedFold(children: [
         ConfigNumber(
           title: 'Volume',
           value: v['speaker_volume'] as int? ?? 70,
@@ -171,10 +178,6 @@ class _CameraVoiceSectionState extends ConsumerState<CameraVoiceSection> {
           enabled: enabled,
           onChanged: (val) => _patch({'speaker_volume': val}),
         ),
-        // The server only requires >= 0 on these two. The upper bounds
-        // are the app's own: a cooldown longer than a day, or more than
-        // ten thousand announcements in one, are not settings anyone
-        // means. Do not "correct" them to match the server.
         ConfigNumber(
           title: 'Wait between announcements',
           value: v['speaker_cooldown_seconds'] as int? ?? 30,
@@ -184,6 +187,7 @@ class _CameraVoiceSectionState extends ConsumerState<CameraVoiceSection> {
           enabled: enabled,
           onChanged: (val) => _patch({'speaker_cooldown_seconds': val}),
         ),
+
         ConfigNumber(
           title: 'Daily cap',
           value: v['speaker_daily_cap'] as int? ?? 50,
@@ -194,6 +198,7 @@ class _CameraVoiceSectionState extends ConsumerState<CameraVoiceSection> {
           enabled: enabled,
           onChanged: (val) => _patch({'speaker_daily_cap': val}),
         ),
+        ]),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
           child: Row(

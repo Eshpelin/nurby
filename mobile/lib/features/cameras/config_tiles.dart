@@ -471,7 +471,7 @@ class ConfigProvider extends StatelessWidget {
     }
     // Set to a provider this list does not contain: deleted, or not
     // visible to this user. Saying so beats rendering a bare uuid.
-    return 'Unknown provider';
+    return 'Unknown AI model';
   }
 
   @override
@@ -530,6 +530,32 @@ class ConfigProvider extends StatelessWidget {
 }
 
 const _kNullChoice = '__default__';
+
+/// The Advanced fold (docs/settings-layers.md).
+///
+/// Anything with a unit of tokens, seconds or a threshold lives under
+/// one of these unless it has a household meaning. Collapsed by default;
+/// every field stays reachable, just not at the same weight as
+/// "Privacy blur".
+class AdvancedFold extends StatelessWidget {
+  const AdvancedFold({super.key, required this.children, this.label = 'Advanced'});
+
+  final List<Widget> children;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+          title: Text(label,
+              style: const TextStyle(fontSize: 13, color: NurbyColors.mutedForeground)),
+          iconColor: NurbyColors.mutedForeground,
+          collapsedIconColor: NurbyColors.mutedForeground,
+          children: children,
+        ),
+      );
+}
 
 const _subStyle =
     TextStyle(color: NurbyColors.mutedForeground, fontSize: 12);

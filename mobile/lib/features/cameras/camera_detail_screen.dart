@@ -434,6 +434,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
                   : null,
             );
           }),
+          AdvancedFold(children: [
           ConfigChoice<String>(
             title: 'When models disagree',
             value: raw['detection_merge'] as String? ?? 'any',
@@ -451,6 +452,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin,
             onChanged: (v) => _patch({'detection_merge': v}),
           ),
+
           ConfigNumber(
             title: 'Models that must agree',
             value: raw['detection_consensus_min'] as int? ?? 2,
@@ -461,6 +463,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin && raw['detection_merge'] == 'consensus',
             onChanged: (v) => _patch({'detection_consensus_min': v}),
           ),
+          ]),
         ]),
       ),
     ];
@@ -483,7 +486,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             onChanged: (v) => _patch({'vlm_prompt': v}),
           ),
           ConfigProvider(
-            title: 'Model',
+            title: 'AI model',
             value: raw['vlm_provider_id'] as String?,
             providers: providers,
             enabled: isAdmin,
@@ -508,6 +511,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin && onObject,
             onChanged: (v) => _patch({'vlm_trigger_objects': v}),
           ),
+          AdvancedFold(children: [
           ConfigNumber(
             title: 'Minimum gap between looks',
             value: raw['vlm_interval'] as int? ?? 0,
@@ -518,6 +522,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin,
             onChanged: (v) => _patch({'vlm_interval': v}),
           ),
+
           ConfigNumber(
             title: 'Description length',
             value: raw['vlm_max_tokens'] as int? ?? 400,
@@ -528,6 +533,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin,
             onChanged: (v) => _patch({'vlm_max_tokens': v}),
           ),
+
           ConfigNumber(
             title: 'Input budget',
             value: raw['vlm_max_input_tokens'] as int? ?? 4096,
@@ -537,6 +543,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin,
             onChanged: (v) => _patch({'vlm_max_input_tokens': v}),
           ),
+          ]),
         ]),
       ),
     ];
@@ -553,12 +560,13 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
       Card(
         child: Column(children: [
           ConfigProvider(
-            title: 'Refiner model',
+            title: 'Second-look AI model',
             value: raw['vlm_refiner_provider_id'] as String?,
             providers: providers,
             enabled: isAdmin,
             onChanged: (v) => _patch({'vlm_refiner_provider_id': v}),
           ),
+          AdvancedFold(children: [
           ConfigStringList(
             title: 'Words worth a second look',
             values: _strings(raw, 'vlm_refiner_keywords'),
@@ -567,6 +575,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin && on,
             onChanged: (v) => _patch({'vlm_refiner_keywords': v}),
           ),
+
           ConfigStringList(
             title: 'Objects worth a second look',
             values: _strings(raw, 'vlm_refiner_trigger_objects'),
@@ -575,6 +584,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin && on,
             onChanged: (v) => _patch({'vlm_refiner_trigger_objects': v}),
           ),
+
           ConfigNumber(
             title: 'Description length',
             value: raw['vlm_refiner_max_tokens'] as int? ?? 400,
@@ -584,6 +594,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin && on,
             onChanged: (v) => _patch({'vlm_refiner_max_tokens': v}),
           ),
+
           ConfigNumber(
             title: 'Input budget',
             value: raw['vlm_refiner_max_input_tokens'] as int? ?? 4096,
@@ -593,6 +604,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin && on,
             onChanged: (v) => _patch({'vlm_refiner_max_input_tokens': v}),
           ),
+          ]),
         ]),
       ),
     ];
@@ -623,11 +635,11 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
     final periodic = mode == 'periodic' || mode == 'both';
     final onEvent = mode == 'event' || mode == 'both';
     return [
-      _sectionLabel('SUMMARIES'),
+      _sectionLabel('CAMERA RECAPS'),
       Card(
         child: Column(children: [
           ConfigChoice<String>(
-            title: 'Write summaries',
+            title: 'Write recaps',
             value: mode,
             options: const ['off', 'periodic', 'event', 'both'],
             labels: const {
@@ -640,7 +652,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             onChanged: (v) => _patch({'summary_mode': v}),
           ),
           ConfigProvider(
-            title: 'Summary model',
+            title: 'Recap model',
             value: raw['summary_provider_id'] as String?,
             providers: providers,
             enabled: isAdmin && mode != 'off',
@@ -655,8 +667,9 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin && periodic,
             onChanged: (v) => _patch({'summary_period_seconds': v}),
           ),
+          AdvancedFold(children: [
           ConfigNumber(
-            title: 'Quiet before summarising',
+            title: 'Quiet before writing a recap',
             value: raw['summary_event_quiet_seconds'] as int? ?? 60,
             min: 5,
             max: 3600,
@@ -665,6 +678,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin && onEvent,
             onChanged: (v) => _patch({'summary_event_quiet_seconds': v}),
           ),
+
           ConfigNumber(
             title: 'Ignore events shorter than',
             value: raw['summary_event_min_duration_seconds'] as int? ?? 5,
@@ -675,16 +689,18 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             onChanged: (v) =>
                 _patch({'summary_event_min_duration_seconds': v}),
           ),
+
           ConfigStringList(
-            title: 'Objects that trigger a summary',
+            title: 'Objects that trigger a recap',
             values: _strings(raw, 'summary_event_trigger_objects'),
             placeholder: 'anything',
             inputHint: 'person, car',
             enabled: isAdmin && onEvent,
             onChanged: (v) => _patch({'summary_event_trigger_objects': v}),
           ),
+
           ConfigNumber(
-            title: 'Summary length',
+            title: 'Recap length',
             value: raw['summary_max_tokens'] as int? ?? 400,
             min: 50,
             max: 2000,
@@ -692,6 +708,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin && mode != 'off',
             onChanged: (v) => _patch({'summary_max_tokens': v}),
           ),
+          ]),
         ]),
       ),
     ];
@@ -728,19 +745,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin && capture,
             onChanged: (v) => _patchAudio({'audio_store_raw': v}),
           ),
-          ConfigChoice<String>(
-            title: 'Transcript storage',
-            value: raw['transcript_store'] as String? ?? 'full',
-            options: const ['full', 'redacted', 'summary_only', 'off'],
-            labels: const {
-              'full': 'Full text',
-              'redacted': 'Redacted',
-              'summary_only': 'Summary only',
-              'off': 'Off (live only)',
-            },
-            enabled: isAdmin,
-            onChanged: (v) => _patchAudio({'transcript_store': v}),
-          ),
+
           ConfigChoice<String>(
             title: 'Spoken language',
             value: raw['audio_language'] as String? ?? 'en',
@@ -748,6 +753,20 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             labels: _languageNames,
             enabled: isAdmin,
             onChanged: (v) => _patchAudio({'audio_language': v}),
+          ),
+          AdvancedFold(children: [
+          ConfigChoice<String>(
+            title: 'Transcript storage',
+            value: raw['transcript_store'] as String? ?? 'full',
+            options: const ['full', 'redacted', 'summary_only', 'off'],
+            labels: const {
+              'full': 'Full text',
+              'redacted': 'Redacted',
+              'summary_only': 'Recap only',
+              'off': 'Off (live only)',
+            },
+            enabled: isAdmin,
+            onChanged: (v) => _patchAudio({'transcript_store': v}),
           ),
           ConfigNumber(
             title: 'Audio retention',
@@ -759,6 +778,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin,
             onChanged: (v) => _patchAudio({'audio_retention_days': v}),
           ),
+
           ConfigNumber(
             title: 'Transcript retention',
             value: raw['transcript_retention_days'] as int? ?? 30,
@@ -768,6 +788,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin,
             onChanged: (v) => _patchAudio({'transcript_retention_days': v}),
           ),
+
           ConfigNumber(
             title: 'Transcription budget',
             value: raw['stt_budget_minutes_per_hour'] as int? ?? 30,
@@ -777,6 +798,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin,
             onChanged: (v) => _patchAudio({'stt_budget_minutes_per_hour': v}),
           ),
+
           ConfigNumber(
             title: 'Decoding quality',
             value: raw['audio_stt_beam_size'] as int? ?? 1,
@@ -786,6 +808,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin,
             onChanged: (v) => _patchAudio({'audio_stt_beam_size': v}),
           ),
+
           ConfigSwitch(
             title: 'Carry context across segments',
             subtitle: 'More coherent long speech, but one transcription '
@@ -796,6 +819,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             onChanged: (v) =>
                 _patchAudio({'audio_stt_condition_on_previous_text': v}),
           ),
+
           ConfigChoice<double>(
             title: 'Silence threshold',
             value: (raw['audio_stt_no_speech_threshold'] as num?)?.toDouble() ??
@@ -814,6 +838,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             onChanged: (v) =>
                 _patchAudio({'audio_stt_no_speech_threshold': v}),
           ),
+          ]),
         ]),
       ),
     ];
@@ -824,6 +849,14 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
       _sectionLabel('CONVERSATIONS'),
       Card(
         child: Column(children: [
+
+          ConfigSwitch(
+            title: 'Summarize conversations',
+            value: raw['conversation_summary_enabled'] as bool? ?? true,
+            enabled: isAdmin,
+            onChanged: (v) => _patch({'conversation_summary_enabled': v}),
+          ),
+          AdvancedFold(children: [
           ConfigNumber(
             title: 'Gap between conversations',
             value: raw['conversation_gap_seconds'] as int? ?? 30,
@@ -833,12 +866,6 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             hint: 'silence longer than this starts a new one',
             enabled: isAdmin,
             onChanged: (v) => _patch({'conversation_gap_seconds': v}),
-          ),
-          ConfigSwitch(
-            title: 'Summarize conversations',
-            value: raw['conversation_summary_enabled'] as bool? ?? true,
-            enabled: isAdmin,
-            onChanged: (v) => _patch({'conversation_summary_enabled': v}),
           ),
           ConfigNumber(
             title: 'Minimum lines to summarize',
@@ -850,6 +877,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             onChanged: (v) =>
                 _patch({'conversation_min_messages_for_summary': v}),
           ),
+          ]),
         ]),
       ),
     ];
@@ -863,11 +891,12 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
           ConfigSwitch(
             title: 'Group repeat sightings',
             subtitle: 'Folds repeated sightings of the same subject into '
-                'one incident instead of many separate events.',
+                'one incident instead of many separate alerts.',
             value: raw['incident_tracking_enabled'] as bool? ?? true,
             enabled: isAdmin,
             onChanged: (v) => _patch({'incident_tracking_enabled': v}),
           ),
+          AdvancedFold(children: [
           ConfigNumber(
             title: 'Close an incident after',
             value: raw['incident_idle_seconds'] as int? ?? 600,
@@ -878,6 +907,7 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin,
             onChanged: (v) => _patch({'incident_idle_seconds': v}),
           ),
+          ]),
         ]),
       ),
     ];
@@ -885,17 +915,17 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
 
   List<Widget> _digestSection(Map<String, dynamic> raw, bool isAdmin) {
     return [
-      _sectionLabel('ACTIVITY DIGEST'),
+      _sectionLabel('PERIODIC RECAPS'),
       Card(
         child: Column(children: [
           ConfigSwitch(
-            title: 'Write periodic digests',
+            title: 'Write periodic recaps',
             value: raw['digest_enabled'] as bool? ?? true,
             enabled: isAdmin,
             onChanged: (v) => _patch({'digest_enabled': v}),
           ),
           ConfigChoice<String>(
-            title: 'Digest period',
+            title: 'Recap period',
             value: raw['digest_period'] as String? ?? '24h',
             options: const ['1h', '6h', '12h', '24h', '48h', '7d'],
             labels: const {
@@ -909,14 +939,16 @@ class _CameraDetailBodyState extends ConsumerState<_CameraDetailBody> {
             enabled: isAdmin,
             onChanged: (v) => _patch({'digest_period': v}),
           ),
+          AdvancedFold(children: [
           ConfigText(
-            title: 'Digest prompt',
+            title: 'Recap prompt',
             value: raw['digest_prompt'] as String?,
-            hintText: 'What should the digest pay attention to?',
+            hintText: 'What should the recap pay attention to?',
             maxLength: 4096,
             enabled: isAdmin,
             onChanged: (v) => _patch({'digest_prompt': v}),
           ),
+          ]),
         ]),
       ),
     ];

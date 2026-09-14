@@ -487,7 +487,7 @@ class _ProvidersSection extends ConsumerWidget {
 
   Future<void> _delete(
       BuildContext context, WidgetRef ref, Map<String, dynamic> p) async {
-    final ok = await _confirm(context, 'Delete provider?',
+    final ok = await _confirm(context, 'Remove this AI model?',
         '"${p['name']}" will be removed. Rules using it may stop working.');
     if (!ok || !context.mounted) return;
     await _mutate(
@@ -516,7 +516,7 @@ class _ProvidersSection extends ConsumerWidget {
                   ? NurbyColors.accent
                   : NurbyColors.danger;
           final text = !configured
-              ? 'No AI provider configured'
+              ? 'No AI model configured'
               : reachable
                   ? '${h['name'] ?? 'Provider'} (${h['kind'] ?? '?'}) reachable'
                   : h['message']?.toString() ??
@@ -534,7 +534,7 @@ class _ProvidersSection extends ConsumerWidget {
           );
         }),
         _async(providers, (list) {
-          if (list.isEmpty) return _emptyNote('No providers configured');
+          if (list.isEmpty) return _emptyNote('No AI models configured');
           return Column(children: [
             for (final p in list)
               ListTile(
@@ -584,7 +584,7 @@ class _ProvidersSection extends ConsumerWidget {
           child: TextButton.icon(
             onPressed: () => _addOrEdit(context, ref),
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add provider'),
+            label: const Text('Add an AI model'),
           ),
         ),
       ],
@@ -647,7 +647,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     final editing = widget.initial != null;
     return AlertDialog(
       backgroundColor: NurbyColors.cardElevated,
-      title: Text(editing ? 'Edit provider' : 'Add provider'),
+      title: Text(editing ? 'Edit AI model' : 'Add an AI model'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -731,7 +731,7 @@ class _StorageSection extends ConsumerWidget {
           return Column(children: [
             _kvRow('Total recordings',
                 _fmtGb(s['total_recording_bytes'] as num?)),
-            _kvRow('Total observations', '${s['total_observations'] ?? 0}'),
+            _kvRow('Total sightings', '${s['total_observations'] ?? 0}'),
             if (perCamera.isEmpty)
               _emptyNote('No per-camera storage data')
             else
@@ -744,7 +744,7 @@ class _StorageSection extends ConsumerWidget {
                       style: const TextStyle(fontSize: 13)),
                   subtitle: Text(
                     '${c['recording_count'] ?? 0} recordings · '
-                    '${c['observation_count'] ?? 0} observations',
+                    '${c['observation_count'] ?? 0} sightings',
                     style: const TextStyle(
                         color: NurbyColors.mutedForeground, fontSize: 12),
                   ),
@@ -1118,8 +1118,10 @@ class _SystemSettingsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(_systemSettingsProvider);
 
+    // Every key is still here, behind the fold (docs/settings-layers.md).
+    // The Household section above carries the ones a person changes.
     return _Section(
-      title: 'SYSTEM SETTINGS',
+      title: 'ADVANCED',
       children: [
         _async(settings, (map) {
           if (map.isEmpty) return _emptyNote('No settings exposed');

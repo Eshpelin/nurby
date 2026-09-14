@@ -98,34 +98,7 @@ class _HouseholdSettingsSectionState
               enabled: isAdmin,
               onChanged: (v) => _patch({'detect_classes': v.isEmpty ? null : v}),
             ),
-            ConfigSwitch(
-              title: 'Describe scenes while idle',
-              subtitle: 'Uses spare AI time to add descriptions to '
-                  'observations that did not get one.',
-              value: enrich,
-              enabled: isAdmin,
-              onChanged: (v) => _patch({'vlm_enrichment_enabled': v}),
-            ),
-            ConfigNumber(
-              title: 'Idle budget',
-              value: s['vlm_enrichment_budget_minutes_per_hour'] as int? ?? 10,
-              min: 0,
-              max: 600,
-              suffix: 'min/hour',
-              enabled: isAdmin && enrich,
-              onChanged: (v) =>
-                  _patch({'vlm_enrichment_budget_minutes_per_hour': v}),
-            ),
-            ConfigNumber(
-              title: 'End a journey after',
-              value: s['journey_idle_seconds'] as int? ?? 300,
-              min: 1,
-              max: 86400,
-              suffix: 'seconds',
-              hint: 'unseen on every camera for this long',
-              enabled: isAdmin,
-              onChanged: (v) => _patch({'journey_idle_seconds': v}),
-            ),
+
             ConfigSwitch(
               title: 'Listen for sounds',
               subtitle: 'Glass breaking, a dog barking, a doorbell. '
@@ -136,7 +109,7 @@ class _HouseholdSettingsSectionState
             ),
             ConfigSwitch(
               title: 'Morning recap',
-              subtitle: 'One household summary a day.',
+              subtitle: 'One household recap a day.',
               value: digest,
               enabled: isAdmin,
               onChanged: (v) => _patch({'daily_digest_enabled': v}),
@@ -159,6 +132,38 @@ class _HouseholdSettingsSectionState
               enabled: isAdmin,
               onChanged: (v) => _patch({'system_timezone': v}),
             ),
+          AdvancedFold(children: [
+            ConfigSwitch(
+              title: 'Describe scenes while idle',
+              subtitle: 'Uses spare AI time to add descriptions to '
+                  'sightings that did not get one.',
+              value: enrich,
+              enabled: isAdmin,
+              onChanged: (v) => _patch({'vlm_enrichment_enabled': v}),
+            ),
+
+            ConfigNumber(
+              title: 'Idle budget',
+              value: s['vlm_enrichment_budget_minutes_per_hour'] as int? ?? 10,
+              min: 0,
+              max: 600,
+              suffix: 'min/hour',
+              enabled: isAdmin && enrich,
+              onChanged: (v) =>
+                  _patch({'vlm_enrichment_budget_minutes_per_hour': v}),
+            ),
+
+            ConfigNumber(
+              title: 'End a journey after',
+              value: s['journey_idle_seconds'] as int? ?? 300,
+              min: 1,
+              max: 86400,
+              suffix: 'seconds',
+              hint: 'unseen on every camera for this long',
+              enabled: isAdmin,
+              onChanged: (v) => _patch({'journey_idle_seconds': v}),
+            ),
+            ]),
           ]),
         ),
       ],
