@@ -585,6 +585,16 @@ class _GuardianSearchCardState extends ConsumerState<GuardianSearchCard> {
       );
 }
 
+/// Links granted to this guardian. Shared so the alert editor can
+/// refresh the list it came from.
+final guardianLinksProvider = FutureProvider<List<Map<String, dynamic>>>(
+    (ref) => ref.watch(guardianRepoProvider).links());
+
+/// Alert kinds, channels and tiers, served by the backend so the two
+/// clients cannot drift from each other or from entitlements.py.
+final guardianVocabularyProvider = FutureProvider<Map<String, dynamic>>(
+    (ref) => ref.watch(guardianRepoProvider).vocabulary());
+
 class AlertPrefsCard extends ConsumerStatefulWidget {
   const AlertPrefsCard({
     super.key,
@@ -604,40 +614,12 @@ class AlertPrefsCard extends ConsumerStatefulWidget {
 class _AlertPrefsCardState extends ConsumerState<AlertPrefsCard> {
   bool _busy = false;
 
-  /// Server-side defaults, mirrored so an unset key reads the way the
-  /// backend will actually treat it rather than as "off".
-  static const _defaults = {
-    'arrived': true,
-    'departed': true,
-    'picked_up': true,
-    'entered_zone': false,
-    'left_zone': false,
-    'not_seen': false,
-    'fell': true,
-    'attended_meal': true,
-  };
+  /// An unset key reads the way the backend will treat it, not as off.
+  bool _pref(String key, bool fallback) =>
+      widget.alertPrefs[key] as bool? ?? fallback;
 
-  static const _labels = {
-    'arrived': 'Arrived home',
-    'departed': 'Left home',
-    'picked_up': 'Picked up by someone',
-    'entered_zone': 'Entered an area',
-    'left_zone': 'Left an area',
-    'not_seen': 'Not seen for a while',
-    'fell': 'Possible fall',
-    'attended_meal': 'Ate a meal',
-  };
-
-  static const _channelLabels = {
-    'telegram': 'Telegram',
-    'email': 'Email',
-    'in_app': 'In the app',
-  };
-
-  bool _pref(String key) =>
-      widget.alertPrefs[key] as bool? ?? _defaults[key] ?? false;
-
-  bool _channel(String key) => widget.notifyChannels[key] as bool? ?? true;
+  bool _channel(String key, bool fallback) =>
+      widget.notifyChannels[key] as bool? ?? fallback;
 
   Future<void> _save(Future<void> Function() call) async {
     setState(() => _busy = true);
@@ -657,26 +639,38 @@ class _AlertPrefsCardState extends ConsumerState<AlertPrefsCard> {
   @override
   Widget build(BuildContext context) {
     final repo = ref.read(guardianRepoProvider);
+    final vocab = ref.watch(guardianVocabularyProvider).value;
+    // No vocabulary, nothing to render. Better an absent card than a
+    // guessed list of alert kinds.
+    if (vocab == null) return const SizedBox.shrink();
+    final kinds = (vocab['alert_kinds'] as List? ?? const [])
+        .whereType<Map>()
+        .map((k) => k.cast<String, dynamic>())
+        .toList();
+    final channels = (vocab['notify_channels'] as List? ?? const [])
+        .whereType<Map>()
+        .map((c) => c.cast<String, dynamic>())
+        .toList();
 
     return GuardianSection(
       title: 'What to tell me about',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final key in _defaults.keys)
+          for (final k in kinds)
             SwitchListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
-              title: Text(_labels[key] ?? key,
-                  style: const TextStyle(fontSize: 13)),
-              value: _pref(key),
+              title: Text('${k['label']}', style: const TextStyle(fontSize: 13)),
+              value: _pref('${k['key']}', k['default'] == true),
               activeColor: NurbyColors.accent,
               onChanged: _busy
                   ? null
                   : (on) => _save(() async {
                         final next = {
-                          for (final k in _defaults.keys) k: _pref(k),
-                        }..[key] = on;
+                          for (final x in kinds)
+                            '${x['key']}': _pref('${x['key']}', x['default'] == true),
+                        }..['${k['key']}'] = on;
                         await repo.updateAlerts(widget.linkId, next);
                       }),
             ),
@@ -687,18 +681,17 @@ class _AlertPrefsCardState extends ConsumerState<AlertPrefsCard> {
           Wrap(
             spacing: 6,
             children: [
-              for (final key in _channelLabels.keys)
+              for (final c in channels)
                 FilterChip(
-                  label: Text(_channelLabels[key]!,
-                      style: const TextStyle(fontSize: 12)),
-                  selected: _channel(key),
+                  label: Text('${c['label']}', style: const TextStyle(fontSize: 12)),
+                  selected: _channel('${c['key']}', c['default'] == true),
                   onSelected: _busy
                       ? null
                       : (on) => _save(() async {
                             final next = {
-                              for (final k in _channelLabels.keys)
-                                k: _channel(k),
-                            }..[key] = on;
+                              for (final x in channels)
+                                '${x['key']}': _channel('${x['key']}', x['default'] == true),
+                            }..['${c['key']}'] = on;
                             await repo.updateChannels(widget.linkId, next);
                           }),
                 ),
@@ -709,10 +702,6 @@ class _AlertPrefsCardState extends ConsumerState<AlertPrefsCard> {
     );
   }
 }
-
-/// Shared so the alert editor can refresh the list it came from.
-final guardianLinksProvider = FutureProvider<List<Map<String, dynamic>>>(
-    (ref) => ref.watch(guardianRepoProvider).links());
 
 // ---- formatting ----
 

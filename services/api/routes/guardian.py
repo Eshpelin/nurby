@@ -187,6 +187,65 @@ async def _free_image_interval(db: AsyncSession) -> int:
 # ── guardian-facing endpoints ────────────────────────────────────────
 
 
+@router.get("/vocabulary")
+async def guardian_vocabulary(_user: User = Depends(get_current_user)) -> dict:
+    """The words and defaults both clients need, from one place.
+
+    Alert kinds, their defaults, delivery channels and tier labels were
+    each written twice: once here and once in Dart. The first time
+    someone adds a ninth alert kind, a client that hardcoded eight shows
+    a household a switch list missing the new one, silently. Serving
+    them means a client renders whatever the backend actually supports.
+
+    Labels are UI words (docs/ia-rollout.md); keys are the API's.
+    """
+    from services.guardian.entitlements import (
+        DEFAULT_ALERT_PREFS,
+        DEFAULT_NOTIFY_CHANNELS,
+        NOTIFY_CHANNELS,
+    )
+
+    return {
+        "alert_kinds": [
+            {"key": k, "label": _ALERT_LABELS.get(k, k), "default": v}
+            for k, v in DEFAULT_ALERT_PREFS.items()
+        ],
+        "notify_channels": [
+            {"key": c, "label": _CHANNEL_LABELS.get(c, c),
+             "default": DEFAULT_NOTIFY_CHANNELS.get(c, True)}
+            for c in NOTIFY_CHANNELS
+        ],
+        "tiers": [
+            {"key": "full", "label": "Full access",
+             "hint": "Everything, including live video if switched on."},
+            {"key": "summary", "label": "Recaps",
+             "hint": "Status, recaps and activity. No live view."},
+            {"key": "alerts_only", "label": "Alerts only",
+             "hint": "Told when something happens. Sees nothing else."},
+        ],
+    }
+
+
+# UI words for the API's alert keys. Kept beside the endpoint that
+# serves them rather than in the clients.
+_ALERT_LABELS = {
+    "arrived": "Arrived home",
+    "departed": "Left home",
+    "picked_up": "Picked up by someone",
+    "entered_zone": "Entered an area",
+    "left_zone": "Left an area",
+    "not_seen": "Not seen for a while",
+    "fell": "Possible fall",
+    "attended_meal": "Ate a meal",
+}
+
+_CHANNEL_LABELS = {
+    "telegram": "Telegram",
+    "email": "Email",
+    "in_app": "In the app",
+}
+
+
 @router.get("/me")
 async def guardian_me(
     user: User = Depends(get_current_user),

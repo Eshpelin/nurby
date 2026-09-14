@@ -779,6 +779,13 @@ class GuardianRepository {
   GuardianRepository(this._api);
   final ApiClient _api;
 
+  /// Alert kinds, delivery channels and tier labels, from the backend.
+  /// These used to be hardcoded in Dart beside a copy in Python; a ninth
+  /// alert kind would have appeared in neither client.
+  Future<Map<String, dynamic>> vocabulary() async =>
+      (await _api.getJson('/api/guardian/vocabulary') as Map)
+          .cast<String, dynamic>();
+
   Future<List<Map<String, dynamic>>> links() async {
     final j = await _api.getJson('/api/guardian/me') as Map;
     return (j['links'] as List? ?? [])

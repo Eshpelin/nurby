@@ -7,6 +7,7 @@ import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
 import 'guardian_admin_screen.dart';
+import 'guardian_cards.dart';
 
 /// Grant someone outside the household a view of one person (#165).
 ///
@@ -47,11 +48,15 @@ class _GrantLinkSheetState extends ConsumerState<GrantLinkSheet> {
     super.dispose();
   }
 
-  static const _tiers = [
-    ('alerts_only', 'Alerts only', 'Told when something happens. Sees nothing else.'),
-    ('summary', 'Recaps', 'Status, recaps and activity. No live view.'),
-    ('full', 'Full', 'Everything, including live video if switched on below.'),
-  ];
+  /// Tiers come from /api/guardian/vocabulary so this list cannot drift
+  /// from what the backend accepts.
+  List<(String, String, String)> _tiers(WidgetRef ref) {
+    final v = ref.watch(guardianVocabularyProvider).value;
+    return [
+      for (final t in (v?['tiers'] as List? ?? const []).whereType<Map>())
+        ('${t['key']}', '${t['label']}', '${t['hint']}'),
+    ];
+  }
 
   bool get _canNext => switch (_step) {
         0 => _email.text.trim().contains('@'),
@@ -227,7 +232,7 @@ class _GrantLinkSheetState extends ConsumerState<GrantLinkSheet> {
           const Text('How much may they see?',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          for (final (key, label, hint) in _tiers)
+          for (final (key, label, hint) in _tiers(ref))
             RadioListTile<String>(
               value: key,
               groupValue: _tier,
@@ -308,7 +313,7 @@ class _GrantLinkSheetState extends ConsumerState<GrantLinkSheet> {
             child: Text(
               '${_email.text.trim()} will be able to see '
               '${_person?.displayName ?? 'this person'}: '
-              '${_tiers.firstWhere((t) => t.$1 == _tier).$2.toLowerCase()}'
+              '${(_tiers(ref).where((t) => t.$1 == _tier).firstOrNull?.$2 ?? _tier).toLowerCase()}'
               '${_tier == 'full' && _liveVideo ? ', with live video' : ''}'
               '${_tier == 'full' && _audio ? ' and audio' : ''}'
               '${_expiryDays == null ? ', until revoked.' : ', for ${_expiryDays == 7 ? 'a week' : _expiryDays == 30 ? 'a month' : _expiryDays == 90 ? 'three months' : 'a year'}.'}',

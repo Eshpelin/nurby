@@ -6,6 +6,7 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import 'grant_link_sheet.dart';
+import 'guardian_cards.dart';
 
 /// The household side of guardian (issue #165).
 ///
@@ -110,6 +111,11 @@ class _LinksTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(grantedLinksProvider);
+    final vocab = ref.watch(guardianVocabularyProvider).value;
+    final tierLabels = {
+      for (final t in (vocab?['tiers'] as List? ?? const []).whereType<Map>())
+        '${t['key']}': '${t['label']}',
+    };
 
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -140,6 +146,7 @@ class _LinksTab extends ConsumerWidget {
               for (final l in active)
                 _LinkRow(
                   link: l,
+                  tierLabels: tierLabels,
                   onRevoke: () => _revoke(context, ref, l),
                   onPickups: () => showModalBottomSheet<void>(
                     context: context,
@@ -160,7 +167,8 @@ class _LinksTab extends ConsumerWidget {
                           color: NurbyColors.mutedForeground,
                           fontWeight: FontWeight.w600)),
                 ),
-                for (final l in revoked) _LinkRow(link: l, onRevoke: null),
+                for (final l in revoked)
+                  _LinkRow(link: l, tierLabels: tierLabels, onRevoke: null),
               ],
             ],
           ),
@@ -175,11 +183,15 @@ class _LinkRow extends StatelessWidget {
     required this.link,
     required this.onRevoke,
     this.onPickups,
+    this.tierLabels,
   });
 
   final Map<String, dynamic> link;
   final VoidCallback? onRevoke;
   final VoidCallback? onPickups;
+
+  /// Key to label, from /api/guardian/vocabulary.
+  final Map<String, String>? tierLabels;
 
   @override
   Widget build(BuildContext context) {
@@ -200,7 +212,7 @@ class _LinkRow extends StatelessWidget {
         ),
         subtitle: Text(
           [
-            _tierLabel(tier),
+            tierLabels?[tier] ?? _tierLabel(tier),
             if (link['live_video'] == true) 'live video',
             if (link['audio'] == true) 'audio',
             if (expires != null) 'until ${_date(expires)}',
@@ -518,9 +530,12 @@ class _PickupsSheetState extends ConsumerState<PickupsSheet> {
 
 // ---- shared bits ----
 
+/// Fallback only. The label proper comes from
+/// /api/guardian/vocabulary; this reads a raw key rather than showing
+/// one when the vocabulary has not landed yet.
 String _tierLabel(String tier) => switch (tier) {
       'full' => 'Full access',
-      'summary' => 'Recaps only',
+      'summary' => 'Recaps',
       'alerts_only' => 'Alerts only',
       _ => tier,
     };
