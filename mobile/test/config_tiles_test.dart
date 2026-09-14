@@ -358,7 +358,7 @@ void _tiles160() {
         providers: providers,
         onChanged: _noop,
       )));
-      expect(find.text('Unknown provider'), findsOneWidget);
+      expect(find.text('Unknown AI model'), findsOneWidget);
       expect(find.textContaining('9f3ab120'), findsNothing);
     });
 

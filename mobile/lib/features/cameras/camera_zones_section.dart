@@ -62,7 +62,7 @@ class _CameraZonesSectionState extends ConsumerState<CameraZonesSection> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: NurbyColors.cardElevated,
-        title: const Text('Delete privacy zone?'),
+        title: const Text('Remove this blur area?'),
         // Deleting is not the same as switching off, and the difference
         // matters: an auto-zone the pipeline still recognises will simply
         // come back, while a hand-drawn one is gone for good.
@@ -120,7 +120,7 @@ class _CameraZonesSectionState extends ConsumerState<CameraZonesSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        widget.sectionLabel('PRIVACY'),
+        widget.sectionLabel('BLUR AREAS'),
         Card(
           child: Column(children: [
             const Padding(
@@ -158,11 +158,11 @@ class _CameraZonesSectionState extends ConsumerState<CameraZonesSection> {
             if (zones.isEmpty)
               const ListTile(
                 dense: true,
-                title: Text('No privacy zones on this camera',
+                title: Text('No blur areas on this camera',
                     style: TextStyle(fontSize: 13)),
                 subtitle: Text(
-                  'Zones appear here once the pipeline detects something '
-                  'worth blurring, such as a neighbour\'s window.',
+                  'Blur areas appear here once the pipeline spots something '
+                  'worth hiding, such as a neighbour\'s window.',
                   style: _sub,
                 ),
               )

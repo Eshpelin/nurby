@@ -46,7 +46,7 @@ class WebhooksSection extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: NurbyColors.cardElevated,
         title: const Text('Delete webhook?'),
-        content: Text('"${w['name']}" will stop receiving events.'),
+        content: Text('"${w['name']}" will stop receiving alerts.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -116,7 +116,7 @@ class WebhooksSection extends ConsumerWidget {
                 ? const ListTile(
                     title: Text('No webhooks', style: TextStyle(fontSize: 13)),
                     subtitle: Text(
-                      'Send every event to a URL of your own, signed with '
+                      'Send every alert to a URL of your own, signed with '
                       'a secret.',
                       style: _sub,
                     ),

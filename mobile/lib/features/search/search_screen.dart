@@ -220,7 +220,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         icon: Icons.manage_search,
         title: 'Search your footage',
         subtitle:
-            'Describe what you are looking for in plain language.\nNurby searches every observation.',
+            'Describe what you are looking for in plain language.\nNurby searches every sighting.',
       );
     }
 

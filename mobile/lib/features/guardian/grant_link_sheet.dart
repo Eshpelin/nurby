@@ -49,7 +49,7 @@ class _GrantLinkSheetState extends ConsumerState<GrantLinkSheet> {
 
   static const _tiers = [
     ('alerts_only', 'Alerts only', 'Told when something happens. Sees nothing else.'),
-    ('summary', 'Summaries', 'Status, recaps and the timeline. No live view.'),
+    ('summary', 'Recaps', 'Status, recaps and activity. No live view.'),
     ('full', 'Full', 'Everything, including live video if switched on below.'),
   ];
 

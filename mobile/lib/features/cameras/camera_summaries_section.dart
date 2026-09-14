@@ -48,7 +48,7 @@ class CameraSummariesSection extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            sectionLabel('WHAT IT CONCLUDED'),
+            sectionLabel('RECAPS'),
             for (final s in rows.take(10))
               Card(
                 margin: const EdgeInsets.only(bottom: 8),

@@ -520,7 +520,7 @@ class _PickupsSheetState extends ConsumerState<PickupsSheet> {
 
 String _tierLabel(String tier) => switch (tier) {
       'full' => 'Full access',
-      'summary' => 'Summaries only',
+      'summary' => 'Recaps only',
       'alerts_only' => 'Alerts only',
       _ => tier,
     };

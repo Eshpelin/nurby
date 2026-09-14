@@ -64,7 +64,7 @@ class ReportsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Reports'),
+        title: const Text('Scheduled questions'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
@@ -98,13 +98,13 @@ class ReportsScreen extends ConsumerWidget {
                       size: 40, color: NurbyColors.mutedForeground),
                   const SizedBox(height: 12),
                   const Center(
-                      child: Text('No reports yet',
+                      child: Text('No scheduled questions yet',
                           style: TextStyle(fontWeight: FontWeight.w600))),
                   const SizedBox(height: 6),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 40),
                     child: Text(
-                      'A report is a question Nurby answers on a schedule. '
+                      'A question Nurby answers on a schedule. '
                       '"What did Sam do today", every evening at seven.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -345,7 +345,7 @@ class _ReportEditorState extends ConsumerState<ReportEditor> {
 
   Future<void> _save() async {
     if (_name.text.trim().isEmpty || _prompt.text.trim().isEmpty) {
-      setState(() => _error = 'A report needs a name and a question.');
+      setState(() => _error = 'It needs a name and a question.');
       return;
     }
     setState(() {
@@ -373,7 +373,7 @@ class _ReportEditorState extends ConsumerState<ReportEditor> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: NurbyColors.cardElevated,
-        title: const Text('Delete report?'),
+        title: const Text('Delete this scheduled question?'),
         content: Text('"${widget.existing!.name}" will stop running.'),
         actions: [
           TextButton(
@@ -413,7 +413,7 @@ class _ReportEditorState extends ConsumerState<ReportEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.existing == null ? 'New report' : 'Edit report',
+            Text(widget.existing == null ? 'New scheduled question' : 'Edit scheduled question',
                 style: const TextStyle(
                     fontSize: 17, fontWeight: FontWeight.w700)),
             const SizedBox(height: 16),

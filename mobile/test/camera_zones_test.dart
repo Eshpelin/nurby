@@ -103,7 +103,7 @@ void main() {
 
     testWidgets('says plainly when a camera has no zones', (tester) async {
       await _pump(tester);
-      expect(find.text('No privacy zones on this camera'), findsOneWidget);
+      expect(find.text('No blur areas on this camera'), findsOneWidget);
     });
 
     testWidgets('a non-admin sees zone state but cannot change it',

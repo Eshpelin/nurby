@@ -311,9 +311,9 @@ class GuardianEventsCard extends ConsumerWidget {
 
     return async.when(
       loading: () => const GuardianSection(
-          title: 'Alerts', child: LinearProgressIndicator()),
+          title: 'Updates', child: LinearProgressIndicator()),
       error: (e, _) => GuardianSection(
-        title: 'Alerts',
+        title: 'Updates',
         child: isForbidden(e)
             ? const TierLocked(what: 'Alerts')
             : Text(apiErrorMessage(e), style: _sub),
@@ -324,7 +324,7 @@ class GuardianEventsCard extends ConsumerWidget {
             .map((i) => i.cast<String, dynamic>())
             .toList();
         return GuardianSection(
-          title: 'Alerts',
+          title: 'Updates',
           child: items.isEmpty
               ? const Text('Nothing raised recently.', style: _sub)
               : Column(

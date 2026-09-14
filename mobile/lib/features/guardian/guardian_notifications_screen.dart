@@ -23,7 +23,7 @@ class GuardianNotificationsScreen extends ConsumerWidget {
     final async = ref.watch(guardianNotificationsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('What I have been told')),
+      appBar: AppBar(title: const Text('Updates')),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ListView(children: [
