@@ -222,7 +222,7 @@ export default function ReportsPage() {
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Scheduled questions</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Saved questions on a clock. &quot;What was Simon doing all day&quot;,
             every night at 7 PM, in your notifications or inbox.

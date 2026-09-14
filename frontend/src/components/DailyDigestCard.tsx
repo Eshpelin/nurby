@@ -138,7 +138,7 @@ export function DailyDigestCard() {
       >
         <SunIcon className="w-4 h-4 text-amber-400" />
         <span className="text-xs font-medium uppercase tracking-wider text-amber-300">
-          Morning brief
+          Morning recap
         </span>
         <span className="text-[10px] text-muted-foreground font-mono">
           {formatWith(start, { year: "numeric", month: "numeric", day: "numeric" })} {formatWith(start, {hour:"2-digit",minute:"2-digit"})} → {formatWith(end, { year: "numeric", month: "numeric", day: "numeric" }) !== formatWith(start, { year: "numeric", month: "numeric", day: "numeric" }) ? `${formatWith(end, { year: "numeric", month: "numeric", day: "numeric" })} ` : ""}{formatWith(end, {hour:"2-digit",minute:"2-digit"})}

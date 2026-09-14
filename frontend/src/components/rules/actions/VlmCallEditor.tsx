@@ -15,7 +15,7 @@ export function VlmCallEditor({ draft, onChange }: VlmCallEditorProps) {
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-muted-foreground block mb-1">Provider</label>
+          <label className="text-xs text-muted-foreground block mb-1">AI model</label>
           <StyledSelect
             value={d.provider}
             options={VLM_PROVIDERS}

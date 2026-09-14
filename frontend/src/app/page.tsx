@@ -1731,7 +1731,7 @@ function DashboardContent() {
                 <div>
                   <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">Event Types</span>
                   <div className="flex flex-col gap-1">
-                    {([["recordings", "Recordings"], ["observations", "AI Observations"], ["conversations", "Conversations"], ["transcripts", "Raw Transcripts"], ["summaries", "Summaries"], ["speech", "Camera Speech"], ["status", "Status Changes"]] as [EventFilter, string][]).map(([value, label]) => (
+                    {([["recordings", "Recordings"], ["observations", "Sightings"], ["conversations", "Conversations"], ["transcripts", "Raw Transcripts"], ["summaries", "Camera recaps"], ["speech", "Camera Speech"], ["status", "Status Changes"]] as [EventFilter, string][]).map(([value, label]) => (
                       <label key={value} className="flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
                         <input type="checkbox" checked={eventFilters.has(value)} onChange={() => toggleEventFilter(value)}
                           className="w-3.5 h-3.5 rounded border-border accent-accent" />
@@ -1905,7 +1905,7 @@ function DashboardContent() {
                     <path d="M12 2L9.1 8.6 2 9.3l5.5 4.9L5.8 22 12 18l6.2 4-1.7-7.8L22 9.3l-7.1-.7L12 2z"/>
                   </svg>
                 </div>
-                <span className="text-sm font-semibold flex-shrink-0">AI Digest</span>
+                <span className="text-sm font-semibold flex-shrink-0">Recap</span>
                 <div className="flex rounded-md border border-border overflow-hidden flex-shrink-0">
                   <button onClick={() => setDigestPeriod("hourly")}
                     className={`px-2 py-1 text-[10px] transition-colors ${digestPeriod === "hourly" ? "bg-accent text-black font-medium" : "text-muted-foreground hover:bg-muted"}`}>
