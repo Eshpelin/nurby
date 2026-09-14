@@ -151,11 +151,34 @@ function Section({
   title,
   children,
   description,
+  advanced = false,
 }: {
   title: string;
   children: React.ReactNode;
   description?: string;
+  /**
+   * Collapsed by default (docs/settings-layers.md). Web folds at the
+   * section level: a section whose fields are all pipeline tuning sits
+   * behind a disclosure so it does not carry the same weight as
+   * "Blur areas". Every field stays reachable.
+   */
+  advanced?: boolean;
 }) {
+  if (advanced) {
+    return (
+      <details className="group rounded-lg border border-border bg-card">
+        <summary className="cursor-pointer list-none px-5 py-4 flex items-center justify-between gap-3">
+          <span>
+            <span className="text-sm font-semibold">{title}</span>
+            <span className="ml-2 text-[10px] uppercase tracking-wider text-muted-foreground">Advanced</span>
+            {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
+          </span>
+          <span className="text-muted-foreground transition-transform group-open:rotate-180" aria-hidden>⌄</span>
+        </summary>
+        <div className="px-5 pb-5 space-y-4">{children}</div>
+      </details>
+    );
+  }
   return (
     <div className="rounded-lg border border-border bg-card p-5">
       <h3 className="text-sm font-semibold mb-1">{title}</h3>
@@ -859,7 +882,7 @@ export default function CameraConfigPage() {
       <div className="space-y-5">
         {/* ── Quick personas ── */}
         <Section
-          title="Personas"
+          title="Quick setup"
           description="Apply a preset bundle to fill detection, recording, and summary settings in one click. Override anything afterward."
         >
           <PersonaPicker variant="compact" onApply={(patch) => applyPersona(patch)} />
@@ -888,7 +911,8 @@ export default function CameraConfigPage() {
         </Section>
 
         {/* ── Feed ── */}
-        <Section title="Feed" description="Stream source and connection settings">
+        <Section title="Feed"
+          advanced description="Stream source and connection settings">
           <FieldRow label="Feed Type">
             <select
               value={streamType}
@@ -1058,6 +1082,7 @@ export default function CameraConfigPage() {
         {supportsAuth && (
           <Section
             title="Authentication"
+          advanced
             description="Credentials for accessing the camera feed"
           >
             <FieldRow label="Username">
@@ -1113,7 +1138,7 @@ export default function CameraConfigPage() {
           title="AI Analysis"
           description="Configure which model analyzes this camera and how"
         >
-          <FieldRow label="VLM Provider" hint="Leave on System Default to use global setting">
+          <FieldRow label="AI model" hint="Leave on System Default to use global setting">
             <select
               value={vlmProviderId || ""}
               onChange={(e) => setVlmProviderId(e.target.value || null)}
@@ -1285,6 +1310,7 @@ export default function CameraConfigPage() {
         {/* Cascade refiner */}
         <Section
           title="Refiner (cascade)"
+          advanced
           description="Re-describes individual frames with a stronger second model the moment a trigger matches (a person appears, a keyword lands). Different from the AI Summarizer below, which periodically condenses many observations into a recap. The refiner upgrades single moments; the summarizer narrates stretches of time."
         >
           <FieldRow label="Refiner Model" hint="Off when blank. Needs a second provider entry, different from AI Analysis.">
@@ -1625,10 +1651,10 @@ export default function CameraConfigPage() {
 
         {/* ── Activity Digest ── */}
         <Section
-          title="Activity Digest"
+          title="Periodic recaps"
           description="Configure the automatic activity summary shown on the cameras page"
         >
-          <FieldRow label="Digest">
+          <FieldRow label="Recaps">
             <Toggle
               checked={digestEnabled}
               onChange={setDigestEnabled}
@@ -1662,7 +1688,7 @@ export default function CameraConfigPage() {
                 </div>
               </FieldRow>
 
-              <FieldRow label="Digest Model" hint="Which model generates the summary">
+              <FieldRow label="Recap model" hint="Which model generates the summary">
                 <select
                   value={digestProviderId || ""}
                   onChange={(e) => setDigestProviderId(e.target.value || null)}
@@ -1680,7 +1706,7 @@ export default function CameraConfigPage() {
                 </select>
               </FieldRow>
 
-              <FieldRow label="Digest Prompt" hint="Custom instructions for generating the summary">
+              <FieldRow label="Recap prompt" hint="Custom instructions for generating the summary">
                 <textarea
                   value={digestPrompt}
                   onChange={(e) => setDigestPrompt(e.target.value)}
@@ -1705,6 +1731,7 @@ export default function CameraConfigPage() {
         {/* ── Summarization ── */}
         <Section
           title="Summarization"
+          advanced
           description="Generate periodic or event-bound narrative recaps using a VLM. Summaries fuse per-frame descriptions, transcripts, and identity facts into a single story."
         >
           <FieldRow label="Mode" hint="Periodic fires on a fixed timer. Event opens on detection and closes after a quiet window. Both runs them independently.">
@@ -1933,6 +1960,7 @@ export default function CameraConfigPage() {
         {camera?.stream_type === "rtsp" && (
           <Section
             title="Smart Track"
+          advanced
             description="Auto-follow detections with the camera's PTZ motor. Requires ONVIF pan/tilt support. The camera will keep the target near frame center and return to the home preset after the target leaves for a few seconds."
           >
             <FieldRow label="Enabled" hint="Master switch. Off means manual PTZ only.">
@@ -2118,6 +2146,7 @@ export default function CameraConfigPage() {
         {detectionModels.some((m) => m.model.includes("world")) && (
           <Section
             title="Open-vocabulary prompts"
+          advanced
             description="When a YOLO-World model is in this camera's detection list, these phrases drive what it detects. Plain English. Add anything you want flagged."
           >
             <FieldRow label="Class names to detect">
@@ -2137,7 +2166,7 @@ export default function CameraConfigPage() {
 
         {/* ── Privacy zones ── */}
         <Section
-          title="Smart privacy zones"
+          title="Blur areas"
           description="AI detects beds, bathrooms, monitors, windows on every keyframe and blurs them before the frame is stored, sent to the VLM, or used for thumbnails."
         >
           <PrivacyZonesSection
@@ -2152,6 +2181,7 @@ export default function CameraConfigPage() {
         {/* ── Timezone ── */}
         <Section
           title="Timezone"
+          advanced
           description="Used to render timestamps in this camera's local time. Anchors per-camera scheduling too."
         >
           <FieldRow label="Timezone">
