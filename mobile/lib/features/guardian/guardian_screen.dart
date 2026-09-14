@@ -132,20 +132,32 @@ class GuardianScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final links = ref.watch(_linksProvider);
 
+    // Two audiences share this screen. A household member reached it
+    // from Settings > Sharing and can go on to manage links. A guardian
+    // is in guardian mode, where Updates is a tab and there is no
+    // Settings, so sign-out lives here.
+    final isGuardian = ref.watch(authProvider).user?.role == 'guardian';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Guardian'),
+        title: Text(isGuardian ? 'Home' : 'Guardian'),
         actions: [
-          IconButton(
-            tooltip: 'What I have been told',
-            icon: const Icon(Icons.notifications_none),
-            onPressed: () => context.push('/more/guardian/notifications'),
-          ),
-          IconButton(
-            tooltip: 'Who can watch us',
-            icon: const Icon(Icons.shield_outlined),
-            onPressed: () => context.push('/more/guardian/admin'),
-          ),
+          if (!isGuardian) ...[
+            IconButton(
+              tooltip: 'Updates',
+              icon: const Icon(Icons.notifications_none),
+              onPressed: () => context.push('/settings/guardian/notifications'),
+            ),
+            IconButton(
+              tooltip: 'Who can watch us',
+              icon: const Icon(Icons.shield_outlined),
+              onPressed: () => context.push('/settings/guardian/admin'),
+            ),
+          ] else
+            IconButton(
+              tooltip: 'Sign out',
+              icon: const Icon(Icons.logout),
+              onPressed: () => ref.read(authProvider.notifier).logout(),
+            ),
         ],
       ),
       body: links.when(
