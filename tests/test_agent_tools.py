@@ -19,6 +19,7 @@ import pytest
 
 from services.agent import access as access_mod
 from services.agent import tools as tools_mod
+from services.agent.tools import _common as tools_common
 from services.agent.tools import (
     TOOL_REGISTRY,
     all_tools_for_provider,
@@ -190,12 +191,12 @@ async def test_query_observations_returns_observations(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     async def fake_embed(text):
         return None  # force keyword path
 
-    monkeypatch.setattr(tools_mod, "_embed_query", fake_embed)
+    monkeypatch.setattr(tools_common, "_embed_query", fake_embed)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -222,7 +223,7 @@ async def test_get_camera_layout_infers_roles(monkeypatch):
     async def fake_access(user, db):
         return {kitchen.id, door.id, other.id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         if "from cameras" in stmt.lower():
@@ -268,7 +269,7 @@ async def test_get_journeys_happy(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -319,7 +320,7 @@ async def test_get_journeys_exact_token_no_cross_match(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -344,7 +345,7 @@ async def test_get_journeys_disambiguation(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -369,7 +370,7 @@ async def test_hours_too_large_clamped(monkeypatch):
     async def fake_access(user, db):
         return set()  # short-circuit. we just want to confirm no raise
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
     db = FakeDB(_empty_camera_responder)
     ctx = {"user": _user("admin"), "run_id": None, "db": db}
     # 9999 hours should clamp silently to 720.
@@ -395,7 +396,7 @@ async def test_analyze_clip_returns_analyzer_not_ready(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     # Force the import inside analyze_clip to fail by removing any
     # installed analyzer module attribute. The except branch in
@@ -426,7 +427,7 @@ async def test_analyze_frame_access_denied(monkeypatch):
     async def fake_access(user, db):
         return set()  # no access
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
     db = FakeDB(_empty_camera_responder)
     db._gets[obs_id] = obs
     ctx = {"user": _user("viewer"), "run_id": None, "db": db}
@@ -471,7 +472,7 @@ async def test_get_last_sightings_no_access_returns_empty(monkeypatch):
     async def fake_access(user, db):
         return set()
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
     out = await get_last_sightings({"user": _user("admin"), "run_id": None, "db": FakeDB(lambda s: [])}, since_days=30)
     assert out == {"persons": [], "labels": [], "since_days": 30}
 
@@ -481,7 +482,7 @@ async def test_get_last_sightings_clamps_since_days(monkeypatch):
     async def fake_access(user, db):
         return set()
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
     out = await get_last_sightings({"user": _user("admin"), "run_id": None, "db": FakeDB(lambda s: [])}, since_days=9999)
     assert out["since_days"] == 365
     out = await get_last_sightings({"user": _user("admin"), "run_id": None, "db": FakeDB(lambda s: [])}, since_days=0)
@@ -493,7 +494,7 @@ async def test_get_household_snapshot_no_access_returns_empty(monkeypatch):
     async def fake_access(user, db):
         return set()
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
     out = await get_household_snapshot({"user": _user("admin"), "run_id": None, "db": FakeDB(lambda s: [])})
     assert out["cameras"] == []
     assert out["persons"] == []
@@ -518,7 +519,7 @@ async def test_summarize_activity_empty_household(monkeypatch):
     async def fake_access(user, db):
         return set()
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         return []
@@ -565,7 +566,7 @@ async def test_summarize_activity_runs_per_person_path(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -599,7 +600,7 @@ async def test_get_events_no_access_returns_no_events_from_other_cams(monkeypatc
     async def fake_access(user, db):
         return set()  # no camera access
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     ev = SimpleNamespace(
         id=uuid.uuid4(),
@@ -728,7 +729,7 @@ async def test_query_relationships_co_present(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -770,7 +771,7 @@ async def test_query_relationships_revisited(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -833,7 +834,7 @@ async def test_query_relationships_path(monkeypatch):
     async def fake_access(user, db):
         return {cam_a, cam_b}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -871,7 +872,7 @@ async def test_query_relationships_seen_with_label(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -899,7 +900,7 @@ async def test_query_relationships_disambiguation(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -929,7 +930,7 @@ async def test_query_relationships_access_filter(monkeypatch):
     async def fake_access(user, db):
         return {visible_cam}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -948,7 +949,7 @@ async def test_query_relationships_clamps(monkeypatch):
     async def fake_access(user, db):
         return set()  # short-circuit before any journey query
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
     db = FakeDB(lambda s: [])
     ctx = {"user": _user("admin"), "run_id": None, "db": db}
     out = await query_relationships(ctx, subject="cat", relation="path", hours=9999, limit=999)
@@ -971,7 +972,7 @@ async def test_get_last_sightings_shows_nickname_and_matches_it(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -1000,7 +1001,7 @@ async def test_get_household_snapshot_shows_nickname(monkeypatch):
     async def fake_access(user, db):
         return {cam.id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -1042,7 +1043,7 @@ async def test_get_last_sightings_label_path_uses_started_at(monkeypatch):
     async def fake_access(user, db):
         return {cam_id}
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
 
     def responder(stmt: str):
         s = stmt.lower()
@@ -1093,8 +1094,8 @@ def _widening_ctx(monkeypatch, obs_rows_per_call):
     async def fake_embed(text):
         return None  # keyword path: exactly one observations query per window
 
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_access)
-    monkeypatch.setattr(tools_mod, "_embed_query", fake_embed)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_access)
+    monkeypatch.setattr(tools_common, "_embed_query", fake_embed)
 
     calls = {"observations": 0}
 

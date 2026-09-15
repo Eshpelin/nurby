@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 
 import services.agent.tools as tools_mod
+from services.agent.tools import _common as tools_common
 from services.agent.tools import get_tool, speak_on_camera
 from services.voice.disclosure import SAFE_FALLBACK
 
@@ -77,7 +78,7 @@ def _wire(monkeypatch, *, enabled=True, allowed=True, camera=True,
 
     monkeypatch.setattr(settings_mod, "get_setting", fake_get_setting)
     monkeypatch.setattr(speaker_mod, "speak", fake_speak)
-    monkeypatch.setattr(tools_mod, "accessible_camera_ids", fake_accessible)
+    monkeypatch.setattr(tools_common, "accessible_camera_ids", fake_accessible)
 
     db = _FakeDB(
         camera=SimpleNamespace(id=CAM, name="Front Door") if camera else None,
