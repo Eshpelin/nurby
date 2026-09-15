@@ -174,3 +174,8 @@ export function statusLabel(status: string): string {
   const map: Record<string, string> = { live: "Online", recording: "Recording", offline: "Offline", error: "Error" };
   return map[status] || status;
 }
+
+// Where the browser reaches the WHEP endpoint for live video. Separate
+// from the API host: the relay usually sits on its own port.
+export const WEBRTC_URL =
+  process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
