@@ -194,6 +194,10 @@ class RuleEngine:
         # and time-window checks pin against this zone so a 22:00 to
         # 06:00 schedule means LA-local, not perception-host-local.
         tz = await self._resolve_timezone()
+        # Household mode (#184), read once per tick like the timezone.
+        # A rule with conditions.modes only fires while the household
+        # is in one of those modes.
+        mode = await self._resolve_household_mode()
 
         # ZoneMinder-style veto. While a veto zone on this camera is
         # triggered (headlight wash on a wall patch, a flapping flag), all
@@ -213,7 +217,7 @@ class RuleEngine:
             # itself. So skip the normal cooldown/dedup/fire path here.
             seq = sequences.get_sequence(rule.trigger_pattern)
             if seq:
-                await self._evaluate_sequence(rule, seq, observation_data, tz)
+                await self._evaluate_sequence(rule, seq, observation_data, tz, mode)
                 continue
 
             # Check cooldown. cooldown_seconds=0 means no cooldown and
@@ -236,7 +240,7 @@ class RuleEngine:
                 continue
 
             # Check conditions
-            if rule.conditions and not self._check_conditions(rule.conditions, observation_data, tz):
+            if rule.conditions and not self._check_conditions(rule.conditions, observation_data, tz, mode):
                 continue
 
             # Fire-once-per-visit dedup. A rule with fire_once_per="visit"
@@ -285,12 +289,12 @@ class RuleEngine:
             severity=getattr(rule, "severity", None) or "alert",
         )
 
-    async def _evaluate_sequence(self, rule, seq: dict, data: dict, tz) -> None:
+    async def _evaluate_sequence(self, rule, seq: dict, data: dict, tz, mode: str | None = None) -> None:
         """Drive a sequence rule for this observation: advance any in-flight
         instance it satisfies, and start a new one if the base trigger (step 0)
         matched. Completion runs the rule's action chain via _fire."""
         start_matched = self._match_trigger(rule.trigger_pattern, data, rule.id, tz)
-        if start_matched and rule.conditions and not self._check_conditions(rule.conditions, data, tz):
+        if start_matched and rule.conditions and not self._check_conditions(rule.conditions, data, tz, mode):
             start_matched = False
         from services.events.actions import run_grounding_check
 
@@ -1136,7 +1140,21 @@ class RuleEngine:
         return timezone.utc
 
     @staticmethod
-    def _check_conditions(conditions: dict, data: dict, tz=None) -> bool:
+    async def _resolve_household_mode() -> str:
+        """Read household_mode from app settings. Falls back to the default
+        (home) if the setting is missing or the read fails, so a settings
+        outage never arms or disarms anything by accident."""
+        from shared.household_mode import DEFAULT_MODE, is_mode
+
+        try:
+            from shared.app_settings import get_setting
+            value = await get_setting("household_mode")
+        except Exception:
+            value = None
+        return value if is_mode(value) else DEFAULT_MODE
+
+    @staticmethod
+    def _check_conditions(conditions: dict, data: dict, tz=None, mode: str | None = None) -> bool:
         """Check if additional conditions are met.
 
         ``tz`` is the household timezone resolved once per evaluate()
@@ -1149,6 +1167,15 @@ class RuleEngine:
         """
         if tz is None:
             tz = timezone.utc
+
+        # Household mode (#184). Legacy callers pass no mode; treat that
+        # as "do not gate" rather than guessing, so a rule test run from
+        # the API sees the same result whatever the house is doing.
+        if mode is not None:
+            from shared.household_mode import rule_active_in
+
+            if not rule_active_in(conditions, mode):
+                return False
 
         # Camera filter (supports single camera_id or camera_ids array)
         cam_ids = conditions.get("camera_ids")
