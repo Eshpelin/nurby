@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
 from shared.database import get_db
-from shared.models import Camera, Observation, Transcript, User
+from shared.models import Camera, HouseholdModeChange, Observation, Transcript, User
 
 
 class SummarizeWindowBody(BaseModel):
@@ -122,5 +122,32 @@ async def get_timeline(
                 "provider": t.provider,
             }
         )
+    # Household mode changes (#184). Not per camera, so they only appear
+    # in the unfiltered feed; a camera's own timeline stays about that
+    # camera. They are the answer to "why was that alert quiet".
+    if not camera_id:
+        mode_q = select(HouseholdModeChange).order_by(HouseholdModeChange.changed_at.desc())
+        mode_clauses: list = []
+        if from_:
+            mode_clauses.append(HouseholdModeChange.changed_at >= from_)
+        if to:
+            mode_clauses.append(HouseholdModeChange.changed_at <= to)
+        if mode_clauses:
+            mode_q = mode_q.where(and_(*mode_clauses))
+        for m in (await db.execute(mode_q.limit(window))).scalars().all():
+            items.append(
+                {
+                    "kind": "mode_change",
+                    "id": str(m.id),
+                    "camera_id": None,
+                    "started_at": m.changed_at.isoformat(),
+                    "ended_at": None,
+                    "mode": m.mode,
+                    "previous_mode": m.previous_mode,
+                    "source": m.source,
+                    "note": m.note,
+                }
+            )
+
     items.sort(key=lambda x: x["started_at"], reverse=True)
     return {"items": items[offset : offset + limit], "total_seen": len(items)}

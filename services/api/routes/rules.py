@@ -827,6 +827,7 @@ def _explain_outcome(
     conditions: dict | None,
     observation: dict,
     tz,
+    mode: str | None = None,
 ) -> str:
     """Build a human-friendly explanation for the test result."""
     if not matched_trigger:
@@ -847,6 +848,13 @@ def _explain_outcome(
     if not matched_conditions and conditions:
         # Identify which condition blocked us so the UI can highlight it.
         from datetime import datetime as _dt
+
+        from shared.household_mode import MODE_LABELS, rule_active_in
+
+        if mode is not None and not rule_active_in(conditions, mode):
+            wanted = ", ".join(MODE_LABELS.get(m, m) for m in conditions.get("modes") or [])
+            now = MODE_LABELS.get(mode, mode)
+            return f"Household mode blocked. This rule is only on while {wanted}; the house is set to {now} right now."
         cam_ids = conditions.get("camera_ids")
         cam = conditions.get("camera_id")
         if cam_ids and observation.get("camera_id") not in cam_ids:
@@ -994,12 +1002,13 @@ async def test_rule(
             matched_trigger = engine._match_trigger(
                 body.trigger_pattern, observation, fake_rule.id, tz
             )
-    matched_conditions = engine._check_conditions(body.conditions or {}, observation, tz)
+    mode = await engine._resolve_household_mode()
+    matched_conditions = engine._check_conditions(body.conditions or {}, observation, tz, mode)
     schedule_blocked = matched_trigger and not matched_conditions
     matched = matched_trigger and matched_conditions
 
     reason = _explain_outcome(
-        matched_trigger, matched_conditions, body.trigger_pattern, body.conditions, observation, tz,
+        matched_trigger, matched_conditions, body.trigger_pattern, body.conditions, observation, tz, mode,
     )
 
     would_fire = _render_actions_preview(body.actions or [], observation, fake_rule)

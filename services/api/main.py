@@ -25,6 +25,7 @@ from services.api.routes import (
     doctor,
     events,
     guardian,
+    household,
     incidents,
     invites,
     journeys,
@@ -271,5 +272,6 @@ app.include_router(privacy_zones.router, prefix="/api/privacy-zones", tags=["pri
 app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
 app.include_router(admin_stats.router, prefix="/api/admin", tags=["admin"])
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
+app.include_router(household.router, prefix="/api/household", tags=["household"])
 app.include_router(agent.ws_router, tags=["websocket"])
 app.include_router(ws_router, tags=["websocket"])

@@ -1843,3 +1843,38 @@ class DeviceResponse(BaseModel):
     last_test_ok: bool | None
     last_error: str | None
     created_at: datetime
+
+
+# ── Household mode (#184) ──
+
+class HouseholdModeChangeResponse(BaseModel):
+    id: uuid.UUID
+    mode: str
+    previous_mode: str | None
+    source: str
+    changed_by_user_id: uuid.UUID | None
+    changed_by_name: str | None = None
+    note: str | None
+    changed_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class HouseholdModeResponse(BaseModel):
+    """The current mode plus what the clients need to render a control."""
+
+    mode: str
+    since: datetime | None
+    source: str | None
+    # All modes, in display order, with the wording the UI shows.
+    modes: list[dict]
+    # Most recent changes, newest first.
+    history: list[HouseholdModeChangeResponse] = Field(default_factory=list)
+    # How many enabled rules are silenced by the current mode. Lets the
+    # control say "3 rules paused" without a second request.
+    silenced_rule_count: int = 0
+
+
+class HouseholdModeUpdate(BaseModel):
+    mode: str = Field(pattern="^(home|away|night)$")
+    note: str | None = Field(default=None, max_length=280)
