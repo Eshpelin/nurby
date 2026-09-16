@@ -13,6 +13,9 @@ abstract final class NurbyColors {
   static const accent = Color(0xFF20C05C); // hsl(142 71% 45%)
   static const danger = Color(0xFFDC2626); // hsl(0 72% 51%)
   static const warning = Color(0xFFF59E0B); // hsl(38 92% 50%)
+  // Informational, not a problem. Used for states that are working as
+  // written but deliberately quiet, e.g. a rule paused by household mode.
+  static const info = Color(0xFF7DD3FC); // hsl(199 95% 74%)
 }
 
 ThemeData buildNurbyTheme() {

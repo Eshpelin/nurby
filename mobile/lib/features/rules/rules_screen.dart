@@ -7,6 +7,7 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
+import '../../models/household_mode.dart';
 
 /// Shared so the rule editor can invalidate the list after save.
 final rulesProvider =
@@ -148,6 +149,9 @@ class _RuleRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(householdModeProvider).value?.mode;
+    final silencedByMode = mode != null && !ruleActiveIn(rule.conditions, mode);
+
     return Dismissible(
       key: ValueKey(rule.id),
       direction: DismissDirection.endToStart,
@@ -193,6 +197,40 @@ class _RuleRow extends ConsumerWidget {
                         style: const TextStyle(
                             color: NurbyColors.mutedForeground, fontSize: 12),
                       ),
+                      // Household mode (#184). A mode-gated rule is enabled
+                      // and correct, it is just not this mode's turn. Blue,
+                      // not amber: this is a state, not a problem.
+                      if (rule.enabled && modeGateLabel(rule.conditions) != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                silencedByMode
+                                    ? Icons.pause_circle_outline
+                                    : Icons.home_outlined,
+                                size: 14,
+                                color: silencedByMode
+                                    ? NurbyColors.info
+                                    : NurbyColors.mutedForeground,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                (silencedByMode
+                                        ? modePausedLabel(rule.conditions)
+                                        : modeGateLabel(rule.conditions)) ??
+                                    '',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: silencedByMode
+                                      ? NurbyColors.info
+                                      : NurbyColors.mutedForeground,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       if (rule.snoozed)
                         Row(
                           mainAxisSize: MainAxisSize.min,

@@ -12,6 +12,7 @@ import 'repositories.dart';
 import 'server_config.dart';
 import 'ws_client.dart';
 import '../models/models.dart';
+import '../models/household_mode.dart';
 
 /// Overridden in main() after SharedPreferences loads.
 final sharedPrefsProvider =
@@ -199,6 +200,14 @@ final eventRepoProvider = Provider((ref) => EventRepository(
     outbox: ref.watch(outboxProvider)));
 final ruleRepoProvider =
     Provider((ref) => RuleRepository(ref.watch(apiClientProvider)));
+final householdRepoProvider =
+    Provider((ref) => HouseholdRepository(ref.watch(apiClientProvider)));
+
+/// Current household mode (#184). Invalidated after a change so the Home
+/// card, the rules list and anything else reading it move together.
+final householdModeProvider = FutureProvider<HouseholdModeState>(
+    (ref) => ref.watch(householdRepoProvider).mode());
+
 final personRepoProvider =
     Provider((ref) => PersonRepository(ref.watch(apiClientProvider)));
 final searchRepoProvider =

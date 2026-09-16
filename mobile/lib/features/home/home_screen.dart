@@ -10,6 +10,7 @@ import '../../models/models.dart';
 import '../timeline/morning_recap_card.dart';
 import '../voice/live_conversation_card.dart';
 import 'first_run_card.dart';
+import 'household_mode_card.dart';
 
 /// Home: is everything all right?
 ///
@@ -45,6 +46,7 @@ class HomeScreen extends ConsumerWidget {
           ref.invalidate(_unreviewedProvider);
           ref.invalidate(camerasProvider);
           ref.invalidate(morningRecapProvider);
+          ref.invalidate(householdModeProvider);
         },
         child: ListView(
           padding: const EdgeInsets.only(bottom: 24),
@@ -54,6 +56,9 @@ class HomeScreen extends ConsumerWidget {
             const LiveConversationCard(),
             // Shown only until the household has a camera and a rule.
             const FirstRunCard(),
+            // Is anyone home? Rules gate on this, so it sits above the
+            // things it silences rather than in Settings.
+            const HouseholdModeCard(),
 
             // Cameras, as a strip. Tapping one goes to it; the header
             // goes to the grid.

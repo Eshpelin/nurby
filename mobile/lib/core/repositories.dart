@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'api_client.dart';
 import 'outbox.dart';
 import '../models/models.dart';
+import '../models/household_mode.dart';
 
 /// One repository per API resource group. Thin: shape mapping only,
 /// no caching (Riverpod providers own lifecycle).
@@ -362,6 +363,20 @@ class RuleRepository {
       (await _api.postJson('/api/rules/generate', body: {'prompt': prompt})
               as Map)
           .cast<String, dynamic>();
+}
+
+/// Household mode (#184). One value for the whole house that rules gate on.
+class HouseholdRepository {
+  HouseholdRepository(this._api);
+  final ApiClient _api;
+
+  Future<HouseholdModeState> mode() async => HouseholdModeState.fromJson(
+      (await _api.getJson('/api/household/mode') as Map).cast<String, dynamic>());
+
+  Future<HouseholdModeState> setMode(String mode, {String? note}) async =>
+      HouseholdModeState.fromJson((await _api.putJson('/api/household/mode',
+              body: {'mode': mode, if (note != null) 'note': note}) as Map)
+          .cast<String, dynamic>());
 }
 
 class PersonRepository {
