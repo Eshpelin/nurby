@@ -12,6 +12,7 @@ from shared.database import Base  # noqa: F401
 from shared.models.accounts import (  # noqa: F401
     ApiKey,
     AppSetting,
+    HouseholdModeChange,
     InviteKey,
     Provider,
     PushDevice,
@@ -125,6 +126,7 @@ __all__ = [
     "GuardianAccessLog",
     "GuardianEvent",
     "GuardianLink",
+    "HouseholdModeChange",
     "HouseholdFact",
     "Incident",
     "InviteKey",

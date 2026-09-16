@@ -232,3 +232,29 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class HouseholdModeChange(Base):
+    """One row every time the household mode changes (#184).
+
+    The current mode lives in app settings, because that is what the rule
+    engine reads once per tick. This table is the history: it is what the
+    timeline shows and what "why didn't I get an alert at 3pm" needs.
+    """
+
+    __tablename__ = "household_mode_changes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    previous_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # manual | agent | auto. See shared/household_mode.py.
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")
+    changed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Free text a person can leave ("off to the airport"), or the reason
+    # the agent gives. Shown on the timeline entry.
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )

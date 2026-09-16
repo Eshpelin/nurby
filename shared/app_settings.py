@@ -322,6 +322,10 @@ DEFAULTS: dict[str, Any] = {
     # messagingSenderId) served to mobile apps via GET /api/push/config so
     # a stock build can init Firebase against any self-hosted install.
     "push_firebase_client_config": None,
+    # ── Household mode (#184) ───────────────────────────────────────────
+    # home | away | night. Read once per rule-engine tick. Rules gate on it
+    # through conditions.modes; a rule without that key fires in every mode.
+    "household_mode": "home",
 }
 
 
