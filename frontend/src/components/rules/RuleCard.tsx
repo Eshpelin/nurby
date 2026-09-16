@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 import { buildRuleSummary, describeTrigger, type Camera, type Rule } from "./types";
+import {
+  modeGateLabel,
+  modePausedLabel,
+  ruleActiveIn,
+  type HouseholdMode,
+} from "@/lib/household-mode";
 
 export interface RuleHealth {
   last_fired_at: string | null;
@@ -23,6 +29,9 @@ export interface RuleCardProps {
   lastFiredAt?: string | null;
   // Aggregate from GET /api/rules/health (action failures, stale refs).
   health?: RuleHealth | null;
+  // Current household mode (#184). A rule gated on a different mode is
+  // enabled but quiet, which otherwise looks identical to broken.
+  householdMode?: HouseholdMode | null;
   onSelect: () => void;
   onToggleEnabled: () => void;
   onEdit: () => void;
@@ -49,6 +58,7 @@ export function RuleCard({
   selected,
   lastFiredAt,
   health,
+  householdMode,
   onSelect,
   onToggleEnabled,
   onEdit,
@@ -62,6 +72,13 @@ export function RuleCard({
   const createdMs = rule.created_at ? new Date(rule.created_at).getTime() : 0;
   const olderThan24h = createdMs > 0 && Date.now() - createdMs > 24 * 3600 * 1000;
   const neverFired = !lastFiredAt;
+  // Household mode (#184). "Paused" is deliberately a different colour
+  // from the amber problem badges: a mode-gated rule is working exactly
+  // as written, it is just not this mode's turn.
+  const modeGate = modeGateLabel(rule.conditions as Record<string, unknown> | null);
+  const silencedByMode =
+    householdMode != null && !ruleActiveIn(rule.conditions as Record<string, unknown> | null, householdMode);
+
   const badgeClass = neverFired
     ? olderThan24h
       ? "border-red-800 bg-red-900/30 text-red-400"
@@ -154,6 +171,22 @@ export function RuleCard({
               {!rule.enabled && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">
                   Disabled
+                </span>
+              )}
+              {rule.enabled && modeGate && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                    silencedByMode
+                      ? "border-sky-700 bg-sky-900/30 text-sky-300"
+                      : "border-border text-muted-foreground"
+                  }`}
+                  title={
+                    silencedByMode
+                      ? `${modeGate}. The house is not in that mode right now, so this rule is quiet.`
+                      : modeGate
+                  }
+                >
+                  {silencedByMode ? modePausedLabel(rule.conditions as Record<string, unknown> | null) : modeGate}
                 </span>
               )}
             </div>

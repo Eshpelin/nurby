@@ -18,6 +18,8 @@ import { RuleEventsPanel } from "@/components/rules/RuleEventsPanel";
 import { TemplateGallery } from "@/components/rules/TemplateGallery";
 import { WebhookSubscriptions } from "@/components/rules/WebhookSubscriptions";
 import { RULE_PREFILL_KEY } from "@/app/rules/new/page";
+import { HouseholdModeControl } from "@/components/HouseholdModeControl";
+import type { HouseholdMode } from "@/lib/household-mode";
 
 const LAST_FIRED_CACHE_MS = 30_000;
 
@@ -35,6 +37,9 @@ export default function RulesPage() {
   const [telegramChannels, setTelegramChannels] = useState<TelegramChannelOption[]>([]);
   const [telegramChannelsLoading, setTelegramChannelsLoading] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  // Current household mode (#184), so a mode-gated rule can say it is
+  // paused rather than looking like it is broken.
+  const [householdMode, setHouseholdMode] = useState<HouseholdMode | null>(null);
 
   // Most-recent event timestamp per rule. Computed from a single
   // /api/events fetch on mount + after each save. Cached for 30s.
@@ -121,6 +126,17 @@ export default function RulesPage() {
   }, [authFetch]);
 
   useEffect(() => {
+    (async () => {
+      try {
+        const r = await authFetch("/api/household/mode");
+        if (r.ok) setHouseholdMode((await r.json()).mode);
+      } catch {
+        /* silent. Badges just fall back to showing the gate, not the pause. */
+      }
+    })();
+  }, [authFetch]);
+
+  useEffect(() => {
     fetchRules();
     fetchCameras();
     fetchPersons();
@@ -199,6 +215,9 @@ export default function RulesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="w-64 hidden md:block">
+            <HouseholdModeControl compact />
+          </div>
           {rules.length > 0 && (
             <button
               onClick={() => setShowTemplates((v) => !v)}
@@ -244,6 +263,7 @@ export default function RulesPage() {
             selectedRuleId={selectedRule?.id ?? null}
             lastFiredByRule={lastFiredByRule}
             healthByRule={healthByRule}
+            householdMode={householdMode}
             telegramChannels={telegramChannels}
             onSelect={setSelectedRule}
             onToggleEnabled={handleToggle}

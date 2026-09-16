@@ -260,8 +260,9 @@ export function RuleBuilder({
     parts.push(cams ? `On ${cams}` : "On any camera");
     if (scheduleSummary) parts.push(scheduleSummary);
     if (state.formCondConfidence !== "any") parts.push(`${state.formCondConfidence} confidence`);
+    if (state.formCondModes.length > 0) parts.push(`only while ${state.formCondModes.join(" or ")}`);
     return parts.join(", ");
-  }, [state.formCondCameras, state.formCondConfidence, scheduleSummary, cameras]);
+  }, [state.formCondCameras, state.formCondConfidence, state.formCondModes, scheduleSummary, cameras]);
 
   const formSummary = useMemo(() => {
     const actionDicts = state.formActions.map(draftToDict);
@@ -373,6 +374,7 @@ export function RuleBuilder({
 
     const conditions: Record<string, unknown> = {};
     if (s.formCondCameras.length > 0) conditions.camera_ids = s.formCondCameras;
+    if (s.formCondModes.length > 0) conditions.modes = s.formCondModes;
     if (s.formScheduleMode === "custom") {
       if (s.formCondTimeAfter) conditions.time_after = s.formCondTimeAfter;
       if (s.formCondTimeBefore) conditions.time_before = s.formCondTimeBefore;
@@ -713,6 +715,8 @@ export function RuleBuilder({
               setFormCondTimeBefore={setterFor("formCondTimeBefore")}
               formCondConfidence={state.formCondConfidence}
               setFormCondConfidence={setterFor("formCondConfidence")}
+              formCondModes={state.formCondModes}
+              setFormCondModes={setterFor("formCondModes")}
             />
           </CollapsibleSection>
 

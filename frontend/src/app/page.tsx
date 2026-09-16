@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import type { StreamType } from "@/lib/camera-types";
 import { AddCameraModal } from "@/components/AddCameraModal";
 import { StarredStatusRow } from "@/components/StarredStatusRow";
+import { HouseholdModeControl } from "@/components/HouseholdModeControl";
 import { VLMOptionalBanner } from "@/components/VLMOptionalBanner";
 import { RefinedBadge } from "@/components/RefinedBadge";
 import { ObservationGroupCard } from "@/components/ObservationGroupCard";
@@ -958,8 +959,9 @@ function DashboardContent() {
 
       {timelineOpen && (
         <>
-          <div className="mb-3">
+          <div className="mb-3 grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-3 items-start">
             <DailyDigestCard />
+            <HouseholdModeControl />
           </div>
           <StarredStatusRow />
         </>

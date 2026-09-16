@@ -1,6 +1,7 @@
 "use client";
 
 import type { Camera } from "./types";
+import { HOUSEHOLD_MODES, MODE_LABELS, type HouseholdMode } from "@/lib/household-mode";
 
 export interface ConditionsSectionProps {
   cameras: Camera[];
@@ -21,6 +22,8 @@ export interface ConditionsSectionProps {
   setFormCondTimeBefore: (v: string) => void;
   formCondConfidence: string;
   setFormCondConfidence: (v: string) => void;
+  formCondModes: string[];
+  setFormCondModes: (v: string[]) => void;
 }
 
 export function ConditionsSection(props: ConditionsSectionProps) {
@@ -40,6 +43,8 @@ export function ConditionsSection(props: ConditionsSectionProps) {
     setFormCondTimeBefore,
     formCondConfidence,
     setFormCondConfidence,
+    formCondModes,
+    setFormCondModes,
   } = props;
 
   return (
@@ -227,6 +232,49 @@ export function ConditionsSection(props: ConditionsSectionProps) {
             </div>
           </div>
         )}
+      </div>
+
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1.5">
+          Household mode
+        </label>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setFormCondModes([])}
+            className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+              formCondModes.length === 0
+                ? "border-green-500/60 bg-green-500/15 text-green-300"
+                : "border-border text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            Any mode
+          </button>
+          {HOUSEHOLD_MODES.map((m) => {
+            const on = formCondModes.includes(m);
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() =>
+                  setFormCondModes(on ? formCondModes.filter((x) => x !== m) : [...formCondModes, m])
+                }
+                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                  on
+                    ? "border-green-500/60 bg-green-500/15 text-green-300"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {MODE_LABELS[m]}
+              </button>
+            );
+          })}
+        </div>
+        <span className="text-[10px] text-muted-foreground">
+          {formCondModes.length === 0
+            ? "Fires whatever the house is set to."
+            : `Quiet unless the house is set to ${formCondModes.map((m) => MODE_LABELS[m as HouseholdMode] ?? m).join(" or ")}. Change the mode from Home.`}
+        </span>
       </div>
 
       <div>

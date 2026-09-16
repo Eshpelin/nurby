@@ -62,6 +62,8 @@ export interface RuleFormState {
   formCondTimeAfter: string;
   formCondTimeBefore: string;
   formCondConfidence: string;
+  // Household modes this rule is on in. Empty = every mode (#184).
+  formCondModes: string[];
 
   // Action chain. When the rule is a sequence, this is the on_complete chain.
   formActions: ActionDraft[];
@@ -127,6 +129,7 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
   formCondTimeAfter: "",
   formCondTimeBefore: "",
   formCondConfidence: "any",
+  formCondModes: [],
 
   formActions: [defaultDraftForType("notify")],
 
@@ -294,6 +297,7 @@ export function hydrateFromRule(rule: Rule): RuleFormState {
   } else {
     base.formCondConfidence = "any";
   }
+  base.formCondModes = Array.isArray(cond.modes) ? (cond.modes as string[]) : [];
 
   base.formActions =
     rawActions.length > 0
