@@ -7,6 +7,7 @@ describe("workplace template evidence", () => {
   it("opens a review alert instead of billing a suspected guest", () => {
     const template = findTemplate("tailgate-guest-fee")!;
     const rule = template.build(context);
+    if (!Array.isArray(rule.actions)) throw new Error("Expected a review action chain");
     expect(rule.actions).toHaveLength(1);
     expect(rule.actions[0].type).toBe("notify");
     expect(JSON.stringify(rule.actions)).not.toMatch(/api_call|charges|fee raised/i);
