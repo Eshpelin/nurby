@@ -115,7 +115,7 @@ async def _require_camera_in_scope(
 
     Single-camera reads (GET, frame, live-detections) scope on the path
     param itself. Returns 404 rather than 403 so a restricted user cannot
-    probe which camera ids exist. No-op for admins / zero-grant users
+    probe which camera ids exist. No-op for admins / explicit all-mode users
     (``ALL``)."""
     allowed: AllowedCameras = await allowed_camera_ids(current_user, db)
     if allowed is ALL:

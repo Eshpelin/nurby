@@ -523,7 +523,7 @@ function InviteForm({
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground mt-1">
-            Leave empty to grant access to all cameras.
+            Leave empty for no camera access. An admin can grant access later.
           </p>
         </div>
       )}

@@ -48,12 +48,16 @@ async def update_user(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update a user's role or active status. Admin only."""
-    user = await db.get(User, user_id)
+    """Update a user's role, active status or explicit camera policy. Admin only."""
+    user = await db.get(User, user_id, with_for_update=True)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     updates = body.model_dump(exclude_unset=True)
+    if updates.get("camera_access_mode") in {"all", "none"}:
+        existing = await db.execute(select(UserCameraAccess).where(UserCameraAccess.user_id == user_id))
+        for row in existing.scalars().all():
+            await db.delete(row)
     for field, value in updates.items():
         setattr(user, field, value)
 
@@ -83,7 +87,7 @@ async def list_user_cameras(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all cameras a user has access to. Admin only."""
+    """List explicitly selected cameras (not effective all-mode access). Admin only."""
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -105,9 +109,15 @@ async def set_user_cameras(
     db: AsyncSession = Depends(get_db),
 ):
     """Replace a user's entire camera access list. Admin only."""
-    user = await db.get(User, user_id)
+    user = await db.get(User, user_id, with_for_update=True)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Validate before replacing anything. Deduplicate repeated IDs.
+    camera_ids = list(dict.fromkeys(body.camera_ids))
+    for camera_id in camera_ids:
+        if await db.get(Camera, camera_id) is None:
+            raise HTTPException(status_code=404, detail="Camera not found")
 
     # Remove all existing access
     existing = await db.execute(
@@ -115,10 +125,12 @@ async def set_user_cameras(
     )
     for row in existing.scalars().all():
         await db.delete(row)
+    await db.flush()
+    user.camera_access_mode = "selected" if camera_ids else "none"
 
     # Grant new access
     new_rows = []
-    for camera_id in body.camera_ids:
+    for camera_id in camera_ids:
         access = UserCameraAccess(
             user_id=user_id,
             camera_id=camera_id,
@@ -144,9 +156,11 @@ async def grant_camera_access(
     db: AsyncSession = Depends(get_db),
 ):
     """Grant a user access to a single camera. Admin only."""
-    user = await db.get(User, user_id)
+    user = await db.get(User, user_id, with_for_update=True)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.camera_access_mode == "all":
+        raise HTTPException(status_code=409, detail="Choose Selected cameras before editing individual cameras")
 
     camera = await db.get(Camera, camera_id)
     if not camera:
@@ -168,6 +182,7 @@ async def grant_camera_access(
         granted_by_id=admin.id,
     )
     db.add(access)
+    user.camera_access_mode = "selected"
     await db.commit()
     await db.refresh(access)
     return access
@@ -181,6 +196,11 @@ async def revoke_camera_access(
     db: AsyncSession = Depends(get_db),
 ):
     """Revoke a user's access to a single camera. Admin only."""
+    user = await db.get(User, user_id, with_for_update=True)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.camera_access_mode == "all":
+        raise HTTPException(status_code=409, detail="Choose Selected cameras before revoking an individual camera")
     result = await db.execute(
         select(UserCameraAccess).where(
             UserCameraAccess.user_id == user_id,

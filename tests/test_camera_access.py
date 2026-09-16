@@ -30,7 +30,7 @@ from shared.models import Camera, Observation
 
 
 def _user(role: str = "admin") -> SimpleNamespace:
-    return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True)
+    return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True, camera_access_mode="selected")
 
 
 class FakeResult:
@@ -85,15 +85,14 @@ async def test_restricted_user_with_grants_returns_that_set():
 
 
 @pytest.mark.asyncio
-async def test_restricted_user_with_no_grants_falls_through_to_all():
-    # The single-owner no-op: a restricted account with zero grants still
-    # sees everything, so existing deploys are unchanged by this change.
+async def test_restricted_user_with_no_grants_sees_nothing():
+    # Revoking the last selected camera must never expand access.
     def responder(stmt: str):
         return []
 
     db = FakeDB(responder)
     result = await allowed_camera_ids(_user("viewer"), db)
-    assert result is ALL
+    assert result == set()
 
 
 @pytest.mark.asyncio

@@ -496,18 +496,13 @@ function AsOfChip() {
 function PickupMomentCard({ event }: { event: GuardianEvent }) {
   const matched = event.pickup_matched;
   return (
-    <div
-      className={`mt-4 rounded-lg border p-5 ${
-        matched === false
-          ? "border-amber-800 bg-amber-950/20"
-          : "border-emerald-800 bg-emerald-950/20"
-      }`}
-    >
+    <div className="mt-4 rounded-lg border p-5 border-amber-800 bg-amber-950/20">
       <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-        <span className={`h-2 w-2 rounded-full ${matched === false ? "bg-amber-500" : "bg-emerald-500"}`} />
-        {matched === false ? "Unrecognized pickup" : "Picked up"}
+        <span className="h-2 w-2 rounded-full bg-amber-500" />
+        {matched === true ? "Possible pickup · approved entry matched" : "Possible pickup · needs review"}
       </div>
       <div className="mt-1.5 text-lg font-medium">{event.message}</div>
+      <p className="mt-2 text-xs text-muted-foreground">Based on nearby camera sightings. Handover has not been confirmed by staff.</p>
       <div className="mt-1 text-xs text-muted-foreground">
         {clockTime(event.at)} · {dayLabel(event.at)}
       </div>

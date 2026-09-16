@@ -89,8 +89,14 @@ def compose_message(kind: str, display_name: str, *, zone: str | None = None,
         return f"{display_name} left{where}."
     if kind == "picked_up":
         if pickup_matched and approved_name:
-            return f"{display_name} was picked up by {approved_name}."
-        return f"{display_name} left with someone not on the approved-pickup list."
+            return (
+                f"Possible pickup for {display_name}: nearby person or vehicle matches {approved_name}'s "
+                "approved-pickup entry. Handover has not been confirmed."
+            )
+        return (
+            f"Possible pickup for {display_name}: nearby person or vehicle did not match the approved-pickup list. "
+            "Handover has not been confirmed. Please check with the facility."
+        )
     if kind == "entered_zone":
         return f"{display_name} entered {zone or 'a monitored area'}."
     if kind == "left_zone":

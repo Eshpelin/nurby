@@ -244,7 +244,7 @@ def test_max_spans_cap_is_enforced():
 
 
 def _user(role: str = "viewer") -> SimpleNamespace:
-    return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True)
+    return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True, camera_access_mode="selected")
 
 
 class _FakeResult:

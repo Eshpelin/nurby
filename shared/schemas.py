@@ -1183,6 +1183,7 @@ class UserResponse(BaseModel):
     email: str
     display_name: str | None
     role: str
+    camera_access_mode: Literal["all", "selected", "none"] = "none"
     is_active: bool
     # True for the auto-created first-run owner that has not yet set a
     # real email + password. Drives the "Secure your account" prompt.
@@ -1217,6 +1218,14 @@ class UserUpdate(BaseModel):
     display_name: str | None = Field(default=None, max_length=255)
     role: str | None = Field(default=None, max_length=50)
     is_active: bool | None = None
+    camera_access_mode: Literal["all", "selected", "none"] | None = None
+
+    @field_validator("camera_access_mode")
+    @classmethod
+    def _non_null_camera_mode(cls, value):
+        if value is None:
+            raise ValueError("Choose all, selected, or none")
+        return value
 
 
 class TokenResponse(BaseModel):

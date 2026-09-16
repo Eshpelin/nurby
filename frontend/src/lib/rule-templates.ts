@@ -45,7 +45,6 @@ export const CATEGORY_LABELS: Record<TemplateCategory, string> = {
 // These are obvious stand-ins that fail closed (bad host = failed action,
 // logged, chain continues) and the card blurb tells the user to swap them.
 const PLACEHOLDER_WMS = "https://your-wms.example.com/api/tasks";
-const PLACEHOLDER_CRM = "https://your-crm.example.com/api/members/charges";
 const PLACEHOLDER_CMMS = "https://your-cmms.example.com/api/work-orders";
 
 export interface RuleTemplate {
@@ -314,8 +313,8 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
   {
     key: "tailgate-badge-door",
     icon: "🚪",
-    title: "Someone tailgated through the badge door",
-    blurb: "Two people across the entry tripwire within 5s → alert with clip",
+    title: "Possible extra entry at the badge door",
+    blurb: "Entry followed by a person detection within 5s → review the clip; may be the same person",
     category: "workplace",
     needsGeometry: true,
     params: [{ name: "camera_id", label: "Which camera watches the entry?", required: false }],
@@ -335,7 +334,7 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
         [
           alertAction(
             ctx,
-            "🚪 Tailgate at {camera_name} ({timestamp_local}). Two people, one entry.",
+            "🚪 Possible extra entry at {camera_name} ({timestamp_local}). Review the clip; this may be the same person.",
             "Possible tailgate at the entry",
             "warning",
           ),
@@ -348,14 +347,14 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
   {
     key: "tailgate-guest-fee",
     icon: "💳",
-    title: "Bill a tailgated entry as a guest visit",
-    blurb: "Same tailgate detection → post a charge to your CRM + email the report",
+    title: "Review a possible guest entry",
+    blurb: "Flag a possible extra entry for review. No fee is charged.",
     category: "workplace",
     needsGeometry: true,
     params: [{ name: "camera_id", label: "Which camera watches the member gate?", required: false }],
     build: (ctx, picked) =>
       synthRule(
-        "Guest fee for a tailgated entry",
+        "Review possible guest entry",
         {
           type: "line_cross",
           direction: "in",
@@ -367,21 +366,10 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
           },
         },
         [
-          {
-            type: "api_call",
-            method: "POST",
-            url: PLACEHOLDER_CRM,
-            payload_template: {
-              reason: "tailgate_guest_fee",
-              camera: "{{camera_name}}",
-              occurred_at: "{{timestamp}}",
-              event_id: "{{event_id}}",
-            },
-          },
           alertAction(
             ctx,
-            "💳 Guest fee raised for a tailgate at {camera_name} ({timestamp_local})",
-            "Guest fee raised for a tailgated entry",
+            "🚪 Review possible guest entry at {camera_name} ({timestamp_local}). Check the clip and entry records before taking action. No fee was charged by this rule.",
+            "Possible guest entry needs review",
             "warning",
           ),
         ],

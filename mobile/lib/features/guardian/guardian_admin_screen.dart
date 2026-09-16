@@ -446,8 +446,8 @@ class _PickupsSheetState extends ConsumerState<PickupsSheet> {
                     fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             const Text(
-              'A pickup that matches one of these is recorded as expected '
-              'rather than raised as an alert.',
+              'Nearby people or vehicles can match an approved entry. '
+              'A camera match does not confirm a handover; check with staff.',
               style: TextStyle(
                   color: NurbyColors.mutedForeground, fontSize: 12),
             ),
