@@ -78,11 +78,25 @@ _GET_HOUSEHOLD_SNAPSHOT_SCHEMA = {
 }
 
 
+async def _household_mode() -> str:
+    """Current household mode, defaulting to home if settings are down."""
+    from shared.household_mode import DEFAULT_MODE, is_mode
+
+    try:
+        from shared.app_settings import get_setting
+
+        value = await get_setting("household_mode")
+    except Exception:
+        value = None
+    return value if is_mode(value) else DEFAULT_MODE
+
+
 async def get_household_snapshot(ctx: dict) -> dict:
     """Cheap one-call orientation primer. Returns:
        - cameras with last-observation timestamp,
        - named Persons with their last sighting,
-       - currently open Journeys (still in progress).
+       - currently open Journeys (still in progress),
+       - the household mode (home, away or night).
 
     Designed to be the LLM's FIRST call on most questions so it has
     enough state to ask a sensible follow-up tool call instead of
@@ -97,6 +111,7 @@ async def get_household_snapshot(ctx: dict) -> dict:
             "cameras": [],
             "persons": [],
             "active_journeys": [],
+            "household_mode": await _household_mode(),
             "now_iso": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -190,6 +205,9 @@ async def get_household_snapshot(ctx: dict) -> dict:
 
     return {
         "now_iso": now.isoformat(),
+        # Household mode (#184). "Why didn't I get an alert" usually ends
+        # here: a rule gated on away/night is quiet while the house is home.
+        "household_mode": await _household_mode(),
         "cameras": cameras,
         "persons": persons,
         "active_journeys": active_journeys,

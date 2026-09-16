@@ -124,8 +124,13 @@ async def list_rules(
     if name_contains:
         query = query.where(func.lower(Rule.name).like(f"%{name_contains.strip().lower()}%"))
     rows = (await db.execute(query)).scalars().all()
+    from services.agent.tools.household import _household_mode
+    from shared.household_mode import rule_active_in
+
+    mode = await _household_mode()
     return {
         "count": len(rows),
+        "household_mode": mode,
         "rules": [
             {
                 "rule_id": str(r.id),
@@ -133,6 +138,11 @@ async def list_rules(
                 "enabled": r.enabled,
                 "trigger": (r.trigger_pattern or {}).get("type"),
                 "cooldown_seconds": r.cooldown_seconds,
+                # Which modes this rule is on in; null means every mode.
+                "only_in_modes": (r.conditions or {}).get("modes") or None,
+                # True when the rule is enabled but the current mode keeps
+                # it quiet. The usual answer to "why no alert".
+                "silenced_by_mode": bool(r.enabled) and not rule_active_in(r.conditions, mode),
             }
             for r in rows
         ],

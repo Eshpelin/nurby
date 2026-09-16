@@ -5,7 +5,7 @@ build a rule from context, so they cannot be shared. Mobile therefore had
 no templates at all and a new household's only path to its first alert
 was the rule builder.
 
-These four are the ones worth having in the first ten minutes. They are
+These five are the ones worth having in the first ten minutes. They are
 plain data rather than builders: a camera id is the only thing they need
 filled in, and `notify` works without Telegram or email configured, so
 one tap produces a rule that actually fires. Everything else stays in the
@@ -39,6 +39,32 @@ STARTERS: list[dict[str, Any]] = [
             ],
             "cooldown_seconds": 300,
             "severity": "info",
+        },
+    },
+    {
+        # The Home/Away use case (#184) as a one-tap rule. Deliberately a
+        # separate starter from "someone at the door" rather than a mode
+        # gate on it: the plain version is the first alert a new household
+        # sees, and it has to fire while they are standing there testing it.
+        "key": "someone-at-the-door-while-out",
+        "title": "Tell me about people at the door only while we're out",
+        "blurb": "Quiet while someone is home. Armed the moment you set the house to Away or Night.",
+        "icon": "person",
+        "needs_camera": True,
+        "rule": {
+            "name": "Someone at the door while we're out",
+            "enabled": True,
+            "trigger_pattern": {"type": "object_detected", "label": "person"},
+            "conditions": {"modes": ["away", "night"]},
+            "actions": [
+                {
+                    "type": "notify",
+                    "message": "Someone is at {camera_name} and nobody is home",
+                    "include_thumbnail": True,
+                }
+            ],
+            "cooldown_seconds": 300,
+            "severity": "alert",
         },
     },
     {

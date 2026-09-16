@@ -130,7 +130,9 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
         "description": (
             "Bootstrap orientation. Returns every accessible camera with "
             "its last-observation timestamp, every named Person with "
-            "their last-seen-at, and any Journey still active right now. "
+            "their last-seen-at, any Journey still active right now, and "
+            "the household mode (home, away or night). Rules can be gated "
+            "on mode, so check it before explaining a missing alert. "
             "Cheap; safe to call on the first turn of most questions so "
             "you have grounding before deciding which tool to call next."
         ),
