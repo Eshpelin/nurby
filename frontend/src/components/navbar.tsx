@@ -7,15 +7,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useWebSocket } from "@/lib/ws";
+import { useWorkerHealth } from "@/lib/useWorkerHealth";
+import { computeSystemStatus } from "@/lib/systemStatus";
+import { SystemStatusPill } from "./dashboard/SystemStatus";
 import { NotificationItem, NotificationsDropdown } from "./notifications";
 import { SecureAccountModal } from "./SecureAccountModal";
 import { MegaNav, MegaNavMobile } from "./MegaNav";
-
-interface ProviderInfo {
-  name: string;
-  kind: string;
-  active: boolean;
-}
 
 function SunIcon() {
   return (
@@ -69,35 +66,6 @@ function getInitials(name: string | null | undefined): string {
     .slice(0, 2);
 }
 
-/**
- * Live WebSocket status. Stays silent while connected (the healthy case is
- * no chrome) and only surfaces a dot + label when the relay is connecting,
- * reconnecting, or down, so a paused live feed reads as paused, not broken.
- * Mirrors the AI-health badge dot pattern next to it.
- */
-function LiveStatusBadge() {
-  const { status } = useWebSocket();
-  if (status === "connected") return null;
-
-  const reconnecting = status === "reconnecting" || status === "connecting";
-  const dot = reconnecting ? "bg-yellow-500 pulse-dot" : "bg-red-500 pulse-dot";
-  const label = reconnecting ? "reconnecting…" : "live offline";
-  const title = reconnecting
-    ? "Live feed paused. Reconnecting to the camera relay."
-    : "Live feed disconnected. No real-time updates right now.";
-
-  return (
-    <span
-      title={title}
-      role="status"
-      aria-live="polite"
-      className={`flex items-center gap-2 text-xs ${reconnecting ? "text-yellow-500" : "text-red-400"}`}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-      <span className="font-mono hidden md:inline">{label}</span>
-    </span>
-  );
-}
 
 export function Navbar() {
   const pathname = usePathname();
@@ -114,7 +82,8 @@ export function Navbar() {
     }
   }, [isGuardian, pathname, router]);
   const { resolvedTheme, setTheme } = useTheme();
-  const [provider, setProvider] = useState<ProviderInfo | null>(null);
+  const { status: wsStatus } = useWebSocket();
+  const { down: workersDown, degraded } = useWorkerHealth();
   const [vlmHealth, setVlmHealth] = useState<{
     configured: boolean; reachable: boolean; name?: string | null;
     kind?: string | null; message?: string | null;
@@ -141,12 +110,6 @@ export function Navbar() {
 
   const fetchProvider = useCallback(async () => {
     try {
-      const res = await authFetch("/api/providers");
-      if (res.ok) {
-        const list: ProviderInfo[] = await res.json();
-        const active = list.find((p) => p.active) || null;
-        setProvider(active);
-      }
       // Reachability. distinguishes "configured" from "actually working".
       const h = await authFetch("/api/providers/health");
       if (h.ok) setVlmHealth(await h.json());
@@ -316,38 +279,18 @@ export function Navbar() {
 
           {/* Live relay status. Quiet when connected; shows reconnecting /
               offline so a stale live view reads as paused, not broken. */}
-          <LiveStatusBadge />
-
-          {(() => {
-            const offline = vlmHealth ? (vlmHealth.configured && !vlmHealth.reachable) : false;
-            const missing = vlmHealth ? !vlmHealth.configured : !provider;
-            const dot = offline ? "bg-red-500 pulse-dot" : missing ? "bg-yellow-500" : "bg-green-500 pulse-dot";
-            const label = offline
-              ? "AI offline"
-              : missing
-                ? "AI optional"
-                : provider ? `${provider.kind} / ${provider.name}` : "AI ready";
-            const title = vlmHealth?.message
-              || (offline
-                ? "The configured AI model is unreachable."
-                : missing
-                  ? "AI optional — set up to enable scene descriptions & Ask Nurby. Detection, recording, and alerts work without it."
-                  : "AI model is reachable.");
-            return (
-              <Link
-                href="/settings"
-                title={title}
-                className={`flex items-center gap-2 text-xs transition-colors ${offline ? "text-red-400 hover:text-red-300" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                {loaded && (
-                  <>
-                    <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-                    <span className="font-mono hidden md:inline">{label}</span>
-                  </>
-                )}
-              </Link>
-            );
-          })()}
+          {/* One consolidated system-status pill: worst of workers /
+              AI / live-relay / degraded, or a quiet "All systems live". */}
+          {loaded && (
+            <SystemStatusPill
+              status={computeSystemStatus({
+                workersDown,
+                degraded,
+                wsStatus,
+                aiOffline: vlmHealth ? vlmHealth.configured && !vlmHealth.reachable : false,
+              })}
+            />
+          )}
 
           {/* Theme toggle */}
           <button
