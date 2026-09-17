@@ -678,11 +678,34 @@ async def _execute_notify(action, observation_data, rule, event_id, ctx):
     if title_text:
         notification["title"] = title_text
 
+    delivered = False
     try:
         await broadcast(notification)
         await _update_event_status(event_id, "notify", "success")
+        delivered = True
     except Exception as exc:
         await _update_event_status(event_id, "notify", "failed", str(exc))
+
+    # Stamp the delivery and advance any verified-activation milestone that
+    # tracks this rule (#193). Best-effort; never breaks the action path.
+    try:
+        from shared.activation_recorder import record_event_for_activation
+
+        async with async_session() as db:
+            if delivered:
+                notif = await db.get(Notification, uuid.UUID(notif_id))
+                if notif is not None:
+                    notif.delivered_at = datetime.now(timezone.utc)
+                    await db.commit()
+            await record_event_for_activation(
+                db,
+                rule_id=rule.id,
+                camera_id=observation_data.get("camera_id"),
+                event_id=event_id,
+                delivered=delivered,
+            )
+    except Exception:
+        logger.exception("Activation recording failed for rule '%s'", rule.name)
 
 
 async def _execute_email(action, observation_data, rule, event_id, ctx):

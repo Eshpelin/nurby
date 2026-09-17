@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { GOALS, goalsForPlace, type Experience, type ExperiencePreferences, type Goal, type Place } from "@/lib/onboarding";
+import { ActivationSteps } from "@/components/ActivationSteps";
+import { DETECTION_GOALS } from "@/lib/activation";
 
 interface Props {
   cameraCount: number;
@@ -172,6 +174,7 @@ export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }:
             <Link href="/timeline" className={button}>Open timeline</Link>
           </div>
           {current.template && <p className="mt-3 text-xs text-muted-foreground">Recommendation saved; monitoring is not verified here. {current.needs} Review your camera, schedule and recipient before enabling a rule, then test a real alert.</p>}
+          {DETECTION_GOALS.has(preferences.goal) && <ActivationSteps goal={preferences.goal} cameraId={null} />}
         </>
       ) : null}
     </section>

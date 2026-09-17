@@ -5,6 +5,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.activation import (
+    DELIVERY_ACTIONS,
+    ActivationList,
+    ActivationView,
+    ConfigureRequest,
+    ConfirmRequest,
+    DraftRuleRequest,
+    compute_activation,
+    starter_key_for_goal,
+)
 from shared.auth import (
     MOBILE_PAIR_TTL_SECONDS,
     create_access_token,
@@ -12,12 +22,14 @@ from shared.auth import (
     decode_mobile_pair_code,
     get_current_user,
     hash_password,
+    require_admin,
     verify_password,
 )
 from shared.config import settings
 from shared.database import get_db
-from shared.models import InviteKey, User, UserCameraAccess
+from shared.models import ActivationMilestone, Camera, InviteKey, Rule, User, UserCameraAccess
 from shared.onboarding import ExperiencePreferences, ExperienceResponse, experience_response
+from shared.rule_starters import starter_rule
 from shared.schemas import (
     AccountClaim,
     AdminSetup,
@@ -287,6 +299,158 @@ async def save_experience(
     current_user.onboarding_preferences = body.model_dump()
     await db.commit()
     return experience_response(current_user)
+
+
+# ── Verified first useful result (#193 / #204 phase 2) ───────────────
+#
+# Activation is installation work, so these endpoints are admin-only.
+# Saving a preference or scaffolding a draft never claims activation:
+# only a real, delivered event the person confirmed marks it verified.
+
+
+def _milestone_view(m: ActivationMilestone) -> ActivationView:
+    return compute_activation(
+        goal=m.goal,
+        rule_id=str(m.rule_id) if m.rule_id else None,
+        camera_id=str(m.camera_id) if m.camera_id else None,
+        draft_rule_id=str(m.draft_rule_id) if m.draft_rule_id else None,
+        configured_at=m.configured_at,
+        tested_at=m.tested_at,
+        confirmed_useful_at=m.confirmed_useful_at,
+        test_kind=m.test_kind,
+        delivery_ok=m.delivery_ok,
+        install_ready_at=m.install_ready_at,
+    )
+
+
+async def _get_milestone(db: AsyncSession, user: User, goal: str) -> ActivationMilestone | None:
+    result = await db.execute(
+        select(ActivationMilestone).where(
+            ActivationMilestone.user_id == user.id, ActivationMilestone.goal == goal
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+@router.get("/me/activation", response_model=ActivationList)
+async def list_activation(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Every activation milestone this user is pursuing, resumable across
+    sessions and devices."""
+    result = await db.execute(
+        select(ActivationMilestone).where(ActivationMilestone.user_id == current_user.id)
+    )
+    return ActivationList(milestones=[_milestone_view(m) for m in result.scalars().all()])
+
+
+@router.post("/me/activation/draft-rule", response_model=ActivationView)
+async def scaffold_draft_rule(
+    body: DraftRuleRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Scaffold a DISABLED draft rule for a goal. The user reviews and
+    enables it; it never fires until they do."""
+    key = starter_key_for_goal(body.goal)
+    if key is None:
+        raise HTTPException(status_code=400, detail=f"Goal {body.goal!r} has no rule to scaffold")
+    payload = starter_rule(key, body.camera_id)
+    if payload is None:  # pragma: no cover - map and starters kept in sync
+        raise HTTPException(status_code=404, detail=f"Unknown starter for goal {body.goal!r}")
+    # The whole point: created off, so a saved preference never arms a rule.
+    payload["enabled"] = False
+    rule = Rule(**payload)
+    db.add(rule)
+    await db.commit()
+    await db.refresh(rule)
+
+    milestone = await _get_milestone(db, current_user, body.goal)
+    now = datetime.now(timezone.utc)
+    if milestone is None:
+        milestone = ActivationMilestone(user_id=current_user.id, goal=body.goal, install_ready_at=now)
+        db.add(milestone)
+    milestone.draft_rule_id = rule.id
+    milestone.rule_id = rule.id
+    milestone.camera_id = uuid_or_none(body.camera_id)
+    if milestone.install_ready_at is None:
+        milestone.install_ready_at = now
+    await db.commit()
+    await db.refresh(milestone)
+    return _milestone_view(milestone)
+
+
+@router.post("/me/activation/configure", response_model=ActivationView)
+async def mark_configured(
+    body: ConfigureRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record that a real rule is configured: enabled, on a camera, with a
+    delivery action. This alone is never verified activation."""
+    if starter_key_for_goal(body.goal) is None:
+        raise HTTPException(status_code=400, detail=f"Goal {body.goal!r} has no activation to configure")
+    rule = await db.get(Rule, uuid_or_none(body.rule_id))
+    if rule is None:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    if not rule.enabled:
+        raise HTTPException(status_code=409, detail="Enable the rule before it can be configured")
+    trigger = rule.trigger_pattern or {}
+    camera_id = trigger.get("camera_id")
+    if not camera_id:
+        raise HTTPException(status_code=409, detail="Point the rule at a camera before configuring")
+    actions = rule.actions or []
+    if not any(isinstance(a, dict) and a.get("type") in DELIVERY_ACTIONS for a in actions):
+        raise HTTPException(status_code=409, detail="Add a delivery action so the alert can reach you")
+
+    milestone = await _get_milestone(db, current_user, body.goal)
+    now = datetime.now(timezone.utc)
+    if milestone is None:
+        milestone = ActivationMilestone(user_id=current_user.id, goal=body.goal, install_ready_at=now)
+        db.add(milestone)
+    milestone.rule_id = rule.id
+    milestone.camera_id = uuid_or_none(camera_id)
+    if milestone.configured_at is None:
+        milestone.configured_at = now
+    if milestone.install_ready_at is None:
+        milestone.install_ready_at = now
+    await db.commit()
+    await db.refresh(milestone)
+    return _milestone_view(milestone)
+
+
+@router.post("/me/activation/confirm", response_model=ActivationView)
+async def confirm_useful(
+    body: ConfirmRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """The person confirms they opened the exact clip and it was useful.
+
+    Requires a delivered test event first: confirmation without a real
+    delivery cannot stand in for verified activation.
+    """
+    milestone = await _get_milestone(db, current_user, body.goal)
+    if milestone is None:
+        raise HTTPException(status_code=404, detail="Nothing to confirm for this goal yet")
+    if milestone.tested_at is None or milestone.delivery_ok is not True:
+        raise HTTPException(status_code=409, detail="No delivered test event yet. Trigger the camera and wait for the alert")
+    milestone.confirmed_useful_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(milestone)
+    return _milestone_view(milestone)
+
+
+def uuid_or_none(value):
+    import uuid as _uuid
+
+    if value is None or isinstance(value, _uuid.UUID):
+        return value
+    try:
+        return _uuid.UUID(str(value))
+    except (ValueError, AttributeError):
+        return None
 
 
 # ── Mobile QR pairing ────────────────────────────────────────────────
