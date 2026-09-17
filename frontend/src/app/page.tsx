@@ -1919,6 +1919,8 @@ function DashboardContent() {
                               audioCaptureId={tx.audio_capture_id}
                               language={tx.language}
                               provider={tx.provider}
+                              speakerName={tx.speaker_name}
+                              speakerSource={tx.speaker_source}
                             />
                           );
                         }

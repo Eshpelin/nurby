@@ -167,6 +167,9 @@ export interface Transcript {
   text: string;
   language: string | null;
   provider: string;
+  speaker_person_id?: string | null;
+  speaker_name?: string | null;
+  speaker_source?: string | null;
 }
 
 export interface Summary {
