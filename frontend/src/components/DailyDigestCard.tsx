@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
-import { formatDateTime, formatWith } from "@/lib/time";
+import { formatDateTime } from "@/lib/time";
 
 interface Visitor {
   name: string;
@@ -59,14 +59,14 @@ export function DailyDigestCard() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   // The brief sits above everything else on the dashboard, so it defaults to a
-  // condensed form (a couple of lines + the top few events) and remembers being
-  // collapsed. Otherwise it pushed the camera wall below the fold on every load.
+  // single collapsed line (headline count only) and remembers when a user opens
+  // it. A big expanded block pushed the camera wall below the fold on every load.
   const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
+    if (typeof window === "undefined") return true;
     try {
-      return window.localStorage.getItem(BRIEF_COLLAPSED_KEY) === "1";
+      return window.localStorage.getItem(BRIEF_COLLAPSED_KEY) !== "0";
     } catch {
-      return false;
+      return true;
     }
   });
   const [showAll, setShowAll] = useState(false);
@@ -126,23 +126,20 @@ export function DailyDigestCard() {
 
   const f = digest.facts || {};
   const bullets = buildBullets(f);
-  const start = new Date(digest.window_start);
-  const end = new Date(digest.window_end);
+  const notableCount = f.notable_count ?? f.notable_events?.length ?? bullets.length;
 
   return (
-    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+    <div className={`rounded-lg border overflow-hidden ${collapsed ? "border-border bg-card" : "border-amber-500/30 bg-amber-500/5"}`}>
       <button
         type="button"
         onClick={toggleCollapsed}
-        className="w-full px-3 py-1.5 flex items-center gap-2 text-left"
+        className="w-full px-3 py-2 flex items-center gap-2 text-left"
       >
-        <SunIcon className="w-4 h-4 text-amber-400" />
-        <span className="text-xs font-medium uppercase tracking-wider text-amber-300">
-          Morning recap
-        </span>
-        <span className="text-[10px] text-muted-foreground font-mono">
-          {formatWith(start, { year: "numeric", month: "numeric", day: "numeric" })} {formatWith(start, {hour:"2-digit",minute:"2-digit"})} → {formatWith(end, { year: "numeric", month: "numeric", day: "numeric" }) !== formatWith(start, { year: "numeric", month: "numeric", day: "numeric" }) ? `${formatWith(end, { year: "numeric", month: "numeric", day: "numeric" })} ` : ""}{formatWith(end, {hour:"2-digit",minute:"2-digit"})}
-        </span>
+        <SunIcon className="w-4 h-4 text-amber-400 flex-shrink-0" />
+        <span className="text-sm font-medium">Morning recap</span>
+        {notableCount > 0 && (
+          <span className="text-xs text-muted-foreground">· {notableCount} event{notableCount === 1 ? "" : "s"} overnight</span>
+        )}
         <ChevronIcon
           className={`ml-auto w-3.5 h-3.5 text-muted-foreground transition-transform ${
             collapsed ? "-rotate-90" : ""
