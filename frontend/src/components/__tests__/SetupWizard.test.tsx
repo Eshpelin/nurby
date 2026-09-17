@@ -70,7 +70,7 @@ describe("SetupWizard", () => {
 
   it("confirms the clip and lands on the verified done screen", async () => {
     let confirmed = false;
-    const milestone = (c: boolean) => ({ goal: "entrance", steps: steps(true, true, c), verified: c, next_step: c ? null : "confirmed", test_kind: "real", seconds_to_first_useful: c ? 240 : null, rule_id: "r1", camera_id: null, draft_rule_id: "d1" });
+    const milestone = (c: boolean) => ({ goal: "entrance", event_id: "e1", steps: steps(true, true, c), verified: c, next_step: c ? null : "confirmed", test_kind: "real", seconds_to_first_useful: c ? 240 : null, rule_id: "r1", camera_id: null, draft_rule_id: "d1" });
     mocks.fetch.mockImplementation(router(
       { preferences: { version: 1, place: "home", goal: "entrance", focus: "daily" }, audience: "administrator" },
       () => ({ milestones: [milestone(confirmed)] }),

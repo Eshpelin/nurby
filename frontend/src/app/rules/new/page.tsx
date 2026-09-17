@@ -10,7 +10,7 @@ import type { Rule } from "@/components/rules/types";
 
 // sessionStorage key used to hand a synthetic (non-persisted) rule to
 // the create page for the Duplicate and persona-template flows.
-export const RULE_PREFILL_KEY = "nurby_rule_prefill";
+import { RULE_PREFILL_KEY } from "@/lib/rule-prefill";
 
 export default function NewRulePage() {
   const router = useRouter();

@@ -12,6 +12,8 @@ from shared.activation import (
     ConfigureRequest,
     ConfirmRequest,
     DraftRuleRequest,
+    RetestRequest,
+    clear_activation_test,
     compute_activation,
     starter_key_for_goal,
 )
@@ -34,7 +36,7 @@ from shared.auth import (
 )
 from shared.config import settings
 from shared.database import get_db
-from shared.models import ActivationMilestone, InviteKey, Rule, User, UserCameraAccess
+from shared.models import ActivationMilestone, Event, InviteKey, Recording, Rule, User, UserCameraAccess
 from shared.onboarding import ExperiencePreferences, ExperienceResponse, experience_response
 from shared.rule_starters import starter_rule
 from shared.schemas import (
@@ -318,6 +320,7 @@ async def save_experience(
 def _milestone_view(m: ActivationMilestone) -> ActivationView:
     return compute_activation(
         goal=m.goal,
+        event_id=str(m.event_id) if getattr(m, "event_id", None) else None,
         rule_id=str(m.rule_id) if m.rule_id else None,
         camera_id=str(m.camera_id) if m.camera_id else None,
         draft_rule_id=str(m.draft_rule_id) if m.draft_rule_id else None,
@@ -334,7 +337,7 @@ async def _get_milestone(db: AsyncSession, user: User, goal: str) -> ActivationM
     result = await db.execute(
         select(ActivationMilestone).where(
             ActivationMilestone.user_id == user.id, ActivationMilestone.goal == goal
-        )
+        ).with_for_update()
     )
     return result.scalar_one_or_none()
 
@@ -379,6 +382,8 @@ async def scaffold_draft_rule(
         milestone = ActivationMilestone(user_id=current_user.id, goal=body.goal, install_ready_at=now)
         db.add(milestone)
     milestone.draft_rule_id = rule.id
+    clear_activation_test(milestone)
+    milestone.configured_at = None
     milestone.rule_id = rule.id
     milestone.camera_id = uuid_or_none(body.camera_id)
     if milestone.install_ready_at is None:
@@ -416,6 +421,9 @@ async def mark_configured(
     if milestone is None:
         milestone = ActivationMilestone(user_id=current_user.id, goal=body.goal, install_ready_at=now)
         db.add(milestone)
+    if milestone.rule_id != rule.id or milestone.camera_id != uuid_or_none(camera_id):
+        clear_activation_test(milestone)
+        milestone.configured_at = None
     milestone.rule_id = rule.id
     milestone.camera_id = uuid_or_none(camera_id)
     if milestone.configured_at is None:
@@ -424,6 +432,53 @@ async def mark_configured(
         milestone.install_ready_at = now
     await db.commit()
     await db.refresh(milestone)
+    return _milestone_view(milestone)
+
+
+async def _activation_evidence(db: AsyncSession, milestone: ActivationMilestone):
+    """Resolve only the recorded event and its own recording, never a generic feed."""
+    if (milestone.configured_at is None or milestone.tested_at is None
+            or milestone.delivery_ok is not True or not milestone.event_id):
+        raise HTTPException(status_code=409, detail="No delivered test event yet. Trigger the camera and wait for the alert")
+    event = await db.get(Event, milestone.event_id)
+    if event is None or event.rule_id != milestone.rule_id or event.camera_id != milestone.camera_id:
+        raise HTTPException(status_code=409, detail="Test evidence no longer matches this setup. Start a new test")
+    recording = await db.get(Recording, event.recording_id) if event.recording_id else None
+    if recording is None or recording.camera_id != milestone.camera_id:
+        raise HTTPException(status_code=409, detail="No recording is available for this test. Check recording and start a new test")
+    from services.api.routes.recordings import _get_disk_path_or_404
+    _get_disk_path_or_404(recording)
+    return event, recording
+
+
+@router.get("/me/activation/evidence")
+async def get_activation_evidence(
+    goal: str,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    milestone = await _get_milestone(db, current_user, goal)
+    if milestone is None:
+        raise HTTPException(status_code=404, detail="Nothing to review for this goal yet")
+    event, recording = await _activation_evidence(db, milestone)
+    offset = max(0.0, (event.fired_at - recording.started_at).total_seconds())
+    # Processing can finish after the recording ends; don't seek beyond it.
+    if recording.duration_seconds and offset >= recording.duration_seconds:
+        offset = 0.0
+    return {"event_id": str(event.id), "recording_id": str(recording.id), "seek_seconds": offset}
+
+
+@router.post("/me/activation/retest", response_model=ActivationView)
+async def restart_activation_test(
+    body: RetestRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    milestone = await _get_milestone(db, current_user, body.goal)
+    if milestone is None:
+        raise HTTPException(status_code=404, detail="No configured goal to test")
+    clear_activation_test(milestone)
+    await db.commit()
     return _milestone_view(milestone)
 
 
@@ -443,7 +498,11 @@ async def confirm_useful(
         raise HTTPException(status_code=404, detail="Nothing to confirm for this goal yet")
     if milestone.tested_at is None or milestone.delivery_ok is not True:
         raise HTTPException(status_code=409, detail="No delivered test event yet. Trigger the camera and wait for the alert")
-    milestone.confirmed_useful_at = datetime.now(timezone.utc)
+    if body.event_id != milestone.event_id:
+        raise HTTPException(status_code=409, detail="The test event changed. Review its evidence again")
+    await _activation_evidence(db, milestone)
+    if milestone.confirmed_useful_at is None:
+        milestone.confirmed_useful_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(milestone)
     return _milestone_view(milestone)

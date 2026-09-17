@@ -372,11 +372,17 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
         <h3 className="text-lg font-semibold tracking-tight">Confirm the clip</h3>
         <p className="mt-1 text-sm text-muted-foreground">Open the alert&apos;s clip and check it shows what you needed to see. Then confirm it below.</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/timeline" className={btn}>Open the timeline</Link>
+          <Link href="/timeline" className={btn}>Open the alert clip</Link>
         </div>
         <div className="mt-5 flex items-center gap-2">
-          <button className={primary} disabled={busy}
-            onClick={async () => { const ok = await call("/api/auth/me/activation/confirm", { goal: prefs?.goal }, "You need a delivered test event first."); if (ok) goto("done"); }}>
+          <button className={primary} disabled={busy || !view?.event_id}
+            onClick={async () => {
+              if (!view?.event_id) return;
+              // Confirm names the exact event that was tested, so a later
+              // event can't silently satisfy an old confirmation.
+              const ok = await call("/api/auth/me/activation/confirm", { goal: prefs?.goal, event_id: view.event_id }, "The test event changed. Review its evidence again.");
+              if (ok) goto("done");
+            }}>
             {busy ? "Confirming…" : "I opened the clip, it was useful"}
           </button>
           <button className={btn} disabled={busy} onClick={() => goto("test")}>Back</button>

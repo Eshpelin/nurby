@@ -12,6 +12,7 @@ export interface ActivationStepView {
 
 export interface ActivationView {
   goal: string;
+  event_id?: string | null;
   rule_id: string | null;
   camera_id: string | null;
   draft_rule_id: string | null;
