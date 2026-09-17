@@ -155,6 +155,44 @@ class GuardianEvent(Base):
     # For pickups: was the escort on the approved list, and who.
     pickup_matched: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     pickup_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Evidence state of a pickup event, distinct from a staff-confirmed handover.
+    # One of: possible | approved_match | confirmed | corrected. A camera-only
+    # inference is never "confirmed"; only an explicit staff action sets that.
+    # See services.guardian.handover for the state contract.
+    handover_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class GuardianHandoverConfirmation(Base):
+    """Append-only audit of staff confirmations and corrections on a pickup.
+
+    A camera inference (co-presence or a plate match) is never a completed
+    handover. An authorized staff member confirms or corrects it here; each
+    action records who, when, and the evidence they relied on. Corrections
+    append a new row rather than overwriting, so the history is preserved
+    (issue #191). The current state also lives denormalized on
+    ``GuardianEvent.handover_state`` for cheap reads; this table is the trail.
+    """
+
+    __tablename__ = "guardian_handover_confirmations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("guardian_events.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    person_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("persons.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # confirmed | corrected
+    decision: Mapped[str] = mapped_column(String(16), nullable=False)
+    # The state the event held before this action, so a correction can be read.
+    prior_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    confirmed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Free-form record of what the staff member relied on (clip id, plate, note).
+    evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 

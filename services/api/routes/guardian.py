@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.guardian import alerts as alerts_mod
 from services.guardian import entitlements as ent
+from services.guardian import handover as handover_mod
 from services.guardian import presence as presence_mod
 from shared.app_settings import get_setting
 from shared.auth import decode_access_token, get_current_user, require_admin
@@ -33,6 +34,8 @@ from shared.models import (
     Camera,
     Facility,
     GuardianAccessLog,
+    GuardianEvent,
+    GuardianHandoverConfirmation,
     GuardianLink,
     Observation,
     Person,
@@ -48,9 +51,12 @@ from shared.schemas import (
     GuardianAccessLogResponse,
     GuardianAlertPrefsUpdate,
     GuardianChannelsUpdate,
+    GuardianHandoverResponse,
     GuardianLinkCreate,
     GuardianLinkResponse,
     GuardianLinkUpdate,
+    HandoverConfirmationResponse,
+    HandoverConfirmRequest,
 )
 
 router = APIRouter()
@@ -793,8 +799,11 @@ async def link_events(
             .limit(limit)
         )
     ).scalars().all()
-    items = [
-        {
+    def _item(e):
+        state = handover_mod.normalize_state(
+            getattr(e, "handover_state", None), e.pickup_matched
+        ) if e.kind == "picked_up" else None
+        return {
             "id": str(e.id),
             "kind": e.kind,
             # Older stored pickup messages used definite handover wording.
@@ -802,19 +811,24 @@ async def link_events(
             "message": alerts_mod.compose_message(
                 "picked_up", person.nickname or person.display_name,
                 approved_name=e.pickup_name, pickup_matched=e.pickup_matched,
+                handover_state=state,
             ) if e.kind == "picked_up" else e.message,
             "severity": e.severity,
             "zone": e.zone,
             "at": e.at.isoformat(),
             "pickup_matched": e.pickup_matched,
             "pickup_name": e.pickup_name,
+            # Distinct evidence state so a client never presents an inferred
+            # pickup as a confirmed handover (issue #191).
+            "handover_state": state,
+            "handover_state_label": handover_mod.STATE_LABELS[state] if state else None,
+            "staff_confirmed": handover_mod.is_staff_confirmed(state),
             "pickup_evidence": (
                 "approved_entry_matched" if e.pickup_matched else "possible_pickup"
             ) if e.kind == "picked_up" else None,
         }
-        for e in rows
-        if ent.alert_enabled(link, e.kind)
-    ]
+
+    items = [_item(e) for e in rows if ent.alert_enabled(link, e.kind)]
     last_pickup = next((i for i in items if i["kind"] == "picked_up"), None)
     await _log(db, link, "timeline", request, {"events": len(items)})
     return {
@@ -1381,6 +1395,102 @@ async def delete_pickup(
     await db.delete(pickup)
     await db.commit()
     return {"deleted": True}
+
+
+# ── staff handover confirmation (inferred vs confirmed, issue #191) ───
+
+
+async def _handover_view(db, event: GuardianEvent) -> GuardianHandoverResponse:
+    """Build the current handover state plus the full, append-only trail."""
+    state = handover_mod.normalize_state(event.handover_state, event.pickup_matched)
+    person = await db.get(Person, event.person_id)
+    display = (
+        (getattr(person, "nickname", None) or getattr(person, "display_name", None))
+        if person
+        else "your dependant"
+    )
+    history = (
+        await db.execute(
+            select(GuardianHandoverConfirmation)
+            .where(GuardianHandoverConfirmation.event_id == event.id)
+            .order_by(GuardianHandoverConfirmation.at.asc())
+        )
+    ).scalars().all()
+    return GuardianHandoverResponse(
+        event_id=event.id,
+        kind=event.kind,
+        handover_state=state,
+        handover_state_label=handover_mod.STATE_LABELS[state],
+        staff_confirmed=handover_mod.is_staff_confirmed(state),
+        pickup_matched=event.pickup_matched,
+        pickup_name=event.pickup_name,
+        message=alerts_mod.compose_message(
+            "picked_up", display,
+            approved_name=event.pickup_name, pickup_matched=event.pickup_matched,
+            handover_state=state,
+        ),
+        history=[HandoverConfirmationResponse.model_validate(h) for h in history],
+    )
+
+
+@router.get("/events/{event_id}/handover", response_model=GuardianHandoverResponse)
+async def get_handover(
+    event_id: uuid.UUID,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """The pickup event's current evidence state and its confirmation history."""
+    event = await db.get(GuardianEvent, event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="Guardian event not found")
+    if event.kind != "picked_up":
+        raise HTTPException(status_code=400, detail="This event is not a pickup")
+    return await _handover_view(db, event)
+
+
+@router.post("/events/{event_id}/handover", response_model=GuardianHandoverResponse)
+async def confirm_handover(
+    event_id: uuid.UUID,
+    body: HandoverConfirmRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record an authorized staff decision on an inferred pickup.
+
+    This is the only path to a staff-confirmed handover. Nothing auto-confirms:
+    a co-presence or a plate match alone can never reach the ``confirmed`` state.
+    Each decision appends an audit row (who, when, prior state, evidence); a
+    correction never erases the earlier decision, it adds a new one.
+    """
+    event = await db.get(GuardianEvent, event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="Guardian event not found")
+    if event.kind != "picked_up":
+        raise HTTPException(status_code=400, detail="Only a pickup event can be confirmed")
+
+    prior = handover_mod.normalize_state(event.handover_state, event.pickup_matched)
+    try:
+        new_state = handover_mod.apply_decision(body.decision)
+    except ValueError as exc:  # pragma: no cover - guarded by schema pattern
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    db.add(
+        GuardianHandoverConfirmation(
+            id=uuid.uuid4(),
+            event_id=event.id,
+            person_id=event.person_id,
+            decision=new_state,
+            prior_state=prior,
+            confirmed_by_user_id=admin.id,
+            evidence=body.evidence,
+            note=body.note,
+            at=datetime.now(timezone.utc),
+        )
+    )
+    event.handover_state = new_state
+    await db.commit()
+    await db.refresh(event)
+    return await _handover_view(db, event)
 
 
 @router.get("/access-log", response_model=list[GuardianAccessLogResponse])

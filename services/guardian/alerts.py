@@ -80,22 +80,38 @@ def severity_for(kind: str, pickup_matched: bool | None = None) -> str:
 
 def compose_message(kind: str, display_name: str, *, zone: str | None = None,
                     approved_name: str | None = None, pickup_matched: bool | None = None,
-                    minutes: int | None = None) -> str:
-    """Plain-language, calm alert text. No alarmism."""
+                    handover_state: str | None = None, minutes: int | None = None) -> str:
+    """Plain-language, calm alert text. No alarmism.
+
+    For a pickup, the wording follows the evidence state (see
+    ``services.guardian.handover``). A camera inference always says the handover
+    has not been confirmed; only a staff-confirmed state says otherwise.
+    """
     where = f" at {zone}" if zone else ""
     if kind == "arrived":
         return f"{display_name} arrived{where}."
     if kind == "departed":
         return f"{display_name} left{where}."
     if kind == "picked_up":
-        if pickup_matched and approved_name:
+        from services.guardian import handover as ho
+
+        state = ho.normalize_state(handover_state, pickup_matched)
+        if state == ho.CONFIRMED:
+            by = f" Handover confirmed with {approved_name}." if approved_name else ""
+            return f"Pickup confirmed by staff for {display_name}.{by}"
+        if state == ho.CORRECTED:
+            return (
+                f"An earlier possible pickup for {display_name} was corrected by staff. "
+                "No confirmed handover was recorded."
+            )
+        if state == ho.APPROVED_MATCH and approved_name:
             return (
                 f"Possible pickup for {display_name}: nearby person or vehicle matches {approved_name}'s "
-                "approved-pickup entry. Handover has not been confirmed."
+                "approved-pickup entry. Handover has not been confirmed by staff."
             )
         return (
             f"Possible pickup for {display_name}: nearby person or vehicle did not match the approved-pickup list. "
-            "Handover has not been confirmed. Please check with the facility."
+            "Handover has not been confirmed by staff. Please check with the facility."
         )
     if kind == "entered_zone":
         return f"{display_name} entered {zone or 'a monitored area'}."
@@ -173,6 +189,13 @@ async def emit(
     try:
         from shared.models import GuardianEvent
 
+        # A pickup event is born inferred, never confirmed. Staff confirmation
+        # is a separate, explicit action (see routes.guardian handover endpoints).
+        handover_state = None
+        if kind == "picked_up":
+            from services.guardian import handover as ho
+
+            handover_state = ho.inferred_state(matched)
         db.add(
             GuardianEvent(
                 person_id=person.id,
@@ -184,6 +207,7 @@ async def emit(
                 observation_id=observation_id,
                 pickup_matched=matched,
                 pickup_name=(pickup or {}).get("approved_name"),
+                handover_state=handover_state,
             )
         )
     except Exception:  # noqa: BLE001

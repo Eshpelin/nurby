@@ -35,6 +35,33 @@ export interface GuardianEvent {
   at: string;
   pickup_matched: boolean | null;
   pickup_name: string | null;
+  // Evidence state of a pickup, distinct from a staff-confirmed handover (#191).
+  // possible | approved_match | confirmed | corrected. Null for non-pickups.
+  handover_state?: HandoverState | null;
+  handover_state_label?: string | null;
+  staff_confirmed?: boolean;
+}
+
+export type HandoverState =
+  | "possible"
+  | "approved_match"
+  | "confirmed"
+  | "corrected";
+
+// UI words per evidence state. A camera inference is never "confirmed".
+export const HANDOVER_LABELS: Record<HandoverState, string> = {
+  possible: "Possible pickup detected",
+  approved_match: "Approved person/vehicle matched",
+  confirmed: "Pickup confirmed by staff",
+  corrected: "Correction: not a confirmed handover",
+};
+
+// True only when authorized staff explicitly confirmed the handover.
+export function isStaffConfirmed(e: {
+  handover_state?: HandoverState | null;
+  staff_confirmed?: boolean;
+}): boolean {
+  return e.staff_confirmed === true || e.handover_state === "confirmed";
 }
 
 export const EVENT_META: Record<string, { label: string; dot: string }> = {

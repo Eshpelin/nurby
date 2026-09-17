@@ -7,8 +7,8 @@ Split out of the single ``schemas.py``; import from
 
 import uuid
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # ── Guardian by Nurby schemas ──
 
@@ -121,6 +121,45 @@ class ApprovedPickupResponse(BaseModel):
     active: bool
     created_at: datetime
     model_config = {"from_attributes": True}
+
+
+class HandoverConfirmRequest(BaseModel):
+    """An authorized staff decision on an inferred pickup event.
+
+    ``decision`` is ``confirmed`` (an authorized guardian did take custody) or
+    ``corrected`` (review found this was not a valid handover). Nothing here
+    auto-confirms; the endpoint requires an admin and records who and when.
+    """
+
+    decision: str = Field(pattern=r"^(confirmed|corrected)$")
+    note: str | None = Field(default=None, max_length=1000)
+    evidence: dict | None = None
+
+
+class HandoverConfirmationResponse(BaseModel):
+    id: uuid.UUID
+    event_id: uuid.UUID
+    decision: str
+    prior_state: str | None
+    confirmed_by_user_id: uuid.UUID | None
+    evidence: dict | None
+    note: str | None
+    at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GuardianHandoverResponse(BaseModel):
+    """Current evidence state of a pickup event plus its full decision trail."""
+
+    event_id: uuid.UUID
+    kind: str
+    handover_state: str
+    handover_state_label: str
+    staff_confirmed: bool
+    pickup_matched: bool | None
+    pickup_name: str | None
+    message: str
+    history: list[HandoverConfirmationResponse]
 
 
 class GuardianAccessLogResponse(BaseModel):

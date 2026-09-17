@@ -14,6 +14,9 @@ import {
   DependantStatus,
   EVENT_META,
   GuardianEvent,
+  HANDOVER_LABELS,
+  HandoverState,
+  isStaffConfirmed,
   NOTIFY_CHANNELS,
   stateColor,
   timeAgo,
@@ -494,15 +497,28 @@ function AsOfChip() {
 }
 
 function PickupMomentCard({ event }: { event: GuardianEvent }) {
-  const matched = event.pickup_matched;
+  const state: HandoverState =
+    event.handover_state ?? (event.pickup_matched ? "approved_match" : "possible");
+  const confirmed = isStaffConfirmed(event);
+  const corrected = state === "corrected";
+  // Only a staff-confirmed handover reads green. Everything inferred stays amber.
+  const tone = confirmed
+    ? { border: "border-emerald-800", bg: "bg-emerald-950/20", dot: "bg-emerald-500" }
+    : { border: "border-amber-800", bg: "bg-amber-950/20", dot: "bg-amber-500" };
+  const label = event.handover_state_label ?? HANDOVER_LABELS[state];
+  const footnote = confirmed
+    ? "An authorized staff member confirmed this handover."
+    : corrected
+      ? "Staff reviewed this and recorded no confirmed handover."
+      : "Based on nearby camera sightings. Handover has not been confirmed by staff.";
   return (
-    <div className="mt-4 rounded-lg border p-5 border-amber-800 bg-amber-950/20">
+    <div className={`mt-4 rounded-lg border p-5 ${tone.border} ${tone.bg}`}>
       <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-        <span className="h-2 w-2 rounded-full bg-amber-500" />
-        {matched === true ? "Possible pickup · approved entry matched" : "Possible pickup · needs review"}
+        <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
+        {label}
       </div>
       <div className="mt-1.5 text-lg font-medium">{event.message}</div>
-      <p className="mt-2 text-xs text-muted-foreground">Based on nearby camera sightings. Handover has not been confirmed by staff.</p>
+      <p className="mt-2 text-xs text-muted-foreground">{footnote}</p>
       <div className="mt-1 text-xs text-muted-foreground">
         {clockTime(event.at)} · {dayLabel(event.at)}
       </div>
@@ -535,10 +551,12 @@ function EventTimeline({ events }: { events: GuardianEvent[] }) {
               <div className="relative pl-4 border-l border-border space-y-3">
                 {g.items.map((e) => {
                   const meta = EVENT_META[e.kind] || { label: e.kind, dot: "bg-zinc-500" };
+                  // A staff-confirmed handover reads green; an inferred pickup stays amber.
+                  const dot = e.kind === "picked_up" && isStaffConfirmed(e) ? "bg-emerald-500" : meta.dot;
                   return (
                     <div key={e.id} className="relative">
                       <span
-                        className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ${meta.dot} ring-2 ring-background`}
+                        className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ${dot} ring-2 ring-background`}
                       />
                       <div className="text-sm">{e.message}</div>
                       <div className="text-[11px] text-muted-foreground">{clockTime(e.at)}</div>
