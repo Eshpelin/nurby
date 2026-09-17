@@ -906,10 +906,9 @@ function DashboardContent() {
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
           <div className="flex-1 text-sm">
-            <span className="font-medium">Nurby is getting to know your cameras.</span>{" "}
+            <span className="font-medium">Nurby is learning your cameras.</span>{" "}
             <span className="text-muted-foreground">
-              The first detections appear here within a minute or so as motion, faces,
-              and objects are processed. You can keep setting up rules and people while it learns.
+              First detections appear within a minute. Keep setting up rules and people meanwhile.
             </span>
           </div>
           <button
@@ -958,17 +957,14 @@ function DashboardContent() {
                   {workersDown.join(" and ")} {workersDown.length > 1 ? "are" : "is"} not running.
                 </span>{" "}
                 <span className="text-muted-foreground">
-                  Nothing is being {workersDown.includes("video ingestion") ? "recorded" : "analysed"} right
-                  now, so the timeline stays empty and alerts will not fire — even
-                  though your cameras may be perfectly fine. Run{" "}
+                  Nothing is recorded and no alerts fire until it restarts. Run{" "}
                   <code className="px-1 py-0.5 rounded bg-muted font-mono">
                     docker compose up -d {workersDown.includes("video ingestion") ? "ingestion" : "perception"}
-                  </code>
-                  , or open{" "}
+                  </code>{" "}
+                  or open{" "}
                   <Link href="/settings" className="text-accent hover:underline">
                     System doctor
-                  </Link>{" "}
-                  to see the full picture.
+                  </Link>.
                 </span>
               </div>
             </div>
@@ -1527,22 +1523,16 @@ function DashboardContent() {
                       <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                     </svg>
                   </div>
-                  <h3 className="text-sm font-semibold mb-1">
-                    {workersDown.length > 0 ? "Nothing is running" : "Nothing happened yet"}
-                  </h3>
+                  <h3 className="text-sm font-semibold mb-1">Nothing here yet</h3>
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-4 leading-relaxed">
-                    {/* Worker state first: while a worker is down every camera
-                        looks broken, and telling the user to check stream URLs
-                        and credentials sends them to debug hardware that is
-                        fine. Only blame the camera once we know something is
-                        actually watching it. */}
+                    {/* Don't re-explain a stopped worker here: the status
+                        banner at the top of the page already owns that message.
+                        Only speak to what this empty feed means. */}
                     {workersDown.length > 0
-                      ? `This is not a quiet day: ${workersDown.join(" and ")} ${
-                          workersDown.length > 1 ? "are" : "is"
-                        } not running, so nothing can be detected. Your cameras may be fine.`
+                      ? "Detection is paused (see the notice above). Events resume once it's running."
                       : cameras.some((c) => c.status === "offline")
                       ? "Some cameras are offline. Check their stream URLs or credentials."
-                      : "Cameras are connected and watching. Events will appear here as soon as something moves."}
+                      : "Cameras are watching. Events appear here as soon as something moves."}
                   </p>
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     {activeFilterCount > 0 && (

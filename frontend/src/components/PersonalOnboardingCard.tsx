@@ -25,6 +25,9 @@ export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }:
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [preview, setPreview] = useState(false);
+  // Setup checklist and daily priorities are progressive disclosure: the card
+  // leads with the goal and one action, detail is one click away.
+  const [showSteps, setShowSteps] = useState(false);
   const [draft, setDraft] = useState<ExperiencePreferences>({ version: 1, place: "home", goal: "entrance", focus: "daily" });
   const [retry, setRetry] = useState(0);
 
@@ -171,7 +174,7 @@ export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }:
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs text-muted-foreground">{preferences.focus === "setup" ? "Camera setup and maintenance" : preferences.place === "business" ? "Your business workspace" : preferences.place === "home" ? "Your home workspace" : "Your workspace"}</p>
-              <h2 className="mt-1 font-semibold">{current.title}</h2>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight">{current.title}</h2>
             </div>
             <button className={button} onClick={() => { setDraft(preferences.goal === "explore" ? { ...preferences, place: "home", goal: "entrance" } : preferences); setEditing(true); setPreview(false); setError(null); }}>Change preferences</button>
           </div>
@@ -185,14 +188,24 @@ export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }:
             {current.template && <Link href="/rules" className={button}>Manage existing rules</Link>}
             <Link href="/timeline" className={button}>Open timeline</Link>
           </div>
-          {current.template && <p className="mt-3 text-xs text-muted-foreground">Recommendation saved; monitoring is not verified here. {current.needs} Review your camera, schedule and recipient before enabling a rule, then test a real alert.</p>}
-          {DETECTION_GOALS.has(preferences.goal) && <ActivationSteps goal={preferences.goal} cameraId={null} />}
-          <DailyPriorities
-            key={`${preferences.goal}:${preferences.focus}:${preferences.paused ? 1 : 0}:${preferences.place_label ?? ""}`}
-            paused={!!preferences.paused}
-            pauseBusy={saving}
-            onTogglePause={() => save({ ...preferences, paused: !preferences.paused })}
-          />
+          <button
+            className="mt-4 text-sm font-medium text-accent hover:underline"
+            aria-expanded={showSteps}
+            onClick={() => setShowSteps((s) => !s)}
+          >
+            {showSteps ? "Hide setup & daily steps" : "Show setup & daily steps"}
+          </button>
+          {showSteps && (
+            <>
+              {DETECTION_GOALS.has(preferences.goal) && <ActivationSteps goal={preferences.goal} cameraId={null} />}
+              <DailyPriorities
+                key={`${preferences.goal}:${preferences.focus}:${preferences.paused ? 1 : 0}:${preferences.place_label ?? ""}`}
+                paused={!!preferences.paused}
+                pauseBusy={saving}
+                onTogglePause={() => save({ ...preferences, paused: !preferences.paused })}
+              />
+            </>
+          )}
         </>
       ) : null}
     </section>
