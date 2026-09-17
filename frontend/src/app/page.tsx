@@ -49,6 +49,8 @@ import { CameraSidebarCard } from "@/components/dashboard/CameraSidebarCard";
 import { PersonActivityModal } from "@/components/dashboard/PersonActivityModal";
 import { SEARCH_HINTS } from "@/components/dashboard/search-hints";
 import { AskHintCard, LocalAIHintCard, SecureAccountNudge } from "@/components/dashboard/HintCards";
+import { SystemStatusStrip } from "@/components/dashboard/SystemStatus";
+import { computeSystemStatus } from "@/lib/systemStatus";
 
 // ── Main unified page ──
 
@@ -856,18 +858,26 @@ function DashboardContent() {
   }
 
 
-  // First-run reassurance. A freshly-onboarded user lands on a dashboard
-  // with cameras but no timeline yet, because the first frames take a beat
-  // to process. Without this, an empty dashboard reads as broken. Shown
-  // only while cameras exist, nothing has been detected, and the user has
-  // not dismissed it; it disappears on its own once the first entry lands.
+  // First-run reassurance, for a genuinely new camera only. A freshly-added
+  // camera has no timeline yet because the first frames take a beat to
+  // process. This used to show on ANY empty feed, so it lingered forever on
+  // established installs (an old install browsing a quiet window, or one with
+  // a stopped worker). Now it needs a camera added in the last 15 minutes AND
+  // a healthy pipeline (a stopped worker is the status strip's job, not a
+  // "still learning" nudge), so it self-expires.
+  const hasRecentCamera = cameras.some((c) => {
+    const added = Date.parse(c.created_at);
+    return Number.isFinite(added) && Date.now() - added < 15 * 60 * 1000;
+  });
   const showLearningBanner =
     timelineOpen &&
     !camerasLoading &&
     cameras.length > 0 &&
     entries.length === 0 &&
     !searchActive &&
-    !learningDismissed;
+    !learningDismissed &&
+    workersDown.length === 0 &&
+    hasRecentCamera;
 
   // The feed tile used inside the wall: the same card the sidebar uses, in
   // fill mode so it stretches to its grid cell.
@@ -900,18 +910,12 @@ function DashboardContent() {
       <PipelineDelayWidget />
 
       {showLearningBanner && (
-        <div className="mb-3 flex items-start gap-3 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
-          <svg className="animate-spin h-4 w-4 text-accent mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none">
+        <div className="mb-3 flex items-center gap-2.5 text-xs text-muted-foreground">
+          <svg className="animate-spin h-3.5 w-3.5 text-accent flex-shrink-0" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <div className="flex-1 text-sm">
-            <span className="font-medium">Nurby is getting to know your cameras.</span>{" "}
-            <span className="text-muted-foreground">
-              The first detections appear here within a minute or so as motion, faces,
-              and objects are processed. You can keep setting up rules and people while it learns.
-            </span>
-          </div>
+          <span className="flex-1">Learning your new camera. First detections appear within a minute.</span>
           <button
             type="button"
             onClick={() => {
@@ -919,7 +923,7 @@ function DashboardContent() {
               try { localStorage.setItem("nurby_learning_dismissed", "1"); } catch { /* ignore */ }
             }}
             aria-label="Dismiss"
-            className="text-muted-foreground hover:text-foreground text-lg leading-none flex-shrink-0"
+            className="hover:text-foreground leading-none flex-shrink-0"
           >
             ×
           </button>
@@ -947,61 +951,17 @@ function DashboardContent() {
       <div ref={dashboardWrapRef} className="flex flex-col lg:flex-row gap-4 lg:flex-1 lg:min-h-[50vh] bg-background">
         {/* LEFT. Customizable camera wall (the main area). */}
         <div className="lg:flex-1 min-w-0 flex flex-col lg:min-h-0 lg:overflow-y-auto scrollbar-thin">
-          {/* A stopped worker means nothing is watching, however healthy
-              the cameras look. Say so loudly rather than letting the user
-              read an empty timeline as a quiet day. */}
-          {workersDown.length > 0 && (
-            <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 mb-4 flex items-start gap-2.5">
-              <span className="text-danger text-sm leading-none mt-0.5">⚠</span>
-              <div className="text-xs leading-relaxed">
-                <span className="font-semibold text-danger">
-                  {workersDown.join(" and ")} {workersDown.length > 1 ? "are" : "is"} not running.
-                </span>{" "}
-                <span className="text-muted-foreground">
-                  Nothing is being {workersDown.includes("video ingestion") ? "recorded" : "analysed"} right
-                  now, so the timeline stays empty and alerts will not fire — even
-                  though your cameras may be perfectly fine. Run{" "}
-                  <code className="px-1 py-0.5 rounded bg-muted font-mono">
-                    docker compose up -d {workersDown.includes("video ingestion") ? "ingestion" : "perception"}
-                  </code>
-                  , or open{" "}
-                  <Link href="/settings" className="text-accent hover:underline">
-                    System doctor
-                  </Link>{" "}
-                  to see the full picture.
-                </span>
-              </div>
-            </div>
-          )}
-          {/* Functional degradation: the worker is alive but a pipeline
-              component is broken (model failed to load, writes crashing). The
-              worker-down banner would never catch this, so it is called out
-              separately with the specific component and reason. */}
-          {workersDown.length === 0 && degradedComponents.length > 0 && (
-            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 mb-4 flex items-start gap-2.5">
-              <span className="text-amber-500 text-sm leading-none mt-0.5">⚠</span>
-              <div className="text-xs leading-relaxed">
-                <span className="font-semibold text-amber-500">
-                  {degradedComponents.map((d) => d.label).join(", ")}{" "}
-                  {degradedComponents.length > 1 ? "are" : "is"} degraded.
-                </span>{" "}
-                <span className="text-muted-foreground">
-                  The worker is running, but this part of the pipeline is failing, so
-                  its results will be missing.{" "}
-                  {degradedComponents[0]?.detail && (
-                    <span className="text-muted-foreground/80">
-                      ({degradedComponents[0].detail})
-                    </span>
-                  )}{" "}
-                  Open{" "}
-                  <Link href="/settings" className="text-accent hover:underline">
-                    System doctor
-                  </Link>{" "}
-                  for details.
-                </span>
-              </div>
-            </div>
-          )}
+          {/* One status strip for anything wrong with recording or the
+              pipeline (worker stopped, or a degraded component). Live-relay
+              and AI-offline live in the header pill, not here. */}
+          <SystemStatusStrip
+            status={computeSystemStatus({
+              workersDown,
+              degraded: degradedComponents,
+              wsStatus: "connected",
+              aiOffline: false,
+            })}
+          />
           {user && <PersonalOnboardingCard key={user.id} cameraCount={cameras.length} camerasLoading={camerasLoading} onSetup={() => setShowWizard(true)} />}
           {user?.role === "admin" && (
             <details className="mb-4 rounded-xl border border-border p-3">
@@ -1527,22 +1487,16 @@ function DashboardContent() {
                       <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                     </svg>
                   </div>
-                  <h3 className="text-sm font-semibold mb-1">
-                    {workersDown.length > 0 ? "Nothing is running" : "Nothing happened yet"}
-                  </h3>
+                  <h3 className="text-sm font-semibold mb-1">Nothing here yet</h3>
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-4 leading-relaxed">
-                    {/* Worker state first: while a worker is down every camera
-                        looks broken, and telling the user to check stream URLs
-                        and credentials sends them to debug hardware that is
-                        fine. Only blame the camera once we know something is
-                        actually watching it. */}
+                    {/* Don't re-explain a stopped worker: the status strip at
+                        the top of the page already owns that. Speak only to
+                        what an empty feed means once things are running. */}
                     {workersDown.length > 0
-                      ? `This is not a quiet day: ${workersDown.join(" and ")} ${
-                          workersDown.length > 1 ? "are" : "is"
-                        } not running, so nothing can be detected. Your cameras may be fine.`
+                      ? "Detection is paused (see the notice above). Events resume once it's running."
                       : cameras.some((c) => c.status === "offline")
                       ? "Some cameras are offline. Check their stream URLs or credentials."
-                      : "Cameras are connected and watching. Events will appear here as soon as something moves."}
+                      : "Cameras are watching. Events appear here as soon as something moves."}
                   </p>
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     {activeFilterCount > 0 && (
