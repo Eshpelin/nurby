@@ -1,0 +1,23 @@
+{
+  "id": "ask_ambiguous_unknown",
+  "kind": "ask",
+  "scenario": "ambiguous_face",
+  "source": "authored",
+  "footage": {
+    "hash": "sha256:PLACEHOLDER_ambiguous_09",
+    "source": "sample:front_door_unknown_visitor.mp4",
+    "note": "unfamiliar face, low confidence; footage not committed"
+  },
+  "input": {"question": "Do we know the person at the door just now?"},
+  "prompt": "Do we know the person at the door just now?",
+  "ground_truth": {
+    "event_present": true,
+    "must_include": ["recognize"],
+    "forbidden": ["your neighbor", "it is definitely"],
+    "reference": "I don't recognize this person; the face doesn't match anyone known."
+  },
+  "mock_prediction": {
+    "answer": "I don't recognize this person, and the face doesn't match anyone you've marked as known.",
+    "event_present": true
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "cap_ambiguous_face",
+  "kind": "caption",
+  "scenario": "ambiguous_face",
+  "source": "authored",
+  "footage": {
+    "hash": "sha256:PLACEHOLDER_ambiguous_05",
+    "source": "sample:front_door_hooded_visitor.mp4",
+    "note": "ambiguous/unfamiliar face; footage not committed"
+  },
+  "input": {"camera": "front_door", "window_seconds": 6, "lighting": "dusk", "weather": "clear"},
+  "ground_truth": {
+    "event_present": true,
+    "must_include": ["unfamiliar"],
+    "forbidden": ["known visitor", "recognized"],
+    "reference": "An unfamiliar person whose face is partly hidden approaches the door at dusk."
+  },
+  "mock_prediction": {
+    "caption": "An unfamiliar visitor with a partly obscured face steps up to the front door.",
+    "event_present": true
+  }
+}

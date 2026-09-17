@@ -1,0 +1,23 @@
+{
+  "id": "ask_known_face_yesterday",
+  "kind": "ask",
+  "scenario": "known_face",
+  "source": "authored",
+  "footage": {
+    "hash": "sha256:PLACEHOLDER_known_06",
+    "source": "sample:front_door_mail_carrier.mp4",
+    "note": "known/recurring face; footage not committed"
+  },
+  "input": {"question": "Who came to the door yesterday afternoon?"},
+  "prompt": "Who came to the door yesterday afternoon?",
+  "ground_truth": {
+    "event_present": true,
+    "must_include": ["mail carrier"],
+    "forbidden": ["stranger", "unknown person"],
+    "reference": "Your regular mail carrier delivered a parcel around 2pm yesterday."
+  },
+  "mock_prediction": {
+    "answer": "Your regular mail carrier dropped a parcel at the door around 2pm.",
+    "event_present": true
+  }
+}

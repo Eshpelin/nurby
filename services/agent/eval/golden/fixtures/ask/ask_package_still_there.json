@@ -1,0 +1,23 @@
+{
+  "id": "ask_package_still_there",
+  "kind": "ask",
+  "scenario": "delivery",
+  "source": "authored",
+  "footage": {
+    "hash": "sha256:PLACEHOLDER_delivery_07",
+    "source": "sample:porch_package_present.mp4",
+    "note": "footage not committed"
+  },
+  "input": {"question": "Is the package still on the porch?"},
+  "prompt": "Is the package still on the porch?",
+  "ground_truth": {
+    "event_present": true,
+    "must_include": ["yes", "package"],
+    "forbidden": ["no package", "taken"],
+    "reference": "Yes, the package is still sitting on the porch by the door."
+  },
+  "mock_prediction": {
+    "answer": "Yes, the package is still on the porch next to the door.",
+    "event_present": true
+  }
+}

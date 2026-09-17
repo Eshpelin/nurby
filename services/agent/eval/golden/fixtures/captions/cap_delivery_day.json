@@ -1,0 +1,22 @@
+{
+  "id": "cap_delivery_day",
+  "kind": "caption",
+  "scenario": "delivery",
+  "source": "authored",
+  "footage": {
+    "hash": "sha256:PLACEHOLDER_delivery_day_01",
+    "source": "sample:driveway_day_package.mp4",
+    "note": "footage not committed; hash-pinned label only"
+  },
+  "input": {"camera": "front_door", "window_seconds": 8, "lighting": "day", "weather": "clear"},
+  "ground_truth": {
+    "event_present": true,
+    "must_include": ["package"],
+    "forbidden": ["intruder", "break-in"],
+    "reference": "A delivery driver leaves a package at the front door and walks away."
+  },
+  "mock_prediction": {
+    "caption": "A courier places a cardboard package by the front door then returns to the truck.",
+    "event_present": true
+  }
+}
