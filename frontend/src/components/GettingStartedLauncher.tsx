@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { PersonalOnboardingCard } from "@/components/PersonalOnboardingCard";
-import { OnboardingMetricsCard } from "@/components/OnboardingMetricsCard";
+import { SetupWizard } from "@/components/SetupWizard";
 import { DETECTION_GOALS, milestoneForGoal, type ActivationList } from "@/lib/activation";
 import type { Experience } from "@/lib/onboarding";
 
@@ -83,39 +82,30 @@ export function GettingStartedLauncher({ cameraCount, camerasLoading, onSetup, i
     : "bg-accent text-white shadow-lg hover:opacity-90";
 
   return (
-    <div className="fixed bottom-4 left-4 z-40 hidden sm:block">
-      {open && (
-        <div className="mb-2 w-[min(92vw,384px)] max-h-[75vh] overflow-y-auto rounded-xl border border-border bg-card-elevated shadow-xl p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">{badge.complete ? "Your Nurby setup" : "Getting started"}</h2>
-            <button aria-label="Close" onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground text-lg leading-none">×</button>
-          </div>
-          <PersonalOnboardingCard
-            embedded
-            cameraCount={cameraCount}
-            camerasLoading={camerasLoading}
-            onSetup={() => { setOpen(false); onSetup(); }}
-            onChanged={refresh}
-          />
-          {isAdmin && (
-            <details className="mt-4 rounded-lg border border-border p-3">
-              <summary className="cursor-pointer text-sm font-medium text-muted-foreground">Onboarding metrics</summary>
-              <div className="mt-3"><OnboardingMetricsCard /></div>
-            </details>
+    <>
+      <div className="fixed bottom-4 left-4 z-40 hidden sm:block">
+        <button
+          onClick={() => { setOpen(true); void refresh(); }}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${pill}`}
+        >
+          <span aria-hidden>{badge.complete ? "✓" : "🚀"}</span>
+          {badge.label}
+          {badge.progress && (
+            <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-xs">{badge.progress}</span>
           )}
-        </div>
+        </button>
+      </div>
+      {open && (
+        <SetupWizard
+          cameraCount={cameraCount}
+          camerasLoading={camerasLoading}
+          onSetupCamera={() => { setOpen(false); onSetup(); }}
+          onClose={() => { setOpen(false); void refresh(); }}
+          onChanged={refresh}
+        />
       )}
-      <button
-        onClick={() => { const next = !open; setOpen(next); if (next) void refresh(); }}
-        aria-expanded={open}
-        className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${pill}`}
-      >
-        <span aria-hidden>{badge.complete ? "✓" : "🚀"}</span>
-        {badge.label}
-        {badge.progress && (
-          <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-xs">{badge.progress}</span>
-        )}
-      </button>
-    </div>
+    </>
   );
 }

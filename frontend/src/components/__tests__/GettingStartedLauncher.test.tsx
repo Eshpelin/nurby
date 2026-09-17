@@ -65,11 +65,12 @@ describe("GettingStartedLauncher", () => {
     expect(screen.queryByText(/\d\/3/)).not.toBeInTheDocument();
   });
 
-  it("opens the setup content in a popover on click", async () => {
+  it("opens the setup wizard on click", async () => {
     mocks.fetch.mockImplementation(router({ experience: { preferences: null, audience: "administrator" }, activation: { milestones: [] } }));
     render(<GettingStartedLauncher isAdmin cameraCount={0} camerasLoading={false} onSetup={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /Set up Nurby/ }));
-    // The embedded card's first-run picker appears inside the popover.
-    expect(await screen.findByText(/What would you like help with first/i)).toBeInTheDocument();
+    // The wizard opens at its first step.
+    expect(await screen.findByRole("dialog", { name: /Set up Nurby/i })).toBeInTheDocument();
+    expect(await screen.findByText(/What should Nurby watch for first/i)).toBeInTheDocument();
   });
 });
