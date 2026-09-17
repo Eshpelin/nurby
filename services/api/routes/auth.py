@@ -15,6 +15,7 @@ from shared.activation import (
     compute_activation,
     starter_key_for_goal,
 )
+from shared.daily_workflow import Capabilities, DailyWorkflow, daily_workflow
 from shared.auth import (
     MOBILE_PAIR_TTL_SECONDS,
     create_access_token,
@@ -451,6 +452,78 @@ def uuid_or_none(value):
         return _uuid.UUID(str(value))
     except (ValueError, AttributeError):
         return None
+
+
+# ── Daily workflow priorities (#204 phase 3) ─────────────────────────
+
+
+async def _account_capabilities(db: AsyncSession, user: User) -> Capabilities:
+    """What the account can actually do today. Read-only; drives which
+    daily priorities are recommended vs shown as blocked."""
+    from services.api.routes.cameras import resolve_demo_video_url
+    from shared.email import resolve_smtp
+    from shared.models import (
+        ActivationMilestone as _AM,
+        Camera as _Camera,
+        Provider,
+        PushDevice,
+        Rule as _Rule,
+        TelegramChannel,
+        WebhookSubscription,
+    )
+
+    cameras = (await db.execute(select(_Camera.stream_type, _Camera.stream_url))).all()
+    demo_url = resolve_demo_video_url()
+    has_real_camera = any(not (c.stream_type == "file" and c.stream_url == demo_url) for c in cameras)
+
+    has_provider = bool(await db.scalar(
+        select(func.count()).select_from(Provider).where(Provider.active.is_(True))
+    ))
+    has_enabled_rule = bool(await db.scalar(
+        select(func.count()).select_from(_Rule).where(_Rule.enabled.is_(True))
+    ))
+
+    telegram = await db.scalar(select(func.count()).select_from(TelegramChannel).where(TelegramChannel.enabled.is_(True)))
+    webhook = await db.scalar(select(func.count()).select_from(WebhookSubscription))
+    push = await db.scalar(select(func.count()).select_from(PushDevice))
+    smtp_cfg = await resolve_smtp()
+    has_channel = bool(telegram or webhook or push or (smtp_cfg.get("host") and smtp_cfg.get("from_addr")))
+
+    verified = bool(await db.scalar(
+        select(func.count()).select_from(_AM).where(
+            _AM.user_id == user.id,
+            _AM.test_kind == "real",
+            _AM.delivery_ok.is_(True),
+            _AM.confirmed_useful_at.isnot(None),
+        )
+    ))
+    return Capabilities(
+        has_real_camera=has_real_camera,
+        has_provider=has_provider,
+        has_channel=has_channel,
+        has_enabled_rule=has_enabled_rule,
+        verified=verified,
+    )
+
+
+@router.get("/me/daily", response_model=DailyWorkflow)
+async def get_daily_workflow(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The person's ordered daily priorities for their audience and goal,
+    capability-aware. Read-only: never creates or rewrites a rule."""
+    resp = experience_response(current_user)
+    prefs = resp.preferences
+    caps = await _account_capabilities(db, current_user)
+    return daily_workflow(
+        audience=resp.audience,
+        goal=prefs.goal if prefs else None,
+        focus=prefs.focus if prefs else "daily",
+        paused=bool(prefs.paused) if prefs else False,
+        place_label=prefs.place_label if prefs else None,
+        caps=caps,
+    )
 
 
 # ── Mobile QR pairing ────────────────────────────────────────────────

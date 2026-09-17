@@ -12,6 +12,12 @@ class ExperiencePreferences(BaseModel):
     place: Literal["home", "business"] | None = None
     goal: Literal["entrance", "deliveries", "after_hours", "review", "explore"]
     focus: Literal["daily", "setup"] = "daily"
+    # An optional label for the place this workspace watches. A single free
+    # text name only. It is not a workspace/tenant id and grants nothing;
+    # real multi-site support is deliberately out of phase 1/3 scope.
+    place_label: str | None = None
+    # Pauses daily-workflow nudges without touching any rule or grant.
+    paused: bool = False
 
     @model_validator(mode="after")
     def compatible_goal(self):
@@ -19,6 +25,10 @@ class ExperiencePreferences(BaseModel):
             raise ValueError("Choose a place for this monitoring goal")
         if self.goal == "after_hours" and self.place != "business":
             raise ValueError("After-hours monitoring requires a business context")
+        if self.place_label is not None:
+            self.place_label = self.place_label.strip() or None
+            if self.place_label and len(self.place_label) > 80:
+                raise ValueError("Place name is too long")
         return self
 
 
