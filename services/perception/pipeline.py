@@ -1241,6 +1241,16 @@ class PerceptionPipeline:
                 "count": len(detections),
             }
 
+            # Real observation confidence (#221). When the caller does not pass
+            # an explicit confidence, derive it from the strongest object
+            # detection's own detector score rather than leaving a slot a later
+            # stage would fill with a placeholder. None stays None for a
+            # motion-only frame. Semantics: services.perception.caption_schema.
+            if confidence is None:
+                from services.perception.caption_schema import detection_confidence
+
+                confidence = detection_confidence(detections)
+
             async with async_session() as db:
                 # Debounce. if the previous observation on this camera was
                 # recent and carries the same label set + same named faces,

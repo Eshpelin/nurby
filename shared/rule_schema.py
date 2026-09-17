@@ -556,7 +556,7 @@ ACTION_TYPES: list[dict] = [
             {"name": "question", "type": "string", "required": True,
              "description": "Yes/no question about the frame."},
             {"name": "min_confidence", "type": "number", "required": False, "default": 0.6,
-             "description": "Minimum confidence, in [0, 1], for a yes to count as a pass."},
+             "description": "Minimum VERIFY-model answer confidence, in [0, 1], for a yes to count as a pass. This is the analyzer's own schema-validated, clamped confidence, not the observation's detection confidence."},
             {"name": "on_fail", "type": "enum", "required": False,
              "enum": ["stop", "continue"], "default": "stop",
              "description": "'stop' aborts later actions when the answer is no/uncertain."},
@@ -615,7 +615,7 @@ CONDITION_FIELDS: list[dict] = [
     {"name": "time_before", "type": "string", "required": False,
      "description": "Active window end, HH:MM inclusive."},
     {"name": "min_confidence", "type": "number", "required": False,
-     "description": "Minimum detection/VLM confidence, in [0, 1]. Skipped when no confidence signal exists."},
+     "description": "Minimum DETECTION confidence, in [0, 1] (the detector's score for the strongest matched object; not a VLM/caption confidence). Skipped when no confidence signal exists."},
     {"name": "ignore_veto", "type": "boolean", "required": False, "default": False,
      "description": "Fire even while an alert veto (e.g. household disarm) is active."},
 ]

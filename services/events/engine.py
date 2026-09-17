@@ -1214,11 +1214,14 @@ class RuleEngine:
         # while a None means "no filter configured".
         min_conf = conditions.get("min_confidence")
         if min_conf is not None:
-            # Live evaluation has no observation-level VLM confidence yet
-            # (the pipeline sends confidence=None), so fall back to the
-            # confidence of the detection the trigger actually matched,
-            # then to the strongest object in frame. Before this fallback
-            # every rule with min_confidence silently never fired live.
+            # Consumer semantics (#221): this gate means DETECTION confidence.
+            # Live evaluation has no observation-level confidence yet (the
+            # pipeline sends confidence=None), and even on a stored observation
+            # Observation.confidence is itself the strongest detection's score,
+            # never a caption confidence. So fall back to the confidence of the
+            # detection the trigger actually matched, then to the strongest
+            # object in frame. Before this fallback every rule with
+            # min_confidence silently never fired live.
             conf = data.get("confidence")
             if conf is None:
                 conf = data.get("_matched_confidence")
