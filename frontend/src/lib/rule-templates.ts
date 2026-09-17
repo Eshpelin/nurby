@@ -70,6 +70,36 @@ export interface RuleTemplate {
   ) => Rule;
 }
 
+// Action types that reach outside Nurby and take a real-world action:
+// drive a relay/device, speak over a camera, or write to another system.
+// Keep in sync with shared/consequential.py. Informational actions (notify,
+// telegram, email, broadcast) and analysis steps (verify, locate) are not
+// listed: a rule built from them stays enabled.
+const CONSEQUENTIAL_ACTION_TYPES = new Set(["api_call", "webhook", "device", "speak"]);
+
+function isConsequentialAction(action: unknown): boolean {
+  return (
+    typeof action === "object" &&
+    action !== null &&
+    CONSEQUENTIAL_ACTION_TYPES.has((action as { type?: string }).type ?? "")
+  );
+}
+
+// A consequential action can also sit in a sequence's on_timeout list
+// (the line-stoppage recipe opens a work order there), so look in the
+// trigger pattern too, not only the top-level chain.
+function timeoutActions(trigger_pattern: Record<string, unknown>): unknown[] {
+  const seq = trigger_pattern?.sequence as { on_timeout?: unknown } | undefined;
+  const t = seq?.on_timeout;
+  return Array.isArray(t) ? t : t ? [t] : [];
+}
+
+export function ruleIsConsequential(rule: Rule): boolean {
+  const actions = Array.isArray(rule.actions) ? rule.actions : rule.actions ? [rule.actions] : [];
+  const candidates = [...actions, ...timeoutActions(rule.trigger_pattern as Record<string, unknown>)];
+  return candidates.some(isConsequentialAction);
+}
+
 function synthRule(
   name: string,
   trigger_pattern: Record<string, unknown>,
@@ -78,7 +108,7 @@ function synthRule(
   cooldown_seconds = 300,
   severity?: string,
 ): Rule {
-  return {
+  const rule: Rule = {
     id: "",
     name,
     enabled: true,
@@ -89,6 +119,20 @@ function synthRule(
     ...(severity ? { severity } : {}),
     created_at: new Date().toISOString(),
   };
+  // Review-first (#192): a template that takes a real-world action lands
+  // disabled so the user reviews it before it can fire. The server enforces
+  // the same default on create; this keeps the builder in step so the toggle
+  // shows off from the start.
+  if (ruleIsConsequential(rule)) rule.enabled = false;
+  return rule;
+}
+
+// True when using this template produces a review-first (disabled) rule.
+export function templateIsReviewFirst(
+  template: RuleTemplate,
+  ctx: TemplateContext,
+): boolean {
+  return ruleIsConsequential(template.build(ctx));
 }
 
 // Telegram to the paired channel when one exists, else an in-app

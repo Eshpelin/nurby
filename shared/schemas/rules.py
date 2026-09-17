@@ -390,6 +390,9 @@ class RuleResponse(BaseModel):
     severity: str = "alert"
     snoozed_until: datetime | None = None
     created_at: datetime
+    # Set on create when the rule takes a real-world action and was forced
+    # disabled for review (#192). Absent/False on reads of stored rules.
+    review_first: bool = False
 
     model_config = {"from_attributes": True}
 

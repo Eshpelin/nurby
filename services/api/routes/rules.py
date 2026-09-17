@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_admin
 from shared.config import settings
+from shared.consequential import rule_is_consequential
 from shared.database import get_db
 from shared.models import Observation, Rule, User
 from shared.schemas import (
@@ -167,11 +168,20 @@ async def create_rule(
     stale = await _stale_rule_refs(db, body.trigger_pattern, body.conditions, body.actions)
     if stale:
         raise HTTPException(status_code=422, detail="; ".join(stale))
-    rule = Rule(**body.model_dump())
+    fields = body.model_dump()
+    # Review-first (#192): a rule that takes a real-world action (drives a
+    # relay, speaks over a camera, writes to another system) is created
+    # disabled so a suspected trigger cannot act before a human has reviewed
+    # it. The user enables it explicitly from the rule list.
+    review_first = rule_is_consequential(fields.get("actions"), fields.get("trigger_pattern"))
+    if review_first:
+        fields["enabled"] = False
+    rule = Rule(**fields)
     db.add(rule)
     await db.commit()
     await db.refresh(rule)
     await _publish_invalidation(rule.id)
+    rule.review_first = review_first
     return rule
 
 
@@ -227,10 +237,16 @@ async def create_from_starter(
     payload = starter_rule(body.key, str(body.camera_id) if body.camera_id else None)
     if payload is None:
         raise HTTPException(status_code=404, detail=f"Unknown starter {body.key!r}")
+    # Starters are notify-only today, but keep the same review-first guard so a
+    # future consequential starter cannot ship enabled by accident (#192).
+    review_first = rule_is_consequential(payload.get("actions"), payload.get("trigger_pattern"))
+    if review_first:
+        payload["enabled"] = False
     rule = Rule(**payload)
     db.add(rule)
     await db.commit()
     await db.refresh(rule)
+    rule.review_first = review_first
     return rule
 
 

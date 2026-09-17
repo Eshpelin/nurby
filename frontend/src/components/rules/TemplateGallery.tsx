@@ -9,6 +9,7 @@ import { useState } from "react";
 import {
   CATEGORY_LABELS,
   RULE_TEMPLATES,
+  templateIsReviewFirst,
   type RuleTemplate,
   type TemplateContext,
   type TemplateParamName,
@@ -38,6 +39,10 @@ function TemplateCard({
 }) {
   const [picked, setPicked] = useState<Partial<Record<TemplateParamName, string>>>({});
 
+  // Templates that take a real-world action (drive a relay, speak over a
+  // camera, write to another system) are created paused for review (#192).
+  const reviewFirst = templateIsReviewFirst(template, ctx);
+
   // Only show a picker when there is actually something to pick.
   const visibleParams = template.params.filter((p) =>
     p.name === "camera_id" ? ctx.cameras.length > 1 : ctx.persons.length > 0,
@@ -54,6 +59,13 @@ function TemplateCard({
           // Say so on the card before the recipe is used.
           <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] leading-snug text-amber-600 dark:text-amber-300">
             {template.disclaimer}
+          </div>
+        )}
+        {reviewFirst && (
+          // Real-world action. Created disabled so the user reviews the
+          // evidence and enables it before it can fire.
+          <div className="mt-2 inline-flex items-center gap-1 rounded border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.5 text-[10px] leading-snug text-sky-600 dark:text-sky-300">
+            ⏸️ Starts paused for review
           </div>
         )}
         {template.needsGeometry && (
