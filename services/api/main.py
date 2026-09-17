@@ -193,6 +193,14 @@ app = FastAPI(
 _CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    # Web dashboard dev/preview server (see .claude/launch.json). Without this
+    # origin the browser rejects every response from :3210 as a CORS failure.
+    # Starlette's CORSMiddleware always emits access-control-allow-credentials
+    # but only emits access-control-allow-origin for an allowed origin, so a
+    # 401 from an expired token looked like a server misconfiguration instead
+    # of a sign-in problem (issue #188).
+    "http://localhost:3210",
+    "http://127.0.0.1:3210",
     "http://localhost:8000",
     "http://localhost:4747",
     "http://127.0.0.1:4747",
