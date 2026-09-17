@@ -54,14 +54,12 @@ from shared.models.digests import (  # noqa: F401
     Notification,
     ScheduledReport,
 )
-from shared.models.onboarding import (  # noqa: F401
-    ActivationMilestone,
-)
 from shared.models.guardian import (  # noqa: F401
     ApprovedPickup,
     Facility,
     GuardianAccessLog,
     GuardianEvent,
+    GuardianHandoverConfirmation,
     GuardianLink,
 )
 from shared.models.identity import (  # noqa: F401
@@ -89,6 +87,9 @@ from shared.models.observations import (  # noqa: F401
     ObservationIncident,
     ObservationVlmPass,
     PersonActionSegment,
+)
+from shared.models.onboarding import (  # noqa: F401
+    ActivationMilestone,
 )
 from shared.models.rules import (  # noqa: F401
     Event,
@@ -131,6 +132,7 @@ __all__ = [
     "GroundingResult",
     "GuardianAccessLog",
     "GuardianEvent",
+    "GuardianHandoverConfirmation",
     "GuardianLink",
     "HouseholdModeChange",
     "HouseholdFact",

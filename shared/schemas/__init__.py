@@ -148,6 +148,9 @@ from shared.schemas.guardian import (  # noqa: F401
     ApprovedPickupCreate,
     ApprovedPickupResponse,
     GuardianAccessLogResponse,
+    GuardianHandoverResponse,
+    HandoverConfirmationResponse,
+    HandoverConfirmRequest,
 )
 
 from shared.schemas.widgets import (  # noqa: F401
@@ -195,9 +198,12 @@ __all__ = [
     "GuardianAccessLogResponse",
     "GuardianAlertPrefsUpdate",
     "GuardianChannelsUpdate",
+    "GuardianHandoverResponse",
     "GuardianLinkCreate",
     "GuardianLinkResponse",
     "GuardianLinkUpdate",
+    "HandoverConfirmRequest",
+    "HandoverConfirmationResponse",
     "HouseholdModeChangeResponse",
     "HouseholdModeResponse",
     "HouseholdModeUpdate",
