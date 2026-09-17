@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { timeAgo, formatDateTime } from "@/lib/time";
 import { EventNotesPanel } from "@/components/rules/EventNotesPanel";
+import { EventFeedbackPanel } from "@/components/events/EventFeedback";
 import { EventEvidence } from "@/components/EventEvidence";
 import { ShareDialog } from "@/components/ShareDialog";
 import type { Camera, EventEntry, Rule } from "@/components/rules/types";
@@ -361,6 +362,7 @@ export default function EventsPage() {
                     ) : (
                       <p className="text-[11px] text-muted-foreground">No payload recorded.</p>
                     )}
+                    <EventFeedbackPanel eventId={ev.id} />
                     <EventNotesPanel eventId={ev.id} />
                   </div>
                 )}

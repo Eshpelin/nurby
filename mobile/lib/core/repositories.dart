@@ -301,6 +301,33 @@ class EventRepository {
   Future<void> deleteNote(String eventId, String noteId) =>
       _api.delete('/api/events/$eventId/notes/$noteId');
 
+  Future<List<EventFeedback>> feedback(String id) async {
+    final j = await _api.getJson('/api/events/$id/feedback') as List;
+    return j
+        .whereType<Map>()
+        .map((f) => EventFeedback.fromJson(f.cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// Offline-safe like [addNote]: a correction recorded in a dead zone
+  /// still reaches the server. PUT overwrites the caller's earlier
+  /// rating, which is what makes correcting cheap.
+  Future<Map<String, dynamic>> setFeedback(String id, String rating,
+      {String? reason}) async {
+    final path = '/api/events/$id/feedback';
+    final body = {if (reason != null) 'reason': reason, 'rating': rating};
+    try {
+      return (await _api.putJson(path, body: body) as Map)
+          .cast<String, dynamic>();
+    } on DioException catch (e) {
+      await _maybeEnqueue(e, path, body: body);
+      rethrow;
+    }
+  }
+
+  Future<void> clearFeedback(String id) =>
+      _api.delete('/api/events/$id/feedback');
+
   Future<void> _maybeEnqueue(DioException e, String path,
       {Object? body}) async {
     if (_outbox == null || !isConnectivityError(e)) return;

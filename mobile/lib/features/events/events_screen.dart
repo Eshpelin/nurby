@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
+import 'event_feedback.dart';
 import 'event_notes.dart';
 import '../../models/models.dart';
 import '../shares/share_sheet.dart';
@@ -410,6 +411,10 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                     ),
                 ],
               ),
+              const SizedBox(height: 16),
+              // Feedback (#195) asks whether the alert was useful or even
+              // correct; notes are the free-text follow-up.
+              EventFeedbackPanel(eventId: event.id),
               const SizedBox(height: 16),
               EventNotes(eventId: event.id),
               const SizedBox(height: 16),
