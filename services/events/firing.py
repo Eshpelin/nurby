@@ -34,8 +34,11 @@ async def store_event(
     observation_id,
     payload: dict,
     severity: str = "alert",
-) -> uuid.UUID:
-    """Persist a fired event and return its id."""
+) -> uuid.UUID | None:
+    """Persist a fired event and return its id, or None when persistence fails.
+
+    A fabricated id must never be returned: the action chain, notifications
+    and webhook consumers would all reference an event that does not exist."""
     try:
         obs_uuid = uuid.UUID(str(observation_id)) if observation_id else None
     except (ValueError, TypeError):
@@ -69,8 +72,28 @@ async def store_event(
             logger.info("Stored event %s for rule %s", event.id, rule_id)
             return event.id
     except Exception:
-        logger.exception("Failed to store event")
-        return uuid.uuid4()
+        # Preserve the full payload in the log so a firing that lands during
+        # a DB outage can be reconstructed manually instead of vanishing.
+        logger.exception(
+            "Failed to store event for rule %s; action chain will be skipped. payload=%s",
+            rule_id, payload,
+        )
+        return None
+
+
+async def _broadcast_store_failed(rule) -> None:
+    """Operator-visible signal that a firing could not be persisted
+    (llm_error-style: best-effort WS event, the UI may toast it)."""
+    try:
+        from services.api.ws import broadcast as _ws_broadcast
+
+        await _ws_broadcast({
+            "type": "event_store_failed",
+            "rule_id": str(rule.id),
+            "rule_name": rule.name,
+        })
+    except Exception:
+        logger.debug("event_store_failed broadcast failed", exc_info=True)
 
 
 async def _broadcast_fired(event_id, rule, observation_data: dict, severity: str) -> None:
@@ -100,15 +123,22 @@ async def fire_actions(
     *,
     severity: str = "alert",
     event_id=None,
-) -> uuid.UUID:
+) -> uuid.UUID | None:
     """Store the event (unless `event_id` supplied), broadcast it, run the action
-    chain, then fan out to webhook subscriptions. Never raises."""
+    chain, then fan out to webhook subscriptions. Never raises.
+
+    Returns the persisted event id. When the event cannot be stored (and no
+    id was supplied) the action chain and subscription fan-out are skipped so
+    nothing references a nonexistent event, and None is returned."""
     from services.events.actions import execute_action
 
     if event_id is None:
         event_id = await store_event(
             rule.id, observation_data.get("observation_id"), observation_data, severity,
         )
+    if event_id is None:
+        await _broadcast_store_failed(rule)
+        return None
     await _broadcast_fired(event_id, rule, observation_data, severity)
 
     # Thread a shared `vars` dict so later actions can reference earlier outputs.

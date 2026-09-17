@@ -28,7 +28,7 @@ import logging
 from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from services.notify.telegram import (
     TelegramAPI,
@@ -38,6 +38,7 @@ from services.notify.telegram import (
     set_message_reaction,
     verify_callback,
 )
+from shared.camera_access import allowed_camera_ids, apply_camera_filter
 from shared.config import settings
 from shared.crypto import InvalidToken, decrypt_secret
 from shared.database import async_session
@@ -73,17 +74,15 @@ def _channel_lock(channel_id: str) -> asyncio.Lock:
         _channel_locks[channel_id] = lock
     return lock
 
-# Bot menu hints. These don't wire actual slash command handlers
-# (Phase 2 only needs the inline buttons). Showing them in the menu
-# helps users discover the actions when buttons aren't visible in the
-# chat history.
+# Bot menu hints. All of these are wired: /start and /pair pair a chat,
+# /notes attaches a note when the original alert's message index is gone
+# (TTL expired or restart with a different Redis), and /ack /mute /snooze
+# act on the most recent unacknowledged, unmuted alert the channel owner
+# may see (issue #224).
 _BOT_COMMANDS = [
     ("ack", "Acknowledge latest alert"),
     ("mute", "Mute 10 minutes"),
     ("snooze", "Snooze rule 1 hour"),
-    # Phase 4. Backup path for the reply-to-add-note feature.
-    # Used when Redis lost the original alert's message index
-    # (TTL expired or restart with a different Redis).
     ("notes", "Add a note to an event. /notes <event_id> <text>"),
 ]
 
@@ -364,6 +363,10 @@ class TelegramPollerManager:
             await self._handle_notes_command(channel_id, message, tail)
             return
 
+        if cmd in ("/ack", "/mute", "/snooze"):
+            await self._handle_action_command(channel_id, message, cmd)
+            return
+
         # Phase 4. Dialog text input. The cluster-naming flow parks an
         # awaiting='name_input' row; the user's next plain text reply
         # in the same chat lands here.
@@ -590,6 +593,76 @@ class TelegramPollerManager:
             f"Rule snoozed until {when}.",
             _markup_disabled(f"💤 Rule snoozed until {when}"),
         )
+
+    # ------------------------------------------------------------------
+    # Issue #224. /ack /mute /snooze slash commands: same do_* helpers the
+    # inline buttons use, aimed at the most recent actionable alert for
+    # this chat instead of an id carried in the button payload.
+    # ------------------------------------------------------------------
+
+    async def _latest_actionable_event(self, db, owner_user_id) -> Event | None:
+        """Most recent unacknowledged, unmuted event the channel owner may
+        see, camera-scoped through the standard access policy. Mirrors the
+        ack/mute semantics of the inline buttons: acked or currently muted
+        alerts are not actionable."""
+        user = await db.get(User, owner_user_id)
+        if user is None:
+            return None
+        allowed = await allowed_camera_ids(user, db)
+        now = datetime.now(timezone.utc)
+        query = (
+            select(Event)
+            .where(
+                Event.acked_at.is_(None),
+                or_(Event.muted_until.is_(None), Event.muted_until <= now),
+            )
+            .order_by(Event.created_at.desc())
+            .limit(1)
+        )
+        query = apply_camera_filter(query, allowed, Event.camera_id)
+        return (await db.execute(query)).scalar_one_or_none()
+
+    async def _handle_action_command(self, channel_id: str, message: dict, cmd: str) -> None:
+        """Route /ack, /mute and /snooze. Pairing is enforced the same way
+        the callback path enforces it: a chat that is not the channel's
+        bound chat is ignored entirely. Replies go out as a followup
+        message; the original alert's inline markup is only rewritten by
+        the buttons themselves (a later button press still correctly
+        reports 'Already acknowledged by ...')."""
+        chat = message.get("chat") or {}
+        chat_id = chat.get("id")
+        owner_user_id = None
+        async with async_session() as db:
+            ch = await db.get(TelegramChannel, _to_uuid(channel_id))
+            if ch is None:
+                return
+            if ch.chat_id and chat_id is not None and str(chat_id) != str(ch.chat_id):
+                logger.warning(
+                    "telegram command rejected. channel=%s chat mismatch (%s vs %s)",
+                    channel_id, chat_id, ch.chat_id,
+                )
+                return
+            owner_user_id = ch.user_id
+            event = await self._latest_actionable_event(db, owner_user_id)
+
+        if cmd == "/ack":
+            if event is None:
+                await self._send_followup(channel_id, chat_id, "No recent alert to acknowledge.")
+                return
+            text_reply, _markup = await self._do_ack(event.id, owner_user_id)
+        elif cmd == "/mute":
+            if event is None:
+                await self._send_followup(channel_id, chat_id, "No recent alert to mute.")
+                return
+            text_reply, _markup = await self._do_mute_event(event.id, 600)
+        else:  # /snooze
+            if event is None or event.rule_id is None:
+                await self._send_followup(
+                    channel_id, chat_id, "No recent alert with a rule to snooze."
+                )
+                return
+            text_reply, _markup = await self._do_snooze_rule(event.rule_id, 3600)
+        await self._send_followup(channel_id, chat_id, text_reply)
 
     # ------------------------------------------------------------------
     # Phase 4. reply-to-add-note + dialog text + slash /notes backup.

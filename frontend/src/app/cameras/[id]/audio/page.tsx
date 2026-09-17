@@ -180,6 +180,13 @@ export default function CameraAudioPage() {
           </h1>
         </div>
 
+        <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
+          Audio detections such as baby cry, glass break, and smoke or CO alarms are best-effort AI signals.
+          They can miss or misfire depending on mic placement and levels, and nothing here is certified or
+          monitored around the clock. Nurby is not a substitute for certified smoke and CO detectors or a
+          monitored alarm service.
+        </div>
+
         {error ? (
           <div className="mb-4 rounded-lg border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
             {error}

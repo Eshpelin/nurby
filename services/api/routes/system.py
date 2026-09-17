@@ -545,6 +545,7 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     "guardian_har_enabled",
     "har_cadence_fps",
     "har_segment_retention_days",
+    "observation_retention_days",
     "guardian_har_test_mode",
     "har_action_set",
     "guardian_reveal_enabled",

@@ -45,7 +45,7 @@ async def _user_from_query_token(token: str | None, db: AsyncSession) -> User:
 @router.get("/{observation_id}/vlm-passes")
 async def get_vlm_passes(
     observation_id: uuid.UUID,
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Ordered version history of every VLM pass over this frame.
@@ -53,9 +53,14 @@ async def get_vlm_passes(
     Pass 1 is the original live caption. later passes are idle enrichment.
     The pass with ``authoritative=true`` is the one currently surfaced as
     the observation's caption.
+
+    Camera scope (issue #201): mirror ``get_observation`` and 404 when the
+    frame's camera is outside the caller's ACL, so pass history cannot leak
+    a foreign camera's captions.
     """
     obs = await db.get(Observation, observation_id)
-    if obs is None:
+    allowed = await allowed_camera_ids(current_user, db)
+    if obs is None or not _camera_in_scope(allowed, obs.camera_id):
         raise HTTPException(status_code=404, detail="Observation not found")
     rows = (await db.execute(
         select(ObservationVlmPass)

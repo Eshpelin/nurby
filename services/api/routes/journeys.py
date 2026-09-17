@@ -18,10 +18,49 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
+from shared.camera_access import (
+    ALL,
+    AllowedCameras,
+    allowed_camera_ids,
+    apply_camera_filter,
+)
 from shared.database import get_db
 from shared.models import Incident, Journey, User
 
 router = APIRouter()
+
+
+def _seg_cam_ids(journey: Journey) -> set[uuid.UUID]:
+    """Camera UUIDs referenced by a journey's segment list.
+
+    A ``Journey`` has no ``camera_id`` column: the cameras it crossed live in
+    the ``segments`` JSON (mirrors ``services/agent/tools/relationships.py``).
+    Malformed / missing ids are skipped rather than raising.
+    """
+    out: set[uuid.UUID] = set()
+    for seg in journey.segments or []:
+        if not isinstance(seg, dict):
+            continue
+        cid = seg.get("camera_id")
+        if not cid:
+            continue
+        try:
+            out.add(uuid.UUID(str(cid)))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _journey_in_scope(journey: Journey, allowed: AllowedCameras) -> bool:
+    """True when the caller may see ``journey`` (issue #201).
+
+    Admins / all-mode users (``ALL``) see every journey. A restricted user
+    sees a journey only when it touched at least one camera in their
+    allowlist. A journey whose segments carry no in-scope camera is hidden.
+    """
+    if allowed is ALL:
+        return True
+    return bool(_seg_cam_ids(journey) & allowed)
 
 
 def _serialize(j: Journey) -> dict[str, Any]:
@@ -52,7 +91,7 @@ async def list_journeys(
     to: datetime | None = Query(default=None),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     q = select(Journey).order_by(Journey.last_seen_at.desc())
@@ -66,28 +105,44 @@ async def list_journeys(
         q = q.where(Journey.started_at >= from_)
     if to:
         q = q.where(Journey.started_at <= to)
-    rows = (await db.execute(q.offset(offset).limit(limit))).scalars().all()
-    return [_serialize(r) for r in rows]
+
+    # Camera scope (issue #201). Journeys carry their cameras in the
+    # segments JSON, so the allowlist cannot be pushed into SQL: fetch the
+    # ordered matches, drop journeys that touch no in-scope camera, then
+    # paginate in Python. All-mode users keep the cheap SQL offset/limit.
+    allowed = await allowed_camera_ids(user, db)
+    if allowed is ALL:
+        rows = (await db.execute(q.offset(offset).limit(limit))).scalars().all()
+        return [_serialize(r) for r in rows]
+    rows = (await db.execute(q)).scalars().all()
+    visible = [r for r in rows if _journey_in_scope(r, allowed)]
+    return [_serialize(r) for r in visible[offset : offset + limit]]
 
 
 @router.get("/{journey_id}")
 async def get_journey(
     journey_id: uuid.UUID,
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     row = await db.get(Journey, journey_id)
-    if row is None:
+    allowed = await allowed_camera_ids(user, db)
+    # 404 (not 403) for a journey outside the caller's cameras, to avoid id
+    # probing and match the single-resource convention (issue #201).
+    if row is None or not _journey_in_scope(row, allowed):
         raise HTTPException(status_code=404, detail="journey not found")
     payload = _serialize(row)
     # Hydrate linked incidents for the detail view so the UI can show
     # per-camera occurrence counts + thumbnails without a second
-    # round-trip.
+    # round-trip. Restrict to in-scope cameras so a mixed-camera journey
+    # cannot leak a foreign camera's incidents.
     incs = (
         await db.execute(
-            select(Incident)
-            .where(Incident.journey_id == journey_id)
-            .order_by(Incident.started_at.asc())
+            apply_camera_filter(
+                select(Incident).where(Incident.journey_id == journey_id),
+                allowed,
+                Incident.camera_id,
+            ).order_by(Incident.started_at.asc())
         )
     ).scalars().all()
     payload["incidents"] = [
@@ -116,11 +171,14 @@ class ReinterpretRequest(BaseModel):
 async def reinterpret_journey(
     journey_id: uuid.UUID,
     body: ReinterpretRequest | None = None,
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     row = await db.get(Journey, journey_id)
-    if row is None:
+    allowed = await allowed_camera_ids(user, db)
+    # Do not run (or reveal) analysis over a journey the caller cannot see
+    # (issue #201): out-of-scope reads as absent.
+    if row is None or not _journey_in_scope(row, allowed):
         raise HTTPException(status_code=404, detail="journey not found")
 
     from services.perception.journey_tracker import JourneyFinalizer

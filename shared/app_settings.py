@@ -289,6 +289,16 @@ DEFAULTS: dict[str, Any] = {
     # retention loop deletes buckets older than this window. Set 0 to disable
     # pruning (not recommended while motion_series_enabled is on).
     "motion_series_retention_days": 7,
+    # ── Observation retention (issue #213) ───────────────────────────
+    # Age-based retention for observations, their thumbnails (annotated +
+    # clean) and the cascade-owned child rows (VLM passes, actions, grounding
+    # results, incident links). Nothing pruned these before, so long-running
+    # installs grew the DB and the thumbnails dir without bound and every
+    # product surface slowly degraded. The hourly ingestion retention loop
+    # deletes in bounded batches; child rows go via DB-level CASCADE and
+    # agent references survive as NULL. Set 0 to disable pruning (not
+    # recommended: growth is unbounded).
+    "observation_retention_days": 90,
     # ── FindAnything / visual grounding (docs/findanything-design.md) ────
     # Master switch for the grounding subsystem (LocateAnything). Default
     # OFF: the model is ~6 GB and needs a datacenter NVIDIA GPU, so the base
