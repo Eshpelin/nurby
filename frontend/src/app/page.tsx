@@ -23,7 +23,7 @@ import { LiveConversationCard } from "@/components/voice/LiveConversationCard";
 import { useWorkerHealth } from "@/lib/useWorkerHealth";
 import { LLMErrorToasts } from "@/components/LLMErrorToasts";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
-import { SetupChecklistCard } from "@/components/SetupChecklistCard";
+import { PersonalOnboardingCard } from "@/components/PersonalOnboardingCard";
 import { AskComposerCard } from "@/components/AskComposerCard";
 import { TranscriptCard } from "@/components/TranscriptCard";
 import { SummaryCard } from "@/components/SummaryCard";
@@ -52,7 +52,7 @@ import { AskHintCard, LocalAIHintCard, SecureAccountNudge } from "@/components/d
 // ── Main unified page ──
 
 function DashboardContent() {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
   const { status: wsStatus } = useWebSocket();
   const { down: workersDown, degraded: degradedComponents } = useWorkerHealth();
   const searchParams = useSearchParams();
@@ -589,39 +589,7 @@ function DashboardContent() {
   useEffect(() => { if (cameras.length > 0) cameras.forEach((cam) => { if (!activityEvents[cam.id]) fetchActivity(cam.id); }); }, [cameras]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (cameras.length === 0) return; const i = setInterval(() => cameras.forEach((c) => fetchActivity(c.id)), 15000); return () => clearInterval(i); }, [cameras, fetchActivity]);
 
-  // First-run onboarding. Pop the wizard if no cameras exist and the
-  // user has not dismissed it. Dismissal is checked both in localStorage
-  // (fast path) and server-side (onboarding_dismissed) so it survives a
-  // browser/device change. An admin can re-trigger the wizard by
-  // flipping onboarding_dismissed back to false in Settings.
-  useEffect(() => {
-    if (camerasLoading) return;
-    if (cameras.length > 0) return;
-    let localDismissed = false;
-    try {
-      localDismissed = localStorage.getItem("nurby-onboarding-dismissed") === "1";
-    } catch {
-      localDismissed = true;
-    }
-    if (localDismissed) return;
-    let cancelled = false;
-    (async () => {
-      let serverDismissed = false;
-      try {
-        const res = await authFetch("/api/system/settings");
-        if (res.ok) {
-          const data = await res.json();
-          serverDismissed = !!data?.onboarding_dismissed;
-        }
-      } catch {
-        /* fall through to showing the wizard */
-      }
-      if (!cancelled && !serverDismissed) setShowWizard(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [camerasLoading, cameras.length, authFetch]);
+  // Goal selection comes first; administrators open camera setup on demand.
 
   // Build timeline entries
   let entries: TimelineEntry[] = [];
@@ -1033,7 +1001,7 @@ function DashboardContent() {
               </div>
             </div>
           )}
-          <SetupChecklistCard onAddCamera={() => { setModalInitialType(undefined); setModalOpen(true); }} />
+          {user && <PersonalOnboardingCard key={user.id} cameraCount={cameras.length} camerasLoading={camerasLoading} onSetup={() => setShowWizard(true)} />}
           <AskComposerCard />
           <CameraWall
             fullscreenRef={dashboardWrapRef}
@@ -2212,7 +2180,7 @@ function DashboardContent() {
       <SecureAccountNudge hasFootage={cameras.length > 0} />
       {cameras.length > 0 && <LocalAIHintCard />}
       {cameras.length > 0 && <AskHintCard />}
-      {showWizard && (
+      {showWizard && user?.role === "admin" && (
         <OnboardingWizard
           onClose={() => setShowWizard(false)}
           onComplete={() => {
