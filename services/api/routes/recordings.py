@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import subprocess
@@ -13,6 +14,12 @@ from sqlalchemy import String, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.background import BackgroundTask
 
+from services.api.evidence_bundle import (
+    MANIFEST_FILENAME,
+    build_manifest,
+    manifest_entry,
+    sha256_file,
+)
 from services.api.recording_annotate import render_annotated
 from shared.auth import get_current_user, require_admin, require_query_token
 from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids, apply_camera_filter
@@ -26,6 +33,7 @@ from shared.ffmpeg_safe import (
 from shared.models import Camera, Observation, Person, Recording, Transcript, User
 from shared.paths import escape_like, resolve_inside, safe_getsize
 from shared.schemas import RecordingResponse
+from shared.version import build_sha, current_version
 
 # A trimmed clip is capped so a request can't ask us to transcode an
 # arbitrarily long segment on the API host. Over this returns 400.
@@ -454,6 +462,122 @@ async def download_bundle(
         tmp.name,
         media_type="application/zip",
         filename="nurby-recordings.zip",
+        background=BackgroundTask(os.remove, tmp.name),
+    )
+
+
+def _build_evidence_zip(
+    entries: list[tuple[str, str]], manifest: dict, zip_path: str
+) -> None:
+    """Write the evidence bundle: every media file plus the manifest.json at the
+    archive root. Media is stored (mp4 is already compressed); the manifest is
+    deflated. Sync; run in an executor."""
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED, allowZip64=True) as zf:
+        for arcname, src in entries:
+            zf.write(src, arcname)
+        zf.writestr(
+            MANIFEST_FILENAME,
+            json.dumps(manifest, indent=2, sort_keys=False),
+            compress_type=zipfile.ZIP_DEFLATED,
+        )
+
+
+@router.get("/evidence-bundle")
+async def download_evidence_bundle(
+    token: str | None = Query(None),
+    camera_id: uuid.UUID | None = Query(default=None),
+    from_: datetime | None = Query(default=None, alias="from"),
+    to: datetime | None = Query(default=None, description="Inclusive end (ISO 8601)"),
+    object: list[str] = Query(default=[]),
+    person_id: uuid.UUID | None = Query(default=None),
+    vehicle_id: uuid.UUID | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export the matching recordings as a downloadable evidence bundle: the
+    media files plus a machine-readable ``manifest.json`` at the archive root
+    that lists a SHA-256 and provenance (source camera, capture timestamps in
+    UTC + local, recording id, processing) for every included file (issue #225).
+
+    Scoped to the caller's allowed cameras (issue #40/#201): no camera the
+    caller cannot see can appear in the bundle or its manifest. Ships the
+    pristine originals, so each entry is labeled ``processing.kind: original``
+    and its hash attests to the exact bytes shipped. Capped by file count and
+    total size like the plain bundle download."""
+    user_id = require_query_token(token)
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or deactivated")
+
+    allowed = await allowed_camera_ids(user, db)
+    query = await _filtered_recordings_query(
+        db, camera_id, from_, to, object, person_id, vehicle_id, allowed
+    )
+    if query is None:
+        raise HTTPException(status_code=404, detail="No recordings match those filters")
+    query = query.order_by(Recording.started_at.asc())
+    recs = (await db.execute(query)).scalars().all()
+
+    # Resolve camera names once for provenance labeling.
+    cam_ids = {r.camera_id for r in recs if r.camera_id is not None}
+    cam_names: dict[uuid.UUID, str] = {}
+    if cam_ids:
+        rows = (
+            await db.execute(select(Camera.id, Camera.name).where(Camera.id.in_(cam_ids)))
+        ).all()
+        cam_names = {cid: name for cid, name in rows}
+
+    entries: list[tuple[str, str]] = []
+    manifest_files: list[dict] = []
+    total = 0
+    for r in recs:
+        path = resolve_inside(_resolve_recording_path(r), settings.recordings_path)
+        if path is None or not os.path.exists(path):
+            continue
+        total += os.path.getsize(path)
+        if len(entries) >= _BUNDLE_MAX_FILES or total > _BUNDLE_MAX_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail="Selected range is too large to bundle. Narrow the time window or camera.",
+            )
+        arcname = f"{r.started_at:%Y%m%d-%H%M%S}-{os.path.basename(path)}"
+        # Hash the bytes actually shipped (the file placed in the zip), so the
+        # manifest verifies exactly what the recipient holds.
+        digest = await asyncio.get_event_loop().run_in_executor(None, sha256_file, path)
+        entries.append((arcname, path))
+        manifest_files.append(
+            manifest_entry(
+                arcname=arcname,
+                sha256=digest,
+                size_bytes=os.path.getsize(path),
+                camera_id=r.camera_id,
+                camera_name=cam_names.get(r.camera_id),
+                recording_id=r.id,
+                started_at=r.started_at,
+                ended_at=r.ended_at,
+                processing={"kind": "original"},
+            )
+        )
+
+    if not entries:
+        raise HTTPException(status_code=404, detail="No recordings match those filters")
+
+    scope: list[str] | str = "all" if allowed is ALL else sorted(str(c) for c in allowed)
+    manifest = build_manifest(
+        manifest_files,
+        generated_by=getattr(user, "email", None) or str(user.id),
+        nurby_version=current_version(),
+        build_sha=build_sha(),
+        camera_scope=scope,
+    )
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    tmp.close()
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _build_evidence_zip, entries, manifest, tmp.name)
+    return FileResponse(
+        tmp.name,
+        media_type="application/zip",
+        filename="nurby-evidence-bundle.zip",
         background=BackgroundTask(os.remove, tmp.name),
     )
 
