@@ -34,7 +34,7 @@ from shared.auth import (
 )
 from shared.config import settings
 from shared.database import get_db
-from shared.models import ActivationMilestone, Camera, InviteKey, Rule, User, UserCameraAccess
+from shared.models import ActivationMilestone, InviteKey, Rule, User, UserCameraAccess
 from shared.onboarding import ExperiencePreferences, ExperienceResponse, experience_response
 from shared.rule_starters import starter_rule
 from shared.schemas import (

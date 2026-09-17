@@ -7,303 +7,38 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PersonaPicker } from "@/components/PersonaPicker";
 import { RetryCountdown } from "@/components/RetryCountdown";
 import type { PersonaPatch } from "@/lib/camera-personas";
-import { ConversationCard } from "@/components/ConversationCard";
-import { SummaryCard } from "@/components/SummaryCard";
 import { PrivacyZonesSection } from "@/components/PrivacyZonesSection";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { ActivityStrip } from "@/components/ActivityStrip";
 import type { MotionZone } from "@/components/camera/types";
 import { ZoneEditorCanvas } from "@/components/camera/ZoneEditorCanvas";
 import { PTZControlPanel } from "@/components/camera/PTZControlPanel";
-import { DETECTION_MODEL_CATALOG } from "@/components/camera/detection-models";
-import { DetectionModelSelect, LabelPicker } from "@/components/camera/ModelPickers";
 import { CameraActivityTab } from "@/components/camera/CameraActivityTab";
+import { Section, StatusDot } from "@/components/camera/settings/primitives";
+import { STREAM_TYPES } from "@/components/camera/settings/constants";
+import type { Camera, Provider } from "@/components/camera/settings/types";
+import { GeneralSection } from "@/components/camera/settings/GeneralSection";
+import { FeedSection } from "@/components/camera/settings/FeedSection";
+import { AuthSection } from "@/components/camera/settings/AuthSection";
+import { AiAnalysisSection } from "@/components/camera/settings/AiAnalysisSection";
+import { RefinerSection } from "@/components/camera/settings/RefinerSection";
+import { DetectionSection } from "@/components/camera/settings/DetectionSection";
+import { RecapsSection } from "@/components/camera/settings/RecapsSection";
+import { SummarizationSection } from "@/components/camera/settings/SummarizationSection";
+import { AudioConversationsSection } from "@/components/camera/settings/AudioConversationsSection";
+import { IncidentTrackingSection } from "@/components/camera/settings/IncidentTrackingSection";
+import { SmartTrackSection } from "@/components/camera/settings/SmartTrackSection";
+import { YoloWorldPromptsSection } from "@/components/camera/settings/YoloWorldPromptsSection";
+import { TimezoneSection } from "@/components/camera/settings/TimezoneSection";
+import { RetentionSection } from "@/components/camera/settings/RetentionSection";
+import { DangerZoneSection } from "@/components/camera/settings/DangerZoneSection";
+import { SaveBar } from "@/components/camera/settings/SaveBar";
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { timezoneOptions } from "@/lib/timezones";
-
-interface Camera {
-  id: string;
-  name: string;
-  stream_url: string;
-  stream_type: string;
-  snapshot_url: string | null;
-  location_label: string | null;
-  username: string | null;
-  auth_token: string | null;
-  snapshot_interval: number;
-  motion_sensitivity: number;
-  recording_enabled: boolean;
-  recording_mode: string;
-  recording_trigger_objects: string[] | null;
-  recording_clip_pre: number;
-  recording_clip_post: number;
-  vlm_provider_id: string | null;
-  vlm_prompt: string | null;
-  vlm_interval: number;
-  vlm_max_tokens: number;
-  vlm_max_input_tokens: number | null;
-  vlm_refiner_provider_id: string | null;
-  vlm_refiner_trigger_objects: string[] | null;
-  vlm_refiner_keywords: string[] | null;
-  vlm_refiner_max_tokens: number | null;
-  vlm_refiner_max_input_tokens: number | null;
-  detect_objects: boolean;
-  detect_faces: boolean;
-  detect_plates: boolean;
-  detect_classes: string[] | null;
-  scene_mode: string;
-  plateless_reid_enabled: boolean | null;
-  object_confidence: number;
-  vlm_trigger: string;
-  vlm_trigger_objects: string[] | null;
-  digest_enabled: boolean;
-  digest_period: string;
-  digest_provider_id: string | null;
-  digest_prompt: string | null;
-  retention_mode: string;
-  retention_days: number;
-  retention_gb: number;
-  detection_models: {model: string; confidence: number; enabled: boolean; label_filter: string[]}[] | null;
-  detection_merge: string;
-  detection_consensus_min: number;
-  summary_provider_id: string | null;
-  summary_mode: string;
-  summary_period_seconds: number;
-  summary_event_quiet_seconds: number;
-  summary_event_trigger_objects: string[] | null;
-  summary_event_min_duration_seconds: number;
-  summary_max_tokens: number;
-  conversation_gap_seconds: number;
-  conversation_summary_enabled: boolean;
-  conversation_min_messages_for_summary: number;
-  incident_tracking_enabled: boolean;
-  incident_idle_seconds: number;
-  privacy_zone_targets: string[] | null;
-  privacy_zone_blur_strength: number;
-  timezone: string | null;
-  ptz_smart_track_enabled: boolean;
-  ptz_smart_track_targets: string[] | null;
-  ptz_smart_track_ignore: string[] | null;
-  ptz_smart_track_priority: string[] | null;
-  ptz_smart_track_lost_seconds: number;
-  ptz_smart_track_home_preset: string | null;
-  ptz_smart_track_zoom: boolean;
-  ptz_smart_track_deadzone: number;
-  ptz_smart_track_max_speed: number;
-  ptz_smart_track_gain: number;
-  ptz_smart_track_min_confidence: number;
-  ptz_smart_track_move_budget_per_minute: number;
-  ptz_profile_token: string;
-  motion_zones: MotionZone[] | null;
-  status: string;
-  status_reason?: string | null;
-  next_retry_at?: number | null;
-  retry_delay_seconds?: number | null;
-  width: number | null;
-  height: number | null;
-  fps: number | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface Provider {
-  id: string;
-  name: string;
-  kind: string;
-  base_url: string;
-  default_model: string | null;
-  active: boolean;
-}
-
-const STREAM_TYPES: Record<string, string> = {
-  rtsp: "RTSP",
-  http_mjpeg: "HTTP MJPEG",
-  http_snapshot: "HTTP Snapshot",
-  hls: "HLS",
-  usb: "USB / Local",
-  file: "File / Test",
-};
-
-const DEFAULT_VLM_PROMPT =
-  "You are a security camera AI assistant. Describe what you see in this camera frame in 1-2 concise sentences. Focus on people, vehicles, animals, and any unusual activity. Be specific about locations, actions, and counts. If nothing notable is happening, say so briefly.";
 
 
 
-
-
-function StatusDot({ status }: { status: string }) {
-  const color =
-    status === "recording"
-      ? "bg-danger"
-      : status === "live"
-        ? "bg-green-500"
-        : "bg-gray-500";
-  return (
-    <span
-      className={`inline-block w-2 h-2 rounded-full ${color} ${status !== "offline" ? "pulse-dot" : ""}`}
-    />
-  );
-}
-
-function Section({
-  title,
-  children,
-  description,
-  advanced = false,
-}: {
-  title: string;
-  children: React.ReactNode;
-  description?: string;
-  /**
-   * Collapsed by default (docs/settings-layers.md). Web folds at the
-   * section level: a section whose fields are all pipeline tuning sits
-   * behind a disclosure so it does not carry the same weight as
-   * "Blur areas". Every field stays reachable.
-   */
-  advanced?: boolean;
-}) {
-  if (advanced) {
-    return (
-      <details className="group rounded-lg border border-border bg-card">
-        <summary className="cursor-pointer list-none px-5 py-4 flex items-center justify-between gap-3">
-          <span>
-            <span className="text-sm font-semibold">{title}</span>
-            <span className="ml-2 text-[10px] uppercase tracking-wider text-muted-foreground">Advanced</span>
-            {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
-          </span>
-          <span className="text-muted-foreground transition-transform group-open:rotate-180" aria-hidden>⌄</span>
-        </summary>
-        <div className="px-5 pb-5 space-y-4">{children}</div>
-      </details>
-    );
-  }
-  return (
-    <div className="rounded-lg border border-border bg-card p-5">
-      <h3 className="text-sm font-semibold mb-1">{title}</h3>
-      {description && (
-        <p className="text-xs text-muted-foreground mb-4">{description}</p>
-      )}
-      {!description && <div className="mb-4" />}
-      <div className="space-y-4">{children}</div>
-    </div>
-  );
-}
-
-function FieldRow({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="grid grid-cols-[180px_1fr] gap-4 items-start">
-      <div>
-        <label className="text-sm text-foreground">{label}</label>
-        {hint && <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>}
-      </div>
-      <div>{children}</div>
-    </div>
-  );
-}
-
-function KeywordChipInput({
-  values,
-  onChange,
-  placeholder,
-}: {
-  values: string[];
-  onChange: (v: string[]) => void;
-  placeholder?: string;
-}) {
-  const [draft, setDraft] = useState("");
-  const commit = () => {
-    const cleaned = draft
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (cleaned.length === 0) return;
-    const next = Array.from(new Set([...values, ...cleaned]));
-    onChange(next);
-    setDraft("");
-  };
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 min-h-[2.25rem] px-2 py-1 rounded-md border border-border bg-background focus-within:border-accent">
-      {values.map((v) => (
-        <span
-          key={v}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded bg-accent/15 text-accent border border-accent/30"
-        >
-          {v}
-          <button
-            type="button"
-            onClick={() => onChange(values.filter((x) => x !== v))}
-            className="text-accent/70 hover:text-accent"
-            aria-label={`Remove ${v}`}
-          >
-            ×
-          </button>
-        </span>
-      ))}
-      <input
-        type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === ",") {
-            e.preventDefault();
-            commit();
-          } else if (e.key === "Backspace" && !draft && values.length > 0) {
-            onChange(values.slice(0, -1));
-          }
-        }}
-        onBlur={commit}
-        placeholder={values.length === 0 ? placeholder : ""}
-        className="flex-1 min-w-[8rem] bg-transparent text-sm focus:outline-none"
-      />
-    </div>
-  );
-}
-
-function Toggle({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label?: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-        checked ? "bg-accent" : "bg-muted"
-      }`}
-    >
-      <span
-        className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-          checked ? "translate-x-[18px]" : "translate-x-[3px]"
-        }`}
-      />
-      {label && (
-        <span className="ml-11 text-sm text-muted-foreground whitespace-nowrap">
-          {label}
-        </span>
-      )}
-    </button>
-  );
-}
-
-const inputClass =
-  "w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent";
 
 export default function CameraConfigPage() {
   const { authFetch, loading: authLoading } = useAuth();
@@ -748,13 +483,6 @@ export default function CameraConfigPage() {
     }
   }
 
-  function formatInterval(seconds: number): string {
-    if (seconds === 0) return "Every keyframe";
-    if (seconds < 60) return `${seconds}s`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60 ? `${seconds % 60}s` : ""}`.trim();
-    return `${Math.floor(seconds / 3600)}h`;
-  }
-
   if (loading) {
     return (
       <div className="px-6 py-6">
@@ -889,1279 +617,216 @@ export default function CameraConfigPage() {
         </Section>
 
         {/* ── General ── */}
-        <Section title="General" description="Basic camera identification and location">
-          <FieldRow label="Name">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={inputClass}
-            />
-          </FieldRow>
-
-          <FieldRow label="Location Label" hint="Where this camera is">
-            <input
-              type="text"
-              value={locationLabel}
-              onChange={(e) => setLocationLabel(e.target.value)}
-              placeholder="e.g. Front porch"
-              className={inputClass}
-            />
-          </FieldRow>
-        </Section>
+        <GeneralSection
+          locationLabel={locationLabel}
+          name={name}
+          setLocationLabel={setLocationLabel}
+          setName={setName}
+        />
 
         {/* ── Feed ── */}
-        <Section title="Feed"
-          advanced description="Stream source and connection settings">
-          <FieldRow label="Feed Type">
-            <select
-              value={streamType}
-              onChange={(e) => setStreamType(e.target.value)}
-              className={inputClass}
-            >
-              {Object.entries(STREAM_TYPES).map(([val, label]) => (
-                <option key={val} value={val}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-
-          <FieldRow
-            label={streamType === "usb" ? "Device" : "Stream URL"}
-            hint={streamType === "usb" ? "Device index (0, 1) or path" : undefined}
-          >
-            <input
-              type="text"
-              value={streamUrl}
-              onChange={(e) => setStreamUrl(e.target.value)}
-              className={`${inputClass} font-mono text-xs`}
-            />
-          </FieldRow>
-
-          {streamType === "http_snapshot" && (
-            <FieldRow label="Poll Interval" hint="Seconds between snapshot fetches">
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={0.5}
-                  max={30}
-                  step={0.5}
-                  value={snapshotInterval}
-                  onChange={(e) => setSnapshotInterval(Number(e.target.value))}
-                  className="flex-1 accent-accent"
-                />
-                <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                  {snapshotInterval}s
-                </span>
-              </div>
-            </FieldRow>
-          )}
-
-          <FieldRow label="Recording Mode" hint="When to save video to disk">
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {([
-                { value: "off", label: "Off" },
-                { value: "always", label: "Always" },
-                { value: "on_motion", label: "On Motion" },
-                { value: "on_object", label: "On Detection" },
-                { value: "clip", label: "Clips" },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => {
-                    setRecordingMode(opt.value);
-                    setRecordingEnabled(opt.value !== "off");
-                  }}
-                  className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
-                    recordingMode === opt.value
-                      ? "border-accent bg-accent/10 text-accent-foreground"
-                      : "border-border hover:border-muted-foreground text-muted-foreground"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              {recordingMode === "off"
-                ? "No video saved to disk. Live view and AI analysis still work."
-                : recordingMode === "always"
-                  ? "Record continuously in 5-minute segments. Uses the most storage."
-                  : recordingMode === "on_motion"
-                    ? "Start recording when motion is detected. Stop after motion ends."
-                    : recordingMode === "on_object"
-                      ? "Record only when specific objects are detected by the AI pipeline."
-                      : "Save bounded clips around AI observations with pre and post buffers. Best for rare, labelled triggers. Use Continuous if triggers fire constantly."}
-            </p>
-          </FieldRow>
-
-          {recordingMode === "on_object" && (
-            <FieldRow label="Record When Detected" hint="Which objects trigger recording. Labels come from the detection model.">
-              <LabelPicker
-                selected={recordingTriggerObjects}
-                available={modelClasses}
-                loading={modelClassesLoading}
-                onChange={setRecordingTriggerObjects}
-                placeholder="Search labels or press Enter for custom"
-                activeModels={detectionModels.map((m) => m.model)}
-                onAddModel={(model) => {
-                  if (detectionModels.some((m) => m.model === model)) return;
-                  setDetectionModels([
-                    ...detectionModels,
-                    { model, confidence: 0.35, enabled: true, label_filter: [] },
-                  ]);
-                }}
-              />
-              {recordingTriggerObjects.length === 0 && (
-                <p className="text-[11px] text-muted-foreground mt-1.5">
-                  No objects selected. Recording triggers on any detection.
-                </p>
-              )}
-            </FieldRow>
-          )}
-
-          {["clip", "on_motion", "on_object"].includes(recordingMode) && (
-            <>
-              <FieldRow label="Pre-buffer" hint="Seconds of footage to keep before the trigger event">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={1}
-                    max={30}
-                    step={1}
-                    value={recordingClipPre}
-                    onChange={(e) => setRecordingClipPre(Number(e.target.value))}
-                    className="flex-1 accent-accent"
-                  />
-                  <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                    {recordingClipPre}s
-                  </span>
-                </div>
-              </FieldRow>
-
-              <FieldRow label="Post-buffer" hint="Seconds to keep recording after the trigger event">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={1}
-                    max={60}
-                    step={1}
-                    value={recordingClipPost}
-                    onChange={(e) => setRecordingClipPost(Number(e.target.value))}
-                    className="flex-1 accent-accent"
-                  />
-                  <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                    {recordingClipPost}s
-                  </span>
-                </div>
-              </FieldRow>
-            </>
-          )}
-
-          <FieldRow label="Motion Sensitivity" hint="Higher = more sensitive">
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={motionSensitivity}
-                onChange={(e) => setMotionSensitivity(Number(e.target.value))}
-                className="flex-1 accent-accent"
-              />
-              <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                {(motionSensitivity * 100).toFixed(0)}%
-              </span>
-            </div>
-          </FieldRow>
-        </Section>
+        <FeedSection
+          detectionModels={detectionModels}
+          modelClasses={modelClasses}
+          modelClassesLoading={modelClassesLoading}
+          motionSensitivity={motionSensitivity}
+          recordingClipPost={recordingClipPost}
+          recordingClipPre={recordingClipPre}
+          recordingMode={recordingMode}
+          recordingTriggerObjects={recordingTriggerObjects}
+          setDetectionModels={setDetectionModels}
+          setMotionSensitivity={setMotionSensitivity}
+          setRecordingClipPost={setRecordingClipPost}
+          setRecordingClipPre={setRecordingClipPre}
+          setRecordingEnabled={setRecordingEnabled}
+          setRecordingMode={setRecordingMode}
+          setRecordingTriggerObjects={setRecordingTriggerObjects}
+          setSnapshotInterval={setSnapshotInterval}
+          setStreamType={setStreamType}
+          setStreamUrl={setStreamUrl}
+          snapshotInterval={snapshotInterval}
+          streamType={streamType}
+          streamUrl={streamUrl}
+        />
 
         {/* ── Authentication ── */}
         {supportsAuth && (
-          <Section
-            title="Authentication"
-          advanced
-            description="Credentials for accessing the camera feed"
-          >
-            <FieldRow label="Username">
-              {/* autoComplete off + a non-login field name so the browser
-                  does not autofill the account email over the camera's own
-                  username. Autofill here silently corrupts the RTSP creds and
-                  the camera 401s. */}
-              <input
-                type="text"
-                name="nurby-camera-username"
-                autoComplete="off"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="admin"
-                className={inputClass}
-              />
-            </FieldRow>
-
-            <FieldRow label="Password" hint="Leave blank to keep current">
-              {/* new-password stops the browser autofilling a saved login
-                  password over the camera credential. */}
-              <input
-                type="password"
-                name="nurby-camera-password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className={inputClass}
-              />
-            </FieldRow>
-
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <span className="flex-1 h-px bg-border" />
-              or use token
-              <span className="flex-1 h-px bg-border" />
-            </div>
-
-            <FieldRow label="Bearer Token" hint="For API-based cameras">
-              <input
-                type="password"
-                value={authToken}
-                onChange={(e) => setAuthToken(e.target.value)}
-                placeholder="Token or API key"
-                className={`${inputClass} font-mono text-xs`}
-              />
-            </FieldRow>
-          </Section>
+          <AuthSection
+            authToken={authToken}
+            password={password}
+            setAuthToken={setAuthToken}
+            setPassword={setPassword}
+            setUsername={setUsername}
+            username={username}
+          />
         )}
 
         {/* ── VLM / AI Analysis ── */}
-        <Section
-          title="AI Analysis"
-          description="Configure which model analyzes this camera and how"
-        >
-          <FieldRow label="AI model" hint="Leave on System Default to use global setting">
-            <select
-              value={vlmProviderId || ""}
-              onChange={(e) => setVlmProviderId(e.target.value || null)}
-              className={inputClass}
-            >
-              <option value="">
-                System Default{activeProvider ? ` (${activeProvider.name})` : ""}
-              </option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.default_model ? ` · ${p.default_model}` : ""}
-                </option>
-              ))}
-            </select>
-            {selectedProvider && (
-              <p className="text-[11px] text-muted-foreground mt-1">
-                {selectedProvider.kind} · {selectedProvider.base_url}
-              </p>
-            )}
-          </FieldRow>
-
-          <FieldRow label="Analysis Frequency" hint="Rate limit. Minimum gap between consecutive VLM calls">
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min={0}
-                max={300}
-                step={5}
-                value={vlmInterval}
-                onChange={(e) => setVlmInterval(Number(e.target.value))}
-                className="flex-1 accent-accent"
-              />
-              <span className="font-mono text-xs text-muted-foreground w-28 text-right">
-                {formatInterval(vlmInterval)}
-              </span>
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-1">
-              {vlmInterval === 0
-                ? "Analyze every motion keyframe. More API calls"
-                : `Wait at least ${formatInterval(vlmInterval)} between VLM calls`}
-            </p>
-          </FieldRow>
-
-          <FieldRow label="Trigger Condition" hint="Gate. What qualifies a frame for VLM analysis in the first place">
-            <div className="flex gap-1.5 mb-2">
-              {([
-                { value: "always", label: "Always", desc: "Time-based, using frequency above" },
-                { value: "on_object", label: "On Detection", desc: "Only when specific objects are detected" },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setVlmTrigger(opt.value)}
-                  className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
-                    vlmTrigger === opt.value
-                      ? "border-accent bg-accent/10 text-accent-foreground"
-                      : "border-border hover:border-muted-foreground text-muted-foreground"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              {vlmTrigger === "always"
-                ? "VLM runs on every keyframe (respecting frequency limit above)"
-                : vlmTriggerObjects.length > 0
-                  ? `VLM only runs when ${vlmTriggerObjects.join(", ")} detected by object detection`
-                  : "VLM only runs when any object is detected"}
-            </p>
-          </FieldRow>
-
-          {vlmTrigger === "on_object" && (
-            <FieldRow label="Trigger Objects" hint="Labels come from the detection model. Type to search or add a custom label.">
-              <LabelPicker
-                selected={vlmTriggerObjects}
-                available={modelClasses}
-                loading={modelClassesLoading}
-                onChange={setVlmTriggerObjects}
-                placeholder="Search labels or press Enter for custom"
-                activeModels={detectionModels.map((m) => m.model)}
-                onAddModel={(model) => {
-                  if (detectionModels.some((m) => m.model === model)) return;
-                  setDetectionModels([
-                    ...detectionModels,
-                    { model, confidence: 0.35, enabled: true, label_filter: [] },
-                  ]);
-                }}
-              />
-              {vlmTriggerObjects.length === 0 && (
-                <p className="text-[11px] text-muted-foreground mt-1.5">
-                  No objects selected. VLM will trigger on any detection.
-                </p>
-              )}
-            </FieldRow>
-          )}
-
-          <FieldRow label="Max Output Tokens" hint="Per-camera output cap. The provider's cap (set in Settings) further tightens this.">
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min={50}
-                max={1000}
-                step={50}
-                value={vlmMaxTokens}
-                onChange={(e) => setVlmMaxTokens(Number(e.target.value))}
-                className="flex-1 accent-accent"
-              />
-              <span className="font-mono text-xs text-muted-foreground w-16 text-right">
-                {vlmMaxTokens}
-              </span>
-            </div>
-          </FieldRow>
-
-          <FieldRow label="Max Input Tokens" hint="Per-camera prompt size cap. Empty defers to the provider's input cap.">
-            <input
-              type="number"
-              min={64}
-              value={vlmMaxInputTokens}
-              onChange={(e) => setVlmMaxInputTokens(e.target.value)}
-              className={inputClass}
-              placeholder="defer to provider"
-            />
-          </FieldRow>
-
-          <FieldRow
-            label="Custom Prompt"
-            hint="System prompt sent to the VLM for every frame on this camera. It steers what the model focuses on and how it phrases descriptions. Leave blank to use the built-in default."
-          >
-            <textarea
-              value={vlmPrompt}
-              onChange={(e) => setVlmPrompt(e.target.value)}
-              placeholder={DEFAULT_VLM_PROMPT}
-              rows={4}
-              className={`${inputClass} resize-y`}
-            />
-            <div className="flex items-center gap-3 mt-1">
-              <button
-                type="button"
-                onClick={() => setShowDefaultVlmPrompt((v) => !v)}
-                className="text-[11px] text-muted-foreground hover:text-accent transition-colors"
-              >
-                {showDefaultVlmPrompt ? "Hide default prompt" : "Show default prompt"}
-              </button>
-              {vlmPrompt.trim() && (
-                <button
-                  type="button"
-                  onClick={() => setVlmPrompt("")}
-                  className="text-[11px] text-muted-foreground hover:text-danger transition-colors"
-                >
-                  Reset to default
-                </button>
-              )}
-            </div>
-            {showDefaultVlmPrompt && (
-              <div className="mt-1.5 rounded-md border border-border bg-muted/40 p-2.5">
-                <p className="text-[11px] text-muted-foreground mb-1">
-                  Effective default when this field is blank:
-                </p>
-                <p className="text-xs text-foreground/80 leading-relaxed">
-                  {DEFAULT_VLM_PROMPT}
-                </p>
-              </div>
-            )}
-          </FieldRow>
-        </Section>
+        <AiAnalysisSection
+          activeProvider={activeProvider}
+          detectionModels={detectionModels}
+          modelClasses={modelClasses}
+          modelClassesLoading={modelClassesLoading}
+          providers={providers}
+          selectedProvider={selectedProvider}
+          setDetectionModels={setDetectionModels}
+          setShowDefaultVlmPrompt={setShowDefaultVlmPrompt}
+          setVlmInterval={setVlmInterval}
+          setVlmMaxInputTokens={setVlmMaxInputTokens}
+          setVlmMaxTokens={setVlmMaxTokens}
+          setVlmPrompt={setVlmPrompt}
+          setVlmProviderId={setVlmProviderId}
+          setVlmTrigger={setVlmTrigger}
+          setVlmTriggerObjects={setVlmTriggerObjects}
+          showDefaultVlmPrompt={showDefaultVlmPrompt}
+          vlmInterval={vlmInterval}
+          vlmMaxInputTokens={vlmMaxInputTokens}
+          vlmMaxTokens={vlmMaxTokens}
+          vlmPrompt={vlmPrompt}
+          vlmProviderId={vlmProviderId}
+          vlmTrigger={vlmTrigger}
+          vlmTriggerObjects={vlmTriggerObjects}
+        />
 
         {/* Cascade refiner */}
-        <Section
-          title="Refiner (cascade)"
-          advanced
-          description="Re-describes individual frames with a stronger second model the moment a trigger matches (a person appears, a keyword lands). Different from the AI Summarizer below, which periodically condenses many observations into a recap. The refiner upgrades single moments; the summarizer narrates stretches of time."
-        >
-          <FieldRow label="Refiner Model" hint="Off when blank. Needs a second provider entry, different from AI Analysis.">
-            <select
-              value={vlmRefinerProviderId || ""}
-              onChange={(e) => setVlmRefinerProviderId(e.target.value || null)}
-              className={inputClass}
-            >
-              <option value="">Off</option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id} disabled={p.id === vlmProviderId}>
-                  {p.name}
-                  {p.default_model ? ` · ${p.default_model}` : ""}
-                  {p.id === vlmProviderId ? " (primary — pick a different one)" : ""}
-                </option>
-              ))}
-            </select>
-            {providers.filter((p) => p.id !== vlmProviderId).length === 0 && (
-              <p className="text-[11px] text-muted-foreground mt-1.5">
-                Only one AI provider is configured, so there is nothing to
-                cascade to. Add a second provider under Settings → AI
-                Providers — for example another Ollama entry pointing at a
-                larger model (gemma3:27b) — and it will appear here.
-              </p>
-            )}
-            {vlmRefinerProviderId && vlmRefinerProviderId === vlmProviderId && (
-              <p className="text-[11px] text-warning mt-1">
-                Refiner must differ from the primary provider. Cascade
-                disabled until you pick another model.
-              </p>
-            )}
-          </FieldRow>
-
-          {vlmRefinerProviderId && (
-            <>
-              <FieldRow label="Escalate when YOLO sees" hint="Detection labels that fire the refiner. Pet-cams, wildlife, vehicles all welcome.">
-                <LabelPicker
-                  selected={vlmRefinerTriggerObjects}
-                  available={modelClasses}
-                  loading={modelClassesLoading}
-                  onChange={setVlmRefinerTriggerObjects}
-                  placeholder="Search labels or press Enter for custom"
-                  activeModels={detectionModels.map((m) => m.model)}
-                  onAddModel={(model) => {
-                    if (detectionModels.some((m) => m.model === model)) return;
-                    setDetectionModels([
-                      ...detectionModels,
-                      { model, confidence: 0.35, enabled: true, label_filter: [] },
-                    ]);
-                  }}
-                />
-                {vlmRefinerTriggerObjects.length === 0 && vlmRefinerKeywords.length === 0 && (
-                  <p className="text-[11px] text-warning mt-1.5">
-                    No triggers set. Refiner will fire on every frame.
-                    Add labels or keywords to gate it.
-                  </p>
-                )}
-              </FieldRow>
-
-              <FieldRow label="Escalate when primary mentions" hint="Comma or Enter to add. Case-insensitive substring match against the cheap model's text output.">
-                <KeywordChipInput
-                  values={vlmRefinerKeywords}
-                  onChange={setVlmRefinerKeywords}
-                  placeholder="package, delivery, stranger..."
-                />
-              </FieldRow>
-
-              <FieldRow label="Refiner Max Output" hint="Per-camera output cap for the refiner. Empty defers to its provider cap.">
-                <input
-                  type="number"
-                  min={50}
-                  value={vlmRefinerMaxTokens}
-                  onChange={(e) => setVlmRefinerMaxTokens(e.target.value)}
-                  className={inputClass}
-                  placeholder="defer to provider"
-                />
-              </FieldRow>
-
-              <FieldRow label="Refiner Max Input" hint="Per-camera prompt size cap for the refiner. Empty defers to its provider cap.">
-                <input
-                  type="number"
-                  min={64}
-                  value={vlmRefinerMaxInputTokens}
-                  onChange={(e) => setVlmRefinerMaxInputTokens(e.target.value)}
-                  className={inputClass}
-                  placeholder="defer to provider"
-                />
-              </FieldRow>
-            </>
-          )}
-        </Section>
+        <RefinerSection
+          detectionModels={detectionModels}
+          modelClasses={modelClasses}
+          modelClassesLoading={modelClassesLoading}
+          providers={providers}
+          setDetectionModels={setDetectionModels}
+          setVlmRefinerKeywords={setVlmRefinerKeywords}
+          setVlmRefinerMaxInputTokens={setVlmRefinerMaxInputTokens}
+          setVlmRefinerMaxTokens={setVlmRefinerMaxTokens}
+          setVlmRefinerProviderId={setVlmRefinerProviderId}
+          setVlmRefinerTriggerObjects={setVlmRefinerTriggerObjects}
+          vlmProviderId={vlmProviderId}
+          vlmRefinerKeywords={vlmRefinerKeywords}
+          vlmRefinerMaxInputTokens={vlmRefinerMaxInputTokens}
+          vlmRefinerMaxTokens={vlmRefinerMaxTokens}
+          vlmRefinerProviderId={vlmRefinerProviderId}
+          vlmRefinerTriggerObjects={vlmRefinerTriggerObjects}
+        />
 
         {/* Detection */}
-        <Section
-          title="Detection"
-          description="Object and face detection models for this camera"
-        >
-          <FieldRow label="Scene Mode" hint="Controls how unknown faces are handled">
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                {(["indoor", "outdoor"] as const).map((mode) => (
-                  <button key={mode} onClick={() => setSceneMode(mode)}
-                    className={`flex-1 px-3 py-2 text-xs rounded-lg transition-colors ${sceneMode === mode ? "bg-accent/15 text-accent-foreground font-medium border border-accent/30" : "text-muted-foreground border border-border hover:text-foreground hover:bg-muted/50"}`}>
-                    {mode === "indoor" ? "Indoor" : "Outdoor"}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {sceneMode === "outdoor"
-                  ? "Outdoor mode will still recognize people you have already named, but will not try to identify unknown faces. This prevents your People page from filling up with strangers walking by."
-                  : "Indoor mode will track all faces and suggest unknown people for you to name."}
-              </p>
-            </div>
-          </FieldRow>
-
-          <FieldRow label="Group unplated vehicles" hint="Re-identify vehicles with no readable plate by appearance">
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                {([["auto", null], ["on", true], ["off", false]] as const).map(([key, val]) => {
-                  const active = platelessReid === val;
-                  return (
-                    <button key={key} onClick={() => setPlatelessReid(val)}
-                      className={`flex-1 px-3 py-2 text-xs rounded-lg transition-colors capitalize ${active ? "bg-accent/15 text-accent-foreground font-medium border border-accent/30" : "text-muted-foreground border border-border hover:text-foreground hover:bg-muted/50"}`}>
-                      {key}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {platelessReid === null
-                  ? `Auto. ${sceneMode === "outdoor" ? "off for this outdoor camera, since a busy street would create many one-off vehicles." : "on for this camera."} Override with On or Off.`
-                  : platelessReid
-                    ? "On. unplated vehicles seen repeatedly here are grouped into one provisional identity by appearance."
-                    : "Off. unplated vehicles are still detected and timelined, but not grouped into identities."}
-              </p>
-            </div>
-          </FieldRow>
-
-          <FieldRow label="Object Detection" hint="Enable YOLO-based object recognition">
-            <Toggle
-              checked={detectObjects}
-              onChange={setDetectObjects}
-              label={detectObjects ? "Enabled" : "Disabled"}
-            />
-          </FieldRow>
-
-          {detectObjects && (
-            <>
-              {/* Per-camera object-class override */}
-              <FieldRow label="Objects on this camera" hint="Override the global 'objects to detect' list, just for this camera.">
-                <div className="space-y-2">
-                  <Toggle
-                    checked={detectClasses !== null}
-                    onChange={(v) => setDetectClasses(v ? [] : null)}
-                    label={detectClasses !== null ? "Custom for this camera" : "Using global default"}
-                  />
-                  {detectClasses !== null && (
-                    <LabelPicker
-                      selected={detectClasses}
-                      available={modelClasses}
-                      loading={modelClassesLoading}
-                      onChange={setDetectClasses}
-                      placeholder="Pick classes (leave empty to detect everything here)"
-                      activeModels={detectionModels.map((m) => m.model)}
-                    />
-                  )}
-                </div>
-              </FieldRow>
-
-              {/* License plate reading (basic, on by default) */}
-              <FieldRow label="License Plates" hint="Read plates on detected vehicles.">
-                <Toggle
-                  checked={detectPlates}
-                  onChange={setDetectPlates}
-                  label={detectPlates ? "Enabled" : "Disabled"}
-                />
-              </FieldRow>
-
-              {/* Model list */}
-              <FieldRow label="Detection Models" hint="Run multiple models for better accuracy">
-                <div className="space-y-2">
-                  {detectionModels.map((m, i) => (
-                    <div key={i} className="flex items-center gap-2 p-2.5 rounded-md border border-border bg-background">
-                      <Toggle
-                        checked={m.enabled}
-                        onChange={(v) => {
-                          const updated = [...detectionModels];
-                          updated[i] = { ...m, enabled: v };
-                          setDetectionModels(updated);
-                        }}
-                      />
-                      <DetectionModelSelect
-                        value={m.model}
-                        onChange={(v) => {
-                          const updated = [...detectionModels];
-                          updated[i] = { ...m, model: v };
-                          setDetectionModels(updated);
-                        }}
-                      />
-                      <div className="flex items-center gap-1.5 min-w-[140px]">
-                        <input
-                          type="range"
-                          min={0.05}
-                          max={0.95}
-                          step={0.05}
-                          value={m.confidence}
-                          onChange={(e) => {
-                            const updated = [...detectionModels];
-                            updated[i] = { ...m, confidence: Number(e.target.value) };
-                            setDetectionModels(updated);
-                          }}
-                          className="flex-1 accent-accent"
-                        />
-                        <span className="font-mono text-[11px] text-muted-foreground w-8 text-right">
-                          {(m.confidence * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDetectionModels(detectionModels.filter((_, j) => j !== i));
-                        }}
-                        className="text-muted-foreground hover:text-danger transition-colors text-sm px-1"
-                        title="Remove model"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const used = new Set(detectionModels.map((x) => x.model));
-                      const next = DETECTION_MODEL_CATALOG.find((m) => !used.has(m.value))?.value || "yolov8n.pt";
-                      setDetectionModels([
-                        ...detectionModels,
-                        { model: next, confidence: 0.35, enabled: true, label_filter: [] },
-                      ]);
-                    }}
-                    className="w-full py-2 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border rounded-md hover:border-accent transition-colors"
-                  >
-                    + Add detection model
-                  </button>
-
-                  {detectionModels.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground">
-                      No models configured. Single YOLO model with {(objectConfidence * 100).toFixed(0)}% confidence used as fallback.
-                    </p>
-                  )}
-                </div>
-              </FieldRow>
-
-              {/* Fallback confidence (shown when no models configured) */}
-              {detectionModels.length === 0 && (
-                <FieldRow label="Confidence Threshold" hint="Min confidence for default YOLO model">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={0.05}
-                      max={0.95}
-                      step={0.05}
-                      value={objectConfidence}
-                      onChange={(e) => setObjectConfidence(Number(e.target.value))}
-                      className="flex-1 accent-accent"
-                    />
-                    <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                      {(objectConfidence * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                </FieldRow>
-              )}
-
-              {/* Merge strategy (only when multiple models) */}
-              {detectionModels.length > 1 && (
-                <>
-                  <FieldRow label="Merge Strategy" hint="How to combine results from multiple models">
-                    <div className="flex gap-1.5">
-                      {([
-                        { value: "any", label: "Any Model", desc: "Union of all detections" },
-                        { value: "consensus", label: "Consensus", desc: "Multiple models must agree" },
-                        { value: "best", label: "Best Score", desc: "Highest confidence per object" },
-                      ] as const).map((opt) => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setDetectionMerge(opt.value)}
-                          className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
-                            detectionMerge === opt.value
-                              ? "border-accent bg-accent/10 text-accent-foreground"
-                              : "border-border hover:border-muted-foreground text-muted-foreground"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-1.5">
-                      {detectionMerge === "any"
-                        ? "Keep all detections from all models. Overlapping boxes get de-duplicated."
-                        : detectionMerge === "consensus"
-                          ? `Only keep objects detected by at least ${detectionConsensusMin} model${detectionConsensusMin !== 1 ? "s" : ""}.`
-                          : "For each detected object region, keep only the highest confidence result."}
-                    </p>
-                  </FieldRow>
-
-                  {detectionMerge === "consensus" && (
-                    <FieldRow label="Min Agreement" hint="Number of models that must detect the same object">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="range"
-                          min={2}
-                          max={Math.max(2, detectionModels.filter((m) => m.enabled).length)}
-                          step={1}
-                          value={detectionConsensusMin}
-                          onChange={(e) => setDetectionConsensusMin(Number(e.target.value))}
-                          className="flex-1 accent-accent"
-                        />
-                        <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                          {detectionConsensusMin} / {detectionModels.filter((m) => m.enabled).length}
-                        </span>
-                      </div>
-                    </FieldRow>
-                  )}
-                </>
-              )}
-            </>
-          )}
-
-          <FieldRow label="Face Detection" hint="Detect and match known people">
-            <Toggle
-              checked={detectFaces}
-              onChange={setDetectFaces}
-              label={detectFaces ? "Enabled" : "Disabled"}
-            />
-          </FieldRow>
-        </Section>
+        <DetectionSection
+          detectClasses={detectClasses}
+          detectFaces={detectFaces}
+          detectObjects={detectObjects}
+          detectPlates={detectPlates}
+          detectionConsensusMin={detectionConsensusMin}
+          detectionMerge={detectionMerge}
+          detectionModels={detectionModels}
+          modelClasses={modelClasses}
+          modelClassesLoading={modelClassesLoading}
+          objectConfidence={objectConfidence}
+          platelessReid={platelessReid}
+          sceneMode={sceneMode}
+          setDetectClasses={setDetectClasses}
+          setDetectFaces={setDetectFaces}
+          setDetectObjects={setDetectObjects}
+          setDetectPlates={setDetectPlates}
+          setDetectionConsensusMin={setDetectionConsensusMin}
+          setDetectionMerge={setDetectionMerge}
+          setDetectionModels={setDetectionModels}
+          setObjectConfidence={setObjectConfidence}
+          setPlatelessReid={setPlatelessReid}
+          setSceneMode={setSceneMode}
+        />
 
         {/* ── Activity Digest ── */}
-        <Section
-          title="Periodic recaps"
-          description="Configure the automatic activity summary shown on the cameras page"
-        >
-          <FieldRow label="Recaps">
-            <Toggle
-              checked={digestEnabled}
-              onChange={setDigestEnabled}
-              label={digestEnabled ? "Enabled" : "Disabled"}
-            />
-          </FieldRow>
-
-          {digestEnabled && (
-            <>
-              <FieldRow label="Time Period" hint="How far back to look for activity">
-                <div className="flex gap-1.5 flex-wrap">
-                  {(["1h", "6h", "12h", "24h", "48h", "7d"] as const).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setDigestPeriod(p)}
-                      className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
-                        digestPeriod === p
-                          ? "border-accent bg-accent/10 text-accent-foreground"
-                          : "border-border hover:border-muted-foreground text-muted-foreground"
-                      }`}
-                    >
-                      {p === "1h" ? "1 hour"
-                        : p === "6h" ? "6 hours"
-                        : p === "12h" ? "12 hours"
-                        : p === "24h" ? "24 hours"
-                        : p === "48h" ? "2 days"
-                        : "7 days"}
-                    </button>
-                  ))}
-                </div>
-              </FieldRow>
-
-              <FieldRow label="Recap model" hint="Which model generates the summary">
-                <select
-                  value={digestProviderId || ""}
-                  onChange={(e) => setDigestProviderId(e.target.value || null)}
-                  className={inputClass}
-                >
-                  <option value="">
-                    System Default{activeProvider ? ` (${activeProvider.name})` : ""}
-                  </option>
-                  {providers.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                      {p.default_model ? ` · ${p.default_model}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </FieldRow>
-
-              <FieldRow label="Recap prompt" hint="Custom instructions for generating the summary">
-                <textarea
-                  value={digestPrompt}
-                  onChange={(e) => setDigestPrompt(e.target.value)}
-                  placeholder="You are Nurby, an AI camera monitoring assistant. Summarize the following camera observations into a brief digest. Be concise (2-4 sentences). Mention key activity, people, and patterns."
-                  rows={3}
-                  className={`${inputClass} resize-y`}
-                />
-                {digestPrompt.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => setDigestPrompt("")}
-                    className="text-[11px] text-muted-foreground hover:text-danger mt-1 transition-colors"
-                  >
-                    Reset to default
-                  </button>
-                )}
-              </FieldRow>
-            </>
-          )}
-        </Section>
+        <RecapsSection
+          activeProvider={activeProvider}
+          digestEnabled={digestEnabled}
+          digestPeriod={digestPeriod}
+          digestPrompt={digestPrompt}
+          digestProviderId={digestProviderId}
+          providers={providers}
+          setDigestEnabled={setDigestEnabled}
+          setDigestPeriod={setDigestPeriod}
+          setDigestPrompt={setDigestPrompt}
+          setDigestProviderId={setDigestProviderId}
+        />
 
         {/* ── Summarization ── */}
-        <Section
-          title="Summarization"
-          advanced
-          description="Generate periodic or event-bound narrative recaps using a VLM. Summaries fuse per-frame descriptions, transcripts, and identity facts into a single story."
-        >
-          <FieldRow label="Mode" hint="Periodic fires on a fixed timer. Event opens on detection and closes after a quiet window. Both runs them independently.">
-            <div className="flex gap-1.5">
-              {(["off", "periodic", "event", "both"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setSummaryMode(m)}
-                  className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${
-                    summaryMode === m
-                      ? "border-accent bg-accent/10 text-accent-foreground"
-                      : "border-border hover:border-muted-foreground text-muted-foreground"
-                  }`}
-                >
-                  {m === "off" ? "Off" : m === "periodic" ? "Periodic" : m === "event" ? "Event" : "Both"}
-                </button>
-              ))}
-            </div>
-          </FieldRow>
-
-          {summaryMode !== "off" && (
-            <>
-              <FieldRow label="Summary Model" hint="Falls back to the AI Analysis provider, then the system default.">
-                <select
-                  value={summaryProviderId || ""}
-                  onChange={(e) => setSummaryProviderId(e.target.value || null)}
-                  className={inputClass}
-                >
-                  <option value="">
-                    Use AI Analysis Provider{vlmProviderId ? "" : activeProvider ? ` (${activeProvider.name})` : ""}
-                  </option>
-                  {providers.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                      {p.default_model ? ` · ${p.default_model}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </FieldRow>
-
-              <FieldRow label="Max Output Tokens" hint="Cap on summary length. 400 fits a 2-4 sentence recap comfortably.">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={100}
-                    max={1500}
-                    step={50}
-                    value={summaryMaxTokens}
-                    onChange={(e) => setSummaryMaxTokens(Number(e.target.value))}
-                    className="flex-1 accent-accent"
-                  />
-                  <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                    {summaryMaxTokens} tok
-                  </span>
-                </div>
-              </FieldRow>
-            </>
-          )}
-
-          {(summaryMode === "periodic" || summaryMode === "both") && (
-            <FieldRow label="Period" hint="How often a periodic summary fires. The first one anchors when summarization is enabled, not retroactively.">
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={300}
-                  max={14400}
-                  step={300}
-                  value={summaryPeriodSeconds}
-                  onChange={(e) => setSummaryPeriodSeconds(Number(e.target.value))}
-                  className="flex-1 accent-accent"
-                />
-                <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                  {formatInterval(summaryPeriodSeconds)}
-                </span>
-              </div>
-            </FieldRow>
-          )}
-
-          {(summaryMode === "event" || summaryMode === "both") && (
-            <>
-              <FieldRow label="Event Trigger Objects" hint="Detection labels that count as activity. Default is person. Override for pet-cams, wildlife, vehicles.">
-                <LabelPicker
-                  selected={summaryEventTriggerObjects}
-                  available={modelClasses}
-                  loading={modelClassesLoading}
-                  onChange={setSummaryEventTriggerObjects}
-                  placeholder="Search labels or press Enter for custom"
-                  activeModels={detectionModels.map((m) => m.model)}
-                  onAddModel={(model) => {
-                    if (detectionModels.some((m) => m.model === model)) return;
-                    setDetectionModels([
-                      ...detectionModels,
-                      { model, confidence: 0.35, enabled: true, label_filter: [] },
-                    ]);
-                  }}
-                />
-                {summaryEventTriggerObjects.length === 0 && (
-                  <p className="text-[11px] text-warning mt-1.5">
-                    No labels selected. Event mode will never fire.
-                  </p>
-                )}
-              </FieldRow>
-
-              <FieldRow label="Quiet Window" hint="Seconds without a matching detection before the event closes and gets summarized.">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={10}
-                    max={600}
-                    step={5}
-                    value={summaryEventQuietSeconds}
-                    onChange={(e) => setSummaryEventQuietSeconds(Number(e.target.value))}
-                    className="flex-1 accent-accent"
-                  />
-                  <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                    {formatInterval(summaryEventQuietSeconds)}
-                  </span>
-                </div>
-              </FieldRow>
-
-              <FieldRow label="Minimum Duration" hint="Drop events shorter than this. Filters out flickers like a bird flying through.">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={1}
-                    max={120}
-                    step={1}
-                    value={summaryEventMinDurationSeconds}
-                    onChange={(e) => setSummaryEventMinDurationSeconds(Number(e.target.value))}
-                    className="flex-1 accent-accent"
-                  />
-                  <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                    {formatInterval(summaryEventMinDurationSeconds)}
-                  </span>
-                </div>
-              </FieldRow>
-            </>
-          )}
-        </Section>
+        <SummarizationSection
+          activeProvider={activeProvider}
+          detectionModels={detectionModels}
+          modelClasses={modelClasses}
+          modelClassesLoading={modelClassesLoading}
+          providers={providers}
+          setDetectionModels={setDetectionModels}
+          setSummaryEventMinDurationSeconds={setSummaryEventMinDurationSeconds}
+          setSummaryEventQuietSeconds={setSummaryEventQuietSeconds}
+          setSummaryEventTriggerObjects={setSummaryEventTriggerObjects}
+          setSummaryMaxTokens={setSummaryMaxTokens}
+          setSummaryMode={setSummaryMode}
+          setSummaryPeriodSeconds={setSummaryPeriodSeconds}
+          setSummaryProviderId={setSummaryProviderId}
+          summaryEventMinDurationSeconds={summaryEventMinDurationSeconds}
+          summaryEventQuietSeconds={summaryEventQuietSeconds}
+          summaryEventTriggerObjects={summaryEventTriggerObjects}
+          summaryMaxTokens={summaryMaxTokens}
+          summaryMode={summaryMode}
+          summaryPeriodSeconds={summaryPeriodSeconds}
+          summaryProviderId={summaryProviderId}
+          vlmProviderId={vlmProviderId}
+        />
 
         {/* ── Audio Conversations ── */}
-        <Section
-          title="Audio Conversations"
-          description="Group consecutive transcripts into a single rolling card and summarize the conversation when it goes quiet."
-        >
-          <FieldRow label="Conversation Gap" hint="Maximum silence between transcripts that still counts as the same conversation. Beyond this, a new conversation opens.">
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min={5}
-                max={300}
-                step={5}
-                value={conversationGapSeconds}
-                onChange={(e) => setConversationGapSeconds(Number(e.target.value))}
-                className="flex-1 accent-accent"
-              />
-              <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                {formatInterval(conversationGapSeconds)}
-              </span>
-            </div>
-          </FieldRow>
-
-          <FieldRow label="Generate Summary" hint="When the conversation closes, send the full transcript to the summary VLM and replace the live caption with a one-line recap.">
-            <Toggle
-              checked={conversationSummaryEnabled}
-              onChange={setConversationSummaryEnabled}
-              label={conversationSummaryEnabled ? "Enabled" : "Disabled"}
-            />
-          </FieldRow>
-
-          {conversationSummaryEnabled && (
-            <FieldRow label="Minimum Messages" hint="Skip the summary call for short conversations (one-liners) to save tokens.">
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  step={1}
-                  value={conversationMinMessages}
-                  onChange={(e) => setConversationMinMessages(Number(e.target.value))}
-                  className="flex-1 accent-accent"
-                />
-                <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                  {conversationMinMessages} msg
-                </span>
-              </div>
-            </FieldRow>
-          )}
-        </Section>
+        <AudioConversationsSection
+          conversationGapSeconds={conversationGapSeconds}
+          conversationMinMessages={conversationMinMessages}
+          conversationSummaryEnabled={conversationSummaryEnabled}
+          setConversationGapSeconds={setConversationGapSeconds}
+          setConversationMinMessages={setConversationMinMessages}
+          setConversationSummaryEnabled={setConversationSummaryEnabled}
+        />
 
         {/* ── Incident tracking ── */}
-        <Section
-          title="Incident tracking"
-          description="Group repeated observations of the same person or object on this camera into one persistent rolling card with a stable id, live updates, and a final summary on close."
-        >
-          <FieldRow label="Tracking">
-            <Toggle
-              checked={incidentTrackingEnabled}
-              onChange={setIncidentTrackingEnabled}
-              label={incidentTrackingEnabled ? "On" : "Off"}
-            />
-          </FieldRow>
-
-          {incidentTrackingEnabled && (
-            <FieldRow label="Idle window" hint="Seconds without a matching detection before the incident closes and gets summarized.">
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={60}
-                  max={3600}
-                  step={30}
-                  value={incidentIdleSeconds}
-                  onChange={(e) => setIncidentIdleSeconds(Number(e.target.value))}
-                  className="flex-1 accent-accent"
-                />
-                <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                  {formatInterval(incidentIdleSeconds)}
-                </span>
-              </div>
-            </FieldRow>
-          )}
-        </Section>
+        <IncidentTrackingSection
+          incidentIdleSeconds={incidentIdleSeconds}
+          incidentTrackingEnabled={incidentTrackingEnabled}
+          setIncidentIdleSeconds={setIncidentIdleSeconds}
+          setIncidentTrackingEnabled={setIncidentTrackingEnabled}
+        />
 
         {/* ── Smart Track (PTZ auto-follow) ── */}
         {camera?.stream_type === "rtsp" && (
-          <Section
-            title="Smart Track"
-          advanced
-            description="Auto-follow detections with the camera's PTZ motor. Requires ONVIF pan/tilt support. The camera will keep the target near frame center and return to the home preset after the target leaves for a few seconds."
-          >
-            <FieldRow label="Enabled" hint="Master switch. Off means manual PTZ only.">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={smartTrackEnabled}
-                  onChange={(e) => setSmartTrackEnabled(e.target.checked)}
-                  className="accent-accent"
-                />
-                <span className="text-sm">{smartTrackEnabled ? "Following" : "Off"}</span>
-              </label>
-            </FieldRow>
-
-            {smartTrackEnabled && (
-              <>
-                <FieldRow label="Follow these labels" hint="Detections matching any of these labels are eligible targets. Empty means follow anything not in the ignore list.">
-                  <KeywordChipInput
-                    values={smartTrackTargets}
-                    onChange={setSmartTrackTargets}
-                    placeholder="person, cat, ..."
-                  />
-                </FieldRow>
-
-                <FieldRow label="Never follow" hint="Hard deny. The camera will not chase these. Useful if you have a resident dog.">
-                  <KeywordChipInput
-                    values={smartTrackIgnore}
-                    onChange={setSmartTrackIgnore}
-                    placeholder="dog, ..."
-                  />
-                </FieldRow>
-
-                <FieldRow label="Priority order" hint="When multiple targets are visible, the camera picks the first label in this list. Falls back to bbox area then confidence.">
-                  <KeywordChipInput
-                    values={smartTrackPriority}
-                    onChange={setSmartTrackPriority}
-                    placeholder="person, cat, ..."
-                  />
-                </FieldRow>
-
-                <FieldRow label="Home preset" hint="ONVIF preset to return to when no target has been seen for the lost window. Set presets on the camera itself, then pick one here.">
-                  <select
-                    value={smartTrackHomePreset}
-                    onChange={(e) => setSmartTrackHomePreset(e.target.value)}
-                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
-                  >
-                    <option value="">No home (just stop)</option>
-                    {smartTrackPresets.map((p) => (
-                      <option key={p.token} value={p.token}>{p.name} ({p.token})</option>
-                    ))}
-                  </select>
-                </FieldRow>
-
-                <FieldRow label="Lost window" hint="Seconds without a target before returning home.">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={1}
-                      max={30}
-                      step={1}
-                      value={smartTrackLostSeconds}
-                      onChange={(e) => setSmartTrackLostSeconds(Number(e.target.value))}
-                      className="flex-1 accent-accent"
-                    />
-                    <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                      {smartTrackLostSeconds}s
-                    </span>
-                  </div>
-                </FieldRow>
-
-                <FieldRow label="Auto-zoom" hint="When target is small, zoom in. When target fills the frame, zoom out. Off by default since over-zoom can lose the target on fast motion.">
-                  <label className="inline-flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={smartTrackZoom}
-                      onChange={(e) => setSmartTrackZoom(e.target.checked)}
-                      className="accent-accent"
-                    />
-                    <span className="text-sm">{smartTrackZoom ? "Auto zoom on" : "Fixed zoom"}</span>
-                  </label>
-                </FieldRow>
-
-                <FieldRow label="Deadzone" hint="Tolerance around frame center where no move is issued. Higher = less twitchy, lower = tighter centering.">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={0.05}
-                      max={0.4}
-                      step={0.01}
-                      value={smartTrackDeadzone}
-                      onChange={(e) => setSmartTrackDeadzone(Number(e.target.value))}
-                      className="flex-1 accent-accent"
-                    />
-                    <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                      {smartTrackDeadzone.toFixed(2)}
-                    </span>
-                  </div>
-                </FieldRow>
-
-                <FieldRow label="Max speed" hint="Cap on ONVIF pan/tilt velocity. 1.0 is the camera's hardware max. Lower values produce smoother but slower follow.">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={0.1}
-                      max={1.0}
-                      step={0.05}
-                      value={smartTrackMaxSpeed}
-                      onChange={(e) => setSmartTrackMaxSpeed(Number(e.target.value))}
-                      className="flex-1 accent-accent"
-                    />
-                    <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                      {smartTrackMaxSpeed.toFixed(2)}
-                    </span>
-                  </div>
-                </FieldRow>
-
-                <FieldRow label="Gain" hint="Proportional gain on the bbox error. Higher = snappier, lower = smoother. 1.5 is a good default for most ONVIF cams.">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={0.5}
-                      max={3.0}
-                      step={0.1}
-                      value={smartTrackGain}
-                      onChange={(e) => setSmartTrackGain(Number(e.target.value))}
-                      className="flex-1 accent-accent"
-                    />
-                    <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                      {smartTrackGain.toFixed(1)}
-                    </span>
-                  </div>
-                </FieldRow>
-
-                <FieldRow label="Min confidence" hint="Detections below this confidence are ignored as follow targets.">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={0.2}
-                      max={0.9}
-                      step={0.05}
-                      value={smartTrackMinConfidence}
-                      onChange={(e) => setSmartTrackMinConfidence(Number(e.target.value))}
-                      className="flex-1 accent-accent"
-                    />
-                    <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                      {smartTrackMinConfidence.toFixed(2)}
-                    </span>
-                  </div>
-                </FieldRow>
-
-                <FieldRow label="Move budget" hint="Hard cap on ContinuousMove commands per minute. Protects against mechanical wear on the gimbal motor.">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={5}
-                      max={120}
-                      step={5}
-                      value={smartTrackMoveBudget}
-                      onChange={(e) => setSmartTrackMoveBudget(Number(e.target.value))}
-                      className="flex-1 accent-accent"
-                    />
-                    <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                      {smartTrackMoveBudget}/min
-                    </span>
-                  </div>
-                </FieldRow>
-
-                <FieldRow label="ONVIF profile token" hint="Most cameras use Profile_1. Change only if your camera uses a different media profile.">
-                  <input
-                    type="text"
-                    value={ptzProfileToken}
-                    onChange={(e) => setPtzProfileToken(e.target.value)}
-                    placeholder="Profile_1"
-                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono"
-                  />
-                </FieldRow>
-              </>
-            )}
-          </Section>
+          <SmartTrackSection
+            ptzProfileToken={ptzProfileToken}
+            setPtzProfileToken={setPtzProfileToken}
+            setSmartTrackDeadzone={setSmartTrackDeadzone}
+            setSmartTrackEnabled={setSmartTrackEnabled}
+            setSmartTrackGain={setSmartTrackGain}
+            setSmartTrackHomePreset={setSmartTrackHomePreset}
+            setSmartTrackIgnore={setSmartTrackIgnore}
+            setSmartTrackLostSeconds={setSmartTrackLostSeconds}
+            setSmartTrackMaxSpeed={setSmartTrackMaxSpeed}
+            setSmartTrackMinConfidence={setSmartTrackMinConfidence}
+            setSmartTrackMoveBudget={setSmartTrackMoveBudget}
+            setSmartTrackPriority={setSmartTrackPriority}
+            setSmartTrackTargets={setSmartTrackTargets}
+            setSmartTrackZoom={setSmartTrackZoom}
+            smartTrackDeadzone={smartTrackDeadzone}
+            smartTrackEnabled={smartTrackEnabled}
+            smartTrackGain={smartTrackGain}
+            smartTrackHomePreset={smartTrackHomePreset}
+            smartTrackIgnore={smartTrackIgnore}
+            smartTrackLostSeconds={smartTrackLostSeconds}
+            smartTrackMaxSpeed={smartTrackMaxSpeed}
+            smartTrackMinConfidence={smartTrackMinConfidence}
+            smartTrackMoveBudget={smartTrackMoveBudget}
+            smartTrackPresets={smartTrackPresets}
+            smartTrackPriority={smartTrackPriority}
+            smartTrackTargets={smartTrackTargets}
+            smartTrackZoom={smartTrackZoom}
+          />
         )}
 
         {/* ── YOLO-World prompts ── */}
         {detectionModels.some((m) => m.model.includes("world")) && (
-          <Section
-            title="Open-vocabulary prompts"
-          advanced
-            description="When a YOLO-World model is in this camera's detection list, these phrases drive what it detects. Plain English. Add anything you want flagged."
-          >
-            <FieldRow label="Class names to detect">
-              <KeywordChipInput
-                values={yoloWorldPrompts}
-                onChange={setYoloWorldPrompts}
-                placeholder="person, package, delivery driver, raccoon, ..."
-              />
-              <p className="text-[11px] text-muted-foreground mt-1.5">
-                Each phrase becomes a detection class. Combine with the
-                existing Detection Models picker to pair YOLO-World
-                with a faster general-purpose model.
-              </p>
-            </FieldRow>
-          </Section>
+          <YoloWorldPromptsSection setYoloWorldPrompts={setYoloWorldPrompts} yoloWorldPrompts={yoloWorldPrompts} />
         )}
 
         {/* ── Privacy zones ── */}
@@ -2179,144 +844,17 @@ export default function CameraConfigPage() {
         </Section>
 
         {/* ── Timezone ── */}
-        <Section
-          title="Timezone"
-          advanced
-          description="Used to render timestamps in this camera's local time. Anchors per-camera scheduling too."
-        >
-          <FieldRow label="Timezone">
-            <select
-              value={cameraTimezone}
-              onChange={(e) => setCameraTimezone(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">(use system default)</option>
-              {timezoneOptions().map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Pick the timezone where this camera is physically located.
-              Leave blank to follow the household-wide system timezone
-              from Settings.
-            </p>
-          </FieldRow>
-        </Section>
+        <TimezoneSection cameraTimezone={cameraTimezone} setCameraTimezone={setCameraTimezone} />
 
         {/* ── Retention ── */}
-        <Section
-          title="Storage Retention"
-          description="Control how long recordings are kept on disk for this camera"
-        >
-          <FieldRow label="Retention Policy">
-            <div className="flex gap-1.5">
-              {([
-                { value: "none", label: "Keep Forever" },
-                { value: "time", label: "By Age" },
-                { value: "size", label: "By Size" },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setRetentionMode(opt.value)}
-                  className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
-                    retentionMode === opt.value
-                      ? "border-accent bg-accent/10 text-accent-foreground"
-                      : "border-border hover:border-muted-foreground text-muted-foreground"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </FieldRow>
-
-          {retentionMode === "time" && (
-            <FieldRow label="Keep Recordings For" hint="Delete recordings older than this">
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={1}
-                  max={365}
-                  step={1}
-                  value={retentionDays}
-                  onChange={(e) => setRetentionDays(Number(e.target.value))}
-                  className="flex-1 accent-accent"
-                />
-                <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                  {retentionDays < 30
-                    ? `${retentionDays}d`
-                    : retentionDays < 365
-                      ? `${Math.floor(retentionDays / 30)}mo ${retentionDays % 30 ? `${retentionDays % 30}d` : ""}`.trim()
-                      : `${Math.floor(retentionDays / 365)}y`}
-                </span>
-              </div>
-              <div className="flex gap-2 mt-2">
-                {[7, 14, 30, 90, 180, 365].map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setRetentionDays(d)}
-                    className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
-                      retentionDays === d
-                        ? "border-accent text-accent-foreground"
-                        : "border-border text-muted-foreground hover:border-muted-foreground"
-                    }`}
-                  >
-                    {d < 30 ? `${d}d` : d < 365 ? `${d / 30}mo` : "1y"}
-                  </button>
-                ))}
-              </div>
-            </FieldRow>
-          )}
-
-          {retentionMode === "size" && (
-            <FieldRow label="Max Storage" hint="Delete oldest recordings when limit is reached">
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={1}
-                  max={500}
-                  step={1}
-                  value={retentionGb}
-                  onChange={(e) => setRetentionGb(Number(e.target.value))}
-                  className="flex-1 accent-accent"
-                />
-                <span className="font-mono text-xs text-muted-foreground w-16 text-right">
-                  {retentionGb < 1000 ? `${retentionGb} GB` : `${(retentionGb / 1000).toFixed(1)} TB`}
-                </span>
-              </div>
-              <div className="flex gap-2 mt-2">
-                {[5, 10, 25, 50, 100, 250, 500].map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => setRetentionGb(g)}
-                    className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
-                      retentionGb === g
-                        ? "border-accent text-accent-foreground"
-                        : "border-border text-muted-foreground hover:border-muted-foreground"
-                    }`}
-                  >
-                    {g} GB
-                  </button>
-                ))}
-              </div>
-            </FieldRow>
-          )}
-
-          {retentionMode !== "none" && (
-            <div className="rounded-md bg-warning/5 border border-warning/20 px-3 py-2">
-              <p className="text-xs text-warning">
-                {retentionMode === "time"
-                  ? `Recordings older than ${retentionDays} day${retentionDays !== 1 ? "s" : ""} will be automatically deleted from disk.`
-                  : `When recordings exceed ${retentionGb} GB, oldest files will be deleted to make space.`}
-              </p>
-            </div>
-          )}
-        </Section>
+        <RetentionSection
+          retentionDays={retentionDays}
+          retentionGb={retentionGb}
+          retentionMode={retentionMode}
+          setRetentionDays={setRetentionDays}
+          setRetentionGb={setRetentionGb}
+          setRetentionMode={setRetentionMode}
+        />
 
         {/* ── PTZ Control ── */}
         {streamType === "rtsp" && (
@@ -2343,82 +881,13 @@ export default function CameraConfigPage() {
         </Section>
 
         {/* ── Danger Zone ── */}
-        <Section title="Danger Zone">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-foreground">Delete this camera</p>
-              <p className="text-xs text-muted-foreground">
-                Removes config and stops stream. Recordings remain on disk.
-              </p>
-            </div>
-            {!deleteConfirm ? (
-              <button
-                onClick={() => setDeleteConfirm(true)}
-                className="px-3 py-1.5 text-sm rounded-md border border-danger/30 text-danger hover:bg-danger/10 transition-colors"
-              >
-                Delete
-              </button>
-            ) : (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setDeleteConfirm(false)}
-                  className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="px-3 py-1.5 text-sm rounded-md bg-danger text-white hover:opacity-90 transition-opacity"
-                >
-                  Confirm Delete
-                </button>
-              </div>
-            )}
-          </div>
-        </Section>
+        <DangerZoneSection deleteConfirm={deleteConfirm} handleDelete={handleDelete} setDeleteConfirm={setDeleteConfirm} />
       </div>
       )}
 
       {/* Sticky save bar. Only on settings tab. */}
       {activeTab === "settings" && (
-      <div className="sticky bottom-0 mt-6 -mx-6 px-6 py-3 bg-background/80 backdrop-blur-sm border-t border-border flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs">
-          {error && <span className="text-danger">{error}</span>}
-          {!error && saving && (
-            <>
-              <svg
-                className="animate-spin w-3 h-3 text-muted-foreground"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <circle
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeDasharray="40 60"
-                />
-              </svg>
-              <span className="text-muted-foreground">Saving.</span>
-            </>
-          )}
-          {!error && !saving && saved && (
-            <span className="text-accent">All changes saved</span>
-          )}
-          {!error && !saving && !saved && (
-            <span className="text-muted-foreground/70">
-              Changes save automatically
-            </span>
-          )}
-        </div>
-        <Link
-          href="/"
-          className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
-        >
-          Done
-        </Link>
-      </div>
+      <SaveBar error={error} saved={saved} saving={saving} />
       )}
     </div>
   );
