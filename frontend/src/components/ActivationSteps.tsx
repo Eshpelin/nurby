@@ -22,15 +22,19 @@ const primary = `${button} bg-accent text-white hover:opacity-90`;
 // claims success on its own: only a real, delivered, confirmed event flips
 // `verified`, and everything else is shown as still-to-do.
 export function ActivationSteps({ goal, cameraId }: Props) {
-  const { authFetch } = useAuth();
+  const { authFetch, token } = useAuth();
   const [view, setView] = useState<ActivationView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [evidence, setEvidence] = useState<{ event_id: string; recording_id: string; seek_seconds: number } | null>(null);
+  const [played, setPlayed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setEvidence(null);
+    setPlayed(false);
     try {
       const res = await authFetch("/api/auth/me/activation");
       if (!res.ok) throw new Error("load");
@@ -60,12 +64,31 @@ export function ActivationSteps({ goal, cameraId }: Props) {
         throw new Error(detail);
       }
       setView(await res.json());
+      setEvidence(null);
+      setPlayed(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : failMsg);
     } finally {
       setBusy(false);
     }
   }, [authFetch]);
+
+  async function reviewEvidence() {
+    setBusy(true);
+    setError(null);
+    setEvidence(null);
+    setPlayed(false);
+    try {
+      const res = await authFetch(`/api/auth/me/activation/evidence?goal=${encodeURIComponent(goal)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Could not load test evidence.");
+      setEvidence(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load test evidence.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (loading) return <p role="status" className="mt-4 text-sm text-muted-foreground">Loading activation progress…</p>;
 
@@ -102,6 +125,7 @@ export function ActivationSteps({ goal, cameraId }: Props) {
       </ol>
 
       <div className="mt-3 flex flex-wrap gap-2">
+        <button className={button} disabled={busy} onClick={() => void load()}>Refresh test progress</button>
         {!view?.draft_rule_id && (
           <button
             className={button}
@@ -125,17 +149,35 @@ export function ActivationSteps({ goal, cameraId }: Props) {
         )}
         {view?.steps[1].done && !view.steps[2].done && (
           <>
-            {view.rule_id && <Link href={`/rules?event=1`} className={button}>Open the alert clip</Link>}
+            <button className={button} disabled={busy} onClick={() => void reviewEvidence()}>Review this test clip</button>
             <button
               className={primary}
-              disabled={busy}
-              onClick={() => post("/api/auth/me/activation/confirm", { goal }, "Confirm needs a delivered test event first.")}
+              disabled={busy || !played || !evidence}
+              onClick={() => post("/api/auth/me/activation/confirm", { goal, event_id: evidence?.event_id }, "Confirm needs a delivered test event first.")}
             >
-              I opened the clip, it was useful
+              I received this alert and this clip was useful
             </button>
           </>
         )}
+        {view?.steps[0].done && (
+          <button className={button} disabled={busy} onClick={() => post("/api/auth/me/activation/retest", { goal }, "Could not start a new test.")}>Start a new test</button>
+        )}
       </div>
+
+      {evidence && token && (
+        <div className="mt-3">
+          <video
+            aria-label="Recording for this test event"
+            controls
+            className="w-full rounded-lg"
+            src={`/api/recordings/${evidence.recording_id}/stream?token=${encodeURIComponent(token)}`}
+            onLoadedMetadata={(e) => { e.currentTarget.currentTime = evidence.seek_seconds; }}
+            onPlaying={() => setPlayed(true)}
+            onError={() => { setPlayed(false); setError("This clip could not be played. Check recording availability before confirming."); }}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">Play this test clip before confirming. Confirmation records your own assessment that you received the alert and found its evidence useful.</p>
+        </div>
+      )}
 
       {view?.verified ? (
         <p className="mt-3 text-xs text-green-600">

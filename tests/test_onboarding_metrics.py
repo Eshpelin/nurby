@@ -13,7 +13,6 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
 
 from services.api.routes import auth as auth_routes
 from shared.onboarding_metrics import MilestoneRow, PreferenceRow, compute_metrics

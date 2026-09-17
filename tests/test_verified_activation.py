@@ -19,7 +19,7 @@ import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -129,7 +129,8 @@ class _RecorderDB:
 
 
 def _milestone(**kw):
-    base = dict(test_kind=None, delivery_ok=None, tested_at=None, event_id=None, rule_id=uuid.uuid4())
+    base = dict(test_kind=None, delivery_ok=None, tested_at=None, event_id=None, rule_id=uuid.uuid4(),
+                camera_id=uuid.uuid4(), configured_at=T0, confirmed_useful_at=None)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -137,7 +138,7 @@ def _milestone(**kw):
 def test_recorder_marks_real_delivered_test():
     m = _milestone()
     db = _RecorderDB([m], SimpleNamespace(stream_type="rtsp"))
-    _run(record_event_for_activation(db, rule_id=m.rule_id, camera_id=uuid.uuid4(), event_id=uuid.uuid4(), delivered=True))
+    _run(record_event_for_activation(db, rule_id=m.rule_id, camera_id=m.camera_id, event_id=uuid.uuid4(), delivered=True))
     assert m.test_kind == "real"
     assert m.delivery_ok is True
     assert m.tested_at is not None
@@ -147,14 +148,14 @@ def test_recorder_marks_real_delivered_test():
 def test_recorder_labels_demo_camera_synthetic():
     m = _milestone()
     db = _RecorderDB([m], SimpleNamespace(stream_type="file"))
-    _run(record_event_for_activation(db, rule_id=m.rule_id, camera_id=uuid.uuid4(), event_id=uuid.uuid4(), delivered=True))
+    _run(record_event_for_activation(db, rule_id=m.rule_id, camera_id=m.camera_id, event_id=uuid.uuid4(), delivered=True))
     assert m.test_kind == "synthetic"
 
 
 def test_recorder_does_not_regress_a_real_delivered_test():
     m = _milestone(test_kind="real", delivery_ok=True, tested_at=T0)
     db = _RecorderDB([m], SimpleNamespace(stream_type="file"))
-    _run(record_event_for_activation(db, rule_id=m.rule_id, camera_id=uuid.uuid4(), event_id=uuid.uuid4(), delivered=True))
+    _run(record_event_for_activation(db, rule_id=m.rule_id, camera_id=m.camera_id, event_id=uuid.uuid4(), delivered=True))
     # Stays real; a later synthetic test does not overwrite it.
     assert m.test_kind == "real"
     assert m.tested_at == T0
@@ -266,18 +267,141 @@ def test_confirm_refuses_without_a_delivered_test():
     )
     db = _ApiDB(milestone=m)
     with pytest.raises(HTTPException) as ei:
-        _run(auth_routes.confirm_useful(body=ConfirmRequest(goal="entrance"), current_user=_Admin(), db=db))
+        _run(auth_routes.confirm_useful(body=ConfirmRequest(goal="entrance", event_id=uuid.uuid4()), current_user=_Admin(), db=db))
     assert ei.value.status_code == 409
     assert m.confirmed_useful_at is None
 
 
-def test_confirm_marks_verified_after_a_real_delivered_test():
-    m = SimpleNamespace(
-        goal="entrance", rule_id=uuid.uuid4(), camera_id=None, draft_rule_id=None,
-        configured_at=T0, tested_at=T0, confirmed_useful_at=None,
-        test_kind="real", delivery_ok=True, install_ready_at=T0,
-    )
-    db = _ApiDB(milestone=m)
-    view = _run(auth_routes.confirm_useful(body=ConfirmRequest(goal="entrance"), current_user=_Admin(), db=db))
+def test_confirm_marks_verified_after_a_real_delivered_test(monkeypatch):
+    m, db = evidence_fixture(monkeypatch)
+    view = _run(auth_routes.confirm_useful(body=ConfirmRequest(goal="entrance", event_id=m.event_id), current_user=_Admin(), db=db))
     assert m.confirmed_useful_at is not None
     assert view.verified is True
+    assert view.event_id == str(m.event_id)
+    stamp = m.confirmed_useful_at
+    _run(auth_routes.confirm_useful(body=ConfirmRequest(goal="entrance", event_id=m.event_id), current_user=_Admin(), db=db))
+    assert m.confirmed_useful_at == stamp
+
+
+def evidence_fixture(monkeypatch):
+    from shared.models import Event, Recording
+    from services.api.routes import recordings
+
+    m = SimpleNamespace(
+        goal="entrance", rule_id=uuid.uuid4(), camera_id=uuid.uuid4(), draft_rule_id=None,
+        configured_at=T0, tested_at=T0, confirmed_useful_at=None,
+        test_kind="real", delivery_ok=True, install_ready_at=T0, event_id=uuid.uuid4(),
+    )
+    recording = SimpleNamespace(id=uuid.uuid4(), camera_id=m.camera_id, started_at=T0, duration_seconds=60)
+    event = SimpleNamespace(id=m.event_id, rule_id=m.rule_id, camera_id=m.camera_id,
+                            recording_id=recording.id, fired_at=T0 + timedelta(seconds=10))
+    db = _ApiDB(milestone=m)
+    db.rows = {(Event, event.id): event, (Recording, recording.id): recording}
+
+    async def get(model, ident):
+        return db.rows.get((model, ident))
+
+    db.get = get
+    monkeypatch.setattr(recordings, "_get_disk_path_or_404", lambda r: "/test/clip.mp4")
+    return m, db
+
+
+def test_evidence_resolves_exact_event_and_recording(monkeypatch):
+    m, db = evidence_fixture(monkeypatch)
+    evidence = _run(auth_routes.get_activation_evidence(goal=m.goal, current_user=_Admin(), db=db))
+    assert evidence["event_id"] == str(m.event_id)
+    assert evidence["seek_seconds"] == 10
+    assert evidence["recording_id"]
+
+
+def test_confirmation_rejects_an_event_other_than_the_one_reviewed(monkeypatch):
+    m, db = evidence_fixture(monkeypatch)
+    with pytest.raises(HTTPException) as exc:
+        _run(auth_routes.confirm_useful(body=ConfirmRequest(goal=m.goal, event_id=uuid.uuid4()), current_user=_Admin(), db=db))
+    assert exc.value.status_code == 409
+    assert m.confirmed_useful_at is None
+
+
+@pytest.mark.parametrize("failure", ["missing_event", "wrong_rule", "wrong_camera", "missing_recording", "foreign_recording", "file_missing"])
+def test_missing_or_mismatched_evidence_cannot_be_confirmed(monkeypatch, failure):
+    from shared.models import Event, Recording
+    from services.api.routes import recordings
+
+    m, db = evidence_fixture(monkeypatch)
+    event = db.rows[(Event, m.event_id)]
+    if failure == "missing_event":
+        del db.rows[(Event, m.event_id)]
+    elif failure == "wrong_rule":
+        event.rule_id = uuid.uuid4()
+    elif failure == "wrong_camera":
+        event.camera_id = uuid.uuid4()
+    elif failure == "missing_recording":
+        event.recording_id = None
+    elif failure == "foreign_recording":
+        db.rows[(Recording, event.recording_id)].camera_id = uuid.uuid4()
+    else:
+        def missing(_r):
+            raise HTTPException(status_code=404, detail="Recording missing")
+        monkeypatch.setattr(recordings, "_get_disk_path_or_404", missing)
+    with pytest.raises(HTTPException):
+        _run(auth_routes.confirm_useful(body=ConfirmRequest(goal=m.goal, event_id=m.event_id), current_user=_Admin(), db=db))
+    assert m.confirmed_useful_at is None
+
+
+def test_recorder_preserves_the_real_event_under_review():
+    event_id = uuid.uuid4()
+    m = _milestone(test_kind="real", delivery_ok=True, tested_at=T0, event_id=event_id, confirmed_useful_at=T0)
+    db = _RecorderDB([m], SimpleNamespace(stream_type="rtsp"))
+    _run(record_event_for_activation(db, rule_id=m.rule_id, camera_id=m.camera_id, event_id=uuid.uuid4(), delivered=True))
+    assert m.event_id == event_id
+    assert m.confirmed_useful_at == T0
+    assert db.committed is False
+
+
+def test_real_event_cannot_inherit_synthetic_confirmation():
+    m = _milestone(test_kind="synthetic", delivery_ok=True, tested_at=T0, event_id=uuid.uuid4(), confirmed_useful_at=T0)
+    db = _RecorderDB([m], SimpleNamespace(stream_type="rtsp"))
+    _run(record_event_for_activation(db, rule_id=m.rule_id, camera_id=m.camera_id, event_id=uuid.uuid4(), delivered=True))
+    assert m.test_kind == "real"
+    assert m.confirmed_useful_at is None
+
+
+@pytest.mark.parametrize("failure", ["unconfigured", "other_camera", "missing_event"])
+def test_recorder_ignores_unrelated_or_incomplete_tests(failure):
+    m = _milestone()
+    camera_id, event_id = m.camera_id, uuid.uuid4()
+    if failure == "unconfigured":
+        m.configured_at = None
+    elif failure == "other_camera":
+        camera_id = uuid.uuid4()
+    else:
+        event_id = None
+    db = _RecorderDB([m], SimpleNamespace(stream_type="rtsp"))
+    _run(record_event_for_activation(db, rule_id=m.rule_id, camera_id=camera_id, event_id=event_id, delivered=True))
+    assert m.tested_at is None
+    assert db.committed is False
+
+
+def test_retest_clears_all_evidence_and_confirmation(monkeypatch):
+    from shared.activation import RetestRequest
+
+    m, db = evidence_fixture(monkeypatch)
+    m.confirmed_useful_at = T0
+    view = _run(auth_routes.restart_activation_test(body=RetestRequest(goal=m.goal), current_user=_Admin(), db=db))
+    assert view.next_step == "tested"
+    assert view.verified is False
+    assert m.event_id is None and m.test_kind is None and m.delivery_ok is None
+    assert m.confirmed_useful_at is None and m.tested_at is None
+
+
+def test_switching_configured_rule_clears_prior_verification(monkeypatch):
+    m, db = evidence_fixture(monkeypatch)
+    m.confirmed_useful_at = T0
+    rule = SimpleNamespace(id=uuid.uuid4(), enabled=True,
+                           trigger_pattern={"camera_id": str(m.camera_id)}, actions=[{"type": "notify"}])
+    async def get(_model, _ident):
+        return rule
+    db.get = get
+    view = _run(auth_routes.mark_configured(body=ConfigureRequest(goal=m.goal, rule_id=str(rule.id)), current_user=_Admin(), db=db))
+    assert view.verified is False
+    assert m.event_id is None and m.confirmed_useful_at is None

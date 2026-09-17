@@ -49,7 +49,7 @@ async def record_event_for_activation(
         return
     try:
         result = await db.execute(
-            select(ActivationMilestone).where(ActivationMilestone.rule_id == _as_uuid(rule_id))
+            select(ActivationMilestone).where(ActivationMilestone.rule_id == _as_uuid(rule_id)).with_for_update()
         )
         milestones = result.scalars().all()
         if not milestones:
@@ -64,10 +64,16 @@ async def record_event_for_activation(
 
         changed = False
         for m in milestones:
-            # Do not regress a real, delivered test to a weaker one.
-            already_real = m.test_kind == "real" and m.delivery_ok is True
-            if already_real and not (not synthetic and delivered):
+            if m.configured_at is None or m.camera_id != _as_uuid(camera_id) or _as_uuid(event_id) is None:
                 continue
+            # Do not regress a real, delivered test to a weaker one.
+            # Keep the exact evidence stable while someone reviews it. A new
+            # test is explicitly requested by clearing the old milestone.
+            already_real = m.test_kind == "real" and m.delivery_ok is True
+            if already_real:
+                continue
+            if m.event_id != _as_uuid(event_id):
+                m.confirmed_useful_at = None
             m.tested_at = now
             m.test_kind = test_kind
             m.delivery_ok = bool(delivered)

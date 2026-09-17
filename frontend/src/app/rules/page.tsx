@@ -17,7 +17,7 @@ import type { RuleHealth } from "@/components/rules/RuleCard";
 import { RuleEventsPanel } from "@/components/rules/RuleEventsPanel";
 import { TemplateGallery } from "@/components/rules/TemplateGallery";
 import { WebhookSubscriptions } from "@/components/rules/WebhookSubscriptions";
-import { RULE_PREFILL_KEY } from "@/app/rules/new/page";
+import { RULE_PREFILL_KEY } from "@/lib/rule-prefill";
 import { HouseholdModeControl } from "@/components/HouseholdModeControl";
 import type { HouseholdMode } from "@/lib/household-mode";
 

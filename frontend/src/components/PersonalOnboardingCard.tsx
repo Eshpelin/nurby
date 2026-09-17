@@ -186,7 +186,7 @@ export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }:
             <Link href="/timeline" className={button}>Open timeline</Link>
           </div>
           {current.template && <p className="mt-3 text-xs text-muted-foreground">Recommendation saved; monitoring is not verified here. {current.needs} Review your camera, schedule and recipient before enabling a rule, then test a real alert.</p>}
-          {DETECTION_GOALS.has(preferences.goal) && <ActivationSteps goal={preferences.goal} cameraId={null} />}
+          {DETECTION_GOALS.has(preferences.goal) && <ActivationSteps key={preferences.goal} goal={preferences.goal} cameraId={null} />}
           <DailyPriorities
             key={`${preferences.goal}:${preferences.focus}:${preferences.paused ? 1 : 0}:${preferences.place_label ?? ""}`}
             paused={!!preferences.paused}

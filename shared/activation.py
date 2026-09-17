@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -54,6 +55,20 @@ class ConfigureRequest(BaseModel):
 
 class ConfirmRequest(BaseModel):
     goal: str
+    event_id: UUID
+
+
+class RetestRequest(BaseModel):
+    goal: str
+
+
+def clear_activation_test(milestone) -> None:
+    """A new configuration or test cannot inherit someone else's evidence."""
+    milestone.tested_at = None
+    milestone.test_kind = None
+    milestone.delivery_ok = None
+    milestone.event_id = None
+    milestone.confirmed_useful_at = None
 
 
 def starter_key_for_goal(goal: str) -> str | None:
@@ -71,6 +86,7 @@ class ActivationStepView(BaseModel):
 
 class ActivationView(BaseModel):
     goal: str
+    event_id: str | None = None
     rule_id: str | None = None
     camera_id: str | None = None
     draft_rule_id: str | None = None
@@ -94,6 +110,7 @@ def _elapsed(start: datetime | None, end: datetime | None) -> float | None:
 def compute_activation(
     *,
     goal: str,
+    event_id: str | None = None,
     rule_id: str | None = None,
     camera_id: str | None = None,
     draft_rule_id: str | None = None,
@@ -135,6 +152,7 @@ def compute_activation(
 
     return ActivationView(
         goal=goal,
+        event_id=event_id,
         rule_id=rule_id,
         camera_id=camera_id,
         draft_rule_id=draft_rule_id,
