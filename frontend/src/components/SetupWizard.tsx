@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { GOALS, goalsForPlace, type Experience, type ExperiencePreferences, type Goal, type Place } from "@/lib/onboarding";
 import { DETECTION_GOALS, milestoneForGoal, type ActivationList, type ActivationView } from "@/lib/activation";
 import { DailyPriorities } from "@/components/DailyPriorities";
+import { Coachmark } from "@/components/Coachmark";
 
 interface Props {
   cameraCount: number;
@@ -41,6 +42,12 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
   // Once the person navigates the wizard themselves, stop auto-repositioning
   // them from server state so a background poll never yanks the step.
   const touched = useRef(false);
+  // Coach-marks anchor to controls the wizard actually renders. Dismissals are
+  // remembered per key so a hint never nags after it's been closed.
+  const cameraBtnRef = useRef<HTMLButtonElement>(null);
+  const draftLinkRef = useRef<HTMLAnchorElement>(null);
+  const [dismissedMarks, setDismissedMarks] = useState<Set<string>>(() => new Set());
+  const dismissMark = useCallback((k: string) => setDismissedMarks((s) => new Set(s).add(k)), []);
 
   const load = useCallback(async () => {
     try {
@@ -145,6 +152,14 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
   }, [putExperience]);
 
   const goto = (k: StepKey) => { touched.current = true; setStep(k); };
+  // Skipping is pure navigation: it never calls an activation endpoint, so a
+  // skipped step is never marked configured/tested/confirmed. The pill and
+  // stepper keep reading true server state. The current step's skip target,
+  // or `null` to close the wizard outright.
+  const skipTarget: Record<StepKey, StepKey | null> = {
+    goal: null, rule: "test", test: "confirm", confirm: null, done: null,
+  };
+  const skip = () => { const to = skipTarget[step]; if (to) goto(to); else onClose(); };
   const changePlace = (place: Place) => setDraft((d) => ({
     ...d, place, goal: goalsForPlace(place).includes(d.goal) ? d.goal : goalsForPlace(place)[0],
   }));
@@ -194,6 +209,18 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
               {step === "test" && renderTest()}
               {step === "confirm" && renderConfirm()}
               {step === "done" && renderDone()}
+              {step !== "done" && (
+                <div className="mt-6 border-t border-border/60 pt-3">
+                  <button
+                    type="button"
+                    onClick={skip}
+                    disabled={busy}
+                    className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+                  >
+                    {skipTarget[step] ? "Skip this step for now" : "Do this later"}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -276,7 +303,12 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
             <p className="mt-1 text-sm text-muted-foreground">Nurby will create a starter rule for this goal, switched off. Nothing is armed until you review and enable it.</p>
             {!camerasLoading && cameraCount === 0 && (
               <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                Connect a real camera first. <button className="font-medium text-accent hover:underline" onClick={onSetupCamera}>Set up a camera</button>
+                Connect a real camera first. <button ref={cameraBtnRef} className="font-medium text-accent hover:underline" onClick={onSetupCamera}>Set up a camera</button>
+                {!dismissedMarks.has("camera") && (
+                  <Coachmark targetRef={cameraBtnRef} onDismiss={() => dismissMark("camera")}>
+                    Start here. Connect a camera, then come back to this step to build the rule.
+                  </Coachmark>
+                )}
               </div>
             )}
             <div className="mt-5 flex items-center gap-2">
@@ -290,8 +322,13 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
           <>
             <p className="mt-1 text-sm text-muted-foreground">Open the draft, choose the camera and how you want to be alerted, then switch it on. Come back and mark it configured.</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link href={`/rules/${draftId}/edit`} className={btn}>Open the draft rule</Link>
+              <Link ref={draftLinkRef} href={`/rules/${draftId}/edit`} className={btn}>Open the draft rule</Link>
             </div>
+            {!dismissedMarks.has("draft") && (
+              <Coachmark targetRef={draftLinkRef} onDismiss={() => dismissMark("draft")}>
+                This opens the draft rule&apos;s editor. Pick the camera and how you&apos;re alerted, switch it on, then return here.
+              </Coachmark>
+            )}
             <div className="mt-5 flex items-center gap-2">
               <button className={primary} disabled={busy}
                 onClick={() => call("/api/auth/me/activation/configure", { goal, rule_id: draftId }, "The rule is not enabled, has no camera, or has no way to alert you yet.")}>

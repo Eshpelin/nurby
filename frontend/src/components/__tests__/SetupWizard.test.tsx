@@ -82,6 +82,41 @@ describe("SetupWizard", () => {
     expect(screen.getByText(/in 4 min/)).toBeInTheDocument();
   });
 
+  it("skips the rule step to test without configuring it on the server", async () => {
+    const posts: string[] = [];
+    mocks.fetch.mockImplementation(router(
+      { preferences: { version: 1, place: "home", goal: "entrance", focus: "daily" }, audience: "administrator" },
+      { milestones: [{ goal: "entrance", steps: steps(false, false, false), verified: false, next_step: "configured", test_kind: null, seconds_to_first_useful: null, rule_id: "r1", camera_id: null, draft_rule_id: "d1" }] },
+      (url) => { posts.push(url); return {}; },
+    ));
+    render(<SetupWizard {...props} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Skip this step for now/ }));
+    // Advances to the test step by navigation only.
+    expect(await screen.findByText("Trigger a real event")).toBeInTheDocument();
+    // No activation endpoint was hit, so nothing was faked as complete.
+    expect(posts.some((u) => u.includes("/configure"))).toBe(false);
+  });
+
+  it("closes the wizard when skipping the goal step", async () => {
+    const onClose = vi.fn();
+    mocks.fetch.mockImplementation(router({ preferences: null, audience: "administrator" }, { milestones: [] }));
+    render(<SetupWizard {...props} onClose={onClose} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Do this later/ }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a dismissible coach-mark pointing at the camera setup control", async () => {
+    mocks.fetch.mockImplementation(router(
+      { preferences: { version: 1, place: "home", goal: "entrance", focus: "daily" }, audience: "administrator" },
+      { milestones: [{ goal: "entrance", steps: steps(false, false, false), verified: false, next_step: "configured", test_kind: null, seconds_to_first_useful: null, rule_id: "r1", camera_id: null, draft_rule_id: null }] },
+    ));
+    render(<SetupWizard {...props} cameraCount={0} />);
+    expect(await screen.findByRole("button", { name: /Set up a camera/ })).toBeInTheDocument();
+    expect(await screen.findByText(/Start here. Connect a camera/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Dismiss tip/ }));
+    await waitFor(() => expect(screen.queryByText(/Start here. Connect a camera/)).not.toBeInTheDocument());
+  });
+
   it("takes an explore goal straight to a done screen", async () => {
     mocks.fetch.mockImplementation(router(
       { preferences: { version: 1, place: null, goal: "explore", focus: "daily" }, audience: "administrator" },
