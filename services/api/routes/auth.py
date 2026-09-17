@@ -16,6 +16,12 @@ from shared.activation import (
     starter_key_for_goal,
 )
 from shared.daily_workflow import Capabilities, DailyWorkflow, daily_workflow
+from shared.onboarding_metrics import (
+    MilestoneRow,
+    OnboardingMetrics,
+    PreferenceRow,
+    compute_metrics,
+)
 from shared.auth import (
     MOBILE_PAIR_TTL_SECONDS,
     create_access_token,
@@ -524,6 +530,47 @@ async def get_daily_workflow(
         place_label=prefs.place_label if prefs else None,
         caps=caps,
     )
+
+
+# ── Onboarding validation metrics (#204 phase 4) ─────────────────────
+
+
+@router.get("/onboarding/metrics", response_model=OnboardingMetrics)
+async def onboarding_metrics(
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Install-wide, aggregate onboarding outcomes. Admin-only, no PII: only
+    counts, a verified-activation rate and the median time to first useful
+    result."""
+    pref_rows = (
+        await db.execute(select(User.onboarding_preferences).where(User.onboarding_preferences.isnot(None)))
+    ).scalars().all()
+    preferences = [
+        PreferenceRow(
+            goal=(p or {}).get("goal"),
+            place=(p or {}).get("place"),
+            focus=(p or {}).get("focus", "daily"),
+            paused=bool((p or {}).get("paused", False)),
+        )
+        for p in pref_rows
+        if isinstance(p, dict)
+    ]
+
+    ms = (await db.execute(select(ActivationMilestone))).scalars().all()
+    milestones = [
+        MilestoneRow(
+            goal=m.goal,
+            configured_at=m.configured_at,
+            confirmed_useful_at=m.confirmed_useful_at,
+            install_ready_at=m.install_ready_at,
+            test_kind=m.test_kind,
+            delivery_ok=m.delivery_ok,
+        )
+        for m in ms
+    ]
+
+    return compute_metrics(preferences, milestones, now=datetime.now(timezone.utc))
 
 
 # ── Mobile QR pairing ────────────────────────────────────────────────
