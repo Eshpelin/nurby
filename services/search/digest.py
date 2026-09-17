@@ -14,6 +14,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.search.query import _call_text_llm
+from shared.camera_access import ALL, AllowedCameras
 from shared.models import Camera, FaceCluster, FaceClusterSample, Observation, Person
 
 logger = logging.getLogger("nurby.search.digest")
@@ -63,6 +64,8 @@ async def generate_digest(
     target_time: datetime | None = None,
     provider=None,
     custom_prompt: str | None = None,
+    *,
+    allowed: AllowedCameras = ALL,
 ) -> dict:
     """Generate a summary digest for the given period.
 
@@ -97,6 +100,8 @@ async def generate_digest(
         Observation.started_at >= start,
         Observation.started_at <= now,
     ]
+    if allowed is not ALL:
+        filters.append(Observation.camera_id.in_(allowed))
     if camera_id:
         filters.append(Observation.camera_id == camera_id)
 
@@ -317,16 +322,21 @@ async def generate_digest(
     # captured inside [start, now].
     unknown_highlights: list[str] = []
     try:
-        sample_rows = await db.execute(
-            select(FaceCluster)
-            .join(FaceClusterSample, FaceClusterSample.cluster_id == FaceCluster.id)
-            .where(FaceClusterSample.captured_at >= start)
-            .where(FaceClusterSample.captured_at <= now)
-            .where(FaceCluster.status == "pending")
-            .where(FaceCluster.person_id.is_(None))
-            .distinct()
-        )
-        seen_clusters = sample_rows.scalars().all()
+        # Cluster descriptions and last-seen values are global across cameras.
+        # Omit this enrichment for scoped viewers rather than leaking another feed.
+        if allowed is not ALL:
+            seen_clusters = []
+        else:
+            sample_rows = await db.execute(
+                select(FaceCluster)
+                .join(FaceClusterSample, FaceClusterSample.cluster_id == FaceCluster.id)
+                .where(FaceClusterSample.captured_at >= start)
+                .where(FaceClusterSample.captured_at <= now)
+                .where(FaceCluster.status == "pending")
+                .where(FaceCluster.person_id.is_(None))
+                .distinct()
+            )
+            seen_clusters = sample_rows.scalars().all()
         for cluster in seen_clusters:
             last = cluster.last_seen_at
             when = _format_timestamp(last) if last else ""

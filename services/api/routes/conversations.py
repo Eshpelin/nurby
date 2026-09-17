@@ -20,8 +20,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.auth import get_current_user, require_query_token
+from shared.auth import get_current_user, get_media_user
 from shared.config import settings
+from shared.camera_access import allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
 from shared.models import Conversation, Person, Transcript, User
 from shared.paths import resolve_inside
@@ -86,7 +87,8 @@ async def list_conversations(
     _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    q = select(Conversation).order_by(Conversation.started_at.desc())
+    allowed = await allowed_camera_ids(_user, db)
+    q = apply_camera_filter(select(Conversation), allowed, Conversation.camera_id).order_by(Conversation.started_at.desc())
     if camera_id:
         q = q.where(Conversation.camera_id == camera_id)
     if finalized is not None:
@@ -102,15 +104,15 @@ async def list_conversations(
 @router.get("/{conversation_id}/clip")
 async def get_conversation_clip(
     conversation_id: uuid.UUID,
-    token: str | None = Query(default=None),
+    _user: User = Depends(get_media_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Stream the conversation-anchored mp4 clip. Accepts ?token= so
     HTML5 <video> can load it without JS-side header injection."""
-    require_query_token(token)
     row = await db.get(Conversation, conversation_id)
     if row is None or not row.clip_path:
         raise HTTPException(status_code=404, detail="clip not found")
+    await require_camera_in_scope(_user, db, row.camera_id, detail="clip not found")
     path = resolve_inside(row.clip_path, settings.recordings_path)
     if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -138,6 +140,7 @@ async def reinterpret_conversation(
     row = await db.get(Conversation, conversation_id)
     if row is None:
         raise HTTPException(status_code=404, detail="conversation not found")
+    await require_camera_in_scope(_user, db, row.camera_id, detail="conversation not found")
 
     # Lazy import to avoid pulling perception deps at API import time.
     from services.perception.conversation_finalizer import ConversationFinalizer
@@ -156,6 +159,7 @@ async def reinterpret_conversation(
         await db.execute(
             select(Transcript)
             .where(Transcript.conversation_id == conversation_id)
+            .where(Transcript.camera_id == row.camera_id)
             .where(Transcript.filtered.is_(False))
             .order_by(Transcript.started_at.asc())
         )
@@ -215,10 +219,12 @@ async def get_conversation(
     row = await db.get(Conversation, conversation_id)
     if row is None:
         raise HTTPException(status_code=404, detail="conversation not found")
+    await require_camera_in_scope(_user, db, row.camera_id, detail="conversation not found")
     tx_rows = (
         await db.execute(
             select(Transcript)
             .where(Transcript.conversation_id == conversation_id)
+            .where(Transcript.camera_id == row.camera_id)
             .where(Transcript.filtered.is_(False))
             .order_by(Transcript.started_at.asc())
         )

@@ -19,6 +19,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
+from shared.camera_access import allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
 from shared.models import Transcript, User
 from shared.paths import escape_like
@@ -62,7 +63,8 @@ async def list_transcripts(
     _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Transcript).order_by(Transcript.started_at.desc())
+    allowed = await allowed_camera_ids(_user, db)
+    query = apply_camera_filter(select(Transcript), allowed, Transcript.camera_id).order_by(Transcript.started_at.desc())
     clauses = []
     if camera_id:
         clauses.append(Transcript.camera_id == camera_id)
@@ -91,7 +93,8 @@ async def export_transcripts_csv(
 ):
     """GDPR-friendly export. CSV stream so multi-million-row exports
     do not blow the API server memory."""
-    query = select(Transcript).order_by(Transcript.started_at.asc())
+    allowed = await allowed_camera_ids(_user, db)
+    query = apply_camera_filter(select(Transcript), allowed, Transcript.camera_id).order_by(Transcript.started_at.asc())
     clauses = [Transcript.filtered.is_(False)]
     if camera_id:
         clauses.append(Transcript.camera_id == camera_id)
@@ -164,6 +167,7 @@ async def get_transcript(
     t = await db.get(Transcript, transcript_id)
     if t is None:
         raise HTTPException(status_code=404, detail="Transcript not found")
+    await require_camera_in_scope(_user, db, t.camera_id, detail="Transcript not found")
     return t
 
 
@@ -177,6 +181,7 @@ async def update_transcript(
     t = await db.get(Transcript, transcript_id)
     if t is None:
         raise HTTPException(status_code=404, detail="Transcript not found")
+    await require_camera_in_scope(_user, db, t.camera_id, detail="Transcript not found")
     if not t.text_edited:
         # Snapshot the original on the first edit only.
         t.original_text = t.text
@@ -196,6 +201,7 @@ async def delete_transcript(
     t = await db.get(Transcript, transcript_id)
     if t is None:
         raise HTTPException(status_code=404, detail="Transcript not found")
+    await require_camera_in_scope(_user, db, t.camera_id, detail="Transcript not found")
     await db.delete(t)
     await db.commit()
 
@@ -206,6 +212,7 @@ async def bulk_delete_for_camera(
     _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await require_camera_in_scope(_user, db, camera_id, detail="Camera not found")
     result = await db.execute(
         select(Transcript).where(Transcript.camera_id == camera_id)
     )

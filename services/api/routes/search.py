@@ -19,6 +19,7 @@ from services.search.query import (
     search_transcripts,
 )
 from shared.auth import get_current_user, require_admin
+from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
 from shared.models import Camera, DigestEntry, Observation, Provider, User
 from shared.schemas import DigestEntryResponse
@@ -59,8 +60,10 @@ async def search(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Search observations with structured filters and text matching."""
+    allowed = await allowed_camera_ids(_current_user, db)
     results = await search_observations(
         db,
+        allowed=allowed,
         query=q,
         camera_id=camera_id,
         person_name=person,
@@ -91,33 +94,34 @@ async def search_union(
     summaries. Each kind contributes up to ``limit_per_kind`` rows. The
     UI is responsible for ranking / interleaving by recency or distance.
     """
+    allowed = await allowed_camera_ids(_current_user, db)
     selected = {k.strip() for k in kinds.split(",") if k.strip()}
     results: list[dict] = []
     if "observations" in selected:
         results.extend(
             await search_observations(
-                db, query=q, camera_id=camera_id,
+                db, query=q, camera_id=camera_id, allowed=allowed,
                 time_from=time_from, time_to=time_to, limit=limit_per_kind,
             )
         )
     if "transcripts" in selected:
         results.extend(
             await search_transcripts(
-                db, query=q, camera_id=camera_id,
+                db, query=q, camera_id=camera_id, allowed=allowed,
                 time_from=time_from, time_to=time_to, limit=limit_per_kind,
             )
         )
     if "conversations" in selected:
         results.extend(
             await search_conversations(
-                db, query=q, camera_id=camera_id,
+                db, query=q, camera_id=camera_id, allowed=allowed,
                 time_from=time_from, time_to=time_to, limit=limit_per_kind,
             )
         )
     if "summaries" in selected:
         results.extend(
             await search_summaries(
-                db, query=q, camera_id=camera_id,
+                db, query=q, camera_id=camera_id, allowed=allowed,
                 time_from=time_from, time_to=time_to, limit=limit_per_kind,
             )
         )
@@ -136,7 +140,8 @@ async def ask_question(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Answer a natural language question grounded in observation history."""
-    result = await answer_question(db, body.question)
+    allowed = await allowed_camera_ids(_current_user, db)
+    result = await answer_question(db, body.question, allowed=allowed)
     return QuestionResponse(**result)
 
 
@@ -147,6 +152,9 @@ async def get_digest(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Generate an activity digest for the given period (on demand)."""
+    allowed = await allowed_camera_ids(_current_user, db)
+    if camera_id is not None:
+        await require_camera_in_scope(_current_user, db, camera_id, detail="Camera not found")
     custom_prompt = None
     provider = None
 
@@ -168,7 +176,7 @@ async def get_digest(
 
     return await generate_digest(
         db, period=period, camera_id=camera_id,
-        provider=provider, custom_prompt=custom_prompt,
+        provider=provider, custom_prompt=custom_prompt, allowed=allowed,
     )
 
 
@@ -180,7 +188,8 @@ async def list_digests(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """List stored digests with optional camera_id filter, newest first."""
-    stmt = select(DigestEntry).order_by(DigestEntry.generated_at.desc())
+    allowed = await allowed_camera_ids(_current_user, db)
+    stmt = apply_camera_filter(select(DigestEntry), allowed, DigestEntry.camera_id).order_by(DigestEntry.generated_at.desc())
 
     if camera_id is not None:
         stmt = stmt.where(DigestEntry.camera_id == camera_id)
@@ -196,7 +205,8 @@ async def get_latest_digest(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Get the most recent stored digest, optionally filtered by camera."""
-    stmt = select(DigestEntry).order_by(DigestEntry.generated_at.desc()).limit(1)
+    allowed = await allowed_camera_ids(_current_user, db)
+    stmt = apply_camera_filter(select(DigestEntry), allowed, DigestEntry.camera_id).order_by(DigestEntry.generated_at.desc()).limit(1)
 
     if camera_id is not None:
         stmt = stmt.where(DigestEntry.camera_id == camera_id)
@@ -298,12 +308,21 @@ def _job_to_status(job) -> ScanStatusModel:
 async def start_scan(
     body: ScanRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Kick off a deep visual scan and return the initial job state. Poll
     ``GET /search/scan/{scan_id}`` for streamed results."""
     from services.grounding.config import is_enabled
-    from services.search.scan import get_registry, run_scan
+    from services.search.scan import get_registry, run_scan, scan_scope_permitted
 
+    allowed = await allowed_camera_ids(current_user, db)
+    if body.camera_id is not None:
+        await require_camera_in_scope(current_user, db, body.camera_id, detail="Camera not found")
+        # Snapshot only the requested camera so revoking an unrelated grant
+        # does not invalidate this single-camera scan.
+        allowed = {body.camera_id}
+    if allowed is not ALL and not allowed:
+        raise HTTPException(status_code=403, detail="No cameras available to scan")
     query = (body.query or "").strip()
     if not query:
         raise HTTPException(status_code=400, detail="query is required")
@@ -317,9 +336,13 @@ async def start_scan(
     # One active scan per user keeps a single user from wedging the GPU (§5).
     existing = registry.active_for_user(str(current_user.id))
     if existing is not None:
-        return _job_to_status(existing)
+        current = await allowed_camera_ids(current_user, db)
+        if scan_scope_permitted(existing, current):
+            return _job_to_status(existing)
+        raise HTTPException(status_code=409, detail="Scan permissions changed; wait for the current scan to stop")
 
     job = registry.create(str(current_user.id), query)
+    job.camera_scope = None if allowed is ALL else set(allowed)
     asyncio.create_task(
         run_scan(
             job,
@@ -327,6 +350,8 @@ async def start_scan(
             time_from=body.time_from,
             time_to=body.time_to,
             max_frames=body.max_frames or 0,
+            allowed=allowed,
+            request_user_id=current_user.id,
         )
     )
     return _job_to_status(job)
@@ -336,13 +361,17 @@ async def start_scan(
 async def get_scan(
     scan_id: str,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Poll a deep-scan job. Results accumulate as frames are grounded."""
-    from services.search.scan import get_registry
+    from services.search.scan import get_registry, scan_scope_permitted
 
     job = get_registry().get(scan_id)
     # 404 (not 403) on a foreign job so we never confirm another user's id.
     if job is None or job.user_id != str(current_user.id):
+        raise HTTPException(status_code=404, detail="scan not found")
+    allowed = await allowed_camera_ids(current_user, db)
+    if not scan_scope_permitted(job, allowed):
         raise HTTPException(status_code=404, detail="scan not found")
     return _job_to_status(job)
 
@@ -376,6 +405,7 @@ async def locate_now(
     from services.grounding.config import is_enabled
     from services.search.scan import _default_frame_loader
 
+    await require_camera_in_scope(current_user, db, body.camera_id, detail="Camera not found")
     prompt = (body.prompt or "").strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="prompt is required")

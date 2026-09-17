@@ -47,3 +47,7 @@ The source audit discovered unscoped search, timeline and summary reads. Those e
 - Migration backfill exercised with representative legacy rows; PostgreSQL DDL generated through Alembic offline mode. A live PostgreSQL upgrade and real camera/mobile end-to-end checks remain to be performed.
 
 No issues are closed automatically by this batch. Implementation, deployment and real-world validation are distinct milestones.
+
+## Continued implementation — 17 September 2026
+
+All six GitHub checks passed on PR #202. The next branch, `codex/camera-read-scope`, implements scoped search/review/audio reads and background-scan revocation for #201. See [the implementation and remaining audit record](camera-read-scope-2026-09-17.md). It depends on the first branch and does not close the camera-isolation release gate.

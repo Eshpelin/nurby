@@ -21,6 +21,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
+from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.database import get_db
 from shared.models import Camera, HouseholdModeChange, Observation, Transcript, User
 
@@ -36,6 +37,7 @@ router = APIRouter()
 async def summarize_window(
     body: SummarizeWindowBody,
     _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Narrative VLM recap of a specific time window (one timeline hour).
 
@@ -48,7 +50,10 @@ async def summarize_window(
     if span_hours > 26:
         raise HTTPException(status_code=400, detail="Window too large (max 26 hours)")
     from services.perception.daily_digest import narrate_window
-    return await narrate_window(body.window_start, body.window_end)
+    allowed = await allowed_camera_ids(_current_user, db)
+    return await narrate_window(
+        body.window_start, body.window_end, camera_ids=None if allowed is ALL else allowed,
+    )
 
 
 @router.get("")
@@ -61,10 +66,13 @@ async def get_timeline(
     _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    obs_q = select(Observation).order_by(Observation.started_at.desc())
+    allowed = await allowed_camera_ids(_user, db)
+    obs_q = apply_camera_filter(select(Observation), allowed, Observation.camera_id).order_by(Observation.started_at.desc())
     tx_q = select(Transcript).where(Transcript.filtered.is_(False)).order_by(
         Transcript.started_at.desc()
     )
+
+    tx_q = apply_camera_filter(tx_q, allowed, Transcript.camera_id)
 
     # Cameras flagged exclude_from_review never appear in the review/
     # timeline feed (they keep recording, just dropped from this view).
@@ -125,7 +133,7 @@ async def get_timeline(
     # Household mode changes (#184). Not per camera, so they only appear
     # in the unfiltered feed; a camera's own timeline stays about that
     # camera. They are the answer to "why was that alert quiet".
-    if not camera_id:
+    if not camera_id and allowed is ALL:
         mode_q = select(HouseholdModeChange).order_by(HouseholdModeChange.changed_at.desc())
         mode_clauses: list = []
         if from_:

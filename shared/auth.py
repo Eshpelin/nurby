@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
@@ -92,6 +92,10 @@ def decode_access_token(token: str) -> uuid.UUID | None:
     """Decode a JWT and return the user UUID, or None if invalid."""
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+        # Pairing and Guardian claim tokens may only be redeemed at their
+        # dedicated endpoints, never used as a general login/media token.
+        if payload.get("purpose") is not None:
+            return None
         sub = payload.get("sub")
         if sub is None:
             return None
@@ -221,6 +225,23 @@ async def require_admin(
             detail="Admin access required",
         )
     return current_user
+
+
+async def get_media_user(
+    token: str | None = Query(default=None),
+    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Media tags use query JWTs; native clients may use bearer JWTs/API keys.
+
+    Both paths resolve the current active account, not just a signed user ID.
+    An explicit Authorization header takes precedence over a query token.
+    """
+    if credentials is None:
+        if not token:
+            raise HTTPException(status_code=401, detail="Missing or invalid token")
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+    return await get_current_user(credentials=credentials, db=db)
 
 
 def require_camera_access(camera_id_param: str = "camera_id"):

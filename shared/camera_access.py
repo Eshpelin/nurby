@@ -26,12 +26,14 @@ giving a precise ``set`` to filter on when they are restricted.
 from __future__ import annotations
 
 import uuid
-from typing import Final
+from typing import Final, TypeVar
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.selectable import Select
+from sqlalchemy.sql.dml import Update
 
 from shared.models import User, UserCameraAccess
 
@@ -64,6 +66,16 @@ class _All:
 ALL: Final[_All] = _All()
 
 AllowedCameras = _All | set[uuid.UUID]
+CameraStatement = TypeVar("CameraStatement", Select, Update)
+
+
+async def require_camera_in_scope(
+    user: User, db: AsyncSession, camera_id: uuid.UUID | None, *, detail: str = "Resource not found",
+) -> None:
+    """Authorize before loading evidence or invoking analysis; hide foreign IDs."""
+    allowed = await allowed_camera_ids(user, db)
+    if allowed is not ALL and camera_id not in allowed:
+        raise HTTPException(status_code=404, detail=detail)
 
 
 async def allowed_camera_ids(user: User, db: AsyncSession) -> AllowedCameras:
@@ -93,10 +105,10 @@ async def allowed_camera_ids(user: User, db: AsyncSession) -> AllowedCameras:
 
 
 def apply_camera_filter(
-    query: Select,
+    query: CameraStatement,
     allowed: AllowedCameras,
     column: ColumnElement,
-) -> Select:
+) -> CameraStatement:
     """Narrow ``query`` to ``allowed`` cameras using ``column``.
 
     No-op when ``allowed is ALL``. When ``allowed`` is an empty set the

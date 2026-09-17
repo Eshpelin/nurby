@@ -26,7 +26,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from services.grounding.cache import get_cached_grounding, store_grounding
+from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids
 from shared.config import settings
+from shared.models import User
 
 logger = logging.getLogger("nurby.search.scan")
 
@@ -70,6 +72,8 @@ class ScanJob:
     cameras_seen: set[str] = field(default_factory=set)
     leaves_privacy_boundary: bool = False
     created_at: float = field(default_factory=time.time)
+    # None means the originating user had explicit all-camera access.
+    camera_scope: set[uuid.UUID] | None = None
 
     def summary(self) -> str:
         """Honest "what was scanned" line so a 'no' is trustworthy (§3.2)."""
@@ -82,6 +86,13 @@ class ScanJob:
         if self.status == "done":
             return f"Checked {self.scanned} frames across {ncams} {cam_word}. No match for '{self.query}'."
         return f"Scanning… {self.scanned}/{self.total} frames."
+
+
+def scan_scope_permitted(job: ScanJob, allowed: AllowedCameras) -> bool:
+    """Do not disclose retained results/counts after any original access is lost."""
+    if allowed is ALL:
+        return True
+    return job.camera_scope is not None and job.camera_scope.issubset(allowed)
 
 
 class ScanRegistry:
@@ -209,6 +220,8 @@ async def run_scan(
     max_frames: int,
     client=None,
     frame_loader=None,
+    allowed: AllowedCameras = ALL,
+    request_user_id: uuid.UUID | None = None,
 ) -> None:
     """Execute the scan: pre-filter candidates, ground each, accumulate boxes.
 
@@ -233,7 +246,16 @@ async def run_scan(
 
     try:
         async with async_session() as db:
-            routed = await classify_intent(db, job.query)
+            if request_user_id is not None:
+                user = await db.get(User, request_user_id)
+                if user is None or not user.is_active:
+                    raise PermissionError("Scan access changed")
+                current = await allowed_camera_ids(user, db)
+                if not scan_scope_permitted(job, current):
+                    raise PermissionError("Scan access changed")
+            # Known-name lookup uses household-wide identities. Scoped viewers
+            # search their authorized footage without that global-name hint.
+            routed = await classify_intent(db, job.query) if allowed is ALL else None
             if routed is not None:
                 job.routed = routed
                 job.status = "done"
@@ -254,6 +276,7 @@ async def run_scan(
                 time_from=time_from,
                 time_to=time_to,
                 limit=max_frames,
+                allowed=allowed,
             )
             if len(candidates) < max_frames:
                 recent = await search_observations(
@@ -263,6 +286,7 @@ async def run_scan(
                     time_from=time_from,
                     time_to=time_to,
                     limit=max_frames,
+                    allowed=allowed,
                 )
                 seen = {c.get("id") for c in candidates}
                 for r in recent:
@@ -280,6 +304,14 @@ async def run_scan(
 
         revision = settings.grounding_model_revision
         for cand in candidates:
+            if request_user_id is not None:
+                async with async_session() as db:
+                    user = await db.get(User, request_user_id)
+                    if user is None or not user.is_active:
+                        raise PermissionError("Scan access changed")
+                    current = await allowed_camera_ids(user, db)
+                    if not scan_scope_permitted(job, current):
+                        raise PermissionError("Scan access changed")
             job.scanned += 1
             obs_id = cand.get("id")
             job.cameras_seen.add(str(cand.get("camera_id")))
