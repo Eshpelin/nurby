@@ -1,0 +1,22 @@
+{
+  "id": "cap_rain_obscured_partial",
+  "kind": "caption",
+  "scenario": "rain_obscured",
+  "source": "authored",
+  "footage": {
+    "hash": "sha256:PLACEHOLDER_rain_03",
+    "source": "sample:driveway_rain_vehicle.mp4",
+    "note": "rain/obscured-lens footage not committed; hash-pinned label only"
+  },
+  "input": {"camera": "driveway", "window_seconds": 8, "lighting": "day", "weather": "heavy_rain"},
+  "ground_truth": {
+    "event_present": true,
+    "must_include": ["rain", "vehicle"],
+    "forbidden": ["clear sky"],
+    "reference": "Through heavy rain and a water-streaked lens a vehicle pulls into the driveway."
+  },
+  "mock_prediction": {
+    "caption": "Heavy rain streaks the lens; the scene is blurry and hard to make out.",
+    "event_present": true
+  }
+}

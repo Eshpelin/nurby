@@ -1,0 +1,23 @@
+{
+  "id": "ask_rain_lowconfidence",
+  "kind": "ask",
+  "scenario": "rain_obscured",
+  "source": "authored",
+  "footage": {
+    "hash": "sha256:PLACEHOLDER_rain_11",
+    "source": "sample:front_door_storm.mp4",
+    "note": "rain/obscured-lens footage not committed"
+  },
+  "input": {"question": "Was anyone at the door during the storm?"},
+  "prompt": "Was anyone at the door during the storm?",
+  "ground_truth": {
+    "event_present": true,
+    "must_include": ["rain"],
+    "forbidden": ["clearly a", "definitely"],
+    "reference": "Hard to tell through the rain, but someone did approach the door."
+  },
+  "mock_prediction": {
+    "answer": "It's hard to tell through the heavy rain, but someone appears to approach the door.",
+    "event_present": true
+  }
+}

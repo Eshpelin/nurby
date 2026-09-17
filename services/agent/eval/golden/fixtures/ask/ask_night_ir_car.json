@@ -1,0 +1,23 @@
+{
+  "id": "ask_night_ir_car",
+  "kind": "ask",
+  "scenario": "night_ir",
+  "source": "authored",
+  "footage": {
+    "hash": "sha256:PLACEHOLDER_night_10",
+    "source": "sample:driveway_night_ir_car.mp4",
+    "note": "night/IR footage not committed"
+  },
+  "input": {"question": "Did a car arrive in the driveway around midnight?"},
+  "prompt": "Did a car arrive in the driveway around midnight?",
+  "ground_truth": {
+    "event_present": true,
+    "must_include": ["car", "driveway"],
+    "forbidden": ["no vehicle"],
+    "reference": "Yes, a car pulled into the driveway just after midnight."
+  },
+  "mock_prediction": {
+    "answer": "Yes, a car pulled into the driveway at about 12:05am.",
+    "event_present": true
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "cap_no_event_empty",
+  "kind": "caption",
+  "scenario": "no_event",
+  "source": "authored",
+  "footage": {
+    "hash": "sha256:PLACEHOLDER_noevent_04",
+    "source": "sample:porch_quiet_afternoon.mp4",
+    "note": "true no-event clip; footage not committed"
+  },
+  "input": {"camera": "front_door", "window_seconds": 10, "lighting": "day", "weather": "clear"},
+  "ground_truth": {
+    "event_present": false,
+    "must_include": [],
+    "forbidden": ["person", "package", "vehicle"],
+    "reference": "An empty porch with no people, packages, or vehicles; nothing happens."
+  },
+  "mock_prediction": {
+    "caption": "Static view of an empty porch; no activity in the window.",
+    "event_present": false
+  }
+}

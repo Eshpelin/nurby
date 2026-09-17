@@ -1,0 +1,23 @@
+{
+  "id": "ask_no_motion_overnight",
+  "kind": "ask",
+  "scenario": "no_event",
+  "source": "authored",
+  "footage": {
+    "hash": "sha256:PLACEHOLDER_noevent_08",
+    "source": "sample:overnight_quiet.mp4",
+    "note": "true no-event overnight window; footage not committed"
+  },
+  "input": {"question": "Did anything happen out front overnight?"},
+  "prompt": "Did anything happen out front overnight?",
+  "ground_truth": {
+    "event_present": false,
+    "must_include": ["no"],
+    "forbidden": ["intruder", "person approached"],
+    "reference": "No, there was no motion or activity out front overnight."
+  },
+  "mock_prediction": {
+    "answer": "No, there was no motion out front overnight; the cameras stayed quiet.",
+    "event_present": false
+  }
+}

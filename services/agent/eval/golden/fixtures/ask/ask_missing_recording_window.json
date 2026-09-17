@@ -1,0 +1,23 @@
+{
+  "id": "ask_missing_recording_window",
+  "kind": "ask",
+  "scenario": "missing_recording",
+  "source": "authored",
+  "footage": {
+    "hash": null,
+    "source": "sample:gap_no_recording",
+    "note": "deliberate missing-recording window; no footage exists for the asked window"
+  },
+  "input": {"question": "What happened in the driveway at 3am?"},
+  "prompt": "What happened in the driveway at 3am?",
+  "ground_truth": {
+    "event_present": false,
+    "must_include": ["no recording"],
+    "forbidden": ["i saw", "there was a"],
+    "reference": "There is no recording for the driveway around 3am, so I can't say what happened."
+  },
+  "mock_prediction": {
+    "answer": "There is no recording for the driveway around 3am, so I can't tell you what happened.",
+    "event_present": false
+  }
+}

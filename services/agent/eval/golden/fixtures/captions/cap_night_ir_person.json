@@ -1,0 +1,22 @@
+{
+  "id": "cap_night_ir_person",
+  "kind": "caption",
+  "scenario": "night_ir",
+  "source": "authored",
+  "footage": {
+    "hash": "sha256:PLACEHOLDER_night_ir_02",
+    "source": "sample:backyard_night_ir.mp4",
+    "note": "IR/night footage not committed; hash-pinned label only"
+  },
+  "input": {"camera": "backyard", "window_seconds": 6, "lighting": "night_ir", "weather": "clear"},
+  "ground_truth": {
+    "event_present": true,
+    "must_include": ["person"],
+    "forbidden": ["daylight"],
+    "reference": "In infrared night view a person walks across the backyard toward the gate."
+  },
+  "mock_prediction": {
+    "caption": "Grayscale infrared frame shows a person crossing the yard toward the side gate.",
+    "event_present": true
+  }
+}
