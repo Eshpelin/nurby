@@ -191,6 +191,42 @@ class Event {
   bool get acked => ackedAt != null;
 }
 
+/// Structured alert feedback (#195): useful, correct-but-not-useful or
+/// incorrect, with an optional reason for incorrect. One row per
+/// reviewer; correcting re-rates in place.
+class EventFeedback {
+  EventFeedback({
+    required this.id,
+    required this.eventId,
+    this.userId,
+    this.reviewerDisplayName,
+    required this.rating,
+    this.reason,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory EventFeedback.fromJson(Map<String, dynamic> j) => EventFeedback(
+        id: j['id'] as String,
+        eventId: j['event_id'] as String,
+        userId: j['user_id'] as String?,
+        reviewerDisplayName: j['reviewer_display_name'] as String?,
+        rating: j['rating'] as String,
+        reason: j['reason'] as String?,
+        createdAt: _date(j['created_at']) ?? DateTime.now(),
+        updatedAt: _date(j['updated_at']) ?? DateTime.now(),
+      );
+
+  final String id;
+  final String eventId;
+  final String? userId;
+  final String? reviewerDisplayName;
+  final String rating;
+  final String? reason;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+
 class Rule {
   Rule({
     required this.id,

@@ -7,7 +7,9 @@ Split out of the single ``schemas.py``; import from
 
 import uuid
 from datetime import datetime
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
 
 
 # ── Observation schemas ──
@@ -83,5 +85,35 @@ class EventNoteResponse(BaseModel):
     text: str
     telegram_message_id: int | None = None
     created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── Alert feedback (#195) ──
+
+class EventFeedbackCreate(BaseModel):
+    """Two interactions: pick a rating, optionally pick one reason. A
+    reason applies only to incorrect alerts; anything else re-runs as a
+    correction by submitting a new rating for the same event."""
+
+    rating: Literal["useful", "correct_but_not_useful", "incorrect"]
+    reason: Literal["wrong_object", "wrong_person", "duplicate", "timing"] | None = None
+
+    @model_validator(mode="after")
+    def reason_only_for_incorrect(self):
+        if self.reason is not None and self.rating != "incorrect":
+            raise ValueError("reason applies only to incorrect alerts")
+        return self
+
+
+class EventFeedbackResponse(BaseModel):
+    id: uuid.UUID
+    event_id: uuid.UUID
+    user_id: uuid.UUID | None = None
+    reviewer_display_name: str | None = None
+    rating: str
+    reason: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}

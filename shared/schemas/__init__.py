@@ -40,6 +40,8 @@ from shared.schemas.observations import (  # noqa: F401
     ObservationResponse,
     NotificationResponse,
     EventResponse,
+    EventFeedbackCreate,
+    EventFeedbackResponse,
     EventNoteCreate,
     EventNoteResponse,
 )
@@ -182,6 +184,8 @@ __all__ = [
     "DigestEntryResponse",
     "EventNoteCreate",
     "EventNoteResponse",
+    "EventFeedbackCreate",
+    "EventFeedbackResponse",
     "EventResponse",
     "FaceClusterResponse",
     "FaceClusterSampleResponse",
