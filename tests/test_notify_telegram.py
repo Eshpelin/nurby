@@ -371,3 +371,138 @@ def test_pairing_status_all_states():
         == "blocked"
     )
     assert _pairing_status(_channel(last_test_ok=False, last_error="timeout")) == "error"
+
+
+# ── issue #224: /ack /mute /snooze slash commands ────────────────────────
+
+
+class _FakeSession:
+    """Async session stand-in that only needs ``get`` for the channel."""
+
+    def __init__(self, channel):
+        self._channel = channel
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, _model, _id):
+        return self._channel
+
+
+def _tg_channel(chat_id="100", user_id="user-1"):
+    return SimpleNamespace(chat_id=chat_id, user_id=user_id)
+
+
+def _action_message(chat_id=100, text="/ack"):
+    return {"chat": {"id": chat_id}, "text": text}
+
+
+def _manager_with(monkeypatch, channel, event):
+    """Build a poller whose channel lookup, latest-event lookup and reply
+    path are all faked; returns (manager, acks, mutes, snoozes, replies)."""
+    from services.notify import telegram_poller as poller
+
+    mgr = poller.TelegramPollerManager()
+    monkeypatch.setattr(poller, "async_session", lambda: _FakeSession(channel))
+
+    async def _latest(db, owner_user_id):
+        return event
+
+    monkeypatch.setattr(mgr, "_latest_actionable_event", _latest)
+
+    acks, mutes, snoozes, replies = [], [], [], []
+
+    async def _ack(event_id, owner_user_id):
+        acks.append((event_id, owner_user_id))
+        return "Acknowledged.", None
+
+    async def _mute(event_id, duration_seconds):
+        mutes.append((event_id, duration_seconds))
+        return "Muted until 10:00.", None
+
+    async def _snooze(rule_id, duration_seconds):
+        snoozes.append((rule_id, duration_seconds))
+        return "Rule snoozed until 11:00.", None
+
+    async def _followup(channel_id, chat_id, text):
+        replies.append((chat_id, text))
+
+    monkeypatch.setattr(mgr, "_do_ack", _ack)
+    monkeypatch.setattr(mgr, "_do_mute_event", _mute)
+    monkeypatch.setattr(mgr, "_do_snooze_rule", _snooze)
+    monkeypatch.setattr(mgr, "_send_followup", _followup)
+    return mgr, acks, mutes, snoozes, replies
+
+
+@pytest.mark.asyncio
+async def test_slash_ack_acts_on_latest_actionable_event(monkeypatch):
+    event = SimpleNamespace(id="evt-1", rule_id="rule-1")
+    mgr, acks, mutes, snoozes, replies = _manager_with(
+        monkeypatch, _tg_channel(), event
+    )
+    await mgr._handle_action_command("11111111-1111-1111-1111-111111111111", _action_message(text="/ack"), "/ack")
+    assert acks == [("evt-1", "user-1")]
+    assert replies == [(100, "Acknowledged.")]
+    assert not mutes and not snoozes
+
+
+@pytest.mark.asyncio
+async def test_slash_mute_uses_ten_minutes(monkeypatch):
+    event = SimpleNamespace(id="evt-1", rule_id="rule-1")
+    mgr, _acks, mutes, _snoozes, replies = _manager_with(
+        monkeypatch, _tg_channel(), event
+    )
+    await mgr._handle_action_command("11111111-1111-1111-1111-111111111111", _action_message(text="/mute"), "/mute")
+    assert mutes == [("evt-1", 600)]
+    assert replies and "Muted" in replies[0][1]
+
+
+@pytest.mark.asyncio
+async def test_slash_snooze_targets_event_rule_for_one_hour(monkeypatch):
+    event = SimpleNamespace(id="evt-1", rule_id="rule-9")
+    mgr, _acks, _mutes, snoozes, replies = _manager_with(
+        monkeypatch, _tg_channel(), event
+    )
+    await mgr._handle_action_command("11111111-1111-1111-1111-111111111111", _action_message(text="/snooze"), "/snooze")
+    assert snoozes == [("rule-9", 3600)]
+    assert replies and "snoozed" in replies[0][1]
+
+
+@pytest.mark.asyncio
+async def test_slash_command_with_no_actionable_alert_replies_without_acting(monkeypatch):
+    mgr, acks, _mutes, _snoozes, replies = _manager_with(
+        monkeypatch, _tg_channel(), None
+    )
+    await mgr._handle_action_command("11111111-1111-1111-1111-111111111111", _action_message(text="/ack"), "/ack")
+    assert not acks
+    assert replies == [(100, "No recent alert to acknowledge.")]
+
+
+@pytest.mark.asyncio
+async def test_slash_commands_reject_unpaired_chat(monkeypatch):
+    """A chat that is not the channel's bound chat is ignored entirely."""
+    event = SimpleNamespace(id="evt-1", rule_id="rule-1")
+    mgr, acks, _mutes, _snoozes, replies = _manager_with(
+        monkeypatch, _tg_channel(chat_id="100"), event
+    )
+    await mgr._handle_action_command(
+        "11111111-1111-1111-1111-111111111111", _action_message(chat_id=999, text="/ack"), "/ack"
+    )
+    assert not acks and not replies
+
+
+@pytest.mark.asyncio
+async def test_slash_ack_without_bound_chat_still_acts(monkeypatch):
+    """A channel with no chat binding (chat_id=None) accepts its own
+    commands — same looseness as the callback path, which only checks
+    when the channel has a binding."""
+    event = SimpleNamespace(id="evt-1", rule_id="rule-1")
+    mgr, acks, _mutes, _snoozes, replies = _manager_with(
+        monkeypatch, _tg_channel(chat_id=None), event
+    )
+    await mgr._handle_action_command("11111111-1111-1111-1111-111111111111", _action_message(chat_id=100), "/ack")
+    assert acks == [("evt-1", "user-1")]
+    assert replies
