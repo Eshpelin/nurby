@@ -54,9 +54,6 @@ from shared.models.digests import (  # noqa: F401
     Notification,
     ScheduledReport,
 )
-from shared.models.onboarding import (  # noqa: F401
-    ActivationMilestone,
-)
 from shared.models.guardian import (  # noqa: F401
     ApprovedPickup,
     Facility,
@@ -99,7 +96,6 @@ from shared.models.rules import (  # noqa: F401
 
 __all__ = [
     "Base",
-    "ActivationMilestone",
     "AgentDailyUsage",
     "AgentRun",
     "AgentToolCall",
