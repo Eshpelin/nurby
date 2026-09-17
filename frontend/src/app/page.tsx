@@ -24,6 +24,7 @@ import { useWorkerHealth } from "@/lib/useWorkerHealth";
 import { LLMErrorToasts } from "@/components/LLMErrorToasts";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { PersonalOnboardingCard } from "@/components/PersonalOnboardingCard";
+import { OnboardingMetricsCard } from "@/components/OnboardingMetricsCard";
 import { AskComposerCard } from "@/components/AskComposerCard";
 import { TranscriptCard } from "@/components/TranscriptCard";
 import { SummaryCard } from "@/components/SummaryCard";
@@ -1002,6 +1003,12 @@ function DashboardContent() {
             </div>
           )}
           {user && <PersonalOnboardingCard key={user.id} cameraCount={cameras.length} camerasLoading={camerasLoading} onSetup={() => setShowWizard(true)} />}
+          {user?.role === "admin" && (
+            <details className="mb-4 rounded-xl border border-border p-3">
+              <summary className="cursor-pointer text-sm font-medium text-muted-foreground">Onboarding metrics (admin)</summary>
+              <div className="mt-3"><OnboardingMetricsCard /></div>
+            </details>
+          )}
           <AskComposerCard />
           <CameraWall
             fullscreenRef={dashboardWrapRef}

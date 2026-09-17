@@ -5,6 +5,8 @@ export interface ExperiencePreferences {
   place: Place | null;
   goal: Goal;
   focus: "daily" | "setup";
+  place_label?: string | null;
+  paused?: boolean;
 }
 export interface Experience {
   preferences: ExperiencePreferences | null;

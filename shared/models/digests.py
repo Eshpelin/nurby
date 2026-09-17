@@ -77,6 +77,10 @@ class Notification(Base):
     )
     read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # When this alert was actually handed to a delivery path (push mirror,
+    # Telegram, email). Null means persisted-only, never delivered. Used by
+    # verified-activation (#193) to prove a real delivery, not just a write.
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ScheduledReport(Base):
