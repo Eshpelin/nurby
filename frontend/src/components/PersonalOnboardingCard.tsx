@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { GOALS, goalsForPlace, type Experience, type ExperiencePreferences, type Goal, type Place } from "@/lib/onboarding";
 import { ActivationSteps } from "@/components/ActivationSteps";
+import { DailyPriorities } from "@/components/DailyPriorities";
 import { DETECTION_GOALS } from "@/lib/activation";
 
 interface Props {
@@ -126,6 +127,17 @@ export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }:
                   ))}
                 </div>
               </fieldset>
+              <label className="mt-4 block text-sm font-medium" htmlFor="experience-place-label">Name this place (optional)</label>
+              <input
+                id="experience-place-label"
+                type="text"
+                maxLength={80}
+                disabled={saving}
+                placeholder={draft.place === "business" ? "e.g. Front shop" : "e.g. Home"}
+                className="mt-2 w-full rounded-lg border border-border bg-background p-2 text-sm sm:w-64"
+                value={draft.place_label ?? ""}
+                onChange={(e) => setDraft((d) => ({ ...d, place_label: e.target.value || null }))}
+              />
               <label className="mt-4 block text-sm font-medium" htmlFor="experience-focus">What will you mainly do here?</label>
               <select id="experience-focus" disabled={saving} className="mt-2 rounded-lg border border-border bg-background p-2 text-sm" value={draft.focus} onChange={(e) => setDraft((d) => ({ ...d, focus: e.target.value as ExperiencePreferences["focus"] }))}>
                 <option value="daily">Monitor and review day to day</option>
@@ -175,6 +187,12 @@ export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }:
           </div>
           {current.template && <p className="mt-3 text-xs text-muted-foreground">Recommendation saved; monitoring is not verified here. {current.needs} Review your camera, schedule and recipient before enabling a rule, then test a real alert.</p>}
           {DETECTION_GOALS.has(preferences.goal) && <ActivationSteps goal={preferences.goal} cameraId={null} />}
+          <DailyPriorities
+            key={`${preferences.goal}:${preferences.focus}:${preferences.paused ? 1 : 0}:${preferences.place_label ?? ""}`}
+            paused={!!preferences.paused}
+            pauseBusy={saving}
+            onTogglePause={() => save({ ...preferences, paused: !preferences.paused })}
+          />
         </>
       ) : null}
     </section>
