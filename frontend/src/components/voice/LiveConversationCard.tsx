@@ -53,13 +53,25 @@ export function LiveConversationCard({
   const [note, setNote] = useState<string | null>(null);
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
 
+  const getToken = useCallback(
+    (): string | null =>
+      typeof window === "undefined" ? null : localStorage.getItem("token"),
+    [],
+  );
+
   const headers = useCallback((): Record<string, string> => {
-    const token =
-      typeof window === "undefined" ? null : localStorage.getItem("token");
+    const token = getToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
-  }, []);
+  }, [getToken]);
 
   const poll = useCallback(async () => {
+    // Don't poll without a usable token. A tokenless request only earns a 401
+    // and floods the console with a (now correctly headered) CORS-shaped error
+    // on the login screen where the card is not even signed in yet (issue #188).
+    if (!getToken()) {
+      setSession(null);
+      return;
+    }
     try {
       const resp = await fetch(`${API}/api/voice/sessions?active=true&limit=1`, {
         headers: headers(),
@@ -80,7 +92,7 @@ export function LiveConversationCard({
       // A failed poll is not worth surfacing. The next one is 3s away,
       // and an error banner on a live doorbell would be noise.
     }
-  }, [headers]);
+  }, [headers, getToken]);
 
   useEffect(() => {
     poll();
