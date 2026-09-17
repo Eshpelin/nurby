@@ -59,6 +59,11 @@ export interface RuleTemplate {
   // The builder opens the inline editor, but the card says so up front rather
   // than letting the user find out on save.
   needsGeometry?: boolean;
+  // Audio life-safety signals (baby cry, alarm/siren, glass break, help calls)
+  // are best-effort classifier output, not a monitored alarm service. Templates
+  // that ride on them carry a one-line disclaimer on the card so nobody mistakes
+  // the recipe for certified life-safety coverage. See docs/audio-detection.md.
+  disclaimer?: string;
   build: (
     ctx: TemplateContext,
     picked?: Partial<Record<TemplateParamName, string>>,
@@ -223,6 +228,7 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
     icon: "🍼",
     title: "The baby is crying",
     blurb: "Baby-cry sound detected → alert",
+    disclaimer: "Best-effort audio signal. Not a substitute for an infant monitor or in-person checks.",
     category: "audio",
     params: [{ name: "camera_id", label: "Which camera is in the nursery?", required: false }],
     build: (ctx, picked) =>
@@ -239,6 +245,7 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
     icon: "🗣️",
     title: "Someone calls for help",
     blurb: 'Spoken phrase "help" detected → alert',
+    disclaimer: "Best-effort audio signal. Not a monitored alarm or emergency service.",
     category: "audio",
     params: [],
     build: (ctx) =>

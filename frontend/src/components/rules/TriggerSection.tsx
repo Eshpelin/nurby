@@ -556,6 +556,10 @@ export function TriggerSection(props: TriggerSectionProps) {
           <p className="text-[11px] text-muted-foreground">
             Detection runs locally on each camera&apos;s audio track. Needs an RTSP stream that publishes audio.
           </p>
+          <p className="text-[11px] text-amber-600 dark:text-amber-300">
+            Informational best-effort signal. It can miss or misfire, and is not a substitute for certified
+            smoke, CO, or alarm devices.
+          </p>
         </div>
       )}
 
