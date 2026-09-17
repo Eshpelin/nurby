@@ -92,6 +92,7 @@ from shared.models.observations import (  # noqa: F401
 )
 from shared.models.rules import (  # noqa: F401
     Event,
+    EventFeedback,
     EventNote,
     Rule,
     RuleSequenceInstance,
@@ -121,6 +122,7 @@ __all__ = [
     "DigestEntry",
     "EntityAssociation",
     "Event",
+    "EventFeedback",
     "EventNote",
     "FaceCluster",
     "FaceClusterSample",
