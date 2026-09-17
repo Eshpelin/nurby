@@ -47,6 +47,14 @@ class Observation(Base):
     vehicle_detections: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     vlm_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     vlm_provider: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # DETECTION confidence, not caption confidence (#221). Holds the detector's
+    # own score for the strongest object detection in the keyframe, in [0, 1], or
+    # None when the frame carried no scored detection (motion-only). The VLM
+    # caption does NOT contribute a confidence here: caption providers do not
+    # expose a calibrated vision confidence uniformly, so no placeholder is
+    # written. Any per-pass caption confidence lives on ObservationVlmPass.
+    # Derived by services.perception.caption_schema.detection_confidence; see
+    # that module for the full semantics every consumer must respect.
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     thumbnail_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     clip_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)

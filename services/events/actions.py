@@ -189,6 +189,8 @@ def _build_template_context(
         "description": observation_data.get("vlm_description", ""),
         "vlm_description": observation_data.get("vlm_description", ""),
         "detections_summary": _summarize_detections(observation_data),
+        # Detection confidence of the strongest object in frame, or None (#221).
+        # This is NOT a VLM/caption confidence; see caption_schema for semantics.
         "confidence": observation_data.get("confidence"),
         "observation_id": observation_data.get("observation_id", ""),
         "recording_id": observation_data.get("recording_id") or "",

@@ -854,7 +854,17 @@ class VLMQueue:
                 if obs:
                     obs.vlm_description = description
                     obs.vlm_provider = provider_name
-                    obs.confidence = 0.8
+                    # Real observation confidence (#221). The caption itself has
+                    # no calibrated confidence, so never stamp a placeholder.
+                    # Carry the strongest object detection's own detector score,
+                    # or leave whatever confidence the observation already holds
+                    # (None for a motion-only frame). Semantics documented in
+                    # services.perception.caption_schema.
+                    from services.perception.caption_schema import detection_confidence
+
+                    real_conf = detection_confidence(detections)
+                    if real_conf is not None:
+                        obs.confidence = real_conf
                     if thumbnail_path:
                         obs.thumbnail_path = thumbnail_path
                     if vlm_late:
