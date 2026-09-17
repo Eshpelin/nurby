@@ -1,0 +1,253 @@
+"""Every API schema, grouped by what it is about.
+
+This used to be one 1,900-line module. It is now a package, and this
+file re-exports the whole set, so ``from shared.schemas import
+CameraCreate`` keeps working for every caller. The grouping is by
+subject, mirroring ``shared.models``: look in ``cameras`` for camera
+and recording payloads, in ``rules`` for rules and their validators,
+and so on.
+
+Private helpers (underscore names) are module-internal; modules that
+need each other's helpers import them directly.
+"""
+
+from shared.schemas.cameras import (  # noqa: F401
+    validate_stream_url,
+    CameraCreate,
+    CameraUpdate,
+    CameraReorderItem,
+    CameraResponse,
+    CameraStatusLogResponse,
+    RecordingResponse,
+)
+from shared.schemas.cameras import (  # noqa: F401
+    _STREAM_URL_SCHEMES,
+    _PATH_STREAM_TYPES,
+    _NETWORK_SCHEMES,
+)
+
+from shared.schemas.identity import (  # noqa: F401
+    PersonCreate,
+    PersonUpdate,
+    PersonResponse,
+    PersonRecapResponse,
+    FaceClusterResponse,
+    FaceClusterSampleResponse,
+    NameClusterRequest,
+)
+
+from shared.schemas.observations import (  # noqa: F401
+    ObservationResponse,
+    NotificationResponse,
+    EventResponse,
+    EventNoteCreate,
+    EventNoteResponse,
+)
+
+from shared.schemas.rules import (  # noqa: F401
+    RuleCreate,
+    RuleUpdate,
+    RuleResponse,
+    ScheduledReportCreate,
+    ScheduledReportUpdate,
+    ScheduledReportResponse,
+    RuleTestRequest,
+    RuleTestActionPreview,
+    RuleTestResponse,
+    RuleReplaySample,
+    RuleReplayResponse,
+)
+from shared.schemas.rules import (  # noqa: F401
+    _VALID_ACTION_TYPES,
+    _LOCATE_OUTPUT_SCHEMA,
+    _VALID_TELEGRAM_BUTTON_ACTIONS,
+    _MAX_TELEGRAM_BUTTONS,
+    _validate_telegram_buttons,
+    _validate_verify_action,
+    _validate_locate_action,
+    _validate_device_action,
+    _validate_action_chain,
+    _validate_sequence,
+    _validate_trigger_pattern,
+)
+
+from shared.schemas.system import (  # noqa: F401
+    SystemStatus,
+    CameraStorageStats,
+    StorageResponse,
+)
+
+from shared.schemas.accounts import (  # noqa: F401
+    ProviderCreate,
+    ProviderResponse,
+    SystemSettingsResponse,
+    SystemSettingsUpdate,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+    AccountClaim,
+    UserUpdate,
+    TokenResponse,
+    PairStartResponse,
+    PairClaim,
+    AdminSetup,
+    InviteKeyCreate,
+    InviteCreatorInfo,
+    InviteRedemptionInfo,
+    InviteKeyResponse,
+    UserCameraAccessResponse,
+    CameraShareRequest,
+    SetCameraAccessRequest,
+    DeviceCreate,
+    DeviceUpdate,
+    DeviceResponse,
+    HouseholdModeChangeResponse,
+    HouseholdModeResponse,
+    HouseholdModeUpdate,
+)
+from shared.schemas.accounts import (  # noqa: F401
+    _EMAIL_RE,
+)
+
+from shared.schemas.integrations import (  # noqa: F401
+    TelegramChannelCreate,
+    TelegramChannelUpdate,
+    TelegramChannelResponse,
+    TelegramDeliveryUpdate,
+    TelegramWebhookInfoResponse,
+    TelegramPairInitResponse,
+    TelegramTestResponse,
+)
+
+from shared.schemas.digests import (  # noqa: F401
+    DigestEntryResponse,
+)
+
+from shared.schemas.agent import (  # noqa: F401
+    MentionRef,
+    AgentAskRequest,
+    AgentAskResponse,
+    AgentRunResponse,
+    AgentToolCallResponse,
+    AgentVlmCallResponse,
+    AgentRunDetailResponse,
+    AgentDailyUsageResponse,
+)
+
+from shared.schemas.guardian import (  # noqa: F401
+    FacilityCreate,
+    FacilityUpdate,
+    FacilityResponse,
+    GuardianLinkCreate,
+    GuardianLinkUpdate,
+    GuardianAlertPrefsUpdate,
+    GuardianChannelsUpdate,
+    GuardianLinkResponse,
+    ApprovedPickupCreate,
+    ApprovedPickupResponse,
+    GuardianAccessLogResponse,
+)
+
+from shared.schemas.widgets import (  # noqa: F401
+    WidgetSource,
+    WidgetCreate,
+    WidgetUpdate,
+    WidgetResponse,
+    WidgetTestRequest,
+    WidgetDataResponse,
+)
+
+__all__ = [
+    "AccountClaim",
+    "AdminSetup",
+    "AgentAskRequest",
+    "AgentAskResponse",
+    "AgentDailyUsageResponse",
+    "AgentRunDetailResponse",
+    "AgentRunResponse",
+    "AgentToolCallResponse",
+    "AgentVlmCallResponse",
+    "ApprovedPickupCreate",
+    "ApprovedPickupResponse",
+    "CameraCreate",
+    "CameraReorderItem",
+    "CameraResponse",
+    "CameraShareRequest",
+    "CameraStatusLogResponse",
+    "CameraStorageStats",
+    "CameraUpdate",
+    "DeviceCreate",
+    "DeviceResponse",
+    "DeviceUpdate",
+    "DigestEntryResponse",
+    "EventNoteCreate",
+    "EventNoteResponse",
+    "EventResponse",
+    "FaceClusterResponse",
+    "FaceClusterSampleResponse",
+    "FacilityCreate",
+    "FacilityResponse",
+    "FacilityUpdate",
+    "GuardianAccessLogResponse",
+    "GuardianAlertPrefsUpdate",
+    "GuardianChannelsUpdate",
+    "GuardianLinkCreate",
+    "GuardianLinkResponse",
+    "GuardianLinkUpdate",
+    "HouseholdModeChangeResponse",
+    "HouseholdModeResponse",
+    "HouseholdModeUpdate",
+    "InviteCreatorInfo",
+    "InviteKeyCreate",
+    "InviteKeyResponse",
+    "InviteRedemptionInfo",
+    "MentionRef",
+    "NameClusterRequest",
+    "NotificationResponse",
+    "ObservationResponse",
+    "PairClaim",
+    "PairStartResponse",
+    "PersonCreate",
+    "PersonRecapResponse",
+    "PersonResponse",
+    "PersonUpdate",
+    "ProviderCreate",
+    "ProviderResponse",
+    "RecordingResponse",
+    "RuleCreate",
+    "RuleReplayResponse",
+    "RuleReplaySample",
+    "RuleResponse",
+    "RuleTestActionPreview",
+    "RuleTestRequest",
+    "RuleTestResponse",
+    "RuleUpdate",
+    "ScheduledReportCreate",
+    "ScheduledReportResponse",
+    "ScheduledReportUpdate",
+    "SetCameraAccessRequest",
+    "StorageResponse",
+    "SystemSettingsResponse",
+    "SystemSettingsUpdate",
+    "SystemStatus",
+    "TelegramChannelCreate",
+    "TelegramChannelResponse",
+    "TelegramChannelUpdate",
+    "TelegramDeliveryUpdate",
+    "TelegramPairInitResponse",
+    "TelegramTestResponse",
+    "TelegramWebhookInfoResponse",
+    "TokenResponse",
+    "UserCameraAccessResponse",
+    "UserCreate",
+    "UserLogin",
+    "UserResponse",
+    "UserUpdate",
+    "WidgetCreate",
+    "WidgetDataResponse",
+    "WidgetResponse",
+    "WidgetSource",
+    "WidgetTestRequest",
+    "WidgetUpdate",
+    "validate_stream_url",
+]
