@@ -271,12 +271,22 @@ async def events_count(
     severity: str | None = Query(default=None),
     rule_id: uuid.UUID | None = Query(default=None),
     from_: datetime | None = Query(default=None, alias="from"),
-    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    """Count events, e.g. ?acked=false for the unreviewed badge."""
+    """Count events, e.g. ?acked=false for the unreviewed badge.
+
+    Scoped to the caller's cameras (issue #201): the badge must count only
+    events the user could actually open, and hidden-from-review cameras are
+    excluded to match the list/history feeds.
+    """
     from sqlalchemy import func as sa_func
 
-    query = select(sa_func.count(Event.id))
+    allowed = await allowed_camera_ids(current_user, db)
+    query = apply_camera_filter(
+        select(sa_func.count(Event.id)).where(_not_review_excluded(Event.camera_id)),
+        allowed,
+        Event.camera_id,
+    )
     if severity in ("alert", "detection"):
         query = query.where(Event.severity == severity)
     if rule_id:
@@ -512,7 +522,7 @@ async def clear_event_feedback(
 @router.get("/{event_id}")
 async def get_event(
     event_id: uuid.UUID,
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a single event with its annotation notes.
@@ -520,10 +530,14 @@ async def get_event(
     Phase 4. The response now embeds an array of ``notes`` (web,
     telegram, api). Pre-Phase-4 callers that only read top-level
     Event fields keep working because the new key is additive.
+
+    Camera scope (issue #201): a foreign event is a 404, matching the
+    feedback routes above, so out-of-scope ids cannot be probed.
     """
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    await require_camera_in_scope(current_user, db, event.camera_id)
     notes_result = await db.execute(
         select(EventNote)
         .where(EventNote.event_id == event_id)
@@ -547,12 +561,14 @@ async def get_event(
 @router.get("/{event_id}/notes", response_model=list[EventNoteResponse])
 async def list_event_notes(
     event_id: uuid.UUID,
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    # Camera scope (issue #201): out-of-scope events read as absent.
+    await require_camera_in_scope(current_user, db, event.camera_id)
     result = await db.execute(
         select(EventNote)
         .where(EventNote.event_id == event_id)
