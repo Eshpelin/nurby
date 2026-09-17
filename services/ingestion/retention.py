@@ -29,6 +29,17 @@ CLEANUP_INTERVAL = 3600  # run every hour
 
 _RELATIVE_PREFIXES = ["./recordings/", "recordings/", "./"]
 
+_THUMBNAIL_PREFIXES = ["./thumbnails/", "thumbnails/", "./"]
+
+# Observation retention (issue #213) batch bounds. Rows are deleted in
+# bounded batches so a first run against a large backlog cannot hold the
+# hourly loop (or lock the table) for minutes; whatever does not fit in
+# one sweep is picked up by the next hourly pass. pgvector-backed tables
+# make big deletes disproportionately expensive, so many small deletes
+# beat one huge one.
+OBSERVATION_PRUNE_BATCH = 500
+OBSERVATION_PRUNE_MAX_BATCHES = 20
+
 
 def _resolve_path(file_path: str | None) -> str | None:
     """Turn a stored (possibly relative) file path into an absolute disk path."""
@@ -66,6 +77,28 @@ def _resolve_audio_path(file_path: str | None) -> str | None:
     return os.path.join(base, rel)
 
 
+def _resolve_thumbnail_path(file_path: str | None) -> str | None:
+    """Resolve an observation thumbnail/clean-frame path to an absolute path.
+
+    Observation thumbnails are written under
+    ``settings.thumbnails_path/observations`` (pipeline.THUMBNAIL_DIR) with
+    paths stored the same (possibly relative) way as recordings. Strip the
+    thumbnail base prefix so both the default relative path and an
+    absolute custom ``thumbnails_path`` resolve correctly.
+    """
+    if not file_path:
+        return None
+    if os.path.isabs(file_path):
+        return file_path
+    base = os.path.abspath(settings.thumbnails_path)
+    rel = file_path
+    for prefix in _THUMBNAIL_PREFIXES:
+        if rel.startswith(prefix):
+            rel = rel[len(prefix):]
+            break
+    return os.path.join(base, rel)
+
+
 def _remove_file(path: str | None) -> tuple[int, bool]:
     """Remove a file from disk. Returns (size_freed, success)."""
     if not path or not os.path.exists(path):
@@ -92,6 +125,21 @@ def prune_motion_samples_stmt(cutoff: datetime):
     from shared.models import MotionSample
 
     return delete(MotionSample).where(MotionSample.bucket < cutoff)
+
+
+def prune_observations_stmt(observation_ids: list):
+    """Build the bulk DELETE for one observation-retention batch (issue #213).
+
+    Pure builder (no DB) so tests can compile it. Children (VLM passes,
+    actions, grounding results, incident junctions) are removed by the
+    DB-level ``ondelete=CASCADE`` FKs; agent references go NULL via
+    ``ondelete=SET NULL``. Events reference observations without an FK
+    (deliberately) and keep their payload text, so nothing dangles at the
+    schema level.
+    """
+    from shared.models import Observation
+
+    return delete(Observation).where(Observation.id.in_(observation_ids))
 
 
 class RetentionManager:
@@ -176,6 +224,16 @@ class RetentionManager:
         except Exception:
             logger.exception("Motion sample retention failed")
 
+        # Observations + thumbnails + VLM passes (#213). System-wide window
+        # (one setting), like HAR segments / motion samples. Nothing pruned
+        # these before, so long-running installs grew observations, their
+        # thumbnail JPEGs and observation_vlm_passes without bound. Best-effort;
+        # failure never blocks the loop.
+        try:
+            await self._enforce_observation_retention()
+        except Exception:
+            logger.exception("Observation retention failed")
+
     async def _enforce_motion_sample_retention(self) -> None:
         """Delete motion_samples rows older than ``motion_series_retention_days``.
 
@@ -199,6 +257,56 @@ class RetentionManager:
                     "Motion sample retention. deleted %d rows (cutoff %s, %d days)",
                     deleted, cutoff.isoformat(), days,
                 )
+
+    async def _enforce_observation_retention(self) -> None:
+        """Delete observations older than ``observation_retention_days``, with
+        their thumbnail files (annotated + clean) and cascade-owned children.
+
+        Each hourly sweep deletes at most ``OBSERVATION_PRUNE_BATCH`` x
+        ``OBSERVATION_PRUNE_MAX_BATCHES`` rows in committed batches, so a
+        first run against a large backlog stays bounded. Thumbnail removal
+        is best-effort (conversations set the precedent): a stale orphaned
+        JPEG is a far smaller problem than rows that never age out, because
+        the recording — not the observation thumbnail — is the evidence.
+        """
+        from shared.app_settings import get_setting
+        from shared.models import Observation
+
+        days = int(await get_setting("observation_retention_days", 90) or 0)
+        if days <= 0:
+            return
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        total = 0
+        async with async_session() as db:
+            for _batch in range(OBSERVATION_PRUNE_MAX_BATCHES):
+                rows = (
+                    await db.execute(
+                        select(
+                            Observation.id,
+                            Observation.thumbnail_path,
+                            Observation.clean_frame_path,
+                        )
+                        .where(Observation.started_at < cutoff)
+                        .order_by(Observation.started_at.asc())
+                        .limit(OBSERVATION_PRUNE_BATCH)
+                    )
+                ).all()
+                if not rows:
+                    break
+                for obs_id, thumb, clean in rows:
+                    _remove_file(_resolve_thumbnail_path(thumb))
+                    if clean and clean != thumb:
+                        _remove_file(_resolve_thumbnail_path(clean))
+                await db.execute(prune_observations_stmt([r[0] for r in rows]))
+                await db.commit()
+                total += len(rows)
+                if len(rows) < OBSERVATION_PRUNE_BATCH:
+                    break
+        if total:
+            logger.info(
+                "Observation retention. deleted %d observations (cutoff %s, %d days)",
+                total, cutoff.isoformat(), days,
+            )
 
     async def _enforce_har_segment_retention(self) -> None:
         """Delete person_action_segments older than ``har_segment_retention_days``."""
