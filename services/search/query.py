@@ -15,6 +15,7 @@ from sqlalchemy import String, and_, cast, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.search.embeddings import generate_embedding, get_embedding_provider
+from shared.camera_access import ALL, AllowedCameras, apply_camera_filter
 from shared.models import (
     Camera,
     Conversation,
@@ -81,6 +82,8 @@ async def search_observations(
     time_to: datetime | None = None,
     limit: int = 30,
     offset: int = 0,
+    *,
+    allowed: AllowedCameras = ALL,
 ) -> list[dict]:
     """Search observations with structured filters and vector similarity.
 
@@ -89,6 +92,10 @@ async def search_observations(
     to ILIKE keyword matching if embedding generation fails.
     """
     filters = []
+    if allowed is not ALL:
+        if not allowed:
+            return []
+        filters.append(Observation.camera_id.in_(allowed))
 
     # Camera filter
     if camera_id:
@@ -287,7 +294,9 @@ def _is_people_intent(question: str) -> bool:
     return bool(words & PEOPLE_INTENT_WORDS)
 
 
-async def _recent_people_observations(db: AsyncSession, hours: int = 24, limit: int = 30) -> list:
+async def _recent_people_observations(
+    db: AsyncSession, hours: int = 24, limit: int = 30, *, allowed: AllowedCameras = ALL,
+) -> list:
     """Fetch recent observations that involved a person or a face.
 
     Used as a fallback when the question asks 'who came' etc. but
@@ -308,6 +317,7 @@ async def _recent_people_observations(db: AsyncSession, hours: int = 24, limit: 
         .order_by(Observation.started_at.desc())
         .limit(limit)
     )
+    stmt = apply_camera_filter(stmt, allowed, Observation.camera_id)
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -316,6 +326,8 @@ async def answer_question(
     db: AsyncSession,
     question: str,
     provider=None,
+    *,
+    allowed: AllowedCameras = ALL,
 ) -> dict:
     """Answer a natural language question using observation context.
 
@@ -323,14 +335,14 @@ async def answer_question(
     """
 
     # Search for relevant observations
-    results = await search_observations(db, query=question, limit=20)
+    results = await search_observations(db, query=question, limit=20, allowed=allowed)
 
     # People-intent fallback. Questions like "who came" rarely match VLM
     # captions or object labels through vector/keyword search because the
     # caption says things like "A man is raising his arm". Pull any recent
     # observation that involved a person or a clustered face.
     if _is_people_intent(question):
-        recent = await _recent_people_observations(db, hours=24, limit=30)
+        recent = await _recent_people_observations(db, hours=24, limit=30, allowed=allowed)
         if recent:
             camera_ids_set = {obs.camera_id for obs in recent}
             camera_map = await _resolve_camera_names(db, camera_ids_set)
@@ -606,6 +618,8 @@ async def search_transcripts(
     time_from: datetime | None = None,
     time_to: datetime | None = None,
     limit: int = 30,
+    *,
+    allowed: AllowedCameras = ALL,
 ) -> list[dict]:
     """Search transcripts by ILIKE + cosine similarity on embeddings.
 
@@ -614,6 +628,10 @@ async def search_transcripts(
     transcripts are excluded.
     """
     base_filters = [Transcript.filtered.is_(False)]
+    if allowed is not ALL:
+        if not allowed:
+            return []
+        base_filters.append(Transcript.camera_id.in_(allowed))
     if camera_id:
         base_filters.append(Transcript.camera_id == camera_id)
     if time_from:
@@ -694,9 +712,15 @@ async def search_summaries(
     time_from: datetime | None = None,
     time_to: datetime | None = None,
     limit: int = 30,
+    *,
+    allowed: AllowedCameras = ALL,
 ) -> list[dict]:
     """Search Summary rows. Mirrors the transcript path."""
     base_filters = []
+    if allowed is not ALL:
+        if not allowed:
+            return []
+        base_filters.append(Summary.camera_id.in_(allowed))
     if camera_id:
         base_filters.append(Summary.camera_id == camera_id)
     if time_from:
@@ -766,11 +790,17 @@ async def search_conversations(
     time_from: datetime | None = None,
     time_to: datetime | None = None,
     limit: int = 30,
+    *,
+    allowed: AllowedCameras = ALL,
 ) -> list[dict]:
     """Search finalized Conversation rows by their summary embedding +
     text. Open conversations are excluded since they have no summary
     yet."""
     base_filters = [Conversation.finalized.is_(True)]
+    if allowed is not ALL:
+        if not allowed:
+            return []
+        base_filters.append(Conversation.camera_id.in_(allowed))
     if camera_id:
         base_filters.append(Conversation.camera_id == camera_id)
     if time_from:

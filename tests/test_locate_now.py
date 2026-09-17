@@ -60,7 +60,7 @@ def _mock_grounding(monkeypatch, boxes, error=None):
     monkeypatch.setattr("services.search.scan._default_frame_loader", lambda p: object())
 
 
-_USER = SimpleNamespace(id=uuid.uuid4())
+_USER = SimpleNamespace(id=uuid.uuid4(), role="admin", is_active=True)
 
 
 @pytest.mark.asyncio

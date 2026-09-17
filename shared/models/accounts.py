@@ -37,6 +37,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="viewer")  # admin, viewer, guardian
     camera_access_mode: Mapped[str] = mapped_column(String(16), default="none", server_default="none", nullable=False)
+    # Personal onboarding choices, never authorization or installation state.
+    onboarding_preferences: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Auto-created first-run owner that has not set real credentials yet.
     # The app drops a new user straight in via /auth/bootstrap, then nags

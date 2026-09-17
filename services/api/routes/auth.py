@@ -17,6 +17,7 @@ from shared.auth import (
 from shared.config import settings
 from shared.database import get_db
 from shared.models import InviteKey, User, UserCameraAccess
+from shared.onboarding import ExperiencePreferences, ExperienceResponse, experience_response
 from shared.schemas import (
     AccountClaim,
     AdminSetup,
@@ -264,6 +265,28 @@ async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
 async def get_me(current_user: User = Depends(get_current_user)):
     """Return the currently authenticated user's profile."""
     return current_user
+
+
+@router.get("/me/experience", response_model=ExperienceResponse)
+async def get_experience(current_user: User = Depends(get_current_user)):
+    """Personal defaults, independent of installation-wide wizard dismissal."""
+    return experience_response(current_user)
+
+
+@router.put("/me/experience", response_model=ExperienceResponse)
+async def save_experience(
+    body: ExperiencePreferences,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # There is deliberately no target user ID and no role/grant field.
+    if current_user.role != "admin" and (
+        body.place is not None or body.focus != "daily" or body.goal not in {"review", "explore"}
+    ):
+        raise HTTPException(status_code=403, detail="Your account can personalize its review experience only")
+    current_user.onboarding_preferences = body.model_dump()
+    await db.commit()
+    return experience_response(current_user)
 
 
 # ── Mobile QR pairing ────────────────────────────────────────────────

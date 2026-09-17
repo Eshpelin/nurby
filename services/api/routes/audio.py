@@ -10,12 +10,13 @@ from __future__ import annotations
 import os
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.auth import require_admin, require_query_token
+from shared.auth import get_media_user, require_admin
+from shared.camera_access import require_camera_in_scope
 from shared.config import settings
 from shared.database import get_db
 from shared.models import AudioAuditLog, AudioCapture, Camera, User
@@ -27,13 +28,13 @@ router = APIRouter()
 @router.get("/{capture_id}")
 async def stream_audio(
     capture_id: uuid.UUID,
-    token: str | None = Query(default=None),
+    user: User = Depends(get_media_user),
     db: AsyncSession = Depends(get_db),
 ):
-    require_query_token(token)
     cap = await db.get(AudioCapture, capture_id)
     if cap is None:
         raise HTTPException(status_code=404, detail="Audio capture not found")
+    await require_camera_in_scope(user, db, cap.camera_id, detail="Audio capture not found")
     path = resolve_inside(cap.file_path, settings.audio_storage_path)
     if path is None:
         raise HTTPException(status_code=403, detail="Access denied")

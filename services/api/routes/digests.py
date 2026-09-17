@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
+from shared.camera_access import allowed_camera_ids, apply_camera_filter
 from shared.database import get_db
 from shared.models import DigestEntry, User
 from shared.schemas import DigestEntryResponse
@@ -19,7 +20,8 @@ async def list_digests(
     _current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(DigestEntry).order_by(DigestEntry.generated_at.desc()).limit(limit)
+    allowed = await allowed_camera_ids(_current_user, db)
+    query = apply_camera_filter(select(DigestEntry), allowed, DigestEntry.camera_id).order_by(DigestEntry.generated_at.desc()).limit(limit)
     if camera_id:
         query = query.where(DigestEntry.camera_id == camera_id)
     result = await db.execute(query)

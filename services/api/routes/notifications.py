@@ -5,6 +5,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
+from shared.camera_access import allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
 from shared.models import Notification, User
 from shared.schemas import NotificationResponse
@@ -19,7 +20,8 @@ async def list_notifications(
     unread_only: bool = Query(default=False),
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    query = select(Notification).order_by(Notification.created_at.desc()).limit(limit).offset(offset)
+    allowed = await allowed_camera_ids(_current_user, db)
+    query = apply_camera_filter(select(Notification), allowed, Notification.camera_id).order_by(Notification.created_at.desc()).limit(limit).offset(offset)
     if unread_only:
         query = query.where(Notification.read == False)  # noqa: E712
     result = await db.execute(query)
@@ -28,9 +30,9 @@ async def list_notifications(
 
 @router.get("/count")
 async def unread_count(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(func.count()).select_from(Notification).where(Notification.read == False)  # noqa: E712
-    )
+    allowed = await allowed_camera_ids(_current_user, db)
+    query = select(func.count()).select_from(Notification).where(Notification.read.is_(False))
+    result = await db.execute(apply_camera_filter(query, allowed, Notification.camera_id))
     return {"unread": result.scalar_one()}
 
 
@@ -43,6 +45,7 @@ async def mark_read(
     notif = await db.get(Notification, notification_id)
     if not notif:
         raise HTTPException(status_code=404, detail="Notification not found")
+    await require_camera_in_scope(_current_user, db, notif.camera_id, detail="Notification not found")
     notif.read = True
     await db.commit()
     await db.refresh(notif)
@@ -51,8 +54,8 @@ async def mark_read(
 
 @router.post("/read-all")
 async def mark_all_read(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    await db.execute(
-        update(Notification).where(Notification.read == False).values(read=True)  # noqa: E712
-    )
+    allowed = await allowed_camera_ids(_current_user, db)
+    query = update(Notification).where(Notification.read.is_(False)).values(read=True)
+    await db.execute(apply_camera_filter(query, allowed, Notification.camera_id))
     await db.commit()
     return {"status": "ok"}

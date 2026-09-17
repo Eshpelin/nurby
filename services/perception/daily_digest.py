@@ -149,14 +149,16 @@ class DailyDigestScheduler:
 # ---- build pipeline ------------------------------------------------------
 
 
-async def narrate_window(window_start: datetime, window_end: datetime) -> dict:
+async def narrate_window(
+    window_start: datetime, window_end: datetime, *, camera_ids: set[Any] | None = None,
+) -> dict:
     """On-demand narrative recap for an arbitrary window, NOT persisted.
 
     Reuses the morning-brief pipeline (notable events + narrative prompt)
     so a per-hour 'summarize this' reads like the daily brief. Returns
     {summary, notable_events}. summary is None when no VLM provider exists.
     """
-    facts = await _collect_facts(window_start, window_end)
+    facts = await _collect_facts(window_start, window_end, camera_ids=camera_ids)
     provider = await _resolve_provider()
     summary: str | None = None
     if provider is not None:

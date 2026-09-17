@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
+from shared.camera_access import allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
 from shared.models import Camera, Summary, User
 
@@ -53,7 +54,8 @@ async def list_summaries(
     _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    q = select(Summary).order_by(Summary.started_at.desc())
+    allowed = await allowed_camera_ids(_user, db)
+    q = apply_camera_filter(select(Summary), allowed, Summary.camera_id).order_by(Summary.started_at.desc())
     if camera_id:
         q = q.where(Summary.camera_id == camera_id)
     if kind:
@@ -85,6 +87,7 @@ async def run_summary_now(
     Reuses the same code path the periodic worker takes. Useful when the
     user wants a recap on demand without waiting for the next tick.
     """
+    await require_camera_in_scope(_user, db, body.camera_id, detail="camera not found")
     cam = await db.get(Camera, body.camera_id)
     if cam is None:
         raise HTTPException(status_code=404, detail="camera not found")
@@ -116,4 +119,5 @@ async def get_summary(
     row = await db.get(Summary, summary_id)
     if row is None:
         raise HTTPException(status_code=404, detail="summary not found")
+    await require_camera_in_scope(_user, db, row.camera_id, detail="summary not found")
     return _serialize(row)
