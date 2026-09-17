@@ -23,8 +23,7 @@ import { LiveConversationCard } from "@/components/voice/LiveConversationCard";
 import { useWorkerHealth } from "@/lib/useWorkerHealth";
 import { LLMErrorToasts } from "@/components/LLMErrorToasts";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
-import { PersonalOnboardingCard } from "@/components/PersonalOnboardingCard";
-import { OnboardingMetricsCard } from "@/components/OnboardingMetricsCard";
+import { GettingStartedLauncher } from "@/components/GettingStartedLauncher";
 import { AskComposerCard } from "@/components/AskComposerCard";
 import { TranscriptCard } from "@/components/TranscriptCard";
 import { SummaryCard } from "@/components/SummaryCard";
@@ -1002,13 +1001,9 @@ function DashboardContent() {
               </div>
             </div>
           )}
-          {user && <PersonalOnboardingCard key={user.id} cameraCount={cameras.length} camerasLoading={camerasLoading} onSetup={() => setShowWizard(true)} />}
-          {user?.role === "admin" && (
-            <details className="mb-4 rounded-xl border border-border p-3">
-              <summary className="cursor-pointer text-sm font-medium text-muted-foreground">Onboarding metrics (admin)</summary>
-              <div className="mt-3"><OnboardingMetricsCard /></div>
-            </details>
-          )}
+          {/* Setup guidance moved off the dashboard body into the corner
+              Getting-started launcher (mounted below), so this surface stays
+              the live monitoring view. */}
           <AskComposerCard />
           <CameraWall
             fullscreenRef={dashboardWrapRef}
@@ -2184,6 +2179,15 @@ function DashboardContent() {
         />
       )}
       <LLMErrorToasts />
+      {user && (
+        <GettingStartedLauncher
+          key={user.id}
+          isAdmin={user.role === "admin"}
+          cameraCount={cameras.length}
+          camerasLoading={camerasLoading}
+          onSetup={() => setShowWizard(true)}
+        />
+      )}
       <SecureAccountNudge hasFootage={cameras.length > 0} />
       {cameras.length > 0 && <LocalAIHintCard />}
       {cameras.length > 0 && <AskHintCard />}

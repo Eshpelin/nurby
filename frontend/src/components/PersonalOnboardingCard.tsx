@@ -12,13 +12,22 @@ interface Props {
   cameraCount: number;
   camerasLoading: boolean;
   onSetup: () => void;
+  // Rendered inside the Getting-started launcher popover, which already
+  // provides the card chrome: drop the outer border/background/margin so it
+  // is not a card-in-a-card.
+  embedded?: boolean;
+  // Fires after preferences save, so a host (the launcher) can refresh its
+  // progress badge.
+  onChanged?: () => void;
 }
 
 const button = "rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted/50 disabled:opacity-50";
 const primary = `${button} bg-accent text-white hover:opacity-90`;
 
-export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }: Props) {
+export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup, embedded = false, onChanged }: Props) {
   const { authFetch } = useAuth();
+  const shell = embedded ? "" : "mb-4 rounded-xl border border-border bg-card p-4 sm:p-5";
+  const shellSm = embedded ? "" : "mb-4 rounded-xl border border-border p-4";
   const [experience, setExperience] = useState<Experience | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,29 +70,30 @@ export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }:
       setExperience(await response.json());
       setEditing(false);
       setPreview(false);
+      onChanged?.();
     } catch {
       setError("Could not save your preferences. Please try again.");
     } finally {
       setSaving(false);
     }
-  }, [authFetch]);
+  }, [authFetch, onChanged]);
 
-  if (loading) return <div role="status" className="mb-4 text-sm text-muted-foreground">Loading your workspace preferences…</div>;
+  if (loading) return <div role="status" className={`${embedded ? "" : "mb-4 "}text-sm text-muted-foreground`}>Loading your workspace preferences…</div>;
   if (!experience) return (
-    <section className="mb-4 rounded-xl border border-border p-4">
+    <section className={shellSm}>
       <p role="alert" className="mb-3 text-sm">{error}</p>
       <button className={button} onClick={() => setRetry((n) => n + 1)}>Retry preferences</button>
     </section>
   );
   if (experience.audience === "guardian") return (
-    <section className="mb-4 rounded-xl border border-border p-4">
+    <section className={shellSm}>
       <h2 className="font-semibold">Your dependant updates</h2>
       <p className="my-2 text-sm text-muted-foreground">View updates and notification preferences for the people linked to your account.</p>
       <Link href="/guardian" className={button}>Open Guardian</Link>
     </section>
   );
   if (experience.audience === "viewer") return (
-    <section className="mb-4 rounded-xl border border-border p-4">
+    <section className={shellSm}>
       <h2 className="font-semibold">Your review workspace</h2>
       <p className="my-2 text-sm text-muted-foreground">Review activity from the cameras shared with you. Your administrator manages installation and access.</p>
       {!camerasLoading && cameraCount === 0 ? (
@@ -98,7 +108,7 @@ export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }:
   const changePlace = (place: Place) => setDraft((d) => ({ ...d, place, goal: goalsForPlace(place).includes(d.goal) ? d.goal : goalsForPlace(place)[0] }));
 
   return (
-    <section aria-label="Your Nurby setup" className="mb-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+    <section aria-label="Your Nurby setup" className={shell}>
       {error && <p role="alert" className="mb-3 text-sm text-red-500">{error}</p>}
       {editing ? (
         <>
@@ -171,7 +181,7 @@ export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }:
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs text-muted-foreground">{preferences.focus === "setup" ? "Camera setup and maintenance" : preferences.place === "business" ? "Your business workspace" : preferences.place === "home" ? "Your home workspace" : "Your workspace"}</p>
-              <h2 className="mt-1 font-semibold">{current.title}</h2>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight">{current.title}</h2>
             </div>
             <button className={button} onClick={() => { setDraft(preferences.goal === "explore" ? { ...preferences, place: "home", goal: "entrance" } : preferences); setEditing(true); setPreview(false); setError(null); }}>Change preferences</button>
           </div>
@@ -185,7 +195,6 @@ export function PersonalOnboardingCard({ cameraCount, camerasLoading, onSetup }:
             {current.template && <Link href="/rules" className={button}>Manage existing rules</Link>}
             <Link href="/timeline" className={button}>Open timeline</Link>
           </div>
-          {current.template && <p className="mt-3 text-xs text-muted-foreground">Recommendation saved; monitoring is not verified here. {current.needs} Review your camera, schedule and recipient before enabling a rule, then test a real alert.</p>}
           {DETECTION_GOALS.has(preferences.goal) && <ActivationSteps goal={preferences.goal} cameraId={null} />}
           <DailyPriorities
             key={`${preferences.goal}:${preferences.focus}:${preferences.paused ? 1 : 0}:${preferences.place_label ?? ""}`}

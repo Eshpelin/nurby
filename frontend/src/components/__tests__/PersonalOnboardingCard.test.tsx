@@ -44,7 +44,9 @@ describe("PersonalOnboardingCard", () => {
 
     await waitFor(() => expect(saved).toEqual({ version: 1, place: "business", goal: "after_hours", focus: "daily" }));
     // Saved view is explicit that monitoring is not yet verified.
-    expect(await screen.findByText(/monitoring is not verified here/i)).toBeInTheDocument();
+    // The no-activation guarantee now lives in the activation checklist
+    // footer rather than a separate caveat paragraph.
+    expect(await screen.findByText(/not activation/i)).toBeInTheDocument();
   });
 
   it("shows a retryable error when saving fails and keeps setup unchanged", async () => {
