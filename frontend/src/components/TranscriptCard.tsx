@@ -30,7 +30,19 @@ interface TranscriptCardProps {
   audioCaptureId?: string | null;
   language?: string | null;
   provider?: string;
+  // Speaker attribution (#227). A name is shown only when the line was
+  // confidently attributed. Unknown speakers stay unlabeled rather than
+  // guessed.
+  speakerName?: string | null;
+  speakerSource?: string | null;
 }
+
+const PersonIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
 
 /**
  * Timeline card for a transcript event. Italic text, mic icon, optional
@@ -38,7 +50,7 @@ interface TranscriptCardProps {
  * from observation cards so the feed stays scannable.
  */
 export function TranscriptCard(props: TranscriptCardProps) {
-  const { startedAt, text, audioCaptureId, provider, language } = props;
+  const { startedAt, text, audioCaptureId, provider, language, speakerName, speakerSource } = props;
   const { token } = useAuth();
   const [showPlayer, setShowPlayer] = useState(false);
   const t = new Date(startedAt);
@@ -57,6 +69,15 @@ export function TranscriptCard(props: TranscriptCardProps) {
         <span>{formatWith(t, { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span>
         {provider ? <span className="text-zinc-500">· {provider}</span> : null}
         {language ? <span className="text-zinc-500">· {language}</span> : null}
+        {speakerName ? (
+          <span
+            className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-300"
+            title={speakerSource === "manual" ? "Speaker set by a household member" : "Attributed from who was on camera"}
+          >
+            <PersonIcon className="w-3 h-3" />
+            {speakerName}
+          </span>
+        ) : null}
       </div>
       <p className="text-sm italic text-zinc-100 leading-relaxed">{text}</p>
       {audioUrl ? (

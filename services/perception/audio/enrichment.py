@@ -152,7 +152,7 @@ async def _gather_heard_text(db, obs: Observation) -> str:
     parts: list[str] = []
     for t in rows:
         prefix = ""
-        if t.speaker_person_id and t.speaker_source in ("video", "fused", "voice"):
+        if t.speaker_person_id and t.speaker_source in ("video", "fused", "voice", "manual"):
             # We do not have the person row in this scope. The speaker
             # name is rendered by the UI from the transcripts read API.
             # For VLM context, anonymize as 'Speaker' so the VLM treats
