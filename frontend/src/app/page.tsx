@@ -929,15 +929,28 @@ function DashboardContent() {
         </div>
       )}
 
-      {timelineOpen && (
-        <>
-          <div className="mb-3 grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-3 items-start">
-            <DailyDigestCard />
-            <HouseholdModeControl />
-          </div>
-          <StarredStatusRow />
-        </>
-      )}
+      {/* Slim monitoring context row. Always visible: what you are watching
+          on the left and the household mode that gates every alert on the
+          right. The morning recap, the who-you-watch row and Ask move into
+          the right activity rail (see below), so the camera wall reads as
+          the hero and this stays a single line of chrome. */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Watching{" "}
+          <span className="text-foreground font-medium">
+            {cameras.length} {cameras.length === 1 ? "camera" : "cameras"}
+          </span>
+          {persons.length > 0 && (
+            <>
+              {" · "}
+              <span className="text-foreground font-medium">
+                {persons.length} {persons.length === 1 ? "person" : "people"}
+              </span>
+            </>
+          )}
+        </p>
+        <HouseholdModeControl inline />
+      </div>
 
       {widgetBuilder.open && (
         <WidgetBuilder
@@ -963,8 +976,8 @@ function DashboardContent() {
           />
           {/* Setup guidance moved off the dashboard body into the corner
               Getting-started launcher (mounted below), so this surface stays
-              the live monitoring view. */}
-          <AskComposerCard />
+              the live monitoring view. Ask, the morning recap and the
+              who-you-watch row now live in the right activity rail. */}
           <CameraWall
             fullscreenRef={dashboardWrapRef}
             items={[
@@ -1135,6 +1148,15 @@ function DashboardContent() {
 
         {/* RIGHT. Timeline + Search. Collapsible side panel. */}
         <main className={`flex flex-col lg:min-h-0 min-w-0 ${timelineOpen ? "lg:w-[420px] flex-shrink-0" : "hidden"}`}>
+          {/* Activity rail header: Ask, the who-you-watch row and the
+              collapsed morning recap. These moved out of the full-width top
+              block so the camera wall owns the main area. Each self-hides
+              when it has nothing to show. */}
+          <div className="flex-shrink-0">
+            <AskComposerCard />
+            <StarredStatusRow />
+            <DailyDigestCard />
+          </div>
           {/* Search bar */}
           <div className="flex-shrink-0 mb-3">
             <div className="flex gap-2">

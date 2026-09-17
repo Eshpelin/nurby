@@ -15,7 +15,13 @@ import { useToast } from "@/lib/feedback";
 import { timeAgo } from "@/lib/time";
 import type { HouseholdMode, HouseholdModeState } from "@/lib/household-mode";
 
-export function HouseholdModeControl({ compact = false }: { compact?: boolean }) {
+export function HouseholdModeControl({
+  compact = false,
+  inline = false,
+}: {
+  compact?: boolean;
+  inline?: boolean;
+}) {
   const { authFetch } = useAuth();
   const toast = useToast();
   const [state, setState] = useState<HouseholdModeState | null>(null);
@@ -59,6 +65,47 @@ export function HouseholdModeControl({ compact = false }: { compact?: boolean })
   if (!state) return null;
 
   const active = state.modes.find((m) => m.key === state.mode);
+
+  // Inline variant for the slim dashboard context row: just the segmented
+  // buttons and the paused-rule signal, no card, label or hint paragraph.
+  // Hints stay reachable through each button's title tooltip.
+  if (inline) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="flex gap-1" role="group" aria-label="Household mode">
+          {state.modes.map((m) => {
+            const on = m.key === state.mode;
+            return (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => choose(m.key)}
+                disabled={saving != null}
+                aria-pressed={on}
+                title={m.hint}
+                className={`px-2.5 py-1 text-xs rounded-md border transition-colors disabled:opacity-60 ${
+                  on
+                    ? "border-green-500/60 bg-green-500/15 text-green-300 font-medium"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+        {state.silenced_rule_count > 0 && (
+          <Link
+            href="/rules"
+            className="text-[11px] text-sky-300 hover:underline whitespace-nowrap"
+            title={`Paused while ${active?.label}`}
+          >
+            {state.silenced_rule_count} paused
+          </Link>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={compact ? "" : "rounded-lg border border-border bg-card/50 p-3"}>
