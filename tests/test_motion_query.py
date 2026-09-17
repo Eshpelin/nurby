@@ -238,7 +238,7 @@ async def test_writer_runs_when_flag_on(monkeypatch):
 
 
 def _user(role: str = "viewer") -> SimpleNamespace:
-    return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True)
+    return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True, camera_access_mode="selected")
 
 
 class _FakeResult:

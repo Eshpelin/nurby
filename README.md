@@ -47,13 +47,13 @@ Deploy a local vision model through Ollama with a RAM-aware picker, or bring you
 
 ### Guardian by Nurby: follow one person, blur everyone else
 
-The Guardian Panel lets a parent or carer follow one specific dependant in a facility, and nobody else. A calm presence check, a verified-pickup moment, a blurred image where every other face is hidden, and a facility admin that grants, revokes, and audits access. See [Guardian by Nurby](#guardian-by-nurby) for the full write-up.
+The Guardian Panel lets a parent or carer follow one specific dependant in a facility, and nobody else. A calm presence check, a possible-pickup moment, a blurred image where every other face is hidden, and a facility admin that grants, revokes, and audits access. Camera sightings can match an approved pickup entry; they do not confirm a handover. See [Guardian by Nurby](#guardian-by-nurby) for the full write-up.
 
 A parent's view. Each dependant shows as present, away, or not seen.
 
 ![Guardian panel showing a parent's dependants](docs/screenshots/guardian-overview.png)
 
-One dependant. Present at a named zone, a "picked up by Mom" moment, and the latest snapshot blurred so no face is identifiable.
+One dependant. Presence at a named zone, pickup-related sightings, and the latest snapshot blurred so no face is identifiable. The screenshot below predates the current wording that distinguishes a possible pickup from a confirmed handover.
 
 ![Guardian dependant detail with a blurred snapshot](docs/screenshots/guardian-detail.png)
 
@@ -111,7 +111,7 @@ It is a thin permission and view layer on top of everything Nurby already does. 
 **What a guardian sees**
 
 - **Presence.** A 10-second check. "Inara is at school, Classroom B, seen 30 seconds ago." Green, amber, or grey.
-- **Safe arrival and verified pickup.** A push the moment they arrive and the moment they leave. Pickup is checked against an approved-pickup registry of people and vehicles, so you get "picked up by you" or a yellow "left with someone not on the approved list."
+- **Arrival and possible pickup.** Updates when arrival or departure is detected. Nearby people and vehicles are checked against an approved-pickup registry. A match is reported as a possible pickup with an approved entry; an unmatched sighting prompts review. Neither confirms who actually collected the dependant. Check with facility staff to confirm handover.
 - **A real day timeline.** Arrival, pickup, and zone moments as they happen, grouped by day, with a dedicated pickup-moment card.
 - **Blurred images.** The most recent snapshot, with every face blurred so no one is identifiable. The dependant's own enrolled photo is shown separately as a recognition aid.
 - **Deeper views.** Short clips, audio signals, a daily recap, gentle weekly trends, and natural-language search scoped to their own dependant.

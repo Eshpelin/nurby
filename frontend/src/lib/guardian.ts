@@ -40,7 +40,7 @@ export interface GuardianEvent {
 export const EVENT_META: Record<string, { label: string; dot: string }> = {
   arrived: { label: "Arrived", dot: "bg-emerald-500" },
   departed: { label: "Left", dot: "bg-zinc-400" },
-  picked_up: { label: "Picked up", dot: "bg-emerald-500" },
+  picked_up: { label: "Possible pickup", dot: "bg-amber-500" },
   entered_zone: { label: "Entered", dot: "bg-sky-500" },
   left_zone: { label: "Left zone", dot: "bg-zinc-400" },
   not_seen: { label: "Not seen", dot: "bg-amber-500" },
@@ -82,7 +82,7 @@ export interface DependantStatus {
 export const ALERT_KINDS: { key: string; label: string }[] = [
   { key: "arrived", label: "Arrived safely" },
   { key: "departed", label: "Left / departed" },
-  { key: "picked_up", label: "Picked up" },
+  { key: "picked_up", label: "Possible pickup" },
   { key: "entered_zone", label: "Entered a zone" },
   { key: "left_zone", label: "Left a zone" },
   { key: "not_seen", label: "Not seen for a while" },

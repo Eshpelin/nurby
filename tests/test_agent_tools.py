@@ -40,7 +40,7 @@ from services.agent.tools import (
 
 
 def _user(role: str = "admin") -> SimpleNamespace:
-    return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True)
+    return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True, camera_access_mode="selected")
 
 
 def _camera(name: str, location: str | None = None) -> SimpleNamespace:
@@ -155,7 +155,7 @@ async def test_access_filter_viewer_with_grants_sees_subset():
 
 
 @pytest.mark.asyncio
-async def test_access_filter_viewer_no_grants_falls_through_to_all():
+async def test_access_filter_viewer_no_grants_sees_nothing():
     cam_ids = [uuid.uuid4() for _ in range(2)]
 
     def responder(stmt: str):
@@ -169,7 +169,7 @@ async def test_access_filter_viewer_no_grants_falls_through_to_all():
     db = FakeDB(responder)
     user = _user("viewer")
     result = await access_mod.accessible_camera_ids(user, db)
-    assert result == set(cam_ids)
+    assert result == set()
 
 
 # ── tool happy paths ───────────────────────────────────────────────

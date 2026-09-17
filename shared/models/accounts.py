@@ -10,6 +10,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
@@ -26,12 +27,16 @@ from shared.database import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("camera_access_mode IN ('all', 'selected', 'none')", name="ck_users_camera_access_mode"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="viewer")  # admin, viewer, guardian
+    camera_access_mode: Mapped[str] = mapped_column(String(16), default="none", server_default="none", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Auto-created first-run owner that has not set real credentials yet.
     # The app drops a new user straight in via /auth/bootstrap, then nags

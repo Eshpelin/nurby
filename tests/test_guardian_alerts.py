@@ -108,12 +108,15 @@ def test_compose_arrived():
 
 def test_compose_pickup_matched():
     msg = alerts.compose_message("picked_up", "Ahmed", approved_name="Mother", pickup_matched=True)
-    assert msg == "Ahmed was picked up by Mother."
+    assert "Possible pickup for Ahmed" in msg
+    assert "matches Mother's approved-pickup entry" in msg
+    assert "Handover has not been confirmed" in msg
 
 
 def test_compose_pickup_unrecognized():
     msg = alerts.compose_message("picked_up", "Ahmed", pickup_matched=False)
-    assert "not on the approved-pickup list" in msg
+    assert "did not match the approved-pickup list" in msg
+    assert "Handover has not been confirmed" in msg
 
 
 # ── emit (mock db) ───────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api_client.dart';
@@ -29,18 +30,14 @@ final _userCamerasProvider =
             .map((c) => Camera.fromJson(c.cast<String, dynamic>()))
             .toList());
 
-/// The policy, in one place, because it is subtle and the UI has to say
-/// it. See shared/camera_access.py.
-///
-/// A non-admin with zero grants sees every camera: the single-owner
-/// no-op. Granting the first camera flips that user into allowlist mode,
-/// so what looks like "give them one more camera" is actually "take away
-/// every camera but this one". The screen states that before the first
-/// grant rather than after.
-String accessSummary(int grants, int totalCameras) {
-  if (grants == 0) return 'Sees every camera ($totalCameras). No allowlist.';
-  return 'Allowlist: $grants of $totalCameras cameras.';
+/// Explicit mode; an empty selection never means unrestricted access.
+String accessSummary(int grants, int totalCameras, {String mode = 'selected'}) {
+  if (mode == 'all') return 'Sees every camera ($totalCameras), including future cameras.';
+  if (mode == 'none' || grants == 0) return 'No camera access.';
+  return 'Selected: $grants of $totalCameras cameras.';
 }
+
+final _accessBusyProvider = StateProvider.family<bool, String>((ref, id) => false);
 
 class CameraAccessScreen extends ConsumerWidget {
   const CameraAccessScreen({super.key});
@@ -85,7 +82,10 @@ class _UserAccessTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final id = user['id'] as String;
-    final granted = ref.watch(_userCamerasProvider(id)).value;
+    final access = ref.watch(_userCamerasProvider(id));
+    final granted = access.value;
+    final mode = user['camera_access_mode'] as String? ?? 'none';
+    final busy = ref.watch(_accessBusyProvider(id));
     final grantedIds = {for (final c in granted ?? const <Camera>[]) c.id};
 
     return Card(
@@ -96,22 +96,39 @@ class _UserAccessTile extends ConsumerWidget {
         subtitle: Text(
           granted == null
               ? 'Loading'
-              : accessSummary(granted.length, allCameras.length),
+              : accessSummary(granted.length, allCameras.length, mode: mode),
           style: const TextStyle(
               color: NurbyColors.mutedForeground, fontSize: 12),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: [
-          if (granted != null && granted.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Ticking the first camera switches this person to an '
-                'allowlist. They will then see only the cameras ticked '
-                'here, not every camera as they do now.',
-                style: TextStyle(fontSize: 12, color: NurbyColors.warning),
-              ),
-            ),
+          if (access.hasError)
+            const Text('Could not load access. Try again.', style: TextStyle(color: NurbyColors.warning)),
+          DropdownButtonFormField<String>(
+            value: mode,
+            decoration: const InputDecoration(labelText: 'Camera access'),
+            items: const [
+              DropdownMenuItem(value: 'none', child: Text('No cameras')),
+              DropdownMenuItem(value: 'selected', child: Text('Selected cameras')),
+              DropdownMenuItem(value: 'all', child: Text('All cameras, including future cameras')),
+            ],
+            onChanged: busy || access.hasError || granted == null ? null : (value) async {
+              if (value == null) return;
+              ref.read(_accessBusyProvider(id).notifier).state = true;
+              try {
+                await ref.read(apiClientProvider).patchJson('/api/users/$id', body: {'camera_access_mode': value});
+                ref.invalidate(_usersProvider);
+                ref.invalidate(_userCamerasProvider(id));
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+                }
+              } finally {
+                ref.read(_accessBusyProvider(id).notifier).state = false;
+              }
+            },
+          ),
+          if (mode == 'selected')
           for (final c in allCameras)
             CheckboxListTile(
               dense: true,
@@ -120,9 +137,10 @@ class _UserAccessTile extends ConsumerWidget {
               activeColor: NurbyColors.accent,
               title: Text(c.name, style: const TextStyle(fontSize: 13)),
               value: grantedIds.contains(c.id),
-              onChanged: granted == null
+              onChanged: granted == null || access.hasError || busy
                   ? null
                   : (on) async {
+                      ref.read(_accessBusyProvider(id).notifier).state = true;
                       final api = ref.read(apiClientProvider);
                       try {
                         if (on == true) {
@@ -131,11 +149,14 @@ class _UserAccessTile extends ConsumerWidget {
                           await api.delete('/api/users/$id/cameras/${c.id}');
                         }
                         ref.invalidate(_userCamerasProvider(id));
+                        ref.invalidate(_usersProvider);
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text(apiErrorMessage(e))));
                         }
+                      } finally {
+                        ref.read(_accessBusyProvider(id).notifier).state = false;
                       }
                     },
             ),

@@ -65,6 +65,7 @@ async def initial_admin_setup(body: AdminSetup, db: AsyncSession = Depends(get_d
         display_name=body.display_name,
         password_hash=hash_password(body.password),
         role="admin",
+        camera_access_mode="all",
         is_active=True,
     )
     db.add(user)
@@ -120,6 +121,7 @@ async def bootstrap(db: AsyncSession = Depends(get_db)):
         display_name="Owner",
         password_hash=hash_password(secrets.token_urlsafe(32)),
         role="admin",
+        camera_access_mode="all",
         is_active=True,
         is_provisional=True,
     )
@@ -204,6 +206,7 @@ async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
         display_name=body.display_name,
         password_hash=hash_password(body.password),
         role=invite.role,
+        camera_access_mode="selected" if invite.camera_ids else "none",
         is_active=True,
         invite_key_id=invite.id,
     )

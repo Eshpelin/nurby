@@ -16,10 +16,45 @@ router = APIRouter()
 
 # In-memory registry of connected clients, each mapped to the per-user
 # camera ACL resolved at connect time (issue #40). The value is either the
-# ``ALL`` sentinel (admin / zero-grant user, sees everything) or a concrete
+# ``ALL`` sentinel (admin / explicit all-mode user) or a concrete
 # ``set[UUID]`` allowlist. ``_deliver_local`` consults this to drop
 # camera-specific messages a given recipient may not see.
 _connections: dict[WebSocket, AllowedCameras] = {}
+_connection_users: dict[WebSocket, uuid.UUID] = {}
+
+
+async def _refresh_connection_access() -> set[WebSocket]:
+    """Recheck once per connected user per delivery batch, across all API workers.
+
+    A socket's handshake permissions must not outlive revocation. Database
+    failures suspend delivery rather than using a stale allowlist. No Redis
+    invalidation race or dependency on the admin hitting this API process.
+    """
+    blocked: set[WebSocket] = set()
+    sockets = list(_connection_users.items())
+    if not sockets:
+        return blocked
+    try:
+        async with async_session() as db:
+            scopes = {}
+            for user_id in {uid for _, uid in sockets}:
+                user = await db.get(User, user_id)
+                scopes[user_id] = (
+                    await allowed_camera_ids(user, db)
+                    if user is not None and user.is_active else None
+                )
+            for ws, user_id in sockets:
+                if ws not in _connections:
+                    continue
+                allowed = scopes[user_id]
+                if allowed is None:
+                    blocked.add(ws)
+                else:
+                    _connections[ws] = allowed
+    except Exception:
+        logger.warning("Could not revalidate live camera access; suspending delivery", exc_info=True)
+        blocked.update(ws for ws, _ in sockets)
+    return blocked
 
 
 def _coerce_camera_id(raw) -> uuid.UUID | None:
@@ -85,6 +120,7 @@ async def _get_relay_redis():
 
 
 async def _deliver_local(payload: str) -> None:
+    blocked = await _refresh_connection_access()
     # Decode once so each socket's ACL can be checked against the message's
     # camera_id without re-parsing. A non-JSON / non-dict payload is treated
     # as a system message and delivered to everyone (the gate is a no-op for
@@ -96,6 +132,8 @@ async def _deliver_local(payload: str) -> None:
         message = None
     dead = set()
     for ws, allowed in list(_connections.items()):
+        if ws in blocked:
+            continue
         if message is not None and not _allowed_to_receive(allowed, message):
             continue
         try:
@@ -104,6 +142,7 @@ async def _deliver_local(payload: str) -> None:
             dead.add(ws)
     for ws in dead:
         _connections.pop(ws, None)
+        _connection_users.pop(ws, None)
 
 
 @router.websocket("/ws")
@@ -113,16 +152,15 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
     Token-authenticated (issue #40): the JWT rides as ``?token=`` exactly
     like the mic socket, since browsers cannot set an Authorization header
     on a WebSocket handshake. The per-user camera ACL is resolved once at
-    connect time and cached alongside the socket; ``_deliver_local`` then
-    drops camera-tagged messages this recipient may not see.
+    connect time and refreshed before delivery, so revocation also applies
+    to already-connected browsers.
     """
     user_id = decode_access_token(token)
     if user_id is None:
         await ws.close(code=4401)
         return
     # Resolve the user and their allowed-camera set once, before accepting,
-    # so an invalid/deactivated user is rejected and the ACL is fixed for
-    # the life of the connection.
+    # so an invalid/deactivated user is rejected before the handshake.
     async with async_session() as db:
         user = await db.get(User, user_id)
         if user is None or not user.is_active:
@@ -132,6 +170,7 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
 
     await ws.accept()
     _connections[ws] = allowed
+    _connection_users[ws] = user_id
     try:
         while True:
             # Keep connection alive, handle incoming messages if needed
@@ -142,6 +181,7 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
         _connections.pop(ws, None)
     finally:
         _connections.pop(ws, None)
+        _connection_users.pop(ws, None)
 
 
 async def broadcast(message: dict):

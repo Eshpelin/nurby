@@ -39,7 +39,7 @@ from shared.models import ResourceShare
 
 
 def _user(role: str = "admin") -> SimpleNamespace:
-    return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True)
+    return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True, camera_access_mode="selected")
 
 
 def _now() -> datetime:

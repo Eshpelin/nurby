@@ -8,17 +8,14 @@ mirrors Guardian's already-scoped ``_allowed_cameras`` posture on the main
 app surface (see issue #40 and
 ``docs/frigate-study/initiatives/camera-access-control.md``).
 
-Policy (V1 single-owner safe by construction):
+Policy (explicit access, issue #190):
 
 * **Admins** see every camera. Returns the :data:`ALL` sentinel.
-* **Restricted users** (viewer/guardian) with one or more explicit
-  ``UserCameraAccess`` grants see only that allowlist. Returns a
-  ``set[UUID]``.
-* **Restricted users with zero grants** fall through to :data:`ALL`. This
-  is the deliberate no-op that keeps existing single-owner deploys
-  unchanged: nobody is locked out until an admin opts a user into the
-  allowlist by granting at least one camera. The data-leak the issue
-  describes only matters once a *restricted* account with grants exists.
+* Non-admins in **all** mode explicitly see every camera.
+* **selected** mode returns the explicit grants, including an empty set.
+* **none**, missing, or unknown modes fail closed. New accounts default to none.
+  Existing access is preserved explicitly by the migration, never inferred
+  from an empty grant list at request time.
 
 The ``ALL`` sentinel is preferred over materializing the full camera-id
 set: it lets callers skip the ``WHERE ... IN (...)`` clause entirely (no
@@ -79,6 +76,12 @@ async def allowed_camera_ids(user: User, db: AsyncSession) -> AllowedCameras:
     if role == "admin":
         return ALL
 
+    mode = getattr(user, "camera_access_mode", "none")
+    if mode == "all":
+        return ALL
+    if mode != "selected":
+        return set()
+
     rows = (
         await db.execute(
             select(UserCameraAccess.camera_id).where(
@@ -86,12 +89,7 @@ async def allowed_camera_ids(user: User, db: AsyncSession) -> AllowedCameras:
             )
         )
     ).all()
-    granted = {row[0] for row in rows}
-    if not granted:
-        # No explicit grants. Fall through to every camera so single-owner
-        # / unconfigured deploys behave exactly as before this change.
-        return ALL
-    return granted
+    return {row[0] for row in rows}
 
 
 def apply_camera_filter(

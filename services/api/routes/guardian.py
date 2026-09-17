@@ -231,7 +231,7 @@ async def guardian_vocabulary(_user: User = Depends(get_current_user)) -> dict:
 _ALERT_LABELS = {
     "arrived": "Arrived home",
     "departed": "Left home",
-    "picked_up": "Picked up by someone",
+    "picked_up": "Possible pickup detected",
     "entered_zone": "Entered an area",
     "left_zone": "Left an area",
     "not_seen": "Not seen for a while",
@@ -797,12 +797,20 @@ async def link_events(
         {
             "id": str(e.id),
             "kind": e.kind,
-            "message": e.message,
+            # Older stored pickup messages used definite handover wording.
+            # Render the current evidence contract without rewriting the audit row.
+            "message": alerts_mod.compose_message(
+                "picked_up", person.nickname or person.display_name,
+                approved_name=e.pickup_name, pickup_matched=e.pickup_matched,
+            ) if e.kind == "picked_up" else e.message,
             "severity": e.severity,
             "zone": e.zone,
             "at": e.at.isoformat(),
             "pickup_matched": e.pickup_matched,
             "pickup_name": e.pickup_name,
+            "pickup_evidence": (
+                "approved_entry_matched" if e.pickup_matched else "possible_pickup"
+            ) if e.kind == "picked_up" else None,
         }
         for e in rows
         if ent.alert_enabled(link, e.kind)

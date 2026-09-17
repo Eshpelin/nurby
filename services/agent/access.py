@@ -8,11 +8,8 @@ share one source of truth. This wrapper materializes the central
 ``ALL`` sentinel into the concrete ``set[UUID]`` the agent tools expect,
 keeping their existing contract unchanged.
 
-Admin users see every camera. Regular users see the cameras shared with
-them via the ``UserCameraAccess`` table; a regular user with zero rows in
-that table falls through to the full camera list, matching the read
-endpoints which do not gate at the row level until an admin opts the user
-into an allowlist.
+Admins and explicit all-mode users see every camera. Selected-mode users
+see only their grants; an empty selection and none mode both deny access.
 """
 
 from __future__ import annotations
@@ -31,7 +28,7 @@ async def accessible_camera_ids(user: User, db: AsyncSession) -> set[uuid.UUID]:
 
     Thin adapter over :func:`shared.camera_access.allowed_camera_ids`. The
     central helper returns ``ALL`` for unrestricted users (admins, or
-    regular users with no explicit grants); the agent tools want a
+    regular users explicitly in all mode); the agent tools want a
     concrete set, so ``ALL`` is expanded to the full camera-id set here.
     A restricted user's allowlist is intersected with the live camera set
     so stale grants for deleted cameras never leak.
