@@ -1,0 +1,104 @@
+# Nurby × Home Assistant rich notification blueprint.
+#
+# Import in HA: Settings → Automations → Blueprints → Import Blueprint,
+# then point it at the URL of this file (or paste it into
+# config/blueprints/automation/nurby/).
+#
+# What it does: fires on a Nurby "Detections" event entity (person/
+# vehicle/face/plate/object), optionally only during off-hours, sends a
+# mobile notification with a tap-through to Nurby's event view, and
+# stays quiet for the cooldown window.
+#
+# The per-camera event topic payload (see mqtt.md) carries event_type,
+# camera, rule_name and event_url; HA's event entity exposes the last
+# event_type in its state, which this blueprint reads.
+
+blueprint:
+  name: Nurby detection alert
+  description: >
+    Send a rich mobile notification when a Nurby camera reports a
+    detection. Optionally restrict to off-hours and set a cooldown.
+  domain: automation
+  input:
+    event_entity:
+      name: Nurby detection event entity
+      description: >
+        The "Detections" event entity of the camera (e.g.
+        event.front_door_detections).
+      selector:
+        entity:
+          filter:
+            - domain: event
+    notify_target:
+      name: Notify target
+      description: The notify.* service to send with (e.g. notify.mobile_app_phone).
+      selector:
+        action:
+    nurby_base_url:
+      name: Nurby base URL
+      description: Where Nurby's web UI lives, for the tap-through link.
+      default: http://nurby.local:4747
+      selector:
+        text:
+    after_hours_only:
+      name: Only between the hours below
+      default: false
+      selector:
+        boolean:
+    after_hour:
+      name: Start hour (24h, local time)
+      default: 22
+      selector:
+        number:
+          min: 0
+          max: 23
+    before_hour:
+      name: End hour (24h, local time)
+      default: 7
+      selector:
+        number:
+          min: 0
+          max: 23
+    cooldown_minutes:
+      name: Cooldown (minutes)
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 1440
+
+mode: single
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input event_entity
+
+variables:
+  # HA event entities put the fired event type in their state
+  # (person / vehicle / face / plate / object / motion).
+  event_type: "{{ trigger.to_state.state }}"
+  base_url: !input nurby_base_url
+
+condition:
+  - condition: template
+    value_template: "{{ event_type in ['motion', 'person', 'face', 'vehicle', 'plate', 'object'] }}"
+  - condition: or
+    conditions:
+      - condition: not
+        conditions:
+          - condition: input
+            input: after_hours_only
+      - condition: time
+        after_input: after_hour
+        before_input: before_hour
+
+action:
+  - action: !input notify_target
+    data:
+      title: "Nurby: {{ event_type }}"
+      message: "{{ trigger.to_state.name }}"
+      data:
+        url: "{{ base_url }}/timeline"
+        push:
+          interruption-level: time-sensitive
