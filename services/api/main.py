@@ -17,6 +17,7 @@ from services.api.routes import (
     body_clusters,
     cameras,
     conversations,
+    coverage,
     daily_digest,
     dashboard_widgets,
     detection_models,
@@ -237,6 +238,37 @@ async def health_check():
         content={"status": status, "database": db_ok, "uptime_seconds": round(time.time() - START_TIME, 1)},
     )
 
+
+@app.get("/api/beacon")
+async def beacon():
+    """End-to-end 'system alive' beacon for an external dead-man's switch (#211).
+
+    Unlike ``/api/health`` (which only checks that the API process can reach
+    its database), this reflects whether the home is actually being
+    monitored: ingestion + perception heartbeats and a producing pipeline,
+    read from the same keys the doctor inspects. Returns 200 only when every
+    critical capability is confirmed; 503 otherwise, so a status-code-only
+    external watchdog trips when perception dies even while the API answers.
+
+    Unauthenticated by design: an off-box cron cannot hold a session. The
+    body is coarse booleans only, never camera-scoped data. See
+    docs/operations/dead-mans-switch.md for the recipe that polls this.
+    """
+    from shared.beacon import compute_beacon
+    from shared.database import async_session
+
+    try:
+        async with async_session() as db:
+            payload, healthy = await compute_beacon(db)
+    except Exception:
+        # Could not even open a session / compute the beacon. That is itself
+        # a monitoring outage, so fail closed with a 503 the watchdog trips on.
+        return JSONResponse(
+            status_code=503,
+            content={"beacon": "degraded", "healthy": False, "failing": ["api"]},
+        )
+    return JSONResponse(status_code=200 if healthy else 503, content=payload)
+
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(api_keys.router, prefix="/api/api-keys", tags=["api-keys"])
@@ -247,6 +279,7 @@ app.include_router(invites.router, prefix="/api/invites", tags=["invites"])
 app.include_router(guardian.router, prefix="/api/guardian", tags=["guardian"])
 app.include_router(system.router, prefix="/api", tags=["system"])
 app.include_router(doctor.router, prefix="/api", tags=["doctor"])
+app.include_router(coverage.router, prefix="/api", tags=["coverage"])
 app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
 app.include_router(voice.router, prefix="/api/voice", tags=["voice"])
 app.include_router(detection_models.router, prefix="/api/detection-models", tags=["detection-models"])
