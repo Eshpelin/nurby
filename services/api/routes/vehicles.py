@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_query_token
+from shared.camera_access import allowed_camera_ids, apply_camera_filter
 from shared.config import settings
 from shared.database import get_db
 from shared.models import Camera, Observation, User, Vehicle
@@ -103,16 +104,19 @@ async def vehicles_activity_summary(
     cam_rows = (await db.execute(select(Camera.id, Camera.name))).all()
     cam_names = {str(cid): name for cid, name in cam_rows}
 
+    allowed = await allowed_camera_ids(_current_user, db)
     now = _now()
     cutoff_7d = now - timedelta(days=7)
     obs = (
         await db.execute(
-            select(Observation)
-            .where(
-                Observation.vehicle_detections.is_not(None),
-                Observation.started_at >= cutoff_7d,
-            )
-            .order_by(Observation.started_at.desc())
+            apply_camera_filter(
+                select(Observation).where(
+                    Observation.vehicle_detections.is_not(None),
+                    Observation.started_at >= cutoff_7d,
+                ),
+                allowed,
+                Observation.camera_id,
+            ).order_by(Observation.started_at.desc())
         )
     ).scalars().all()
 
@@ -167,13 +171,17 @@ async def vehicle_activity_feed(
 ):
     """Sightings of one vehicle. observations whose vehicle_detections
     reference this vehicle, newest first, with camera name + thumbnail."""
+    allowed = await allowed_camera_ids(_current_user, db)
     cam_rows = (await db.execute(select(Camera.id, Camera.name))).all()
     cam_names = {str(cid): name for cid, name in cam_rows}
 
     obs = (
         await db.execute(
-            select(Observation)
-            .where(Observation.vehicle_detections.is_not(None))
+            apply_camera_filter(
+                select(Observation).where(Observation.vehicle_detections.is_not(None)),
+                allowed,
+                Observation.camera_id,
+            )
             .order_by(Observation.started_at.desc())
             .limit(limit * 6)
         )

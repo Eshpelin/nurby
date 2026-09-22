@@ -8,12 +8,17 @@ over observation descriptions and VLM-generated content.
 import logging
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy import String, and_, cast, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.search.answer_scope import (
+    coverage_limitations,
+    summarize_identity,
+    summarize_scope,
+)
 from services.search.embeddings import generate_embedding, get_embedding_provider
 from shared.camera_access import ALL, AllowedCameras, apply_camera_filter
 from shared.models import (
@@ -352,10 +357,37 @@ async def answer_question(
                 if r["id"] not in seen:
                     results.append(r)
 
+    # Trustworthy-answer scaffolding (#198): what was searched, and what
+    # could not be checked. Computed from the evidence + the camera status
+    # log so an answer can never quietly hide a coverage gap. The implied
+    # search window is the last 24h (the people-intent fallback's horizon).
+    scope = summarize_scope(results)
+    try:
+        limitations = await coverage_limitations(
+            db,
+            allowed=allowed,
+            window_from=datetime.now(timezone.utc) - timedelta(hours=24),
+        )
+    except Exception:
+        logger.exception("coverage limitations lookup failed")
+        limitations = []
+
     if not results:
+        # Distinguish a genuine quiet period from a coverage gap: if a camera
+        # was offline, say so instead of implying nothing happened.
+        if limitations:
+            msg = (
+                "No matching observations found, but coverage was incomplete "
+                "for this period, so this is not a confirmed quiet period."
+            )
+        else:
+            msg = "No matching observations found. Try a different query or check that cameras are recording."
         return {
-            "answer": "No matching observations found. Try a different query or check that cameras are recording.",
+            "answer": msg,
             "sources": [],
+            "scope": scope,
+            "identity": {"matched": [], "uncertain_identities": 0, "unidentified_faces": 0},
+            "limitations": limitations,
         }
 
     # Resolve cluster_id -> named-person name so answers use real names
@@ -404,12 +436,29 @@ async def answer_question(
         from services.search.embeddings import get_embedding_provider
         provider = await get_embedding_provider()
 
+    # Identity certainty breakdown, using the same name resolution the
+    # context builder applies. Kept apart so an answer never upgrades a
+    # recurring unknown face into a named person.
+    def _resolve_face_name(face: dict) -> str | None:
+        nm = face.get("person_name")
+        if nm:
+            return name_alias.get(nm, nm)
+        cid = face.get("cluster_id")
+        if cid:
+            return cluster_name_map.get(str(cid))
+        return None
+
+    identity = summarize_identity(results, _resolve_face_name)
+
     if not provider:
         # No VLM. return search results without synthesized answer
         return {
             "answer": None,
             "sources": results,
             "note": "No VLM provider configured. Showing matching observations.",
+            "scope": scope,
+            "identity": identity,
+            "limitations": limitations,
         }
 
     def _pretty_ts(iso: str | None) -> str:
@@ -505,8 +554,11 @@ async def answer_question(
 
     directives.extend([
         "Use the person's real name when one is given. Unnamed faces are 'an unknown person'.",
+        "A recurring but unnamed face is 'a recurring unknown person', never a guessed name.",
         "Do not output ISO strings, seconds, or microseconds.",
         "If the observations do not actually answer the question, say so briefly.",
+        "Never claim to have created, enabled, scheduled, or turned on any alert,"
+        " rule, or automation. You can only describe what was seen.",
     ])
 
     system_prompt = (
@@ -527,6 +579,9 @@ async def answer_question(
         return {
             "answer": answer_text,
             "sources": results[:10],
+            "scope": scope,
+            "identity": identity,
+            "limitations": limitations,
         }
     except Exception:
         logger.exception("VLM question answering failed")
@@ -534,6 +589,9 @@ async def answer_question(
             "answer": None,
             "sources": results,
             "note": "VLM call failed. Showing matching observations.",
+            "scope": scope,
+            "identity": identity,
+            "limitations": limitations,
         }
 
 

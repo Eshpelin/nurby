@@ -12,6 +12,13 @@ from sqlalchemy import Text, and_, select, text
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm.attributes import flag_modified
 
+from shared.camera_access import (
+    ALL,
+    AllowedCameras,
+    allowed_camera_ids,
+    apply_camera_filter,
+)
+
 
 def sa_lower(col):
     return sa_func.lower(col)
@@ -337,12 +344,16 @@ async def person_activity_summary(_current_user: User = Depends(get_current_user
 
     # Fetch observations with person detections from last 7 days for efficiency
     from datetime import timedelta
+    allowed = await allowed_camera_ids(_current_user, db)
     cutoff_7d = datetime.now(tz.utc) - timedelta(days=7)
     obs_result = await db.execute(
-        select(Observation)
-        .where(Observation.person_detections.isnot(None))
-        .where(Observation.started_at >= cutoff_7d)
-        .order_by(Observation.started_at.desc())
+        apply_camera_filter(
+            select(Observation)
+            .where(Observation.person_detections.isnot(None))
+            .where(Observation.started_at >= cutoff_7d),
+            allowed,
+            Observation.camera_id,
+        ).order_by(Observation.started_at.desc())
     )
     observations = obs_result.scalars().all()
 
@@ -446,9 +457,13 @@ async def person_activity_feed(
 
     # Query observations with person_detections, scan for matching person_id
     # For PostgreSQL, we could use JSON operators, but for portability we fetch and filter
+    allowed = await allowed_camera_ids(_current_user, db)
     obs_result = await db.execute(
-        select(Observation)
-        .where(Observation.person_detections.isnot(None))
+        apply_camera_filter(
+            select(Observation).where(Observation.person_detections.isnot(None)),
+            allowed,
+            Observation.camera_id,
+        )
         .order_by(Observation.started_at.desc())
         .limit(limit * 3)  # Over-fetch since we filter in Python
     )
@@ -536,12 +551,16 @@ async def cluster_activity_summary(
     cam_result = await db.execute(select(Camera))
     cameras = {str(c.id): c.name for c in cam_result.scalars().all()}
 
+    allowed = await allowed_camera_ids(_current_user, db)
     cutoff = datetime.now(tz.utc) - timedelta(hours=hours)
     obs_result = await db.execute(
-        select(Observation)
-        .where(Observation.person_detections.isnot(None))
-        .where(Observation.started_at >= cutoff)
-        .order_by(Observation.started_at.desc())
+        apply_camera_filter(
+            select(Observation)
+            .where(Observation.person_detections.isnot(None))
+            .where(Observation.started_at >= cutoff),
+            allowed,
+            Observation.camera_id,
+        ).order_by(Observation.started_at.desc())
     )
     observations = obs_result.scalars().all()
 
@@ -626,9 +645,13 @@ async def cluster_activity_feed(
     cid_str = str(cluster_id)
     label = f"Unknown {cluster.auto_label_number}" if cluster.auto_label_number else "Unknown"
 
+    allowed = await allowed_camera_ids(_current_user, db)
     obs_result = await db.execute(
-        select(Observation)
-        .where(Observation.person_detections.isnot(None))
+        apply_camera_filter(
+            select(Observation).where(Observation.person_detections.isnot(None)),
+            allowed,
+            Observation.camera_id,
+        )
         .order_by(Observation.started_at.desc())
         .limit(limit * 3)
     )
@@ -688,14 +711,16 @@ async def starred_status(
     )
     persons = list(result.scalars().all())
 
+    allowed = await allowed_camera_ids(_current_user, db)
+
     # Auto-seed. if no one is starred yet, promote the top 3 most-seen persons
     # so the dashboard never looks empty. The user can unstar them later.
     if not persons:
-        persons = await _auto_star_top_persons(db, limit=3)
+        persons = await _auto_star_top_persons(db, limit=3, allowed=allowed)
 
     out: list[dict] = []
     for p in persons:
-        recap = await generate_recap(db, p, force=force)
+        recap = await generate_recap(db, p, force=force, allowed=allowed)
         out.append({
             "person_id": p.id,
             "display_name": p.display_name,
@@ -714,7 +739,9 @@ async def starred_status(
     return out
 
 
-async def _auto_star_top_persons(db: AsyncSession, limit: int = 3) -> list[Person]:
+async def _auto_star_top_persons(
+    db: AsyncSession, limit: int = 3, allowed: AllowedCameras = ALL
+) -> list[Person]:
     """Pick the most frequently detected persons over the last 7 days and mark
     them as starred. Returns the newly-starred persons. No-op if there are no
     persons at all in the DB."""
@@ -728,9 +755,13 @@ async def _auto_star_top_persons(db: AsyncSession, limit: int = 3) -> list[Perso
 
     cutoff = datetime.now(_tz.utc) - _td(days=7)
     ores = await db.execute(
-        select(Observation)
-        .where(Observation.person_detections.isnot(None))
-        .where(Observation.started_at >= cutoff)
+        apply_camera_filter(
+            select(Observation)
+            .where(Observation.person_detections.isnot(None))
+            .where(Observation.started_at >= cutoff),
+            allowed,
+            Observation.camera_id,
+        )
     )
     counts: dict[str, int] = {}
     for obs in ores.scalars().all():
@@ -1031,10 +1062,15 @@ async def photo_candidates(
             await db.execute(select(Camera.id, Camera.width, Camera.height))
         ).all()
     }
+    allowed = await allowed_camera_ids(_current_user, db)
     result = await db.execute(
-        select(Observation)
-        .where(Observation.thumbnail_path.isnot(None))
-        .where(Observation.person_detections.cast(Text).like(f"%{pid}%"))
+        apply_camera_filter(
+            select(Observation)
+            .where(Observation.thumbnail_path.isnot(None))
+            .where(Observation.person_detections.cast(Text).like(f"%{pid}%")),
+            allowed,
+            Observation.camera_id,
+        )
         .order_by(Observation.started_at.desc())
         .limit(limit)
     )
@@ -1130,12 +1166,17 @@ async def _follow_observations(
     time_to: datetime | None,
     camera_ids: list[uuid.UUID] | None,
     limit: int,
+    allowed: AllowedCameras = ALL,
 ) -> list[Observation]:
     """Pull observations whose ``person_detections`` reference the
     subject. Person + cluster are mutually exclusive. We over-fetch
     because the JSON match runs in Python (no GIN on the json path
     today)."""
-    q = select(Observation).where(Observation.person_detections.isnot(None))
+    q = apply_camera_filter(
+        select(Observation).where(Observation.person_detections.isnot(None)),
+        allowed,
+        Observation.camera_id,
+    )
     if camera_ids:
         q = q.where(Observation.camera_id.in_(camera_ids))
     if time_from:
@@ -1251,6 +1292,7 @@ async def _follow_bundle(
     time_to: datetime | None,
     camera_ids_param: list[uuid.UUID] | None,
     limit: int,
+    allowed: AllowedCameras = ALL,
 ) -> dict:
     """Build the unified investigative bundle for one subject.
 
@@ -1271,6 +1313,7 @@ async def _follow_bundle(
         time_to=time_to,
         camera_ids=camera_ids_param,
         limit=limit,
+        allowed=allowed,
     )
 
     # Cameras seen on, derived from observations.
@@ -1299,7 +1342,9 @@ async def _follow_bundle(
     seen_camera_uuids = [uuid.UUID(c["id"]) for c in cameras_seen_list]
 
     # Incidents matching the subject signature.
-    inc_q = select(Incident).order_by(Incident.last_seen_at.desc()).limit(limit)
+    inc_q = apply_camera_filter(
+        select(Incident), allowed, Incident.camera_id
+    ).order_by(Incident.last_seen_at.desc()).limit(limit)
     # Exact on each element of the key, so a legacy joined key such as
     # "Ahmed,Sara" is found for Sara, and Sam does not match Samantha
     # (#151). The previous ILIKE '%name%' did the second by accident.
@@ -1333,9 +1378,13 @@ async def _follow_bundle(
     tx_rows: list[Transcript] = []
     if person_id is not None:
         tx_q = (
-            select(Transcript)
-            .where(Transcript.speaker_person_id == person_id)
-            .where(Transcript.filtered.is_(False))
+            apply_camera_filter(
+                select(Transcript)
+                .where(Transcript.speaker_person_id == person_id)
+                .where(Transcript.filtered.is_(False)),
+                allowed,
+                Transcript.camera_id,
+            )
             .order_by(Transcript.started_at.desc())
             .limit(limit)
         )
@@ -1449,6 +1498,7 @@ async def follow_person(
     person = await db.get(Person, person_id)
     if person is None:
         raise HTTPException(status_code=404, detail="person not found")
+    allowed = await allowed_camera_ids(_user, db)
     subject = {
         "kind": "person",
         "id": str(person.id),
@@ -1466,6 +1516,7 @@ async def follow_person(
         time_to=to,
         camera_ids_param=camera_ids,
         limit=limit,
+        allowed=allowed,
     )
 
 
@@ -1486,6 +1537,7 @@ async def follow_cluster(
     cluster = await db.get(FaceCluster, cluster_id)
     if cluster is None:
         raise HTTPException(status_code=404, detail="cluster not found")
+    allowed = await allowed_camera_ids(_user, db)
     subject = {
         "kind": "cluster",
         "id": str(cluster.id),
@@ -1504,4 +1556,5 @@ async def follow_cluster(
         time_to=to,
         camera_ids_param=camera_ids,
         limit=limit,
+        allowed=allowed,
     )

@@ -18,10 +18,50 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
+from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids
 from shared.database import get_db
 from shared.models import Incident, Journey, User
 
 router = APIRouter()
+
+
+def _restrict_to_visible(query, allowed: AllowedCameras):
+    """Hide journeys that touch any camera outside ``allowed``.
+
+    A journey aggregates incidents across cameras; its segments,
+    transitions and camera counts would leak foreign-camera presence
+    if any linked incident sits on a camera the viewer cannot see. So
+    we fail closed: a journey is visible only when it has at least one
+    incident in scope and none out of scope. ``ALL`` is a no-op.
+    """
+    if allowed is ALL:
+        return query
+    in_scope = (
+        select(Incident.journey_id)
+        .where(Incident.journey_id.is_not(None), Incident.camera_id.in_(allowed))
+    )
+    foreign = (
+        select(Incident.journey_id)
+        .where(Incident.journey_id.is_not(None), Incident.camera_id.not_in(allowed))
+    )
+    return query.where(Journey.id.in_(in_scope), Journey.id.not_in(foreign))
+
+
+async def _journey_visible(journey_id: uuid.UUID, allowed: AllowedCameras, db: AsyncSession) -> bool:
+    """Whether a single journey is fully within ``allowed`` (see above)."""
+    if allowed is ALL:
+        return True
+    cam_rows = (
+        await db.execute(
+            select(Incident.camera_id).where(Incident.journey_id == journey_id)
+        )
+    ).all()
+    cams = {row[0] for row in cam_rows}
+    if not cams:
+        # A journey with no linked incidents has no evidence to leak, but
+        # also nothing a restricted user is entitled to. Fail closed.
+        return False
+    return cams.issubset(allowed)
 
 
 def _serialize(j: Journey) -> dict[str, Any]:
@@ -55,7 +95,8 @@ async def list_journeys(
     _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    q = select(Journey).order_by(Journey.last_seen_at.desc())
+    allowed = await allowed_camera_ids(_user, db)
+    q = _restrict_to_visible(select(Journey), allowed).order_by(Journey.last_seen_at.desc())
     if subject_kind:
         q = q.where(Journey.subject_kind == subject_kind)
     if subject_key:
@@ -78,6 +119,10 @@ async def get_journey(
 ):
     row = await db.get(Journey, journey_id)
     if row is None:
+        raise HTTPException(status_code=404, detail="journey not found")
+    allowed = await allowed_camera_ids(_user, db)
+    if not await _journey_visible(journey_id, allowed, db):
+        # 404, not 403, so a foreign journey id is never confirmed.
         raise HTTPException(status_code=404, detail="journey not found")
     payload = _serialize(row)
     # Hydrate linked incidents for the detail view so the UI can show
@@ -121,6 +166,9 @@ async def reinterpret_journey(
 ):
     row = await db.get(Journey, journey_id)
     if row is None:
+        raise HTTPException(status_code=404, detail="journey not found")
+    allowed = await allowed_camera_ids(_user, db)
+    if not await _journey_visible(journey_id, allowed, db):
         raise HTTPException(status_code=404, detail="journey not found")
 
     from services.perception.journey_tracker import JourneyFinalizer
