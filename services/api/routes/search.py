@@ -40,6 +40,11 @@ class QuestionResponse(BaseModel):
     answer: str | None
     sources: list[dict]
     note: str | None = None
+    # #198: make the answer inspectable. What was searched, how sure we are
+    # who people are, and what could not be checked (outages / retention).
+    scope: dict | None = None
+    identity: dict | None = None
+    limitations: list[str] = []
 
 
 class BackfillResponse(BaseModel):
