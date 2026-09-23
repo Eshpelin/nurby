@@ -17,6 +17,7 @@ import { StorageLocationCard } from "@/components/settings/StorageLocation";
 import { ALL_PROVIDERS, PROVIDER_KINDS } from "@/lib/provider-presets";
 import { ProviderFields } from "@/components/ProviderFields";
 import { timezoneOptions } from "@/lib/timezones";
+import { rememberPreferredAgentModel } from "@/lib/agent-model-preference";
 
 import InviteKeysModal from "./InviteKeysModal";
 import type {
@@ -221,9 +222,19 @@ export default function SettingsPage() {
         body: JSON.stringify({ model: ollamaSelectedModel }),
       });
       if (res.ok) {
-        const data = await res.json();
+        let data = await res.json() as { stage: string; message: string; model?: string };
         setOllamaDeployResult(data);
-        if (data.stage === "done") fetchProviders();
+        while (data.stage !== "done" && data.stage !== "error" && data.stage !== "cancelled") {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          const poll = await authFetch("/api/ollama/deploy/status");
+          if (!poll.ok) break;
+          data = await poll.json();
+          setOllamaDeployResult(data);
+        }
+        if (data.stage === "done") {
+          rememberPreferredAgentModel(data.model || ollamaSelectedModel);
+          await Promise.all([fetchProviders(), checkOllama()]);
+        }
       }
     } catch {
       setOllamaDeployResult({ stage: "error", message: "Network error" });

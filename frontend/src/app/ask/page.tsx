@@ -23,6 +23,11 @@ import type {
   ProviderModel,
   UsageToday,
 } from "@/components/ask/types";
+import {
+  clearPreferredAgentModel,
+  consumePreferredAgentModel,
+  rememberPreferredAgentModel,
+} from "@/lib/agent-model-preference";
 
 const LS_MODEL_KEY = "nurby:agent-last-model";
 const LS_ONBOARDED_KEY = "nurby:agent-onboarded";
@@ -121,7 +126,16 @@ export default function AskPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: modelName }),
       });
-      if (res.ok) await fetchProviders();
+      if (!res.ok) return;
+      let status = await res.json() as { stage?: string };
+      while (status.stage && !["done", "error", "cancelled"].includes(status.stage)) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const poll = await authFetch("/api/ollama/deploy/status");
+        if (!poll.ok) break;
+        status = await poll.json();
+      }
+      if (status.stage === "done") rememberPreferredAgentModel(modelName);
+      await fetchProviders();
     } finally {
       setDeploying(false);
     }
@@ -129,6 +143,8 @@ export default function AskPage() {
 
   useEffect(() => {
     if (providersLoading || providers.length === 0) return;
+    const deployed = consumePreferredAgentModel(providers);
+    if (deployed) { setModel(deployed); return; }
     // Prefer a tool-capable model. the agent needs tool-calling, and
     // onboarding sets up a vision model (gemma3) that lacks it. Auto-pick
     // so Ask works without the user hunting for the right model.
@@ -153,6 +169,7 @@ export default function AskPage() {
   }, [providersLoading, providers]);
 
   const persistModel = useCallback((m: ProviderModel) => {
+    clearPreferredAgentModel();
     setModel(m);
     try {
       localStorage.setItem(LS_MODEL_KEY, JSON.stringify({ provider_id: m.provider_id, id: m.id }));
