@@ -25,6 +25,8 @@ Distinguishing frozen (defect) from quiet (normal) is explicit: freeze needs
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import re
 
 # Defaults. Tunable per deployment; the caller passes overrides.
 FREEZE_SECONDS = 180.0          # identical frames this long => frozen
@@ -33,6 +35,8 @@ OBSCURE_SECONDS = 180.0         # sustained this long => obscured
 RECOVER_SECONDS = 10.0          # healthy again this long => recovered
 SCENE_CHANGE_DISTANCE = 24      # average-hash Hamming distance
 SCENE_CHANGE_SECONDS = 180.0    # persistent change this long => degraded
+VLM_MISMATCH_SECONDS = 180.0
+VLM_MIN_CONFIDENCE = 0.75
 
 
 @dataclass
@@ -44,6 +48,7 @@ class _State:
     low_var_since: float | None = None
     reference_hash: int | None = None
     scene_changed_since: float | None = None
+    vlm_mismatch_since: float | None = None
     # Current degraded verdict + when health returned.
     degraded: bool = False
     degraded_reason: str | None = None
@@ -76,6 +81,8 @@ class ContentHealthDetector:
         detect_freeze: bool = True,
         detect_obscure: bool = True,
         detect_scene_change: bool = False,
+        vlm_mismatch_seconds: float = VLM_MISMATCH_SECONDS,
+        vlm_min_confidence: float = VLM_MIN_CONFIDENCE,
     ) -> None:
         self.freeze_seconds = freeze_seconds
         self.obscure_variance = obscure_variance
@@ -86,6 +93,8 @@ class ContentHealthDetector:
         self.detect_freeze = detect_freeze
         self.detect_obscure = detect_obscure
         self.detect_scene_change = detect_scene_change
+        self.vlm_mismatch_seconds = vlm_mismatch_seconds
+        self.vlm_min_confidence = vlm_min_confidence
         self._s = _State()
         self.reason: str | None = None
 
@@ -130,6 +139,30 @@ class ContentHealthDetector:
                 s.healthy_since = None
                 self.reason = "recovered"
                 return "recovered"
+        return None
+
+    def update_vlm(self, expected_scene: bool, confidence: float, now: float) -> str | None:
+        """Fold in a low-frequency VLM scene-baseline result.
+
+        A single model response never changes health. Only a confident,
+        sustained mismatch does, and an expected result clears the pending
+        mismatch so ordinary activity cannot flap the camera state.
+        """
+        s = self._s
+        if expected_scene or confidence < self.vlm_min_confidence:
+            s.vlm_mismatch_since = None
+            return None
+        if s.vlm_mismatch_since is None:
+            s.vlm_mismatch_since = now
+            return None
+        if now - s.vlm_mismatch_since < self.vlm_mismatch_seconds:
+            return None
+        if not s.degraded:
+            s.degraded = True
+            s.degraded_reason = "scene_mismatch"
+            self.reason = "scene_mismatch"
+            s.healthy_since = None
+            return "degraded"
         return None
 
     def _track_freeze(self, frame_hash: int, now: float) -> bool:
@@ -178,3 +211,30 @@ class ContentHealthDetector:
     @property
     def is_degraded(self) -> bool:
         return self._s.degraded
+
+
+def parse_scene_health_response(text: str | None) -> tuple[bool, float, str] | None:
+    """Parse the constrained VLM response used by the scene check.
+
+    Accepts JSON directly or a JSON object embedded in a short response. A
+    malformed answer is ignored rather than becoming a degraded verdict.
+    """
+    if not text:
+        return None
+    candidate = text.strip()
+    match = re.search(r"\{.*\}", candidate, re.DOTALL)
+    if match:
+        candidate = match.group(0)
+    try:
+        data = json.loads(candidate)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("expected_scene"), bool):
+        return None
+    try:
+        confidence = float(data.get("confidence"))
+    except (TypeError, ValueError):
+        return None
+    if not 0.0 <= confidence <= 1.0:
+        return None
+    return data["expected_scene"], confidence, str(data.get("reason") or "")[:240]

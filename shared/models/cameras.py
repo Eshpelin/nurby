@@ -160,6 +160,9 @@ class Camera(Base):
     freeze_detection_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     obscuration_detection_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     scene_change_detection_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Low-frequency VLM comparison against the camera's learned scene
+    # baseline. Opt-in because it consumes model calls and can be subjective.
+    scene_baseline_detection_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Master enable/disable. When False the ingestion manager will not
     # start (or will tear down) all workers for this camera: stream,
     # audio, STT, and MediaMTX path. The camera row is kept intact so

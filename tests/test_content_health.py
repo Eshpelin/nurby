@@ -115,6 +115,44 @@ def test_persistent_scene_change_can_trip_when_opted_in():
     assert det.reason == "scene_changed"
 
 
+def test_vlm_scene_mismatch_requires_confidence_and_hysteresis():
+    det = ContentHealthDetector(
+        detect_freeze=False,
+        detect_obscure=False,
+        vlm_mismatch_seconds=30,
+        vlm_min_confidence=0.8,
+    )
+    assert det.update_vlm(False, 0.79, 0.0) is None
+    assert det.update_vlm(False, 0.95, 10.0) is None
+    assert det.update_vlm(False, 0.95, 39.0) is None
+    assert det.update_vlm(False, 0.95, 40.0) == "degraded"
+    assert det.reason == "scene_mismatch"
+
+
+def test_expected_vlm_scene_clears_pending_mismatch():
+    det = ContentHealthDetector(
+        detect_freeze=False,
+        detect_obscure=False,
+        vlm_mismatch_seconds=30,
+    )
+    assert det.update_vlm(False, 0.95, 0.0) is None
+    assert det.update_vlm(True, 0.99, 10.0) is None
+    assert det.update_vlm(False, 0.95, 31.0) is None
+
+
+def test_parse_scene_health_response_is_strict_and_bounded():
+    from services.ingestion.content_health import parse_scene_health_response
+
+    assert parse_scene_health_response(
+        '{"expected_scene": false, "confidence": 0.91, "reason": "wall"}'
+    ) == (False, 0.91, "wall")
+    assert parse_scene_health_response(
+        'Result: {"expected_scene": true, "confidence": 0.8}'
+    ) == (True, 0.8, "")
+    assert parse_scene_health_response("not json") is None
+    assert parse_scene_health_response('{"expected_scene": "false", "confidence": 1}') is None
+
+
 # ── feature helper ──
 
 def test_frame_features_distinguishes_uniform_from_textured():

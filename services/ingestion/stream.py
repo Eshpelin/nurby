@@ -6,6 +6,7 @@ keyframes to Redis for the perception pipeline.
 """
 
 import asyncio
+import json
 import logging
 import os
 import shutil
@@ -52,6 +53,7 @@ MOTION_COOLDOWN = 3.0  # Seconds between motion keyframe publishes
 # second is plenty for a minutes-scale freeze/obscuration window.
 CONTENT_HEALTH_SAMPLE_SECONDS = 1.0
 CONTENT_HEALTH_SETTING_TTL = 60.0  # re-read the enable flag at most this often
+CONTENT_HEALTH_VLM_INTERVAL = 3600.0  # one scene comparison per camera/hour
 
 
 def _frame_features(frame: "np.ndarray") -> tuple[int, float]:
@@ -183,6 +185,8 @@ class StreamWorker:
         self._content_detect_freeze = True
         self._content_detect_obscure = True
         self._content_detect_scene_change = False
+        self._content_detect_scene_baseline = False
+        self._content_last_vlm_check = 0.0
         self._connected_this_cycle = False
         # Lockout-prevention state (see run()).
         self._consecutive_failures = 0
@@ -1114,7 +1118,8 @@ class StreamWorker:
                 global_on = bool(await get_setting("content_health_enabled", False))
             except Exception:
                 global_on = False
-            cam_on, freeze, obscure = False, True, True
+            cam_on, freeze, obscure, scene_baseline = False, True, True, False
+            camera = None
             try:
                 async with async_session() as db:
                     camera = await db.get(Camera, self.camera_id)
@@ -1122,18 +1127,20 @@ class StreamWorker:
                         cam_on = bool(getattr(camera, "content_health_enabled", False))
                         freeze = bool(getattr(camera, "freeze_detection_enabled", True))
                         obscure = bool(getattr(camera, "obscuration_detection_enabled", True))
+                        scene_baseline = bool(getattr(camera, "scene_baseline_detection_enabled", False))
             except Exception:
                 pass
             self._content_enabled = global_on or cam_on
             # Rebuild the detector if the per-path flags changed.
             scene_change = bool(getattr(camera, "scene_change_detection_enabled", False)) if camera is not None else False
-            if (freeze, obscure, scene_change) != (
+            if (freeze, obscure, scene_change, scene_baseline) != (
                 self._content_detect_freeze, self._content_detect_obscure,
-                self._content_detect_scene_change,
+                self._content_detect_scene_change, self._content_detect_scene_baseline,
             ):
                 self._content_detect_freeze = freeze
                 self._content_detect_obscure = obscure
                 self._content_detect_scene_change = scene_change
+                self._content_detect_scene_baseline = scene_baseline
                 self._content_detector = None
         return self._content_enabled
 
@@ -1157,6 +1164,64 @@ class StreamWorker:
         edge = self._content_detector.update(ahash, variance, now)
         if edge is not None:
             await self._publish_content_health(edge, self._content_detector.reason)
+        if self._content_detect_scene_baseline and now - self._content_last_vlm_check >= CONTENT_HEALTH_VLM_INTERVAL:
+            self._content_last_vlm_check = now
+            try:
+                await self._run_content_health_vlm(frame, now)
+            except Exception:
+                logger.debug("content-health VLM check failed", exc_info=True)
+
+    async def _run_content_health_vlm(self, frame, now: float) -> None:
+        """Ask the configured VLM whether the current composition matches
+        the learned camera baseline. This is deliberately hourly and only
+        runs when the operator enabled the VLM path."""
+        from services.ingestion.content_health import parse_scene_health_response
+        from services.perception.baseline import camera_baseline, format_baseline_context
+        from services.perception.vlm import VLMClient, get_active_provider
+
+        # The existing CLIP gate is the cheap boring-scene veto. A skipped
+        # frame is not evidence of degradation.
+        try:
+            from services.perception.vlm_gate import maybe_skip_via_gate
+            decision = await maybe_skip_via_gate(frame, enabled=True)
+            if not decision.allow:
+                return
+        except Exception:
+            logger.debug("content-health VLM gate failed; continuing", exc_info=True)
+
+        provider = await get_active_provider()
+        if provider is None:
+            return
+        async with async_session() as db:
+            baseline = await camera_baseline(db, self.camera_id, datetime.now(timezone.utc))
+        if not baseline:
+            return
+        context = format_baseline_context(
+            baseline, {"labels": {}, "known_faces": [], "unknown_faces": 0}
+        )
+        text = await VLMClient().describe(
+            frame,
+            [],
+            provider,
+            system_prompt=(
+                "You are checking a security camera's composition, not ordinary activity. "
+                "Return JSON only: {\"expected_scene\":true/false,"
+                "\"confidence\":0..1,\"reason\":\"short explanation\"}. "
+                "Ignore temporary people, vehicles, lighting, and weather changes. "
+                "Set false only for a sustained-looking re-aim, wall, obstruction, or"
+                " composition that clearly contradicts the normal baseline."
+            ),
+            max_tokens=120,
+            extra_context=context,
+            camera_id=str(self.camera_id),
+        )
+        parsed = parse_scene_health_response(text)
+        if parsed is None:
+            return
+        expected, confidence, reason = parsed
+        edge = self._content_detector.update_vlm(expected, confidence, now)
+        if edge is not None:
+            await self._publish_content_health(edge, reason or self._content_detector.reason)
 
     async def _publish_content_health(self, edge: str, reason: str | None) -> None:
         """Emit a ``degraded`` / ``recovered`` edge on the camera-status

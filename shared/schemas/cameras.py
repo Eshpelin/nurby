@@ -113,6 +113,7 @@ class CameraCreate(BaseModel):
     privacy_zone_blur_strength: int = Field(default=55, ge=5, le=151)
     yolo_world_prompts: list[str] | None = None
     timezone: str | None = Field(default=None, max_length=64)
+    scene_baseline_detection_enabled: bool | None = None
     # Summary config
     summary_provider_id: uuid.UUID | None = None
     summary_mode: str = Field(default="off", max_length=16)
@@ -187,6 +188,7 @@ class CameraUpdate(BaseModel):
     webcam_device: str | None = Field(default=None, max_length=255)
     audio_only: bool | None = None
     exclude_from_review: bool | None = None
+    scene_baseline_detection_enabled: bool | None = None
     enabled: bool | None = None
     privacy_zone_targets: list[str] | None = None
     privacy_zone_blur_strength: int | None = Field(default=None, ge=5, le=151)
@@ -293,6 +295,7 @@ class CameraResponse(BaseModel):
     privacy_zone_blur_strength: int = 55
     yolo_world_prompts: list[str] | None = None
     timezone: str | None = None
+    scene_baseline_detection_enabled: bool = False
     summary_provider_id: uuid.UUID | None = None
     summary_mode: str = "off"
     summary_period_seconds: int = 1800
