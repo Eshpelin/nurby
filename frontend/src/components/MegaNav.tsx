@@ -55,6 +55,7 @@ const MENUS: MenuDef[] = [
 const PLAIN: LinkDef[] = [
   { label: "Home", href: "/", hint: "Is everything all right" },
   { label: "Cameras", href: "/cameras", hint: "Show me" },
+  { label: "Settings", href: "/settings", hint: "Configure Nurby" },
 ];
 
 // Panel width per menu (px). The shared card transitions between these, which
@@ -689,6 +690,20 @@ export function MegaNavMobile({ open, onClose }: { open: boolean; onClose: () =>
             </div>
           );
         })}
+
+        {PLAIN.filter((l) => l.href !== "/").map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            onClick={onClose}
+            title={l.hint}
+            className={`block rounded-lg px-3 py-2.5 text-sm ${
+              pathname.startsWith(l.href) ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {l.label}
+          </Link>
+        ))}
 
         
       </div>

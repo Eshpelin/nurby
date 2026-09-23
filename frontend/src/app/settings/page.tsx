@@ -341,6 +341,14 @@ export default function SettingsPage() {
     checkOllama();
   }, [fetchProviders, fetchInviteKeys, fetchCameras, fetchStorage, fetchSmtp, fetchBlurPersons, fetchAppSettings, fetchClasses, checkOllama]);
 
+  // Settings links can deep-link to a collapsed card. Open the relevant card
+  // so a user lands on the control they were promised, not just the page.
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash === "#providers") setShowProviders(true);
+    if (hash === "#storage") setShowStorage(true);
+  }, []);
+
   // Poll for Ollama installation every 5s while not installed
   useEffect(() => {
     if (ollamaStatus?.installed) return;
@@ -567,6 +575,23 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
       </div>
 
+      <div className="mb-6 rounded-lg border border-border bg-card">
+        <div className="px-4 py-3 border-b border-border">
+          <h2 className="text-sm font-medium">Configure Nurby</h2>
+          <p className="text-xs text-muted-foreground">
+            Jump directly to the part of Nurby you want to change.
+          </p>
+        </div>
+        <div className="grid gap-2 px-4 py-3 sm:grid-cols-2">
+          <Link href="/settings#providers" className={pillClass}>AI models and providers</Link>
+          <Link href="/cameras" className={pillClass}>Cameras and capture</Link>
+          <Link href="/rules" className={pillClass}>Alert rules</Link>
+          <Link href="/settings#storage" className={pillClass}>Storage and retention</Link>
+          <Link href="/settings#notifications" className={pillClass}>Notifications and integrations</Link>
+          {user?.role === "admin" && <Link href="/settings/access" className={pillClass}>Camera access</Link>}
+        </div>
+      </div>
+
       {/* Alerts and Admin moved here from the navigation (docs/ia-rollout.md).
           Rules are the most powerful thing in the product and the least
           discoverable; putting them beside the other alert configuration is
@@ -618,7 +643,7 @@ export default function SettingsPage() {
         <ShareLinksCard />
 
         {/* AI Providers card */}
-        <div className="rounded-lg border border-border bg-card">
+        <div id="providers" className="rounded-lg border border-border bg-card scroll-mt-20">
           <button
             onClick={() => setShowProviders(!showProviders)}
             className="w-full px-4 py-3.5 flex items-center justify-between text-left"
@@ -909,7 +934,7 @@ export default function SettingsPage() {
         <DevicesSection />
 
         {/* Storage card */}
-        <div className="rounded-lg border border-border bg-card">
+        <div id="storage" className="rounded-lg border border-border bg-card scroll-mt-20">
           <button
             onClick={() => setShowStorage(!showStorage)}
             className="w-full px-4 py-3.5 flex items-center justify-between text-left"
@@ -979,7 +1004,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Email card */}
-        <div className="rounded-lg border border-border bg-card px-4 py-3.5 flex items-center justify-between">
+        <div id="notifications" className="rounded-lg border border-border bg-card px-4 py-3.5 flex items-center justify-between scroll-mt-20">
           <div className="flex items-center gap-3">
             <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
               smtpLoading ? "bg-muted-foreground/40" : smtpConfigured ? "bg-green-500" : "bg-muted-foreground/40"
