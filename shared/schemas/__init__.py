@@ -48,6 +48,13 @@ from shared.schemas.observations import (  # noqa: F401
     EventNoteCreate,
     EventNoteResponse,
 )
+from shared.schemas.bulk import (  # noqa: F401
+    BulkDeleteResponse,
+    BulkPreviewResponse,
+    BulkSelectionRequest,
+    EventSelectionFilters,
+    RecordingSelectionFilters,
+)
 
 from shared.schemas.rules import (  # noqa: F401
     RuleCreate,
@@ -266,4 +273,9 @@ __all__ = [
     "WidgetTestRequest",
     "WidgetUpdate",
     "validate_stream_url",
+    "BulkDeleteResponse",
+    "BulkPreviewResponse",
+    "BulkSelectionRequest",
+    "EventSelectionFilters",
+    "RecordingSelectionFilters",
 ]

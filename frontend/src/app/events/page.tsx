@@ -48,6 +48,10 @@ export default function EventsPage() {
   const [ackedFilter, setAckedFilter] = useState<"" | "false" | "true">("");
   const [severityFilter, setSeverityFilter] = useState<"" | "alert" | "detection">("alert");
   const [range, setRange] = useState<RangeValue>("7d");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectAllMatching, setSelectAllMatching] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
   const ruleNames = useMemo(() => {
     const m = new Map<string, string>();
@@ -168,6 +172,83 @@ export default function EventsPage() {
     }
   }, [authFetch, buildQuery]);
 
+  const selectionFilters = useCallback(() => {
+    const hours = RANGES.find((r) => r.value === range)?.hours ?? 0;
+    return {
+      camera_id: cameraFilter || undefined,
+      rule_id: ruleFilter || undefined,
+      acked: ackedFilter === "" ? undefined : ackedFilter === "true",
+      severity: severityFilter || undefined,
+      from: hours > 0 ? new Date(Date.now() - hours * 3600_000).toISOString() : undefined,
+    };
+  }, [cameraFilter, ruleFilter, ackedFilter, severityFilter, range]);
+
+  const downloadSelectedCsv = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (selectAllMatching) {
+        const f = selectionFilters();
+        if (f.camera_id) params.set("camera_id", f.camera_id);
+        if (f.rule_id) params.set("rule_id", f.rule_id);
+        if (f.acked !== undefined) params.set("acked", String(f.acked));
+        if (f.severity) params.set("severity", f.severity);
+        if (f.from) params.set("from", f.from);
+      } else {
+        for (const id of selectedIds) params.append("event_id", id);
+      }
+      const res = await authFetch(`/api/events/export.csv?${params}`);
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "events.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setBulkMessage(e instanceof Error ? e.message : "Export failed");
+    }
+  }, [authFetch, selectedIds, selectAllMatching, selectionFilters]);
+
+  const bulkDelete = useCallback(async () => {
+    if (!selectAllMatching && selectedIds.size === 0) return;
+    setBulkBusy(true);
+    setBulkMessage(null);
+    try {
+      const body = selectAllMatching
+        ? { all_matching: true, filters: selectionFilters() }
+        : { ids: [...selectedIds] };
+      const previewRes = await authFetch("/api/events/bulk/preview", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const preview = await previewRes.json().catch(() => ({}));
+      if (!previewRes.ok) throw new Error(preview.detail || `Preview failed (${previewRes.status})`);
+      if (!window.confirm(`Delete ${preview.matching} event${preview.matching === 1 ? "" : "s"}? Linked recordings will be preserved.`)) return;
+      const res = await authFetch("/api/events/bulk/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.detail || `Bulk delete failed (${res.status})`);
+      const removed = new Set(selectedIds);
+      setEvents((prev) => prev.filter((e) => !removed.has(e.id)));
+      setSelectedIds(new Set());
+      setSelectAllMatching(false);
+      if (selectAllMatching) await fetchEvents(0);
+      setBulkMessage(`Deleted ${result.deleted} event${result.deleted === 1 ? "" : "s"}. Linked recordings were preserved.`);
+    } catch (e) {
+      setBulkMessage(e instanceof Error ? e.message : "Bulk delete failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [authFetch, fetchEvents, selectedIds, selectAllMatching, selectionFilters]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setSelectAllMatching(false);
+  }, [cameraFilter, ruleFilter, ackedFilter, severityFilter, range]);
+
   const cameraOf = (ev: EventEntry): string => {
     const payload = (ev.payload || {}) as Record<string, unknown>;
     const cid = payload.camera_id as string | undefined;
@@ -206,6 +287,12 @@ export default function EventsPage() {
         >
           Export CSV
         </button>
+        <button
+          type="button"
+          onClick={() => { setSelectedIds(new Set(events.map((e) => e.id))); setSelectAllMatching(false); }}
+          disabled={events.length === 0}
+          className="px-3 py-1.5 text-sm rounded-md border border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+        >Select page</button>
       </div>
         <div className="mb-4"><ActivityFilterBar /></div>
 
@@ -258,6 +345,22 @@ export default function EventsPage() {
         </select>
       </div>
 
+      {(selectedIds.size > 0 || selectAllMatching) && (
+        <div className="flex flex-wrap items-center gap-2 mb-4 rounded-md border border-accent/30 bg-accent/5 px-3 py-2">
+          <span className="text-xs text-accent">{selectAllMatching ? "All matching events" : `${selectedIds.size} selected`}</span>
+          <button type="button" onClick={downloadSelectedCsv} disabled={bulkBusy} className="px-2 py-1 text-xs rounded border border-accent text-accent">Download CSV</button>
+          <button type="button" onClick={bulkDelete} disabled={bulkBusy} className="px-2 py-1 text-xs rounded border border-red-500/50 text-red-400">{bulkBusy ? "Deleting…" : "Delete"}</button>
+          <button type="button" onClick={() => { setSelectedIds(new Set()); setSelectAllMatching(false); }} className="px-2 py-1 text-xs text-muted-foreground">Clear</button>
+        </div>
+      )}
+      {events.length > 0 && selectedIds.size === events.length && !selectAllMatching && hasMore && (
+        <div className="mb-4 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-accent flex items-center justify-between">
+          <span>All loaded events are selected.</span>
+          <button type="button" onClick={() => setSelectAllMatching(true)} className="underline">Select all matching filters</button>
+        </div>
+      )}
+      {bulkMessage && <div className="mb-4 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">{bulkMessage}</div>}
+
       {error && (
         <div className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
           {error}
@@ -286,6 +389,21 @@ export default function EventsPage() {
                 className="rounded-md border border-border bg-card p-3 cursor-pointer hover:border-muted-foreground/30 transition-colors"
               >
                 <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(ev.id) || selectAllMatching}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => {
+                      setSelectAllMatching(false);
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(ev.id)) next.delete(ev.id); else next.add(ev.id);
+                        return next;
+                      });
+                    }}
+                    aria-label={`Select event from ${formatDateTime(ev.fired_at)}`}
+                    className="accent-[var(--accent)]"
+                  />
                   <span
                     className={`w-2 h-2 rounded-full flex-shrink-0 ${
                       ev.action_status === "success"

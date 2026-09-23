@@ -219,6 +219,10 @@ export default function RecordingsPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectAllMatching, setSelectAllMatching] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
   const cameraNames = useMemo(() => {
     const map: Record<string, string> = {};
@@ -295,6 +299,73 @@ export default function RecordingsPage() {
     if (token) params.set("token", token);
     window.open(`/api/recordings/download-bundle?${params.toString()}`, "_blank");
   };
+
+  const selectionFilters = useCallback(() => ({
+    camera_id: cameraFilter || undefined,
+    from: dateFrom ? new Date(dateFrom).toISOString() : undefined,
+    to: dateTo ? new Date(dateTo).toISOString() : undefined,
+    objects: objectFilters,
+    person_id: personFilter || undefined,
+    vehicle_id: vehicleFilter || undefined,
+  }), [cameraFilter, dateFrom, dateTo, objectFilters, personFilter, vehicleFilter]);
+
+  const selectedCount = selectAllMatching ? "all matching" : String(selectedIds.size);
+
+  const downloadSelected = useCallback((evidence: boolean) => {
+    const params = new URLSearchParams();
+    if (token) params.set("token", token);
+    if (selectAllMatching) {
+      const f = selectionFilters();
+      if (f.camera_id) params.set("camera_id", f.camera_id);
+      if (f.from) params.set("from", f.from);
+      if (f.to) params.set("to", f.to);
+      for (const obj of f.objects) params.append("object", obj);
+      if (f.person_id) params.set("person_id", f.person_id);
+      if (f.vehicle_id) params.set("vehicle_id", f.vehicle_id);
+    } else {
+      for (const id of selectedIds) params.append("recording_id", id);
+    }
+    window.open(`/api/recordings/${evidence ? "evidence-bundle" : "download-bundle"}?${params}`, "_blank");
+  }, [token, selectAllMatching, selectedIds, selectionFilters]);
+
+  const bulkDelete = useCallback(async () => {
+    if (!selectAllMatching && selectedIds.size === 0) return;
+    setBulkBusy(true);
+    setBulkMessage(null);
+    try {
+      const body = selectAllMatching
+        ? { all_matching: true, filters: selectionFilters() }
+        : { ids: [...selectedIds] };
+      const previewRes = await authFetch("/api/recordings/bulk/preview", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const preview = await previewRes.json().catch(() => ({}));
+      if (!previewRes.ok) throw new Error(preview.detail || `Preview failed (${previewRes.status})`);
+      if (!window.confirm(`Delete ${preview.matching} recording${preview.matching === 1 ? "" : "s"}? This removes the recording files and cannot be undone.${preview.missing_files ? ` ${preview.missing_files} file${preview.missing_files === 1 ? " is" : "s are"} already missing.` : ""}`)) return;
+      const res = await authFetch("/api/recordings/bulk/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.detail || `Bulk delete failed (${res.status})`);
+      const removed = new Set([...selectedIds]);
+      setRecordings((prev) => prev.filter((r) => !removed.has(r.id)));
+      setSelectedIds(new Set());
+      setSelectAllMatching(false);
+      if (selectAllMatching) await fetchRecordings();
+      setBulkMessage(`Deleted ${result.deleted} recording${result.deleted === 1 ? "" : "s"}${result.missing ? `; ${result.missing} file${result.missing === 1 ? "" : "s"} were already missing` : ""}.`);
+    } catch (err) {
+      setBulkMessage(err instanceof Error ? err.message : "Bulk delete failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [authFetch, fetchRecordings, selectedIds, selectAllMatching, selectionFilters]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setSelectAllMatching(false);
+  }, [cameraFilter, dateFrom, dateTo, objectFilters, personFilter, vehicleFilter]);
 
   // Speech search: find transcripts matching the query (respecting the camera
   // and date filters), so the user can jump to "when someone said X".
@@ -459,6 +530,8 @@ export default function RecordingsPage() {
     setPersonFilter("");
     setVehicleFilter("");
     setPage(0);
+    setSelectedIds(new Set());
+    setSelectAllMatching(false);
   };
 
   const hasActiveFilters =
@@ -604,6 +677,45 @@ export default function RecordingsPage() {
             Download range
           </button>
 
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedIds(new Set(recordings.map((r) => r.id)));
+              setSelectAllMatching(false);
+            }}
+            disabled={recordings.length === 0}
+            className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
+          >
+            Select page
+          </button>
+          {(selectedIds.size > 0 || selectAllMatching) && (
+            <>
+              <button
+                type="button"
+                onClick={() => downloadSelected(false)}
+                disabled={bulkBusy}
+                className="px-3 py-2 text-xs rounded-md border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
+              >Download selected</button>
+              <button
+                type="button"
+                onClick={() => downloadSelected(true)}
+                disabled={bulkBusy}
+                className="px-3 py-2 text-xs rounded-md border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
+              >Evidence bundle</button>
+              <button
+                type="button"
+                onClick={bulkDelete}
+                disabled={bulkBusy}
+                className="px-3 py-2 text-xs rounded-md border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+              >{bulkBusy ? "Deleting…" : `Delete ${selectedCount}`}</button>
+              <button
+                type="button"
+                onClick={() => { setSelectedIds(new Set()); setSelectAllMatching(false); }}
+                className="px-2 py-2 text-xs text-muted-foreground hover:text-foreground"
+              >Clear selection</button>
+            </>
+          )}
+
           {hasActiveFilters && (
             <button
               onClick={resetFiltersAndPage}
@@ -613,6 +725,16 @@ export default function RecordingsPage() {
             </button>
           )}
         </div>
+
+        {recordings.length > 0 && selectedIds.size === recordings.length && !selectAllMatching && hasNextPage && (
+          <div className="rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-accent flex items-center justify-between">
+            <span>All {recordings.length} recordings on this page are selected.</span>
+            <button type="button" onClick={() => setSelectAllMatching(true)} className="underline">Select all matching filters</button>
+          </div>
+        )}
+        {bulkMessage && (
+          <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">{bulkMessage}</div>
+        )}
 
         {/* Row 3: search what was said (transcripts) */}
         <form
@@ -722,17 +844,35 @@ export default function RecordingsPage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {recordings.map((rec) => (
-              <button
+              <div
                 key={rec.id}
-                type="button"
                 onClick={() => {
                   pendingSeekRef.current = null;
                   setClipStart(null);
                   setClipEnd(null);
                   setExpandedId(rec.id);
                 }}
-                className="group text-left rounded-lg border border-border bg-card overflow-hidden hover:border-accent/60 hover:bg-card/80 transition-all focus:outline-none focus:ring-1 focus:ring-accent"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedId(rec.id); } }}
+                className={`group relative text-left rounded-lg border bg-card overflow-hidden hover:border-accent/60 hover:bg-card/80 transition-all focus:outline-none focus:ring-1 focus:ring-accent ${selectedIds.has(rec.id) ? "border-accent ring-1 ring-accent/40" : "border-border"}`}
               >
+                <label className="absolute z-10 top-2 left-2 rounded bg-black/60 p-1.5 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(rec.id) || selectAllMatching}
+                    onChange={() => {
+                      setSelectAllMatching(false);
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(rec.id)) next.delete(rec.id); else next.add(rec.id);
+                        return next;
+                      });
+                    }}
+                    aria-label={`Select recording from ${formatDateTime(rec.started_at)}`}
+                    className="accent-[var(--accent)]"
+                  />
+                </label>
                 {rec.thumbnail_path ? (
                   <img
                     src={`/api/recordings/${rec.id}/thumbnail${token ? `?token=${token}` : ""}`}
@@ -762,7 +902,7 @@ export default function RecordingsPage() {
                   </div>
                   <FacetChips facet={facets[rec.id]} />
                 </div>
-              </button>
+              </div>
             ))}
           </div>
 

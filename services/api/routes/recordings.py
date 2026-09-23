@@ -32,7 +32,13 @@ from shared.ffmpeg_safe import (
 )
 from shared.models import Camera, Observation, Person, Recording, Transcript, User
 from shared.paths import escape_like, resolve_inside, safe_getsize
-from shared.schemas import RecordingResponse
+from shared.schemas import (
+    BulkDeleteResponse,
+    BulkPreviewResponse,
+    BulkSelectionRequest,
+    RecordingResponse,
+    RecordingSelectionFilters,
+)
 from shared.version import build_sha, current_version
 
 # A trimmed clip is capped so a request can't ask us to transcode an
@@ -48,6 +54,7 @@ _FACETS_MAX_IDS = 200
 # zip / temp file. Over either limit returns 413 asking to narrow the window.
 _BUNDLE_MAX_FILES = 200
 _BUNDLE_MAX_BYTES = 5 * 1024**3  # 5 GB
+_BULK_RECORDING_MAX = 200
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +255,134 @@ async def _filtered_recordings_query(
     return query
 
 
+async def _bulk_recordings(
+    request: BulkSelectionRequest,
+    db: AsyncSession,
+    allowed: AllowedCameras,
+    *,
+    limit: int | None = None,
+) -> list[Recording]:
+    """Resolve an explicit or filter-wide selection under the current ACL."""
+    filters = request.filters
+    if filters is not None and not isinstance(filters, dict):
+        raise HTTPException(status_code=422, detail="Recording filters are required")
+    try:
+        f = RecordingSelectionFilters.model_validate(filters or {})
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid recording filters") from exc
+    if request.all_matching:
+        query = await _filtered_recordings_query(
+            db, f.camera_id, f.from_, f.to, f.objects, f.person_id, f.vehicle_id, allowed
+        )
+    else:
+        query = apply_camera_filter(
+            select(Recording).where(Recording.id.in_(request.ids)),
+            allowed,
+            Recording.camera_id,
+        )
+    if query is None:
+        return []
+    query = query.order_by(Recording.started_at.desc())
+    if limit is not None:
+        query = query.limit(limit + 1)
+    return list((await db.execute(query)).scalars().all())
+
+
+async def _recording_preview(
+    request: BulkSelectionRequest, db: AsyncSession, user: User
+) -> BulkPreviewResponse:
+    allowed = await allowed_camera_ids(user, db)
+    rows = await _bulk_recordings(request, db, allowed, limit=_BULK_RECORDING_MAX)
+    if len(rows) > _BULK_RECORDING_MAX:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Select at most {_BULK_RECORDING_MAX} recordings per operation",
+        )
+    estimated = sum(int(r.file_size_bytes or 0) for r in rows)
+    missing = 0
+    for row in rows:
+        path = await _contained_recording_path(row)
+        if path is None or not os.path.exists(path):
+            missing += 1
+    return BulkPreviewResponse(
+        resource="recordings",
+        requested=len(request.ids) if not request.all_matching else len(rows),
+        matching=len(rows),
+        estimated_bytes=estimated,
+        cameras=sorted({r.camera_id for r in rows if r.camera_id is not None}),
+        missing_files=missing,
+    )
+
+
+@router.post("/bulk/preview", response_model=BulkPreviewResponse)
+async def preview_recordings_bulk(
+    request: BulkSelectionRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _recording_preview(request, db, current_user)
+
+
+@router.post("/bulk/delete", response_model=BulkDeleteResponse)
+async def delete_recordings_bulk(
+    request: BulkSelectionRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    allowed = await allowed_camera_ids(current_user, db)
+    rows = await _bulk_recordings(request, db, allowed, limit=_BULK_RECORDING_MAX)
+    if len(rows) > _BULK_RECORDING_MAX:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Select at most {_BULK_RECORDING_MAX} recordings per operation",
+        )
+    deleted = 0
+    missing = 0
+    failed_ids: list[uuid.UUID] = []
+    for recording in rows:
+        path = await _contained_recording_path(recording)
+        if path is None:
+            failed_ids.append(recording.id)
+            continue
+        if not os.path.exists(path):
+            missing += 1
+        else:
+            try:
+                os.remove(path)
+            except OSError:
+                failed_ids.append(recording.id)
+                continue
+        if recording.thumbnail_path:
+            thumbnail = resolve_inside(recording.thumbnail_path, settings.thumbnails_path)
+            if thumbnail and os.path.exists(thumbnail):
+                try:
+                    os.remove(thumbnail)
+                except OSError:
+                    logger.warning("Could not remove thumbnail for %s", recording.id)
+        await db.delete(recording)
+        deleted += 1
+    await db.commit()
+    logger.info(
+        "bulk_recording_delete",
+        extra={
+            "actor_user_id": str(current_user.id),
+            "requested": len(request.ids) if not request.all_matching else len(rows),
+            "deleted": deleted,
+            "missing": missing,
+            "failed": len(failed_ids),
+        },
+    )
+    return BulkDeleteResponse(
+        resource="recordings",
+        requested=len(request.ids) if not request.all_matching else len(rows),
+        deleted=deleted,
+        missing=missing,
+        skipped=max(0, len(request.ids) - len(rows)) if not request.all_matching else 0,
+        failed=len(failed_ids),
+        failed_ids=failed_ids,
+    )
+
+
 @router.get("", response_model=list[RecordingResponse])
 async def list_recordings(
     camera_id: uuid.UUID | None = Query(default=None),
@@ -430,6 +565,7 @@ def _build_zip(entries: list[tuple[str, str]], zip_path: str) -> None:
 @router.get("/download-bundle")
 async def download_bundle(
     token: str | None = Query(None),
+    recording_id: list[uuid.UUID] = Query(default=[], description="Explicit recordings to export"),
     camera_id: uuid.UUID | None = Query(default=None),
     from_: datetime | None = Query(default=None, alias="from"),
     to: datetime | None = Query(default=None, description="Inclusive end (ISO 8601)"),
@@ -452,6 +588,8 @@ async def download_bundle(
     )
     if query is None:
         raise HTTPException(status_code=404, detail="No recordings match those filters")
+    if recording_id:
+        query = query.where(Recording.id.in_(recording_id))
     query = query.order_by(Recording.started_at.asc())
     recs = (await db.execute(query)).scalars().all()
 
@@ -504,6 +642,7 @@ def _build_evidence_zip(
 @router.get("/evidence-bundle")
 async def download_evidence_bundle(
     token: str | None = Query(None),
+    recording_id: list[uuid.UUID] = Query(default=[], description="Explicit recordings to export"),
     camera_id: uuid.UUID | None = Query(default=None),
     from_: datetime | None = Query(default=None, alias="from"),
     to: datetime | None = Query(default=None, description="Inclusive end (ISO 8601)"),
@@ -533,6 +672,8 @@ async def download_evidence_bundle(
     )
     if query is None:
         raise HTTPException(status_code=404, detail="No recordings match those filters")
+    if recording_id:
+        query = query.where(Recording.id.in_(recording_id))
     query = query.order_by(Recording.started_at.asc())
     recs = (await db.execute(query)).scalars().all()
 
@@ -808,14 +949,15 @@ async def download_clip(
 @router.delete("/{recording_id}", status_code=204)
 async def delete_recording(
     recording_id: uuid.UUID,
-    _current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    recording = await db.get(Recording, recording_id)
-    if not recording:
-        raise HTTPException(status_code=404, detail="Recording not found")
+    allowed = await allowed_camera_ids(current_user, db)
+    recording = await _get_recording_or_404(recording_id, db, allowed)
 
-    rec_path = await _contained_recording_path(recording) or _resolve_recording_path(recording)
+    rec_path = await _contained_recording_path(recording)
+    if rec_path is None:
+        raise HTTPException(status_code=403, detail="Access denied")
     try:
         os.remove(rec_path)
     except OSError:

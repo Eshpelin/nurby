@@ -1,4 +1,5 @@
 import uuid
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,6 +13,10 @@ from shared.database import get_db
 from shared.models import Camera, Event, EventFeedback, EventNote, Observation, Person, Rule, User
 from shared.paths import escape_like
 from shared.schemas import (
+    BulkDeleteResponse,
+    BulkPreviewResponse,
+    BulkSelectionRequest,
+    EventSelectionFilters,
     EventFeedbackCreate,
     EventFeedbackResponse,
     EventNoteCreate,
@@ -19,7 +24,10 @@ from shared.schemas import (
     EventResponse,
 )
 
+_BULK_EVENT_MAX = 500
+
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _not_review_excluded(camera_id_col):
@@ -156,6 +164,46 @@ async def _filtered_events_query(
     return query
 
 
+async def _bulk_events(
+    request: BulkSelectionRequest,
+    db: AsyncSession,
+    allowed: AllowedCameras,
+    *,
+    limit: int | None = None,
+) -> list[Event]:
+    filters = request.filters
+    if filters is not None and not isinstance(filters, dict):
+        raise HTTPException(status_code=422, detail="Event filters are required")
+    try:
+        f = EventSelectionFilters.model_validate(filters or {})
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid event filters") from exc
+    if request.all_matching:
+        query = await _filtered_events_query(
+            db,
+            rule_id=f.rule_id,
+            camera_id=f.camera_id,
+            status=f.status,
+            from_=f.from_,
+            to=f.to,
+            person_id=f.person_id,
+            label=f.label,
+            acked=f.acked,
+            severity=f.severity,
+            allowed=allowed,
+        )
+    else:
+        query = apply_camera_filter(
+            select(Event).where(Event.id.in_(request.ids)), allowed, Event.camera_id
+        )
+    if query is None:
+        return []
+    query = query.order_by(Event.fired_at.desc())
+    if limit is not None:
+        query = query.limit(limit + 1)
+    return list((await db.execute(query)).scalars().all())
+
+
 @router.get("/history", response_model=list[EventResponse])
 async def event_history(
     rule_id: uuid.UUID | None = Query(default=None),
@@ -192,6 +240,7 @@ async def event_history(
 
 @router.get("/export.csv")
 async def export_events_csv(
+    event_id: list[uuid.UUID] = Query(default=[], description="Explicit events to export"),
     rule_id: uuid.UUID | None = Query(default=None),
     camera_id: uuid.UUID | None = Query(default=None),
     status: str | None = Query(default=None),
@@ -218,6 +267,8 @@ async def export_events_csv(
         to=to, person_id=person_id, label=label, acked=acked, severity=severity,
         allowed=allowed,
     )
+    if query is not None and event_id:
+        query = query.where(Event.id.in_(event_id))
 
     columns = [
         "id", "fired_at", "rule_id", "rule_name", "camera_id", "camera_name",
@@ -326,6 +377,58 @@ async def batch_ack(
         acked += 1
     await db.commit()
     return {"acked": acked, "requested": len(event_ids)}
+
+
+@router.post("/bulk/preview", response_model=BulkPreviewResponse)
+async def preview_events_bulk(
+    request: BulkSelectionRequest,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    allowed = await allowed_camera_ids(_current_user, db)
+    rows = await _bulk_events(request, db, allowed, limit=_BULK_EVENT_MAX)
+    if len(rows) > _BULK_EVENT_MAX:
+        raise HTTPException(
+            status_code=413, detail=f"Select at most {_BULK_EVENT_MAX} events per operation"
+        )
+    return BulkPreviewResponse(
+        resource="events",
+        requested=len(request.ids) if not request.all_matching else len(rows),
+        matching=len(rows),
+        cameras=sorted({e.camera_id for e in rows if e.camera_id is not None}),
+        linked_recordings=sum(1 for e in rows if e.recording_id is not None),
+    )
+
+
+@router.post("/bulk/delete", response_model=BulkDeleteResponse)
+async def delete_events_bulk(
+    request: BulkSelectionRequest,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    allowed = await allowed_camera_ids(_current_user, db)
+    rows = await _bulk_events(request, db, allowed, limit=_BULK_EVENT_MAX)
+    if len(rows) > _BULK_EVENT_MAX:
+        raise HTTPException(
+            status_code=413, detail=f"Select at most {_BULK_EVENT_MAX} events per operation"
+        )
+    for event in rows:
+        await db.delete(event)
+    await db.commit()
+    logger.info(
+        "bulk_event_delete",
+        extra={
+            "actor_user_id": str(_current_user.id),
+            "requested": len(request.ids) if not request.all_matching else len(rows),
+            "deleted": len(rows),
+        },
+    )
+    return BulkDeleteResponse(
+        resource="events",
+        requested=len(request.ids) if not request.all_matching else len(rows),
+        deleted=len(rows),
+        skipped=max(0, len(request.ids) - len(rows)) if not request.all_matching else 0,
+    )
 
 
 # ── Structured alert feedback (#195) ──
