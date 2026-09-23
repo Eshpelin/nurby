@@ -775,11 +775,32 @@ async def trigger_update(_current_user: User = Depends(require_admin)):
 # validate a candidate before it is saved.
 
 
-class StorageLocationStatus(BaseModel):
-    recordings_path: str
+# #266: warn well before retention starts deleting (or recording fails).
+LOW_DISK_FREE_BYTES = 10 * 1024**3
+
+
+def _gb(n: int) -> str:
+    return f"{n / 1024**3:.1f} GB"
+
+
+class StorageLocationInfo(BaseModel):
+    key: str  # recordings | thumbnails | audio
+    path: str
     source: str  # "default" | "custom"
-    docker: bool
+    exists: bool = False
+    writable: bool = False
     free_bytes: int | None = None
+    total_bytes: int | None = None
+
+
+class StorageLocationStatus(BaseModel):
+    """Full storage overview for Settings (issue #266): every media root,
+    whether it is writable right now, capacity, and deployment context."""
+
+    locations: list[StorageLocationInfo]
+    docker: bool
+    low_space: bool = False
+    warnings: list[str] = []
 
 
 class StorageValidateRequest(BaseModel):
@@ -856,6 +877,9 @@ def validate_storage_dir(raw: str) -> StorageValidateResponse:
         free, total = usage.free, usage.total
     except OSError:
         pass
+    detail = "Ready." if existed else "Directory created."
+    if free is not None and free < LOW_DISK_FREE_BYTES:
+        detail += f" Warning: only {_gb(free)} free on this volume."
     return StorageValidateResponse(
         ok=True,
         path=path,
@@ -864,27 +888,76 @@ def validate_storage_dir(raw: str) -> StorageValidateResponse:
         writable=True,
         free_bytes=free,
         total_bytes=total,
-        detail="Ready." if existed else "Directory created.",
+        detail=detail,
     )
+
+
+def _probe_dir(path: str) -> StorageLocationInfo:
+    """exists/writable/capacity for one media root, without creating it.
+    Sync; thread-offloaded by the caller."""
+    info = StorageLocationInfo(key="recordings", path=path, source="default")
+    info.exists = os.path.isdir(path)
+    if info.exists:
+        probe = os.path.join(path, ".nurby_write_test")
+        try:
+            with open(probe, "w", encoding="utf-8") as f:
+                f.write("nurby")
+            os.remove(probe)
+            info.writable = True
+        except OSError:
+            info.writable = False
+        try:
+            usage = shutil.disk_usage(path)
+            info.free_bytes, info.total_bytes = usage.free, usage.total
+        except OSError:
+            pass
+    return info
 
 
 @router.get("/system/storage", response_model=StorageLocationStatus)
 async def storage_location_status(_current_user: User = Depends(require_admin)):
-    """Effective recordings root plus free space, for setup and Settings."""
+    """Storage overview (issue #266): recordings / thumbnails / audio
+    roots with writable status and capacity, plus deployment context.
+    Admin-only: paths reveal host layout."""
     from shared import storage_paths
+    from shared.app_settings import get_setting
 
     override = await get_setting("storage_recordings_dir", None)
-    root = storage_paths.current_recordings_root()
-    free = None
-    try:
-        free = shutil.disk_usage(root).free
-    except OSError:
-        pass
+    roots = [
+        storage_paths.current_recordings_root(),
+        settings.thumbnails_path,
+        settings.audio_storage_path,
+    ]
+    # Write probes block on the filesystem — keep them off the event loop.
+    locations = await asyncio.to_thread(lambda: [_probe_dir(p) for p in roots])
+    locations[0].key = "recordings"
+    locations[0].source = "custom" if override else "default"
+    locations[1].key = "thumbnails"
+    locations[2].key = "audio"
+
+    warnings: list[str] = []
+    low = False
+    for loc in locations:
+        if not loc.exists:
+            warnings.append(
+                f"{loc.key.capitalize()} location {loc.path} does not exist yet."
+            )
+        elif not loc.writable:
+            warnings.append(
+                f"{loc.key.capitalize()} location {loc.path} is not writable by Nurby."
+            )
+        if loc.free_bytes is not None and loc.free_bytes < LOW_DISK_FREE_BYTES:
+            low = True
+            warnings.append(
+                f"Only {_gb(loc.free_bytes)} free at {loc.path}. "
+                "With retention on, old media will be deleted as space runs out; "
+                "with retention off, recording will fail when the disk fills."
+            )
     return StorageLocationStatus(
-        recordings_path=root,
-        source="custom" if override else "default",
+        locations=locations,
         docker=storage_paths.in_docker(),
-        free_bytes=free,
+        low_space=low,
+        warnings=warnings,
     )
 
 

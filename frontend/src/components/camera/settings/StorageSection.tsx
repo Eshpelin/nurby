@@ -21,12 +21,18 @@ interface StorageSectionProps {
   setStorageProfileId: (id: string | null) => void;
 }
 
+interface StorageLocationInfo {
+  key: string;
+  path: string;
+}
+
 export function StorageSection({
   storageProfileId,
   setStorageProfileId,
 }: StorageSectionProps) {
   const { authFetch } = useAuth();
   const [profiles, setProfiles] = useState<StorageProfile[]>([]);
+  const [globalRoot, setGlobalRoot] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [root, setRoot] = useState("");
@@ -43,9 +49,27 @@ export function StorageSection({
     }
   }, [authFetch]);
 
+  const loadGlobal = useCallback(async () => {
+    // Where "Default" records to, so the choice is readable without shell
+    // access (issue #266). Admin-only endpoint; camera settings are too.
+    try {
+      const res = await authFetch("/api/system/storage");
+      if (res.ok) {
+        const d = await res.json();
+        const rec = (d.locations as StorageLocationInfo[]).find(
+          (l) => l.key === "recordings"
+        );
+        setGlobalRoot(rec?.path ?? null);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [authFetch]);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadGlobal();
+  }, [load, loadGlobal]);
 
   const check = async () => {
     setCheckMsg("");
@@ -123,7 +147,9 @@ export function StorageSection({
           onChange={(e) => setStorageProfileId(e.target.value || null)}
           className="text-xs bg-background border border-border rounded px-2 py-1.5 min-w-52"
         >
-          <option value="">Default (global location)</option>
+          <option value="">
+            {globalRoot ? `Default — ${globalRoot}` : "Default (global location)"}
+          </option>
           {profiles.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} — {p.root}

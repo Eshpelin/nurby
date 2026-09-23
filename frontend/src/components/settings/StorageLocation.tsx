@@ -1,19 +1,34 @@
 "use client";
 
-// Media storage location (issue #251). Shared form used by the first-run
-// onboarding wizard (the "where do recordings live?" moment) and the
-// Settings page. Validates a directory server-side (exists / writable /
-// free space) before saving the storage_recordings_dir override; the
-// backend applies it process-wide for NEW recordings.
+// Media storage (issues #251/#266). Shared pieces:
+//   StorageLocationForm  — pick/validate/save the recordings root (used by
+//                          the onboarding wizard and the settings overview)
+//   StorageOverviewBlock — the full overview: every media root with
+//                          writable status + capacity, low-space warnings,
+//                          copyable Docker remediation, and the form
+//
+// Embedded in the existing settings "Storage" card (usage bars + retention
+// live there too, from GET /api/storage) so location, usage, and retention
+// read as one surface, not three.
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 
-interface StorageStatus {
-  recordings_path: string;
-  source: "default" | "custom";
-  docker: boolean;
+interface StorageLocationInfo {
+  key: string; // recordings | thumbnails | audio
+  path: string;
+  source: string; // default | custom
+  exists: boolean;
+  writable: boolean;
   free_bytes: number | null;
+  total_bytes: number | null;
+}
+
+interface StorageStatus {
+  locations: StorageLocationInfo[];
+  docker: boolean;
+  low_space: boolean;
+  warnings: string[];
 }
 
 interface StorageValidation {
@@ -33,12 +48,20 @@ export function formatBytes(bytes: number | null | undefined): string {
   return `${Math.max(0, mb).toFixed(0)} MB free`;
 }
 
+const LOCATION_LABELS: Record<string, string> = {
+  recordings: "Recordings",
+  thumbnails: "Thumbnails",
+  audio: "Audio",
+};
+
+// ── Location form (change the recordings root) ───────────────────────
+
 export function StorageLocationForm({
   onSaved,
-  compact = false,
+  showCurrent = true,
 }: {
   onSaved?: () => void;
-  compact?: boolean;
+  showCurrent?: boolean;
 }) {
   const { authFetch } = useAuth();
   const [status, setStatus] = useState<StorageStatus | null>(null);
@@ -55,7 +78,7 @@ export function StorageLocationForm({
       if (res.ok) {
         const d: StorageStatus = await res.json();
         setStatus(d);
-        setPath((p) => p || d.recordings_path);
+        setPath((p) => p || d.locations.find((l) => l.key === "recordings")?.path || "");
       }
     } catch {
       /* ignore */
@@ -65,6 +88,15 @@ export function StorageLocationForm({
   useEffect(() => {
     load();
   }, [load]);
+
+  const refreshStatus = useCallback(async () => {
+    try {
+      const s = await authFetch("/api/system/storage");
+      if (s.ok) setStatus(await s.json());
+    } catch {
+      /* ignore */
+    }
+  }, [authFetch]);
 
   const validate = useCallback(
     async (target?: string): Promise<StorageValidation | null> => {
@@ -104,7 +136,7 @@ export function StorageLocationForm({
           setSaved(true);
           setDirty(false);
           onSaved?.();
-          load();
+          refreshStatus();
           return true;
         }
         const body = await res.json().catch(() => null);
@@ -121,7 +153,7 @@ export function StorageLocationForm({
         setSaving(false);
       }
     },
-    [authFetch, load, onSaved],
+    [authFetch, refreshStatus, onSaved],
   );
 
   const saveInput = useCallback(async () => {
@@ -133,9 +165,13 @@ export function StorageLocationForm({
   const resetToDefault = useCallback(async () => {
     if (await save(null)) {
       setValidation(null);
-      if (status) setPath(status.recordings_path);
+      const rec = status?.locations.find((l) => l.key === "recordings");
+      if (rec) setPath(rec.path);
     }
   }, [save, status]);
+
+  const recordings = status?.locations.find((l) => l.key === "recordings");
+  const isCustom = recordings?.source === "custom";
 
   return (
     <div className="space-y-2.5">
@@ -146,12 +182,10 @@ export function StorageLocationForm({
         >
           Where should recordings be stored?
         </label>
-        {!compact && (
-          <p className="text-xs text-muted-foreground mt-0.5">
-            New recordings, clips, and their caches land here. Existing files
-            stay in the previous location — pick this before adding cameras.
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground mt-0.5">
+          New recordings, clips, and their caches land here. Existing files
+          stay in the previous location — pick this before adding cameras.
+        </p>
       </div>
 
       <div className="flex gap-2">
@@ -176,12 +210,13 @@ export function StorageLocationForm({
         </button>
       </div>
 
-      {status && (
+      {showCurrent && recordings && (
         <p className="text-[11px] text-muted-foreground">
-          Current: <code className="bg-background px-1 rounded">{status.recordings_path}</code>
+          Current: <code className="bg-background px-1 rounded">{recordings.path}</code>
           {" · "}
-          {formatBytes(status.free_bytes)}
-          {status.source === "custom" ? " · custom location" : ""}
+          {recordings.writable ? "writable" : "not writable"}
+          {recordings.free_bytes !== null ? ` · ${formatBytes(recordings.free_bytes)}` : ""}
+          {isCustom ? " · custom location" : ""}
         </p>
       )}
 
@@ -214,13 +249,13 @@ export function StorageLocationForm({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          disabled={saving || checking || (!dirty && status?.source !== "custom")}
+          disabled={saving || checking || !dirty}
           onClick={saveInput}
           className="px-3 py-1.5 text-xs rounded-md bg-accent text-black font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
         >
           {saving ? "Saving…" : "Use this location"}
         </button>
-        {status?.source === "custom" && (
+        {isCustom && (
           <button
             type="button"
             disabled={saving}
@@ -235,16 +270,144 @@ export function StorageLocationForm({
   );
 }
 
+// ── Full overview (embeds the form) ──────────────────────────────────
+
+function CopyableEnvBlock({ docker }: { docker: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const text = [
+    "# .env — store media on another host drive (Docker)",
+    "NURBY_RECORDINGS_VOLUME=D:/Nurby/recordings",
+    "NURBY_THUMBNAILS_VOLUME=D:/Nurby/thumbnails",
+    "NURBY_AUDIO_VOLUME=D:/Nurby/audio",
+  ].join("\n");
+  if (!docker) return null;
+  return (
+    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 space-y-1.5">
+      <p className="text-[11px] text-amber-300">
+        Nurby is running in Docker. Paths above are container paths — they map
+        to host drives through compose volumes. Changing the UI field picks a
+        container path; to use a different host drive, put this in your{" "}
+        <code className="bg-background px-1 rounded">.env</code> and restart:
+      </p>
+      <pre className="text-[10px] font-mono bg-background rounded p-2 overflow-x-auto">
+        {text}
+      </pre>
+      <button
+        type="button"
+        onClick={() => {
+          navigator.clipboard?.writeText(text).then(
+            () => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            },
+            () => undefined,
+          );
+        }}
+        className="text-[11px] text-accent hover:underline"
+      >
+        {copied ? "Copied" : "Copy .env block"}
+      </button>
+    </div>
+  );
+}
+
+export function StorageOverviewBlock() {
+  const { authFetch } = useAuth();
+  const [status, setStatus] = useState<StorageStatus | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await authFetch("/api/system/storage");
+      if (res.ok) setStatus(await res.json());
+    } catch {
+      /* ignore */
+    }
+  }, [authFetch]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <div className="space-y-4">
+      {status?.warnings.map((w) => (
+        <div
+          key={w}
+          className={`rounded-md px-3 py-2 text-xs ${
+            status.low_space
+              ? "bg-red-500/10 border border-red-500/20 text-red-400"
+              : "bg-amber-500/10 border border-amber-500/20 text-amber-300"
+          }`}
+        >
+          {w}
+        </div>
+      ))}
+
+      <div className="space-y-1.5">
+        {(status?.locations ?? []).map((loc) => (
+          <div
+            key={loc.key}
+            className="flex items-center justify-between gap-3 text-xs"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  !loc.exists
+                    ? "bg-muted-foreground/40"
+                    : loc.writable
+                      ? "bg-green-500"
+                      : "bg-red-500"
+                }`}
+                title={!loc.exists ? "Missing" : loc.writable ? "Writable" : "Not writable"}
+              />
+              <span className="text-muted-foreground w-20 flex-shrink-0">
+                {LOCATION_LABELS[loc.key] ?? loc.key}
+              </span>
+              <code className="bg-background px-1 rounded truncate">{loc.path}</code>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {loc.source === "custom" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent">
+                  custom
+                </span>
+              )}
+              <span className="text-[11px] text-muted-foreground">
+                {formatBytes(loc.free_bytes)}
+              </span>
+            </div>
+          </div>
+        ))}
+        {!status && (
+          <p className="text-xs text-muted-foreground">Loading locations…</p>
+        )}
+      </div>
+
+      <CopyableEnvBlock docker={Boolean(status?.docker)} />
+
+      <div className="border-t border-border pt-3">
+        <StorageLocationForm showCurrent={false} />
+      </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        Retention is set per camera (Storage Retention in each camera&apos;s
+        settings), and a camera can record to its own location (Storage
+        Location in camera settings). Recordings already written stay where
+        they are when locations change.
+      </p>
+    </div>
+  );
+}
+
 export function StorageLocationCard() {
   return (
-    <div className="rounded-lg border border-border bg-card px-4 py-3.5 space-y-3">
+    <div className="space-y-3">
       <div>
-        <div className="text-sm font-medium mb-1">Storage location</div>
+        <div className="text-sm font-medium mb-1">Location</div>
         <p className="text-xs text-muted-foreground">
-          Choose the drive and folder where Nurby keeps recordings.
+          The drives and folders Nurby writes media to.
         </p>
       </div>
-      <StorageLocationForm compact />
+      <StorageOverviewBlock />
     </div>
   );
 }

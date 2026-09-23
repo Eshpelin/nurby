@@ -975,6 +975,10 @@ export default function SettingsPage() {
 
           {showStorage && (
             <div className="px-4 pb-4 border-t border-border pt-3">
+              {/* Location control + overview (issues #251/#266). */}
+              <div className="mb-4">
+                <StorageLocationCard />
+              </div>
               {storage ? (
                 <div className="space-y-2">
                   {storage.cameras.length === 0 ? (
@@ -1040,9 +1044,6 @@ export default function SettingsPage() {
 
         {/* MQTT / Home Assistant */}
         <MqttSection />
-
-        {/* Storage location (recordings drive/folder, issue #251) */}
-        <StorageLocationCard />
 
         {/* Invite Keys card */}
         {(() => {
