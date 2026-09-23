@@ -130,6 +130,7 @@ class Camera(Base):
     content_health_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     freeze_detection_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     obscuration_detection_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    scene_change_detection_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Master enable/disable. When False the ingestion manager will not
     # start (or will tear down) all workers for this camera: stream,
     # audio, STT, and MediaMTX path. The camera row is kept intact so

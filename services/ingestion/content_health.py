@@ -31,6 +31,8 @@ FREEZE_SECONDS = 180.0          # identical frames this long => frozen
 OBSCURE_VARIANCE = 8.0          # grayscale variance below this => obscured
 OBSCURE_SECONDS = 180.0         # sustained this long => obscured
 RECOVER_SECONDS = 10.0          # healthy again this long => recovered
+SCENE_CHANGE_DISTANCE = 24      # average-hash Hamming distance
+SCENE_CHANGE_SECONDS = 180.0    # persistent change this long => degraded
 
 
 @dataclass
@@ -40,6 +42,8 @@ class _State:
     frozen_since: float | None = None
     # Obscuration tracking.
     low_var_since: float | None = None
+    reference_hash: int | None = None
+    scene_changed_since: float | None = None
     # Current degraded verdict + when health returned.
     degraded: bool = False
     degraded_reason: str | None = None
@@ -67,15 +71,21 @@ class ContentHealthDetector:
         obscure_variance: float = OBSCURE_VARIANCE,
         obscure_seconds: float = OBSCURE_SECONDS,
         recover_seconds: float = RECOVER_SECONDS,
+        scene_change_distance: int = SCENE_CHANGE_DISTANCE,
+        scene_change_seconds: float = SCENE_CHANGE_SECONDS,
         detect_freeze: bool = True,
         detect_obscure: bool = True,
+        detect_scene_change: bool = False,
     ) -> None:
         self.freeze_seconds = freeze_seconds
         self.obscure_variance = obscure_variance
         self.obscure_seconds = obscure_seconds
         self.recover_seconds = recover_seconds
+        self.scene_change_distance = scene_change_distance
+        self.scene_change_seconds = scene_change_seconds
         self.detect_freeze = detect_freeze
         self.detect_obscure = detect_obscure
+        self.detect_scene_change = detect_scene_change
         self._s = _State()
         self.reason: str | None = None
 
@@ -88,9 +98,17 @@ class ContentHealthDetector:
 
         frozen = self._track_freeze(frame_hash, now) if self.detect_freeze else False
         obscured = self._track_obscure(variance, now) if self.detect_obscure else False
+        scene_changed = (
+            self._track_scene_change(frame_hash, now)
+            if self.detect_scene_change else False
+        )
 
-        unhealthy = frozen or obscured
-        reason = "frozen" if frozen else ("obscured" if obscured else None)
+        unhealthy = frozen or obscured or scene_changed
+        reason = (
+            "frozen" if frozen else
+            "obscured" if obscured else
+            "scene_changed" if scene_changed else None
+        )
 
         if unhealthy:
             s.healthy_since = None
@@ -135,6 +153,26 @@ class ContentHealthDetector:
                 return True
         else:
             s.low_var_since = None
+        return False
+
+    def _track_scene_change(self, frame_hash: int, now: float) -> bool:
+        """Detect a persistent re-aim/tamper against the startup reference.
+
+        This path is opt-in because a camera's normal composition can change
+        seasonally or after a deliberate reposition. It is intentionally
+        separate from freeze and obscuration, and a confirmed change remains
+        degraded until the worker is restarted or the detector is reset.
+        """
+        s = self._s
+        if s.reference_hash is None:
+            s.reference_hash = frame_hash
+            return False
+        distance = (s.reference_hash ^ frame_hash).bit_count()
+        if distance >= self.scene_change_distance:
+            if s.scene_changed_since is None:
+                s.scene_changed_since = now
+            return now - s.scene_changed_since >= self.scene_change_seconds
+        s.scene_changed_since = None
         return False
 
     @property

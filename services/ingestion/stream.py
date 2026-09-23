@@ -130,6 +130,16 @@ def build_auth_url(stream_url: str, username: str | None, password: str | None) 
     return urlunparse(authed)
 
 
+def _encode_jpeg(frame) -> bytes | None:
+    """JPEG-encode a BGR frame for the MQTT snapshot topic. Returns None
+    when encoding fails."""
+    try:
+        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        return buf.tobytes() if ok else None
+    except Exception:
+        return None
+
+
 class StreamWorker:
     def __init__(
         self,
@@ -172,6 +182,7 @@ class StreamWorker:
         self._content_setting_checked = 0.0
         self._content_detect_freeze = True
         self._content_detect_obscure = True
+        self._content_detect_scene_change = False
         self._connected_this_cycle = False
         # Lockout-prevention state (see run()).
         self._consecutive_failures = 0
@@ -1076,9 +1087,14 @@ class StreamWorker:
                 pass
             self._content_enabled = global_on or cam_on
             # Rebuild the detector if the per-path flags changed.
-            if (freeze, obscure) != (self._content_detect_freeze, self._content_detect_obscure):
+            scene_change = bool(getattr(camera, "scene_change_detection_enabled", False)) if camera is not None else False
+            if (freeze, obscure, scene_change) != (
+                self._content_detect_freeze, self._content_detect_obscure,
+                self._content_detect_scene_change,
+            ):
                 self._content_detect_freeze = freeze
                 self._content_detect_obscure = obscure
+                self._content_detect_scene_change = scene_change
                 self._content_detector = None
         return self._content_enabled
 
@@ -1096,6 +1112,7 @@ class StreamWorker:
             self._content_detector = ContentHealthDetector(
                 detect_freeze=self._content_detect_freeze,
                 detect_obscure=self._content_detect_obscure,
+                detect_scene_change=self._content_detect_scene_change,
             )
         ahash, variance = await asyncio.to_thread(_frame_features, frame)
         edge = self._content_detector.update(ahash, variance, now)

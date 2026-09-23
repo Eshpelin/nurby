@@ -100,6 +100,21 @@ def test_toggles_disable_paths():
         t += 1.0
 
 
+def test_persistent_scene_change_can_trip_when_opted_in():
+    det = ContentHealthDetector(
+        detect_freeze=False,
+        detect_obscure=False,
+        detect_scene_change=True,
+        scene_change_distance=4,
+        scene_change_seconds=10,
+    )
+    assert det.update(frame_hash=0b0000, variance=500.0, now=0.0) is None
+    assert det.update(frame_hash=0b1111, variance=500.0, now=5.0) is None
+    assert det.update(frame_hash=0b1111, variance=500.0, now=10.0) is None
+    assert det.update(frame_hash=0b1111, variance=500.0, now=15.0) == "degraded"
+    assert det.reason == "scene_changed"
+
+
 # ── feature helper ──
 
 def test_frame_features_distinguishes_uniform_from_textured():

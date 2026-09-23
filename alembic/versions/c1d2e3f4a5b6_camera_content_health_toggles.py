@@ -34,9 +34,14 @@ def upgrade() -> None:
         "cameras",
         sa.Column("obscuration_detection_enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
     )
+    op.add_column(
+        "cameras",
+        sa.Column("scene_change_detection_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
+    )
 
 
 def downgrade() -> None:
+    op.drop_column("cameras", "scene_change_detection_enabled")
     op.drop_column("cameras", "obscuration_detection_enabled")
     op.drop_column("cameras", "freeze_detection_enabled")
     op.drop_column("cameras", "content_health_enabled")

@@ -23,8 +23,13 @@ the ingestion loop:
   quiet scene, whose hash keeps changing, never trips.
 - **Obscured / tampered** - grayscale variance below `obscure_variance` for
   `obscure_seconds`: a covered or wall-facing lens is near-uniform.
+- **Scene change / re-aim** - optionally compare each frame with a startup
+  reference average-hash. A sustained large Hamming distance raises
+  `scene_changed`; this path is off by default because deliberate seasonal or
+  installation changes need an explicit reset/restart.
 
-Each path is independently toggleable (`detect_freeze`, `detect_obscure`), and
+Each path is independently toggleable (`detect_freeze`, `detect_obscure`,
+`detect_scene_change`), and
 recovery requires a sustained clear stretch (`recover_seconds`) so the state
 never flaps.
 
@@ -59,10 +64,9 @@ degraded stretch surfaces in Home/recaps/Ask and cannot be called quiet.
 
 ## Deferred
 
-- **Periodic VLM "is this the expected scene?" check** for tamper/scene-change
-  against a learned baseline (`services/perception/baseline.py`), respecting
-  cost controls (hourly, skip when the CLIP gate would call the frame boring).
-  The cheap frozen/obscured detectors ship first.
+- **Periodic VLM "is this the expected scene?" check** against a learned
+  baseline (`services/perception/baseline.py`), respecting cost controls
+  (hourly, skip when the CLIP gate would call the frame boring).
 
 Source: `services/ingestion/content_health.py`, wiring in
 `services/ingestion/stream.py`, triggers in `services/events/engine.py`,
