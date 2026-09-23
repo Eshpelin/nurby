@@ -77,13 +77,15 @@ def _vehicle_ids_in(obs: Observation) -> set[str]:
 
 @router.get("", response_model=list[VehicleResponse])
 async def list_vehicles(
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """All known vehicles, most recently seen first."""
-    rows = (
-        await db.execute(select(Vehicle).order_by(Vehicle.last_seen_at.desc()))
-    ).scalars().all()
+    allowed = await allowed_camera_ids(current_user, db)
+    stmt = select(Vehicle)
+    if allowed is not ALL:
+        stmt = stmt.where(Vehicle.first_camera_id.in_(allowed))
+    rows = (await db.execute(stmt.order_by(Vehicle.last_seen_at.desc()))).scalars().all()
     return rows
 
 
@@ -97,14 +99,17 @@ async def vehicles_activity_summary(
     Scans observations from the last 7 days and tallies by vehicle_id,
     mirroring the People activity summary.
     """
-    vehicles = (await db.execute(select(Vehicle))).scalars().all()
+    allowed = await allowed_camera_ids(_current_user, db)
+    vehicle_stmt = select(Vehicle)
+    if allowed is not ALL:
+        vehicle_stmt = vehicle_stmt.where(Vehicle.first_camera_id.in_(allowed))
+    vehicles = (await db.execute(vehicle_stmt)).scalars().all()
     if not vehicles:
         return []
 
     cam_rows = (await db.execute(select(Camera.id, Camera.name))).all()
     cam_names = {str(cid): name for cid, name in cam_rows}
 
-    allowed = await allowed_camera_ids(_current_user, db)
     now = _now()
     cutoff_7d = now - timedelta(days=7)
     obs = (

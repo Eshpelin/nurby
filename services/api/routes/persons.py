@@ -79,8 +79,19 @@ async def _person_has_scoped_sighting(person_id: uuid.UUID, user: User, db: Asyn
 
 
 @router.get("", response_model=list[PersonResponse])
-async def list_persons(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Person).order_by(Person.created_at))
+async def list_persons(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    allowed = await allowed_camera_ids(current_user, db)
+    if allowed is ALL:
+        stmt = select(Person).order_by(Person.created_at)
+    else:
+        stmt = (
+            select(Person)
+            .join(FaceCluster, FaceCluster.person_id == Person.id)
+            .where(FaceCluster.first_camera_id.in_(allowed))
+            .distinct()
+            .order_by(Person.created_at)
+        )
+    result = await db.execute(stmt)
     return result.scalars().all()
 
 
@@ -98,15 +109,18 @@ class NameClusterBody(PydanticBaseModel):
 @router.get("/suggestions", response_model=list)
 async def list_suggestions(
     min_sightings: int = Query(default=2, ge=1, description="Minimum sightings to show as suggestion"),
-    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """List auto-discovered face clusters pending user naming."""
-    result = await db.execute(
+    allowed = await allowed_camera_ids(current_user, db)
+    stmt = (
         select(FaceCluster)
         .where(FaceCluster.status == "pending")
         .where(FaceCluster.sighting_count >= min_sightings)
-        .order_by(FaceCluster.sighting_count.desc())
     )
+    if allowed is not ALL:
+        stmt = stmt.where(FaceCluster.first_camera_id.in_(allowed))
+    result = await db.execute(stmt.order_by(FaceCluster.sighting_count.desc()))
     clusters = result.scalars().all()
     return [
         {
@@ -129,15 +143,17 @@ async def list_suggestions(
 @router.get("/suggestions/{cluster_id}/samples")
 async def get_cluster_samples(
     cluster_id: uuid.UUID,
-    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Get sample face thumbnails for a cluster."""
-    result = await db.execute(
+    allowed = await allowed_camera_ids(current_user, db)
+    stmt = (
         select(FaceClusterSample)
         .where(FaceClusterSample.cluster_id == cluster_id)
-        .order_by(FaceClusterSample.captured_at.desc())
-        .limit(12)
     )
+    if allowed is not ALL:
+        stmt = stmt.where(FaceClusterSample.camera_id.in_(allowed))
+    result = await db.execute(stmt.order_by(FaceClusterSample.captured_at.desc()).limit(12))
     samples = result.scalars().all()
     return [
         {

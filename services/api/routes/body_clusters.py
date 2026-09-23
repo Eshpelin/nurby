@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_query_token
+from shared.camera_access import ALL, allowed_camera_ids
 from shared.config import settings
 from shared.database import get_db
 from shared.models import BodyCluster, BodyClusterSample, Person, User
@@ -48,6 +49,7 @@ async def list_body_suggestions(
     db: AsyncSession = Depends(get_db),
 ):
     """List tentative body clusters pending naming or face co-verification."""
+    allowed = await allowed_camera_ids(_current_user, db)
     stmt = (
         select(BodyCluster)
         .where(BodyCluster.status == "pending")
@@ -55,6 +57,8 @@ async def list_body_suggestions(
     )
     if not include_confirmed:
         stmt = stmt.where(BodyCluster.confidence == "tentative")
+    if allowed is not ALL:
+        stmt = stmt.where(BodyCluster.first_camera_id.in_(allowed))
     stmt = stmt.order_by(BodyCluster.sighting_count.desc())
     rows = (await db.execute(stmt)).scalars().all()
     return [
@@ -88,14 +92,11 @@ async def get_body_samples(
     _current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    rows = (
-        await db.execute(
-            select(BodyClusterSample)
-            .where(BodyClusterSample.cluster_id == cluster_id)
-            .order_by(BodyClusterSample.captured_at.desc())
-            .limit(12)
-        )
-    ).scalars().all()
+    allowed = await allowed_camera_ids(_current_user, db)
+    stmt = select(BodyClusterSample).where(BodyClusterSample.cluster_id == cluster_id)
+    if allowed is not ALL:
+        stmt = stmt.where(BodyClusterSample.camera_id.in_(allowed))
+    rows = (await db.execute(stmt.order_by(BodyClusterSample.captured_at.desc()).limit(12))).scalars().all()
     return [
         {
             "id": str(s.id),
@@ -113,9 +114,15 @@ async def get_body_thumbnail(
     token: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    require_query_token(token)
+    user_id = require_query_token(token)
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or deactivated")
+    allowed = await allowed_camera_ids(user, db)
     cluster = await db.get(BodyCluster, cluster_id)
-    if not cluster or not cluster.sample_thumbnail_path:
+    if not cluster or not cluster.sample_thumbnail_path or (
+        allowed is not ALL and cluster.first_camera_id not in allowed
+    ):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     return _serve_thumbnail(cluster.sample_thumbnail_path)
 
@@ -127,9 +134,15 @@ async def get_body_sample_thumbnail(
     token: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    require_query_token(token)
+    user_id = require_query_token(token)
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or deactivated")
+    allowed = await allowed_camera_ids(user, db)
     sample = await db.get(BodyClusterSample, sample_id)
-    if not sample or sample.cluster_id != cluster_id or not sample.thumbnail_path:
+    if not sample or sample.cluster_id != cluster_id or not sample.thumbnail_path or (
+        allowed is not ALL and sample.camera_id not in allowed
+    ):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     return _serve_thumbnail(sample.thumbnail_path)
 
