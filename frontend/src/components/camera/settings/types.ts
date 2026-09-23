@@ -42,6 +42,7 @@ interface Camera {
   retention_mode: string;
   retention_days: number;
   retention_gb: number;
+  storage_profile_id: string | null;
   detection_models: {model: string; confidence: number; enabled: boolean; label_filter: string[]}[] | null;
   detection_merge: string;
   detection_consensus_min: number;

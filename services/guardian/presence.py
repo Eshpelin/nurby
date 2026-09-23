@@ -205,7 +205,8 @@ async def latest_clip(
     allowed_camera_ids: Iterable[uuid.UUID] | None = None,
 ) -> dict | None:
     """The freshest observation recording clip containing the dependant, at or
-    before the cutoff. Returns {observation_id, clip_path, captured_at} or None."""
+    before the cutoff. Returns {observation_id, clip_path, captured_at,
+    camera_id} or None."""
     now = now or datetime.now(timezone.utc)
     cutoff = ent.cutoff_time(link, free_delay_seconds, now)
     obs = await _latest_observation_with_person(db, person.id, cutoff, allowed_camera_ids)
@@ -215,4 +216,7 @@ async def latest_clip(
         "observation_id": str(obs.id),
         "clip_path": obs.clip_path,
         "captured_at": obs.started_at,
+        # Camera-scoped clips may live under a per-camera storage root
+        # (issue #251); consumers resolve containment against it.
+        "camera_id": str(obs.camera_id),
     }

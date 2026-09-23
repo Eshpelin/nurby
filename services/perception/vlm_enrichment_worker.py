@@ -626,7 +626,7 @@ class EnrichmentManager:
             )).scalars().first()
         if rec is None or not rec.file_path:
             return None
-        path = _resolve_recording_path(rec.file_path)
+        path = await _resolve_recording_path(rec.file_path, camera_id)
         if not path or not os.path.exists(path):
             return None
         offset = max(0.0, (ts - rec.started_at).total_seconds())
@@ -714,9 +714,13 @@ def _hmontage(frames):
         return frames[0] if frames else None
 
 
-def _resolve_recording_path(file_path: str) -> str | None:
+async def _resolve_recording_path(file_path: str, camera_id) -> str | None:
     """Resolve a stored recording path to an absolute disk path contained
-    inside ``recordings_path``. Returns None on escape so a poisoned row is
-    never fed to ffmpeg."""
+    inside the root the camera records into (its storage profile, else the
+    global root). Returns None on escape so a poisoned row is never fed to
+    ffmpeg."""
     from shared.config import settings
-    return contained_input(file_path, settings.recordings_path)
+    from shared.storage_paths import recordings_root_for
+
+    root = await recordings_root_for(camera_id)
+    return contained_input(file_path, root) or contained_input(file_path, settings.recordings_path)

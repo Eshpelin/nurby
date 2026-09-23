@@ -26,6 +26,31 @@ from sqlalchemy.orm import Mapped, mapped_column
 from shared.database import Base
 
 
+class StorageProfile(Base):
+    """A named media-storage location a camera can record into (issue #251).
+
+    v1 implements ``kind="local"``: ``root`` is an absolute directory on a
+    filesystem the backend can see — a second drive, a mounted SMB/NFS
+    share, an rclone mount over FTP/S3/WebDAV. ``kind`` stays textual so
+    native remote backends (a write-through FTP/S3 uploader with its own
+    playback story) can slot in later without a migration; until then,
+    "my own FTP" is answered by mounting it and pointing a profile at the
+    mount. See docs/storage-architecture.md.
+
+    Resolution order per camera: its profile's root, else the global
+    recordings root (storage_recordings_dir override or env default).
+    """
+
+    __tablename__ = "storage_profiles"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    kind: Mapped[str] = mapped_column(String(16), default="local", nullable=False)
+    root: Mapped[str] = mapped_column(String(1024), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Camera(Base):
     __tablename__ = "cameras"
 
@@ -136,6 +161,15 @@ class Camera(Base):
     # audio, STT, and MediaMTX path. The camera row is kept intact so
     # config and history are preserved. Mirrors Frigate PRs #16894/#16920.
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Per-camera storage (issue #251). Null = the camera records under the
+    # global recordings root (env default or the storage_recordings_dir
+    # override); set = the camera's segments land under the profile's root,
+    # resolved by shared/storage_paths.recordings_root_for.
+    storage_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("storage_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     # Audio-only mode. When true the ingestion + perception pipelines
     # skip video decode and run only the audio path (VAD, STT, audio
     # events, clap pattern, speech phrase). UI hides the video tile.

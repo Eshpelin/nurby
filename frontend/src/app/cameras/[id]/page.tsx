@@ -31,6 +31,7 @@ import { SmartTrackSection } from "@/components/camera/settings/SmartTrackSectio
 import { YoloWorldPromptsSection } from "@/components/camera/settings/YoloWorldPromptsSection";
 import { TimezoneSection } from "@/components/camera/settings/TimezoneSection";
 import { RetentionSection } from "@/components/camera/settings/RetentionSection";
+import { StorageSection } from "@/components/camera/settings/StorageSection";
 import { DangerZoneSection } from "@/components/camera/settings/DangerZoneSection";
 import { SaveBar } from "@/components/camera/settings/SaveBar";
 
@@ -99,6 +100,7 @@ export default function CameraConfigPage() {
   const [digestProviderId, setDigestProviderId] = useState<string | null>(null);
   const [digestPrompt, setDigestPrompt] = useState("");
   const [retentionMode, setRetentionMode] = useState("none");
+  const [storageProfileId, setStorageProfileId] = useState<string | null>(null);
   const [retentionDays, setRetentionDays] = useState(30);
   const [retentionGb, setRetentionGb] = useState(50);
   const [summaryProviderId, setSummaryProviderId] = useState<string | null>(null);
@@ -194,6 +196,7 @@ export default function CameraConfigPage() {
       setDigestProviderId(cam.digest_provider_id ?? null);
       setDigestPrompt(cam.digest_prompt || "");
       setRetentionMode(cam.retention_mode ?? "none");
+      setStorageProfileId(cam.storage_profile_id ?? null);
       setRetentionDays(cam.retention_days ?? 30);
       setRetentionGb(cam.retention_gb ?? 50);
       setSummaryProviderId(cam.summary_provider_id ?? null);
@@ -356,6 +359,7 @@ export default function CameraConfigPage() {
         retention_mode: retentionMode,
         retention_days: retentionDays,
         retention_gb: retentionGb,
+        storage_profile_id: storageProfileId,
         summary_provider_id: summaryProviderId,
         summary_mode: summaryMode,
         summary_period_seconds: summaryPeriodSeconds,
@@ -854,6 +858,12 @@ export default function CameraConfigPage() {
           setRetentionDays={setRetentionDays}
           setRetentionGb={setRetentionGb}
           setRetentionMode={setRetentionMode}
+        />
+
+        {/* ── Storage Location ── */}
+        <StorageSection
+          storageProfileId={storageProfileId}
+          setStorageProfileId={setStorageProfileId}
         />
 
         {/* ── PTZ Control ── */}

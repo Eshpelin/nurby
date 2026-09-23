@@ -649,7 +649,11 @@ async def link_clip(
     )
     if clip is None:
         raise HTTPException(status_code=404, detail="No recent clip available")
-    path = resolve_inside(clip["clip_path"], settings.recordings_path)
+    from shared.storage_paths import recordings_root_for
+
+    path = resolve_inside(
+        clip["clip_path"], await recordings_root_for(clip.get("camera_id"))
+    )
     if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):

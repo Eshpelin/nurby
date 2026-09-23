@@ -298,7 +298,7 @@ async def share_media(token: str, db: AsyncSession = Depends(get_db)):
         rec = await db.get(Recording, share.recording_id)
         if not rec:
             raise HTTPException(status_code=410, detail="No longer available")
-        path = _get_disk_path_or_404(rec)  # resolves inside recordings root; already privacy-blurred if configured
+        path = await _get_disk_path_or_404(rec)  # resolves inside the camera's recordings root; already privacy-blurred if configured
         return FileResponse(path, media_type="video/mp4", filename=os.path.basename(path))
 
     # observation or event → serve the observation thumbnail (frame)

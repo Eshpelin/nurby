@@ -271,10 +271,11 @@ def select_frames(window_seconds: int, target_max_frames: int = 8) -> list[float
 # ────────────────────────────────────────────────────────────────────
 
 
-def _resolve_recording_path(rec: Recording) -> Path | None:
+async def _resolve_recording_path(rec: Recording) -> Path | None:
     """Resolve a recording's stored ``file_path`` to a disk path that is
-    proven to live inside the ``recordings_path`` root before it is handed
-    to ffmpeg.
+    proven to live inside the recordings root the camera records into
+    (its storage profile, else the global root) before it is handed to
+    ffmpeg.
 
     The stored value may be absolute, relative to the configured root, or
     already include the camera prefix. Every candidate is run through
@@ -286,7 +287,9 @@ def _resolve_recording_path(rec: Recording) -> Path | None:
     raw = rec.file_path or ""
     if not raw:
         return None
-    base = os.path.abspath(settings.recordings_path)
+    from shared.storage_paths import recordings_root_for
+
+    base = os.path.abspath(await recordings_root_for(rec.camera_id))
     candidates: list[str] = []
     # Reuse the shared resolver for the common (root-relative) shapes.
     contained = contained_input(raw, base)
@@ -371,7 +374,7 @@ async def extract_frames_from_recording(
 ) -> list[np.ndarray]:
     """Extract each requested frame as a numpy array. Returns [] when the
     media file is missing (retention-pruned)."""
-    path = _resolve_recording_path(recording_row)
+    path = await _resolve_recording_path(recording_row)
     if path is None:
         logger.info(
             "recording %s file missing on disk (likely retention-pruned)",

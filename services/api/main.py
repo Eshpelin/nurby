@@ -45,6 +45,7 @@ from services.api.routes import (
     rules_nl,
     search,
     shares,
+    storage_profiles,
     summaries,
     system,
     telegram,
@@ -326,6 +327,8 @@ app.include_router(daily_digest.router, prefix="/api/daily-digest", tags=["daily
 app.include_router(privacy_zones.router, prefix="/api/privacy-zones", tags=["privacy-zones"])
 app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
 app.include_router(mqtt.router, prefix="/api", tags=["mqtt"])
+app.include_router(storage_profiles.router, prefix="/api", tags=["storage"])
+
 app.include_router(admin_stats.router, prefix="/api/admin", tags=["admin"])
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(household.router, prefix="/api/household", tags=["household"])

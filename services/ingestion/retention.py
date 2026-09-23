@@ -41,8 +41,10 @@ OBSERVATION_PRUNE_BATCH = 500
 OBSERVATION_PRUNE_MAX_BATCHES = 20
 
 
-def _resolve_path(file_path: str | None) -> str | None:
-    """Turn a stored (possibly relative) file path into an absolute disk path."""
+def _resolve_path(file_path: str | None, camera_id=None) -> str | None:
+    """Turn a stored (possibly relative) file path into an absolute disk
+    path under the recordings root. Sync on purpose: callers pass the
+    root they already resolved (per-camera since storage profiles)."""
     if not file_path:
         return None
     if os.path.isabs(file_path):
@@ -53,6 +55,24 @@ def _resolve_path(file_path: str | None) -> str | None:
             rel = rel[len(prefix):]
             break
     return os.path.join(os.path.abspath(settings.recordings_path), rel)
+
+
+async def _resolve_camera_path(file_path: str | None, camera_id) -> str | None:
+    """Recording-file variant: resolves against the ROOT THE CAMERA
+    RECORDS INTO (its storage profile, else the global root)."""
+    if not file_path:
+        return None
+    from shared.storage_paths import recordings_root_for
+
+    root = await recordings_root_for(camera_id)
+    if os.path.isabs(file_path):
+        return file_path
+    rel = file_path
+    for prefix in _RELATIVE_PREFIXES:
+        if rel.startswith(prefix):
+            rel = rel[len(prefix):]
+            break
+    return os.path.join(os.path.abspath(root), rel)
 
 
 def _resolve_audio_path(file_path: str | None) -> str | None:
@@ -436,7 +456,7 @@ class RetentionManager:
             if not rows:
                 return
             for conv in rows:
-                _remove_file(_resolve_path(getattr(conv, "clip_path", None)))
+                _remove_file(await _resolve_camera_path(getattr(conv, "clip_path", None), getattr(conv, "camera_id", None)))
                 await db.delete(conv)
             await db.commit()
             logger.info(
@@ -493,7 +513,7 @@ class RetentionManager:
             freed_bytes = 0
 
             for rec in old_recordings:
-                abs_path = _resolve_path(rec.file_path)
+                abs_path = await _resolve_camera_path(rec.file_path, rec.camera_id)
                 size, ok = _remove_file(abs_path)
                 if not ok:
                     logger.warning("Skipping DB delete for recording %s, file still on disk", rec.id)
@@ -557,7 +577,7 @@ class RetentionManager:
                     break
 
                 rec_size = rec.file_size_bytes or 0
-                abs_path = _resolve_path(rec.file_path)
+                abs_path = await _resolve_camera_path(rec.file_path, rec.camera_id)
                 size, ok = _remove_file(abs_path)
                 if not ok:
                     logger.warning("Skipping DB delete for recording %s, file still on disk", rec.id)

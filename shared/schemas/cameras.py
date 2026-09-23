@@ -147,6 +147,9 @@ class CameraUpdate(BaseModel):
     motion_sensitivity: float | None = Field(default=None, ge=0.0, le=1.0)
     recording_enabled: bool | None = None
     recording_mode: str | None = None
+    # Per-camera storage location (issue #251). Null = global recordings
+    # root; a profile id routes this camera's segments under that root.
+    storage_profile_id: uuid.UUID | None = None
     recording_trigger_objects: list[str] | None = None
     recording_clip_pre: int | None = Field(default=None, ge=1, le=30)
     recording_clip_post: int | None = Field(default=None, ge=1, le=60)
@@ -238,6 +241,7 @@ class CameraResponse(BaseModel):
     name: str
     stream_url: str
     stream_type: str
+    storage_profile_id: uuid.UUID | None = None
     snapshot_url: str | None
     location_label: str | None
     has_credentials: bool = False
@@ -351,5 +355,34 @@ class RecordingResponse(BaseModel):
     thumbnail_path: str | None
     blur_status: str = "pending"
     blur_error: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+# -- Storage profiles (issue #251) --
+
+class StorageProfileCreate(BaseModel):
+    """A named media-storage location. v1 supports kind="local": an
+    absolute directory on a filesystem the backend can see (a second
+    drive, or a mount of an FTP/SMB/S3 remote)."""
+
+    name: str = Field(min_length=1, max_length=120)
+    root: str = Field(min_length=1, max_length=1024)
+    kind: str = Field(default="local", pattern="^(local|smb|nfs|ftp|s3|webdav)$")
+
+
+class StorageProfileUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    root: str | None = Field(default=None, min_length=1, max_length=1024)
+    enabled: bool | None = None
+
+
+class StorageProfileResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    kind: str
+    root: str
+    enabled: bool
+    created_at: datetime
 
     model_config = {"from_attributes": True}

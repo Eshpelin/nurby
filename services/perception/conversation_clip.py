@@ -76,8 +76,10 @@ async def build_clip_for_conversation(
     if not overlaps:
         return None
 
+    from shared.storage_paths import recordings_root_for
+
     out_dir = os.path.join(
-        os.path.abspath(settings.recordings_path),
+        os.path.abspath(await recordings_root_for(camera_id)),
         "clips",
         str(camera_id),
     )
@@ -86,7 +88,7 @@ async def build_clip_for_conversation(
 
     if len(overlaps) == 1:
         rec, ss, dur = overlaps[0]
-        src = _resolve_path(rec.file_path)
+        src = await _resolve_path(rec.file_path, camera_id)
         if not src or not os.path.exists(src):
             return None
         ok = await _trim_segment(src, ss, dur, out_path)
@@ -101,7 +103,7 @@ async def build_clip_for_conversation(
         part_paths: list[str] = []
         try:
             for i, (rec, ss, dur) in enumerate(overlaps):
-                src = _resolve_path(rec.file_path)
+                src = await _resolve_path(rec.file_path, camera_id)
                 if not src or not os.path.exists(src):
                     continue
                 part_path = os.path.join(tmp_dir, f"{i:03d}.mp4")
@@ -257,12 +259,16 @@ def _silent_remove(path: str) -> None:
         pass
 
 
-def _resolve_path(stored: str | None) -> str | None:
+async def _resolve_path(stored: str | None, camera_id=None) -> str | None:
     """Resolve a stored recording path to an absolute disk path contained
-    inside ``recordings_path``. Returns None on escape (``..``/symlink/
-    absolute-outside-root) so a poisoned row degrades to "no clip" instead
-    of feeding an arbitrary file to ffmpeg."""
-    return contained_input(stored, settings.recordings_path)
+    inside the root the camera records into (its storage profile, else the
+    global root). Returns None on escape (``..``/symlink/absolute-outside-
+    root) so a poisoned row degrades to "no clip" instead of feeding an
+    arbitrary file to ffmpeg."""
+    from shared.storage_paths import recordings_root_for
+
+    root = await recordings_root_for(camera_id)
+    return contained_input(stored, root) or contained_input(stored, settings.recordings_path)
 
 
 def _file_ok(path: str) -> bool:

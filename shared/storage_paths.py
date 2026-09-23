@@ -60,8 +60,10 @@ def in_docker() -> bool:
 
 def invalidate() -> None:
     """Force the next apply to re-read the setting (settings PATCH)."""
-    global _last_check
+    global _last_check, _profile_roots_at
     _last_check = 0.0
+    _profile_roots.clear()
+    _profile_roots_at = 0.0
 
 
 async def apply_storage_overrides(*, force: bool = False) -> None:
@@ -97,3 +99,55 @@ async def apply_storage_overrides(*, force: bool = False) -> None:
             desired,
             "app setting" if root else "env default",
         )
+
+
+# ── Per-camera roots (storage profiles) ──────────────────────────────
+#
+# A camera with a storage profile records under that profile's root
+# instead of the global one. Roots are cached per process and refreshed
+# on the same throttle as the global override; camera/profile PATCHes
+# invalidate via the storage restart signal.
+
+_profile_roots: dict[str, str] = {}
+_profile_roots_at = 0.0
+
+
+async def _load_profile_roots() -> dict[str, str]:
+    """camera_id (str) -> enabled local profile root. Cached ~30s."""
+    global _profile_roots, _profile_roots_at
+    now = time.monotonic()
+    if _profile_roots_at > 0 and now - _profile_roots_at < _THROTTLE_SECONDS:
+        return _profile_roots
+    _profile_roots_at = now
+    try:
+        from sqlalchemy import select
+
+        from shared.database import async_session
+        from shared.models import Camera, StorageProfile
+
+        async with async_session() as db:
+            rows = await db.execute(
+                select(Camera.id, StorageProfile.root)
+                .join(StorageProfile, Camera.storage_profile_id == StorageProfile.id)
+                .where(StorageProfile.enabled.is_(True))
+            )
+            _profile_roots = {str(cam_id): root for cam_id, root in rows.all()}
+    except Exception:
+        logger.debug("profile root load failed", exc_info=True)
+    return _profile_roots
+
+
+async def recordings_root_for(camera_id) -> str:
+    """The recordings root a given camera writes to / is served from:
+    its storage profile's root when it has one, else the global root.
+    ``camera_id=None`` (or an unknown camera) resolves to the global root.
+    Callers must already be async; the cache keeps this off the hot path.
+
+    Note this only RESOLVES — reflecting the global override onto the
+    singleton is the lifecycle ticks' job (API startup, manager sync,
+    settings PATCH), so a stale override is never re-applied from here.
+    """
+    if camera_id is None:
+        return settings.recordings_path
+    roots = await _load_profile_roots()
+    return roots.get(str(camera_id)) or settings.recordings_path

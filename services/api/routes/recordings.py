@@ -71,9 +71,29 @@ def _resolve_recording_path_raw(file_path: str) -> str:
     return os.path.join(os.path.abspath(settings.recordings_path), rel)
 
 
+def _resolve_recording_path_raw(file_path: str) -> str:
+    """Turn a stored (possibly relative) path into an absolute disk path
+    under the GLOBAL recordings root. Prefer the camera-aware pair below."""
+    rel = file_path
+    for prefix in _RELATIVE_PREFIXES:
+        if rel.startswith(prefix):
+            rel = rel[len(prefix):]
+            break
+    return os.path.join(os.path.abspath(settings.recordings_path), rel)
+
+
 def _resolve_recording_path(recording: Recording) -> str:
     """Turn a stored (possibly relative) file_path into an absolute disk path."""
     return _resolve_recording_path_raw(recording.file_path)
+
+
+async def _contained_recording_path(recording: Recording) -> str | None:
+    """Absolute path of a recording, proven to live under the ROOT THE
+    CAMERA RECORDS INTO (its storage profile, else the global root)."""
+    from shared.storage_paths import recordings_root_for
+
+    root = await recordings_root_for(recording.camera_id)
+    return resolve_inside(_resolve_recording_path_raw(recording.file_path), root)
 
 
 def _camera_in_scope(allowed: AllowedCameras, camera_id: uuid.UUID | None) -> bool:
@@ -116,9 +136,8 @@ async def _get_recording_or_404(
     return recording
 
 
-def _get_disk_path_or_404(recording: Recording) -> str:
-    from shared.config import settings as _settings
-    path = resolve_inside(_resolve_recording_path(recording), _settings.recordings_path)
+async def _get_disk_path_or_404(recording: Recording) -> str:
+    path = await _contained_recording_path(recording)
     if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
@@ -439,7 +458,7 @@ async def download_bundle(
     entries: list[tuple[str, str]] = []
     total = 0
     for r in recs:
-        path = resolve_inside(_resolve_recording_path(r), settings.recordings_path)
+        path = await _contained_recording_path(r)
         if path is None or not os.path.exists(path):
             continue
         total += os.path.getsize(path)
@@ -530,7 +549,7 @@ async def download_evidence_bundle(
     manifest_files: list[dict] = []
     total = 0
     for r in recs:
-        path = resolve_inside(_resolve_recording_path(r), settings.recordings_path)
+        path = await _contained_recording_path(r)
         if path is None or not os.path.exists(path):
             continue
         total += os.path.getsize(path)
@@ -601,7 +620,7 @@ async def stream_recording(
     user = await _user_from_query_token(token, db)
     allowed = await allowed_camera_ids(user, db)
     recording = await _get_recording_or_404(recording_id, db, allowed)
-    path = _get_disk_path_or_404(recording)
+    path = await _get_disk_path_or_404(recording)
     return FileResponse(path, media_type="video/mp4", filename=os.path.basename(path))
 
 
@@ -690,7 +709,7 @@ async def download_recording(
     user = await _user_from_query_token(token, db)
     allowed = await allowed_camera_ids(user, db)
     recording = await _get_recording_or_404(recording_id, db, allowed)
-    path = _get_disk_path_or_404(recording)
+    path = await _get_disk_path_or_404(recording)
 
     # With no annotation flags this serves the pristine original (unchanged
     # behaviour). With any flag we render/serve a cached annotated copy.
@@ -746,7 +765,7 @@ async def download_clip(
     user = await _user_from_query_token(token, db)
     allowed = await allowed_camera_ids(user, db)
     recording = await _get_recording_or_404(recording_id, db, allowed)
-    src_path = _get_disk_path_or_404(recording)
+    src_path = await _get_disk_path_or_404(recording)
 
     if end <= start:
         raise HTTPException(status_code=400, detail="end must be greater than start")
@@ -796,7 +815,7 @@ async def delete_recording(
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")
 
-    rec_path = _resolve_recording_path(recording)
+    rec_path = await _contained_recording_path(recording) or _resolve_recording_path(recording)
     try:
         os.remove(rec_path)
     except OSError:

@@ -19,6 +19,9 @@ from shared.schemas.cameras import (  # noqa: F401
     CameraResponse,
     CameraStatusLogResponse,
     RecordingResponse,
+    StorageProfileCreate,
+    StorageProfileResponse,
+    StorageProfileUpdate,
 )
 from shared.schemas.cameras import (  # noqa: F401
     _STREAM_URL_SCHEMES,
@@ -181,6 +184,9 @@ __all__ = [
     "CameraStatusLogResponse",
     "CameraStorageStats",
     "CameraUpdate",
+    "StorageProfileCreate",
+    "StorageProfileResponse",
+    "StorageProfileUpdate",
     "DeviceCreate",
     "DeviceResponse",
     "DeviceUpdate",

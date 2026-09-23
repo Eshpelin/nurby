@@ -45,6 +45,7 @@ from shared.models.cameras import (  # noqa: F401
     PrivacyZone,
     Recording,
     SpeakerCapability,
+    StorageProfile,
 )
 from shared.models.digests import (  # noqa: F401
     DailyDigest,
@@ -156,6 +157,7 @@ __all__ = [
     "RuleSequenceInstance",
     "ScheduledReport",
     "SpeakerCapability",
+    "StorageProfile",
     "SpeechEvent",
     "Summary",
     "TelegramChannel",

@@ -4,6 +4,10 @@ Where Nurby keeps recordings is decided at one of two layers, depending
 on how you run it. Both exist because "where is the video going to live?"
 is the first question a new install has to answer (issue #251).
 
+Per-camera overrides (a second drive, or a mount of your FTP/SMB/S3
+remote) sit on top of both and are described in
+[storage architecture](../storage-architecture.md).
+
 ## In the app: the storage location setting
 
 The first-run wizard opens with **"Where should recordings be stored?"**;

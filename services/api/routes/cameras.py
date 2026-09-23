@@ -1207,14 +1207,32 @@ async def update_camera(
         if cred in updates:
             updates[cred] = seal(updates[cred])
 
+    # Per-camera storage (issue #251): the profile must exist, and moving
+    # a camera between roots takes effect on the next segment, so restart
+    # the worker like any stream-affecting change.
+    storage_changed = False
+    if "storage_profile_id" in updates:
+        new_profile_id = updates["storage_profile_id"]
+        if new_profile_id is not None:
+            from shared.models import StorageProfile
+
+            if await db.get(StorageProfile, new_profile_id) is None:
+                raise HTTPException(status_code=400, detail="Storage profile not found")
+        storage_changed = getattr(camera, "storage_profile_id", None) != new_profile_id
+
     for field, value in updates.items():
         setattr(camera, field, value)
 
     await db.commit()
     await db.refresh(camera)
 
+    if storage_changed:
+        from shared.storage_paths import invalidate as invalidate_storage_cache
+
+        invalidate_storage_cache()
+
     # Signal stream restart if connection params changed
-    if stream_changed:
+    if stream_changed or storage_changed:
         try:
             import redis.asyncio as aioredis
             r = aioredis.from_url(settings.redis_url)

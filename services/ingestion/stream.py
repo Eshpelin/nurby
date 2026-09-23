@@ -190,6 +190,9 @@ class StreamWorker:
         self._paused = False  # auto-retry paused, waiting for operator (hybrid policy)
         self._last_reason: str | None = None  # latest status reason, for the retry hint
         self._redis = None
+        # Recordings root for THIS camera (its storage profile or the
+        # global root), resolved in run() before any segment is written.
+        self._recordings_root: str = settings.recordings_path
         # Smart recording state
         # Pre-capture (pre-roll) is kept on disk as rolling H.264 segments, not
         # as decoded frames in RAM: a full-resolution frame ring costs ~0.7 GB
@@ -264,6 +267,15 @@ class StreamWorker:
         hammer the network (and pile up OpenCV threads) every 5 seconds
         forever. A successful connection resets the backoff.
         """
+        # Storage location (issue #251): resolve this camera's recordings
+        # root (its storage profile, else the global root) once per worker
+        # run; a profile change restarts the worker with a fresh root.
+        try:
+            from shared.storage_paths import recordings_root_for
+
+            self._recordings_root = await recordings_root_for(self.camera_id)
+        except Exception:
+            logger.debug("recordings root resolution failed", exc_info=True)
         delay = RECONNECT_DELAY
         while self._running:
             if self._paused:
@@ -889,7 +901,7 @@ class StreamWorker:
     def _segment_path(self, start: datetime) -> str:
         date_dir = start.strftime("%Y-%m-%d")
         filename = f"{self.camera_id}_{start.strftime('%H%M%S')}.mp4"
-        return os.path.join(settings.recordings_path, str(self.camera_id), date_dir, filename)
+        return os.path.join(self._recordings_root, str(self.camera_id), date_dir, filename)
 
     # ── Pre-capture (pre-roll) on-disk rolling segments ──
     #
@@ -901,7 +913,7 @@ class StreamWorker:
     # pollute the dated recording dirs.
 
     def _preroll_dir(self) -> str:
-        return os.path.join(settings.recordings_path, str(self.camera_id), ".preroll")
+        return os.path.join(self._recordings_root, str(self.camera_id), ".preroll")
 
     def _preroll_temp_path(self, start: datetime) -> str:
         # microseconds keep temp names unique even for sub-second rotations

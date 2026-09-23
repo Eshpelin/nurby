@@ -113,7 +113,9 @@ async def get_conversation_clip(
     if row is None or not row.clip_path:
         raise HTTPException(status_code=404, detail="clip not found")
     await require_camera_in_scope(_user, db, row.camera_id, detail="clip not found")
-    path = resolve_inside(row.clip_path, settings.recordings_path)
+    from shared.storage_paths import recordings_root_for
+
+    path = resolve_inside(row.clip_path, await recordings_root_for(row.camera_id))
     if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
