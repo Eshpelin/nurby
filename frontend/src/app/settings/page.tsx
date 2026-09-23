@@ -13,6 +13,7 @@ import { ShareLinksCard } from "@/components/ShareLinksCard";
 import { SystemDoctorPanel } from "@/components/SystemDoctorPanel";
 import { DevicesSection } from "@/components/DevicesSection";
 import { GroundingSettingsCard } from "@/components/settings/GroundingSettingsCard";
+import { StorageLocationCard } from "@/components/settings/StorageLocation";
 import { ALL_PROVIDERS, PROVIDER_KINDS } from "@/lib/provider-presets";
 import { ProviderFields } from "@/components/ProviderFields";
 import { timezoneOptions } from "@/lib/timezones";
@@ -1003,6 +1004,9 @@ export default function SettingsPage() {
 
         {/* MQTT / Home Assistant */}
         <MqttSection />
+
+        {/* Storage location (recordings drive/folder, issue #251) */}
+        <StorageLocationCard />
 
         {/* Invite Keys card */}
         {(() => {

@@ -28,7 +28,12 @@ from shared.ffmpeg_safe import (
 from shared.paths import safe_getsize
 
 DEFAULT_SIGMA = 20
-CACHE_DIR = os.path.join(settings.recordings_path, "guardian_blurred")
+
+
+def _cache_dir() -> str:
+    """Read at call time so a storage-location override (shared/storage_paths)
+    applies without a process restart."""
+    return os.path.join(settings.recordings_path, "guardian_blurred")
 
 
 def _cache_key(src_path: str, sigma: int) -> str:
@@ -45,8 +50,9 @@ def blur_clip(src_path: str, sigma: int = DEFAULT_SIGMA) -> str:
     transcoding with ffmpeg on first request and caching the result. Raises
     ``RuntimeError`` if ffmpeg fails or produces no output."""
     sigma = max(1, int(sigma))
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    dest = os.path.join(CACHE_DIR, f"{_cache_key(src_path, sigma)}.mp4")
+    cache_dir = _cache_dir()
+    os.makedirs(cache_dir, exist_ok=True)
+    dest = os.path.join(cache_dir, f"{_cache_key(src_path, sigma)}.mp4")
     if safe_getsize(dest) > 0:
         return dest
     tmp = f"{dest}.{os.getpid()}.tmp.mp4"

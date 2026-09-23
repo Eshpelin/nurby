@@ -358,6 +358,12 @@ DEFAULTS: dict[str, Any] = {
     # Seconds between periodic JPEG publishes on cameras/{slug}/snapshot.
     # 0 disables the periodic frame; observation snapshots always publish.
     "mqtt_camera_frame_interval": 10,
+    # ── Media storage location (docs/operations/storage-location.md) ─────
+    # Directory where recordings (and their derived caches) are written.
+    # None = the env-provided default (RECORDINGS_PATH / compose volume).
+    # Applied process-wide by shared/storage_paths.apply_storage_overrides;
+    # affects NEW recordings only — existing files stay where they are.
+    "storage_recordings_dir": None,
 }
 
 

@@ -62,7 +62,18 @@ async def main():
     _dev_mod.set_rule_event_sink(pipeline.rule_engine.evaluate)
     from services.perception.vlm_queue import publish_stats_forever
 
+    # Storage-location override (issue #251): pick up a recordings-root
+    # change made in the setup wizard / Settings without a restart. The
+    # helper self-throttles; a minute here is well within tolerance.
+    async def _storage_overrides_forever():
+        from shared import storage_paths
+
+        while True:
+            await storage_paths.apply_storage_overrides()
+            await asyncio.sleep(60)
+
     await asyncio.gather(
+        _storage_overrides_forever(),
         # Lets the doctor tell "this worker is dead" apart from "there is
         # genuinely nothing to see". Without it, a stopped perception
         # service looks exactly like a quiet day.

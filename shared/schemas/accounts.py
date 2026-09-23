@@ -98,6 +98,8 @@ class SystemSettingsResponse(BaseModel):
     mqtt_discovery_enabled: bool = True
     mqtt_stats_interval: int = 60
     mqtt_camera_frame_interval: int = 10
+    # Media storage location (issue #251). Null = env-provided default.
+    storage_recordings_dir: str | None = None
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -156,6 +158,9 @@ class SystemSettingsUpdate(BaseModel):
     mqtt_discovery_enabled: bool | None = None
     mqtt_stats_interval: int | None = Field(default=None, ge=5, le=86400)
     mqtt_camera_frame_interval: int | None = Field(default=None, ge=0, le=3600)
+    # Media storage location. Absolute POSIX or Windows drive path; the
+    # validate endpoint enforces the shape before this is stored.
+    storage_recordings_dir: str | None = Field(default=None, max_length=1024)
 
 
 # -- User schemas --

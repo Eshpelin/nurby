@@ -85,7 +85,11 @@ def test_render_annotated_smoke(tmp_path, monkeypatch):
         pytest.skip("could not encode synthetic source clip")
 
     # Redirect the cache into tmp so we don't touch the real recordings dir.
-    monkeypatch.setattr(ra, "CACHE_DIR", str(tmp_path / "annotated"))
+    # The cache dir is read lazily from the settings root so a storage-
+    # location override (shared/storage_paths) applies without a restart.
+    monkeypatch.setattr(
+        ra.settings, "recordings_path", str(tmp_path / "recordings_root")
+    )
 
     observations = [
         {"offset": 0.2, "vlm_description": "A person walks in",

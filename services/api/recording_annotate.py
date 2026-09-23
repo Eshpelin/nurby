@@ -33,7 +33,11 @@ from shared.paths import safe_getsize
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = os.path.join(settings.recordings_path, "annotated")
+
+def _cache_dir() -> str:
+    """Read at call time so a storage-location override (shared/storage_paths)
+    applies without a process restart."""
+    return os.path.join(settings.recordings_path, "annotated")
 
 # Label -> priority lane. The top three things people scrub for.
 _HUMAN = {"person"}
@@ -172,8 +176,9 @@ def render_annotated(
     (offset relative to the recording start, precomputed by the caller)."""
     import cv2
 
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    dest = os.path.join(CACHE_DIR, f"{_cache_key(src_path, opts)}.mp4")
+    cache_dir = _cache_dir()
+    os.makedirs(cache_dir, exist_ok=True)
+    dest = os.path.join(cache_dir, f"{_cache_key(src_path, opts)}.mp4")
     if safe_getsize(dest) > 0:
         return dest
 

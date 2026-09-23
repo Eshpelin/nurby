@@ -118,6 +118,12 @@ async def lifespan(app: FastAPI):
             "exposing this machine beyond your own network."
         )
     await asyncio.to_thread(_run_migrations)
+    # Storage-location override (issue #251): reflect a saved recordings
+    # root onto this process before anything starts writing. Ingestion
+    # and perception apply it on their own startup/tick paths.
+    from shared import storage_paths
+
+    await storage_paths.apply_storage_overrides(force=True)
     digest_task = asyncio.create_task(run_digest_loop())
     # Body re-identification housekeeping. Decay tentative clusters and
     # fuse body+face overlaps so face naming retroactively confirms

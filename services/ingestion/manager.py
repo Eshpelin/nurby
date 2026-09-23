@@ -185,6 +185,17 @@ class CameraManager:
         except Exception:
             logger.debug("mqtt producer sync failed", exc_info=True)
 
+        # Storage-location override (issue #251): apply a recordings-root
+        # change made in the setup wizard / Settings. Self-throttled, so
+        # calling on every sync tick is fine; new segments pick it up
+        # within one poll interval.
+        try:
+            from shared import storage_paths
+
+            await storage_paths.apply_storage_overrides()
+        except Exception:
+            logger.debug("storage override apply failed", exc_info=True)
+
         # Keep MediaMTX paths aligned with DB state before starting workers
         # so stream workers can pull the muxed RTSP copy. Handles USB push
         # bridges, RTSP/HLS pull-source registration, and stale path

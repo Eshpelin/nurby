@@ -1,4 +1,5 @@
 import asyncio
+import shutil
 import time
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -578,6 +579,9 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     "mqtt_discovery_enabled",
     "mqtt_stats_interval",
     "mqtt_camera_frame_interval",
+    # Media storage location (issue #251). The recordings root override;
+    # applied process-wide by shared/storage_paths on the settings PATCH.
+    "storage_recordings_dir",
 )
 
 
@@ -651,6 +655,15 @@ async def patch_settings(
 
     for k, v in updates.items():
         await set_setting(k, v)
+
+    # Storage-location overrides take effect immediately (not on the
+    # ~30s throttle): a user finishing the setup step expects the next
+    # recording to land where they just picked.
+    if "storage_recordings_dir" in updates:
+        from shared import storage_paths
+
+        storage_paths.invalidate()
+        await storage_paths.apply_storage_overrides(force=True)
 
     data = await _read_whitelisted_settings()
     return SystemSettingsResponse(**data)
@@ -752,3 +765,132 @@ async def trigger_update(_current_user: User = Depends(require_admin)):
             " This page will be briefly unavailable."
         ),
     }
+
+
+# ── Media storage location (issue #251) ──────────────────────────────
+#
+# The setup wizard and Settings pick where recordings live. The override
+# itself is the storage_recordings_dir app setting applied process-wide
+# by shared/storage_paths; these endpoints report the effective root and
+# validate a candidate before it is saved.
+
+
+class StorageLocationStatus(BaseModel):
+    recordings_path: str
+    source: str  # "default" | "custom"
+    docker: bool
+    free_bytes: int | None = None
+
+
+class StorageValidateRequest(BaseModel):
+    path: str
+
+
+class StorageValidateResponse(BaseModel):
+    ok: bool
+    path: str = ""
+    exists: bool = False
+    created: bool = False
+    writable: bool = False
+    free_bytes: int | None = None
+    total_bytes: int | None = None
+    detail: str = ""
+
+
+def _is_absolute_media_path(path: str) -> bool:
+    """POSIX absolute, or a Windows drive path like D:\\ or D:/."""
+    if path.startswith("/"):
+        return True
+    return len(path) >= 3 and path[1] == ":" and path[2] in ("\\", "/")
+
+
+def validate_storage_dir(raw: str) -> StorageValidateResponse:
+    """Probe a candidate recordings directory. Creates it if missing,
+    writes and removes a probe file, reports free space. Pure-ish and
+    sync (thread offloading at the route)."""
+    from shared import storage_paths
+
+    path = (raw or "").strip().strip('"')
+    if not path:
+        return StorageValidateResponse(ok=False, detail="Enter a directory path.")
+    if not _is_absolute_media_path(path):
+        return StorageValidateResponse(
+            ok=False,
+            path=path,
+            detail="Use an absolute path, e.g. D:\\Nurby\\recordings or /srv/nurby/recordings.",
+        )
+    if len(path) >= 2 and path[1] == ":" and storage_paths.in_docker():
+        # A "D:\..." path inside a Linux container would silently create a
+        # literally-named folder and lose every recording on recreate.
+        return StorageValidateResponse(
+            ok=False,
+            path=path,
+            detail=(
+                "Windows drive paths need Nurby running natively on the host. "
+                "In Docker, set NURBY_RECORDINGS_VOLUME=D:/Nurby/recordings in .env, "
+                "or enter a path already mounted into the container."
+            ),
+        )
+    existed = os.path.isdir(path)
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError as exc:
+        return StorageValidateResponse(
+            ok=False, path=path, detail=f"Could not create the directory: {exc}"
+        )
+    probe = os.path.join(path, ".nurby_write_test")
+    try:
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write("nurby")
+        os.remove(probe)
+    except OSError as exc:
+        return StorageValidateResponse(
+            ok=False,
+            path=path,
+            exists=True,
+            detail=f"The directory is not writable: {exc}",
+        )
+    free = total = None
+    try:
+        usage = shutil.disk_usage(path)
+        free, total = usage.free, usage.total
+    except OSError:
+        pass
+    return StorageValidateResponse(
+        ok=True,
+        path=path,
+        exists=True,
+        created=not existed,
+        writable=True,
+        free_bytes=free,
+        total_bytes=total,
+        detail="Ready." if existed else "Directory created.",
+    )
+
+
+@router.get("/system/storage", response_model=StorageLocationStatus)
+async def storage_location_status(_current_user: User = Depends(require_admin)):
+    """Effective recordings root plus free space, for setup and Settings."""
+    from shared import storage_paths
+
+    override = await get_setting("storage_recordings_dir", None)
+    root = storage_paths.current_recordings_root()
+    free = None
+    try:
+        free = shutil.disk_usage(root).free
+    except OSError:
+        pass
+    return StorageLocationStatus(
+        recordings_path=root,
+        source="custom" if override else "default",
+        docker=storage_paths.in_docker(),
+        free_bytes=free,
+    )
+
+
+@router.post("/system/storage/validate", response_model=StorageValidateResponse)
+async def storage_location_validate(
+    body: StorageValidateRequest, _current_user: User = Depends(require_admin)
+):
+    """Check a candidate directory before it is saved."""
+    return await asyncio.to_thread(validate_storage_dir, body.path)

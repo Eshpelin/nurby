@@ -6,6 +6,7 @@ import CameraBrandHelp from "@/components/CameraBrandHelp";
 import { OllamaDeployPanel } from "@/components/OllamaDeployPanel";
 import { AddCameraModal } from "@/components/AddCameraModal";
 import { ONBOARDING_PRESETS } from "@/lib/provider-presets";
+import { StorageLocationForm } from "@/components/settings/StorageLocation";
 
 interface Provider {
   id: string;
@@ -21,14 +22,17 @@ interface Props {
   onComplete: () => void;
 }
 
-type Step = "choose" | "magic" | "camera" | "provider" | "done";
+type Step = "storage" | "choose" | "magic" | "camera" | "provider" | "done";
 
 // Curated subset of the shared provider catalog (see @/lib/provider-presets).
 const PROVIDER_PRESETS = ONBOARDING_PRESETS;
 
 
 /**
- * Three-step first-run modal, ordered for the fastest path to a live feed:
+ * First-run modal, ordered for the fastest path to a live feed:
+ *   0. storage (where recordings live — #251. the first thing a new
+ *      self-hoster wants to decide, and the last moment it is free of
+ *      already-written data)
  *   1. camera  (demo camera is the default. one click and you're watching)
  *   2. provider (optional VLM. detection, faces and rules work without it,
  *      so this step defaults to a pure Next)
@@ -40,7 +44,7 @@ const PROVIDER_PRESETS = ONBOARDING_PRESETS;
  */
 export function OnboardingWizard({ onClose, onComplete }: Props) {
   const { authFetch } = useAuth();
-  const [step, setStep] = useState<Step>("choose");
+  const [step, setStep] = useState<Step>("storage");
   const [providers, setProviders] = useState<Provider[]>([]);
 
   // Persist dismissal both locally (fast path) and server-side (so it
@@ -232,6 +236,9 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
+          {step === "storage" && (
+            <StorageStep onNext={() => setStep("choose")} />
+          )}
           {step === "choose" && (
             <ChooseStep
               onMagic={() => setStep("magic")}
@@ -371,6 +378,39 @@ function stepNumber(s: Step): number {
   if (s === "camera") return 1;
   if (s === "provider") return 2;
   return 3;
+}
+
+// Storage preamble (issue #251): where recordings live. Runs before any
+// camera exists, so the choice costs nothing — no files to migrate, no
+// recordings split across drives. Entirely skippable; the default keeps
+// working and Settings -> Storage location revisits it later.
+function StorageStep({ onNext }: { onNext: () => void }) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <h3 className="text-xl font-semibold">Where should recordings be stored?</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed mt-1">
+          The one thing worth deciding before your first camera starts
+          writing video: which drive and folder keeps your footage.
+        </p>
+      </div>
+
+      <StorageLocationForm />
+
+      <div className="flex items-center justify-between pt-1">
+        <button
+          type="button"
+          onClick={onNext}
+          className="px-4 py-2 text-sm rounded-md bg-accent text-black font-medium hover:bg-accent/90 transition-colors"
+        >
+          Continue
+        </button>
+        <p className="text-[11px] text-muted-foreground">
+          You can change this later in Settings → Storage location.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 // First fork. one-click "magic" that provisions everything locally, or the
