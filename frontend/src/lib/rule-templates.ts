@@ -456,7 +456,7 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
     key: "after-hours-office",
     icon: "🌙",
     title: "Somebody is in the building after hours",
-    blurb: "Person seen 7pm–6am → AI double-check → alert",
+    blurb: "Fast person alert 7pm–6am → AI may demote it afterward",
     category: "workplace",
     params: [{ name: "camera_id", label: "Which camera watches the floor?", required: false }],
     build: (ctx, picked) =>
@@ -464,18 +464,21 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
         "After-hours presence",
         { type: "object_detected", label: "person", min_frames: 3, within_seconds: 20 },
         [
-          {
-            type: "verify",
-            question: "Is there a person inside the office in this frame?",
-            min_confidence: 0.6,
-            on_fail: "stop",
-          },
+          // The deterministic person trigger owns first notification. AI is
+          // deliberately post-alert: it can demote a false positive, but it
+          // must never delay the security-critical first alert.
           alertAction(
             ctx,
             "🌙 Someone on {camera_name} at {timestamp_local}, outside working hours",
             "After-hours presence detected",
             "warning",
           ),
+          {
+            type: "verify",
+            question: "Is there a person inside the office in this frame?",
+            min_confidence: 0.6,
+            on_fail: "demote",
+          },
         ],
         {
           ...(cameraConditions(ctx, picked, /office|floor|work|desk|lobby/i) ?? {}),
