@@ -195,7 +195,7 @@ def test_evidence_bundle_scopes_to_allowed_cameras(tmp_path, monkeypatch):
 
     resp = asyncio.run(
         recordings_routes.download_evidence_bundle(
-            token="t", camera_id=None, from_=None, to=None,
+            token="t", recording_id=[], camera_id=None, from_=None, to=None,
             object=[], person_id=None, vehicle_id=None, db=db,
         )
     )
@@ -236,7 +236,7 @@ def test_evidence_bundle_404_when_no_recordings(tmp_path, monkeypatch):
     with pytest.raises(HTTPException) as ei:
         asyncio.run(
             recordings_routes.download_evidence_bundle(
-                token="t", camera_id=None, from_=None, to=None,
+                token="t", recording_id=[], camera_id=None, from_=None, to=None,
                 object=[], person_id=None, vehicle_id=None, db=db,
             )
         )

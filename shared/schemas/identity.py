@@ -19,6 +19,7 @@ class PersonCreate(BaseModel):
     consent_given: bool = False
     privacy_blur: bool = False
     is_starred: bool = False
+    is_household_member: bool = False
     recap_prompt: str | None = Field(default=None, max_length=2000)
     recap_provider: str | None = Field(default=None, max_length=32)
     recap_model: str | None = Field(default=None, max_length=255)
@@ -31,6 +32,7 @@ class PersonUpdate(BaseModel):
     consent_given: bool | None = None
     privacy_blur: bool | None = None
     is_starred: bool | None = None
+    is_household_member: bool | None = None
     recap_prompt: str | None = Field(default=None, max_length=2000)
     recap_provider: str | None = Field(default=None, max_length=32)
     recap_model: str | None = Field(default=None, max_length=255)
@@ -45,6 +47,7 @@ class PersonResponse(BaseModel):
     privacy_blur: bool
     photo_path: str | None
     is_starred: bool
+    is_household_member: bool = False
     recap_prompt: str | None
     recap_provider: str | None
     recap_model: str | None

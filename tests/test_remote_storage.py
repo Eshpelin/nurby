@@ -93,6 +93,11 @@ async def test_profile_root_filter_excludes_ftp_kinds():
     must keep buffering to the global root, not to a remote path."""
     from shared import storage_paths
 
+    # The profile roots are cached per process with a throttle, so an earlier
+    # test that warmed the cache would make this one skip the query it asserts
+    # on. Force a fresh load.
+    storage_paths.invalidate()
+
     captured = {}
 
     class Result:

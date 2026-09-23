@@ -143,6 +143,12 @@ async def lifespan(app: FastAPI):
     from services.events.sequence_sweeper import SequenceSweeper
     seq_sweeper = SequenceSweeper()
     seq_sweeper_task = asyncio.create_task(seq_sweeper.run())
+    # Auto Home/Away mode (#184): flip the household mode from the identity
+    # graph as known members leave / return. Inert until someone is marked a
+    # household member.
+    from services.perception.presence_mode_sweeper import PresenceModeSweeper
+    presence_sweeper = PresenceModeSweeper()
+    presence_task = asyncio.create_task(presence_sweeper.run())
 
     # Optionally warm the grounding model so the first FindAnything isn't slow.
     async def _warm_grounding() -> None:
@@ -189,6 +195,8 @@ async def lifespan(app: FastAPI):
     face_merger_task.cancel()
     seq_sweeper.stop()
     seq_sweeper_task.cancel()
+    presence_sweeper.stop()
+    presence_task.cancel()
     warm_grounding_task.cancel()
     tg_manager.stop()
     tg_task.cancel()

@@ -36,6 +36,9 @@ class Person(Base):
     # cluster naming always use the canonical display_name.
     nickname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     relationship: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Counts toward Home/Away presence (#184): when every household member has
+    # left, auto mode flips to "away"; when one is seen again, back to "home".
+    is_household_member: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     consent_given: Mapped[bool] = mapped_column(Boolean, default=False)
     # Which facility this person belongs to. Null = unscoped (every camera).
     facility_id: Mapped[uuid.UUID | None] = mapped_column(
