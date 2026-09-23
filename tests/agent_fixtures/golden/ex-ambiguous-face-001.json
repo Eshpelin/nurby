@@ -1,0 +1,20 @@
+{
+  "family": "ambiguous_face",
+  "id": "ex-ambiguous-face-001",
+  "kind": "caption",
+  "media": {
+    "note": "EXAMPLE",
+    "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "recorded_output": "An unknown person walks up to the door and looks around.",
+  "source": "curated",
+  "truth": {
+    "event_present": true,
+    "must_include": [],
+    "must_not_include": [
+      "Sara",
+      "known"
+    ],
+    "reference": "An unfamiliar person of uncertain identity approaches the door."
+  }
+}

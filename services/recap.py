@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.events.actions import _call_vlm, _get_provider_by_kind
+from shared.camera_access import ALL, AllowedCameras, apply_camera_filter
 from shared.config import settings
 from shared.models import Camera, Observation, Person
 
@@ -64,13 +65,18 @@ def _format_ago(when: datetime, now: datetime) -> str:
 
 
 async def _collect_sightings(
-    db: AsyncSession, person_id: str, cameras: dict[str, str]
+    db: AsyncSession, person_id: str, cameras: dict[str, str],
+    allowed: AllowedCameras = ALL,
 ) -> tuple[list[dict], Observation | None]:
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     result = await db.execute(
-        select(Observation)
-        .where(Observation.person_detections.isnot(None))
-        .where(Observation.started_at >= cutoff)
+        apply_camera_filter(
+            select(Observation)
+            .where(Observation.person_detections.isnot(None))
+            .where(Observation.started_at >= cutoff),
+            allowed,
+            Observation.camera_id,
+        )
         .order_by(Observation.started_at.desc())
         .limit(400)
     )
@@ -138,7 +144,8 @@ async def _pick_provider(person: Person):
 
 
 async def generate_recap(
-    db: AsyncSession, person: Person, force: bool = False
+    db: AsyncSession, person: Person, force: bool = False,
+    allowed: AllowedCameras = ALL,
 ) -> dict:
     """Return {status, last_seen_at, last_camera_id, last_thumbnail_path,
     sightings_24h, generated_at, cached}. Caches on the Person row."""
@@ -153,7 +160,7 @@ async def generate_recap(
         and person.recap_cached_at
         and (now - person.recap_cached_at) < _recap_ttl()
     ):
-        last = await _latest_sighting_meta(db, str(person.id))
+        last = await _latest_sighting_meta(db, str(person.id), allowed)
         return {
             "status": person.recap_cached_status,
             "last_seen_at": last["at"],
@@ -167,7 +174,7 @@ async def generate_recap(
             "stale": False,
         }
 
-    sightings, latest = await _collect_sightings(db, str(person.id), cameras)
+    sightings, latest = await _collect_sightings(db, str(person.id), cameras, allowed)
     count_24h = len(sightings)
 
     status = await _run_vlm_status(person, sightings)
@@ -191,12 +198,18 @@ async def generate_recap(
     }
 
 
-async def _latest_sighting_meta(db: AsyncSession, person_id: str) -> dict:
+async def _latest_sighting_meta(
+    db: AsyncSession, person_id: str, allowed: AllowedCameras = ALL
+) -> dict:
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     result = await db.execute(
-        select(Observation)
-        .where(Observation.person_detections.isnot(None))
-        .where(Observation.started_at >= cutoff)
+        apply_camera_filter(
+            select(Observation)
+            .where(Observation.person_detections.isnot(None))
+            .where(Observation.started_at >= cutoff),
+            allowed,
+            Observation.camera_id,
+        )
         .order_by(Observation.started_at.desc())
         .limit(400)
     )

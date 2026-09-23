@@ -1,0 +1,19 @@
+{
+  "family": "known_face",
+  "id": "ex-known-face-001",
+  "kind": "caption",
+  "media": {
+    "note": "EXAMPLE",
+    "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "recorded_output": "A woman opens the front door with a key and steps inside.",
+  "source": "curated",
+  "truth": {
+    "event_present": true,
+    "must_include": [
+      "door"
+    ],
+    "must_not_include": [],
+    "reference": "Sara, a known household member, unlocks and enters the front door."
+  }
+}

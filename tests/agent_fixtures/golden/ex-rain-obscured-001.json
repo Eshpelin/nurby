@@ -1,0 +1,19 @@
+{
+  "family": "rain_obscured",
+  "id": "ex-rain-obscured-001",
+  "kind": "caption",
+  "media": {
+    "note": "EXAMPLE obscured lens",
+    "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "recorded_output": "The view is blurred by rain on the lens; nothing clearly visible and no activity.",
+  "source": "curated",
+  "truth": {
+    "event_present": false,
+    "must_include": [
+      "rain"
+    ],
+    "must_not_include": [],
+    "reference": "Heavy rain on the dome blurs the lens; scene not reliably visible."
+  }
+}

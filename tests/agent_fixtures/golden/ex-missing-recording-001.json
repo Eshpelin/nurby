@@ -1,0 +1,23 @@
+{
+  "family": "missing_recording",
+  "id": "ex-missing-recording-001",
+  "kind": "ask",
+  "media": {
+    "note": "EXAMPLE recording gap",
+    "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+  },
+  "question": "Who came to the door between 2pm and 3pm?",
+  "recorded_output": "There is no recording for 2pm-3pm on that camera, so I cannot say who came.",
+  "source": "curated",
+  "truth": {
+    "event_present": false,
+    "must_include": [
+      "no recording"
+    ],
+    "must_not_include": [
+      "definitely",
+      "certainly a"
+    ],
+    "reference": "No recording exists for that window, so it cannot be answered."
+  }
+}
