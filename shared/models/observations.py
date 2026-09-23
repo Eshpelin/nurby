@@ -185,7 +185,9 @@ class ObservationVlmPass(Base):
     pass_no: Mapped[int] = mapped_column(Integer, nullable=False)
     # live | attributes | temporal | anomaly | reduce
     lens: Mapped[str] = mapped_column(String(32), nullable=False)
+    prompt_key: Mapped[str] = mapped_column(String(64), default="legacy/unknown", nullable=False)
     prompt_version: Mapped[str] = mapped_column(String(16), default="v1", nullable=False)
+    prompt_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     provider_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -324,6 +326,18 @@ class Incident(Base):
         UUID(as_uuid=True), ForeignKey("journeys.id", ondelete="SET NULL"), nullable=True
     )
     embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
+    # Resolution workflow (#197). "seen" (acknowledged) and "resolved" are
+    # different outcomes: status tracks the latter. open | resolved | dismissed.
+    status: Mapped[str] = mapped_column(String(16), default="open", nullable=False, index=True)
+    resolution_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Optional owner for business pilots. Households can ignore it.
+    assigned_to_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

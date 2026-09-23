@@ -47,6 +47,34 @@ STREAM_ERROR_GIVE_UP = 3
 CAMERA_RETRY_KEY_PREFIX = "nurby:camera_retry:"  # per-camera next-retry hint for the UI
 MOTION_THRESHOLD = 0.01  # Minimum motion score to trigger event
 MOTION_COOLDOWN = 3.0  # Seconds between motion keyframe publishes
+# Content-health sampling (#212). Frozen/obscured detection runs on a coarse
+# cadence off already-decoded frames, so it adds no decode pass. One sample a
+# second is plenty for a minutes-scale freeze/obscuration window.
+CONTENT_HEALTH_SAMPLE_SECONDS = 1.0
+CONTENT_HEALTH_SETTING_TTL = 60.0  # re-read the enable flag at most this often
+
+
+def _frame_features(frame: "np.ndarray") -> tuple[int, float]:
+    """Cheap perceptual features for content-health (#212).
+
+    Returns ``(ahash, variance)``:
+
+    * ``ahash`` - a 64-bit average-hash of an 8x8 grayscale downsample. Two
+      genuinely different live frames practically never share it, so an
+      identical run means a frozen decoder, not a quiet scene.
+    * ``variance`` - grayscale variance of a 32x32 downsample. A covered or
+      wall-facing lens is near-uniform, so this collapses toward zero.
+    """
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    small = cv2.resize(gray, (8, 8), interpolation=cv2.INTER_AREA)
+    avg = small.mean()
+    bits = (small >= avg).flatten()
+    ahash = 0
+    for b in bits:
+        ahash = (ahash << 1) | int(b)
+    var_src = cv2.resize(gray, (32, 32), interpolation=cv2.INTER_AREA)
+    variance = float(np.var(var_src))
+    return ahash, variance
 # Post-capture (post-roll) is per-camera and configurable via
 # Camera.recording_clip_post; on_motion/on_object hold the recording open that
 # many seconds past the last trigger. See _should_record / _check_and_update_trigger.
@@ -136,6 +164,14 @@ class StreamWorker:
         self._prev_gray = None
         self._last_motion_publish = 0.0
         self._last_status: str | None = None
+        # Content-health (#212) state: lazily created detector + cached enable
+        # flag so the hot loop never awaits a settings read per frame.
+        self._content_detector = None
+        self._content_last_sample = 0.0
+        self._content_enabled = False
+        self._content_setting_checked = 0.0
+        self._content_detect_freeze = True
+        self._content_detect_obscure = True
         self._connected_this_cycle = False
         # Lockout-prevention state (see run()).
         self._consecutive_failures = 0
@@ -448,6 +484,14 @@ class StreamWorker:
                         if now - self._last_motion_publish >= MOTION_COOLDOWN:
                             self._last_motion_publish = now
                             await self._publish_keyframe(frame, motion_score)
+
+                # Content-health (#212): frozen/obscured detection on a coarse
+                # cadence off this already-decoded frame. Fully isolated so it
+                # can never disturb the motion/recording path.
+                try:
+                    await self._run_content_health(frame)
+                except Exception:
+                    logger.debug("content-health check error (ignored)", exc_info=True)
 
                 # Check for recording triggers from perception pipeline
                 if self.recording_mode in ("on_object", "clip") and frame_count % MOTION_FRAME_INTERVAL == 0:
@@ -1002,6 +1046,100 @@ class StreamWorker:
             logger.exception(
                 "Failed to publish camera status transition for %s", self.camera_id
             )
+
+    async def _content_health_on(self) -> bool:
+        """Whether content-health detection is enabled, cached briefly.
+
+        Enabled when the per-camera ``content_health_enabled`` flag is set
+        (issue #212) OR the global ``content_health_enabled`` app setting is
+        on. The per-path toggles (freeze / obscuration) are read alongside so
+        each detector path is individually controllable per camera.
+        """
+        now = time.monotonic()
+        if now - self._content_setting_checked >= CONTENT_HEALTH_SETTING_TTL:
+            self._content_setting_checked = now
+            global_on = False
+            try:
+                from shared.app_settings import get_setting
+                global_on = bool(await get_setting("content_health_enabled", False))
+            except Exception:
+                global_on = False
+            cam_on, freeze, obscure = False, True, True
+            try:
+                async with async_session() as db:
+                    camera = await db.get(Camera, self.camera_id)
+                    if camera is not None:
+                        cam_on = bool(getattr(camera, "content_health_enabled", False))
+                        freeze = bool(getattr(camera, "freeze_detection_enabled", True))
+                        obscure = bool(getattr(camera, "obscuration_detection_enabled", True))
+            except Exception:
+                pass
+            self._content_enabled = global_on or cam_on
+            # Rebuild the detector if the per-path flags changed.
+            if (freeze, obscure) != (self._content_detect_freeze, self._content_detect_obscure):
+                self._content_detect_freeze = freeze
+                self._content_detect_obscure = obscure
+                self._content_detector = None
+        return self._content_enabled
+
+    async def _run_content_health(self, frame) -> None:
+        """Sample the frame for freeze/obscuration and publish degraded /
+        recovered edges. Self-throttles; no-op unless enabled."""
+        now = time.monotonic()
+        if now - self._content_last_sample < CONTENT_HEALTH_SAMPLE_SECONDS:
+            return
+        self._content_last_sample = now
+        if not await self._content_health_on():
+            return
+        if self._content_detector is None:
+            from services.ingestion.content_health import ContentHealthDetector
+            self._content_detector = ContentHealthDetector(
+                detect_freeze=self._content_detect_freeze,
+                detect_obscure=self._content_detect_obscure,
+            )
+        ahash, variance = await asyncio.to_thread(_frame_features, frame)
+        edge = self._content_detector.update(ahash, variance, now)
+        if edge is not None:
+            await self._publish_content_health(edge, self._content_detector.reason)
+
+    async def _publish_content_health(self, edge: str, reason: str | None) -> None:
+        """Emit a ``degraded`` / ``recovered`` edge on the camera-status
+        stream and log it, WITHOUT changing the camera's primary status: a
+        frozen or obscured camera is still streaming, so recording/live must
+        stay untouched. The perception rule engine matches these to the
+        ``camera_degraded`` / ``camera_recovered`` triggers (#212)."""
+        try:
+            async with async_session() as db:
+                camera = await db.get(Camera, self.camera_id)
+                cam_name = (camera.name if camera else "") or ""
+                db.add(CameraStatusLog(
+                    camera_id=self.camera_id,
+                    status=edge,  # "degraded" | "recovered"
+                    previous_status=self._last_status,
+                    reason=reason or edge,
+                ))
+                await db.commit()
+        except Exception:
+            logger.exception("Failed to log content-health edge for %s", self.camera_id)
+            cam_name = ""
+        try:
+            r = await self._get_redis()
+            await r.xadd(
+                CAMERA_STATUS_STREAM_KEY,
+                {
+                    "camera_id": str(self.camera_id),
+                    "camera_name": cam_name,
+                    "camera_status": edge,
+                    "previous_status": self._last_status or "",
+                    "reason": reason or "",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+                maxlen=CAMERA_STATUS_STREAM_MAXLEN,
+                approximate=True,
+            )
+            logger.info("Camera %s content-health. %s (%s)", self.camera_id, edge, reason)
+        except Exception:
+            logger.exception("Failed to publish content-health edge for %s", self.camera_id)
 
     async def _update_camera_properties(self, width: int, height: int, fps: float):
         try:

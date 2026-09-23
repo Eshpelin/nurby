@@ -51,6 +51,33 @@ router = APIRouter()
 PHOTOS_DIR = os.path.join(settings.thumbnails_path, "persons")
 
 
+async def _query_token_user(token: str | None, db: AsyncSession) -> User:
+    user_id = require_query_token(token)
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or deactivated")
+    return user
+
+
+async def _person_has_scoped_sighting(person_id: uuid.UUID, user: User, db: AsyncSession) -> bool:
+    allowed = await allowed_camera_ids(user, db)
+    if allowed is ALL:
+        return True
+    row = (
+        await db.execute(
+            apply_camera_filter(
+                select(FaceCluster.first_camera_id)
+                .where(FaceCluster.person_id == person_id)
+                .where(FaceCluster.first_camera_id.is_not(None))
+                .limit(1),
+                allowed,
+                FaceCluster.first_camera_id,
+            )
+        )
+    ).first()
+    return row is not None
+
+
 @router.get("", response_model=list[PersonResponse])
 async def list_persons(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Person).order_by(Person.created_at))
@@ -130,9 +157,12 @@ async def get_cluster_thumbnail(
     db: AsyncSession = Depends(get_db),
 ):
     """Thumbnail auth accepts `?token=` query param so <img> tags work."""
-    require_query_token(token)
+    user = await _query_token_user(token, db)
     cluster = await db.get(FaceCluster, cluster_id)
-    if not cluster or not cluster.sample_thumbnail_path:
+    allowed = await allowed_camera_ids(user, db)
+    if not cluster or not cluster.sample_thumbnail_path or (
+        allowed is not ALL and cluster.first_camera_id not in allowed
+    ):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     path = resolve_inside(cluster.sample_thumbnail_path, settings.thumbnails_path)
     if path is None:
@@ -150,9 +180,12 @@ async def get_sample_thumbnail(
     db: AsyncSession = Depends(get_db),
 ):
     """Thumbnail auth accepts `?token=` query param so <img> tags work."""
-    require_query_token(token)
+    user = await _query_token_user(token, db)
     sample = await db.get(FaceClusterSample, sample_id)
-    if not sample or not sample.thumbnail_path or sample.cluster_id != cluster_id:
+    allowed = await allowed_camera_ids(user, db)
+    if not sample or not sample.thumbnail_path or sample.cluster_id != cluster_id or (
+        allowed is not ALL and sample.camera_id not in allowed
+    ):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     path = resolve_inside(sample.thumbnail_path, settings.thumbnails_path)
     if path is None:
@@ -1022,9 +1055,11 @@ async def get_person_photo(
     db: AsyncSession = Depends(get_db),
 ):
     """Photo auth accepts `?token=` query param so <img> tags work."""
-    require_query_token(token)
+    user = await _query_token_user(token, db)
     person = await db.get(Person, person_id)
     if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    if not await _person_has_scoped_sighting(person_id, user, db):
         raise HTTPException(status_code=404, detail="Person not found")
     if not person.photo_path:
         raise HTTPException(status_code=404, detail="No photo uploaded")

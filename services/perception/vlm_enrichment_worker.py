@@ -34,6 +34,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
+from services.perception.prompt_registry import version_for
 from shared.app_settings import get_setting
 from shared.database import async_session
 from shared.ffmpeg_safe import (
@@ -555,7 +556,9 @@ class EnrichmentManager:
             new_no = (obs.enrich_pass_count or 0) + 1
             db.add(ObservationVlmPass(
                 observation_id=obs_id, pass_no=new_no, lens=lens,
-                prompt_version="v1",
+                prompt_key=lens,
+                prompt_version=version_for(lens),
+                prompt_text=LENS_PROMPTS.get(lens),
                 provider_name=getattr(provider, "name", None),
                 model=getattr(provider, "default_model", None),
                 description=description, attributes=attributes,
@@ -584,7 +587,9 @@ class EnrichmentManager:
                 p.authoritative = False
             db.add(ObservationVlmPass(
                 observation_id=obs_id, pass_no=new_no, lens="summary",
-                prompt_version="v1",
+                prompt_key="summary",
+                prompt_version=version_for("summary"),
+                prompt_text=LENS_PROMPTS["summary"],
                 provider_name=getattr(provider, "name", None),
                 model=getattr(provider, "default_model", None),
                 description=summary, attributes=attributes, authoritative=True,

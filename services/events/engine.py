@@ -429,16 +429,25 @@ class RuleEngine:
         # those types never match real observations, so the catch-all
         # "any" stays scoped to actual footage.
         if data.get("event_kind") == "camera_status":
-            if trigger_type not in ("camera_offline", "camera_online"):
+            # camera_degraded / camera_recovered (#212) ride the same
+            # synthetic status stream as offline/online: a frozen, obscured
+            # or tampered view keeps the socket alive, so it is a distinct
+            # edge from a dead connection.
+            _status_triggers = {
+                "camera_offline": "offline",
+                "camera_online": "online",
+                "camera_degraded": "degraded",
+                "camera_recovered": "recovered",
+            }
+            if trigger_type not in _status_triggers:
                 return False
-            want = "offline" if trigger_type == "camera_offline" else "online"
-            if data.get("camera_status") != want:
+            if data.get("camera_status") != _status_triggers[trigger_type]:
                 return False
             cam_filter = pattern.get("camera_id")
             if cam_filter and str(cam_filter) != str(data.get("camera_id")):
                 return False
             return True
-        if trigger_type in ("camera_offline", "camera_online"):
+        if trigger_type in ("camera_offline", "camera_online", "camera_degraded", "camera_recovered"):
             return False
 
         # Incident lifecycle events: synthetic payloads emitted when the

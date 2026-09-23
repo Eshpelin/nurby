@@ -2,8 +2,6 @@
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
-
 from services.events import tuning
 
 NOW = datetime(2026, 6, 11, 3, 0, tzinfo=timezone.utc)  # 03:00, a "night" hour
@@ -115,3 +113,63 @@ def test_preview_reports_useful_lost():
     ]
     out = tuning.preview({"kind": "cooldown", "proposed_value": 300}, events)
     assert out["useful_lost"] == ["b"]  # a real recall cost is surfaced, not hidden
+
+
+# ── route: apply is reversible and never silent ──
+
+def _tuning_app(rule):
+    import uuid as _uuid
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+
+    from services.api.routes import tuning as route
+    from shared.auth import get_current_user
+    from shared.database import get_db
+
+    class _DB:
+        async def get(self, model, ident):
+            return rule
+        async def commit(self):
+            return None
+
+    app = FastAPI()
+    app.include_router(route.router, prefix="/api")
+    app.dependency_overrides[get_db] = lambda: _DB()
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id=_uuid.uuid4(), role="admin", is_active=True
+    )
+    return app
+
+
+def test_apply_cooldown_returns_previous_for_undo():
+    import uuid
+    from types import SimpleNamespace
+
+    from fastapi.testclient import TestClient
+
+    rule = SimpleNamespace(id=uuid.uuid4(), cooldown_seconds=60, conditions={}, severity="alert")
+    client = TestClient(_tuning_app(rule))
+    r = client.post(f"/api/rules/{rule.id}/apply-tuning",
+                    json={"field": "cooldown_seconds", "proposed_value": 300})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["previous_value"] == 60      # undo token
+    assert rule.cooldown_seconds == 300      # change applied
+    # Undo: apply the previous value back.
+    client.post(f"/api/rules/{rule.id}/apply-tuning",
+                json={"field": "cooldown_seconds", "proposed_value": 60})
+    assert rule.cooldown_seconds == 60
+
+
+def test_apply_rejects_unknown_field():
+    import uuid
+    from types import SimpleNamespace
+
+    from fastapi.testclient import TestClient
+
+    rule = SimpleNamespace(id=uuid.uuid4(), cooldown_seconds=60, conditions={}, severity="alert")
+    client = TestClient(_tuning_app(rule))
+    r = client.post(f"/api/rules/{rule.id}/apply-tuning",
+                    json={"field": "trigger_pattern", "proposed_value": {}})
+    assert r.status_code == 400

@@ -34,7 +34,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import component_health, heartbeat
-from shared.camera_access import ALL, AllowedCameras, apply_camera_filter
+from shared.camera_access import AllowedCameras, apply_camera_filter
 from shared.models import Camera, CameraStatusLog, Observation, Recording
 
 # Statuses that mean the stream was up.
@@ -51,6 +51,7 @@ class CameraCoverage:
     last_ai_caption_at: str | None = None
     last_recording_at: str | None = None
     outages: list[dict[str, Any]] = field(default_factory=list)
+    degradations: list[dict[str, Any]] = field(default_factory=list)
     gaps: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -63,16 +64,13 @@ class CameraCoverage:
             "last_ai_caption_at": self.last_ai_caption_at,
             "last_recording_at": self.last_recording_at,
             "outages": self.outages,
+            "degradations": self.degradations,
             "gaps": self.gaps,
         }
 
 
 def _iso(dt: datetime | None) -> str | None:
     return dt.isoformat() if dt else None
-
-
-def _fmt(dt: datetime) -> str:
-    return dt.astimezone().strftime("%b %d, %-I:%M %p").lower()
 
 
 def _pair_outages(rows: list[CameraStatusLog], window_to: datetime) -> dict[Any, list[dict]]:
@@ -96,6 +94,28 @@ def _pair_outages(rows: list[CameraStatusLog], window_to: datetime) -> dict[Any,
     for cam, since in open_since.items():
         by_cam.setdefault(cam, []).append(
             {"from": _iso(since), "to": None, "reason": "still offline"}
+        )
+    return by_cam
+
+
+def _pair_degradations(rows: list[CameraStatusLog], window_to: datetime) -> dict[Any, list[dict]]:
+    """Pair content-health degraded/recovered edges into visible intervals."""
+    by_cam: dict[Any, list[dict]] = {}
+    open_since: dict[Any, CameraStatusLog] = {}
+    for row in rows:
+        cam = row.camera_id
+        if row.status == "degraded":
+            open_since.setdefault(cam, row)
+        elif row.status == "recovered" and cam in open_since:
+            start = open_since.pop(cam)
+            by_cam.setdefault(cam, []).append(
+                {"from": _iso(start.timestamp), "to": _iso(row.timestamp),
+                 "reason": start.reason or "degraded"}
+            )
+    for cam, start in open_since.items():
+        by_cam.setdefault(cam, []).append(
+            {"from": _iso(start.timestamp), "to": None,
+             "reason": start.reason or "still degraded"}
         )
     return by_cam
 
@@ -154,7 +174,9 @@ async def compute_coverage(
         .order_by(CameraStatusLog.camera_id, CameraStatusLog.timestamp.asc())
     )
     status_q = apply_camera_filter(status_q, allowed, CameraStatusLog.camera_id)
-    outages = _pair_outages(list((await db.execute(status_q)).scalars().all()), window_to)
+    status_rows = list((await db.execute(status_q)).scalars().all())
+    outages = _pair_outages(status_rows, window_to)
+    degradations = _pair_degradations(status_rows, window_to)
 
     pipeline = await pipeline_health()
     pipeline_broken = (
@@ -166,6 +188,7 @@ async def compute_coverage(
     out: list[CameraCoverage] = []
     for cid, name, status, recording_mode in cameras:
         cam_outages = outages.get(cid, [])
+        cam_degradations = degradations.get(cid, [])
         obs_at = last_obs.get(cid)
         gaps: list[str] = []
 
@@ -180,6 +203,12 @@ async def compute_coverage(
                 )
             elif status not in _ONLINE:
                 gaps.append("Currently offline; live view is not being monitored.")
+        elif cam_degradations:
+            state = "degraded"
+            gaps.append(
+                f"Content health degraded for {len(cam_degradations)} interval(s); "
+                "that time cannot be treated as quiet."
+            )
         elif pipeline_broken:
             state = "unprocessed"
             if pipeline["vlm"] == component_health.FAIL:
@@ -207,6 +236,7 @@ async def compute_coverage(
                 last_ai_caption_at=_iso(last_caption.get(cid)),
                 last_recording_at=_iso(last_rec.get(cid)),
                 outages=cam_outages,
+                degradations=cam_degradations,
                 gaps=gaps,
             )
         )

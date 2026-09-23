@@ -78,8 +78,11 @@ services:
       # Falls back to the Docker host if that service is not running.
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     volumes:
-      - recordings:/data/recordings
-      - thumbnails:/data/thumbnails
+      # Set these to host paths in .env (for example D:/Nurby/recordings on
+      # Docker Desktop for Windows) to keep media off the system drive. The
+      # named-volume defaults preserve the existing installation behaviour.
+      - ${NURBY_RECORDINGS_VOLUME:-recordings}:/data/recordings
+      - ${NURBY_THUMBNAILS_VOLUME:-thumbnails}:/data/thumbnails
     depends_on:
       postgres:
         condition: service_healthy
@@ -188,7 +191,7 @@ services:
       # stdio (SDK permitting). stdio is the must-have default.
       NURBY_MCP_HTTP: ${NURBY_MCP_HTTP:-}
     volumes:
-      - thumbnails:/data/thumbnails:ro
+      - ${NURBY_THUMBNAILS_VOLUME:-thumbnails}:/data/thumbnails:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -226,8 +229,8 @@ services:
       # real RTSP/ONVIF cameras.
       OPENCV_FFMPEG_CAPTURE_OPTIONS: "user_agent;Mozilla/5.0"
     volumes:
-      - recordings:/data/recordings
-      - thumbnails:/data/thumbnails
+      - ${NURBY_RECORDINGS_VOLUME:-recordings}:/data/recordings
+      - ${NURBY_THUMBNAILS_VOLUME:-thumbnails}:/data/thumbnails
       # Persist the audio ML model caches so they download once and survive
       # image rebuilds. Without these, every rebuild loses the PANNs clap
       # tagger data (/root/panns_data) and the faster-whisper model
@@ -266,9 +269,9 @@ services:
       # Browser-like UA so hosted demo clips on stock-video CDNs stream.
       OPENCV_FFMPEG_CAPTURE_OPTIONS: "user_agent;Mozilla/5.0"
     volumes:
-      - recordings:/data/recordings
-      - thumbnails:/data/thumbnails
-      - audio:/data/audio
+      - ${NURBY_RECORDINGS_VOLUME:-recordings}:/data/recordings
+      - ${NURBY_THUMBNAILS_VOLUME:-thumbnails}:/data/thumbnails
+      - ${NURBY_AUDIO_VOLUME:-audio}:/data/audio
     depends_on:
       postgres:
         condition: service_healthy

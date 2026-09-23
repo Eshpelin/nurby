@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_query_token
-from shared.camera_access import allowed_camera_ids, apply_camera_filter
+from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.config import settings
 from shared.database import get_db
 from shared.models import Camera, Observation, User, Vehicle
@@ -266,19 +266,42 @@ async def vehicle_photo(
     """Best available photo. the vehicle's stored photo, else the most
     recent sighting thumbnail. Accepts a token query param so <img> tags
     work without a header."""
-    require_query_token(token)
+    user_id = require_query_token(token)
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or deactivated")
+    allowed = await allowed_camera_ids(user, db)
 
     v = await db.get(Vehicle, vehicle_id)
     if v is None:
         raise HTTPException(status_code=404, detail="Vehicle not found")
+    if allowed is not ALL and v.first_camera_id not in allowed:
+        # A vehicle's first sighting may be outside the current grant, but a
+        # later authorized observation can still make the identity visible.
+        visible_obs = (
+            await db.execute(
+                apply_camera_filter(
+                    select(Observation)
+                    .where(Observation.vehicle_detections.is_not(None)),
+                    allowed,
+                    Observation.camera_id,
+                )
+            )
+        ).scalars().all()
+        if not any(str(vehicle_id) in _vehicle_ids_in(o) for o in visible_obs):
+            raise HTTPException(status_code=404, detail="Vehicle not found")
 
     path = v.photo_path
     if not path or not os.path.exists(path):
         # Fall back to the latest sighting thumbnail.
         obs = (
             await db.execute(
-                select(Observation)
-                .where(Observation.vehicle_detections.is_not(None))
+                apply_camera_filter(
+                    select(Observation)
+                    .where(Observation.vehicle_detections.is_not(None)),
+                    allowed,
+                    Observation.camera_id,
+                )
                 .order_by(Observation.started_at.desc())
                 .limit(200)
             )

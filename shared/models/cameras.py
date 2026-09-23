@@ -123,6 +123,13 @@ class Camera(Base):
     # target; only the review surfaces drop it. Distinct from the
     # dashboard camera-wall hide, which is a per-browser layout choice.
     exclude_from_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Content-health detection (#212): flag a frozen/obscured/tampered view
+    # that keeps the stream "online" while coverage is silently gone. Master
+    # switch off by default; each detection path pre-armed so enabling the
+    # master is enough. See services/ingestion/content_health.py.
+    content_health_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    freeze_detection_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    obscuration_detection_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Master enable/disable. When False the ingestion manager will not
     # start (or will tear down) all workers for this camera: stream,
     # audio, STT, and MediaMTX path. The camera row is kept intact so

@@ -11,7 +11,7 @@ of individual frames.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,6 +25,8 @@ from shared.database import get_db
 from shared.models import Incident, Observation, User
 
 router = APIRouter()
+
+_INCIDENT_STATUSES = {"open", "resolved", "dismissed"}
 
 
 def _serialize(i: Incident) -> dict[str, Any]:
@@ -45,6 +47,12 @@ def _serialize(i: Incident) -> dict[str, Any]:
         "summary_provider_name": i.summary_provider_name,
         "conversation_id": str(i.conversation_id) if i.conversation_id else None,
         "created_at": i.created_at.isoformat(),
+        # Resolution workflow (#197).
+        "status": getattr(i, "status", "open"),
+        "resolution_reason": getattr(i, "resolution_reason", None),
+        "resolved_at": (r.isoformat() if (r := getattr(i, "resolved_at", None)) else None),
+        "resolved_by_user_id": (str(u) if (u := getattr(i, "resolved_by_user_id", None)) else None),
+        "assigned_to_user_id": (str(a) if (a := getattr(i, "assigned_to_user_id", None)) else None),
     }
 
 
@@ -71,6 +79,7 @@ async def list_incidents(
     camera_id: uuid.UUID | None = Query(default=None),
     finalized: bool | None = Query(default=None),
     signature_kind: str | None = Query(default=None),
+    status: str | None = Query(default=None, description="open | resolved | dismissed"),
     from_: datetime | None = Query(default=None, alias="from"),
     to: datetime | None = Query(default=None),
     limit: int = Query(default=50, le=200),
@@ -86,6 +95,10 @@ async def list_incidents(
     )
     if camera_id:
         q = q.where(Incident.camera_id == camera_id)
+    if status:
+        if status not in _INCIDENT_STATUSES:
+            raise HTTPException(status_code=422, detail="invalid incident status")
+        q = q.where(Incident.status == status)
     if finalized is not None:
         q = q.where(Incident.finalized.is_(finalized))
     if signature_kind:
@@ -137,7 +150,122 @@ async def get_incident(
         )
     payload = _serialize(row)
     payload["observations"] = [_serialize_obs(o) for o in obs_rows]
+    # Who handled / owns it, by name, so shared users see it without a second
+    # lookup (#197). Permission is already enforced on the incident's camera.
+    payload["ownership"] = await _ownership(row, db)
+    # Connect the (already permission- and retention-scoped) evidence export
+    # into the incident workflow so it is one click, not a separate hunt
+    # (#197). The client hits this endpoint with these params; the bundle
+    # endpoint re-checks the caller's camera ACL itself (#225/#201).
+    payload["evidence_export"] = {
+        "path": "/api/recordings/evidence-bundle",
+        "params": {
+            "camera_id": str(row.camera_id),
+            "from": row.started_at.isoformat(),
+            "to": row.last_seen_at.isoformat(),
+        },
+    }
     return payload
+
+
+async def _ownership(i: Incident, db: AsyncSession) -> dict[str, Any]:
+    """Resolve resolver/assignee display names for an incident."""
+    ids = [u for u in (i.resolved_by_user_id, i.assigned_to_user_id) if u]
+    names: dict[uuid.UUID, str] = {}
+    if ids:
+        rows = (
+            await db.execute(
+                select(User.id, User.display_name, User.email).where(User.id.in_(ids))
+            )
+        ).all()
+        names = {uid: (dn or email) for uid, dn, email in rows}
+    return {
+        "status": getattr(i, "status", "open"),
+        "resolved_by": names.get(i.resolved_by_user_id) if i.resolved_by_user_id else None,
+        "resolved_at": i.resolved_at.isoformat() if i.resolved_at else None,
+        "resolution_reason": i.resolution_reason,
+        "assigned_to": names.get(i.assigned_to_user_id) if i.assigned_to_user_id else None,
+    }
+
+
+class ResolveRequest(BaseModel):
+    reason: str | None = None
+
+
+@router.post("/{incident_id}/resolve")
+async def resolve_incident(
+    incident_id: uuid.UUID,
+    body: ResolveRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark an incident resolved (handled), recording who and when (#197)."""
+    row = await _get_incident_in_scope(incident_id, current_user, db)
+    row.status = "resolved"
+    row.resolution_reason = (body.reason if body else None)
+    row.resolved_at = datetime.now(timezone.utc)
+    row.resolved_by_user_id = current_user.id
+    await db.commit()
+    await db.refresh(row)
+    return {**_serialize(row), "ownership": await _ownership(row, db)}
+
+
+@router.post("/{incident_id}/dismiss")
+async def dismiss_incident(
+    incident_id: uuid.UUID,
+    body: ResolveRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Dismiss an incident (not worth acting on), recording who and when."""
+    row = await _get_incident_in_scope(incident_id, current_user, db)
+    row.status = "dismissed"
+    row.resolution_reason = (body.reason if body else None)
+    row.resolved_at = datetime.now(timezone.utc)
+    row.resolved_by_user_id = current_user.id
+    await db.commit()
+    await db.refresh(row)
+    return {**_serialize(row), "ownership": await _ownership(row, db)}
+
+
+@router.post("/{incident_id}/reopen")
+async def reopen_incident(
+    incident_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reopen a resolved/dismissed incident, clearing its resolution."""
+    row = await _get_incident_in_scope(incident_id, current_user, db)
+    row.status = "open"
+    row.resolution_reason = None
+    row.resolved_at = None
+    row.resolved_by_user_id = None
+    await db.commit()
+    await db.refresh(row)
+    return {**_serialize(row), "ownership": await _ownership(row, db)}
+
+
+class AssignRequest(BaseModel):
+    user_id: uuid.UUID | None = None  # null clears the assignment
+
+
+@router.post("/{incident_id}/assign")
+async def assign_incident(
+    incident_id: uuid.UUID,
+    body: AssignRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Assign (or unassign) an incident to a user, for business pilots (#197)."""
+    row = await _get_incident_in_scope(incident_id, current_user, db)
+    if body.user_id is not None:
+        assignee = await db.get(User, body.user_id)
+        if assignee is None or not getattr(assignee, "is_active", True):
+            raise HTTPException(status_code=404, detail="assignee not found")
+    row.assigned_to_user_id = body.user_id
+    await db.commit()
+    await db.refresh(row)
+    return {**_serialize(row), "ownership": await _ownership(row, db)}
 
 
 class ReinterpretRequest(BaseModel):

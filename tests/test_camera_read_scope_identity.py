@@ -97,8 +97,12 @@ class IdentityDB:
             return _fake_vehicle()
         if model.__name__ == "FaceCluster":
             return _fake_cluster()
-        # Journey / FaceCluster: a bare row exists; visibility is decided by
-        # the (empty, out-of-scope) incident scan, which must 404.
+        if model.__name__ == "Journey":
+            # A journey whose only segment is on a foreign camera: the
+            # segments-based scope check (#201) must hide it -> 404.
+            return SimpleNamespace(
+                id=ident, segments=[{"camera_id": str(self.foreign_camera)}],
+            )
         return SimpleNamespace(id=ident, camera_id=self.foreign_camera)
 
 
@@ -125,7 +129,6 @@ SCOPED = [
     ("/vehicles/activity/summary", ["observations"]),
     ("/vehicles/activity/" + str(uuid.uuid4()), ["observations"]),
     ("/persons/clusters/activity/summary", ["observations"]),
-    ("/journeys", ["incidents"]),
 ]
 
 

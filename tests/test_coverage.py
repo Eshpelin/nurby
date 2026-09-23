@@ -150,6 +150,24 @@ async def test_still_offline_interval_is_open(healthy_pipeline):
 
 
 @pytest.mark.asyncio
+async def test_degraded_interval_is_not_quiet(healthy_pipeline):
+    cid, name, _, mode = _cam()
+    cam = (cid, name, "live", mode)
+    logs = [
+        SimpleNamespace(camera_id=cid, status="degraded", reason="frozen",
+                        timestamp=NOW - timedelta(hours=1)),
+        SimpleNamespace(camera_id=cid, status="recovered", reason="moving",
+                        timestamp=NOW - timedelta(minutes=30)),
+    ]
+    db = _CovDB(cameras=[cam], status_rows=logs)
+    rep = await _run(db)
+    c = rep["cameras"][0]
+    assert c["evidence_state"] == "degraded"
+    assert c["degradations"][0]["reason"] == "frozen"
+    assert any("cannot be treated as quiet" in gap for gap in c["gaps"])
+
+
+@pytest.mark.asyncio
 async def test_broken_pipeline_is_unprocessed_not_quiet(monkeypatch):
     async def _alive(_s):
         return True

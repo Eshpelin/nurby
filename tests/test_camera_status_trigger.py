@@ -61,6 +61,45 @@ def test_camera_online_fires_on_recovery(monkeypatch):
     assert rec.call_count == 1
 
 
+def _degraded_event(camera_id: str = CAM) -> dict:
+    ev = _offline_event(camera_id)
+    ev["camera_status"] = "degraded"
+    ev["previous_status"] = "live"
+    ev["status_reason"] = "frozen"
+    return ev
+
+
+def test_camera_degraded_fires_on_degraded_event(monkeypatch):
+    rule = FakeRule(name="r", trigger_pattern={"type": "camera_degraded"})
+    eng, rec = install_engine(monkeypatch, [rule])
+    asyncio.run(eng.evaluate(_degraded_event()))
+    assert rec.call_count == 1
+
+
+def test_camera_degraded_ignores_offline_event(monkeypatch):
+    # A frozen/obscured view is a distinct edge from a dead connection.
+    rule = FakeRule(name="r", trigger_pattern={"type": "camera_degraded"})
+    eng, rec = install_engine(monkeypatch, [rule])
+    asyncio.run(eng.evaluate(_offline_event()))
+    assert rec.call_count == 0
+
+
+def test_camera_recovered_fires_on_recovered_event(monkeypatch):
+    rule = FakeRule(name="r", trigger_pattern={"type": "camera_recovered"})
+    eng, rec = install_engine(monkeypatch, [rule])
+    ev = _degraded_event()
+    ev["camera_status"] = "recovered"
+    asyncio.run(eng.evaluate(ev))
+    assert rec.call_count == 1
+
+
+def test_offline_trigger_ignores_degraded_event(monkeypatch):
+    rule = FakeRule(name="r", trigger_pattern={"type": "camera_offline"})
+    eng, rec = install_engine(monkeypatch, [rule])
+    asyncio.run(eng.evaluate(_degraded_event()))
+    assert rec.call_count == 0
+
+
 def test_camera_filter_in_pattern(monkeypatch):
     rule = FakeRule(
         name="r", trigger_pattern={"type": "camera_offline", "camera_id": CAM}
