@@ -216,6 +216,26 @@ TRIGGER_TYPES: list[dict] = [
         ],
     },
     {
+        "type": "camera_degraded",
+        "label": "Camera view degraded",
+        "description": "A connected camera is frozen, obscured, or unexpectedly re-aimed.",
+        "group": "system",
+        "fields": [
+            {"name": "camera_id", "type": "uuid", "required": False, "ref": "camera",
+             "description": "Only this camera. Omit to fire for any camera."},
+        ],
+    },
+    {
+        "type": "camera_recovered",
+        "label": "Camera view recovered",
+        "description": "A previously degraded camera view is healthy again.",
+        "group": "system",
+        "fields": [
+            {"name": "camera_id", "type": "uuid", "required": False, "ref": "camera",
+             "description": "Only this camera. Omit to fire for any camera."},
+        ],
+    },
+    {
         "type": "association_deviation",
         "label": "Breaks a known pattern",
         "description": (

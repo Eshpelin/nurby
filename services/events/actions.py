@@ -175,6 +175,7 @@ def _build_template_context(
         "rule_name": rule.name,
         "camera_id": observation_data.get("camera_id", ""),
         "camera_name": observation_data.get("camera_name") or observation_data.get("camera_id", ""),
+        "reason": observation_data.get("reason") or observation_data.get("status_reason") or "",
         "timestamp": observation_data.get("timestamp", ""),
         "timestamp_local": observation_data.get("timestamp_local")
         or _localize_timestamp(

@@ -236,7 +236,7 @@ export function RuleBuilder({
       if (s.formTriggerLineDirection !== "any") p.direction = s.formTriggerLineDirection;
       if (s.formTriggerObjectClass) p.label = s.formTriggerObjectClass;
     }
-    if (s.formTriggerType === "camera_offline" || s.formTriggerType === "camera_online" || s.formTriggerType === "incident_started" || s.formTriggerType === "incident_ended") {
+    if (["camera_offline", "camera_online", "camera_degraded", "camera_recovered"].includes(s.formTriggerType) || s.formTriggerType === "incident_started" || s.formTriggerType === "incident_ended") {
       if (s.formTriggerGeomCamId) p.camera_id = s.formTriggerGeomCamId;
     }
     return p;
@@ -309,7 +309,7 @@ export function RuleBuilder({
       if (s.formTriggerLineDirection !== "any") trigger_pattern.direction = s.formTriggerLineDirection;
       if (s.formTriggerObjectClass) trigger_pattern.label = s.formTriggerObjectClass;
     }
-    if (s.formTriggerType === "camera_offline" || s.formTriggerType === "camera_online" || s.formTriggerType === "incident_started" || s.formTriggerType === "incident_ended") {
+    if (["camera_offline", "camera_online", "camera_degraded", "camera_recovered"].includes(s.formTriggerType) || s.formTriggerType === "incident_started" || s.formTriggerType === "incident_ended") {
       if (s.formTriggerGeomCamId) trigger_pattern.camera_id = s.formTriggerGeomCamId;
     }
     if (s.formTriggerType === "plate_list") {

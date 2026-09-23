@@ -296,6 +296,12 @@ class CameraResponse(BaseModel):
     yolo_world_prompts: list[str] | None = None
     timezone: str | None = None
     scene_baseline_detection_enabled: bool = False
+    content_health_enabled: bool = False
+    freeze_detection_enabled: bool = True
+    obscuration_detection_enabled: bool = True
+    scene_change_detection_enabled: bool = False
+    health_status: str = "healthy"
+    health_reason: str | None = None
     summary_provider_id: uuid.UUID | None = None
     summary_mode: str = "off"
     summary_period_seconds: int = 1800

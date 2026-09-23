@@ -52,6 +52,7 @@ class CameraStatusWatcher:
             "camera_name": fields.get("camera_name") or "",
             "camera_status": fields.get("camera_status") or "",
             "previous_status": fields.get("previous_status") or None,
+            "reason": fields.get("reason") or "",
             "status_reason": fields.get("reason") or "",
             "timestamp": fields.get("timestamp") or "",
         }

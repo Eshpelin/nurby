@@ -201,6 +201,8 @@ export const TRIGGER_TYPES: TriggerType[] = [
   { value: "line_cross",      label: "Tripwire",        icon: Icon.tripwire,  desc: "A tracked object crosses a line.",                accent: "indigo", group: "spatial" },
   { value: "camera_offline",  label: "Camera offline",  icon: Icon.camOff,    desc: "A camera stops responding (tamper, power, network).", accent: "rose", group: "system" },
   { value: "camera_online",   label: "Camera recovered", icon: Icon.camOff,    desc: "A camera comes back after being offline.",        accent: "green",  group: "system" },
+  { value: "camera_degraded", label: "Camera view degraded", icon: Icon.camOff, desc: "A connected view is frozen, obscured, or unexpectedly re-aimed.", accent: "rose", group: "system" },
+  { value: "camera_recovered", label: "Camera view recovered", icon: Icon.camOff, desc: "A previously degraded camera view is healthy again.", accent: "green", group: "system" },
   { value: "incident_started", label: "Incident begins", icon: Icon.clock,     desc: "A new cluster of repeat sightings opens (same person/vehicle keeps appearing).", accent: "amber", group: "system" },
   { value: "incident_ended",  label: "Incident recap",  icon: Icon.clock,      desc: "An incident closes: fires once with duration, count, and an AI recap.", accent: "indigo", group: "system" },
   { value: "association_deviation", label: "Breaks a known pattern", icon: Icon.clock, desc: "A learned habit is broken: a different vehicle where one usually is, an odd hour, or one that normally happened by now has not.", accent: "amber", group: "system" },
@@ -519,9 +521,9 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
       ? `When ${what} begins`
       : `When ${what} ends (with recap)`;
   }
-  if (t === "camera_offline" || t === "camera_online") {
+  if (["camera_offline", "camera_online", "camera_degraded", "camera_recovered"].includes(t)) {
     const cid = pattern.camera_id as string | undefined;
-    const what = t === "camera_offline" ? "goes offline" : "comes back online";
+    const what = t === "camera_offline" ? "goes offline" : t === "camera_online" ? "comes back online" : t === "camera_degraded" ? "has a degraded view" : "has a recovered view";
     if (cid) {
       const camName = cameraLookup.get(cid) || cid.slice(0, 8);
       return `When ${camName} ${what}`;

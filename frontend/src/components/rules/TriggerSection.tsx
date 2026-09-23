@@ -631,7 +631,7 @@ export function TriggerSection(props: TriggerSectionProps) {
         </div>
       )}
 
-      {(formTriggerType === "camera_offline" || formTriggerType === "camera_online" || formTriggerType === "incident_started" || formTriggerType === "incident_ended") && (
+      {(["camera_offline", "camera_online", "camera_degraded", "camera_recovered"].includes(formTriggerType) || formTriggerType === "incident_started" || formTriggerType === "incident_ended") && (
         <div className="space-y-2">
           <label className="text-xs text-muted-foreground block mb-1.5">
             Which camera (optional)
@@ -676,6 +676,10 @@ export function TriggerSection(props: TriggerSectionProps) {
               ? "Fires when the camera stops responding: power cut, network drop, or tampering. Pair with a cooldown so a flaky camera does not spam you."
               : formTriggerType === "camera_online"
               ? "Fires when a camera recovers after being offline. Useful to close the loop on an outage alert."
+              : formTriggerType === "camera_degraded"
+              ? "Fires when a connected camera is frozen, obscured, or persistently pointed at an unexpected scene."
+              : formTriggerType === "camera_recovered"
+              ? "Fires when a previously degraded camera view returns to a healthy scene."
               : formTriggerType === "incident_started"
               ? "Fires the moment repeat sightings of the same person or vehicle cluster into a new incident."
               : "Fires once when an incident closes, carrying its duration, sighting count, and an AI-written recap your webhook, email, or Telegram message can include."}

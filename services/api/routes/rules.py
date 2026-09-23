@@ -25,6 +25,55 @@ from shared.schemas import (
 )
 
 router = APIRouter()
+
+DEFAULT_CAMERA_HEALTH_RULE_NAME = "Camera content health"
+DEFAULT_CAMERA_RECOVERY_RULE_NAME = "Camera content health recovered"
+
+
+async def _ensure_default_camera_health_rule(db: AsyncSession) -> None:
+    """Install the household's safe default camera-health notification.
+
+    This is intentionally lazy rather than a migration: rules are household
+    data, while migrations cannot reliably know which installation/user owns
+    them. The trigger is edge-based, so one degraded period produces one
+    notification and the recovery closes the loop.
+    """
+    existing = await db.execute(
+        select(Rule.name).where(Rule.name.in_([
+            DEFAULT_CAMERA_HEALTH_RULE_NAME,
+            DEFAULT_CAMERA_RECOVERY_RULE_NAME,
+        ]))
+    )
+    names = set(existing.scalars().all())
+    if DEFAULT_CAMERA_HEALTH_RULE_NAME not in names:
+        db.add(Rule(
+            name=DEFAULT_CAMERA_HEALTH_RULE_NAME,
+            enabled=True,
+            trigger_pattern={"type": "camera_degraded"},
+            conditions=None,
+            actions=[{
+                "type": "notify",
+                "message": "{camera_name} camera health degraded: {reason}",
+            }],
+            cooldown_seconds=3600,
+            severity="alert",
+        ))
+    if DEFAULT_CAMERA_RECOVERY_RULE_NAME not in names:
+        db.add(Rule(
+            name=DEFAULT_CAMERA_RECOVERY_RULE_NAME,
+            enabled=True,
+            trigger_pattern={"type": "camera_recovered"},
+            conditions=None,
+            actions=[{
+                "type": "notify",
+                "message": "{camera_name} camera health recovered",
+            }],
+            cooldown_seconds=3600,
+            severity="info",
+        ))
+    if names >= {DEFAULT_CAMERA_HEALTH_RULE_NAME, DEFAULT_CAMERA_RECOVERY_RULE_NAME}:
+        return
+    await db.commit()
 logger = logging.getLogger("nurby.api.rules")
 
 
@@ -155,6 +204,7 @@ async def _stale_rule_refs(db: AsyncSession, trigger_pattern, conditions, action
 
 @router.get("", response_model=list[RuleResponse])
 async def list_rules(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _ensure_default_camera_health_rule(db)
     result = await db.execute(select(Rule).order_by(Rule.created_at))
     return result.scalars().all()
 
@@ -621,13 +671,18 @@ def _synthesize_observation_for_trigger(
             "zone_name": trigger_pattern.get("zone_name") or "test-line",
         }]
 
-    elif t in ("camera_offline", "camera_online"):
+    elif t in ("camera_offline", "camera_online", "camera_degraded", "camera_recovered"):
         # Synthetic availability edge, matching what the ingestion worker
         # publishes on a real transition (see CameraStatusWatcher).
         pcam = trigger_pattern.get("camera_id") or cam
         obs["camera_id"] = str(pcam)
         obs["event_kind"] = "camera_status"
-        obs["camera_status"] = "offline" if t == "camera_offline" else "online"
+        obs["camera_status"] = {
+            "camera_offline": "offline",
+            "camera_online": "online",
+            "camera_degraded": "degraded",
+            "camera_recovered": "recovered",
+        }[t]
         obs["previous_status"] = "recording" if t == "camera_offline" else "offline"
         obs["status_reason"] = "synthesized test transition"
         obs["camera_name"] = "Test Camera"

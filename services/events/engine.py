@@ -312,6 +312,38 @@ class RuleEngine:
             return
         try:
             async with async_session() as db:
+                # Camera content-health alerts are a product default, not a
+                # setup task. Install them from the worker as well as the API
+                # list endpoint so the first degraded camera is actionable
+                # even if nobody has opened the Rules page yet.
+                default_rules = {
+                    "Camera content health": (
+                        "camera_degraded",
+                        "{camera_name} camera health degraded: {reason}",
+                        "alert",
+                    ),
+                    "Camera content health recovered": (
+                        "camera_recovered",
+                        "{camera_name} camera health recovered",
+                        "info",
+                    ),
+                }
+                existing_names = set((await db.execute(
+                    select(Rule.name).where(Rule.name.in_(list(default_rules)))
+                )).scalars().all())
+                for name, (trigger, message, severity) in default_rules.items():
+                    if name not in existing_names:
+                        db.add(Rule(
+                            name=name,
+                            enabled=True,
+                            trigger_pattern={"type": trigger},
+                            conditions=None,
+                            actions=[{"type": "notify", "message": message}],
+                            cooldown_seconds=3600,
+                            severity=severity,
+                        ))
+                if len(existing_names) < len(default_rules):
+                    await db.commit()
                 result = await db.execute(
                     select(Rule).where(Rule.enabled.is_(True))
                 )

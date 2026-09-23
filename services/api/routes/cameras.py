@@ -343,9 +343,27 @@ async def list_cameras(current_user: User = Depends(get_current_user), db: Async
         Camera.id,
     )
     result = await db.execute(query)
-    return await _attach_retry_hints(
-        [_camera_to_response(c) for c in result.scalars().all()]
-    )
+    cameras = result.scalars().all()
+    responses = [_camera_to_response(c) for c in cameras]
+    # Content-health edges do not replace the primary stream status: a frozen
+    # feed can still be connected. Surface the latest health edge alongside
+    # the camera summary so the camera wall/list can show the real problem.
+    camera_ids = {c.id for c in cameras}
+    if camera_ids:
+        logs = await db.execute(
+            select(CameraStatusLog)
+            .where(CameraStatusLog.camera_id.in_(camera_ids))
+            .where(CameraStatusLog.status.in_(["degraded", "recovered"]))
+            .order_by(CameraStatusLog.timestamp.desc())
+        )
+        latest: dict[uuid.UUID, CameraStatusLog] = {}
+        for log in logs.scalars():
+            latest.setdefault(log.camera_id, log)
+        for response in responses:
+            log = latest.get(response["id"])
+            response["health_status"] = "degraded" if log and log.status == "degraded" else "healthy"
+            response["health_reason"] = log.reason if log and log.status == "degraded" else None
+    return await _attach_retry_hints(responses)
 
 
 @router.get("/{camera_id}/actions")
