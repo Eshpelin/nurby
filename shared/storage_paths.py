@@ -130,7 +130,11 @@ async def _load_profile_roots() -> dict[str, str]:
                 select(Camera.id, StorageProfile.root)
                 .join(StorageProfile, Camera.storage_profile_id == StorageProfile.id)
                 .where(StorageProfile.enabled.is_(True))
+                .where(StorageProfile.kind == "local")
             )
+            # Only kind="local" profiles resolve as LOCAL roots; FTP-profile
+            # cameras keep the global root as their buffer (shared/
+            # remote_storage.py handles their remote destination).
             _profile_roots = {str(cam_id): root for cam_id, root in rows.all()}
     except Exception:
         logger.debug("profile root load failed", exc_info=True)

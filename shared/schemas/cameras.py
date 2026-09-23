@@ -362,19 +362,22 @@ class RecordingResponse(BaseModel):
 # -- Storage profiles (issue #251) --
 
 class StorageProfileCreate(BaseModel):
-    """A named media-storage location. v1 supports kind="local": an
-    absolute directory on a filesystem the backend can see (a second
-    drive, or a mount of an FTP/SMB/S3 remote)."""
+    """A named media-storage location. kind="local" is an absolute
+    directory on a filesystem the backend can see; kind="ftp" is a native
+    FTP server (config: host, port, username, password, passive, tls,
+    delete_after_upload) — the root is the remote base directory."""
 
     name: str = Field(min_length=1, max_length=120)
     root: str = Field(min_length=1, max_length=1024)
     kind: str = Field(default="local", pattern="^(local|smb|nfs|ftp|s3|webdav)$")
+    config: dict | None = None
 
 
 class StorageProfileUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     root: str | None = Field(default=None, min_length=1, max_length=1024)
     enabled: bool | None = None
+    config: dict | None = None
 
 
 class StorageProfileResponse(BaseModel):
@@ -384,5 +387,9 @@ class StorageProfileResponse(BaseModel):
     root: str
     enabled: bool
     created_at: datetime
+    # Kind-specific settings with the password stripped; has_password
+    # tells the UI a stored credential exists without exposing it.
+    config: dict | None = None
+    has_password: bool = False
 
     model_config = {"from_attributes": True}

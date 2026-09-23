@@ -57,6 +57,32 @@ def _resolve_path(file_path: str | None, camera_id=None) -> str | None:
     return os.path.join(os.path.abspath(settings.recordings_path), rel)
 
 
+async def _delete_remote_copy(rec) -> None:
+    """Best-effort removal of the FTP copy of an expired recording
+    (issue #269). Uses the profile snapshot stored at upload time, so the
+    remote is cleaned even after the camera moved to another profile. A
+    failed delete orphans one file on the remote — logged, not fatal."""
+    if rec.remote_state != "uploaded" or not rec.remote_profile_id or not rec.remote_path:
+        return
+    try:
+        from shared.models import StorageProfile
+        from shared.remote_storage import ftp_delete, parse_ftp_config
+
+        async with async_session() as db:
+            profile = await db.get(StorageProfile, rec.remote_profile_id)
+        cfg = parse_ftp_config(profile.config_enc) if profile else None
+        if cfg is None:
+            logger.warning(
+                "Cannot delete remote copy of %s: storage profile gone", rec.id
+            )
+            return
+        ok, detail = await ftp_delete(cfg, rec.remote_path)
+        if not ok:
+            logger.warning("Remote delete failed for %s: %s", rec.id, detail)
+    except Exception:
+        logger.exception("remote delete failed for %s", getattr(rec, "id", "?"))
+
+
 async def _resolve_camera_path(file_path: str | None, camera_id) -> str | None:
     """Recording-file variant: resolves against the ROOT THE CAMERA
     RECORDS INTO (its storage profile, else the global root)."""
@@ -520,6 +546,7 @@ class RetentionManager:
                     continue
                 freed_bytes += size
                 _remove_file(_resolve_path(rec.thumbnail_path))
+                await _delete_remote_copy(rec)
 
                 logger.info(
                     "Deleting recording for camera %s, file %s, reason %s",
@@ -583,6 +610,7 @@ class RetentionManager:
                     logger.warning("Skipping DB delete for recording %s, file still on disk", rec.id)
                     continue
                 _remove_file(_resolve_path(rec.thumbnail_path))
+                await _delete_remote_copy(rec)
 
                 logger.info(
                     "Deleting recording for camera %s, file %s, reason %s",

@@ -48,6 +48,10 @@ class StorageProfile(Base):
     kind: Mapped[str] = mapped_column(String(16), default="local", nullable=False)
     root: Mapped[str] = mapped_column(String(1024), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Kind-specific connection settings (FTP: host/port/username/passive/
+    # tls/delete_after_upload), JSON with the password sealed via the same
+    # Fernet cipher as camera credentials. Null for kind="local".
+    config_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -344,6 +348,18 @@ class Recording(Base):
     clean_frame_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     blur_status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
     blur_error: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Remote storage (issue #269, FTP profiles). Null remote_state = the
+    # recording is local-only (no FTP profile at write time). pending rows
+    # are picked up by the ingestion upload worker; uploaded recordings may
+    # no longer exist locally (delete_after_upload) and are served from the
+    # remote via an on-demand cache. remote_profile_id snapshots WHICH
+    # profile handled the upload so retention can clean up the remote even
+    # after the camera moves to a different profile.
+    remote_state: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    remote_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    remote_profile_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    remote_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
+    remote_error: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
 
 class PrivacyZone(Base):

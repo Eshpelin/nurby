@@ -2,6 +2,8 @@
 
 Calls the route helpers directly — no broker, no DB."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from services.api.routes.system import validate_storage_dir
@@ -160,8 +162,10 @@ def test_storage_overview_reports_three_roots_and_warnings(tmp_path, monkeypatch
     monkeypatch.setattr(settings, "audio_storage_path", str(tmp_path / "audio"))
 
     from services.api.routes.system import storage_location_status
+    from unittest.mock import AsyncMock
 
-    out = asyncio.run(storage_location_status(_current_user=None))
+    fake_db = SimpleNamespace(scalar=AsyncMock(return_value=0))
+    out = asyncio.run(storage_location_status(_current_user=None, db=fake_db))
     keys = [loc.key for loc in out.locations]
     assert keys == ["recordings", "thumbnails", "audio"]
     rec = out.locations[0]

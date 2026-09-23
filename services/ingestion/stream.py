@@ -1290,5 +1290,23 @@ class StreamWorker:
                     schedule_blur(recording.id)
                 except Exception:
                     logger.exception("Failed to schedule blur for %s", recording.id)
+
+                # Native FTP (issue #269): a camera with an FTP storage
+                # profile uploads this segment via the ingestion upload
+                # worker. The local copy is the buffer until then.
+                try:
+                    from shared.remote_storage import ftp_target_for
+
+                    target = await ftp_target_for(self.camera_id)
+                    if target is not None:
+                        from shared.remote_storage import remote_path_for
+
+                        profile_id, remote_root = target
+                        recording.remote_state = "pending"
+                        recording.remote_profile_id = uuid.UUID(profile_id)
+                        recording.remote_path = remote_path_for(remote_root, file_path)
+                        await db.commit()
+                except Exception:
+                    logger.debug("remote pending marking failed", exc_info=True)
         except Exception:
             logger.exception("Failed to save recording metadata")

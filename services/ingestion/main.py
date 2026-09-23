@@ -29,6 +29,14 @@ async def main():
     asyncio.create_task(retention.run())
     logger.info("Retention manager started as background task")
 
+    # Native FTP backend (issue #269): drain the buffer-then-upload outbox
+    # (recordings marked pending by the stream worker) + sweep the
+    # on-demand playback cache.
+    from services.ingestion.remote_upload import get_worker
+    upload_worker = get_worker()
+    asyncio.create_task(upload_worker.run())
+    logger.info("Remote upload worker started as background task")
+
     await manager.run()
 
 

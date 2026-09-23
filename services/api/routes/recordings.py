@@ -94,6 +94,9 @@ def _resolve_recording_path(recording: Recording) -> str:
     return _resolve_recording_path_raw(recording.file_path)
 
 
+from services.ingestion.remote_upload import fetch_to_cache
+
+
 async def _contained_recording_path(recording: Recording) -> str | None:
     """Absolute path of a recording, proven to live under the ROOT THE
     CAMERA RECORDS INTO (its storage profile, else the global root)."""
@@ -145,6 +148,13 @@ async def _get_recording_or_404(
 
 async def _get_disk_path_or_404(recording: Recording) -> str:
     path = await _contained_recording_path(recording)
+    if path is None or not os.path.exists(path):
+        # Remote storage (issue #269): the local buffer copy is removed
+        # after a verified FTP upload — fetch it back into the playback
+        # cache before giving up.
+        cached = await fetch_to_cache(recording)
+        if cached:
+            return cached
     if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):

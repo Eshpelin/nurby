@@ -915,7 +915,10 @@ def _probe_dir(path: str) -> StorageLocationInfo:
 
 
 @router.get("/system/storage", response_model=StorageLocationStatus)
-async def storage_location_status(_current_user: User = Depends(require_admin)):
+async def storage_location_status(
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     """Storage overview (issue #266): recordings / thumbnails / audio
     roots with writable status and capacity, plus deployment context.
     Admin-only: paths reveal host layout."""
@@ -946,6 +949,19 @@ async def storage_location_status(_current_user: User = Depends(require_admin)):
             warnings.append(
                 f"{loc.key.capitalize()} location {loc.path} is not writable by Nurby."
             )
+    # Remote uploads (issue #269): stuck recordings live only in the local
+    # buffer and will age out of retention without ever reaching the FTP
+    # server — that is exactly what the operator needs to know about.
+    from shared.models import Recording
+
+    failed_remote = await db.scalar(
+        select(func.count()).select_from(Recording).where(Recording.remote_state == "failed")
+    )
+    if failed_remote:
+        warnings.append(
+            f"{failed_remote} recording(s) failed to upload to their FTP location "
+            "and currently exist only in the local buffer."
+        )
         if loc.free_bytes is not None and loc.free_bytes < LOW_DISK_FREE_BYTES:
             low = True
             warnings.append(

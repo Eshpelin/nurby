@@ -53,13 +53,36 @@ storage as a POSIX path, playback (HTTP range requests) and retention
 keep working unchanged, and the remote's flakiness stays an ops concern
 rather than an app code path.
 
-**kind="ftp" / "s3" / native writers (designed, not built)** — a
-write-through uploader would remove the mount fragility but needs its
-own subsystem: an upload outbox with retries after local buffering, a
-deletion policy synced with retention, and playback that either proxies
-off-remote or falls back to a local cache. The `kind` column exists so
-that project slots in without a migration; until then the create API
-rejects non-local kinds with a pointer here.
+**kind="ftp" (implemented, native)** — a real FTP/FTPS writer, built as
+**buffer-then-upload** so recording never depends on the network:
+
+1. Segments are written locally first (the camera keeps buffering to the
+   global root — an FTP profile never changes the local write path).
+2. At finalize time the recording is marked `pending` with a snapshot of
+   which profile owns it (`remote_profile_id`).
+3. The ingestion **upload worker** (30 s cadence, oldest first) transfers
+   segments with size verification, then deletes the local copy
+   (`delete_after_upload`, default on). Failures retry up to 20 attempts;
+   the terminal `failed` state keeps the local copy and surfaces in the
+   storage overview warnings.
+4. **Playback** falls back to FTP: the first request for an
+   uploaded-and-removed recording downloads it into
+   `<recordings root>/.remote_cache` (LRU-capped at ~20 GB) and serves
+   from there, so HTTP range requests and seeking work unchanged.
+5. **Retention** deletes the remote object using the profile snapshot.
+
+Credentials are Fernet-sealed on the profile (`config_enc`) and never
+echoed by the API (responses carry a masked config plus `has_password`).
+
+Known v1 limitations: agent/VLM clip analysis reads the local buffer, so
+segments already uploaded and removed are analyzed best-effort only (the
+upload cadence leaves near-time analysis working); changing a camera's
+profile or deleting one can orphan already-uploaded remote files (the
+per-recording snapshot covers retention, not reassignments).
+
+**kind="s3" / "webdav" (designed, not built)** — the same
+buffer-then-upload skeleton applies (tracked in #270 for S3); the create
+API rejects unimplemented kinds with a pointer here.
 
 ## Where resolution happens (code map)
 
