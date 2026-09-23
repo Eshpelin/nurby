@@ -171,6 +171,20 @@ class CameraManager:
             result = await db.execute(select(Camera).where(Camera.enabled.is_(True)))
             cameras = {c.id: c for c in result.scalars().all()}
 
+        # MQTT producer bookkeeping (docs/integrations/mqtt.md): feed the
+        # slug cache the workers read (they only know their camera id)
+        # and sweep motion OFF edges after the quiet delay.
+        try:
+            from services.integrations.mqtt import publishers as mqtt_pub
+            from shared.mqtt_topics import camera_slug
+
+            for cam in cameras.values():
+                mqtt_pub.set_camera_slug(cam.id, camera_slug(cam.name, cam.id))
+            mqtt_pub.prune_slugs(cameras.keys())
+            await mqtt_pub.sweep_motion_off()
+        except Exception:
+            logger.debug("mqtt producer sync failed", exc_info=True)
+
         # Keep MediaMTX paths aligned with DB state before starting workers
         # so stream workers can pull the muxed RTSP copy. Handles USB push
         # bridges, RTSP/HLS pull-source registration, and stale path

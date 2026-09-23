@@ -115,6 +115,16 @@ async def _broadcast_fired(event_id, rule, observation_data: dict, severity: str
     except Exception:
         logger.debug("event_fired broadcast failed", exc_info=True)
 
+    # MQTT fan-out (docs/integrations/mqtt.md). Rides the same Redis bus
+    # as the WS relay: fire-and-forget, bridged to the broker by the API
+    # process only when the integration is enabled.
+    try:
+        from services.integrations.mqtt.publishers import publish_rule_event
+
+        await publish_rule_event(event_id, rule, observation_data, severity)
+    except Exception:
+        logger.debug("mqtt event publish failed", exc_info=True)
+
 
 async def fire_actions(
     rule,

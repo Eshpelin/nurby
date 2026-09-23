@@ -78,7 +78,7 @@ async def handle_command(
 
     if restart_stream:
         try:
-            r = await bus_redis()
+            r = bus_redis()
             await r.set(f"{STREAM_RESTART_KEY_PREFIX}{camera_id}", "1")
         except Exception:
             logger.debug("stream restart signal failed", exc_info=True)

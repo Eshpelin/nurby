@@ -496,6 +496,15 @@ class StreamWorker:
                             self._last_motion_publish = now
                             await self._publish_keyframe(frame, motion_score)
 
+                    # MQTT periodic live frame (docs/integrations/mqtt.md).
+                    # Rate-limited internally; no-op when disabled.
+                    try:
+                        from services.integrations.mqtt import publishers as mqtt_pub
+
+                        await mqtt_pub.maybe_publish_frame(self.camera_id, frame, _encode_jpeg)
+                    except Exception:
+                        logger.debug("mqtt frame publish failed", exc_info=True)
+
                 # Content-health (#212): frozen/obscured detection on a coarse
                 # cadence off this already-decoded frame. Fully isolated so it
                 # can never disturb the motion/recording path.
@@ -742,6 +751,14 @@ class StreamWorker:
                                     self._last_motion_publish = now
                                     await self._publish_keyframe(frame, motion_score)
 
+                            # MQTT periodic live frame (docs/integrations/mqtt.md).
+                            try:
+                                from services.integrations.mqtt import publishers as mqtt_pub
+
+                                await mqtt_pub.maybe_publish_frame(self.camera_id, frame, _encode_jpeg)
+                            except Exception:
+                                logger.debug("mqtt frame publish failed", exc_info=True)
+
                     except httpx.HTTPError:
                         logger.warning("Snapshot fetch failed for camera %s", self.camera_id)
 
@@ -858,6 +875,16 @@ class StreamWorker:
             logger.debug("Published motion keyframe for camera %s", self.camera_id)
         except Exception:
             logger.exception("Failed to publish keyframe to Redis")
+
+        # MQTT motion fan-out (docs/integrations/mqtt.md): publishes the
+        # ON edge on the first keyframe after quiet; the manager loop
+        # sweeps the delayed OFF.
+        try:
+            from services.integrations.mqtt import publishers as mqtt_pub
+
+            await mqtt_pub.note_motion(self.camera_id, mqtt_pub.slug_for(self.camera_id) or "")
+        except Exception:
+            logger.debug("mqtt motion publish failed", exc_info=True)
 
     def _segment_path(self, start: datetime) -> str:
         date_dir = start.strftime("%Y-%m-%d")

@@ -13,3 +13,9 @@ so that import crash-loops the process.
 # lost. Tamper alerting cannot ride a fire-and-forget channel.
 CAMERA_STATUS_STREAM_KEY = "nurby:camera_status"
 CAMERA_STATUS_STREAM_MAXLEN = 500
+
+# Per-camera stream-restart signal. Set (existence-check key) by the
+# camera PATCH route and the MQTT bridge command handlers; the ingestion
+# manager's sync loop consumes and deletes it to rebuild the worker
+# immediately instead of waiting for the next config-diff pass.
+STREAM_RESTART_KEY_PREFIX = "nurby:stream_restart:"

@@ -44,6 +44,10 @@ dependencies = [
     # Nurby MCP server (services/mcp/server.py) that re-exports the agent
     # tool registry to MCP clients like Claude Desktop.
     "mcp>=1.2.0",
+    # asyncio MQTT client for the Home Assistant integration
+    # (services/integrations/mqtt). BSD-3-Clause; no connection is made
+    # unless mqtt_enabled is turned on.
+    "aiomqtt>=2.3",
 ]
 
 [project.optional-dependencies]

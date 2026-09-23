@@ -336,6 +336,28 @@ DEFAULTS: dict[str, Any] = {
     # home | away | night. Read once per rule-engine tick. Rules gate on it
     # through conditions.modes; a rule without that key fires in every mode.
     "household_mode": "home",
+    # ── MQTT / Home Assistant (docs/integrations/mqtt.md) ────────────────
+    # Master switch. When false no broker connection is made and
+    # producers' bus publishes are simply never drained.
+    "mqtt_enabled": False,
+    "mqtt_host": "",
+    "mqtt_port": 1883,
+    "mqtt_username": "",
+    # Fernet-sealed at write time (system.py PATCH), unsealed by the
+    # bridge. Write-only through the settings API: never echoed back.
+    "mqtt_password": "",
+    "mqtt_tls": False,
+    # Root of Nurby's topic tree. Change it (with client_id) to run
+    # several Nurby instances against one broker, like Frigate.
+    "mqtt_topic_prefix": "nurby",
+    "mqtt_client_id": "nurby",
+    # Emit Home Assistant discovery configs under homeassistant/... .
+    "mqtt_discovery_enabled": True,
+    # Seconds between {prefix}/stats publishes.
+    "mqtt_stats_interval": 60,
+    # Seconds between periodic JPEG publishes on cameras/{slug}/snapshot.
+    # 0 disables the periodic frame; observation snapshots always publish.
+    "mqtt_camera_frame_interval": 10,
 }
 
 

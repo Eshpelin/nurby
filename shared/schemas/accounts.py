@@ -86,6 +86,18 @@ class SystemSettingsResponse(BaseModel):
     # readable; the service account is write-only (it holds a private
     # key) and is deliberately absent from this response model.
     push_firebase_client_config: dict | None = None
+    # MQTT / Home Assistant (docs/integrations/mqtt.md). mqtt_password is
+    # write-only (Fernet-sealed at rest) and deliberately absent here.
+    mqtt_enabled: bool = False
+    mqtt_host: str = ""
+    mqtt_port: int = 1883
+    mqtt_username: str = ""
+    mqtt_tls: bool = False
+    mqtt_topic_prefix: str = "nurby"
+    mqtt_client_id: str = "nurby"
+    mqtt_discovery_enabled: bool = True
+    mqtt_stats_interval: int = 60
+    mqtt_camera_frame_interval: int = 10
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -130,6 +142,20 @@ class SystemSettingsUpdate(BaseModel):
     # messagingSenderId) is handed to mobile apps via GET /api/push/config.
     push_fcm_service_account: dict | None = None
     push_firebase_client_config: dict | None = None
+    # MQTT / Home Assistant. The password is sealed with the camera
+    # credential cipher by the route before it lands in app_settings and
+    # is never echoed back (absent from SystemSettingsResponse).
+    mqtt_enabled: bool | None = None
+    mqtt_host: str | None = Field(default=None, max_length=255)
+    mqtt_port: int | None = Field(default=None, ge=1, le=65535)
+    mqtt_username: str | None = Field(default=None, max_length=255)
+    mqtt_password: str | None = Field(default=None, max_length=1024)
+    mqtt_tls: bool | None = None
+    mqtt_topic_prefix: str | None = Field(default=None, max_length=64, pattern="^[A-Za-z0-9_./-]*$")
+    mqtt_client_id: str | None = Field(default=None, max_length=64, pattern="^[A-Za-z0-9_.-]*$")
+    mqtt_discovery_enabled: bool | None = None
+    mqtt_stats_interval: int | None = Field(default=None, ge=5, le=86400)
+    mqtt_camera_frame_interval: int | None = Field(default=None, ge=0, le=3600)
 
 
 # -- User schemas --

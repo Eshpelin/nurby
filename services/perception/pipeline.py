@@ -1381,6 +1381,26 @@ class PerceptionPipeline:
                     obs.id, camera_id, len(detections),
                 )
 
+                # MQTT snapshot fan-out (docs/integrations/mqtt.md): best
+                # frame onto the camera's snapshot topic so the HA camera
+                # entity updates on every observation. Fire-and-forget.
+                try:
+                    cam_mqtt = await self._get_camera_config(camera_id)
+                    if cam_mqtt is not None and thumbnail_path:
+                        from services.integrations.mqtt.config import current_prefix
+                        from services.integrations.mqtt.publishers import (
+                            publish_snapshot_from_path,
+                        )
+                        from shared.mqtt_topics import camera_slug
+
+                        await publish_snapshot_from_path(
+                            camera_slug(cam_mqtt.name, camera_id),
+                            await current_prefix(),
+                            thumbnail_path,
+                        )
+                except Exception:
+                    logger.debug("mqtt observation publish failed", exc_info=True)
+
                 # Invalidate starred recaps when any identified face appears.
                 if person_detections and person_detections.get("faces"):
                     person_ids = [

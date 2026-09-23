@@ -31,6 +31,7 @@ from services.api.routes import (
     invites,
     journeys,
     mentions,
+    mqtt,
     notifications,
     observations,
     ollama_deploy,
@@ -152,6 +153,12 @@ async def lifespan(app: FastAPI):
     from services.notify.telegram_poller import TelegramPollerManager
     tg_manager = TelegramPollerManager()
     tg_task = asyncio.create_task(tg_manager.run())
+    # MQTT / Home Assistant bridge supervisor (docs/integrations/mqtt.md).
+    # No-op until mqtt_enabled is flipped in settings; producers in the
+    # perception/ingestion processes fan in through the Redis bus.
+    from services.integrations.mqtt import get_bridge
+    mqtt_bridge = get_bridge()
+    mqtt_bridge.start()
     # Scheduled reports. Saved agent questions on a clock ("what was Simon
     # doing all day, every night at 7 PM"), delivered to notify/email.
     from services.api.report_scheduler import ReportScheduler
@@ -178,6 +185,7 @@ async def lifespan(app: FastAPI):
     warm_grounding_task.cancel()
     tg_manager.stop()
     tg_task.cancel()
+    mqtt_bridge.cancel()
     try:
         await _tg_shutdown()
     except Exception:
@@ -311,6 +319,7 @@ app.include_router(journeys.router, prefix="/api/journeys", tags=["journeys"])
 app.include_router(daily_digest.router, prefix="/api/daily-digest", tags=["daily-digest"])
 app.include_router(privacy_zones.router, prefix="/api/privacy-zones", tags=["privacy-zones"])
 app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
+app.include_router(mqtt.router, prefix="/api", tags=["mqtt"])
 app.include_router(admin_stats.router, prefix="/api/admin", tags=["admin"])
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(household.router, prefix="/api/household", tags=["household"])

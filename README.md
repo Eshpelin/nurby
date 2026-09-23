@@ -88,6 +88,7 @@ Nurby is free, open-source software for recording and understanding your securit
 - **It understands, not just detects.** YOLO finds objects, faces are recognized and grouped into people, and a vision model captions scenes. A built-in agent answers questions over all of it.
 - **FindAnything: search beyond the ~80 COCO classes.** YOLO only knows a fixed handful of object types. When you look for something it never detects, a *chicken*, a *red ladder*, a *child in a blue jacket*, Nurby falls back to NVIDIA's open-vocabulary **[LocateAnything](https://huggingface.co/nvidia/LocateAnything-3B)** grounding model and points at it in your footage anyway, drawing boxes on what it finds. Describe anything in plain words and Nurby locates it, an open-world dictionary instead of a fixed label set, which makes search genuinely intelligent. It runs locally on an NVIDIA GPU or Apple Silicon (no account or token), and the same capability is available as a Rules "visual condition" ("when a chicken is in the coop, do X"). Off by default; one toggle enables it.
 - **Automation that reaches the real world.** Rules can notify, email, call webhooks, sound physical alarms, and gate on a second AI confirmation before firing.
+- **Home Assistant out of the box.** MQTT support with automatic HA discovery: every camera shows up as motion sensors, detection events, a live-snapshot tile, and detect/record switches. Frigate-style topic contract for Node-RED and friends; bundled Mosquitto one compose profile away.
 - **Programmable.** A documented REST API, long-lived API keys, signed webhooks, and an MCP server let you build on top of it.
 
 ## Real-world use cases
@@ -292,6 +293,7 @@ Want more control (custom passwords, HTTPS, a public address)? See [Configuratio
 - Long-lived API keys (`nrb_...`) for scripts, scoped and revocable, alongside user JWTs.
 - Outbound webhooks with HMAC-SHA256 body signing, automatic retries with backoff, and standing event subscriptions independent of any single rule. Every alert can carry a direct link to its footage clip.
 - Email via SMTP and Telegram with inline acknowledge, mute, and snooze buttons.
+- MQTT with Home Assistant discovery: cameras, motion, detections, snapshots, and per-camera switches appear in HA automatically (a bundled Mosquitto is one compose profile away). See [Home Assistant](docs/integrations/home-assistant.md) and the [MQTT topic contract](docs/integrations/mqtt.md).
 
 ### Operations
 - Live dashboard with a camera grid, hover PTZ controls, an activity timeline, and a 24h digest with a people gallery.
@@ -299,7 +301,7 @@ Want more control (custom passwords, HTTPS, a public address)? See [Configuratio
 - Notification center, per-camera storage and retention views, dark and light themes with no flash on load.
 - JWT auth with bcrypt, a first-run admin setup, and invite keys with per-camera access grants.
 
-See the [docs](docs/) for deeper guides. [REST API](docs/api.md), [webhooks](docs/webhooks.md), [physical devices](docs/devices.md), [MCP server](docs/mcp.md), and the [agent design](docs/agent-design.md).
+See the [docs](docs/) for deeper guides. [REST API](docs/api.md), [webhooks](docs/webhooks.md), [physical devices](docs/devices.md), [MCP server](docs/mcp.md), [Home Assistant](docs/integrations/home-assistant.md), and the [agent design](docs/agent-design.md).
 
 ## Architecture
 
@@ -461,6 +463,7 @@ nurby/
 |   +-- ingestion/      RTSP decode, motion, recording, retention
 |   +-- perception/     YOLO, tracking, face + body re-id, VLM, audio, blur
 |   +-- events/         rule engine, actions, webhooks, email, Telegram
+|   +-- integrations/   MQTT / Home Assistant bridge (discovery, commands)
 |   +-- agent/          tool-use Q&A driver, tools, summarizer
 |   +-- mcp/            MCP server exposing read tools
 |   +-- search/         vector search, embeddings, digests

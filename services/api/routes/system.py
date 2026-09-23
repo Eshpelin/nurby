@@ -564,6 +564,20 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     # SystemSettingsResponse), because it contains a private key.
     "push_fcm_service_account",
     "push_firebase_client_config",
+    # MQTT / Home Assistant (docs/integrations/mqtt.md). The password is
+    # write-only like the FCM service account: PATCHable, sealed with the
+    # camera credential cipher before storage, never echoed back.
+    "mqtt_enabled",
+    "mqtt_host",
+    "mqtt_port",
+    "mqtt_username",
+    "mqtt_password",
+    "mqtt_tls",
+    "mqtt_topic_prefix",
+    "mqtt_client_id",
+    "mqtt_discovery_enabled",
+    "mqtt_stats_interval",
+    "mqtt_camera_frame_interval",
 )
 
 
@@ -627,6 +641,13 @@ async def patch_settings(
 
     if "system_timezone" in updates:
         _validate_timezone(updates["system_timezone"])
+
+    # Store the MQTT broker password sealed with the same cipher as
+    # camera credentials; the bridge unseals it at connect time.
+    if updates.get("mqtt_password"):
+        from shared.camera_secrets import seal
+
+        updates["mqtt_password"] = seal(str(updates["mqtt_password"]))
 
     for k, v in updates.items():
         await set_setting(k, v)

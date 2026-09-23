@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { extractApiError } from "@/lib/api-error";
 import TelegramSection from "@/components/TelegramSection";
+import MqttSection from "@/components/MqttSection";
 import { VoiceSettingsCard } from "@/components/voice/VoiceSettingsCard";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
 import { PairMobileCard } from "@/components/PairMobileCard";
@@ -999,6 +1000,9 @@ export default function SettingsPage() {
 
         {/* Telegram notifications */}
         <TelegramSection />
+
+        {/* MQTT / Home Assistant */}
+        <MqttSection />
 
         {/* Invite Keys card */}
         {(() => {

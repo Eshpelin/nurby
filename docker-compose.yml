@@ -121,6 +121,25 @@ services:
     #           count: all
     #           capabilities: [gpu]
 
+  # Bundled MQTT broker for the Home Assistant integration
+  # (docs/integrations/mqtt.md). Behind the "mqtt" profile so a plain
+  # `docker compose up` never starts it — most HA users already run a
+  # broker. Enable with:
+  #   docker compose --profile mqtt up -d mosquitto
+  # Then set mqtt_enabled=true and mqtt_host=mosquitto in Settings -> MQTT.
+  # 1883 is published for HA on another box. allow_anonymous is ON for a
+  # frictionless LAN start; add a password_file in config/mosquitto.conf
+  # (and set mqtt_username/mqtt_password) before exposing it further.
+  mosquitto:
+    profiles: ["mqtt"]
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+
   # FindAnything / visual grounding (LocateAnything-3B). The model is ~6GB and
   # needs a datacenter NVIDIA GPU, so it is behind the "grounding" profile: a
   # plain `docker compose up` never builds or starts it. Enable with:
@@ -315,3 +334,4 @@ volumes:
   grounding_models:
   panns_data:
   hf_cache:
+  mosquitto_data:
