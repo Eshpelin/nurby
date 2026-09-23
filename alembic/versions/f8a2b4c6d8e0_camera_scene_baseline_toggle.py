@@ -1,10 +1,11 @@
 """Add the opt-in VLM scene-baseline content-health toggle (#212)."""
 
 import sqlalchemy as sa
+
 from alembic import op
 
-revision = "e4f5a6b7c8d9"
-down_revision = "c1d2e3f4a5b6"
+revision = "f8a2b4c6d8e0"
+down_revision = "f7a1b2c3d4e5"
 branch_labels = None
 depends_on = None
 
