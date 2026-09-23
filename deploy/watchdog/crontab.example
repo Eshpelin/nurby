@@ -1,0 +1,13 @@
+# Off-box dead-man's switch for Nurby (#211), via plain cron.
+#
+# Install this on a SECOND machine (a VPS, a Raspberry Pi on a different
+# power strip and network, a friend's always-on box) - NOT on the Nurby
+# host, which is the thing that may be down.
+#
+#   crontab -e   # then paste the line below, edited for your paths/URL
+#
+# Every 2 minutes. With NURBY_FAIL_THRESHOLD=2 that gives an honest
+# detection window of ~4 minutes plus the beacon's stale_after_seconds
+# (a just-died worker can read alive until its heartbeat key expires).
+
+*/2 * * * * NURBY_BEACON_URL="https://your-nurby.example.com/api/beacon" TELEGRAM_BOT_TOKEN="123456:abc" TELEGRAM_CHAT_ID="99999" NURBY_FAIL_THRESHOLD="2" NURBY_STATE_FILE="/var/lib/nurby-watchdog/state.json" /usr/bin/python3 /opt/nurby/deploy/watchdog/nurby_watchdog.py >> /var/log/nurby-watchdog.log 2>&1

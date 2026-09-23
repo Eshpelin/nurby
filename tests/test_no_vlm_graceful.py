@@ -101,8 +101,7 @@ def test_journey_reinterpret_no_provider_returns_graceful_payload(monkeypatch):
 
     out = _run(
         journey_routes.reinterpret_journey(
-            journey_id=row.id, body=None,
-            user=SimpleNamespace(role="admin", id=uuid.uuid4(), camera_access_mode="all"), db=db
+            journey_id=row.id, body=None, _user=SimpleNamespace(role="admin", id=uuid.uuid4()), db=db
         )
     )
     assert out["ai_synthesis"] is False
@@ -118,8 +117,7 @@ def test_journey_reinterpret_missing_journey_still_404(monkeypatch):
     with pytest.raises(Exception) as exc:
         _run(
             journey_routes.reinterpret_journey(
-                journey_id=uuid.uuid4(), body=None,
-                user=SimpleNamespace(role="admin", id=uuid.uuid4(), camera_access_mode="all"), db=db
+                journey_id=uuid.uuid4(), body=None, _user=SimpleNamespace(role="admin", id=uuid.uuid4()), db=db
             )
         )
     assert "404" in str(exc.value) or "not found" in str(exc.value)

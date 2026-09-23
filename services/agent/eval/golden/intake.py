@@ -1,138 +1,121 @@
-"""Intake path: reviewed alert (#195) -> golden case.
+"""Grow the golden set from real failures (#214 <- #195).
 
-Acceptance criterion. "Incorrect reviewed alerts can be added to the
-set without manual schema work." A maintainer reviewing alerts marks
-one "incorrect" with a reason (``wrong_object`` / ``wrong_person`` /
-``duplicate`` / ``timing``, per ``EventFeedbackCreate``). This turns
-that alert + its feedback into a golden case dict that ``case_from_dict``
-loads unchanged, so the set grows straight from real failures.
+When a user marks a fired alert ``incorrect`` (``EventFeedback``, #195),
+that is a real-world case the model got wrong: exactly what the golden set
+should learn from. This module turns such a review into a draft
+:class:`GoldenCase` with no manual schema work, so the intake is one call
+(or one CLI subcommand) rather than hand-authoring JSON.
 
-The mapping is deliberate.
+The draft is deliberately *incomplete*: it captures what we know
+automatically (the footage reference, the family guess from the reason, the
+fact that the asserted event was wrong) and leaves ``reference`` for a human
+to fill with the correct description. It is written with ``source`` set to
+``feedback:<event_id>`` so its provenance is obvious and duplicates are
+detectable.
 
-- ``wrong_object`` / ``wrong_person``. The alert asserted an object or
-  person that was not there. The mis-asserted label becomes a
-  ``forbidden`` phrase; the event is treated as absent unless the
-  reviewer supplies the correct label.
-- ``duplicate``. A real event, but the alert double-fired. Event stays
-  present; the corrected description (if any) drives ``must_include``.
-- ``timing``. The event is real but the window was wrong; event stays
-  present and the correct wording seeds ``must_include``.
-
-Callers pass plain dicts (an observation row and the feedback row) so
-this never imports the ORM. It returns a dict ready to ``json.dump`` or
-feed straight to ``case_from_dict``.
+Kept dict-in / case-out so it is unit-testable without a live database; a
+thin DB adapter (:func:`intake_incorrect_feedback`) is provided for the CLI.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from services.agent.eval.golden.schema import GoldenCase, case_from_dict
+from services.agent.eval.golden.schema import GoldenCase, GroundTruth, MediaRef, save_case
 
-# Which reasons imply the alert's asserted content was itself wrong (so
-# the asserted label becomes forbidden) vs. a real event mis-timed or
-# repeated.
-_CONTENT_WRONG_REASONS = {"wrong_object", "wrong_person"}
+# Map an EventFeedback.reason (#195 closed vocab) to a scenario family guess.
+# The human curator can correct it, but this gets the case filed in the right
+# bucket automatically most of the time.
+_REASON_TO_FAMILY = {
+    "wrong_object": "delivery",
+    "wrong_person": "ambiguous_face",
+    "duplicate": "no_event",
+    "timing": "no_event",
+}
 
 
-def alert_to_golden_case_dict(
-    observation: dict[str, Any],
-    feedback: dict[str, Any],
-    *,
-    correct_label: str | None = None,
-) -> dict[str, Any]:
-    """Build a golden-case dict from an incorrect reviewed alert.
+def case_from_feedback(fb: dict[str, Any]) -> GoldenCase:
+    """Build a draft golden case from an ``incorrect`` feedback record.
 
-    ``observation`` needs at least ``id`` and a text field
-    (``caption`` / ``summary`` / ``description``). ``feedback`` matches
-    ``EventFeedbackCreate`` (``rating``, ``reason``). ``correct_label``
-    is the reviewer's optional ground-truth phrase.
+    ``fb`` is a plain dict so this is DB-free and testable. Expected keys:
+    ``event_id`` (str), optional ``reason``, ``camera_id``, ``clip_sha256``,
+    ``clip_path``, ``asserted_caption`` (what the model said), and optional
+    ``event_present`` (defaults to False: an ``incorrect`` alert usually
+    means "you flagged something that was not really the event").
     """
-    rating = feedback.get("rating")
-    if rating != "incorrect":
-        raise ValueError(
-            f"intake only accepts rating='incorrect' alerts; got {rating!r}"
+    event_id = str(fb["event_id"])
+    reason = fb.get("reason") or ""
+    family = _REASON_TO_FAMILY.get(reason, "no_event")
+    media = None
+    if fb.get("clip_sha256"):
+        media = MediaRef(
+            sha256=str(fb["clip_sha256"]),
+            path=fb.get("clip_path"),
+            note=f"from incorrect alert {event_id}"
+            + (f" (reason: {reason})" if reason else ""),
         )
-    reason = feedback.get("reason")
-
-    asserted = str(
-        observation.get("caption")
-        or observation.get("summary")
-        or observation.get("description")
-        or ""
-    ).strip()
-
-    obs_id = observation.get("id") or observation.get("observation_id") or "unknown"
-    footage_hash = (
-        observation.get("footage_hash")
-        or observation.get("clip_hash")
-        or observation.get("recording_hash")
+    return GoldenCase(
+        id=f"feedback-{event_id}",
+        family=family,
+        kind="caption",
+        truth=GroundTruth(
+            event_present=bool(fb.get("event_present", False)),
+            reference="",  # a human fills the correct description
+            must_not_include=[],
+        ),
+        media=media,
+        prompt=fb.get("prompt"),
+        recorded_output=fb.get("asserted_caption"),
+        source=f"feedback:{event_id}",
     )
 
-    content_wrong = reason in _CONTENT_WRONG_REASONS
-    forbidden: list[str] = []
-    must_include: list[str] = []
-    if content_wrong and asserted:
-        # The alert's own words are the confident-wrong claim to catch.
-        forbidden = [asserted]
-    if correct_label:
-        must_include = [correct_label]
 
-    # For content-wrong with no corrected label, treat as "no event of
-    # that kind": the fixed output should not repeat the wrong claim.
-    event_present = not (content_wrong and not correct_label)
+async def intake_incorrect_feedback(db, limit: int = 100) -> list[str]:
+    """Pull recent ``incorrect`` EventFeedback rows and write draft golden
+    cases for any not already present. Returns the case ids written.
 
-    scenario = _reason_to_scenario(reason)
+    DB-touching, so kept out of the pure path above. Idempotent: a case
+    whose ``<id>.json`` already exists is skipped, so re-running does not
+    clobber a curator's edits.
+    """
+    from sqlalchemy import select
 
-    return {
-        "id": f"intake_{reason or 'incorrect'}_{obs_id}",
-        "kind": "caption",
-        "scenario": scenario,
-        "source": "alert_intake",
-        "footage": {
-            "hash": footage_hash,
-            "source": f"observation:{obs_id}",
-            "note": "footage not committed; hash-pinned from reviewed alert",
-        },
-        "input": {
-            "observation_id": obs_id,
-            "feedback_reason": reason,
+    from services.agent.eval.golden.schema import GOLDEN_DIR
+    from shared.models import Event
+    from shared.models.rules import EventFeedback
+
+    rows = (
+        await db.execute(
+            select(EventFeedback)
+            .where(EventFeedback.rating == "incorrect")
+            .order_by(EventFeedback.updated_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+
+    written: list[str] = []
+    for fb in rows:
+        event_id = str(fb.event_id)
+        if (GOLDEN_DIR / f"feedback-{event_id}.json").exists():
+            continue
+        event = await db.get(Event, fb.event_id)
+        # The alert text lives in Event.payload (no dedicated column); pull
+        # the most description-like field so the draft carries what the model
+        # actually said, for a curator to compare against the truth.
+        asserted = None
+        ep = getattr(event, "payload", None) or {}
+        if isinstance(ep, dict):
+            for key in ("message", "description", "vlm_description", "summary", "caption"):
+                if ep.get(key):
+                    asserted = str(ep[key])
+                    break
+        payload: dict[str, Any] = {
+            "event_id": event_id,
+            "reason": fb.reason,
             "asserted_caption": asserted,
-        },
-        "ground_truth": {
-            "event_present": event_present,
-            "must_include": must_include,
-            "forbidden": forbidden,
-            "reference": correct_label or "",
-        },
-        # No replay prediction yet: a live run fills this. Until then the
-        # replay provider yields an empty caption, which flags the case
-        # as unfixed rather than silently passing.
-        "mock_prediction": {},
-    }
-
-
-def alert_to_golden_case(
-    observation: dict[str, Any],
-    feedback: dict[str, Any],
-    *,
-    correct_label: str | None = None,
-) -> GoldenCase:
-    """Same as :func:`alert_to_golden_case_dict`, returned parsed."""
-    return case_from_dict(
-        alert_to_golden_case_dict(
-            observation, feedback, correct_label=correct_label
-        )
-    )
-
-
-def _reason_to_scenario(reason: str | None) -> str:
-    return {
-        "wrong_object": "ambiguous_face",
-        "wrong_person": "ambiguous_face",
-        "duplicate": "delivery",
-        "timing": "missing_recording",
-    }.get(reason or "", "ambiguous_face")
-
-
-__all__ = ["alert_to_golden_case", "alert_to_golden_case_dict"]
+            "camera_id": str(getattr(event, "camera_id", "") or "") or None,
+        }
+        case = case_from_feedback(payload)
+        save_case(case)
+        written.append(case.id)
+    return written

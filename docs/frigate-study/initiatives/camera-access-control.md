@@ -44,3 +44,42 @@ cameras or silently dropping events. This needs a deliberate design pass. Issue 
 
 - Coordinate with #23387 (hide-from-review) and the motion-search initiative — same allowlist.
 - Until shipped, document clearly that Nurby is single-trust-domain (all logins are full-access).
+
+## #201 read-surface audit (2026-09-23)
+
+The central helper (`shared/camera_access.py`) and the first wave of scoping (#190)
+covered search, timeline, summaries, conversations, transcripts, audio, digests,
+notifications and the WS fan-out. A follow-up audit of the remaining authenticated
+read surfaces found and fixed these cross-camera leaks:
+
+- **`persons.py`** — `activity/summary`, `activity/{person_id}`, `clusters/activity/summary`,
+  `clusters/activity/{cluster_id}`, `photo-candidates`, `starred/status` (via recap),
+  `_auto_star_top_persons`, and the `follow` investigative bundle
+  (`_follow_observations` + `_follow_bundle`: observations, incidents, transcripts).
+  All now funnel through `allowed_camera_ids` + `apply_camera_filter` before the
+  JSON scan, so a restricted viewer never sees a foreign camera's sighting,
+  thumbnail, camera name, or last-seen location.
+- **`vehicles.py`** — `activity/summary` and `activity/{vehicle_id}` scoped the same way.
+- **`journeys.py`** — a journey aggregates incidents across cameras; it is now hidden
+  entirely (fail-closed) unless every linked incident sits on an allowed camera.
+  `list`, `get`, and `reinterpret` all enforce this; a foreign journey id returns 404.
+- **`services/recap.py`** — `generate_recap`/`_collect_sightings`/`_latest_sighting_meta`
+  take an `allowed` allowlist, threaded from `starred/status`.
+
+Negative coverage: `tests/test_camera_read_scope_identity.py` drives these endpoints with a
+restricted user (two cameras, one foreign) and asserts every emitted SQL statement carries
+the `camera_id IN (...)` predicate, that a no-access user gets nothing, and that a foreign
+journey id 404s.
+
+### Remaining constraints (not yet covered — keep #201 open)
+
+- **Query-token media byte-serving** (`persons/{id}/photo`, `vehicles/{id}/photo`,
+  thumbnail/clip serving) authenticates with a shared query token, not a per-user
+  session, so it cannot apply the per-user allowlist today. A restricted user who
+  learns an object id could still fetch its image. Closing this needs the media layer
+  to carry user identity (or per-camera signed URLs). Documented, not fixed.
+- **Guardian** keeps its own facility/entitlement ACL and is intentionally out of this
+  helper's scope.
+- **Identity roll-ups** (`list_persons`, `list_vehicles`, cluster suggestion lists) still
+  return globally-known identities; only their per-camera *activity* is scoped. Whether an
+  identity seen only on a foreign camera should be hidden outright is a product decision.

@@ -5,6 +5,11 @@ realistic household questions correctly. It is the gate that backs the
 Phase 1 exit criterion in `docs/agent-design.md` section 11.3.
 Twenty-seven of thirty fixtures must pass before Phase 1 ships.
 
+> This mocked suite is a **regression** gate against scripted fixtures, not
+> an accuracy claim. The real-footage accuracy yardstick is the golden set,
+> see [`docs/golden-set-eval.md`](golden-set-eval.md) (#214). Accuracy claims
+> cite a golden-set scorecard, never this run.
+
 ## Layout
 
 ```

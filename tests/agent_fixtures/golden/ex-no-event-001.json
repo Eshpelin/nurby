@@ -1,0 +1,21 @@
+{
+  "family": "no_event",
+  "id": "ex-no-event-001",
+  "kind": "caption",
+  "media": {
+    "note": "EXAMPLE true-negative",
+    "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "recorded_output": "No activity. The driveway is empty and quiet, only shadows shift.",
+  "source": "curated",
+  "truth": {
+    "event_present": false,
+    "must_include": [],
+    "must_not_include": [
+      "person",
+      "package",
+      "vehicle"
+    ],
+    "reference": "Empty driveway, no people or vehicles, only tree shadows moving."
+  }
+}

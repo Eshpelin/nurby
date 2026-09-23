@@ -1,0 +1,23 @@
+{
+  "family": "delivery",
+  "id": "ex-delivery-001",
+  "kind": "caption",
+  "media": {
+    "note": "EXAMPLE. replace with real clip hash",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "prompt": "Describe what happens on the porch.",
+  "recorded_output": "A courier places a cardboard package by the front door and walks away.",
+  "source": "curated",
+  "truth": {
+    "event_present": true,
+    "must_include": [
+      "package"
+    ],
+    "must_not_include": [
+      "took",
+      "stole"
+    ],
+    "reference": "A delivery courier sets a cardboard package on the front porch and leaves."
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "family": "night_ir",
+  "id": "ex-night-ir-001",
+  "kind": "caption",
+  "media": {
+    "note": "EXAMPLE night/IR",
+    "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "recorded_output": "A small animal, likely a cat, moves across the yard in infrared night view.",
+  "source": "curated",
+  "truth": {
+    "event_present": true,
+    "must_include": [],
+    "must_not_include": [
+      "person",
+      "intruder"
+    ],
+    "reference": "In night IR, a cat crosses the yard."
+  }
+}

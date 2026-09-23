@@ -1,0 +1,38 @@
+# Companion watchdog as a container, for running on a SECOND machine (#211).
+#
+# IMPORTANT: do NOT add this to the main Nurby compose file on the Nurby
+# host. A watchdog that runs on the same box it watches dies with the box
+# and tells you nothing. Deploy this compose file on a different machine on
+# a different network/power source.
+#
+# It runs nurby_watchdog.py on a loop with a sleep, alerting off-box when
+# the beacon stops answering.
+
+services:
+  nurby-watchdog:
+    image: python:3.12-slim
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./nurby_watchdog.py:/app/nurby_watchdog.py:ro
+      - watchdog-state:/state
+    environment:
+      NURBY_BEACON_URL: "https://your-nurby.example.com/api/beacon"
+      NURBY_FAIL_THRESHOLD: "2"
+      NURBY_STATE_FILE: "/state/state.json"
+      # Pick a channel that does NOT run on the Nurby host:
+      TELEGRAM_BOT_TOKEN: "123456:abc"
+      TELEGRAM_CHAT_ID: "99999"
+      POLL_INTERVAL_SECONDS: "120"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        echo "nurby-watchdog polling $$NURBY_BEACON_URL every $$POLL_INTERVAL_SECONDS s";
+        while true; do
+          python3 /app/nurby_watchdog.py || true;
+          sleep "$${POLL_INTERVAL_SECONDS:-120}";
+        done
+
+volumes:
+  watchdog-state: {}

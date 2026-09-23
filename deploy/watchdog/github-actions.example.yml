@@ -1,0 +1,50 @@
+# Hosted, truly off-box dead-man's switch for Nurby (#211).
+#
+# Copy this to `.github/workflows/nurby-watchdog.yml` in a *private* repo
+# (the beacon URL and alert secrets should not be public). GitHub runs the
+# cron on its own infrastructure, so it keeps polling even when your home
+# loses power or internet, which is the whole point.
+#
+# Set these repository secrets (Settings -> Secrets and variables -> Actions):
+#   NURBY_BEACON_URL      https://your-nurby.example.com/api/beacon
+#   TELEGRAM_BOT_TOKEN    (or the SMTP_* / ALERT_EMAIL_* set)
+#   TELEGRAM_CHAT_ID
+#
+# Note: GitHub's shortest schedule granularity is 5 minutes, and scheduled
+# runs can be delayed under load, so the honest detection window here is
+# roughly 5-15 minutes plus the beacon's stale_after_seconds. For a tighter
+# window, run nurby_watchdog.py from a real cron on a second machine.
+
+name: nurby-watchdog
+
+on:
+  schedule:
+    - cron: "*/5 * * * *" # every 5 minutes
+  workflow_dispatch: {}
+
+concurrency:
+  group: nurby-watchdog
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Persist the state file across runs so we alert on the down->up and
+      # up->down transitions only, instead of spamming every 5 minutes.
+      - uses: actions/cache@v4
+        with:
+          path: nurby_watchdog_state.json
+          key: nurby-watchdog-state-${{ github.run_id }}
+          restore-keys: nurby-watchdog-state-
+
+      - name: Poll the Nurby beacon
+        env:
+          NURBY_BEACON_URL: ${{ secrets.NURBY_BEACON_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NURBY_FAIL_THRESHOLD: "1" # one bad 5-min poll is already ~5 min of silence
+          NURBY_STATE_FILE: nurby_watchdog_state.json
+        run: python3 deploy/watchdog/nurby_watchdog.py

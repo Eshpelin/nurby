@@ -1,167 +1,241 @@
-"""Tests for the golden-set evaluation harness (issue #214).
+"""Golden-set real-footage eval harness (#214).
 
-These assert the harness *runs deterministically on the committed
-fixtures* and that scoring, scorecard, coverage, the CLI, and the #195
-intake path all behave. No live model, no network, no footage.
+Covers the schema round-trip, deterministic + judge scoring, scorecard
+aggregation and provenance, coverage validation, and #195 feedback intake.
+No footage, no live model: the harness scores each case's recorded_output
+through the deterministic KeywordJudge.
 """
 
-from __future__ import annotations
 
-from services.agent.eval.golden import (
+import pytest
+
+from services.agent.eval.golden.harness import run_scorecard
+from services.agent.eval.golden.intake import case_from_feedback
+from services.agent.eval.golden.schema import (
     SCENARIO_FAMILIES,
-    ReplayAnswerProvider,
-    ReplayCaptionProvider,
-    RunConfig,
-    alert_to_golden_case,
-    format_scorecard,
-    load_golden_set,
-    run_golden_set,
+    GoldenCase,
+    GroundTruth,
+    MediaRef,
+    coverage,
+    coverage_gaps,
+    load_cases,
+    save_case,
 )
-from services.agent.eval.golden import scoring
-from services.agent.eval.golden.cli import main as cli_main
+from services.agent.eval.golden.scoring import (
+    KeywordJudge,
+    LLMJudge,
+    infer_event_present,
+    score_case,
+)
 
 
-# ── Fixtures load + run ─────────────────────────────────────────────
-
-
-def test_committed_golden_set_loads():
-    cases = load_golden_set()
-    assert len(cases) == 12
-    kinds = {c.kind for c in cases}
-    assert kinds == {"caption", "ask"}
-
-
-def test_all_scenario_families_covered():
-    cases = load_golden_set()
-    covered = {c.scenario for c in cases}
-    for family in SCENARIO_FAMILIES:
-        assert family in covered, f"scenario family {family!r} missing from golden set"
-
-
-def test_run_is_deterministic_on_replay():
-    report = run_golden_set(load_golden_set())
-    assert report.total == 12
-    # Exactly one crafted partial-coverage case is expected to fail.
-    assert report.passed == 11
-    fails = [s.case_id for s in report.scores if not s.passed]
-    assert fails == ["cap_rain_obscured_partial"]
-
-
-def test_headline_metrics_have_expected_values():
-    report = run_golden_set(load_golden_set())
-    # caption cases: four full-coverage + one 0.5 => mean 0.9
-    assert abs(report.caption_faithfulness - 0.9) < 1e-9
-    # every ask answer fully covers its keywords
-    assert abs(report.answer_correctness - 1.0) < 1e-9
-    # every prediction agrees on event presence/absence
-    assert abs(report.event_presence_accuracy - 1.0) < 1e-9
-
-
-def test_partial_case_metrics():
-    report = run_golden_set(load_golden_set())
-    partial = next(s for s in report.scores if s.case_id == "cap_rain_obscured_partial")
-    assert abs(partial.metrics["keyword_coverage"] - 0.5) < 1e-9
-    assert not partial.passed
-    assert partial.failures  # human-readable reason present
-
-
-# ── Scoring unit checks ─────────────────────────────────────────────
-
-
-def test_scoring_primitives():
-    assert scoring.keyword_coverage("a package on the porch", ["package"]) == 1.0
-    assert scoring.keyword_coverage("only rain here", ["rain", "vehicle"]) == 0.5
-    assert scoring.keyword_coverage("anything", []) == 1.0
-    assert scoring.forbidden_violations("an intruder appears", ["intruder"]) == ["intruder"]
-    assert scoring.forbidden_violations("all clear", ["intruder"]) == []
-    assert scoring.exact_match("A Package.", "a package") is True
-    # multi-word phrase, punctuation/case insensitive
-    assert scoring.phrase_present("Your Mail-Carrier arrived", "mail carrier") is True
-    assert 0.0 < scoring.semantic_lite("a car in the driveway", "a car pulled in") < 1.0
-
-
-# ── Scorecard ───────────────────────────────────────────────────────
-
-
-def test_scorecard_is_attributable_and_complete():
-    report = run_golden_set(
-        load_golden_set(),
-        config=RunConfig(provider="google", model="gemini-2.0-flash", prompt_version="v3", mode="live"),
+def _case(**kw):
+    base = dict(
+        id="t1", family="delivery", kind="caption",
+        truth=GroundTruth(event_present=True, reference="a courier drops a package"),
+        recorded_output="a courier drops a package at the door",
     )
-    card = format_scorecard(report)
-    assert "gemini-2.0-flash" in card
-    assert "Prompt version. v3" in card
-    assert "Caption faithfulness" in card
-    assert "Ask answer correctness" in card
-    assert "Event presence/absence accuracy" in card
-    # all families present -> no coverage-gap section
-    assert "Coverage gaps" not in card
-    # the one failure is surfaced
-    assert "cap_rain_obscured_partial" in card
+    base.update(kw)
+    return GoldenCase(**base)
 
 
-def test_scorecard_flags_missing_families_on_subset():
-    cases = [c for c in load_golden_set() if c.scenario == "delivery"]
-    report = run_golden_set(cases)
-    card = format_scorecard(report)
-    assert "Coverage gaps" in card
-    assert "night_ir" in card
+# ── schema ──
+
+def test_case_json_round_trip():
+    c = _case(media=MediaRef(sha256="a" * 64, path="/x.mp4"), source="curated")
+    again = GoldenCase.from_dict(c.to_dict())
+    assert again.to_dict() == c.to_dict()
 
 
-# ── Providers ───────────────────────────────────────────────────────
-
-
-def test_replay_providers_read_mock_prediction():
-    cases = load_golden_set()
-    cap_case = next(c for c in cases if c.kind == "caption")
-    ask_case = next(c for c in cases if c.kind == "ask")
-    assert ReplayCaptionProvider().caption(cap_case).caption
-    assert ReplayAnswerProvider().answer(ask_case).answer
-
-
-# ── #195 intake path ────────────────────────────────────────────────
-
-
-def test_alert_intake_wrong_object_becomes_forbidden():
-    observation = {"id": "obs_123", "caption": "A raccoon knocks over a bin", "footage_hash": "sha256:xyz"}
-    feedback = {"rating": "incorrect", "reason": "wrong_object"}
-    case = alert_to_golden_case(observation, feedback)
-    assert case.source == "alert_intake"
-    # the mis-asserted caption is now something the fixed output must avoid
-    assert "A raccoon knocks over a bin" in case.ground_truth.forbidden
-    # content-wrong with no corrected label => treated as no such event
-    assert case.ground_truth.event_present is False
-    # it round-trips through the normal loader with no manual schema work
-    assert case.kind == "caption"
-    assert case.footage["hash"] == "sha256:xyz"
-
-
-def test_alert_intake_with_correct_label():
-    observation = {"id": "obs_9", "summary": "Unknown person at door"}
-    feedback = {"rating": "incorrect", "reason": "wrong_person"}
-    case = alert_to_golden_case(observation, feedback, correct_label="your daughter")
-    assert "your daughter" in case.ground_truth.must_include
-    assert case.ground_truth.event_present is True
-
-
-def test_alert_intake_rejects_non_incorrect():
-    import pytest
-
+def test_unknown_family_rejected():
     with pytest.raises(ValueError):
-        alert_to_golden_case({"id": "x"}, {"rating": "useful"})
+        _case(family="not_a_family")
 
 
-# ── CLI ─────────────────────────────────────────────────────────────
+def test_ask_requires_question():
+    with pytest.raises(ValueError):
+        _case(kind="ask", question=None)
 
 
-def test_cli_runs_green_in_replay_mode(capsys):
-    code = cli_main(["--provider", "replay", "--model", "mock", "--prompt-version", "v0"])
-    out = capsys.readouterr().out
-    assert code == 0
-    assert "Golden-Set Scorecard" in out
+def test_save_and_load(tmp_path):
+    save_case(_case(id="c-a"), tmp_path)
+    save_case(_case(id="c-b"), tmp_path)
+    loaded = load_cases(tmp_path)
+    assert [c.id for c in loaded] == ["c-a", "c-b"]  # sorted by id
 
 
-def test_cli_min_pass_rate_gate_fails_when_unmet():
-    # committed set passes 11/12 (~0.92); demand 100% and the gate trips
-    code = cli_main(["--min-pass-rate", "1.0"])
-    assert code == 1
+# ── deterministic scoring ──
+
+@pytest.mark.parametrize("text,present", [
+    ("a person walks up", True),
+    ("No activity, the yard is quiet", False),
+    ("nobody around", False),
+    ("", False),
+])
+def test_infer_event_present(text, present):
+    assert infer_event_present(text) is present
+
+
+def test_event_absence_scored_correct():
+    c = _case(truth=GroundTruth(event_present=False, reference="empty driveway"),
+              recorded_output="No activity, empty and quiet")
+    s = score_case(c, c.recorded_output, KeywordJudge())
+    assert s.event_correct is True
+
+
+def test_forbidden_vocab_trips():
+    c = _case(truth=GroundTruth(event_present=True, reference="courier drops a package",
+                                must_not_include=["stole"]),
+              recorded_output="a person stole a package")
+    s = score_case(c, c.recorded_output, KeywordJudge())
+    assert s.vocab_ok is False
+    assert "forbidden" in s.detail
+
+
+def test_missing_required_vocab_trips():
+    c = _case(truth=GroundTruth(event_present=True, reference="x", must_include=["package"]),
+              recorded_output="a person walks by")
+    s = score_case(c, c.recorded_output, KeywordJudge())
+    assert s.vocab_ok is False
+
+
+def test_keyword_judge_scores_overlap():
+    j = KeywordJudge()
+    high, _ = j.score(question=None, reference="courier drops a package at the door",
+                      candidate="a courier dropped a package by the door")
+    low, _ = j.score(question=None, reference="courier drops a package",
+                     candidate="a cat runs across the lawn")
+    assert high > low
+    assert 0.0 <= low <= high <= 1.0
+
+
+def test_llm_judge_parses_score_and_is_reproducible():
+    j = LLMJudge(lambda prompt: "0.9", model="fixed-judge-1")
+    val, detail = j.score(question=None, reference="a courier drops a package",
+                          candidate="a courier left a package")
+    assert val == 0.9
+    assert j.name == "llm-judge:fixed-judge-1"
+
+
+def test_llm_judge_unparseable_fails_closed():
+    j = LLMJudge(lambda prompt: "the caption looks great", model="m")
+    val, _ = j.score(question=None, reference="x", candidate="y")
+    assert val == 0.0
+
+
+def test_llm_judge_error_fails_closed():
+    def boom(prompt):
+        raise RuntimeError("judge down")
+
+    j = LLMJudge(boom, model="m")
+    val, detail = j.score(question=None, reference="x", candidate="y")
+    assert val == 0.0
+    assert "judge error" in detail
+
+
+def test_score_case_uses_judge_threshold():
+    c = _case(recorded_output="a courier drops a package at the door")
+    hi = LLMJudge(lambda p: "0.95", model="m", pass_threshold=0.6)
+    lo = LLMJudge(lambda p: "0.3", model="m", pass_threshold=0.6)
+    assert score_case(c, c.recorded_output, hi).passed is True
+    assert score_case(c, c.recorded_output, lo).passed is False
+
+
+# ── scorecard ──
+
+def test_scorecard_metrics_and_provenance():
+    cases = [
+        _case(id="ok", recorded_output="a courier drops a package at the door"),
+        _case(id="bad", family="no_event",
+              truth=GroundTruth(event_present=False, reference="empty"),
+              recorded_output="a person is clearly walking around"),  # says event, truth none
+    ]
+    card = run_scorecard(cases, provider="gemini", model="flash", prompt_version="v3")
+    d = card.to_dict()
+    assert d["provenance"] == {
+        "provider": "gemini", "model": "flash", "prompt_version": "v3",
+        "judge": "keyword-jaccard-v1", "generated_at": card.generated_at,
+    }
+    assert d["metrics"]["n_scored"] == 2
+    assert card.event_accuracy == 0.5  # one right, one wrong
+    assert any(f["id"] == "bad" for f in d["failures"])
+
+
+def test_scorecard_skips_cases_without_output():
+    c = _case(id="no-out", recorded_output=None)
+    card = run_scorecard([c], provider="p", model="m", prompt_version="v1")
+    assert card.scores == []
+    assert any("no-out" in s for s in card.skipped)
+
+
+def test_runner_output_preferred_over_recorded():
+    c = _case(recorded_output="recorded text")
+    card = run_scorecard([c], provider="p", model="m", prompt_version="v1",
+                         runner=lambda case: "a courier drops a package at the door")
+    assert card.scores and card.scores[0].judge_score > 0
+
+
+def test_runner_error_is_skipped_not_fatal():
+    def boom(case):
+        raise RuntimeError("model down")
+
+    c = _case()
+    card = run_scorecard([c], provider="p", model="m", prompt_version="v1", runner=boom)
+    assert card.scores == []
+    assert any("runner error" in s for s in card.skipped)
+
+
+def test_markdown_renders():
+    card = run_scorecard([_case()], provider="p", model="m", prompt_version="v1")
+    md = card.to_markdown()
+    assert "Golden-set scorecard" in md
+    assert "Prompt version" in md
+
+
+# ── coverage ──
+
+def test_coverage_gaps_reported():
+    cases = [_case(id=f"d{i}", family="delivery") for i in range(3)]
+    gaps = coverage_gaps(cases)
+    assert gaps["delivery"] == (3, SCENARIO_FAMILIES["delivery"])
+    assert "no_event" in gaps  # zero cases -> gap
+    assert coverage(cases)["delivery"] == 3
+
+
+# ── intake from #195 feedback ──
+
+def test_case_from_incorrect_feedback_needs_no_manual_schema():
+    fb = {
+        "event_id": "e123",
+        "reason": "wrong_object",
+        "clip_sha256": "f" * 64,
+        "clip_path": "/clips/e123.mp4",
+        "asserted_caption": "a person stole a package",
+    }
+    c = case_from_feedback(fb)
+    assert c.id == "feedback-e123"
+    assert c.source == "feedback:e123"
+    assert c.family == "delivery"  # mapped from wrong_object
+    assert c.recorded_output == "a person stole a package"
+    assert c.media.sha256 == "f" * 64
+    # It round-trips like any other case (no manual schema work).
+    assert GoldenCase.from_dict(c.to_dict()).id == "feedback-e123"
+
+
+def test_intake_defaults_family_for_unknown_reason():
+    c = case_from_feedback({"event_id": "e9", "reason": "timing"})
+    assert c.family == "no_event"
+
+
+# ── the shipped example set loads and scores ──
+
+def test_shipped_examples_load_and_score():
+    cases = load_cases()  # tests/agent_fixtures/golden
+    assert len(cases) >= 7
+    # Every family in the examples has at least one case.
+    fams = {c.family for c in cases}
+    assert fams == set(SCENARIO_FAMILIES)
+    card = run_scorecard(cases, provider="example", model="recorded", prompt_version="v0")
+    # The curated examples are written to pass their own checks.
+    assert card.event_accuracy == 1.0
+    assert card.metrics()["n_scored"] == len(cases)
