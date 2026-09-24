@@ -21,6 +21,7 @@ from shared.schemas.cameras import (  # noqa: F401
     RecordingResponse,
     StorageProfileCreate,
     StorageProfileResponse,
+    StorageProfileStats,
     StorageProfileUpdate,
 )
 from shared.schemas.cameras import (  # noqa: F401
@@ -193,6 +194,7 @@ __all__ = [
     "CameraUpdate",
     "StorageProfileCreate",
     "StorageProfileResponse",
+    "StorageProfileStats",
     "StorageProfileUpdate",
     "DeviceCreate",
     "DeviceResponse",

@@ -97,6 +97,7 @@ from shared.models.rules import (  # noqa: F401
     Event,
     EventFeedback,
     EventNote,
+    ExpectedActivity,
     Rule,
     RuleSequenceInstance,
 )
@@ -127,6 +128,7 @@ __all__ = [
     "Event",
     "EventFeedback",
     "EventNote",
+    "ExpectedActivity",
     "FaceCluster",
     "FaceClusterSample",
     "FaceEmbedding",

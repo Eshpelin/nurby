@@ -32,9 +32,14 @@ def upgrade() -> None:
     op.create_index(
         "ix_recordings_remote_state", "recordings", ["remote_state"], non_unique=True
     )
+    # Per-profile upload stats (issue #276) group by remote_profile_id.
+    op.create_index(
+        "ix_recordings_remote_profile_id", "recordings", ["remote_profile_id"], non_unique=True
+    )
 
 
 def downgrade() -> None:
+    op.drop_index("ix_recordings_remote_profile_id", table_name="recordings")
     op.drop_index("ix_recordings_remote_state", table_name="recordings")
     op.drop_column("recordings", "remote_error")
     op.drop_column("recordings", "remote_attempts")

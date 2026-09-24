@@ -196,3 +196,44 @@ class EventFeedback(Base):
     __table_args__ = (
         UniqueConstraint("event_id", "user_id", name="uq_event_feedback_event_user"),
     )
+
+
+class ExpectedActivity(Base):
+    """A scheduled expectation that fires when something normally-observed did
+    NOT happen in its window (#215).
+
+    Evaluated off the frame loop by ``ExpectedActivitySweeper`` once a window
+    has closed (end + grace): the decision itself is the pure
+    ``services.perception.expected_activity.evaluate_window``. Absence is only
+    an alert when the window was actually covered; a coverage gap reads as
+    ``unknown``, never ``violated``.
+    """
+
+    __tablename__ = "expected_activities"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # person -> a named person must appear; any_person -> anyone; any_activity
+    # -> any observation at all (motion counts).
+    subject_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="person")
+    subject_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Empty list = any camera the sweeper can see.
+    camera_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    weekdays: Mapped[list] = mapped_column(JSON, nullable=False)  # 0=Mon .. 6=Sun
+    start_time: Mapped[str] = mapped_column(String(5), nullable=False)  # "HH:MM" local
+    end_time: Mapped[str] = mapped_column(String(5), nullable=False)    # "HH:MM" local
+    grace_minutes: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # Household modes this expectation is active in (#184). Null = all modes.
+    # Default excludes "away" so an away day is not a nobody-home alarm.
+    active_modes: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Dedupe + recap: the last local date evaluated and the outcome
+    # (satisfied | violated | unknown | not_applicable | skipped_mode).
+    last_evaluated_on: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    last_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

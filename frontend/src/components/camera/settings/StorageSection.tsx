@@ -17,6 +17,22 @@ interface StorageProfile {
   enabled: boolean;
   config?: Record<string, unknown> | null;
   has_password?: boolean;
+  stats?: {
+    pending: number;
+    failed: number;
+    uploaded: number;
+    uploaded_bytes: number;
+    last_upload_at: string | null;
+  } | null;
+}
+
+function ago(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const secs = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (secs < 90) return "just now";
+  if (secs < 3600) return `${Math.round(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.round(secs / 3600)}h ago`;
+  return `${Math.round(secs / 86400)}d ago`;
 }
 
 interface StorageSectionProps {
@@ -233,6 +249,19 @@ export function StorageSection({
             ? "New segments upload to the FTP server after they are written; until then they buffer in the default location. Recordings made before this change stay where they are."
             : `New segments land under ${selected.root}. Recordings made before this change stay in the previous location.`}
         </p>
+      )}
+
+      {selected?.kind === "ftp" && selected.stats && (selected.stats.pending > 0 || selected.stats.failed > 0 || selected.stats.uploaded > 0) && (
+        <div className="text-[11px] text-muted-foreground flex items-center gap-3">
+          <span>{selected.stats.uploaded} on FTP</span>
+          {selected.stats.pending > 0 && (
+            <span className="text-amber-300">{selected.stats.pending} waiting to upload</span>
+          )}
+          {selected.stats.failed > 0 && (
+            <span className="text-red-400">{selected.stats.failed} failed — kept locally</span>
+          )}
+          {selected.stats.last_upload_at && <span>last upload {ago(selected.stats.last_upload_at)}</span>}
+        </div>
       )}
 
       <div className="space-y-2 pt-1">

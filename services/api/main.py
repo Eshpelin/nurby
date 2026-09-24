@@ -25,6 +25,7 @@ from services.api.routes import (
     digests,
     doctor,
     events,
+    expected_activity,
     guardian,
     household,
     incidents,
@@ -149,6 +150,11 @@ async def lifespan(app: FastAPI):
     from services.perception.presence_mode_sweeper import PresenceModeSweeper
     presence_sweeper = PresenceModeSweeper()
     presence_task = asyncio.create_task(presence_sweeper.run())
+    # Expected-activity absence alerts (#215): evaluate closed windows off the
+    # frame loop and fire when something normally-observed did not happen.
+    from services.perception.expected_activity_sweeper import ExpectedActivitySweeper
+    expected_sweeper = ExpectedActivitySweeper()
+    expected_task = asyncio.create_task(expected_sweeper.run())
 
     # Optionally warm the grounding model so the first FindAnything isn't slow.
     async def _warm_grounding() -> None:
@@ -197,6 +203,8 @@ async def lifespan(app: FastAPI):
     seq_sweeper_task.cancel()
     presence_sweeper.stop()
     presence_task.cancel()
+    expected_sweeper.stop()
+    expected_task.cancel()
     warm_grounding_task.cancel()
     tg_manager.stop()
     tg_task.cancel()
@@ -318,6 +326,7 @@ app.include_router(rules_nl.router, prefix="/api/rules", tags=["rules"])
 app.include_router(rules.router, prefix="/api/rules", tags=["rules"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
+app.include_router(expected_activity.router, prefix="/api/expected-activity", tags=["expected-activity"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(push.router, prefix="/api/push", tags=["push"])
 app.include_router(providers.router, prefix="/api/providers", tags=["providers"])

@@ -32,6 +32,7 @@ from shared.remote_storage import parse_ftp_config, probe_ftp, seal_ftp_config
 from shared.schemas import (
     StorageProfileCreate,
     StorageProfileResponse,
+    StorageProfileStats,
     StorageProfileUpdate,
 )
 from shared.storage_paths import invalidate as invalidate_storage_cache
@@ -43,7 +44,7 @@ logger = logging.getLogger("nurby.api.storage-profiles")
 SUPPORTED_KINDS = ("local", "ftp")
 
 
-def _serialize(profile: StorageProfile) -> StorageProfileResponse:
+def _serialize(profile: StorageProfile, stats: StorageProfileStats | None = None) -> StorageProfileResponse:
     config = None
     has_password = False
     if profile.kind == "ftp":
@@ -60,7 +61,44 @@ def _serialize(profile: StorageProfile) -> StorageProfileResponse:
         created_at=profile.created_at,
         config=config,
         has_password=has_password,
+        stats=stats or StorageProfileStats(),
     )
+
+
+async def _profile_stats(db: AsyncSession, profiles: list[StorageProfile]) -> dict[uuid.UUID, StorageProfileStats]:
+    """One grouped query over Recording.remote_* columns (issue #276).
+    Recordings count toward the profile snapshot that uploaded them, even
+    if the camera has since moved to a different profile."""
+    from sqlalchemy import func
+
+    from shared.models import Recording
+
+    out = {p.id: StorageProfileStats() for p in profiles}
+    if not profiles:
+        return out
+    rows = await db.execute(
+        select(
+            Recording.remote_profile_id,
+            Recording.remote_state,
+            func.count().label("n"),
+            func.coalesce(func.sum(Recording.file_size_bytes), 0).label("bytes"),
+            func.max(Recording.ended_at).label("last"),
+        )
+        .where(Recording.remote_profile_id.in_([p.id for p in profiles]))
+        .where(Recording.remote_state.is_not(None))
+        .group_by(Recording.remote_profile_id, Recording.remote_state)
+    )
+    for pid, state, n, total, last in rows.all():
+        stats = out.get(pid)
+        if stats is None:
+            stats = out[pid] = StorageProfileStats()
+        if state not in ("pending", "failed", "uploaded"):
+            continue  # unknown future state — don't explode the schema
+        setattr(stats, state, n)
+        if state == "uploaded":
+            stats.uploaded_bytes = int(total)
+            stats.last_upload_at = last
+    return out
 
 
 async def _load_profile(profile_id: uuid.UUID, db: AsyncSession) -> StorageProfile:
@@ -95,7 +133,9 @@ async def list_profiles(
     _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)
 ):
     rows = await db.execute(select(StorageProfile).order_by(StorageProfile.name))
-    return [_serialize(p) for p in rows.scalars().all()]
+    profiles = list(rows.scalars().all())
+    stats = await _profile_stats(db, profiles)
+    return [_serialize(p, stats.get(p.id)) for p in profiles]
 
 
 @router.post("/storage-profiles", response_model=StorageProfileResponse, status_code=201)
@@ -144,7 +184,7 @@ async def create_profile(
     await db.commit()
     await db.refresh(profile)
     invalidate_storage_cache()
-    return _serialize(profile)
+    return _serialize(profile, StorageProfileStats())
 
 
 @router.patch("/storage-profiles/{profile_id}", response_model=StorageProfileResponse)
@@ -197,7 +237,8 @@ async def update_profile(
     await db.commit()
     await db.refresh(profile)
     invalidate_storage_cache()
-    return _serialize(profile)
+    stats_map = await _profile_stats(db, [profile])
+    return _serialize(profile, stats_map.get(profile.id))
 
 
 @router.delete("/storage-profiles/{profile_id}", status_code=204)

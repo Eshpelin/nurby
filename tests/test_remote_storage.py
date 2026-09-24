@@ -299,3 +299,63 @@ def test_profile_serializer_masks_password():
     assert "hunter2" not in str(out)
     assert out["has_password"] is True
     assert out["config"]["host"] == "nas.local"
+
+
+# ── per-profile upload stats (issue #276) ────────────────────────────
+
+
+def test_profile_stats_fold_counts_and_bytes():
+    import asyncio
+
+    from shared.schemas import StorageProfileStats
+    from services.api.routes.storage_profiles import _profile_stats
+
+    pid = uuid.uuid4()
+    other = uuid.uuid4()
+    rows = [
+        (pid, "uploaded", 3, 3000, "2026-09-24T10:00:00+00:00"),
+        (pid, "pending", 1, 100, None),
+        (pid, "failed", 2, 200, None),
+        (other, "uploaded", 1, 50, None),
+    ]
+
+    class Result:
+        def all(self):
+            return rows
+
+    class FakeDB:
+        async def execute(self, stmt, *a, **k):
+            # Only recordings for the requested profiles are counted.
+            assert "remote_profile_id" in str(stmt)
+            return Result()
+
+    profiles = [SimpleNamespace(id=pid), SimpleNamespace(id=uuid.uuid4())]
+    out = asyncio.run(_profile_stats(FakeDB(), profiles))
+    assert out[pid].uploaded == 3
+    assert out[pid].uploaded_bytes == 3000
+    assert out[pid].pending == 1
+    assert out[pid].failed == 2
+    assert out[pid].last_upload_at == "2026-09-24T10:00:00+00:00"
+    # The untouched profile still gets a zeroed stats object.
+    for pid2 in profiles:
+        assert isinstance(out.get(pid2.id, StorageProfileStats()), StorageProfileStats)
+
+
+def test_profile_stats_ignores_unknown_future_states():
+    import asyncio
+
+    from services.api.routes.storage_profiles import _profile_stats
+
+    pid = uuid.uuid4()
+    rows = [(pid, "quantum", 1, 1, None)]
+
+    class Result:
+        def all(self):
+            return rows
+
+    class FakeDB:
+        async def execute(self, stmt, *a, **k):
+            return Result()
+
+    out = asyncio.run(_profile_stats(FakeDB(), [SimpleNamespace(id=pid)]))
+    assert (out[pid].pending, out[pid].uploaded, out[pid].failed) == (0, 0, 0)

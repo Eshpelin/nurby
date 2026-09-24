@@ -394,6 +394,17 @@ class StorageProfileUpdate(BaseModel):
     config: dict | None = None
 
 
+class StorageProfileStats(BaseModel):
+    """Upload state for one profile (issue #276). Aggregated from
+    Recording.remote_* columns; all-zero for unused/local profiles."""
+
+    pending: int = 0
+    failed: int = 0
+    uploaded: int = 0
+    uploaded_bytes: int = 0
+    last_upload_at: datetime | None = None
+
+
 class StorageProfileResponse(BaseModel):
     id: uuid.UUID
     name: str
@@ -405,5 +416,6 @@ class StorageProfileResponse(BaseModel):
     # tells the UI a stored credential exists without exposing it.
     config: dict | None = None
     has_password: bool = False
+    stats: StorageProfileStats = Field(default_factory=StorageProfileStats)
 
     model_config = {"from_attributes": True}
