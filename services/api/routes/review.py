@@ -17,9 +17,18 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
-from shared.camera_access import allowed_camera_ids, apply_camera_filter
+from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.database import get_db
-from shared.models import Camera, Event, Incident, Notification, User
+from shared.models import (
+    BodyCluster,
+    Camera,
+    EntityAssociation,
+    Event,
+    FaceCluster,
+    Incident,
+    Notification,
+    User,
+)
 from shared.schemas import ReviewItemResponse, ReviewQueueResponse
 
 router = APIRouter()
@@ -185,6 +194,116 @@ async def list_review_items(
                 provenance={"source": "notification", "rule_id": notification.rule_id},
             ))
 
+    if "identity_suggestion" in requested:
+        face_query = apply_camera_filter(
+            select(FaceCluster)
+            .where(FaceCluster.status == "pending")
+            .order_by(FaceCluster.last_seen_at.desc()),
+            allowed,
+            FaceCluster.first_camera_id,
+        )
+        for cluster in (await db.execute(face_query.limit(100))).scalars().all():
+            items.append(_item(
+                source_type="face_cluster",
+                source_id=cluster.id,
+                kind="identity_suggestion",
+                status="open",
+                priority="normal",
+                title="Unknown person needs review",
+                summary=(
+                    f"{cluster.sighting_count} sightings of "
+                    f"{cluster.auto_label_number and f'Unknown {cluster.auto_label_number}' or 'the same unknown person'}"
+                ),
+                created_at=cluster.created_at,
+                updated_at=cluster.last_seen_at,
+                camera_id=cluster.first_camera_id,
+                unread=True,
+                evidence={
+                    "sample_thumbnail_path": cluster.sample_thumbnail_path,
+                    "sighting_count": cluster.sighting_count,
+                    "first_seen_at": cluster.first_seen_at,
+                    "last_seen_at": cluster.last_seen_at,
+                    "appearance_description": cluster.appearance_description,
+                },
+                provenance={"source": "face_cluster", "cluster_status": cluster.status},
+            ))
+
+        body_query = apply_camera_filter(
+            select(BodyCluster)
+            .where(BodyCluster.status == "pending")
+            .order_by(BodyCluster.last_seen_at.desc()),
+            allowed,
+            BodyCluster.first_camera_id,
+        )
+        for cluster in (await db.execute(body_query.limit(100))).scalars().all():
+            items.append(_item(
+                source_type="body_cluster",
+                source_id=cluster.id,
+                kind="identity_suggestion",
+                status="open",
+                priority="normal",
+                title="Unknown appearance needs review",
+                summary=f"{cluster.sighting_count} sightings of a recurring body appearance",
+                created_at=cluster.created_at,
+                updated_at=cluster.last_seen_at,
+                camera_id=cluster.first_camera_id,
+                unread=True,
+                evidence={
+                    "sample_thumbnail_path": cluster.sample_thumbnail_path,
+                    "sighting_count": cluster.sighting_count,
+                    "first_seen_at": cluster.first_seen_at,
+                    "last_seen_at": cluster.last_seen_at,
+                    "appearance_description": cluster.appearance_description,
+                },
+                provenance={"source": "body_cluster", "cluster_status": cluster.status},
+            ))
+
+    if "relationship_suggestion" in requested:
+        association_rows = (
+            await db.execute(
+                select(EntityAssociation)
+                .where(EntityAssociation.status == "candidate")
+                .order_by(EntityAssociation.last_seen_at.desc())
+                .limit(100)
+            )
+        ).scalars().all()
+        for association in association_rows:
+            # A restricted user may only see an association if at least one
+            # supporting camera is in scope. Do not leak the existence of an
+            # otherwise hidden relationship through queue counts.
+            allowed_ids = {str(camera_id) for camera_id in allowed} if allowed is not ALL else None
+            if allowed_ids is not None and not any(
+                str(camera_id) in allowed_ids for camera_id in (association.camera_histogram or {})
+            ):
+                continue
+            relation = association.relation.replace("_", " ")
+            items.append(_item(
+                source_type="association",
+                source_id=association.id,
+                kind="relationship_suggestion",
+                status="open",
+                priority="normal",
+                title="Possible relationship needs review",
+                summary=(
+                    f"{association.subject_key} is often seen {relation} "
+                    f"{association.object_label or association.object_key}"
+                ),
+                created_at=association.created_at,
+                updated_at=association.last_seen_at or association.created_at,
+                camera_id=None,
+                unread=True,
+                evidence={
+                    "evidence_count": association.evidence_count,
+                    "distinct_days": association.distinct_days,
+                    "first_seen_at": association.first_seen_at,
+                    "last_seen_at": association.last_seen_at,
+                    "camera_histogram": association.camera_histogram or {},
+                },
+                provenance={"source": association.source, "relation": association.relation},
+            ))
+
+    if unread_only:
+        items = [item for item in items if item.unread]
     items.sort(key=lambda item: item.updated_at, reverse=True)
     total = len(items)
     page = items[offset:offset + limit]

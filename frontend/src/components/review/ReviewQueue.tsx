@@ -105,6 +105,9 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                 {item.kind === "notification" && item.unread && (
                   <button type="button" onClick={() => void markNotificationRead(item)} className="text-[11px] text-muted-foreground hover:text-foreground">Mark read</button>
                 )}
+                {item.kind === "identity_suggestion" && (
+                  <a href="/people" className="text-[11px] text-accent hover:underline">Review in People</a>
+                )}
               </div>
             </li>
           ))}
