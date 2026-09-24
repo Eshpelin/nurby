@@ -70,6 +70,7 @@ from services.agent.tools.relationships import (  # noqa: F401
     query_relationships,
 )
 from services.agent.tools.setup_tools import (  # noqa: F401
+    draft_rule,
     get_rule_schema,
     run_doctor,
     suggest_rule,
@@ -104,6 +105,7 @@ __all__ = [
     "query_relationships",
     "run_doctor",
     "speak_on_camera",
+    "draft_rule",
     "suggest_rule",
     "summarize_activity",
     "summarize_window",

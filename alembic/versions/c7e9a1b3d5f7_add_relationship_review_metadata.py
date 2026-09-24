@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
-revision = "c1d2e3f4a5b6"
+revision = "c7e9a1b3d5f7"
 down_revision = "b5d7f9a1c3e5"
 branch_labels = None
 depends_on = None

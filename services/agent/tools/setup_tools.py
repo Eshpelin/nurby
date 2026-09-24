@@ -79,6 +79,136 @@ async def suggest_rule(ctx: dict, *, description: str) -> dict:
     }
 
 
+_DRAFT_RULE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["description"],
+    "properties": {
+        "description": {
+            "type": "string",
+            "description": (
+                "Plain-English description of the automation the user wants, "
+                "e.g. 'alert me when a stranger is at the front door after 10pm'. "
+                "No JSON, no field names."
+            ),
+        },
+    },
+}
+
+
+def _summarize_rule(rule: dict) -> str:
+    """A short human sentence describing a drafted rule for the confirm card."""
+    tp = rule.get("trigger_pattern") or {}
+    trig = tp.get("type", "activity")
+    if tp.get("label"):
+        trig = f"{tp['label']} detected"
+    actions = [a.get("type") for a in (rule.get("actions") or []) if a.get("type")]
+    act = ", ".join(actions) or "notify"
+    conds = rule.get("conditions") or {}
+    when = ""
+    if conds.get("time_after") or conds.get("time_before"):
+        when = f" between {conds.get('time_after','?')}-{conds.get('time_before','?')}"
+    return f"{rule.get('name', 'Rule')}: on {trig}{when} → {act}"
+
+
+def _rule_camera_ids(rule: dict) -> set[str]:
+    """Every camera id a drafted rule references (trigger + conditions)."""
+    out: set[str] = set()
+    tp = rule.get("trigger_pattern") or {}
+    if tp.get("camera_id"):
+        out.add(str(tp["camera_id"]))
+    conds = rule.get("conditions") or {}
+    if conds.get("camera_id"):
+        out.add(str(conds["camera_id"]))
+    for c in conds.get("camera_ids") or []:
+        out.add(str(c))
+    return out
+
+
+async def draft_rule(ctx: dict, *, description: str) -> dict:
+    """Draft a real, ready-to-create rule from a description and hand it back
+    as a confirm proposal (#284).
+
+    Writes nothing: it translates the request into a validated rule and returns
+    a ``client_action`` the UI renders as a Confirm card. The rule is only
+    created when the user confirms (the client POSTs it to /api/rules). Scoped
+    to the caller's cameras: a draft that references a camera they cannot see
+    is refused.
+    """
+    from shared.camera_access import ALL, allowed_camera_ids
+
+    db = ctx["db"]
+    user = ctx.get("user")
+    description = (description or "").strip()
+    if not description:
+        return {"ok": False, "error": "description must not be empty"}
+
+    try:
+        from services.api.routes.rules_nl import translate_rule
+
+        out = await translate_rule(db, description)
+    except Exception as exc:  # HTTPException (no provider / unparseable) or other
+        detail = getattr(exc, "detail", None) or str(exc)
+        return {
+            "ok": False,
+            "error": "could_not_draft",
+            "message": f"I couldn't turn that into a rule: {detail}",
+        }
+
+    rule = out["rule"]
+
+    # Permission: never draft a rule on a camera the caller cannot see.
+    if user is not None:
+        allowed = await allowed_camera_ids(user, db)
+        if allowed is not ALL:
+            import uuid as _uuid
+
+            allowed_str = {str(c) for c in allowed}
+            foreign = []
+            for cid in _rule_camera_ids(rule):
+                try:
+                    _uuid.UUID(cid)
+                except ValueError:
+                    continue
+                if cid not in allowed_str:
+                    foreign.append(cid)
+            if foreign:
+                return {
+                    "ok": False,
+                    "error": "camera_out_of_scope",
+                    "message": "That rule targets a camera you don't have access to.",
+                }
+
+    summary = _summarize_rule(rule)
+    return {
+        "ok": True,
+        "rule": rule,
+        "summary": summary,
+        "notes": out.get("notes", []),
+        "warnings": out.get("warnings", []),
+        # The driver forwards client_action to the UI as a Confirm card; the
+        # write happens only when the user confirms (client POSTs body).
+        "client_action": {
+            "kind": "create_rule",
+            "method": "POST",
+            "path": "/api/rules",
+            "title": rule.get("name", "New rule"),
+            "summary": summary,
+            "warnings": out.get("warnings", []),
+            "body": rule,
+        },
+        "message_for_user": (
+            f"I've drafted this rule — {summary}. Review it below and press Confirm "
+            "to create it (I won't create anything until you do)."
+        ),
+        "instructions": (
+            "Tell the user you drafted the rule and they can confirm it below. "
+            "Relay message_for_user; do not print the JSON or field names. If there "
+            "are warnings, mention them briefly."
+        ),
+    }
+
+
 _TEST_CAMERA_CONNECTION_SCHEMA = {
     "type": "object",
     "additionalProperties": False,

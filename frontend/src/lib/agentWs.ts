@@ -18,7 +18,10 @@ export type AgentEventType =
   | "error"
   | "cancelled"
   | "budget_warning"
-  | "clarification";
+  | "clarification"
+  // A tool proposed a client-side action (e.g. draft_rule's Confirm card,
+  // #284). The UI renders it; the write happens only on the user's confirm.
+  | "client_action";
 
 export interface AgentEvent {
   type: AgentEventType;
