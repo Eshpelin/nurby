@@ -364,6 +364,11 @@ class RecordingResponse(BaseModel):
     thumbnail_path: str | None
     blur_status: str = "pending"
     blur_error: str | None = None
+    # Remote storage (issue #269): null = local-only; pending = buffered
+    # for FTP upload; uploaded = lives on the FTP profile; failed = retries
+    # exhausted (local buffer is the only copy).
+    remote_state: str | None = None
+    storage_profile_name: str | None = None
 
     model_config = {"from_attributes": True}
 

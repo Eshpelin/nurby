@@ -30,7 +30,7 @@ from shared.ffmpeg_safe import (
     DisallowedFfmpegArgError,
     assert_allowed_args,
 )
-from shared.models import Camera, Observation, Person, Recording, Transcript, User
+from shared.models import Camera, Observation, Person, Recording, StorageProfile, Transcript, User
 from shared.paths import escape_like, resolve_inside, safe_getsize
 from shared.schemas import (
     BulkDeleteResponse,
@@ -155,10 +155,32 @@ async def _get_disk_path_or_404(recording: Recording) -> str:
         cached = await fetch_to_cache(recording)
         if cached:
             return cached
+        if getattr(recording, "remote_state", None) == "uploaded":
+            # Issue #275: say WHERE the recording lives instead of claiming
+            # it does not exist.
+            name = await _profile_name(recording.remote_profile_id)
+            raise HTTPException(
+                status_code=404,
+                detail=f"Stored on {name} (FTP), which is currently unreachable. "
+                "Check the server, then try again.",
+            )
     if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Recording file not found on disk")
+    return path
+
+
+async def _profile_name(profile_id) -> str:
+    """Human name for a storage profile snapshot, for error copy."""
+    if not profile_id:
+        return "your FTP server"
+    try:
+        async with async_session() as db:
+            profile = await db.get(StorageProfile, profile_id)
+        return profile.name if profile else "your FTP server"
+    except Exception:
+        return "your FTP server"
     return path
 
 
@@ -409,6 +431,10 @@ async def list_recordings(
     ),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
+    remote_state: str | None = Query(
+        default=None,
+        description="Filter by storage state: local | pending | uploaded | failed (issue #269)",
+    ),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     allowed = await allowed_camera_ids(current_user, db)
@@ -417,9 +443,27 @@ async def list_recordings(
     )
     if query is None:
         return []
+    if remote_state == "local":
+        query = query.where(Recording.remote_state.is_(None))
+    elif remote_state in ("pending", "uploaded", "failed"):
+        query = query.where(Recording.remote_state == remote_state)
     query = query.order_by(Recording.started_at.desc()).limit(limit).offset(offset)
     result = await db.execute(query)
-    return result.scalars().all()
+    recordings = list(result.scalars().all())
+
+    # Remote storage (issue #275): attach the storage-profile name so UIs
+    # can say WHERE a recording lives, not just local-vs-remote.
+    profile_ids = {r.remote_profile_id for r in recordings if r.remote_profile_id}
+    names: dict[uuid.UUID, str] = {}
+    if profile_ids:
+        rows = await db.execute(
+            select(StorageProfile.id, StorageProfile.name).where(StorageProfile.id.in_(profile_ids))
+        )
+        names = {pid: name for pid, name in rows.all()}
+    for r in recordings:
+        if r.remote_profile_id:
+            r.storage_profile_name = names.get(r.remote_profile_id)
+    return recordings
 
 
 def _detection_labels(object_detections: dict | None) -> list[str]:

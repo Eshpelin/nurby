@@ -30,6 +30,8 @@ interface Recording {
   duration_seconds: number | null;
   file_size_bytes: number | null;
   thumbnail_path: string | null;
+  remote_state?: string | null; // null = local-only; pending | uploaded | failed
+  storage_profile_name?: string | null;
 }
 
 interface Camera {
@@ -169,6 +171,7 @@ export default function RecordingsPage() {
   const [objectFilters, setObjectFilters] = useState<string[]>([]);
   const [personFilter, setPersonFilter] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
   const [showBoxes, setShowBoxes] = useState(true);
   // "Search what was said" mode: transcript full-text search that deep-links
   // into the covering recording, seeked to the utterance.
@@ -265,8 +268,9 @@ export default function RecordingsPage() {
     if (vehicleFilter) params.set("vehicle_id", vehicleFilter);
     if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
     if (dateTo) params.set("to", new Date(dateTo).toISOString());
+    if (locationFilter) params.set("remote_state", locationFilter);
     return params;
-  }, [page, cameraFilter, objectFilters, personFilter, vehicleFilter, dateFrom, dateTo]);
+  }, [page, cameraFilter, objectFilters, personFilter, vehicleFilter, dateFrom, dateTo, locationFilter]);
 
   const fetchRecordings = useCallback(async () => {
     setLoading(true);
@@ -610,6 +614,19 @@ export default function RecordingsPage() {
             ))}
           </select>
 
+          <select
+            value={locationFilter}
+            onChange={(e) => { setLocationFilter(e.target.value); setPage(0); }}
+            className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
+            title="Where the recordings are stored"
+          >
+            <option value="">All locations</option>
+            <option value="local">Local only</option>
+            <option value="pending">Uploading</option>
+            <option value="uploaded">On FTP</option>
+            <option value="failed">Upload failed</option>
+          </select>
+
           <div className="flex items-center gap-2">
             <label className="text-xs text-muted-foreground">From</label>
             <input
@@ -899,6 +916,27 @@ export default function RecordingsPage() {
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span>{formatDuration(rec.duration_seconds)}</span>
                     <span>{formatFileSize(rec.file_size_bytes)}</span>
+                    {rec.remote_state === "uploaded" && (
+                      <span
+                        className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+                        title={rec.storage_profile_name ? `Stored on ${rec.storage_profile_name} (FTP)` : "Stored on FTP"}
+                      >
+                        On FTP
+                      </span>
+                    )}
+                    {rec.remote_state === "pending" && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300" title="Waiting to upload to FTP">
+                        Uploading
+                      </span>
+                    )}
+                    {rec.remote_state === "failed" && (
+                      <span
+                        className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400"
+                        title="FTP upload failed — only the local copy exists. Check Settings → Storage."
+                      >
+                        Upload failed
+                      </span>
+                    )}
                   </div>
                   <FacetChips facet={facets[rec.id]} />
                 </div>
