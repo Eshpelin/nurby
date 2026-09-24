@@ -5,7 +5,7 @@
 // the camera page state so the SaveBar persists it with the rest of the
 // settings; the profile list is fetched here.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { FieldRow, Section } from "./primitives";
 
@@ -67,6 +67,10 @@ export function StorageSection({
   const [msg, setMsg] = useState("");
   const [msgOk, setMsgOk] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The assignment the page hydrated with (#278): switching affects new
+  // segments only, so say so while a changed (unsaved) choice is selected.
+  const initialProfileRef = useRef<string | null>(storageProfileId);
+  const locationChanged = storageProfileId !== initialProfileRef.current;
 
   const load = useCallback(async () => {
     try {
@@ -242,6 +246,21 @@ export function StorageSection({
           ))}
         </select>
       </FieldRow>
+
+      {locationChanged && (
+        <p className="text-[11px] text-amber-300">
+          Switching affects new segments only — recordings already written
+          stay in the previous location and won&apos;t play until moved.{" "}
+          <a
+            href="https://github.com/Eshpelin/nurby/blob/main/docs/operations/storage-location.md"
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            Migration notes
+          </a>
+        </p>
+      )}
 
       {selected && (
         <p className="text-[11px] text-muted-foreground">

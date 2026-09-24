@@ -1,6 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { StorageLowSpaceBanner, StorageOverviewBlock } from "@/components/settings/StorageLocation";
+import {
+  StorageLocationForm,
+  StorageLowSpaceBanner,
+  StorageOverviewBlock,
+} from "@/components/settings/StorageLocation";
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), role: "admin" }));
 vi.mock("@/lib/auth", () => ({
@@ -76,5 +80,29 @@ describe("StorageOverviewBlock (#274)", () => {
     mocks.fetch.mockImplementation(fetchRouter(null));
     render(<StorageOverviewBlock />);
     expect(await screen.findByText("Loading locations…")).toBeInTheDocument();
+  });
+});
+
+
+describe("StorageLocationForm consequence warning (#278)", () => {
+  it("warns that changed locations affect new recordings only", async () => {
+    mocks.fetch.mockImplementation(fetchRouter(overview()));
+    render(<StorageLocationForm />);
+    const input = await screen.findByLabelText("Where should recordings be stored?");
+    expect(screen.queryByText(/won't play until moved/i)).not.toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "/mnt/elsewhere" } });
+    expect(screen.getByText(/won't play until moved/i)).toBeInTheDocument();
+    expect(screen.getByText(/Migration notes/i)).toHaveAttribute(
+      "href",
+      "https://github.com/Eshpelin/nurby/blob/main/docs/operations/storage-location.md"
+    );
+  });
+
+  it("stays quiet while the current location is unchanged", async () => {
+    mocks.fetch.mockImplementation(fetchRouter(overview()));
+    render(<StorageLocationForm />);
+    await screen.findByLabelText("Where should recordings be stored?");
+    // Prefill happened; no change -> no warning.
+    expect(screen.queryByText(/won't play until moved/i)).not.toBeInTheDocument();
   });
 });

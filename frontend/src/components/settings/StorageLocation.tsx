@@ -231,6 +231,22 @@ export function StorageLocationForm({
         </p>
       )}
 
+      {dirty && recordings && path.trim() !== recordings.path && (
+        <p className="text-[11px] text-amber-300">
+          Heads-up: recordings already written stay in the previous location
+          and won&apos;t play until moved. New recordings use the new
+          location immediately.{" "}
+          <a
+            href="https://github.com/Eshpelin/nurby/blob/main/docs/operations/storage-location.md"
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            Migration notes
+          </a>
+        </p>
+      )}
+
       {status?.docker && (
         <p className="text-[11px] text-amber-300">
           Nurby is running in Docker: enter a path inside the container (the
