@@ -860,7 +860,7 @@ export default function CameraConfigPage() {
           setRetentionMode={setRetentionMode}
         />
 
-        {/* ── Storage Location ── */}
+        {/* ── Recordings location ── */}
         <StorageSection
           storageProfileId={storageProfileId}
           setStorageProfileId={setStorageProfileId}

@@ -387,7 +387,7 @@ export function StorageOverviewBlock() {
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        Retention is set per camera (Storage Retention in each camera&apos;s
+        Retention is set per camera (Retention in each camera&apos;s
         settings), and a camera can record to its own location (Storage
         Location in camera settings). Recordings already written stay where
         they are when locations change.
@@ -428,7 +428,7 @@ export function StorageLocationCard() {
   return (
     <div className="space-y-3">
       <div>
-        <div className="text-sm font-medium mb-1">Location</div>
+        <div className="text-sm font-medium mb-1">Recordings location</div>
         <p className="text-xs text-muted-foreground">
           The drives and folders Nurby writes media to.
         </p>

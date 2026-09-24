@@ -223,7 +223,7 @@ export function StorageSection({
 
   return (
     <Section
-      title="Storage Location"
+      title="Recordings location"
       description="Where this camera's recordings are written. Default keeps them with everything else; FTP locations upload segments to your own server (buffered locally first, so an outage never loses footage)."
     >
       <FieldRow label="Record to">

@@ -25,8 +25,8 @@ export function RetentionSection({
 }: RetentionSectionProps) {
   return (
         <Section
-          title="Storage Retention"
-          description="Control how long recordings are kept on disk for this camera"
+          title="Retention"
+          description="How long recordings are kept before deletion"
         >
           <FieldRow label="Retention Policy">
             <div className="flex gap-1.5">
