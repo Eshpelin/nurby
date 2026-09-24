@@ -95,7 +95,10 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
           <h2 id="review-queue-heading" className="text-sm font-medium">Review queue</h2>
           <p className="text-xs text-muted-foreground mt-0.5">Incidents, notifications, and system suggestions in one place.</p>
         </div>
-        <button type="button" onClick={() => void load()} className="text-xs text-muted-foreground hover:text-foreground">Refresh</button>
+        <div className="flex items-center gap-3">
+          <a href="/settings#privacy-controls" className="text-xs text-muted-foreground hover:text-foreground">Privacy controls</a>
+          <button type="button" onClick={() => void load()} className="text-xs text-muted-foreground hover:text-foreground">Refresh</button>
+        </div>
       </div>
       {loading ? (
         <p className="px-4 py-5 text-xs text-muted-foreground">Loading review items…</p>
