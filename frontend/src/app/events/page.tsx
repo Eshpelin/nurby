@@ -16,6 +16,7 @@ import { EventNotesPanel } from "@/components/rules/EventNotesPanel";
 import { EventFeedbackPanel } from "@/components/events/EventFeedback";
 import { EventEvidence } from "@/components/EventEvidence";
 import { ShareDialog } from "@/components/ShareDialog";
+import { ReviewQueue } from "@/components/review/ReviewQueue";
 import type { Camera, EventEntry, Rule } from "@/components/rules/types";
 
 const PAGE_SIZE = 50;
@@ -274,9 +275,9 @@ export default function EventsPage() {
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Alerts</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Review</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Every rule that fired, across all cameras. Review, acknowledge, export.
+            One place for incidents, notifications, and alerts across all cameras.
           </p>
         </div>
         <button
@@ -294,6 +295,7 @@ export default function EventsPage() {
           className="px-3 py-1.5 text-sm rounded-md border border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
         >Select page</button>
       </div>
+      <ReviewQueue onOpenEvent={(eventId) => setExpandedId(eventId)} />
         <div className="mb-4"><ActivityFilterBar /></div>
 
       <div className="flex items-center gap-1 mb-3">
