@@ -88,7 +88,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
   };
 
   const decideRelationship = async (item: ReviewItem, decision: "confirm" | "reject" | "defer") => {
-    if (item.kind !== "relationship_suggestion") return;
+    if (item.source_type !== "association") return;
     setDecisionBusy(item.id);
     try {
       const res = await authFetch(`/api/review/relationship-suggestions/${item.source_id}/decision`, {
@@ -106,7 +106,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
   };
 
   const toggleEvidence = async (item: ReviewItem) => {
-    if (item.kind !== "relationship_suggestion") return;
+    if (item.source_type !== "association") return;
     if (expandedEvidence === item.id) {
       setExpandedEvidence(null);
       return;
@@ -158,7 +158,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.summary}</p>
                 <span className="mt-1 block text-[10px] text-muted-foreground">{timeAgo(item.updated_at)}</span>
-                {item.kind === "relationship_suggestion" && expandedEvidence === item.id && (
+                {item.source_type === "association" && expandedEvidence === item.id && (
                   <div className="mt-2 rounded border border-border/70 bg-background/50 p-2">
                     {evidenceLoading === item.id ? (
                       <p className="text-[10px] text-muted-foreground">Loading supporting episodes…</p>
@@ -190,7 +190,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                 {item.kind === "identity_suggestion" && (
                   <a href="/people" className="text-[11px] text-accent hover:underline">Review in People</a>
                 )}
-                {item.kind === "relationship_suggestion" && (
+                {item.source_type === "association" && (
                   <>
                     <button
                       type="button"

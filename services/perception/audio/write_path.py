@@ -143,6 +143,15 @@ async def _write(
             conversation_id=conversation_id,
         )
         db.add(transcript)
+        try:
+            from services.perception.audio.name_mentions import process_transcript_name_mentions
+
+            await db.flush()
+            await process_transcript_name_mentions(db, transcript)
+        except Exception:
+            # A hypothesis producer must never prevent the transcript itself
+            # from being stored and played back.
+            logger.exception("name mention processing failed transcript=%s", transcript.id)
         await db.commit()
         await db.refresh(transcript)
 

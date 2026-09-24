@@ -272,7 +272,7 @@ async def list_review_items(
                 provenance={"source": "body_cluster", "cluster_status": cluster.status},
             ))
 
-    if "relationship_suggestion" in requested:
+    if "relationship_suggestion" in requested or "identity_suggestion" in requested:
         association_rows = (
             await db.execute(
                 select(EntityAssociation)
@@ -287,17 +287,27 @@ async def list_review_items(
             # otherwise hidden relationship through queue counts.
             if not _association_visible(association, allowed):
                 continue
+            association_kind = (
+                "identity_suggestion"
+                if association.relation == "possibly_named"
+                else "relationship_suggestion"
+            )
+            if association_kind not in requested:
+                continue
             relation = association.relation.replace("_", " ")
             items.append(_item(
                 source_type="association",
                 source_id=association.id,
-                kind="relationship_suggestion",
+                kind=association_kind,
                 status="open",
                 priority="normal",
-                title="Possible relationship needs review",
+                title=("Possible name from audio" if association_kind == "identity_suggestion"
+                       else "Possible relationship needs review"),
                 summary=(
-                    f"{association.subject_key} is often seen {relation} "
-                    f"{association.object_label or association.object_key}"
+                    f"{association.subject_key} may be {association.object_label or association.object_key}"
+                    if association_kind == "identity_suggestion"
+                    else f"{association.subject_key} is often seen {relation} "
+                         f"{association.object_label or association.object_key}"
                 ),
                 created_at=association.created_at,
                 updated_at=association.last_seen_at or association.created_at,
