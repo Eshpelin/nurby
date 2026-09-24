@@ -16,7 +16,9 @@ docker compose -f docker-compose.yml -f docker-compose.samples.yml up -d
 
 The overlay mounts the host fixture directory as `/demo` inside ingestion and
 perception. It does not change the normal deployment or expose host files to
-the API container.
+the API container. It also enables the ingestion service's opt-in audio/STT
+pipeline for this local QA profile; the default deployment remains audio-off
+until an operator explicitly enables it.
 
 ## Register the files as cameras
 

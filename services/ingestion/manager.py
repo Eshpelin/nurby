@@ -29,6 +29,23 @@ POLL_INTERVAL = 10  # seconds between DB polls for camera changes
 RESTART_KEY_PREFIX = "nurby:stream_restart:"
 
 
+def _audio_source_url(cam: Camera) -> str | None:
+    """Resolve the audio input for a camera.
+
+    MediaMTX provides the shared audio path for network cameras, but file
+    cameras are intentionally not registered as MediaMTX paths. Their audio
+    must be read from the same local/remote file source as the video worker.
+    """
+    if getattr(cam, "stream_type", "") == "file":
+        return cam.stream_url or None
+    return mux_rtsp_url(
+        cam.id,
+        cam.stream_type,
+        stream_url=cam.stream_url,
+        webcam_device=getattr(cam, "webcam_device", None),
+    )
+
+
 def _stream_config_hash(cam: Camera) -> str:
     """Hash stream-affecting fields to detect config changes."""
     parts = [
@@ -122,11 +139,7 @@ class CameraManager:
                     cam.stream_url, cam.username, unseal(cam.password)
                 )
         else:
-            audio_url = mux_rtsp_url(
-                cam.id, cam.stream_type,
-                stream_url=cam.stream_url,
-                webcam_device=getattr(cam, "webcam_device", None),
-            )
+            audio_url = _audio_source_url(cam)
             if audio_url is None and cam.stream_type in ("rtsp", "hls") and cam.stream_url:
                 # Safety fallback for the window between camera create and
                 # mux path registration. Prefer direct URL once, retry via
@@ -209,12 +222,7 @@ class CameraManager:
         # capture and the existing detection workers share a single
         # upstream session per camera.
         def _resolve_audio_url(cam: Camera) -> str | None:
-            return mux_rtsp_url(
-                cam.id,
-                cam.stream_type,
-                stream_url=cam.stream_url,
-                webcam_device=getattr(cam, "webcam_device", None),
-            )
+            return _audio_source_url(cam)
 
         try:
             await self._stt_pipeline.sync(list(cameras.values()), _resolve_audio_url)

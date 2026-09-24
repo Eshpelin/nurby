@@ -13,6 +13,11 @@ services:
       - ./recordings/demo:/demo:ro
 
   ingestion:
+    environment:
+      # The normal deployment keeps STT opt-in globally. Enable it only for
+      # this explicit local QA profile so audio/transcription flows can be
+      # exercised against the sample camera.
+      AUDIO_ENABLED: "true"
     volumes:
       - ./recordings/demo:/demo:ro
 
