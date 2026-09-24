@@ -17,6 +17,10 @@ def test_unrelated_sentence_does_not_turn_every_word_into_a_name():
     assert extract_name_mentions("The car is outside and the light is on.") == []
 
 
+def test_negated_request_is_not_a_name_hypothesis():
+    assert extract_name_mentions("Don't tell Simon that I am here.") == []
+
+
 def test_duplicate_mentions_are_deduplicated_by_context():
     mentions = extract_name_mentions("Hey Simon, wait Simon, can you look?")
     assert [m["normalized"] for m in mentions] == ["simon"]

@@ -29,6 +29,7 @@ _STOPWORDS = {
     "the", "this", "that", "there", "please", "come", "look", "wait",
     "can", "could", "would", "where", "is", "tell", "ask", "call",
 }
+_NEGATION = re.compile(r"(?:\b(?:don't|dont|do not|not|never|no)\s+)$", re.IGNORECASE)
 
 
 def extract_name_mentions(text: str) -> list[dict[str, str]]:
@@ -37,6 +38,10 @@ def extract_name_mentions(text: str) -> list[dict[str, str]]:
     seen: set[tuple[str, str]] = set()
     for kind, pattern in _PATTERNS:
         for match in pattern.finditer(text or ""):
+            # A request not to address/contact someone is not evidence that
+            # the nearby person has that name.
+            if _NEGATION.search((text or "")[:match.start()]):
+                continue
             name = match.group(1).strip(" '").strip()
             normalized = name.casefold()
             if normalized in _STOPWORDS or len(normalized) < 2:

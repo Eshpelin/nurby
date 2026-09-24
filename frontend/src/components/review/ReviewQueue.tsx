@@ -32,7 +32,8 @@ type RelationshipDetail = {
     camera_ids: string[];
     observation_ids: string[];
     metadata: Record<string, unknown>;
-    source_status: "available" | "source_expired";
+    source_status: "available" | "source_changed" | "source_expired";
+    source_url: string | null;
   }[];
 };
 
@@ -187,6 +188,14 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                                   Open frame
                                 </a>
                               ))}
+                              {typeof evidence.source_url === "string" && (
+                                <a href={evidence.source_url} target="_blank" rel="noreferrer" className="ml-2 text-accent hover:underline">
+                                  Open transcript
+                                </a>
+                              )}
+                              {evidence.source_status === "source_changed" && (
+                                <span className="ml-2 italic">Transcript edited; re-check this hypothesis</span>
+                              )}
                               {evidence.source_status === "source_expired" && (
                                 <span className="ml-2 italic">Source no longer retained</span>
                               )}

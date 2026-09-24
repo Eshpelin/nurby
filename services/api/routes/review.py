@@ -29,6 +29,7 @@ from shared.models import (
     FaceCluster,
     Incident,
     Notification,
+    Transcript,
     User,
 )
 from shared.schemas import ReviewItemResponse, ReviewQueueResponse
@@ -470,6 +471,25 @@ async def get_relationship_suggestion(
         cameras = {str(camera_id) for camera_id in (row.camera_ids or [])}
         if allowed_ids is not None and not cameras.intersection(allowed_ids):
             continue
+        metadata = row.evidence_metadata or {}
+        transcript_id = metadata.get("transcript_id")
+        transcript_exists = True
+        transcript_edited = False
+        if transcript_id:
+            try:
+                transcript = await db.scalar(
+                    select(Transcript).where(Transcript.id == uuid.UUID(str(transcript_id)))
+                )
+                transcript_exists = transcript is not None
+                transcript_edited = bool(transcript and transcript.text_edited)
+            except (TypeError, ValueError):
+                transcript_exists = False
+        if transcript_id and not transcript_exists:
+            source_status = "source_expired"
+        elif transcript_id and transcript_edited:
+            source_status = "source_changed"
+        else:
+            source_status = "available" if row.observation_ids or row.journey_id or transcript_id else "source_expired"
         evidence.append({
             "id": str(row.id),
             "episode_key": row.episode_key,
@@ -481,8 +501,9 @@ async def get_relationship_suggestion(
             "observed_at": row.observed_at,
             "score": row.score,
             "explanation": row.explanation,
-            "metadata": row.evidence_metadata or {},
-            "source_status": "available" if row.observation_ids or row.journey_id else "source_expired",
+            "metadata": metadata,
+            "source_status": source_status,
+            "source_url": f"/api/transcripts/{transcript_id}" if transcript_id and transcript_exists else None,
         })
     return {
         "id": str(association.id),
