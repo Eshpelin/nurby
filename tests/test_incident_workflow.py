@@ -41,12 +41,22 @@ class _Res:
     def all(self):
         return self._rows
 
+    def scalars(self):
+        return self
+
+    def first(self):
+        return self._rows[0] if self._rows else None
+
 
 class _DB:
     def __init__(self, incident, users=None):
         self.incident = incident
         self.users = users or {}
         self.committed = False
+        self.logged: list = []  # IncidentEvent rows appended via add()
+
+    def add(self, obj):
+        self.logged.append(obj)
 
     async def get(self, model, ident):
         if model.__name__ == "Incident":
@@ -62,7 +72,10 @@ class _DB:
         return None
 
     async def execute(self, stmt):
-        # Only used by _ownership's User name lookup.
+        t = str(stmt).lower()
+        if "from incident_events" in t:
+            return _Res(list(self.logged))
+        # User name lookups (both ownership pointers and audit-log actors).
         return _Res([(uid, u.display_name, u.email) for uid, u in self.users.items()])
 
 
@@ -141,3 +154,117 @@ def test_resolve_foreign_incident_is_404():
     assert "404" in str(exc.value) or "not found" in str(exc.value)
     assert row.status == "open"  # untouched
     assert db.committed is False
+
+
+# ── audit log history (#197 Phase 2) ──
+
+def test_audit_log_records_each_transition():
+    user = _admin()
+    row = _incident()
+    db = _DB(row, users={user.id: user})
+    _run(inc.resolve_incident(row.id, inc.ResolveRequest(reason="handled"), user, db))
+    _run(inc.reopen_incident(row.id, user, db))
+    out = _run(inc.dismiss_incident(row.id, inc.ResolveRequest(reason="nope"), user, db))
+    actions = [e.action for e in db.logged]
+    assert actions == ["resolved", "reopened", "dismissed"]
+    # History survives reopen (unlike the single resolved_by pointer).
+    hist = out["ownership"]["history"]
+    assert [h["action"] for h in hist] == ["resolved", "reopened", "dismissed"]
+    assert hist[0]["actor"] == "Ops" and hist[0]["reason"] == "handled"
+
+
+def test_assign_logs_actor_and_detail():
+    user = _admin()
+    assignee = SimpleNamespace(id=uuid.uuid4(), display_name="Alice", email="a@x.com")
+    row = _incident()
+    db = _DB(row, users={user.id: user, assignee.id: assignee})
+    _run(inc.assign_incident(row.id, inc.AssignRequest(user_id=assignee.id), user, db))
+    _run(inc.assign_incident(row.id, inc.AssignRequest(user_id=None), user, db))
+    assert [e.action for e in db.logged] == ["assigned", "unassigned"]
+    assert db.logged[0].detail == "Alice"
+
+
+# ── detail enrichment helpers (#197 Phase 1) ──
+
+class _DispatchDB:
+    """Dispatches execute() by table name for the enrichment helpers."""
+
+    def __init__(self, *, events=None, rules=None, notes=None, incidents=None, recording=None):
+        self._events = events or []
+        self._rules = rules or []
+        self._notes = notes or []
+        self._incidents = incidents or []
+        self._recording = recording
+        self._got = None
+
+    async def get(self, model, ident):
+        if model.__name__ == "Observation":
+            return self._got
+        return None
+
+    async def execute(self, stmt):
+        t = str(stmt).lower()
+        if "from events" in t:
+            return _Res(self._events)
+        if "from rules" in t:
+            return _Res(self._rules)
+        if "from event_notes" in t:
+            return _Res(self._notes)
+        if "from incidents" in t:
+            return _Res(self._incidents)
+        if "from recordings" in t:
+            return _Res([self._recording] if self._recording else [])
+        return _Res([])
+
+
+def test_incident_alerts_maps_trigger_and_action():
+    rid = uuid.uuid4()
+    ev = SimpleNamespace(
+        id=uuid.uuid4(), fired_at=datetime.now(timezone.utc), severity="alert",
+        rule_id=rid, action_type="telegram", action_status="sent", action_error=None,
+        acked_at=None,
+    )
+    db = _DispatchDB(events=[ev], rules=[(rid, "Front door while away")], notes=[])
+    out = _run(inc._incident_alerts(db, [uuid.uuid4()]))
+    assert out[0]["trigger_reason"] == "Front door while away"
+    assert out[0]["action_status"] == "sent"
+    assert out[0]["seen"] is False
+
+
+def test_incident_alerts_empty_without_obs():
+    db = _DispatchDB()
+    assert _run(inc._incident_alerts(db, [])) == []
+
+
+def test_related_sightings_scoped_to_journey():
+    from shared.camera_access import ALL
+    jid = uuid.uuid4()
+    inc_row = _incident()
+    inc_row.journey_id = jid
+    sib = _incident()
+    sib.summary_text = "seen at the gate"
+    db = _DispatchDB(incidents=[sib])
+    out = _run(inc._related_sightings(db, inc_row, ALL))
+    assert out and out[0]["summary_text"] == "seen at the gate"
+
+
+def test_related_sightings_none_without_journey():
+    from shared.camera_access import ALL
+    db = _DispatchDB()
+    assert _run(inc._related_sightings(db, _incident(), ALL)) == []
+
+
+def test_exact_clip_finds_covering_recording():
+    row = _incident()
+    rec = SimpleNamespace(
+        id=uuid.uuid4(), started_at=row.started_at, ended_at=None, thumbnail_path="/t.jpg",
+    )
+    db = _DispatchDB(recording=rec)
+    out = _run(inc._exact_clip(db, row))
+    assert out["recording_id"] == str(rec.id)
+    assert out["anchor_at"] == row.started_at.isoformat()
+
+
+def test_exact_clip_none_when_no_recording():
+    db = _DispatchDB(recording=None)
+    assert _run(inc._exact_clip(db, _incident())) is None
