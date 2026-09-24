@@ -106,6 +106,10 @@ def next_status(
     """
     if current in TERMINAL_STATUSES:
         return current
+    if current == "deferred":
+        # New evidence may bring a deferred suggestion back for review, but
+        # it must not silently promote it to an established fact.
+        return "candidate"
     if user_confirmed:
         return "established"
     if distinct_days >= min_days:
@@ -209,6 +213,8 @@ def vehicles_in(observations) -> dict[str, dict]:
                     "camera_id": str(cam) if cam else None,
                     "observation_ids": [],
                     "camera_ids": [],
+                    "plate_text": entry.get("plate_text"),
+                    "identity_kind": "plate" if entry.get("plate_text") else "appearance",
                 },
             )
             observation_id = getattr(obs, "id", None)
@@ -239,6 +245,7 @@ async def record_pairing(
     journey_id: uuid.UUID | None = None,
     observation_ids: list[str] | None = None,
     camera_ids: list[str] | None = None,
+    evidence_metadata: dict | None = None,
 ) -> EntityAssociation | None:
     """Fold one co-presence event into its edge, creating it if needed.
 
@@ -290,7 +297,11 @@ async def record_pairing(
             camera_ids=camera_ids or ([camera_id] if camera_id else []),
             observed_at=when,
             explanation="The subject and vehicle were observed in the same finalized visit episode.",
-            evidence_metadata={"vehicle_id": object_key, "vehicle_label": object_label},
+            evidence_metadata={
+                "vehicle_id": object_key,
+                "vehicle_label": object_label,
+                **(evidence_metadata or {}),
+            },
         ))
     return existing
 
@@ -348,6 +359,10 @@ async def process_journey(
             journey_id=journey.id,
             observation_ids=seen.get("observation_ids") or [],
             camera_ids=seen.get("camera_ids") or [str(camera_id) for camera_id in cameras],
+            evidence_metadata={
+                "identity_kind": seen.get("identity_kind"),
+                "plate_text": seen.get("plate_text"),
+            },
         )
         if edge is not None:
             touched += 1

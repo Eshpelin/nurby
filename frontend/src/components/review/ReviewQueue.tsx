@@ -87,7 +87,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
     if (res.ok) setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, unread: false, status: "resolved" } : candidate));
   };
 
-  const decideRelationship = async (item: ReviewItem, decision: "confirm" | "reject") => {
+  const decideRelationship = async (item: ReviewItem, decision: "confirm" | "reject" | "defer") => {
     if (item.kind !== "relationship_suggestion") return;
     setDecisionBusy(item.id);
     try {
@@ -199,6 +199,14 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                       className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
                       {expandedEvidence === item.id ? "Hide evidence" : "Evidence"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void decideRelationship(item, "defer")}
+                      disabled={decisionBusy === item.id}
+                      className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    >
+                      Not now
                     </button>
                     <button
                       type="button"

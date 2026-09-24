@@ -39,7 +39,7 @@ _KINDS = {"incident", "alert", "notification", "identity_suggestion", "relations
 
 
 class RelationshipDecisionBody(BaseModel):
-    decision: Literal["confirm", "reject"]
+    decision: Literal["confirm", "reject", "defer"]
     note: str | None = Field(default=None, max_length=1000)
 
 
@@ -395,7 +395,7 @@ async def decide_relationship_suggestion(
     editor rather than by replaying a notification action.
     """
     association = await db.get(EntityAssociation, association_id)
-    if not association or association.status != "candidate":
+    if not association or association.status not in {"candidate", "deferred"}:
         raise HTTPException(status_code=404, detail="Relationship suggestion not found")
 
     allowed = await allowed_camera_ids(current_user, db)
@@ -404,7 +404,11 @@ async def decide_relationship_suggestion(
         if not any(str(camera_id) in allowed_ids for camera_id in (association.camera_histogram or {})):
             raise HTTPException(status_code=404, detail="Relationship suggestion not found")
 
-    association.status = "established" if body.decision == "confirm" else "rejected"
+    association.status = {
+        "confirm": "established",
+        "reject": "rejected",
+        "defer": "deferred",
+    }[body.decision]
     association.user_confirmed = body.decision == "confirm"
     association.reviewed_at = datetime.now(timezone.utc)
     association.reviewed_by_user_id = current_user.id

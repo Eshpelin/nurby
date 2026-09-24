@@ -49,8 +49,9 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
       <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">Observed associations</div>
       <div className="space-y-1.5">
         {items.map((item) => {
-          const label = item.object_label || item.object_key;
-          const relation = item.relation.replaceAll("_", " ");
+          const isVehicleView = Boolean(objectKey);
+          const label = isVehicleView ? item.subject_key : (item.object_label || item.object_key);
+          const relation = isVehicleView ? "often seen with" : item.relation.replaceAll("_", " ");
           return (
             <div key={item.id} className="flex items-center gap-2 rounded border border-border/70 px-2.5 py-2">
               <div className="min-w-0 flex-1">

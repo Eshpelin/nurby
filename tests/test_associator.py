@@ -146,6 +146,10 @@ def test_an_archived_edge_returns_as_a_candidate_not_established():
     assert next_status("archived", 1, 3, user_confirmed=False) == "candidate"
 
 
+def test_deferred_edge_returns_for_review_without_auto_promotion():
+    assert next_status("deferred", 99, 3, user_confirmed=False) == "candidate"
+
+
 # ---- helpers -------------------------------------------------------------
 
 
@@ -184,6 +188,8 @@ def test_vehicles_in_ignores_unidentified_detections():
             "camera_id": None,
             "observation_ids": [],
             "camera_ids": [],
+            "plate_text": None,
+            "identity_kind": "appearance",
         }
     }
 
