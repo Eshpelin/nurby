@@ -209,6 +209,57 @@ async def draft_rule(ctx: dict, *, description: str) -> dict:
     }
 
 
+_REMEMBER_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["fact"],
+    "properties": {
+        "fact": {
+            "type": "string",
+            "description": (
+                "One plain-language fact about the household to remember, e.g. "
+                "'the kids get home around 3:30pm on weekdays' or 'the grey "
+                "sedan in the driveway is Dad's car'. A single sentence."
+            ),
+        },
+    },
+}
+
+
+async def remember(ctx: dict, *, fact: str) -> dict:
+    """Propose remembering a household fact (#286).
+
+    Writes nothing: it returns a ``client_action`` the UI renders as a Confirm
+    card, and the fact is stored (source="user", so the curator never rewrites
+    it) only when the user confirms. Reuses the same confirm gate as draft_rule
+    (#284)."""
+    fact = (fact or "").strip()
+    if not fact:
+        return {"ok": False, "error": "fact must not be empty"}
+    if len(fact) > 2000:
+        fact = fact[:2000]
+    return {
+        "ok": True,
+        "fact": fact,
+        "client_action": {
+            "kind": "remember_fact",
+            "method": "POST",
+            "path": "/api/household/facts",
+            "title": "Remember this",
+            "summary": fact,
+            "body": {"text": fact, "kind": "note"},
+        },
+        "message_for_user": (
+            f"Want me to remember that? “{fact}” — confirm below and I'll "
+            "keep it in the household's memory (I won't save it until you do)."
+        ),
+        "instructions": (
+            "Relay message_for_user; tell the user they can confirm below. Do not "
+            "claim you already saved it — it saves only on confirm."
+        ),
+    }
+
+
 _TEST_CAMERA_CONNECTION_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
