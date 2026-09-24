@@ -32,7 +32,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -50,6 +50,7 @@ logger = logging.getLogger("nurby.perception.associator")
 # coincidence. Three is low enough to be useful within a week and high
 # enough that a single unusual day cannot mint a fact on its own.
 DEFAULT_MIN_DISTINCT_DAYS = 3
+COOCCURRENCE_GAP = timedelta(seconds=90)
 
 # Subject kinds worth associating. A body-cluster subject is appearance
 # derived and does not survive a change of clothes, so it cannot carry a
@@ -189,6 +190,17 @@ def journey_camera_ids(journey: Journey) -> list[uuid.UUID]:
     return out
 
 
+def journeys_cooccur(first: Journey, second: Journey, gap: timedelta = COOCCURRENCE_GAP) -> bool:
+    """Return whether two finalized journeys share a camera and time window."""
+    first_start, first_end = journey_window(first)
+    second_start, second_end = journey_window(second)
+    if not (first_start and first_end and second_start and second_end):
+        return False
+    if not set(journey_camera_ids(first)).intersection(journey_camera_ids(second)):
+        return False
+    return max(first_start, second_start) <= min(first_end, second_end) + gap
+
+
 def vehicles_in(observations) -> dict[str, dict]:
     """``{vehicle_id: {"label", "camera_id"}}`` for identified vehicles.
 
@@ -246,6 +258,8 @@ async def record_pairing(
     observation_ids: list[str] | None = None,
     camera_ids: list[str] | None = None,
     evidence_metadata: dict | None = None,
+    evidence_kind: str = "association",
+    evidence_explanation: str = "The subjects were observed in the same finalized visit episode.",
 ) -> EntityAssociation | None:
     """Fold one co-presence event into its edge, creating it if needed.
 
@@ -265,6 +279,24 @@ async def record_pairing(
             .limit(1)
         )
     ).scalars().first()
+
+    if episode_key:
+        prior_evidence = (
+            await db.execute(
+                select(AssociationEvidence.id)
+                .join(EntityAssociation, AssociationEvidence.association_id == EntityAssociation.id)
+                .where(EntityAssociation.subject_kind == subject_kind)
+                .where(EntityAssociation.subject_key == subject_key)
+                .where(EntityAssociation.object_kind == object_kind)
+                .where(EntityAssociation.object_key == object_key)
+                .where(EntityAssociation.relation == relation)
+                .where(EntityAssociation.source == "learned")
+                .where(AssociationEvidence.episode_key == episode_key)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if prior_evidence and existing is not None:
+            return existing
 
     if existing is None:
         existing = EntityAssociation(
@@ -290,13 +322,13 @@ async def record_pairing(
         db.add(AssociationEvidence(
             association_id=existing.id,
             episode_key=episode_key,
-            evidence_kind="vehicle_pairing",
+            evidence_kind=evidence_kind,
             role="supporting",
             journey_id=journey_id,
             observation_ids=observation_ids or [],
             camera_ids=camera_ids or ([camera_id] if camera_id else []),
             observed_at=when,
-            explanation="The subject and vehicle were observed in the same finalized visit episode.",
+            explanation=evidence_explanation,
             evidence_metadata={
                 "vehicle_id": object_key,
                 "vehicle_label": object_label,
@@ -363,6 +395,73 @@ async def process_journey(
                 "identity_kind": seen.get("identity_kind"),
                 "plate_text": seen.get("plate_text"),
             },
+            evidence_kind="vehicle_pairing",
+            evidence_explanation="The subject and vehicle were observed in the same finalized visit episode.",
+        )
+        if edge is not None:
+            touched += 1
+    return touched
+
+
+async def process_cooccurrences(
+    db: AsyncSession, journey: Journey, *, tz_name: str = "UTC",
+    min_days: int = DEFAULT_MIN_DISTINCT_DAYS,
+    gap: timedelta = COOCCURRENCE_GAP,
+) -> int:
+    """Create reviewable pair hypotheses from overlapping finalized journeys.
+
+    Journeys, not observations, are the unit of evidence. A pair must share a
+    camera and overlap (or arrive within ``gap`` seconds); mere presence in a
+    broad camera view at unrelated times is not enough.
+    """
+    if journey.subject_kind not in ASSOCIABLE_SUBJECT_KINDS:
+        return 0
+    start, end = journey_window(journey)
+    if not (start and end):
+        return 0
+    cameras = set(journey_camera_ids(journey))
+    if not cameras:
+        return 0
+    others = (
+        await db.execute(
+            select(Journey)
+            .where(Journey.id != journey.id)
+            .where(Journey.finalized.is_(True))
+            .where(Journey.subject_kind.in_(ASSOCIABLE_SUBJECT_KINDS))
+            .where(Journey.subject_key != journey.subject_key)
+            .where(Journey.started_at <= end + gap)
+            .where(Journey.last_seen_at >= start - gap)
+        )
+    ).scalars().all()
+    touched = 0
+    for other in others:
+        other_cameras = set(journey_camera_ids(other))
+        shared_cameras = cameras.intersection(other_cameras)
+        if not journeys_cooccur(journey, other, gap):
+            continue
+        left, right = sorted(
+            [(journey.subject_kind, journey.subject_key, journey),
+             (other.subject_kind, other.subject_key, other)]
+        )
+        episode_key = "cooccurrence:" + ":".join(sorted((str(journey.id), str(other.id))))
+        edge = await record_pairing(
+            db,
+            subject_kind=left[0],
+            subject_key=left[1],
+            object_kind=right[0],
+            object_key=right[1],
+            object_label=None,
+            relation="accompanies",
+            when=max(start, other_start),
+            tz_name=tz_name,
+            min_days=min_days,
+            camera_id=str(next(iter(shared_cameras))),
+            episode_key=episode_key,
+            journey_id=journey.id,
+            camera_ids=[str(camera_id) for camera_id in shared_cameras],
+            evidence_metadata={"other_journey_id": str(other.id)},
+            evidence_kind="cooccurrence",
+            evidence_explanation="Both subjects were observed in overlapping finalized visit episodes on a shared camera.",
         )
         if edge is not None:
             touched += 1
@@ -579,6 +678,9 @@ class Associator:
             for journey in pending:
                 try:
                     touched += await process_journey(
+                        db, journey, tz_name=tz_name, min_days=min_days
+                    )
+                    touched += await process_cooccurrences(
                         db, journey, tz_name=tz_name, min_days=min_days
                     )
                 except Exception:

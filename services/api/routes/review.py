@@ -14,7 +14,7 @@ from typing import Iterable, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
@@ -346,10 +346,16 @@ async def list_entity_associations(
         raise HTTPException(status_code=422, detail="subject_key or object_key is required")
     allowed = await allowed_camera_ids(current_user, db)
     query = select(EntityAssociation).where(EntityAssociation.status != "rejected")
-    if subject_kind:
-        query = query.where(EntityAssociation.subject_kind == subject_kind)
-    if subject_key:
-        query = query.where(EntityAssociation.subject_key == subject_key)
+    if subject_kind and subject_key and not object_key:
+        query = query.where(or_(
+            and_(EntityAssociation.subject_kind == subject_kind, EntityAssociation.subject_key == subject_key),
+            and_(EntityAssociation.object_kind == subject_kind, EntityAssociation.object_key == subject_key),
+        ))
+    else:
+        if subject_kind:
+            query = query.where(EntityAssociation.subject_kind == subject_kind)
+        if subject_key:
+            query = query.where(EntityAssociation.subject_key == subject_key)
     if object_kind:
         query = query.where(EntityAssociation.object_kind == object_kind)
     if object_key:
@@ -357,8 +363,10 @@ async def list_entity_associations(
     rows = (
         await db.execute(query.order_by(EntityAssociation.last_seen_at.desc()).limit(100))
     ).scalars().all()
-    return [
-        {
+    result = []
+    for row in rows:
+        viewed_as_subject = row.subject_kind == subject_kind and row.subject_key == subject_key
+        result.append({
             "id": str(row.id),
             "subject_kind": row.subject_kind,
             "subject_key": row.subject_key,
@@ -373,11 +381,12 @@ async def list_entity_associations(
             "distinct_days": row.distinct_days,
             "first_seen_at": row.first_seen_at,
             "last_seen_at": row.last_seen_at,
+            "counterpart_label": (
+                row.object_label or row.object_key if viewed_as_subject else row.subject_key
+            ),
             "evidence_url": f"/api/review/relationship-suggestions/{row.id}",
-        }
-        for row in rows
-        if _association_visible(row, allowed)
-    ]
+        })
+    return [item for row, item in zip(rows, result) if _association_visible(row, allowed)]
 
 
 @router.post("/relationship-suggestions/{association_id}/decision")

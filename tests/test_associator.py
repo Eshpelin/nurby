@@ -20,6 +20,7 @@ from services.perception.associator import (
     journey_camera_ids,
     local_buckets,
     next_status,
+    journeys_cooccur,
     vehicles_in,
 )
 
@@ -202,6 +203,24 @@ def test_journey_camera_ids_dedupes_and_skips_junk():
         {"camera_id": cam}, {"camera_id": cam}, {"camera_id": "not-a-uuid"}, {},
     ])
     assert journey_camera_ids(j) == [_uuid.UUID(cam)]
+
+
+def test_journeys_cooccur_requires_shared_camera_and_nearby_time():
+    import uuid as _uuid
+
+    cam = str(_uuid.uuid4())
+    first = SimpleNamespace(
+        started_at=_at(1, 8), last_seen_at=_at(1, 8, 10), ended_at=None,
+        segments=[{"camera_id": cam}],
+    )
+    second = SimpleNamespace(
+        started_at=_at(1, 8, 11), last_seen_at=_at(1, 8, 20), ended_at=None,
+        segments=[{"camera_id": cam}],
+    )
+    assert journeys_cooccur(first, second)
+    second.started_at = _at(1, 9)
+    second.last_seen_at = _at(1, 9, 10)
+    assert not journeys_cooccur(first, second)
 
 
 def test_body_subjects_are_not_associable():
