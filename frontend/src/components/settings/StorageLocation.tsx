@@ -441,6 +441,17 @@ export function StorageLowSpaceBanner() {
 }
 
 export function StorageLocationCard() {
+  // Location endpoints are admin-only (issue #279): non-admins get a clear
+  // note instead of an endless loading state. Usage bars in the parent card
+  // remain visible to everyone (GET /api/storage is not admin-only).
+  const { user } = useAuth();
+  if (user?.role !== "admin") {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Only admins can change the storage location.
+      </p>
+    );
+  }
   return (
     <div className="space-y-3">
       <div>

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  StorageLocationCard,
   StorageLocationForm,
   StorageLowSpaceBanner,
   StorageOverviewBlock,
@@ -104,5 +105,24 @@ describe("StorageLocationForm consequence warning (#278)", () => {
     await screen.findByLabelText("Where should recordings be stored?");
     // Prefill happened; no change -> no warning.
     expect(screen.queryByText(/won't play until moved/i)).not.toBeInTheDocument();
+  });
+});
+
+
+describe("StorageLocationCard gating (#279)", () => {
+  it("shows an admin note instead of the form for non-admins", () => {
+    mocks.role = "viewer";
+    mocks.fetch.mockImplementation(fetchRouter(overview()));
+    render(<StorageLocationCard />);
+    expect(screen.getByText(/Only admins can change the storage location/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Where should recordings be stored?")).not.toBeInTheDocument();
+    mocks.role = "admin";
+  });
+
+  it("renders the full block for admins", async () => {
+    mocks.fetch.mockImplementation(fetchRouter(overview()));
+    render(<StorageLocationCard />);
+    expect(await screen.findByText("Recordings location")).toBeInTheDocument();
+    expect(await screen.findByText("Recordings")).toBeInTheDocument();
   });
 });
