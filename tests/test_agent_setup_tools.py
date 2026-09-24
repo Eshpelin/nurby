@@ -131,3 +131,29 @@ async def test_test_camera_connection_skips_file():
     out = await camera_connection_tool({"db": db}, camera_id=str(uuid.uuid4()))
     assert out["ok"] is True
     assert out["skipped"] is True
+
+
+@pytest.mark.asyncio
+async def test_test_camera_connection_resolves_camera_name(monkeypatch):
+    camera_id = uuid.uuid4()
+    cam = MagicMock()
+    cam.id = camera_id
+    cam.name = "Demo Camera"
+    cam.stream_type = "file"
+    db = AsyncMock()
+    db.get = AsyncMock(return_value=cam)
+    row = MagicMock()
+    row.scalars.return_value.all.return_value = [cam]
+    db.execute.return_value = row
+    user = MagicMock()
+
+    async def allowed(*_args):
+        return {camera_id}
+
+    monkeypatch.setattr("services.agent.access.accessible_camera_ids", allowed)
+    out = await camera_connection_tool(
+        {"db": db, "user": user}, camera_id="demo camera"
+    )
+
+    assert out["ok"] is True
+    assert out["skipped"] is True

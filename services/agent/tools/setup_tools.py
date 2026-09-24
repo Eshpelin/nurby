@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import uuid
 
+from sqlalchemy import func, select
+
 from shared.models import (
     Camera,
 )
@@ -265,7 +267,13 @@ _TEST_CAMERA_CONNECTION_SCHEMA = {
     "additionalProperties": False,
     "required": ["camera_id"],
     "properties": {
-        "camera_id": {"type": "string", "description": "UUID of an existing camera."},
+        "camera_id": {
+            "type": "string",
+            "description": (
+                "UUID or exact name of an existing camera. Human-readable "
+                "camera names are accepted and resolved to the UUID."
+            ),
+        },
     },
 }
 
@@ -278,10 +286,35 @@ async def test_camera_connection(ctx: dict, *, camera_id: str) -> dict:
     from services.api.camera_probe import ERROR_HINTS, parse_target, probe_rtsp_describe, probe_tcp
 
     db = ctx["db"]
+    raw_camera_id = str(camera_id).strip()
     try:
-        cam = await db.get(Camera, uuid.UUID(camera_id))
+        resolved_id = uuid.UUID(raw_camera_id)
     except ValueError:
-        return {"ok": False, "error": "camera_id is not a UUID"}
+        # The UI and household context present camera names to people. The
+        # tool contract used to expose UUID-only input, which made a natural
+        # request like "test Demo Camera" fail before the camera was even
+        # looked up. Resolve exact names case-insensitively within the
+        # caller's camera ACL and make ambiguity explicit.
+        user = ctx.get("user")
+        if user is None:
+            return {"ok": False, "error": "camera_id must be a UUID or camera name"}
+        from services.agent.access import accessible_camera_ids
+
+        allowed = await accessible_camera_ids(user, db)
+        result = await db.execute(
+            select(Camera).where(func.lower(Camera.name) == raw_camera_id.lower())
+        )
+        matches = [cam for cam in result.scalars().all() if cam.id in allowed]
+        if not matches:
+            return {"ok": False, "error": f"No accessible camera named {raw_camera_id!r}"}
+        if len(matches) > 1:
+            return {
+                "ok": False,
+                "error": f"More than one accessible camera is named {raw_camera_id!r}; use its UUID.",
+            }
+        resolved_id = matches[0].id
+
+    cam = await db.get(Camera, resolved_id)
     if cam is None:
         return {"ok": False, "error": "No camera with that id"}
     if cam.stream_type in ("file", "usb", "webcam", "browser_mic"):
@@ -330,5 +363,4 @@ async def run_doctor(ctx: dict) -> dict:
 
     checks = await doctor_endpoint(_current_user=ctx["user"], db=ctx["db"])
     return {"checks": [c.model_dump() for c in checks]}
-
 
