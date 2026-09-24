@@ -18,7 +18,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-The frontend bundles Geist locally as the primary font and falls back to system font stacks if the asset cannot be loaded. Production builds do not depend on network access to a font provider.
+The frontend bundles Geist locally as the primary font and falls back to system font stacks if the asset cannot be loaded. Production builds do not depend on network access to a font provider. Geist is licensed under the SIL Open Font License 1.1; the copyright notice and license are included in `public/fonts/OFL.txt`.
 
 ## Learn More
 
