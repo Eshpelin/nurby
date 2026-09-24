@@ -21,6 +21,20 @@ type ReviewItem = {
   provenance: Record<string, unknown>;
 };
 
+type RelationshipDetail = {
+  evidence_count: number;
+  distinct_days: number;
+  evidence: {
+    id: string;
+    observed_at: string;
+    role: string;
+    explanation: string | null;
+    camera_ids: string[];
+    observation_ids: string[];
+    metadata: Record<string, unknown>;
+  }[];
+};
+
 type ReviewQueueProps = {
   onOpenEvent?: (eventId: string) => void;
 };
@@ -41,6 +55,9 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [decisionBusy, setDecisionBusy] = useState<string | null>(null);
+  const [expandedEvidence, setExpandedEvidence] = useState<string | null>(null);
+  const [relationshipDetails, setRelationshipDetails] = useState<Record<string, RelationshipDetail>>({});
+  const [evidenceLoading, setEvidenceLoading] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +105,28 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
     }
   };
 
+  const toggleEvidence = async (item: ReviewItem) => {
+    if (item.kind !== "relationship_suggestion") return;
+    if (expandedEvidence === item.id) {
+      setExpandedEvidence(null);
+      return;
+    }
+    setExpandedEvidence(item.id);
+    if (relationshipDetails[item.id]) return;
+    setEvidenceLoading(item.id);
+    try {
+      const res = await authFetch(`/api/review/relationship-suggestions/${item.source_id}`);
+      if (!res.ok) throw new Error(`Evidence unavailable (${res.status})`);
+      const detail: RelationshipDetail = await res.json();
+      setRelationshipDetails((current) => ({ ...current, [item.id]: detail }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Evidence unavailable");
+      setExpandedEvidence(null);
+    } finally {
+      setEvidenceLoading(null);
+    }
+  };
+
   return (
     <section className="mb-5 rounded-lg border border-border bg-card/50" aria-labelledby="review-queue-heading">
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
@@ -119,6 +158,27 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.summary}</p>
                 <span className="mt-1 block text-[10px] text-muted-foreground">{timeAgo(item.updated_at)}</span>
+                {item.kind === "relationship_suggestion" && expandedEvidence === item.id && (
+                  <div className="mt-2 rounded border border-border/70 bg-background/50 p-2">
+                    {evidenceLoading === item.id ? (
+                      <p className="text-[10px] text-muted-foreground">Loading supporting episodes…</p>
+                    ) : relationshipDetails[item.id]?.evidence.length ? (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] text-muted-foreground">
+                          {relationshipDetails[item.id].distinct_days} independent visits · source episodes below
+                        </p>
+                        {relationshipDetails[item.id].evidence.slice(0, 5).map((evidence) => (
+                          <div key={evidence.id} className="text-[10px] text-muted-foreground">
+                            <span className="text-foreground">{new Date(evidence.observed_at).toLocaleString()}</span>
+                            {evidence.explanation ? ` — ${evidence.explanation}` : ""}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">No visible evidence episodes remain.</p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {item.source_type === "event" && onOpenEvent && (
@@ -132,6 +192,14 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                 )}
                 {item.kind === "relationship_suggestion" && (
                   <>
+                    <button
+                      type="button"
+                      onClick={() => void toggleEvidence(item)}
+                      disabled={evidenceLoading === item.id}
+                      className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    >
+                      {expandedEvidence === item.id ? "Hide evidence" : "Evidence"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => void decideRelationship(item, "reject")}
