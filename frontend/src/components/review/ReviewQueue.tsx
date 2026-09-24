@@ -190,7 +190,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                               ))}
                               {typeof evidence.source_url === "string" && (
                                 <a href={evidence.source_url} target="_blank" rel="noreferrer" className="ml-2 text-accent hover:underline">
-                                  Open transcript
+                                  {evidence.metadata.transcript_id ? "Open transcript" : "Open journey"}
                                 </a>
                               )}
                               {evidence.source_status === "source_changed" && (

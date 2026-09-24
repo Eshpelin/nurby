@@ -503,7 +503,11 @@ async def get_relationship_suggestion(
             "explanation": row.explanation,
             "metadata": metadata,
             "source_status": source_status,
-            "source_url": f"/api/transcripts/{transcript_id}" if transcript_id and transcript_exists else None,
+            "source_url": (
+                f"/api/transcripts/{transcript_id}" if transcript_id and transcript_exists
+                else f"/api/journeys/{row.journey_id}" if row.journey_id
+                else None
+            ),
         })
     return {
         "id": str(association.id),
