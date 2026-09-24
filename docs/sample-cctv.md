@@ -7,7 +7,22 @@ vehicle flows without a physical CCTV device or a remote video URL.
 ## Start the fixture stack
 
 Place one or more `.mp4`, `.mov`, or `.mkv` files in `recordings/demo/`. The
-repository includes `rec_mike_real.mp4` as a small local fixture. Then start
+repository includes `rec_mike_real.mp4` as a small local fixture. To create a
+fresh, validated offline fixture, run:
+
+```sh
+scripts/build_sample_cctv_fixtures.sh
+```
+
+That creates a video-plus-tone clip for testing camera, recording, and audio
+plumbing. The tone is deliberately not presented as speech and cannot prove
+transcription. To test transcription, provide a real speech recording:
+
+```sh
+scripts/build_sample_cctv_fixtures.sh /path/to/speech.wav
+```
+
+The builder validates that both streams are present before returning. Then start
 the stack with the read-only fixture overlay:
 
 ```sh
