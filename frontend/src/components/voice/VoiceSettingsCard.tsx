@@ -34,6 +34,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 export function VoiceSettingsCard() {
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<VoiceSettings | null>(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phrase, setPhrase] = useState("");
@@ -45,13 +46,22 @@ export function VoiceSettingsCard() {
   }, []);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const resp = await fetch(`${API}/api/voice/settings`, {
         headers: headers(),
       });
-      if (resp.ok) setSettings(await resp.json());
-    } catch {
-      setError("Could not load voice settings.");
+      if (!resp.ok) {
+        throw new Error(
+          `Could not load voice settings (HTTP ${resp.status}).`,
+        );
+      }
+      setSettings(await resp.json());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Could not load voice settings.");
+    } finally {
+      setLoading(false);
     }
   }, [headers]);
 
@@ -156,9 +166,21 @@ export function VoiceSettingsCard() {
               camera that can talk is a camera that can give something away.
             </p>
 
-            {!settings ? (
+            {loading ? (
               <div className="text-xs text-muted-foreground py-6 text-center">
                 Loading.
+              </div>
+            ) : !settings ? (
+              <div className="space-y-3 py-4">
+                <div className="rounded-md border border-red-600/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                  {error ?? "Could not load voice settings."}
+                </div>
+                <button
+                  onClick={load}
+                  className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors"
+                >
+                  Retry
+                </button>
               </div>
             ) : (
               <div className="space-y-5">
