@@ -70,6 +70,10 @@ from shared.schemas.rules import (  # noqa: F401
     RuleReplaySample,
     RuleReplayResponse,
 )
+from shared.schemas.review import (  # noqa: F401
+    ReviewItemResponse,
+    ReviewQueueResponse,
+)
 from shared.schemas.rules import (  # noqa: F401
     _VALID_ACTION_TYPES,
     _LOCATE_OUTPUT_SCHEMA,
@@ -246,6 +250,8 @@ __all__ = [
     "RuleTestActionPreview",
     "RuleTestRequest",
     "RuleTestResponse",
+    "ReviewItemResponse",
+    "ReviewQueueResponse",
     "RuleUpdate",
     "ScheduledReportCreate",
     "ScheduledReportResponse",

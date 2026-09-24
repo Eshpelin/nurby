@@ -41,6 +41,7 @@ from services.api.routes import (
     providers,
     push,
     recordings,
+    review,
     reports,
     rules,
     rules_nl,
@@ -339,6 +340,7 @@ app.include_router(audio.router, prefix="/api/audio", tags=["audio"])
 app.include_router(summaries.router, prefix="/api/summaries", tags=["summaries"])
 app.include_router(conversations.router, prefix="/api/conversations", tags=["conversations"])
 app.include_router(incidents.router, prefix="/api/incidents", tags=["incidents"])
+app.include_router(review.router, prefix="/api/review", tags=["review"])
 app.include_router(journeys.router, prefix="/api/journeys", tags=["journeys"])
 app.include_router(daily_digest.router, prefix="/api/daily-digest", tags=["daily-digest"])
 app.include_router(privacy_zones.router, prefix="/api/privacy-zones", tags=["privacy-zones"])
