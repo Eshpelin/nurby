@@ -11,6 +11,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth";
 import type { AgentEvent } from "@/lib/agentWs";
 import type { AgentRunDetail, Citation } from "./types";
 import CitationChip from "./CitationChip";
@@ -56,6 +57,17 @@ interface TraceItem {
   error: string | null;
 }
 
+interface RuleDraftAction {
+  call_id: string;
+  kind: string; // "create_rule"
+  method: string;
+  path: string;
+  title?: string;
+  summary?: string;
+  warnings?: string[];
+  body: Record<string, unknown>;
+}
+
 interface ViewModel {
   plan: string | null;
   trace: TraceItem[];
@@ -67,6 +79,7 @@ interface ViewModel {
   failed: boolean;
   errorMessage: string | null;
   noEvidence: boolean;
+  pendingActions: RuleDraftAction[];
 }
 
 function summarizeArgs(args: unknown): string {
@@ -107,9 +120,27 @@ function buildFromEvents(events: AgentEvent[]): ViewModel {
   let budgetExhausted = false;
   let failed = false;
   let errorMessage: string | null = null;
+  const actionMap = new Map<string, RuleDraftAction>();
 
   for (const ev of events) {
     switch (ev.type) {
+      case "client_action": {
+        const a = (ev.action ?? {}) as Record<string, unknown>;
+        const call_id = String(ev.call_id ?? `a${actionMap.size}`);
+        if (a && typeof a === "object" && a.body) {
+          actionMap.set(call_id, {
+            call_id,
+            kind: String(a.kind ?? "action"),
+            method: String(a.method ?? "POST"),
+            path: String(a.path ?? ""),
+            title: a.title as string | undefined,
+            summary: a.summary as string | undefined,
+            warnings: Array.isArray(a.warnings) ? (a.warnings as string[]) : [],
+            body: a.body as Record<string, unknown>,
+          });
+        }
+        break;
+      }
       case "plan":
         plan = (ev.summary as string) ?? (ev.text as string) ?? plan;
         break;
@@ -197,6 +228,7 @@ function buildFromEvents(events: AgentEvent[]): ViewModel {
     failed,
     errorMessage,
     noEvidence,
+    pendingActions: Array.from(actionMap.values()),
   };
 }
 
@@ -249,7 +281,96 @@ function buildFromDetail(detail: AgentRunDetail): ViewModel {
     failed: detail.status === "failed",
     errorMessage: detail.error_message,
     noEvidence: detail.status === "completed" && !(detail.final_answer ?? "").trim(),
+    pendingActions: [],
   };
+}
+
+/**
+ * Confirm card for a rule the agent drafted (#284). The agent never creates
+ * the rule; this card is the gate — the write happens only when the user
+ * presses Confirm, which POSTs the drafted body to the normal rule-create
+ * endpoint.
+ */
+function RuleDraftConfirm({ action }: { action: RuleDraftAction }) {
+  const { authFetch } = useAuth();
+  const [state, setState] = useState<"idle" | "creating" | "created" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  if (action.kind !== "create_rule" || dismissed) return null;
+
+  async function confirm() {
+    setState("creating");
+    setError(null);
+    try {
+      const res = await authFetch(action.path, {
+        method: action.method || "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(action.body),
+      });
+      if (res.ok) {
+        setState("created");
+      } else {
+        let detail = `Create failed (${res.status}).`;
+        try {
+          const j = await res.json();
+          if (typeof j?.detail === "string") detail = j.detail;
+        } catch {/* keep default */}
+        setError(detail);
+        setState("error");
+      }
+    } catch {
+      setError("Could not reach the server.");
+      setState("error");
+    }
+  }
+
+  if (state === "created") {
+    return (
+      <div className="rounded-md border border-emerald-600/40 bg-emerald-950/20 px-3 py-2 text-sm">
+        <span className="text-emerald-300">Rule created.</span>{" "}
+        <Link href="/rules" className="underline text-emerald-200">View in Rules</Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-sky-600/40 bg-sky-950/20 px-3 py-2.5 space-y-2">
+      <div className="text-[10px] uppercase tracking-wide text-sky-300">Draft rule</div>
+      <div className="text-sm font-medium">{action.title || "New rule"}</div>
+      {action.summary && (
+        <div className="text-xs text-muted-foreground">{action.summary}</div>
+      )}
+      {action.warnings && action.warnings.length > 0 && (
+        <ul className="text-[11px] text-amber-300 list-disc list-inside">
+          {action.warnings.map((w, i) => (
+            <li key={i}>{w}</li>
+          ))}
+        </ul>
+      )}
+      {state === "error" && error && (
+        <div className="text-[11px] text-rose-300">{error}</div>
+      )}
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          type="button"
+          onClick={confirm}
+          disabled={state === "creating"}
+          className="text-xs px-3 py-1 rounded border border-sky-500/50 bg-sky-500/15 text-sky-200 hover:bg-sky-500/25 disabled:opacity-50"
+        >
+          {state === "creating" ? "Creating…" : "Confirm & create"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          disabled={state === "creating"}
+          className="text-xs px-3 py-1 rounded border border-border text-muted-foreground hover:text-foreground disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
 }
 
 interface AgentResponseCardProps {
@@ -396,6 +517,12 @@ export default function AgentResponseCard({
         ) : (
           <div className="text-sm text-muted-foreground italic">Investigating.</div>
         )}
+
+        {/* Confirm cards for tool-proposed writes (draft_rule, #284). The
+            rule is created only when the user presses Confirm. */}
+        {vm.pendingActions.map((a) => (
+          <RuleDraftConfirm key={a.call_id} action={a} />
+        ))}
 
         {vm.citations.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border/60">

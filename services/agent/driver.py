@@ -115,7 +115,11 @@ Automation rules.
 Honesty.
 - If evidence is weak, say so. Hedge with "I think" or "possibly" below confidence 0.6.
 - Never invent details. If a clip does not show what was asked, say it does not show.
-- If the user asks something out-of-scope (weather, news, write actions, system config), politely decline.
+- If the user asks something out-of-scope (weather, news, unrelated system config), politely decline.
+- Creating or changing an automation/alert IS in scope: call draft_rule with a
+  plain-English description. It drafts a rule and shows the user a Confirm card;
+  it creates nothing until the user confirms, so never claim a rule was created
+  — say you drafted it for them to confirm.
 
 Identity disambiguation.
 - If a name matches multiple Persons, pick the one with the most recent activity OR ask the user.
@@ -942,6 +946,16 @@ class AgentDriver:
             "cached": bool(result.get("cached")) if isinstance(result, dict) else False,
             "latency_ms": latency_ms,
         })
+        # A tool may propose a client-side action (e.g. draft_rule's Confirm
+        # card, #284). It writes nothing itself; the UI renders the proposal and
+        # the user's explicit confirm performs the write. Forward it verbatim.
+        if isinstance(result, dict) and isinstance(result.get("client_action"), dict):
+            await self._emit(state, run_id, {
+                "type": "client_action",
+                "call_id": tu.id,
+                "name": name,
+                "action": result["client_action"],
+            })
         return result if isinstance(result, dict) else {"value": result}
 
     # ── provider failure handling ─────────────────────────────────

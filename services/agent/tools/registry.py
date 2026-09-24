@@ -49,10 +49,12 @@ from services.agent.tools.relationships import (
     query_relationships,
 )
 from services.agent.tools.setup_tools import (
+    _DRAFT_RULE_SCHEMA,
     _GET_RULE_SCHEMA_SCHEMA,
     _RUN_DOCTOR_SCHEMA,
     _SUGGEST_RULE_SCHEMA,
     _TEST_CAMERA_CONNECTION_SCHEMA,
+    draft_rule,
     get_rule_schema,
     run_doctor,
     suggest_rule,
@@ -382,6 +384,24 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
         "fn": suggest_rule,
         "side_effect": "read",
         "cost_class": "cheap",
+    },
+    {
+        "name": "draft_rule",
+        "description": (
+            "PREFERRED when the user asks to create, set up, add, or change "
+            "an automation/alert. Takes a plain-English description and drafts "
+            "a real, ready-to-create rule, returning a Confirm proposal shown "
+            "to the user. It creates NOTHING on its own — the rule is only made "
+            "when the user presses Confirm. Relay the message_for_user; never "
+            "print JSON or field names. Prefer this over suggest_rule."
+        ),
+        "input_schema": _DRAFT_RULE_SCHEMA,
+        "fn": draft_rule,
+        # 'propose' writes nothing itself; the create happens on the user's
+        # explicit confirm via the client. Kept out of the 'write' class so the
+        # driver may run it, but it carries a client_action for the confirm gate.
+        "side_effect": "read",
+        "cost_class": "medium",
     },
     {
         "name": "test_camera_connection",

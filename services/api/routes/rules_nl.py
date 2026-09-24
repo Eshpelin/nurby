@@ -372,17 +372,25 @@ async def _pick_provider(db: AsyncSession, provider_id: uuid.UUID | None) -> Pro
     return provider
 
 
-@router.post("/generate", response_model=GenerateRuleResponse)
-async def generate_rule(
-    body: GenerateRuleRequest,
-    _current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
+async def translate_rule(
+    db: AsyncSession,
+    prompt: str,
+    *,
+    provider_id: uuid.UUID | None = None,
+    mentions: list | None = None,
+) -> dict:
+    """Translate a plain-language description into a validated RuleCreate dict.
+
+    Shared by the ``POST /generate`` route and the agent's ``draft_rule`` tool
+    so there is one NL->rule path. Returns ``{"rule", "notes", "warnings"}``;
+    raises ``HTTPException`` when no provider is available or a valid rule
+    cannot be produced.
+    """
     from services.agent.llm import llm_call
     from services.api.routes.rules import _stale_rule_refs
     from shared.rule_schema import build_schema
 
-    provider = await _pick_provider(db, body.provider_id)
+    provider = await _pick_provider(db, provider_id)
     model = provider.default_model
     if not model:
         raise HTTPException(status_code=409, detail="The provider has no default model set.")
@@ -413,12 +421,12 @@ async def generate_rule(
 
     from services.api.routes.mentions import verify_mentions
 
-    verified_mentions = await verify_mentions(db, body.mentions)
+    verified_mentions = await verify_mentions(db, mentions or [])
 
     system_prompt = build_system_prompt(
         build_schema(), cameras, persons, channels, devices, verified_mentions
     )
-    messages = [{"role": "user", "content": body.prompt}]
+    messages = [{"role": "user", "content": prompt}]
     notes: list[str] = []
 
     candidate: dict | None = None
@@ -469,4 +477,16 @@ async def generate_rule(
     warnings = await _stale_rule_refs(
         db, candidate.get("trigger_pattern"), candidate.get("conditions"), candidate.get("actions")
     )
-    return GenerateRuleResponse(rule=candidate, notes=notes, warnings=warnings)
+    return {"rule": candidate, "notes": notes, "warnings": warnings}
+
+
+@router.post("/generate", response_model=GenerateRuleResponse)
+async def generate_rule(
+    body: GenerateRuleRequest,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    out = await translate_rule(
+        db, body.prompt, provider_id=body.provider_id, mentions=body.mentions
+    )
+    return GenerateRuleResponse(**out)
