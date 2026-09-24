@@ -229,7 +229,7 @@ async def list_review_items(
                     f"{cluster.sighting_count} sightings of "
                     f"{cluster.auto_label_number and f'Unknown {cluster.auto_label_number}' or 'the same unknown person'}"
                 ),
-                created_at=cluster.created_at,
+                created_at=cluster.first_seen_at,
                 updated_at=cluster.last_seen_at,
                 camera_id=cluster.first_camera_id,
                 unread=True,
@@ -259,7 +259,7 @@ async def list_review_items(
                 priority="normal",
                 title="Unknown appearance needs review",
                 summary=f"{cluster.sighting_count} sightings of a recurring body appearance",
-                created_at=cluster.created_at,
+                created_at=cluster.first_seen_at,
                 updated_at=cluster.last_seen_at,
                 camera_id=cluster.first_camera_id,
                 unread=True,
