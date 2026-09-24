@@ -37,6 +37,14 @@ def test_drops_empty():
     assert reason == "empty"
 
 
+def test_drops_punctuation_only_noise():
+    keep, reason = filter_hallucination(
+        _result(text=". . . . .", no_speech_prob=0.59, duration_ms=15000)
+    )
+    assert keep is False
+    assert reason == "punctuation_only"
+
+
 def test_drops_provider_error():
     keep, reason = filter_hallucination(_result(error="boom"))
     assert keep is False

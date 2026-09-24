@@ -82,6 +82,13 @@ def filter_hallucination(result: TranscriptResult) -> tuple[bool, str]:
     # Too short and too few tokens. Single-syllable matches on noise.
     normalized = _normalize(text)
     tokens = normalized.split()
+
+    # Whisper can emit punctuation-only fragments for tones, silence, or
+    # other non-speech audio (for example ``. . . . .``). They are not useful
+    # captions and should not enter the transcript/review/search surfaces.
+    if not normalized:
+        return False, "punctuation_only"
+
     if (
         result.duration_ms < AUDIO_HALLUCINATION_MIN_DURATION_MS
         and len(tokens) <= 1
