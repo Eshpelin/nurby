@@ -457,6 +457,18 @@ class StreamWorker:
         segment_start = None
         segment_path = None
         frame_count = 0
+        # OpenCV reads local files as quickly as the CPU permits. That is
+        # useful for batch processing but surprising for a camera fixture:
+        # a two-minute sample would finish in seconds and repeatedly flap
+        # offline. Pace local file sources at their declared FPS so they act
+        # like deterministic CCTV inputs while network streams remain
+        # governed by the source itself.
+        pace_local_file = (
+            self.stream_type == STREAM_TYPE_FILE
+            and isinstance(self.stream_url, str)
+            and not self.stream_url.startswith(("http://", "https://", "rtsp://"))
+        )
+        file_started_at = time.monotonic()
 
         # Drop any pre-roll temp segments left behind by a prior crash so they
         # cannot leak (they live outside the DB-keyed retention sweep).
@@ -625,7 +637,12 @@ class StreamWorker:
                         logger.debug("pre-roll write failed for %s", self.camera_id, exc_info=True)
 
                 # Yield control to event loop
-                await asyncio.sleep(0)
+                if pace_local_file:
+                    expected_elapsed = frame_count / max(float(fps), 1.0)
+                    actual_elapsed = time.monotonic() - file_started_at
+                    await asyncio.sleep(max(0.0, expected_elapsed - actual_elapsed))
+                else:
+                    await asyncio.sleep(0)
 
         finally:
             if writer is not None:

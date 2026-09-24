@@ -1,0 +1,17 @@
+version: "3.9"
+
+# Local-only fixture overlay. Start the normal stack with this file when you
+# want ingestion/perception to read sample CCTV clips from recordings/demo:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.samples.yml up -d
+#
+# The directory is read-only and is deliberately not part of the default
+# deployment so a production install never gains access to host recordings.
+services:
+  ingestion:
+    volumes:
+      - ./recordings/demo:/demo:ro
+
+  perception:
+    volumes:
+      - ./recordings/demo:/demo:ro
