@@ -146,8 +146,12 @@ async def _write(
         try:
             from services.perception.audio.name_mentions import process_transcript_name_mentions
 
-            await db.flush()
-            await process_transcript_name_mentions(db, transcript)
+            # The hypothesis producer is optional enrichment. Keep it in a
+            # savepoint so a malformed association/evidence write can roll
+            # back without losing the transcript that triggered it.
+            async with db.begin_nested():
+                await db.flush()
+                await process_transcript_name_mentions(db, transcript)
         except Exception:
             # A hypothesis producer must never prevent the transcript itself
             # from being stored and played back.
