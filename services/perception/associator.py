@@ -366,6 +366,49 @@ async def process_journey(
         db, journey, seen_vehicles, when=start, tz_name=tz_name
     )
 
+    # Preserve counter-evidence for review instead of reducing it to a
+    # one-off alert. A subject using another vehicle must not inflate the
+    # positive association counters.
+    present_vehicle_ids = set(seen_vehicles)
+    established_edges = (
+        await db.execute(
+            select(EntityAssociation)
+            .where(EntityAssociation.subject_kind == journey.subject_kind)
+            .where(EntityAssociation.subject_key == journey.subject_key)
+            .where(EntityAssociation.object_kind == "vehicle")
+            .where(EntityAssociation.relation == "uses")
+            .where(EntityAssociation.status != "rejected")
+        )
+    ).scalars().all()
+    observation_ids = [str(observation.id) for observation in rows]
+    camera_ids = [str(camera_id) for camera_id in cameras]
+    for edge in established_edges:
+        if edge.object_key in present_vehicle_ids:
+            continue
+        episode_key = f"contradiction:{journey.id}:{edge.id}"
+        exists = (
+            await db.execute(
+                select(AssociationEvidence.id)
+                .where(AssociationEvidence.association_id == edge.id)
+                .where(AssociationEvidence.episode_key == episode_key)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if exists:
+            continue
+        db.add(AssociationEvidence(
+            association_id=edge.id,
+            episode_key=episode_key,
+            evidence_kind="vehicle_absence",
+            role="contradictory",
+            journey_id=journey.id,
+            observation_ids=observation_ids,
+            camera_ids=camera_ids,
+            observed_at=start,
+            explanation="The subject was observed in a finalized visit without this usually associated vehicle.",
+            evidence_metadata={"present_vehicle_ids": list(present_vehicle_ids)},
+        ))
+
     touched = 0
     for vehicle_id, seen in seen_vehicles.items():
         label = seen.get("label")

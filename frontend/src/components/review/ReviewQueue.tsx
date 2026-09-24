@@ -32,6 +32,7 @@ type RelationshipDetail = {
     camera_ids: string[];
     observation_ids: string[];
     metadata: Record<string, unknown>;
+    source_status: "available" | "source_expired";
   }[];
 };
 
@@ -50,7 +51,7 @@ const KIND_LABEL: Record<ReviewItem["kind"], string> = {
 };
 
 export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
-  const { authFetch } = useAuth();
+  const { authFetch, token } = useAuth();
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -168,9 +169,28 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                           {relationshipDetails[item.id].distinct_days} independent visits · source episodes below
                         </p>
                         {relationshipDetails[item.id].evidence.slice(0, 5).map((evidence) => (
-                          <div key={evidence.id} className="text-[10px] text-muted-foreground">
-                            <span className="text-foreground">{new Date(evidence.observed_at).toLocaleString()}</span>
-                            {evidence.explanation ? ` — ${evidence.explanation}` : ""}
+                          <div key={evidence.id} className="flex items-start gap-2 text-[10px] text-muted-foreground">
+                            <span className={evidence.role === "contradictory" ? "text-amber-300" : "text-emerald-300"}>
+                              {evidence.role === "contradictory" ? "Conflict" : "Support"}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-foreground">{new Date(evidence.observed_at).toLocaleString()}</span>
+                              {evidence.explanation ? ` — ${evidence.explanation}` : ""}
+                              {evidence.observation_ids.slice(0, 2).map((observationId) => (
+                                <a
+                                  key={observationId}
+                                  href={`/api/observations/${observationId}/thumbnail${token ? `?token=${encodeURIComponent(token)}` : ""}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="ml-2 text-accent hover:underline"
+                                >
+                                  Open frame
+                                </a>
+                              ))}
+                              {evidence.source_status === "source_expired" && (
+                                <span className="ml-2 italic">Source no longer retained</span>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>

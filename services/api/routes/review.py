@@ -482,6 +482,7 @@ async def get_relationship_suggestion(
             "score": row.score,
             "explanation": row.explanation,
             "metadata": row.evidence_metadata or {},
+            "source_status": "available" if row.observation_ids or row.journey_id else "source_expired",
         })
     return {
         "id": str(association.id),
