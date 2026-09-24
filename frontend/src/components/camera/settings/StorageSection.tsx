@@ -72,14 +72,25 @@ export function StorageSection({
   const initialProfileRef = useRef<string | null>(storageProfileId);
   const locationChanged = storageProfileId !== initialProfileRef.current;
 
+  // Stale assignment (issue #280): the assigned profile was deleted (the DB
+  // already NULLed the camera via ON DELETE SET NULL) while this page held
+  // the old id in state. Clear it so Save doesn't 400, and say why.
+  const [staleNotice, setStaleNotice] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const res = await authFetch("/api/storage-profiles");
-      if (res.ok) setProfiles(await res.json());
+      if (!res.ok) return; // non-admin: leave page state untouched
+      const list: StorageProfile[] = await res.json();
+      setProfiles(list);
+      if (storageProfileId && !list.some((p) => p.id === storageProfileId)) {
+        setStaleNotice(true);
+        setStorageProfileId(null);
+      }
     } catch {
       /* ignore */
     }
-  }, [authFetch]);
+  }, [authFetch, storageProfileId, setStorageProfileId]);
 
   const loadGlobal = useCallback(async () => {
     // Where "Default" records to, so the choice is readable without shell
@@ -247,6 +258,13 @@ export function StorageSection({
         </select>
       </FieldRow>
 
+      {staleNotice && (
+        <p className="text-[11px] text-amber-300" role="status">
+          The previously selected storage location was deleted. New recordings
+          will use the default location unless you choose another one.
+        </p>
+      )}
+
       {locationChanged && (
         <p className="text-[11px] text-amber-300">
           Switching affects new segments only — recordings already written
@@ -265,7 +283,7 @@ export function StorageSection({
       {selected && (
         <p className="text-[11px] text-muted-foreground">
           {selected.kind === "ftp"
-            ? "New segments upload to the FTP server after they are written; until then they buffer in the default location. Recordings made before this change stay where they are."
+            ? "New segments upload on FTP after they are written; until then they buffer in the default location. Recordings made before this change stay where they are."
             : `New segments land under ${selected.root}. Recordings made before this change stay in the previous location.`}
         </p>
       )}
