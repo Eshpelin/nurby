@@ -8,6 +8,10 @@ version: "3.9"
 # The directory is read-only and is deliberately not part of the default
 # deployment so a production install never gains access to host recordings.
 services:
+  api:
+    volumes:
+      - ./recordings/demo:/demo:ro
+
   ingestion:
     volumes:
       - ./recordings/demo:/demo:ro

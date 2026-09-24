@@ -1,6 +1,7 @@
 import asyncio
 import glob
 import logging
+import os
 import platform
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -10,6 +11,7 @@ from urllib.parse import urlparse
 import cv2
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +30,7 @@ from services.discovery.onvif import (
     ptz_goto_preset,
     ptz_stop,
 )
-from shared.auth import get_current_user, require_admin
+from shared.auth import get_current_user, require_admin, require_query_token
 from shared.camera_access import (
     ALL,
     AllowedCameras,
@@ -236,6 +238,38 @@ class DiscoveredOnvifDevice(BaseModel):
     auth_required: bool
     resolution: str | None
     already_added: bool = False
+
+
+@router.get("/{camera_id}/preview")
+async def preview_local_file(
+    camera_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(lambda token=Query(default=None): require_query_token(token)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Serve a local file-camera fixture to the browser.
+
+    A browser cannot read the container's ``/demo`` path directly, and a
+    local file is not a MediaMTX stream. Keep this endpoint limited to the
+    read-only fixture directory and enforce the same camera ACL as the rest
+    of the camera UI. Production deployments without the sample overlay get
+    a normal 404 because the file is not present.
+    """
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="Invalid user")
+    camera = await db.get(Camera, camera_id)
+    if camera is None or camera.stream_type != "file":
+        raise HTTPException(status_code=404, detail="File camera not found")
+    allowed = await allowed_camera_ids(user, db)
+    if allowed is not ALL and camera_id not in allowed:
+        raise HTTPException(status_code=403, detail="Camera access denied")
+    source = os.path.realpath(camera.stream_url or "")
+    fixture_root = os.path.realpath("/demo")
+    if not source.startswith(fixture_root + os.sep):
+        raise HTTPException(status_code=404, detail="Local fixture not found")
+    if not os.path.isfile(source):
+        raise HTTPException(status_code=404, detail="Local fixture not found")
+    return FileResponse(source, media_type="video/mp4", filename=os.path.basename(source))
 
 
 @router.get("/personas")

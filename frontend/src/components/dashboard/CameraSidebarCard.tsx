@@ -22,6 +22,7 @@ import type { ActivityEvent, Camera } from "@/app/dashboard-types";
 import { extractStreamName } from "@/app/dashboard-helpers";
 import { AnalyzingShimmer, DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, DetectionOverlay, MiniPTZ, SignalBadge } from "@/components/dashboard/CameraOverlays";
 import { WEBRTC_URL } from "@/app/dashboard-helpers";
+import { useAuth } from "@/lib/auth";
 
 export type CameraLayout = "single" | "double" | "list";
 export function CameraSidebarCard({
@@ -63,6 +64,12 @@ export function CameraSidebarCard({
   // ingestion poll + connect cycle.
   const isRemoteFile =
     camera.stream_type === "file" && /^https?:\/\//.test(camera.stream_url);
+  const { token } = useAuth();
+  const isLocalFile = camera.stream_type === "file" && !isRemoteFile;
+  const localFilePreview = isLocalFile && token
+    ? `/api/cameras/${camera.id}/preview?token=${encodeURIComponent(token)}`
+    : null;
+  const isPlayableFile = isRemoteFile || Boolean(localFilePreview);
 
   // Webcam publisher state for this tile. If this tab owns the capture
   // we render the local MediaStream directly in a <video> element.
@@ -110,8 +117,8 @@ export function CameraSidebarCard({
                 <line x1="8" y1="23" x2="16" y2="23" />
               </svg>
             </div>
-          ) : isRemoteFile ? (
-            <video src={camera.stream_url} autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
+          ) : isPlayableFile ? (
+            <video src={isRemoteFile ? camera.stream_url : localFilePreview ?? undefined} autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
           ) : isWebcam && localStream ? (
             <video ref={webcamVideoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" />
           ) : camera.status !== "offline" ? (
@@ -179,9 +186,9 @@ export function CameraSidebarCard({
               </Link>
             )}
           </div>
-        ) : isRemoteFile ? (
+        ) : isPlayableFile ? (
           <video
-            src={camera.stream_url}
+            src={isRemoteFile ? camera.stream_url : localFilePreview ?? undefined}
             autoPlay
             muted
             loop
@@ -236,7 +243,7 @@ export function CameraSidebarCard({
             "latest" box would land on the wrong frame. Detections for these
             stay frame-accurate in the timeline (the thumbnail is the exact
             analyzed frame). Near-live cameras (rtsp/webrtc) keep the overlay. */}
-        {camera.status !== "offline" && !isRemoteFile && (
+        {camera.status !== "offline" && !isPlayableFile && (
           <DetectionOverlay cameraId={camera.id} visible={overlayVisible} frameWidth={frameW} frameHeight={frameH} />
         )}
 
