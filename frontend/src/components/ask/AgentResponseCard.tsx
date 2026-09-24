@@ -436,6 +436,7 @@ export default function AgentResponseCard({
   const inspected = inspectCallId
     ? vm.trace.find((t) => t.call_id === inspectCallId) ?? null
     : null;
+  const waitingForFinal = !vm.done && !isStreaming && vm.trace.length > 0;
 
   return (
     <div className="border border-border bg-card rounded-lg overflow-hidden">
@@ -545,7 +546,11 @@ export default function AgentResponseCard({
             </div>
           ) : null
         ) : (
-          <div className="text-sm text-muted-foreground italic">Investigating.</div>
+          <div className="text-sm text-muted-foreground italic">
+            {waitingForFinal
+              ? "The investigation finished; loading the final answer…"
+              : "Investigating."}
+          </div>
         )}
 
         {/* Confirm cards for tool-proposed writes (draft_rule, #284). The

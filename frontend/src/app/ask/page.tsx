@@ -197,9 +197,19 @@ export default function AskPage() {
       const res = await authFetch(`/api/agent/runs/${runId}`);
       if (res.ok) {
         const detail = (await res.json()) as AgentRunDetail;
-        setPastRuns((prev) => [...prev, detail]);
+        // The websocket can close before the final event reaches the
+        // browser. Replace any prior copy instead of leaving the active card
+        // stuck on "Investigating." while History already says completed.
+        setPastRuns((prev) => [
+          ...prev.filter((run) => run.id !== detail.id),
+          detail,
+        ]);
+      } else {
+        setSubmitError(`Could not load the completed answer (${res.status}).`);
       }
-    } catch {/* ignore */}
+    } catch {
+      setSubmitError("The run completed, but its final answer could not be loaded. Refresh to retry.");
+    }
     setActiveQuestion(null);
     setActiveRunId(null);
     setParentRunId(runId);

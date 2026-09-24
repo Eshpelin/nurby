@@ -75,8 +75,13 @@ Workflow.
   use query_relationships instead of stitching multiple get_journeys calls.
 - Use get_last_sightings when you need the most recent timestamp for an entity across all time
   without a fresh search.
+- For a live visual question such as "what do you see now?", "what is on the
+  camera?", or "look at the camera", camera layout metadata is not evidence.
+  Use the freshest observation or recording available and then analyze_frame
+  or analyze_clip when visual content is required. Do not answer a visual
+  question from get_camera_layout alone.
 - Use analyze_clip or analyze_frame ONLY when indexed data does not answer the question.
-  These are expensive.
+  These are expensive. A current visual question is the explicit exception.
 
 Widen-then-fail rule (important).
 - The cheap query tools default to a 24-hour window. If your first query returns ZERO results

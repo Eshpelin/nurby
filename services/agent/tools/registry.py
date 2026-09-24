@@ -121,6 +121,8 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
             "(entry, kitchen, garage, outdoor, nursery, living, other), "
             "scene_mode (indoor/outdoor), online status, and timezone. "
             "Use when you need to know which camera covers which area. "
+            "Do not use for 'what do you see now?' or other visual questions; "
+            "this returns metadata, not an image or scene description. "
             "Prefer get_household_snapshot when you also want last-"
             "observation freshness per camera. Cheap."
         ),
@@ -349,8 +351,9 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
             "thumbnail. Use when you already have a specific "
             "observation_id (from query_observations or "
             "get_last_sightings) and need to verify or extract a "
-            "single detail ('is the dog in this frame holding "
-            "anything?', 'what color is the visitor's jacket?'). "
+            "single detail ('what do you see right now?', 'is the dog in "
+            "this frame holding anything?', 'what color is the visitor's "
+            "jacket?'). "
             "Cached per (observation, question, model) forever. "
             "Returns the same structured answer schema as analyze_clip."
         ),
