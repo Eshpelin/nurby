@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+/* Geist remains the primary UI font, but is checked into the application so
+   a production build never depends on a font CDN. Each family falls back to
+   the platform system stack if the asset cannot be loaded at runtime. */
+@font-face {
+  font-family: "Geist Local";
+  src: url("/fonts/geist-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono Local";
+  src: url("/fonts/geist-mono-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 :root {
   --background: 0 0% 3.9%;
   --foreground: 0 0% 98%;
@@ -28,16 +47,14 @@
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-danger: hsl(var(--danger));
   --color-warning: hsl(var(--warning));
-  /* Build-safe system stacks. Do not use next/font/google here: a frontend
-     build must not require network access to Google Fonts. */
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: "Geist Local", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Local", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Geist Local", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 /* Scrollbar styling */

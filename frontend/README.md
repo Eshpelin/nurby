@@ -18,7 +18,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-The frontend uses system font stacks so production builds remain hermetic and do not depend on network access to a font provider. If branded font files are added later, they should be checked into `public/` or bundled as a package rather than fetched during `next build`.
+The frontend bundles Geist locally as the primary font and falls back to system font stacks if the asset cannot be loaded. Production builds do not depend on network access to a font provider.
 
 ## Learn More
 
