@@ -7,6 +7,7 @@ import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { useToast, useConfirm } from "@/lib/feedback";
 import { extractApiError } from "@/lib/api-error";
 import { timeAgo as timeAgoBase, formatWith } from "@/lib/time";
+import { AssociationSummary } from "@/components/review/AssociationSummary";
 
 interface Person {
   id: string;
@@ -1005,7 +1006,8 @@ export default function PeoplePage() {
                         </button>
                       </div>
 
-                      {/* Activity timeline */}
+                    {/* Activity timeline */}
+                      <AssociationSummary subjectKind="person" subjectKey={p.display_name} />
                       <div className="max-h-96 overflow-y-auto">
                         {loadingActivity ? (
                           <div className="text-xs text-muted-foreground text-center py-8">

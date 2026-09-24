@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { useToast, useConfirm } from "@/lib/feedback";
 import { timeAgo as timeAgoBase } from "@/lib/time";
+import { AssociationSummary } from "@/components/review/AssociationSummary";
 
 interface Vehicle {
   id: string;
@@ -217,6 +218,7 @@ export default function VehiclesPage() {
 
               {isOpen && (
                 <div className="border-t border-border bg-background/40 p-3">
+                  <AssociationSummary objectKind="vehicle" objectKey={v.id} />
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">
                     Sightings (newest first)
                   </div>

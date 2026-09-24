@@ -41,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import estop
 from shared.app_settings import get_setting
 from shared.database import async_session
-from shared.models import EntityAssociation, Journey, Observation, Vehicle
+from shared.models import AssociationEvidence, EntityAssociation, Journey, Observation, Vehicle
 
 logger = logging.getLogger("nurby.perception.associator")
 
@@ -207,8 +207,15 @@ def vehicles_in(observations) -> dict[str, dict]:
                 {
                     "label": entry.get("identity_key"),
                     "camera_id": str(cam) if cam else None,
+                    "observation_ids": [],
+                    "camera_ids": [],
                 },
             )
+            observation_id = getattr(obs, "id", None)
+            if observation_id and str(observation_id) not in out[str(vid)]["observation_ids"]:
+                out[str(vid)]["observation_ids"].append(str(observation_id))
+            if cam and str(cam) not in out[str(vid)]["camera_ids"]:
+                out[str(vid)]["camera_ids"].append(str(cam))
     return out
 
 
@@ -228,6 +235,10 @@ async def record_pairing(
     tz_name: str,
     min_days: int,
     camera_id: str | None = None,
+    episode_key: str | None = None,
+    journey_id: uuid.UUID | None = None,
+    observation_ids: list[str] | None = None,
+    camera_ids: list[str] | None = None,
 ) -> EntityAssociation | None:
     """Fold one co-presence event into its edge, creating it if needed.
 
@@ -267,6 +278,20 @@ async def record_pairing(
 
     if not fold(existing, when, tz_name, min_days, camera_id=camera_id):
         return None
+    if episode_key:
+        await db.flush()
+        db.add(AssociationEvidence(
+            association_id=existing.id,
+            episode_key=episode_key,
+            evidence_kind="vehicle_pairing",
+            role="supporting",
+            journey_id=journey_id,
+            observation_ids=observation_ids or [],
+            camera_ids=camera_ids or ([camera_id] if camera_id else []),
+            observed_at=when,
+            explanation="The subject and vehicle were observed in the same finalized visit episode.",
+            evidence_metadata={"vehicle_id": object_key, "vehicle_label": object_label},
+        ))
     return existing
 
 
@@ -319,6 +344,10 @@ async def process_journey(
             tz_name=tz_name,
             min_days=min_days,
             camera_id=seen.get("camera_id"),
+            episode_key=str(journey.id),
+            journey_id=journey.id,
+            observation_ids=seen.get("observation_ids") or [],
+            camera_ids=seen.get("camera_ids") or [str(camera_id) for camera_id in cameras],
         )
         if edge is not None:
             touched += 1

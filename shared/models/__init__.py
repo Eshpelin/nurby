@@ -64,6 +64,7 @@ from shared.models.guardian import (  # noqa: F401
     GuardianLink,
 )
 from shared.models.identity import (  # noqa: F401
+    AssociationEvidence,
     BodyCluster,
     BodyClusterSample,
     EntityAssociation,
@@ -110,6 +111,7 @@ __all__ = [
     "AgentToolCall",
     "AgentVlmCall",
     "ApiKey",
+    "AssociationEvidence",
     "AppSetting",
     "ApprovedPickup",
     "AudioAuditLog",

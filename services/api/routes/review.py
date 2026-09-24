@@ -21,6 +21,7 @@ from shared.auth import get_current_user
 from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.database import get_db
 from shared.models import (
+    AssociationEvidence,
     BodyCluster,
     Camera,
     EntityAssociation,
@@ -40,6 +41,13 @@ _KINDS = {"incident", "alert", "notification", "identity_suggestion", "relations
 class RelationshipDecisionBody(BaseModel):
     decision: Literal["confirm", "reject"]
     note: str | None = Field(default=None, max_length=1000)
+
+
+def _association_visible(association: EntityAssociation, allowed) -> bool:
+    if allowed is ALL:
+        return True
+    allowed_ids = {str(camera_id) for camera_id in allowed}
+    return bool(allowed_ids.intersection(str(camera_id) for camera_id in (association.camera_histogram or {})))
 
 
 def _review_visible(camera_id):
@@ -277,10 +285,7 @@ async def list_review_items(
             # A restricted user may only see an association if at least one
             # supporting camera is in scope. Do not leak the existence of an
             # otherwise hidden relationship through queue counts.
-            allowed_ids = {str(camera_id) for camera_id in allowed} if allowed is not ALL else None
-            if allowed_ids is not None and not any(
-                str(camera_id) in allowed_ids for camera_id in (association.camera_histogram or {})
-            ):
+            if not _association_visible(association, allowed):
                 continue
             relation = association.relation.replace("_", " ")
             items.append(_item(
@@ -322,6 +327,59 @@ async def list_review_items(
     )
 
 
+@router.get("/associations")
+async def list_entity_associations(
+    subject_kind: str | None = Query(default=None),
+    subject_key: str | None = Query(default=None),
+    object_kind: str | None = Query(default=None),
+    object_key: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the same association projections used by entity detail pages.
+
+    Review remains the only decision surface; this endpoint is read-only and
+    exists so People, Vehicles, and future cluster views can show context
+    without duplicating inference or lifecycle rules.
+    """
+    if not any((subject_key, object_key)):
+        raise HTTPException(status_code=422, detail="subject_key or object_key is required")
+    allowed = await allowed_camera_ids(current_user, db)
+    query = select(EntityAssociation).where(EntityAssociation.status != "rejected")
+    if subject_kind:
+        query = query.where(EntityAssociation.subject_kind == subject_kind)
+    if subject_key:
+        query = query.where(EntityAssociation.subject_key == subject_key)
+    if object_kind:
+        query = query.where(EntityAssociation.object_kind == object_kind)
+    if object_key:
+        query = query.where(EntityAssociation.object_key == object_key)
+    rows = (
+        await db.execute(query.order_by(EntityAssociation.last_seen_at.desc()).limit(100))
+    ).scalars().all()
+    return [
+        {
+            "id": str(row.id),
+            "subject_kind": row.subject_kind,
+            "subject_key": row.subject_key,
+            "object_kind": row.object_kind,
+            "object_key": row.object_key,
+            "object_label": row.object_label,
+            "relation": row.relation,
+            "status": row.status,
+            "source": row.source,
+            "user_confirmed": row.user_confirmed,
+            "evidence_count": row.evidence_count,
+            "distinct_days": row.distinct_days,
+            "first_seen_at": row.first_seen_at,
+            "last_seen_at": row.last_seen_at,
+            "evidence_url": f"/api/review/relationship-suggestions/{row.id}",
+        }
+        for row in rows
+        if _association_visible(row, allowed)
+    ]
+
+
 @router.post("/relationship-suggestions/{association_id}/decision")
 async def decide_relationship_suggestion(
     association_id: uuid.UUID,
@@ -357,4 +415,65 @@ async def decide_relationship_suggestion(
         "status": association.status,
         "user_confirmed": association.user_confirmed,
         "reviewed_at": association.reviewed_at,
+    }
+
+
+@router.get("/relationship-suggestions/{association_id}")
+async def get_relationship_suggestion(
+    association_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a relationship hypothesis and only its visible evidence episodes."""
+    association = await db.get(EntityAssociation, association_id)
+    if not association:
+        raise HTTPException(status_code=404, detail="Relationship suggestion not found")
+
+    allowed = await allowed_camera_ids(current_user, db)
+    allowed_ids = {str(camera_id) for camera_id in allowed} if allowed is not ALL else None
+    association_cameras = {str(camera_id) for camera_id in (association.camera_histogram or {})}
+    if allowed_ids is not None and not association_cameras.intersection(allowed_ids):
+        raise HTTPException(status_code=404, detail="Relationship suggestion not found")
+
+    rows = (
+        await db.execute(
+            select(AssociationEvidence)
+            .where(AssociationEvidence.association_id == association.id)
+            .order_by(AssociationEvidence.observed_at.desc())
+        )
+    ).scalars().all()
+    evidence = []
+    for row in rows:
+        cameras = {str(camera_id) for camera_id in (row.camera_ids or [])}
+        if allowed_ids is not None and not cameras.intersection(allowed_ids):
+            continue
+        evidence.append({
+            "id": str(row.id),
+            "episode_key": row.episode_key,
+            "kind": row.evidence_kind,
+            "role": row.role,
+            "journey_id": str(row.journey_id) if row.journey_id else None,
+            "observation_ids": row.observation_ids or [],
+            "camera_ids": row.camera_ids or [],
+            "observed_at": row.observed_at,
+            "score": row.score,
+            "explanation": row.explanation,
+            "metadata": row.evidence_metadata or {},
+        })
+    return {
+        "id": str(association.id),
+        "subject_kind": association.subject_kind,
+        "subject_key": association.subject_key,
+        "object_kind": association.object_kind,
+        "object_key": association.object_key,
+        "object_label": association.object_label,
+        "relation": association.relation,
+        "source": association.source,
+        "status": association.status,
+        "user_confirmed": association.user_confirmed,
+        "evidence_count": association.evidence_count,
+        "distinct_days": association.distinct_days,
+        "first_seen_at": association.first_seen_at,
+        "last_seen_at": association.last_seen_at,
+        "evidence": evidence,
     }

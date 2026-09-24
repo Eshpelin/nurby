@@ -13,6 +13,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Float,
     Integer,
     String,
     Text,
@@ -71,6 +72,40 @@ class FaceEmbedding(Base):
     embedding = mapped_column(Vector(512), nullable=False)  # 512-dim InsightFace ArcFace embedding
     source: Mapped[str] = mapped_column(String(32), default="upload")  # upload | detection
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AssociationEvidence(Base):
+    """One explainable episode supporting or contradicting an association.
+
+    Aggregate counters on ``EntityAssociation`` are useful for sorting, but
+    cannot explain why a relationship exists. This ledger keeps one stable
+    row per source episode so #253, #254, and #255 share the same review and
+    entity-detail evidence model without counting keyframes as visits.
+    """
+
+    __tablename__ = "association_evidence"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    association_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("entity_associations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    episode_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    evidence_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="supporting")
+    journey_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("journeys.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    observation_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    camera_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evidence_metadata: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("association_id", "episode_key", name="uq_association_evidence_episode"),
+    )
 
 
 class FaceCluster(Base):

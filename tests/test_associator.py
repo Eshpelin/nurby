@@ -179,7 +179,12 @@ def test_vehicles_in_ignores_unidentified_detections():
         SimpleNamespace(vehicle_detections=None),
     ]
     assert vehicles_in(rows) == {
-        "v-1": {"label": "ABC123", "camera_id": None}
+        "v-1": {
+            "label": "ABC123",
+            "camera_id": None,
+            "observation_ids": [],
+            "camera_ids": [],
+        }
     }
 
 
