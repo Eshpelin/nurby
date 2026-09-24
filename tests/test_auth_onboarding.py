@@ -192,3 +192,27 @@ def test_demo_camera_reused_when_one_exists(monkeypatch):
     assert out is existing
     # No new row was inserted.
     db.add.assert_not_called()
+
+
+def test_new_demo_camera_is_recording_with_bounded_retention(monkeypatch):
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    db.execute.side_effect = [
+        _exec_result(first=None),  # no existing demo camera
+        _exec_result(all=[]),      # no display orders yet
+    ]
+    monkeypatch.setattr(camera_routes, "_camera_to_response", lambda c: c)
+    monkeypatch.setattr(
+        camera_routes,
+        "resolve_demo_video_url",
+        lambda: "https://example.test/demo.mp4",
+    )
+
+    out = _run(camera_routes.create_demo_camera(_current_user=_FakeUser(), db=db))
+
+    assert out.recording_enabled is True
+    assert out.recording_mode == "always"
+    assert out.retention_mode == "time"
+    assert out.retention_days == 1

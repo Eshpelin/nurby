@@ -69,6 +69,7 @@ services:
       MEDIAMTX_API_URL: http://mediamtx:9997
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
+      AUDIO_STORAGE_PATH: /data/audio
       # Stable signing secret so issued tokens survive restarts. Sourced
       # from .env; without it each restart mints a fresh random secret and
       # invalidates every existing session/login.
@@ -83,6 +84,7 @@ services:
       # named-volume defaults preserve the existing installation behaviour.
       - ${NURBY_RECORDINGS_VOLUME:-recordings}:/data/recordings
       - ${NURBY_THUMBNAILS_VOLUME:-thumbnails}:/data/thumbnails
+      - ${NURBY_AUDIO_VOLUME:-audio}:/data/audio
     depends_on:
       postgres:
         condition: service_healthy
@@ -238,6 +240,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
+      AUDIO_STORAGE_PATH: /data/audio
       # USB and built-in cameras must be bridged on the host. Docker Desktop
       # cannot pass AVFoundation or v4l2 devices into a Linux container. Run
       # `python -m services.ingestion.host_bridge_main` on the host instead.
@@ -250,6 +253,7 @@ services:
     volumes:
       - ${NURBY_RECORDINGS_VOLUME:-recordings}:/data/recordings
       - ${NURBY_THUMBNAILS_VOLUME:-thumbnails}:/data/thumbnails
+      - ${NURBY_AUDIO_VOLUME:-audio}:/data/audio
       # Persist the audio ML model caches so they download once and survive
       # image rebuilds. Without these, every rebuild loses the PANNs clap
       # tagger data (/root/panns_data) and the faster-whisper model

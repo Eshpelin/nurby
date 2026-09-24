@@ -50,6 +50,10 @@ worker reconnects and starts it again, which gives the rest of the system a
 continuous CCTV-like source. Set the camera's recording mode to `off` from
 the UI when you only want live perception without creating recordings.
 
+The built-in first-run demo camera also records by default, with a one-day
+retention limit so new users immediately have recordings to review without an
+unbounded disk-growth risk.
+
 The local fixture path is intentionally separate from the remote demo-camera
 endpoint. That endpoint remains useful for onboarding, while this workflow is
 deterministic and works offline.

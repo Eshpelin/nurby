@@ -845,11 +845,14 @@ async def create_demo_camera(_current_user: User = Depends(require_admin), db: A
         scene_mode="outdoor",
         detect_objects=True,
         detect_faces=True,
-        recording_enabled=False,
-        # recording_mode is what the ingestion worker actually honors
-        # (recording_enabled is deprecated). Without this the demo would
-        # record its looping feed to disk forever and fill the volume.
-        recording_mode="off",
+        # The demo is a first-run recording source, but it must be bounded so
+        # repeatedly looping footage cannot fill the installation volume.
+        # recording_mode is what ingestion honors; recording_enabled is kept
+        # true for older clients that still inspect that field.
+        recording_enabled=True,
+        recording_mode="always",
+        retention_mode="time",
+        retention_days=1,
         display_order=(max(orders) + 1) if orders else 0,
     )
     db.add(camera)
