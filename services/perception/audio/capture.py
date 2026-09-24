@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -49,9 +50,15 @@ class AudioCapture:
     by the router.
     """
 
-    def __init__(self, camera_id: uuid.UUID, stream_url: str) -> None:
+    def __init__(
+        self, camera_id: uuid.UUID, stream_url: str, realtime: bool = False
+    ) -> None:
         self.camera_id = camera_id
         self.stream_url = stream_url
+        # File cameras are test/development CCTV sources. Pace their decoded
+        # audio to wall-clock time so a 20-second clip does not enqueue 20
+        # seconds of speech in a few milliseconds and overwhelm STT.
+        self.realtime = realtime
         self.queue: asyncio.Queue[PcmChunk] = asyncio.Queue(maxsize=AUDIO_PCM_QUEUE_MAX)
         self._running = threading.Event()
         self._thread: threading.Thread | None = None
@@ -111,6 +118,7 @@ class AudioCapture:
             )
 
             buf = bytearray()
+            next_chunk_at = time.monotonic()
             for packet in container.demux(astream):
                 if not self._running.is_set():
                     break
@@ -141,6 +149,11 @@ class AudioCapture:
                                     channels=AUDIO_CHANNELS,
                                 )
                             )
+                            if self.realtime:
+                                next_chunk_at += _CHUNK_MS / 1000
+                                delay = next_chunk_at - time.monotonic()
+                                if delay > 0:
+                                    time.sleep(delay)
         finally:
             try:
                 container.close()

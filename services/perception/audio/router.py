@@ -70,7 +70,11 @@ class CameraAudioRouter:
         self._redis = None
         self._budget_skipped = 0
 
-        self._capture = AudioCapture(camera_id, stream_url)
+        self._capture = AudioCapture(
+            camera_id,
+            stream_url,
+            realtime=stream_url.startswith("/demo/"),
+        )
         self._vad = VadSegmenter(camera_id, on_speech_start=self._on_speech_start)
         self._segments: asyncio.Queue[SpeechSegment] = asyncio.Queue(
             maxsize=AUDIO_SEGMENT_QUEUE_MAX
