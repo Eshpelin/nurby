@@ -40,6 +40,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [decisionBusy, setDecisionBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,6 +68,24 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
     if (item.kind !== "notification" || !item.unread) return;
     const res = await authFetch(`/api/notifications/${item.source_id}/read`, { method: "PATCH" });
     if (res.ok) setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, unread: false, status: "resolved" } : candidate));
+  };
+
+  const decideRelationship = async (item: ReviewItem, decision: "confirm" | "reject") => {
+    if (item.kind !== "relationship_suggestion") return;
+    setDecisionBusy(item.id);
+    try {
+      const res = await authFetch(`/api/review/relationship-suggestions/${item.source_id}/decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+      if (!res.ok) throw new Error(`Could not ${decision} relationship (${res.status})`);
+      setItems((current) => current.filter((candidate) => candidate.id !== item.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Relationship decision failed");
+    } finally {
+      setDecisionBusy(null);
+    }
   };
 
   return (
@@ -107,6 +126,26 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                 )}
                 {item.kind === "identity_suggestion" && (
                   <a href="/people" className="text-[11px] text-accent hover:underline">Review in People</a>
+                )}
+                {item.kind === "relationship_suggestion" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void decideRelationship(item, "reject")}
+                      disabled={decisionBusy === item.id}
+                      className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    >
+                      Not related
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void decideRelationship(item, "confirm")}
+                      disabled={decisionBusy === item.id}
+                      className="text-[11px] text-accent hover:underline disabled:opacity-50"
+                    >
+                      Confirm
+                    </button>
+                  </>
                 )}
               </div>
             </li>

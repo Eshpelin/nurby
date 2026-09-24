@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Iterable
+from typing import Iterable, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,6 +35,11 @@ from shared.schemas import ReviewItemResponse, ReviewQueueResponse
 router = APIRouter()
 
 _KINDS = {"incident", "alert", "notification", "identity_suggestion", "relationship_suggestion", "camera_health", "privacy_review"}
+
+
+class RelationshipDecisionBody(BaseModel):
+    decision: Literal["confirm", "reject"]
+    note: str | None = Field(default=None, max_length=1000)
 
 
 def _review_visible(camera_id):
@@ -314,3 +320,41 @@ async def list_review_items(
         next_offset=offset + limit if offset + limit < total else None,
         total=total,
     )
+
+
+@router.post("/relationship-suggestions/{association_id}/decision")
+async def decide_relationship_suggestion(
+    association_id: uuid.UUID,
+    body: RelationshipDecisionBody,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Confirm or reject a learned relationship without exposing hidden evidence.
+
+    Decisions are intentionally irreversible through this endpoint: rejected
+    associations must not be silently revived by later inference, and an
+    established edge must be changed through a future explicit relationship
+    editor rather than by replaying a notification action.
+    """
+    association = await db.get(EntityAssociation, association_id)
+    if not association or association.status != "candidate":
+        raise HTTPException(status_code=404, detail="Relationship suggestion not found")
+
+    allowed = await allowed_camera_ids(current_user, db)
+    if allowed is not ALL:
+        allowed_ids = {str(camera_id) for camera_id in allowed}
+        if not any(str(camera_id) in allowed_ids for camera_id in (association.camera_histogram or {})):
+            raise HTTPException(status_code=404, detail="Relationship suggestion not found")
+
+    association.status = "established" if body.decision == "confirm" else "rejected"
+    association.user_confirmed = body.decision == "confirm"
+    association.reviewed_at = datetime.now(timezone.utc)
+    association.reviewed_by_user_id = current_user.id
+    association.review_note = body.note.strip() if body.note else None
+    await db.commit()
+    return {
+        "id": str(association.id),
+        "status": association.status,
+        "user_confirmed": association.user_confirmed,
+        "reviewed_at": association.reviewed_at,
+    }
