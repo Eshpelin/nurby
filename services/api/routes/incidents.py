@@ -22,7 +22,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.auth import get_current_user
 from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.database import get_db
-from shared.models import Incident, Observation, User
+from shared.models import (
+    Event,
+    EventNote,
+    Incident,
+    IncidentEvent,
+    Observation,
+    Recording,
+    Rule,
+    User,
+)
 
 router = APIRouter()
 
@@ -150,9 +159,16 @@ async def get_incident(
         )
     payload = _serialize(row)
     payload["observations"] = [_serialize_obs(o) for o in obs_rows]
-    # Who handled / owns it, by name, so shared users see it without a second
-    # lookup (#197). Permission is already enforced on the incident's camera.
+    # Who handled / owns it, by name + full history, so shared users see it
+    # without a second lookup (#197). Permission is already enforced above.
     payload["ownership"] = await _ownership(row, db)
+    # Consistent detail (#197): trigger reason + action result of the alerts
+    # this incident fired, the related cross-camera sightings, and the exact
+    # clip, so an incident is inspected in one place.
+    allowed = await allowed_camera_ids(current_user, db)
+    payload["alerts"] = await _incident_alerts(db, parsed)
+    payload["related_sightings"] = await _related_sightings(db, row, allowed)
+    payload["exact_clip"] = await _exact_clip(db, row)
     # Connect the (already permission- and retention-scoped) evidence export
     # into the incident workflow so it is one click, not a separate hunt
     # (#197). The client hits this endpoint with these params; the bundle
@@ -168,23 +184,195 @@ async def get_incident(
     return payload
 
 
+def _actor_name(u) -> str | None:
+    if u is None:
+        return None
+    return getattr(u, "display_name", None) or getattr(u, "email", None)
+
+
+async def _log_event(
+    db: AsyncSession,
+    incident_id: uuid.UUID,
+    action: str,
+    actor: User | None,
+    *,
+    reason: str | None = None,
+    detail: str | None = None,
+) -> None:
+    """Append one workflow transition to the incident's audit log (#197)."""
+    db.add(
+        IncidentEvent(
+            incident_id=incident_id,
+            action=action,
+            actor_user_id=getattr(actor, "id", None),
+            reason=reason,
+            detail=detail,
+        )
+    )
+
+
 async def _ownership(i: Incident, db: AsyncSession) -> dict[str, Any]:
-    """Resolve resolver/assignee display names for an incident."""
-    ids = [u for u in (i.resolved_by_user_id, i.assigned_to_user_id) if u]
+    """Current handler/assignee plus the full transition history (#197).
+
+    The single ``resolved_by`` pointer is the latest state; ``history`` is the
+    append-only audit log so shared users see everyone who handled it and when,
+    even across reopens."""
+    # Names for the current pointers.
+    ptr_ids = [u for u in (i.resolved_by_user_id, i.assigned_to_user_id) if u]
     names: dict[uuid.UUID, str] = {}
-    if ids:
+    if ptr_ids:
         rows = (
             await db.execute(
-                select(User.id, User.display_name, User.email).where(User.id.in_(ids))
+                select(User.id, User.display_name, User.email).where(User.id.in_(ptr_ids))
             )
         ).all()
         names = {uid: (dn or email) for uid, dn, email in rows}
+
+    # Transition history, oldest first, with actor names.
+    log_rows = (
+        await db.execute(
+            select(IncidentEvent)
+            .where(IncidentEvent.incident_id == i.id)
+            .order_by(IncidentEvent.created_at.asc())
+        )
+    ).scalars().all()
+    actor_ids = {e.actor_user_id for e in log_rows if e.actor_user_id}
+    actor_names: dict[uuid.UUID, str] = {}
+    if actor_ids:
+        rows = (
+            await db.execute(
+                select(User.id, User.display_name, User.email).where(User.id.in_(actor_ids))
+            )
+        ).all()
+        actor_names = {uid: (dn or email) for uid, dn, email in rows}
+
+    history = [
+        {
+            "action": e.action,
+            "actor": actor_names.get(e.actor_user_id) if e.actor_user_id else None,
+            "reason": e.reason,
+            "detail": e.detail,
+            "at": e.created_at.isoformat() if e.created_at else None,
+        }
+        for e in log_rows
+    ]
     return {
         "status": getattr(i, "status", "open"),
         "resolved_by": names.get(i.resolved_by_user_id) if i.resolved_by_user_id else None,
         "resolved_at": i.resolved_at.isoformat() if i.resolved_at else None,
         "resolution_reason": i.resolution_reason,
         "assigned_to": names.get(i.assigned_to_user_id) if i.assigned_to_user_id else None,
+        "history": history,
+    }
+
+
+async def _incident_alerts(db: AsyncSession, obs_ids: list[uuid.UUID]) -> list[dict[str, Any]]:
+    """Alerts fired from this incident's observations: the trigger reason (which
+    rule) and the action result (delivered / failed / seen), so the detail
+    answers 'what fired and did it reach me' without leaving the page (#197)."""
+    if not obs_ids:
+        return []
+    events = (
+        await db.execute(
+            select(Event).where(Event.observation_id.in_(obs_ids)).order_by(Event.fired_at.asc())
+        )
+    ).scalars().all()
+    if not events:
+        return []
+    rule_ids = {e.rule_id for e in events if e.rule_id}
+    rule_names: dict[uuid.UUID, str] = {}
+    if rule_ids:
+        rule_names = {
+            rid: name
+            for rid, name in (
+                await db.execute(select(Rule.id, Rule.name).where(Rule.id.in_(rule_ids)))
+            ).all()
+        }
+    # Notes on those alerts, surfaced inline so the workflow shows them too.
+    notes_by_event: dict[uuid.UUID, list[dict]] = {}
+    ev_ids = [e.id for e in events]
+    for n in (
+        await db.execute(
+            select(EventNote).where(EventNote.event_id.in_(ev_ids)).order_by(EventNote.created_at.asc())
+        )
+    ).scalars().all():
+        notes_by_event.setdefault(n.event_id, []).append(
+            {"text": n.text, "source": n.source, "at": n.created_at.isoformat() if n.created_at else None}
+        )
+    out = []
+    for e in events:
+        out.append({
+            "event_id": str(e.id),
+            "fired_at": e.fired_at.isoformat() if e.fired_at else None,
+            "severity": e.severity,
+            "trigger_reason": rule_names.get(e.rule_id) if e.rule_id else None,
+            "action_type": e.action_type,
+            "action_status": e.action_status,        # pending | sent | failed
+            "action_error": e.action_error,
+            "seen": e.acked_at is not None,
+            "seen_at": e.acked_at.isoformat() if e.acked_at else None,
+            "notes": notes_by_event.get(e.id, []),
+        })
+    return out
+
+
+async def _related_sightings(
+    db: AsyncSession, incident: Incident, allowed
+) -> list[dict[str, Any]]:
+    """Sibling incidents on the same cross-camera journey, permission-scoped —
+    the 'related sightings' the detail should link to (#197)."""
+    if not incident.journey_id:
+        return []
+    q = apply_camera_filter(
+        select(Incident).where(
+            Incident.journey_id == incident.journey_id, Incident.id != incident.id
+        ),
+        allowed,
+        Incident.camera_id,
+    ).order_by(Incident.started_at.asc())
+    rows = (await db.execute(q)).scalars().all()
+    return [
+        {
+            "id": str(r.id),
+            "camera_id": str(r.camera_id),
+            "started_at": r.started_at.isoformat(),
+            "last_seen_at": r.last_seen_at.isoformat(),
+            "summary_text": r.summary_text,
+            "status": getattr(r, "status", "open"),
+        }
+        for r in rows
+    ]
+
+
+async def _exact_clip(db: AsyncSession, incident: Incident) -> dict[str, Any] | None:
+    """The recording covering the incident's peak moment, so 'open the exact
+    clip' is one hop (#197). Falls back to the incident's start when there is
+    no peak observation."""
+    anchor = None
+    if incident.peak_observation_id:
+        obs = await db.get(Observation, incident.peak_observation_id)
+        anchor = obs.started_at if obs else None
+    anchor = anchor or incident.started_at
+    if anchor is None:
+        return None
+    rec = (
+        await db.execute(
+            select(Recording)
+            .where(Recording.camera_id == incident.camera_id)
+            .where(Recording.started_at <= anchor)
+            .where((Recording.ended_at.is_(None)) | (Recording.ended_at >= anchor))
+            .order_by(Recording.started_at.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    if rec is None:
+        return None
+    return {
+        "recording_id": str(rec.id),
+        "started_at": rec.started_at.isoformat(),
+        "ended_at": rec.ended_at.isoformat() if rec.ended_at else None,
+        "anchor_at": anchor.isoformat(),
+        "thumbnail_path": rec.thumbnail_path,
     }
 
 
@@ -201,10 +389,12 @@ async def resolve_incident(
 ):
     """Mark an incident resolved (handled), recording who and when (#197)."""
     row = await _get_incident_in_scope(incident_id, current_user, db)
+    reason = body.reason if body else None
     row.status = "resolved"
-    row.resolution_reason = (body.reason if body else None)
+    row.resolution_reason = reason
     row.resolved_at = datetime.now(timezone.utc)
     row.resolved_by_user_id = current_user.id
+    await _log_event(db, row.id, "resolved", current_user, reason=reason)
     await db.commit()
     await db.refresh(row)
     return {**_serialize(row), "ownership": await _ownership(row, db)}
@@ -219,10 +409,12 @@ async def dismiss_incident(
 ):
     """Dismiss an incident (not worth acting on), recording who and when."""
     row = await _get_incident_in_scope(incident_id, current_user, db)
+    reason = body.reason if body else None
     row.status = "dismissed"
-    row.resolution_reason = (body.reason if body else None)
+    row.resolution_reason = reason
     row.resolved_at = datetime.now(timezone.utc)
     row.resolved_by_user_id = current_user.id
+    await _log_event(db, row.id, "dismissed", current_user, reason=reason)
     await db.commit()
     await db.refresh(row)
     return {**_serialize(row), "ownership": await _ownership(row, db)}
@@ -240,6 +432,7 @@ async def reopen_incident(
     row.resolution_reason = None
     row.resolved_at = None
     row.resolved_by_user_id = None
+    await _log_event(db, row.id, "reopened", current_user)
     await db.commit()
     await db.refresh(row)
     return {**_serialize(row), "ownership": await _ownership(row, db)}
@@ -258,11 +451,16 @@ async def assign_incident(
 ):
     """Assign (or unassign) an incident to a user, for business pilots (#197)."""
     row = await _get_incident_in_scope(incident_id, current_user, db)
+    assignee = None
     if body.user_id is not None:
         assignee = await db.get(User, body.user_id)
         if assignee is None or not getattr(assignee, "is_active", True):
             raise HTTPException(status_code=404, detail="assignee not found")
     row.assigned_to_user_id = body.user_id
+    if body.user_id is None:
+        await _log_event(db, row.id, "unassigned", current_user)
+    else:
+        await _log_event(db, row.id, "assigned", current_user, detail=_actor_name(assignee))
     await db.commit()
     await db.refresh(row)
     return {**_serialize(row), "ownership": await _ownership(row, db)}

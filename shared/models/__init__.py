@@ -82,6 +82,7 @@ from shared.models.integrations import (  # noqa: F401
 from shared.models.observations import (  # noqa: F401
     GroundingResult,
     Incident,
+    IncidentEvent,
     Journey,
     Observation,
     ObservationAction,
@@ -138,6 +139,7 @@ __all__ = [
     "HouseholdModeChange",
     "HouseholdFact",
     "Incident",
+    "IncidentEvent",
     "InviteKey",
     "Journey",
     "MotionSample",

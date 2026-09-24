@@ -343,6 +343,36 @@ class Incident(Base):
     )
 
 
+class IncidentEvent(Base):
+    """Append-only log of an incident's workflow transitions (#197).
+
+    Durable ownership/audit: "who handled it and when" survives a reopen,
+    unlike the single ``resolved_by`` pointer on ``Incident``. One row per
+    action (resolved / dismissed / reopened / assigned / unassigned) with the
+    actor, an optional reason, and a human ``detail`` (e.g. the assignee).
+    """
+
+    __tablename__ = "incident_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    incident_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    detail: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_incident_events_incident_created", "incident_id", "created_at"),
+    )
+
+
 class ObservationIncident(Base):
     """One observation's membership in one subject's incident.
 
