@@ -478,6 +478,9 @@ async def process_cooccurrences(
     ).scalars().all()
     touched = 0
     for other in others:
+        other_start, other_end = journey_window(other)
+        if not (other_start and other_end):
+            continue
         other_cameras = set(journey_camera_ids(other))
         shared_cameras = cameras.intersection(other_cameras)
         if not journeys_cooccur(journey, other, gap):

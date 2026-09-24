@@ -223,6 +223,20 @@ def test_journeys_cooccur_requires_shared_camera_and_nearby_time():
     assert not journeys_cooccur(first, second)
 
 
+def test_journeys_cooccur_rejects_different_cameras_even_when_times_overlap():
+    import uuid as _uuid
+
+    first = SimpleNamespace(
+        started_at=_at(1, 8), last_seen_at=_at(1, 8, 10), ended_at=None,
+        segments=[{"camera_id": str(_uuid.uuid4())}],
+    )
+    second = SimpleNamespace(
+        started_at=_at(1, 8, 1), last_seen_at=_at(1, 8, 9), ended_at=None,
+        segments=[{"camera_id": str(_uuid.uuid4())}],
+    )
+    assert not journeys_cooccur(first, second)
+
+
 def test_body_subjects_are_not_associable():
     """An appearance cluster does not survive a change of clothes, so it
     cannot carry a habit across days, which is the only thing an

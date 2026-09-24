@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { formatDateTime } from "@/lib/time";
+import { AssociationSummary } from "@/components/review/AssociationSummary";
 
 interface SubjectPerson {
   kind: "person";
@@ -204,6 +205,10 @@ export function FollowFeedPage({ kind, id }: Props) {
           setRangeS={setRangeS}
           heatPeak={heatPeak}
         />
+      )}
+
+      {bundle && kind === "cluster" && (
+        <AssociationSummary subjectKind="cluster" subjectKey={id} />
       )}
 
       {bundle && bundle.stats.cameras_seen.length > 0 && (
