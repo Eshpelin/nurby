@@ -49,6 +49,7 @@ import { PersonActivityModal } from "@/components/dashboard/PersonActivityModal"
 import { SEARCH_HINTS } from "@/components/dashboard/search-hints";
 import { AskHintCard, LocalAIHintCard, SecureAccountNudge } from "@/components/dashboard/HintCards";
 import { SystemStatusStrip } from "@/components/dashboard/SystemStatus";
+import { StorageLowSpaceBanner } from "@/components/settings/StorageLocation";
 import { computeSystemStatus } from "@/lib/systemStatus";
 
 // ── Main unified page ──
@@ -963,6 +964,9 @@ function DashboardContent() {
       <div ref={dashboardWrapRef} className="flex flex-col lg:flex-row gap-4 lg:flex-1 lg:min-h-[50vh] bg-background">
         {/* LEFT. Customizable camera wall (the main area). */}
         <div className="lg:flex-1 min-w-0 flex flex-col lg:min-h-0 lg:overflow-y-auto scrollbar-thin">
+          {/* Low disk / unwritable storage roots (issue #274). Admin-only;
+              renders nothing otherwise. */}
+          <StorageLowSpaceBanner />
           {/* One status strip for anything wrong with recording or the
               pipeline (worker stopped, or a degraded component). Live-relay
               and AI-offline live in the header pill, not here. */}

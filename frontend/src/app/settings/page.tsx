@@ -13,7 +13,7 @@ import { ShareLinksCard } from "@/components/ShareLinksCard";
 import { SystemDoctorPanel } from "@/components/SystemDoctorPanel";
 import { DevicesSection } from "@/components/DevicesSection";
 import { GroundingSettingsCard } from "@/components/settings/GroundingSettingsCard";
-import { StorageLocationCard } from "@/components/settings/StorageLocation";
+import { StorageLocationCard, useStorageOverview } from "@/components/settings/StorageLocation";
 import { ALL_PROVIDERS, PROVIDER_KINDS } from "@/lib/provider-presets";
 import { ProviderFields } from "@/components/ProviderFields";
 import { timezoneOptions } from "@/lib/timezones";
@@ -156,6 +156,11 @@ export default function SettingsPage() {
       }
     } catch { /* silent */ }
   }, []);
+
+  // Storage warnings (issue #274) surface on the collapsed card header, so
+  // low disk / unwritable roots are visible without expanding anything.
+  const { overview: storageOverview } = useStorageOverview(user?.role === "admin");
+  const storageWarningCount = storageOverview?.warnings.length ?? 0;
 
   const fetchStorage = useCallback(async () => {
     try {
@@ -952,10 +957,23 @@ export default function SettingsPage() {
           >
             <div className="flex items-center gap-3">
               <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                storageLoading ? "bg-muted-foreground/40" : storage ? "bg-green-500" : "bg-muted-foreground/40"
+                storageWarningCount > 0
+                  ? "bg-red-500"
+                  : storageLoading
+                    ? "bg-muted-foreground/40"
+                    : storage
+                      ? "bg-green-500"
+                      : "bg-muted-foreground/40"
               }`} />
               <div>
-                <div className="text-sm font-medium">Storage</div>
+                <div className="text-sm font-medium flex items-center gap-2">
+                  Storage
+                  {storageWarningCount > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-normal">
+                      {storageWarningCount} warning{storageWarningCount !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {storageLoading ? "Loading." : storage
                     ? storage.cameras.length > 0

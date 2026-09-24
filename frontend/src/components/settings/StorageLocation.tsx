@@ -12,6 +12,7 @@
 // read as one surface, not three.
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 
 interface StorageLocationInfo {
@@ -40,6 +41,34 @@ interface StorageValidation {
   detail: string;
 }
 
+export function useStorageOverview(enabled: boolean, pollMs?: number) {
+  // One overview fetch (GET /api/system/storage, admin-only) shared by the
+  // settings card, the dashboard low-space banner and the forms. `enabled`
+  // lets non-admins and unmounted surfaces skip the 403 entirely.
+  const { authFetch } = useAuth();
+  const [overview, setOverview] = useState<StorageStatus | null>(null);
+
+  const reload = useCallback(async () => {
+    if (!enabled) return;
+    try {
+      const res = await authFetch("/api/system/storage");
+      setOverview(res.ok ? await res.json() : null);
+    } catch {
+      setOverview(null);
+    }
+  }, [authFetch, enabled]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    reload();
+    if (!pollMs) return;
+    const t = setInterval(reload, pollMs);
+    return () => clearInterval(t);
+  }, [reload, enabled, pollMs]);
+
+  return { overview, reload };
+}
+
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes === null || bytes === undefined) return "unknown";
   const gb = bytes / 1024 ** 3;
@@ -63,8 +92,9 @@ export function StorageLocationForm({
   onSaved?: () => void;
   showCurrent?: boolean;
 }) {
-  const { authFetch } = useAuth();
-  const [status, setStatus] = useState<StorageStatus | null>(null);
+  const { authFetch, user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const { overview: status, reload: refreshStatus } = useStorageOverview(isAdmin);
   const [path, setPath] = useState("");
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -72,31 +102,12 @@ export function StorageLocationForm({
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await authFetch("/api/system/storage");
-      if (res.ok) {
-        const d: StorageStatus = await res.json();
-        setStatus(d);
-        setPath((p) => p || d.locations.find((l) => l.key === "recordings")?.path || "");
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [authFetch]);
-
+  // Prefill once the overview arrives (without clobbering user input).
   useEffect(() => {
-    load();
-  }, [load]);
-
-  const refreshStatus = useCallback(async () => {
-    try {
-      const s = await authFetch("/api/system/storage");
-      if (s.ok) setStatus(await s.json());
-    } catch {
-      /* ignore */
+    if (status) {
+      setPath((p) => p || status.locations.find((l) => l.key === "recordings")?.path || "");
     }
-  }, [authFetch]);
+  }, [status]);
 
   const validate = useCallback(
     async (target?: string): Promise<StorageValidation | null> => {
@@ -312,21 +323,8 @@ function CopyableEnvBlock({ docker }: { docker: boolean }) {
 }
 
 export function StorageOverviewBlock() {
-  const { authFetch } = useAuth();
-  const [status, setStatus] = useState<StorageStatus | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const res = await authFetch("/api/system/storage");
-      if (res.ok) setStatus(await res.json());
-    } catch {
-      /* ignore */
-    }
-  }, [authFetch]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { user } = useAuth();
+  const { overview: status } = useStorageOverview(user?.role === "admin");
 
   return (
     <div className="space-y-4">
@@ -394,6 +392,34 @@ export function StorageOverviewBlock() {
         Location in camera settings). Recordings already written stay where
         they are when locations change.
       </p>
+    </div>
+  );
+}
+
+export function StorageLowSpaceBanner() {
+  // Dashboard mirror of the storage warnings (#274): the settings card is
+  // collapsed by default, so low disk / unwritable roots must surface on
+  // the monitoring view. Admin-only; quiet 60s poll.
+  const { user } = useAuth();
+  const { overview } = useStorageOverview(user?.role === "admin", 60_000);
+
+  if (user?.role !== "admin" || !overview?.low_space) return null;
+  const rec = overview.locations.find((l) => l.key === "recordings");
+  return (
+    <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 flex items-start justify-between gap-3">
+      <div className="text-xs text-red-400">
+        <span className="font-medium">Low disk space. </span>
+        {rec?.free_bytes != null
+          ? `Only ${formatBytes(rec.free_bytes)} at ${rec.path}. `
+          : ""}
+        {overview.warnings[0] ?? ""}
+      </div>
+      <Link
+        href="/settings#storage"
+        className="text-xs text-red-300 hover:text-red-200 underline whitespace-nowrap"
+      >
+        Review storage
+      </Link>
     </div>
   );
 }
