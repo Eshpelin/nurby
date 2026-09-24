@@ -291,13 +291,39 @@ function buildFromDetail(detail: AgentRunDetail): ViewModel {
  * presses Confirm, which POSTs the drafted body to the normal rule-create
  * endpoint.
  */
+const ACTION_META: Record<
+  string,
+  { badge: string; confirm: string; pending: string; success: string; link?: { href: string; label: string } }
+> = {
+  create_rule: {
+    badge: "Draft rule",
+    confirm: "Confirm & create",
+    pending: "Creating…",
+    success: "Rule created.",
+    link: { href: "/rules", label: "View in Rules" },
+  },
+  remember_fact: {
+    badge: "Remember this",
+    confirm: "Confirm & save",
+    pending: "Saving…",
+    success: "Saved to memory.",
+    link: { href: "/memory", label: "View in Memory" },
+  },
+};
+
+/**
+ * Confirm card for an agent-proposed write (#284/#286). The agent never writes;
+ * this card is the gate — the write happens only when the user presses Confirm,
+ * which POSTs the proposed body to the normal endpoint.
+ */
 function RuleDraftConfirm({ action }: { action: RuleDraftAction }) {
   const { authFetch } = useAuth();
   const [state, setState] = useState<"idle" | "creating" | "created" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
-  if (action.kind !== "create_rule" || dismissed) return null;
+  const meta = ACTION_META[action.kind];
+  if (!meta || dismissed) return null;
 
   async function confirm() {
     setState("creating");
@@ -311,7 +337,7 @@ function RuleDraftConfirm({ action }: { action: RuleDraftAction }) {
       if (res.ok) {
         setState("created");
       } else {
-        let detail = `Create failed (${res.status}).`;
+        let detail = `Failed (${res.status}).`;
         try {
           const j = await res.json();
           if (typeof j?.detail === "string") detail = j.detail;
@@ -328,16 +354,20 @@ function RuleDraftConfirm({ action }: { action: RuleDraftAction }) {
   if (state === "created") {
     return (
       <div className="rounded-md border border-emerald-600/40 bg-emerald-950/20 px-3 py-2 text-sm">
-        <span className="text-emerald-300">Rule created.</span>{" "}
-        <Link href="/rules" className="underline text-emerald-200">View in Rules</Link>
+        <span className="text-emerald-300">{meta.success}</span>{" "}
+        {meta.link && (
+          <Link href={meta.link.href} className="underline text-emerald-200">
+            {meta.link.label}
+          </Link>
+        )}
       </div>
     );
   }
 
   return (
     <div className="rounded-md border border-sky-600/40 bg-sky-950/20 px-3 py-2.5 space-y-2">
-      <div className="text-[10px] uppercase tracking-wide text-sky-300">Draft rule</div>
-      <div className="text-sm font-medium">{action.title || "New rule"}</div>
+      <div className="text-[10px] uppercase tracking-wide text-sky-300">{meta.badge}</div>
+      {action.title && <div className="text-sm font-medium">{action.title}</div>}
       {action.summary && (
         <div className="text-xs text-muted-foreground">{action.summary}</div>
       )}
@@ -358,7 +388,7 @@ function RuleDraftConfirm({ action }: { action: RuleDraftAction }) {
           disabled={state === "creating"}
           className="text-xs px-3 py-1 rounded border border-sky-500/50 bg-sky-500/15 text-sky-200 hover:bg-sky-500/25 disabled:opacity-50"
         >
-          {state === "creating" ? "Creating…" : "Confirm & create"}
+          {state === "creating" ? meta.pending : meta.confirm}
         </button>
         <button
           type="button"

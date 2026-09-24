@@ -660,6 +660,7 @@ def test_registry_lookup():
         "get_rule_schema",
         "suggest_rule",
         "draft_rule",
+        "remember",
         "test_camera_connection",
         "run_doctor",
     }

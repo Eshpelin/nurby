@@ -51,11 +51,13 @@ from services.agent.tools.relationships import (
 from services.agent.tools.setup_tools import (
     _DRAFT_RULE_SCHEMA,
     _GET_RULE_SCHEMA_SCHEMA,
+    _REMEMBER_SCHEMA,
     _RUN_DOCTOR_SCHEMA,
     _SUGGEST_RULE_SCHEMA,
     _TEST_CAMERA_CONNECTION_SCHEMA,
     draft_rule,
     get_rule_schema,
+    remember,
     run_doctor,
     suggest_rule,
     test_camera_connection,
@@ -402,6 +404,20 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
         # driver may run it, but it carries a client_action for the confirm gate.
         "side_effect": "read",
         "cost_class": "medium",
+    },
+    {
+        "name": "remember",
+        "description": (
+            "Use when the user tells you to remember something about their "
+            "household ('remember that…', 'note that…', 'keep in mind…'). Takes "
+            "one plain-language fact and returns a Confirm card. It saves "
+            "NOTHING on its own — the fact is stored only when the user confirms. "
+            "Relay message_for_user; never claim it is already saved."
+        ),
+        "input_schema": _REMEMBER_SCHEMA,
+        "fn": remember,
+        "side_effect": "read",
+        "cost_class": "cheap",
     },
     {
         "name": "test_camera_connection",

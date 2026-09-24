@@ -38,6 +38,7 @@ const MENUS: MenuDef[] = [
     label: "Ask",
     links: [
       { label: "Ask Nurby", href: "/ask", hint: "Question your footage" },
+      { label: "Memory", href: "/memory", hint: "What Nurby remembers" },
       { label: "Scheduled questions", href: "/reports", hint: "Questions answered on a clock" },
     ],
   },
