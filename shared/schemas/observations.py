@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ── Observation schemas ──
@@ -72,6 +72,23 @@ class EventResponse(BaseModel):
     acked_by_user_id: uuid.UUID | None = None
     acked_via: str | None = None
     muted_until: datetime | None = None
+
+    @field_validator("payload", mode="before")
+    @classmethod
+    def remove_filesystem_paths(cls, value):
+        """Never expose host/container layout through an event payload."""
+        def clean(item):
+            if isinstance(item, dict):
+                return {
+                    key: clean(child)
+                    for key, child in item.items()
+                    if not key.endswith("_path")
+                }
+            if isinstance(item, list):
+                return [clean(child) for child in item]
+            return item
+
+        return clean(value) if value is not None else value
 
     model_config = {"from_attributes": True}
 

@@ -32,7 +32,7 @@ const RANGES = [
 type RangeValue = (typeof RANGES)[number]["value"];
 
 export default function EventsPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const searchParams = useSearchParams();
   const [events, setEvents] = useState<EventEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -491,6 +491,7 @@ export default function EventsPage() {
                       <EventEvidence
                         payload={ev.payload}
                         recordingId={ev.recording_id}
+                        isAdmin={user?.role === "admin"}
                         cameraId={String((ev.payload as Record<string, unknown>).camera_id || "")}
                         firedAt={ev.fired_at}
                       />

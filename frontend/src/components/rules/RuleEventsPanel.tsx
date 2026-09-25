@@ -29,7 +29,7 @@ interface RuleEvaluation {
 }
 
 export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const [ruleEvents, setRuleEvents] = useState<EventEntry[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
@@ -361,6 +361,7 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                       {ev.payload ? (
                         <EventEvidence
                           payload={ev.payload}
+                          isAdmin={user?.role === "admin"}
                           recordingId={ev.recording_id}
                           cameraId={String((ev.payload as Record<string, unknown>).camera_id || "")}
                           firedAt={ev.fired_at}

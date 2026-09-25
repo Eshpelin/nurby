@@ -75,11 +75,13 @@ export function summarizePayload(payload: Payload): string {
 
 export function EventEvidence({
   payload,
+  isAdmin = false,
   recordingId: eventRecordingId,
   cameraId,
   firedAt,
 }: {
   payload: Payload;
+  isAdmin?: boolean;
   recordingId?: string | null;
   cameraId?: string | null;
   firedAt?: string | null;
@@ -206,14 +208,16 @@ export function EventEvidence({
         )}
       </div>
 
-      <details onClick={(e) => e.stopPropagation()}>
-        <summary className="text-[10px] text-muted-foreground cursor-pointer select-none hover:text-foreground">
-          Raw payload (for debugging)
-        </summary>
-        <pre className="mt-1 text-[10px] font-mono bg-muted/50 rounded p-2 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
-          {JSON.stringify(payload, null, 2)}
-        </pre>
-      </details>
+      {isAdmin && (
+        <details onClick={(e) => e.stopPropagation()}>
+          <summary className="text-[10px] text-muted-foreground cursor-pointer select-none hover:text-foreground">
+            Developer details
+          </summary>
+          <pre className="mt-1 text-[10px] font-mono bg-muted/50 rounded p-2 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
+            {JSON.stringify(payload, null, 2)}
+          </pre>
+        </details>
+      )}
     </div>
   );
 }
