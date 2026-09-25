@@ -56,19 +56,29 @@ VISION_MODELS = [
     # it, and falls back to lighter models on modest hardware.
     # disk_gb is the approximate download size, used for the preflight
     # free-space check before a pull starts.
+    # min_ollama_version: oldest Ollama that can serve the family. The
+    # recommender skips families above the running version up front (#304)
+    # instead of learning about them from a failed multi-GB pull; the
+    # post-failure seeding below remains the ground truth.
     {"name": "gemma4:12b", "label": "Gemma 4 12B", "family": "Gemma 4", "ram_gb": 12, "disk_gb": 8.5,
+     "min_ollama_version": "0.18.0",
      "quality": "best", "vision": True, "description": "Newest Google multimodal. agentic, runs on 16GB+ laptops"},
     {"name": "gemma4:e4b", "label": "Gemma 4 E4B", "family": "Gemma 4", "ram_gb": 8, "disk_gb": 5.0,
+     "min_ollama_version": "0.18.0",
      "quality": "great", "vision": True,
      "description": "Lighter Gemma 4 with native audio input, for mid-range machines"},
     {"name": "gemma4:e2b", "label": "Gemma 4 E2B", "family": "Gemma 4", "ram_gb": 6, "disk_gb": 3.0,
+     "min_ollama_version": "0.18.0",
      "quality": "good", "vision": True, "description": "Smallest Gemma 4, native audio, for modest hardware"},
     # Gemma 3 (Google, all sizes support vision)
     {"name": "gemma3:27b", "label": "Gemma 3 27B", "family": "Gemma", "ram_gb": 20, "disk_gb": 17.0,
+     "min_ollama_version": "0.5.0",
      "quality": "best", "vision": True, "description": "Highest quality vision model from Google"},
     {"name": "gemma3:12b", "label": "Gemma 3 12B", "family": "Gemma", "ram_gb": 10, "disk_gb": 8.1,
+     "min_ollama_version": "0.5.0",
      "quality": "great", "vision": True, "description": "Great balance of quality and speed"},
     {"name": "gemma3:4b", "label": "Gemma 3 4B", "family": "Gemma", "ram_gb": 4, "disk_gb": 3.3,
+     "min_ollama_version": "0.5.0",
      "quality": "good", "vision": True, "description": "Good quality, runs on most machines"},
     {"name": "gemma3:1b", "label": "Gemma 3 1B", "family": "Gemma", "ram_gb": 2, "disk_gb": 0.8,
      "quality": "fast", "vision": True, "description": "Ultra-light, works on low-end hardware"},
@@ -90,6 +100,7 @@ VISION_MODELS = [
      "quality": "fast", "vision": True, "description": "Tiny vision model for edge devices"},
     # Llama 3.2 Vision
     {"name": "llama3.2-vision:11b", "label": "Llama 3.2 Vision 11B", "family": "Llama", "ram_gb": 8, "disk_gb": 7.9,
+     "min_ollama_version": "0.4.0",
      "quality": "great", "vision": True, "description": "Meta's multimodal Llama with vision"},
     {"name": "llama3.2-vision:90b", "label": "Llama 3.2 Vision 90B", "family": "Llama", "ram_gb": 55, "disk_gb": 55.0,
      "quality": "best", "vision": True, "description": "Largest Llama vision model"},
@@ -102,6 +113,56 @@ MODEL_BY_NAME = {m["name"]: m for m in VISION_MODELS}
 
 # Free space to keep after a pull, on top of the model download itself.
 _DISK_MARGIN_GB = 2.0
+
+_BYTE_UNITS = {"B": 1, "KB": 10**3, "MB": 10**6, "GB": 10**9, "TB": 10**12}
+
+
+def _gb_label(disk_gb: float) -> str:
+    """'3.3 GB' from a catalog disk_gb."""
+    return f"{disk_gb:g} GB"
+
+
+def _parse_bytes_progress(text: str) -> tuple[int, int] | None:
+    """(completed, total) bytes from an 'ollama pull' progress fragment
+    like '1.2 GB/3.3 GB'. None when the fragment carries no byte pair.
+    Pure, for tests."""
+    match = _re.search(
+        r"(\d+(?:\.\d+)?)\s*([KMGT]?B)\s*/\s*(\d+(?:\.\d+)?)\s*([KMGT]?B)",
+        text,
+    )
+    if not match:
+        return None
+    completed = float(match.group(1)) * _BYTE_UNITS[match.group(2).upper()]
+    total = float(match.group(3)) * _BYTE_UNITS[match.group(4).upper()]
+    return int(completed), int(total)
+
+
+def _download_message(model: str, completed: int | None, total: int | None, pct: float | None = None) -> str:
+    """'Downloading gemma3:4b — 1.2 GB of 3.3 GB (36%)', degrading to what
+    each layer knows: catalog size when nothing has arrived yet, percent
+    when only that does, bare model name as a last resort."""
+    base = f"Downloading {model}"
+    catalog = MODEL_BY_NAME.get(model)
+    if total:
+        total_label = f"{total / 10 ** 9:g} GB" if total >= 10 ** 9 else f"{total / 10 ** 6:g} MB"
+    else:
+        total_label = f"{_gb_label(catalog['disk_gb'])}" if catalog else None
+    if completed is not None and total:
+        completed_label = (
+            f"{completed / 10 ** 9:g} GB" if total >= 10 ** 9 else f"{completed / 10 ** 6:g} MB"
+        )
+        if pct is None and total > 0:
+            pct = completed / total * 100
+        if pct is not None:
+            return f"{base} — {completed_label} of {total_label} ({pct:.0f}%)"
+        return f"{base} — {completed_label} of {total_label}"
+    if pct is not None:
+        if total_label:
+            return f"{base} ({pct:.0f}% of about {total_label})"
+        return f"{base} ({pct:.0f}%)"
+    if total_label:
+        return f"{base} (about {total_label})"
+    return base
 
 # Families that a pull already told us this Ollama install can't serve
 # (e.g. "requires a newer version of Ollama" for a brand-new model like
@@ -118,6 +179,9 @@ class OllamaStatus(BaseModel):
     running: bool
     models: list[str]
     recommended_model: str | None
+    # True when recommended_model is already on the machine — magic can
+    # say "using what you have" and skip the download entirely (#304).
+    recommended_installed: bool = False
     system_ram_gb: float | None
     disk_free_gb: float | None = None
     available_models: list[dict]
@@ -136,6 +200,14 @@ class DeployStatus(BaseModel):
     message: str
     progress: float | None = None  # 0-100 for pull progress
     model: str | None = None
+    # Pull progress in bytes, when the transport reports it (HTTP pull
+    # reports exact totals; the CLI path parses GB/MB markers). The UI
+    # shows human sizes so a user can consent to a download knowingly.
+    total_bytes: int | None = None
+    completed_bytes: int | None = None
+    # True when the requested model was already on the machine and the
+    # deploy was pure registration — nothing was downloaded (#304).
+    already_installed: bool = False
     # Machine-readable failure reason, e.g. insufficient_disk /
     # insufficient_ram / pull_failed / no_ollama.
     code: str | None = None
@@ -169,21 +241,89 @@ def _get_system_ram_gb() -> float | None:
         return None
 
 
-def _recommend_model(ram_gb: float | None) -> str:
+def _parse_version(version: str | None) -> tuple[int, ...] | None:
+    """'0.18.4' -> (0, 18, 4); None when absent or unparseable."""
+    if not version:
+        return None
+    match = _re.match(r"\s*v?(\d+(?:\.\d+){0,3})", version)
+    if not match:
+        return None
+    return tuple(int(part) for part in match.group(1).split("."))
+
+
+def _seed_unsupported_families_from_version(version: str | None) -> None:
+    """Pre-seed the incompatible-family set from the running Ollama's
+    version (#304). The failure-driven seeding in _run_deploy_job stays as
+    the ground truth; this just means a fresh API process no longer has to
+    fail one doomed pull per new family before recommending a compatible
+    model. Unknown/unparseable versions seed nothing.
+    """
+    parsed = _parse_version(version)
+    if parsed is None:
+        return
+    for model in VISION_MODELS:
+        minimum = _parse_version(model.get("min_ollama_version"))
+        if minimum is not None and parsed < minimum:
+            _unsupported_families.add(model["family"])
+
+
+async def _probe_version(url: str) -> str | None:
+    """Running Ollama's version string, or None."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{url}/api/version")
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("version") if isinstance(data, dict) else None
+    except (httpx.ConnectError, httpx.TimeoutException, OSError):
+        pass
+    return None
+
+
+def _installed_exact(model_name: str, installed: list[str]) -> bool:
+    """Strict installed check for the recommender.
+
+    Unlike ``_model_installed`` (whose prefix match reports gemma3:4b as
+    present when only gemma3:12b is), the zero-download promise needs the
+    exact tagged model: recommending a name Ollama does not actually have
+    would produce a provider whose model fails at inference.
+    """
+    return model_name in installed
+
+
+def _recommend_model(ram_gb: float | None, installed: list[str] | None = None) -> tuple[str, bool]:
     """Pick the best model that fits in available RAM.
 
-    Skips families this Ollama install has already told us it can't pull
-    (see ``_unsupported_families``), so a known-incompatible install stops
-    recommending Gemma 4 and goes straight to Gemma 3 instead of failing
-    the same way on every fresh setup attempt.
+    Returns (name, already_installed). Prefers a capable model the user
+    already has (#304): a fresh setup should reach its first description
+    without re-downloading gigabytes for something on the machine.
+
+    Skips families this Ollama install can't pull (see
+    ``_unsupported_families``, seeded from pull failures and proactively
+    from the version probe), so a known-incompatible install stops
+    recommending Gemma 4 and goes straight to Gemma 3.
     """
     candidates = [m for m in VISION_MODELS if m["family"] not in _unsupported_families]
+    installed = installed or []
     if ram_gb is None:
-        return "gemma3:4b"  # safe default
-    for model in candidates:
-        if ram_gb >= model["ram_gb"] * 1.5:  # leave headroom
-            return model["name"]
-    return "gemma3:1b"
+        # RAM unknown (the probe is best-effort): an already-present model
+        # is safe to recommend — it is on disk and presumably running —
+        # otherwise keep the historical safe default.
+        for model in candidates:
+            if _installed_exact(model["name"], installed):
+                return model["name"], True
+        return "gemma3:4b", False
+    fit = [m for m in candidates if ram_gb >= m["ram_gb"] * 1.5]
+    if not fit:
+        # Nothing fits with headroom: the smallest model, installed first.
+        smallest = min(candidates, key=lambda m: m["ram_gb"]) if candidates else None
+        if smallest and _installed_exact(smallest["name"], installed):
+            return smallest["name"], True
+        return "gemma3:1b", "gemma3:1b" in installed
+    for model in fit:  # catalog order is curated best-first
+        if _installed_exact(model["name"], installed):
+            return model["name"], True
+    return fit[0]["name"], False
 
 
 import os
@@ -260,6 +400,8 @@ class DeployJob:
         self.stage = "checking"  # checking | pulling | registering | done | error | cancelled
         self.message = "Preparing"
         self.progress: float | None = None
+        self.total_bytes: int | None = None
+        self.completed_bytes: int | None = None
         self.code: str | None = None
         self.task: asyncio.Task | None = None
         self.proc: asyncio.subprocess.Process | None = None
@@ -270,6 +412,8 @@ class DeployJob:
             message=self.message,
             progress=self.progress,
             model=self.model,
+            total_bytes=self.total_bytes,
+            completed_bytes=self.completed_bytes,
             code=self.code,
         )
 
@@ -316,8 +460,10 @@ async def _pull_via_http(base_url: str, model: str, job: DeployJob) -> tuple[boo
                     total = chunk.get("total")
                     completed = chunk.get("completed")
                     if total and completed is not None:
+                        job.total_bytes = int(total)
+                        job.completed_bytes = int(completed)
                         job.progress = round(min(100.0, completed / total * 100), 1)
-                        job.message = f"Downloading {model} ({job.progress:.0f}%)"
+                        job.message = _download_message(model, int(completed), int(total), job.progress)
                 if last_status and last_status != "success":
                     return False, f"Pull did not complete. {last_status}"
                 return True, "ok"
@@ -348,10 +494,15 @@ async def _pull_via_cli(ollama_path: str, model: str, job: DeployJob) -> tuple[b
             if not chunk:
                 break
             tail = (tail + chunk)[-2048:]
-            matches = _PERCENT_RE.findall(chunk.decode(errors="replace"))
+            decoded_chunk = chunk.decode(errors="replace")
+            byte_progress = _parse_bytes_progress(decoded_chunk)
+            if byte_progress is not None:
+                job.completed_bytes, job.total_bytes = byte_progress
+            matches = _PERCENT_RE.findall(decoded_chunk)
             if matches:
                 job.progress = float(matches[-1])
-                job.message = f"Downloading {model} ({job.progress:.0f}%)"
+            if byte_progress is not None or matches:
+                job.message = _download_message(model, job.completed_bytes, job.total_bytes, job.progress)
         await proc.wait()
     finally:
         job.proc = None
@@ -424,7 +575,7 @@ async def _run_deploy_job(job: DeployJob, ollama_path: str | None, remote_url: s
     """The background deploy: pull the model, then register the provider."""
     try:
         job.stage = "pulling"
-        job.message = f"Downloading {job.model}"
+        job.message = _download_message(job.model, None, None)
         if ollama_path:
             ok, msg = await _pull_via_cli(ollama_path, job.model, job)
             provider_url = OLLAMA_URL
@@ -481,17 +632,23 @@ async def get_ollama_status(_current_user: User = Depends(require_admin)):
     reachable_url, models = await _detect_running()
     running = reachable_url is not None
     installed = ollama_path is not None or running
+    # Know about incompatible families before attempting anything (#304):
+    # an old Ollama skipping straight to a compatible recommendation saves
+    # a doomed multi-GB pull attempt on every fresh process.
+    if reachable_url:
+        _seed_unsupported_families_from_version(await _probe_version(reachable_url))
     # _get_system_ram_gb() shells out to `sysctl` on macOS (up to 5s); keep it
     # off the event loop so a slow probe doesn't stall all other requests.
     ram_gb = await asyncio.to_thread(_get_system_ram_gb)
     disk_free = await asyncio.to_thread(_get_disk_free_gb)
-    recommended = _recommend_model(ram_gb)
+    recommended, recommended_installed = _recommend_model(ram_gb, models)
 
     return OllamaStatus(
         installed=installed,
         running=running,
         models=models,
         recommended_model=recommended,
+        recommended_installed=recommended_installed,
         system_ram_gb=round(ram_gb, 1) if ram_gb else None,
         disk_free_gb=round(disk_free, 1) if disk_free else None,
         available_models=VISION_MODELS,
@@ -615,11 +772,23 @@ async def deploy_model(
             ),
         )
 
+    # Know about incompatible families before preflight (#304) so an old
+    # Ollama fails fast with a compatible-model hint instead of a doomed
+    # pull. Probe whichever URL this deploy will actually use.
+    _seed_unsupported_families_from_version(await _probe_version(provider_url))
+
     # Cheap path: model already present. Register synchronously so callers
     # that don't poll (old settings panel behavior) still work.
     if _model_installed(model_name, installed):
         message = await _register_provider(model_name, provider_url)
-        return DeployStatus(stage="done", message=message, model=model_name, progress=100.0)
+        exact = _installed_exact(model_name, installed)
+        return DeployStatus(
+            stage="done",
+            message=message if exact else f"{message} (note: {model_name} was not present; the registered model may need a pull)",
+            model=model_name,
+            progress=100.0,
+            already_installed=exact,
+        )
 
     failure = _preflight(model_name)
     if failure is not None:
@@ -629,7 +798,7 @@ async def deploy_model(
     # Stamp the stage before the task runs so the immediate response (and
     # any poll racing the task startup) already reads "pulling".
     job.stage = "pulling"
-    job.message = f"Downloading {model_name}"
+    job.message = _download_message(model_name, None, None)
     job.task = asyncio.create_task(
         _run_deploy_job(job, ollama_path, None if ollama_path else remote_url)
     )
