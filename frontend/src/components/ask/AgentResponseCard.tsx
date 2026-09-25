@@ -49,6 +49,19 @@ export function renderAnswer(text: string, citations: Citation[]): React.ReactNo
   return out;
 }
 
+export function traceProgressLabel(trace: Pick<TraceItem, "name" | "kind" | "done">[]): string {
+  const current = trace.find((item) => !item.done) ?? trace[trace.length - 1];
+  if (!current) return "Investigating.";
+  const labels: Record<string, string> = {
+    get_camera_layout: "Checking which cameras are available",
+    search_observations: "Searching recent camera evidence",
+    get_observations: "Reading camera observations",
+    get_recordings: "Checking recordings",
+    summarize_observations: "Summarizing the evidence",
+  };
+  return labels[current.name] || (current.kind === "vlm" ? "Looking at camera frames" : `Running ${current.name.replaceAll("_", " ")}`);
+}
+
 interface TraceItem {
   call_id: string;
   kind: "tool" | "vlm";
@@ -453,6 +466,7 @@ export default function AgentResponseCard({
     ? vm.trace.find((t) => t.call_id === inspectCallId) ?? null
     : null;
   const waitingForFinal = !vm.done && !isStreaming && vm.trace.length > 0;
+  const progressLabel = traceProgressLabel(vm.trace);
 
   return (
     <div className="border border-border bg-card rounded-lg overflow-hidden">
@@ -565,7 +579,7 @@ export default function AgentResponseCard({
           <div className="text-sm text-muted-foreground italic">
             {waitingForFinal
               ? "The investigation finished; loading the final answer…"
-              : "Investigating."}
+              : progressLabel}
           </div>
         )}
 
@@ -587,6 +601,7 @@ export default function AgentResponseCard({
         {vm.done && vm.model && (
           <div className="text-[10px] text-muted-foreground border-t border-border/60 pt-2">
             Answered by <span className="font-mono text-foreground">{vm.providerName ? `${vm.providerName} / ` : ""}{vm.model}</span>.
+            <span className="block mt-1">Ask uses a tool-capable model for camera lookups; this can differ from the model used for camera descriptions.</span>
           </div>
         )}
 

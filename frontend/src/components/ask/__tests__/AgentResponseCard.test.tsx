@@ -5,7 +5,7 @@ vi.mock("../CitationChip", () => ({
   default: () => <button type="button" aria-label="Open citation">citation</button>,
 }));
 
-import { renderAnswer } from "../AgentResponseCard";
+import { renderAnswer, traceProgressLabel } from "../AgentResponseCard";
 
 describe("renderAnswer", () => {
   it("turns valid observation tokens into citation controls", () => {
@@ -20,5 +20,10 @@ describe("renderAnswer", () => {
     const html = renderToStaticMarkup(<>{renderAnswer("Seen [obs:not-a-real-id]", [])}</>);
     expect(html).not.toContain("obs:");
     expect(html).toContain("Seen");
+  });
+
+  it("turns trace tool names into human-readable progress", () => {
+    expect(traceProgressLabel([{ name: "get_camera_layout", kind: "tool", done: false }]))
+      .toBe("Checking which cameras are available");
   });
 });
