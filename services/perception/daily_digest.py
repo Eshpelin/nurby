@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -44,6 +45,7 @@ from shared.models import (
     Incident,
     Journey,
     Observation,
+    Person,
     Provider,
     Vehicle,
 )
@@ -522,7 +524,100 @@ async def _collect_facts(
         facts["notable_events"] = events[:25]
         facts["notable_count"] = len(events)
 
+        # Household notes (#185): what the household already knows, so the
+        # recap can explain rather than just list — "the gardener was here,
+        # as expected on a Tuesday". Only notes that bear on this window
+        # are included: a schedule note whose weekday is the window's, or
+        # a note about something that actually appeared.
+        facts["household_notes"] = await _relevant_household_notes(
+            db,
+            window_end=window_end,
+            tz=tz,
+            named_persons=set(named),
+            seen_camera_ids=set(active_cams),
+            seen_vehicle_ids={str(v.id) for v in veh_rows},
+            scoped=scoped,
+        )
+
     return facts
+
+
+async def _relevant_household_notes(
+    db,
+    *,
+    window_end: datetime,
+    tz,
+    named_persons: set[str],
+    seen_camera_ids: set[str],
+    seen_vehicle_ids: set[str],
+    scoped: bool,
+) -> list[dict]:
+    """Established notes that could explain something in this window.
+
+    Schedule notes count as expected-even-if-unseen: "the cleaner was
+    expected this morning and nothing was on the cameras" is exactly the
+    kind of line a recap is for. Person/vehicle/camera notes only match
+    on sightings inside the window. Scoped digests (camera-restricted
+    viewers) still get schedule and household-wide notes — they say
+    nothing about other cameras — but never person notes resolved from
+    outside the scoped set; matching here is against ``named_persons``
+    from the already-scoped observation sample.
+    """
+    from shared.fact_schedule import schedule_active, schedule_summary
+    from shared.models import HouseholdFact
+
+    try:
+        rows = (
+            await db.execute(
+                select(HouseholdFact)
+                .where(HouseholdFact.status == "established")
+                .order_by(HouseholdFact.pinned.desc(), HouseholdFact.evidence_count.desc())
+                .limit(50)
+            )
+        ).scalars().all()
+    except Exception:
+        return []
+
+    try:
+        window_local = window_end.astimezone(tz) if tz else window_end.astimezone()
+    except Exception:
+        window_local = window_end
+
+    notes: list[dict] = []
+    for f in rows:
+        summary = schedule_summary(f)
+        entry = None
+        if summary is not None and schedule_active(
+            f.schedule_days, f.schedule_start_minute, f.schedule_end_minute,
+            now_local=window_local,
+        ):
+            entry = {"id": str(f.id), "text": f.text, "expected": True, "seen": None}
+        elif f.entity_kind == "person" and f.entity_key:
+            try:
+                person = await db.get(Person, uuid.UUID(f.entity_key))
+            except Exception:
+                person = None
+            name = person.display_name if person else None
+            if name and name in named_persons:
+                entry = {"id": str(f.id), "text": f.text, "expected": False, "seen": name}
+        elif f.entity_kind == "vehicle" and f.entity_key and not scoped:
+            if f.entity_key in seen_vehicle_ids:
+                entry = {"id": str(f.id), "text": f.text, "expected": False, "seen": None}
+        elif f.entity_kind == "camera" and f.entity_key:
+            if f.entity_key in seen_camera_ids:
+                entry = {"id": str(f.id), "text": f.text, "expected": False, "seen": None}
+        elif f.entity_kind == "household" and summary is None:
+            # Household-wide notes ride along only when they are timely
+            # (a schedule), not as ambient context — otherwise every
+            # recap inherits every note ever written.
+            continue
+        if entry is not None:
+            entry["schedule"] = summary
+            entry["source"] = f.source
+            notes.append(entry)
+        if len(notes) >= 8:
+            break
+    return notes
 
 
 def _incident_phrase(kind: str | None, key: str | None) -> str:
@@ -580,20 +675,48 @@ def _build_prompt(
 ) -> str:
     when = _window_phrase(window_start, window_end)
     events = facts.get("notable_events") or []
-
-    if not events:
-        return (
-            f"There were no notable events {when}. Reply with a single short,"
-            " friendly sentence saying it was a quiet night with nothing of"
-            " note. Do not invent anything."
-        )
+    notes = facts.get("household_notes") or []
 
     lines = [f"Here are the notable events {when}, earliest first:", ""]
     for e in events:
         clock = e.get("when")
         prefix = f"{clock} - " if clock else "- "
         lines.append(f"{prefix}{e.get('text')}")
-    lines.append("")
+    if notes:
+        lines.append("")
+        lines.append("Household notes (things the people here already know):")
+        for n in notes:
+            suffix = ""
+            if n.get("schedule"):
+                suffix = f" [scheduled: {n['schedule']}"
+                suffix += ", expected during this window]" if n.get("expected") else "]"
+            elif n.get("seen"):
+                suffix = f" [about: {n['seen']}, who appears above]"
+            lines.append(f"- {n['text']}{suffix}")
+        lines.append(
+            "Use a note only when it genuinely explains something above — e.g."
+            " say the gardener was here \"as expected on a Thursday\", or that"
+            " something absent was expected. A note that explains nothing"
+            " should be left out entirely. Never present a note as your own"
+            " observation, and never contradict it with a guess."
+        )
+        lines.append("")
+
+    if not events:
+        if not notes:
+            return (
+                f"There were no notable events {when}. Reply with a single short,"
+                " friendly sentence saying it was a quiet night with nothing of"
+                " note. Do not invent anything."
+            )
+        lines.append(
+            "There were no notable events in the window. If a note above was"
+            " expected during this window and nothing contradicts it, one short"
+            " sentence saying it was quiet and anything expected did not show"
+            " (or passed without incident) is fine. Do not invent events."
+        )
+        return "\n".join(lines)
+
     lines.append(
         f"Write a brief, friendly recap of what happened {when} for the person"
         " who lives here. Lead with the most notable thing, name people and"

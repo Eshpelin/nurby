@@ -25,14 +25,14 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 try:
     from zoneinfo import ZoneInfo
 except ImportError:  # pragma: no cover - py<3.9
     ZoneInfo = None  # type: ignore
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from services.events import firing, sequences
 from services.perception.spatial_events import (
@@ -41,7 +41,7 @@ from services.perception.spatial_events import (
     _segments_cross,
 )
 from shared.database import async_session
-from shared.models import Recording, Rule
+from shared.models import Recording, Rule, RuleEvaluation
 
 # Redis pubsub channel that backend routes publish to whenever a rule
 # is created, updated, or deleted. The perception process listens and
@@ -198,6 +198,12 @@ class RuleEngine:
         # A rule with conditions.modes only fires while the household
         # is in one of those modes.
         mode = await self._resolve_household_mode()
+        # Confirmed household-note schedules (#185), resolved once per
+        # tick like the mode. While a note's window holds, alerts about
+        # the subject it names are muted — "the cleaner comes Thursdays
+        # 9-11" stops Thursday-morning cleaner alerts. Subject-bearing
+        # triggers only, so a motion rule on the same frame still runs.
+        suppressions = await self._resolve_fact_suppressions(tz)
 
         # ZoneMinder-style veto. While a veto zone on this camera is
         # triggered (headlight wash on a wall patch, a flapping flag), all
@@ -211,6 +217,14 @@ class RuleEngine:
             if veto_active and not (rule.conditions or {}).get("ignore_veto"):
                 continue
 
+            # Household-note suppression (#185). Opt out with
+            # conditions.ignore_fact_suppression.
+            if suppressions and not (rule.conditions or {}).get("ignore_fact_suppression"):
+                hit_fact = self._suppression_hit(suppressions, rule.trigger_pattern, observation_data)
+                if hit_fact is not None:
+                    await self._record_suppression_hit(hit_fact)
+                    continue
+
             # Sequence rules (temporal, multi-step) are evaluated out-of-band:
             # the base trigger only STARTS or advances an in-flight instance,
             # and the action chain fires on COMPLETION, not on the trigger
@@ -219,15 +233,6 @@ class RuleEngine:
             if seq:
                 await self._evaluate_sequence(rule, seq, observation_data, tz, mode)
                 continue
-
-            # Check cooldown. cooldown_seconds=0 means no cooldown and
-            # skips all Redis traffic so chatty triggers (motion, etc.)
-            # do not generate per-keyframe roundtrips.
-            now = time.time()
-            if rule.cooldown_seconds and rule.cooldown_seconds > 0:
-                last_fired = await self._read_cooldown(rule.id)
-                if last_fired and (now - last_fired) < rule.cooldown_seconds:
-                    continue
 
             # Prune visit-dedup state every frame (even when the trigger
             # will not match) so a subject leaving the camera ends its visit.
@@ -239,8 +244,22 @@ class RuleEngine:
             if not self._match_trigger(rule.trigger_pattern, observation_data, rule.id, tz):
                 continue
 
+            # Check cooldown only after the trigger matches so a suppression
+            # record represents a meaningful candidate, not every frame.
+            now = time.time()
+            if rule.cooldown_seconds and rule.cooldown_seconds > 0:
+                last_fired = await self._read_cooldown(rule.id)
+                if last_fired and (now - last_fired) < rule.cooldown_seconds:
+                    await self._record_evaluation(
+                        rule, observation_data, "suppressed", "cooldown",
+                        {"cooldown_seconds": rule.cooldown_seconds, "remaining_seconds": max(0, rule.cooldown_seconds - (now - last_fired))},
+                    )
+                    continue
+
             # Check conditions
             if rule.conditions and not self._check_conditions(rule.conditions, observation_data, tz, mode):
+                reason, details = self._condition_reason(rule.conditions, observation_data, tz, mode)
+                await self._record_evaluation(rule, observation_data, "suppressed", reason, details)
                 continue
 
             # Fire-once-per-visit dedup. A rule with fire_once_per="visit"
@@ -252,6 +271,7 @@ class RuleEngine:
             if fire_once_per_visit and self._visit_already_fired(
                 rule.id, observation_data
             ):
+                await self._record_evaluation(rule, observation_data, "suppressed", "already_fired_visit", {})
                 continue
 
             # Fire-once-per-incident dedup. A rule with
@@ -268,10 +288,12 @@ class RuleEngine:
             if fire_once_per_incident and self._incident_already_fired(
                 rule.id, observation_data
             ):
+                await self._record_evaluation(rule, observation_data, "suppressed", "already_fired_incident", {})
                 continue
 
             # Rule matched. Fire actions.
             logger.info("Rule '%s' triggered by observation", rule.name)
+            await self._record_evaluation(rule, observation_data, "fired", "trigger_matched", {})
             if rule.cooldown_seconds and rule.cooldown_seconds > 0:
                 await self._write_cooldown(rule.id, now, rule.cooldown_seconds)
 
@@ -288,6 +310,64 @@ class RuleEngine:
             rule, observation_data, rule.actions,
             severity=getattr(rule, "severity", None) or "alert",
         )
+
+    @staticmethod
+    async def _record_evaluation(rule, data: dict, outcome: str, reason: str, details: dict) -> None:
+        """Persist only decisive outcomes and retain them for 30 days."""
+        try:
+            observation_id = data.get("observation_id")
+            camera_id = data.get("camera_id")
+            row = RuleEvaluation(
+                rule_id=rule.id,
+                observation_id=uuid.UUID(str(observation_id)) if observation_id else None,
+                camera_id=uuid.UUID(str(camera_id)) if camera_id else None,
+                outcome=outcome,
+                reason_code=reason,
+                details=details or {},
+            )
+            async with async_session() as db:
+                db.add(row)
+                await db.execute(
+                    delete(RuleEvaluation).where(
+                        RuleEvaluation.evaluated_at < datetime.now(timezone.utc) - timedelta(days=30)
+                    )
+                )
+                await db.commit()
+        except Exception:
+            # Evidence must never take down live rule evaluation.
+            logger.debug("rule evaluation evidence write failed", exc_info=True)
+
+    @staticmethod
+    def _condition_reason(conditions: dict, data: dict, tz, mode: str | None) -> tuple[str, dict]:
+        from shared.household_mode import rule_active_in
+
+        if mode is not None and not rule_active_in(conditions, mode):
+            return "mode_gated", {"mode": mode, "allowed_modes": conditions.get("modes") or []}
+        cam_ids = conditions.get("camera_ids")
+        cam = conditions.get("camera_id")
+        if cam_ids and data.get("camera_id") not in cam_ids:
+            return "camera_excluded", {"camera_id": data.get("camera_id"), "allowed_camera_ids": cam_ids}
+        if cam and not cam_ids and data.get("camera_id") != cam:
+            return "camera_excluded", {"camera_id": data.get("camera_id"), "allowed_camera_id": cam}
+        allowed_days = conditions.get("days")
+        if allowed_days:
+            day_map = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
+            today = day_map[datetime.now(tz).weekday()]
+            if today not in allowed_days:
+                return "outside_schedule", {"today": today, "allowed_days": allowed_days}
+        after, before = conditions.get("time_after"), conditions.get("time_before")
+        if after or before:
+            now_time = datetime.now(tz).strftime("%H:%M")
+            if not _within_window(datetime.now(tz), after, before):
+                return "outside_schedule", {"time": now_time, "time_after": after, "time_before": before}
+        minimum = conditions.get("min_confidence")
+        if minimum is not None:
+            score = data.get("confidence")
+            if score is None:
+                score = data.get("_matched_confidence")
+            if score is not None and score < minimum:
+                return "below_confidence", {"score": score, "threshold": minimum}
+        return "condition_failed", {}
 
     async def _evaluate_sequence(self, rule, seq: dict, data: dict, tz, mode: str | None = None) -> None:
         """Drive a sequence rule for this observation: advance any in-flight
@@ -1193,6 +1273,143 @@ class RuleEngine:
         except Exception:
             value = None
         return value if is_mode(value) else DEFAULT_MODE
+
+    # Household-note suppression (#185). One DB read per evaluate tick;
+    # the table is tiny and the query hits the suppression index. On any
+    # failure the result is "nothing suppressed" — an outage must never
+    # mute alerts.
+    @staticmethod
+    async def _resolve_fact_suppressions(tz) -> dict:
+        """Confirmed, in-window note schedules as ``{(kind, key): fact_id}``.
+
+        Only person/vehicle/camera-attached facts participate: a
+        household-wide note names no subject, so it has nothing to
+        match an event against and must not become a blanket mute.
+        Person facts also register the person's display name, because
+        association deviations key subjects by name while notes attach
+        by id.
+        """
+        from datetime import datetime as _datetime
+
+        from shared.fact_schedule import schedule_active
+        from shared.models import HouseholdFact
+
+        now_local = _datetime.now(tz)
+        try:
+            async with async_session() as db:
+                rows = (
+                    await db.execute(
+                        select(HouseholdFact)
+                        .where(HouseholdFact.status == "established")
+                        .where(HouseholdFact.suppresses_alerts.is_(True))
+                        .where(HouseholdFact.suppression_confirmed_at.is_not(None))
+                    )
+                ).scalars().all()
+                active = [
+                    f for f in rows
+                    if f.entity_kind in ("person", "vehicle", "camera")
+                    and schedule_active(
+                        f.schedule_days, f.schedule_start_minute,
+                        f.schedule_end_minute, now_local=now_local,
+                    )
+                ]
+                person_names = {}
+                person_ids = {f.entity_key for f in active if f.entity_kind == "person"}
+                if person_ids:
+                    from shared.models import Person
+
+                    try:
+                        uuids = {uuid.UUID(k) for k in person_ids}
+                        name_rows = (
+                            await db.execute(
+                                select(Person.id, Person.display_name).where(Person.id.in_(uuids))
+                            )
+                        ).all()
+                        person_names = {str(pid): name for pid, name in name_rows}
+                    except Exception:
+                        person_names = {}
+        except Exception:
+            logger.exception("household-note suppression lookup failed")
+            return {}
+
+        out: dict = {}
+        for fact in active:
+            out[(fact.entity_kind, fact.entity_key)] = fact.id
+            if fact.entity_kind == "person" and person_names.get(fact.entity_key):
+                out[("person", person_names[fact.entity_key])] = fact.id
+        return out
+
+    @staticmethod
+    def _suppression_hit(suppressions: dict, pattern: dict, data: dict) -> "uuid.UUID | None":
+        """The note muting this rule for this observation, if any.
+
+        Subject-bearing triggers only. A motion or object rule on the
+        same frame is not about the named subject and still fires; the
+        association deviations, an identified vehicle, and a recognized
+        face are.
+        """
+        trigger = (pattern or {}).get("type")
+        if trigger in ("association_deviation", "association_unauthorized"):
+            hit = suppressions.get((data.get("subject_kind"), data.get("subject_key")))
+            if hit is not None:
+                return hit
+            # Deviation payloads carry the object without its kind; the
+            # only subject an object side can be is a vehicle id.
+            object_key = data.get("object_key")
+            if object_key is not None:
+                return suppressions.get(("vehicle", str(object_key)))
+            return None
+        if trigger == "vehicle_detected":
+            vehicles = (data.get("vehicle_detections") or {}).get("vehicles", []) or []
+            for vehicle in vehicles:
+                vid = vehicle.get("vehicle_id")
+                if vid is not None:
+                    hit = suppressions.get(("vehicle", str(vid)))
+                    if hit is not None:
+                        return hit
+            return None
+        if trigger in ("face_detected", "face_recognized"):
+            faces = (data.get("person_detections") or {})
+            for face in faces.get("faces", []) or []:
+                pid = face.get("person_id")
+                if pid is not None:
+                    hit = suppressions.get(("person", str(pid)))
+                    if hit is not None:
+                        return hit
+            return None
+        return None
+
+    # At most one hit record per note per window, so a cleaner pacing in
+    # front of a camera for an hour counts once, not once per keyframe.
+    SUPPRESSION_HIT_LOG_SECONDS = 300
+
+    async def _record_suppression_hit(self, fact_id) -> None:
+        """Count a suppressed alert on the note, visibly and throttled."""
+        now = time.time()
+        last = getattr(self, "_suppression_hits", None)
+        if last is None:
+            self._suppression_hits = last = {}
+        if now - last.get(fact_id, 0) < self.SUPPRESSION_HIT_LOG_SECONDS:
+            return
+        last[fact_id] = now
+        logger.info("alert suppressed by household note %s (schedule active)", fact_id)
+        try:
+            from sqlalchemy import func, update
+
+            from shared.models import HouseholdFact
+
+            async with async_session() as db:
+                await db.execute(
+                    update(HouseholdFact)
+                    .where(HouseholdFact.id == fact_id)
+                    .values(
+                        suppression_hit_count=HouseholdFact.suppression_hit_count + 1,
+                        last_suppressed_at=func.now(),
+                    )
+                )
+                await db.commit()
+        except Exception:
+            logger.debug("suppression hit accounting failed", exc_info=True)
 
     @staticmethod
     def _check_conditions(conditions: dict, data: dict, tz=None, mode: str | None = None) -> bool:

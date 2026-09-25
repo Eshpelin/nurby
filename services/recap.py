@@ -100,7 +100,9 @@ async def _collect_sightings(
     return out, latest
 
 
-def _build_user_prompt(person: Person, sightings: list[dict]) -> str:
+def _build_user_prompt(
+    person: Person, sightings: list[dict], notes: list[str] | None = None
+) -> str:
     now = datetime.now(timezone.utc)
     lines = [f"Person. {person.display_name}"]
     if person.relationship:
@@ -119,9 +121,45 @@ def _build_user_prompt(person: Person, sightings: list[dict]) -> str:
             stamp = _format_ago(s["at"], now)
             desc = s["description"] or "No description"
             lines.append(f"- {stamp}, {s['camera']}. {desc}")
+    if notes:
+        lines.append("")
+        lines.append(
+            "Household notes about this person (background the household "
+            "already knows; use to make sense of the sightings, never as a "
+            "sighting itself):"
+        )
+        for note in notes:
+            lines.append(f"- {note}")
     lines.append("")
     lines.append("Write the one-sentence status now.")
     return "\n".join(lines)
+
+
+async def _person_notes(db: AsyncSession, person_id: str) -> list[str]:
+    """Established household notes attached to this person, for recap
+    context (#185). Bounded; a missing notes table or empty library is
+    simply no notes."""
+    from shared.fact_schedule import schedule_summary
+    from shared.models import HouseholdFact
+
+    try:
+        rows = (
+            await db.execute(
+                select(HouseholdFact)
+                .where(HouseholdFact.status == "established")
+                .where(HouseholdFact.entity_kind == "person")
+                .where(HouseholdFact.entity_key == str(person_id))
+                .order_by(HouseholdFact.pinned.desc(), HouseholdFact.evidence_count.desc())
+                .limit(3)
+            )
+        ).scalars().all()
+    except Exception:
+        return []
+    out = []
+    for f in rows:
+        summary = schedule_summary(f)
+        out.append(f"{f.text}" + (f" (recurring {summary})" if summary else ""))
+    return out
 
 
 async def _pick_provider(person: Person):
@@ -177,7 +215,7 @@ async def generate_recap(
     sightings, latest = await _collect_sightings(db, str(person.id), cameras, allowed)
     count_24h = len(sightings)
 
-    status = await _run_vlm_status(person, sightings)
+    status = await _run_vlm_status(person, sightings, await _person_notes(db, str(person.id)))
 
     person.recap_cached_status = status
     person.recap_cached_at = now
@@ -239,12 +277,14 @@ def _fallback_status(person: Person, sightings: list[dict]) -> str:
     return f"{person.display_name} last seen on {s['camera']} {stamp}."
 
 
-async def _run_vlm_status(person: Person, sightings: list[dict]) -> str:
+async def _run_vlm_status(
+    person: Person, sightings: list[dict], notes: list[str] | None = None
+) -> str:
     kind, provider = await _pick_provider(person)
     if not provider:
         return _fallback_status(person, sightings)
     model = person.recap_model or provider.default_model or ""
-    prompt = _build_user_prompt(person, sightings)
+    prompt = _build_user_prompt(person, sightings, notes)
     try:
         raw = await _call_vlm(
             kind,
