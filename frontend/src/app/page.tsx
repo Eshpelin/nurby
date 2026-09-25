@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useWebSocket } from "@/lib/ws";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { recordFunnelEvent, shouldAutoOpenOnboarding } from "@/lib/onboarding";
 import type { StreamType } from "@/lib/camera-types";
 import { AddCameraModal } from "@/components/AddCameraModal";
 import { StarredStatusRow } from "@/components/StarredStatusRow";
@@ -73,7 +74,38 @@ function DashboardContent() {
     try { setLearningDismissed(localStorage.getItem("nurby_learning_dismissed") === "1"); }
     catch { setLearningDismissed(false); }
   }, []);
+
+  // Auto-open the first-run wizard on a true fresh install (#293): admin,
+  // zero cameras, never dismissed (locally or server-side). Existing
+  // installs — any camera, any flag — never see a surprise modal. The
+  // README promises this moment; until now the wizard only opened from a
+  // buried corner pill.
+  useEffect(() => {
+    if (autoOpenRanRef.current || !user || camerasLoading) return;
+    if (user.role !== "admin" || cameras.length > 0) {
+      autoOpenRanRef.current = true;
+      return;
+    }
+    autoOpenRanRef.current = true;
+    let cancelled = false;
+    (async () => {
+      let serverDismissed = false;
+      try {
+        const res = await authFetch("/api/system/settings");
+        if (res.ok) serverDismissed = (await res.json()).onboarding_dismissed === true;
+      } catch { /* unreachable server: local flag still gates */ }
+      if (cancelled) return;
+      if (shouldAutoOpenOnboarding({ role: user.role, cameraCount: cameras.length, camerasLoading, serverDismissed })) {
+        // The wizard counts its own wizard_shown on mount.
+        setShowWizard(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user, camerasLoading, cameras, authFetch]);
   const [showWizard, setShowWizard] = useState(false);
+  // True once the auto-open check ran (one attempt per session), so a
+  // slow settings fetch cannot re-trigger it later (#293).
+  const autoOpenRanRef = useRef(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalInitialType, setModalInitialType] = useState<StreamType | undefined>(undefined);
   const [activityEvents, setActivityEvents] = useState<Record<string, ActivityEvent[]>>({});

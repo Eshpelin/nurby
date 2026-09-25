@@ -63,7 +63,7 @@ The facility side. Grant a guardian or invite one by email, set the tier and ent
 
 ### Mobile app: the same brain in your pocket
 
-A Flutter companion app mirrors the web dashboard with the same dark-first design language. Five tabs cover the daily loop. **Cameras** shows live tiles with detection boxes and a plain-language activity line under each feed. **Timeline** is the AI-captioned history of what happened, filterable by camera. **Ask** is the same agentic Q&A as the web app, so you can ask "when did the package arrive today" from the couch. **Alerts** lists rule firings with severity and one-tap acknowledge. **More** holds rules, people, vehicles, recordings, and Guardian. The mockups below show the UI direction the app follows.
+A Flutter companion app mirrors the web dashboard with the same dark-first design language. Five tabs cover the daily loop. **Cameras** shows live tiles with detection boxes and a plain-language activity line under each feed. **Timeline** is the AI-captioned history of what happened, filterable by camera. **Ask** is the same agentic Q&A as the web app, so you can ask "when did the package arrive today" from the couch. **Alerts** lists rule firings with severity and one-tap acknowledge. **More** holds rules, people, vehicles, recordings, and Guardian. The mockups below show the app's design direction. The shipped tabs are Home · Cameras · Activity · Ask · People (docs/ia-rollout.md); treat the screens as the look, not the literal layout.
 
 | Cameras | Timeline | Ask Nurby |
 |:---:|:---:|:---:|
@@ -187,10 +187,12 @@ The first time, this downloads and assembles everything. It can take **5 to 15 m
 
 Open your web browser and go to **[http://localhost:4747](http://localhost:4747)**.
 
-The first visit drops you straight in. No account wall, no forms. You pick how to start:
+The first visit opens a short setup wizard — no account wall, no forms. You pick how to start:
 
-- **Show me some magic.** One click. Nurby adds a live demo camera, sets up a private local vision model if one is reachable, and lands you on the dashboard watching footage. Nothing leaves your machine.
-- **Set it up myself.** A short guided flow. Add your own camera (paste its RTSP or ONVIF link, the built-in brand guide covers 26 popular brands, or use your laptop or phone webcam), then optionally pick a vision model, local or cloud.
+- **Show me some magic.** One click. Nurby adds a live demo camera, sets up a private local vision model if one is reachable (it prefers a model already on your machine and downloads nothing in that case), and lands you on the dashboard watching footage. Nothing leaves your machine.
+- **Set it up myself.** A short guided flow: choose where recordings should live, then add your own camera (paste its RTSP or ONVIF link, the built-in brand guide covers 26 popular brands, or use your laptop or phone webcam), then optionally pick a vision model, local or cloud.
+
+The wizard only appears on a fresh install (an admin with no cameras yet) and you can skip every step. If it ever needs to come back, an admin can re-trigger it from Settings.
 
 When you are ready, a **Secure your account** button in the top bar lets you set an email and password so only you can get back in. Until then you are signed in as a provisional owner.
 

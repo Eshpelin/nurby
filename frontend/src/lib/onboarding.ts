@@ -64,3 +64,67 @@ export const GOALS: Record<Goal, {
 export function goalsForPlace(place: Place): Goal[] {
   return place === "business" ? ["after_hours", "entrance", "review"] : ["entrance", "deliveries", "review"];
 }
+
+// ── First-run wizard gate and funnel (#293) ──
+
+export type FunnelEvent = "wizard_shown" | "magic_clicked" | "manual_clicked" | "wizard_completed";
+
+const DISMISS_KEY = "nurby-onboarding-dismissed";
+
+export function localOnboardingDismissed(): boolean {
+  try {
+    return localStorage.getItem(DISMISS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markOnboardingDismissedLocally(): void {
+  try {
+    localStorage.setItem(DISMISS_KEY, "1");
+  } catch {
+    /* private mode: the server flag still gates other visits */
+  }
+}
+
+export interface AutoOpenGate {
+  role: string | undefined;
+  cameraCount: number;
+  camerasLoading: boolean;
+  serverDismissed: boolean | null; // null = not fetched yet
+}
+
+/**
+ * Decide whether the first-run wizard should open by itself. Strict on
+ * purpose (#293): a fresh install used to land on an alarm-heavy dashboard
+ * with the guided setup buried in a corner pill, while existing installs
+ * (any camera, any flag) must never see a surprise modal.
+ */
+export function shouldAutoOpenOnboarding(gate: AutoOpenGate): boolean {
+  if (gate.role !== "administrator" && gate.role !== "admin") return false;
+  if (gate.camerasLoading) return false;
+  if (gate.cameraCount > 0) return false;
+  if (localOnboardingDismissed()) return false;
+  if (gate.serverDismissed === true) return false;
+  return true;
+}
+
+/**
+ * Fire-and-forget funnel counter. Never throws, never blocks the wizard:
+ * the aggregate only feeds the admin metrics card.
+ */
+export function recordFunnelEvent(authFetch: (p: string, init?: RequestInit) => Promise<Response>, event: FunnelEvent): void {
+  authFetch("/api/auth/onboarding/funnel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event }),
+  }).catch(() => undefined);
+}
+
+export function browserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
+}

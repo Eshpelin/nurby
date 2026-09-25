@@ -7,6 +7,11 @@ import { OllamaDeployPanel } from "@/components/OllamaDeployPanel";
 import { AddCameraModal } from "@/components/AddCameraModal";
 import { ONBOARDING_PRESETS } from "@/lib/provider-presets";
 import { StorageLocationForm } from "@/components/settings/StorageLocation";
+import {
+  browserTimezone,
+  markOnboardingDismissedLocally,
+  recordFunnelEvent,
+} from "@/lib/onboarding";
 import { notifyProvidersChanged } from "@/lib/providers-changed";
 
 interface Provider {
@@ -45,18 +50,23 @@ const PROVIDER_PRESETS = ONBOARDING_PRESETS;
  */
 export function OnboardingWizard({ onClose, onComplete }: Props) {
   const { authFetch } = useAuth();
-  const [step, setStep] = useState<Step>("storage");
+  // Welcome first (#293): the magic/manual choice is the promise of the
+  // first visit, and the storage question only means something once a
+  // path is picked. The manual path asks storage before any camera
+  // writes video; the magic path skips it (the demo records nothing).
+  const [step, setStep] = useState<Step>("choose");
   const [providers, setProviders] = useState<Provider[]>([]);
+  // Detected once so the done step can offer the household timezone.
+  const [browserTz] = useState(() => browserTimezone());
+  // On by default: the browser timezone is almost always right, and the
+  // checkbox is right there to untick. Only actually sent when ticked.
+  const [tzAccepted, setTzAccepted] = useState(true);
 
   // Persist dismissal both locally (fast path) and server-side (so it
   // survives a browser/device change; an admin can re-trigger the wizard
   // by flipping onboarding_dismissed back to false in Settings).
   const markDismissed = useCallback(() => {
-    try {
-      localStorage.setItem("nurby-onboarding-dismissed", "1");
-    } catch {
-      /* ignore */
-    }
+    markOnboardingDismissedLocally();
     authFetch("/api/system/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -125,6 +135,36 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
       }
     })();
   }, [authFetch]);
+
+  // Funnel counters (#293). Fire-and-forget; the aggregate feeds the admin
+  // metrics card only.
+  useEffect(() => {
+    recordFunnelEvent(authFetch, "wizard_shown");
+  }, [authFetch]);
+
+  const onMagicChosen = useCallback(() => {
+    recordFunnelEvent(authFetch, "magic_clicked");
+    setStep("magic");
+  }, [authFetch]);
+
+  const onManualChosen = useCallback(() => {
+    recordFunnelEvent(authFetch, "manual_clicked");
+    setStep("storage");
+  }, [authFetch]);
+
+  const finishWizard = useCallback(() => {
+    recordFunnelEvent(authFetch, "wizard_completed");
+    if (tzAccepted && browserTz) {
+      // Offered on the done step; the server validates the name.
+      authFetch("/api/system/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ system_timezone: browserTz }),
+      }).catch(() => undefined);
+    }
+    markDismissed();
+    onComplete();
+  }, [authFetch, tzAccepted, browserTz, markDismissed, onComplete]);
 
   async function createProvider(): Promise<Provider | null> {
     setProviderError(null);
@@ -240,19 +280,15 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
           {step === "storage" && (
-            <StorageStep onNext={() => setStep("choose")} />
+            <StorageStep onNext={() => setStep("camera")} />
           )}
           {step === "choose" && (
-            <ChooseStep
-              onMagic={() => setStep("magic")}
-              onManual={() => setStep("camera")}
-            />
+            <ChooseStep onMagic={onMagicChosen} onManual={onManualChosen} />
           )}
           {step === "magic" && (
             <MagicStep
               onDone={() => {
-                markDismissed();
-                onComplete();
+                finishWizard();
               }}
               onFallback={() => setStep("camera")}
               onCloudFallback={() => {
@@ -290,10 +326,12 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
             />
           )}
           {step === "done" && (
-            <DoneStep onClose={() => {
-              markDismissed();
-              onComplete();
-            }} />
+            <DoneStep
+              onClose={finishWizard}
+              browserTz={browserTz}
+              tzAccepted={tzAccepted}
+              onTzAccepted={setTzAccepted}
+            />
           )}
         </div>
 
@@ -302,6 +340,7 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
           <button
             onClick={() => {
               if (step === "provider") setStep("camera");
+              if (step === "storage") setStep("choose");
             }}
             className={`px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted ${
               step === "done" ? "invisible" : ""
@@ -1127,7 +1166,17 @@ function CameraStep({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-function DoneStep({ onClose }: { onClose: () => void }) {
+function DoneStep({
+  onClose,
+  browserTz,
+  tzAccepted,
+  onTzAccepted,
+}: {
+  onClose: () => void;
+  browserTz: string;
+  tzAccepted: boolean;
+  onTzAccepted: (v: boolean) => void;
+}) {
   return (
     <div className="space-y-4 text-center py-6">
       <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center mx-auto">
@@ -1141,6 +1190,22 @@ function DoneStep({ onClose }: { onClose: () => void }) {
         describing activity as soon as it sees motion, and the first
         observations will land on your timeline.
       </p>
+      {browserTz && (
+        <label className="text-left max-w-md mx-auto flex items-start gap-2.5 rounded-md border border-border bg-card/40 px-3 py-2 cursor-pointer hover:border-accent/40 transition-colors">
+          <input
+            type="checkbox"
+            checked={tzAccepted}
+            onChange={(e) => onTzAccepted(e.target.checked)}
+            className="mt-0.5 accent-green-500"
+          />
+          <span>
+            <span className="block text-xs font-medium">Use {browserTz} as the Nurby timezone</span>
+            <span className="block text-[11px] text-muted-foreground leading-tight">
+              Detected from this browser. Recaps and schedules run in it. Change later in Settings → System timezone.
+            </span>
+          </span>
+        </label>
+      )}
       <div className="text-left max-w-md mx-auto space-y-2">
         <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
           Two things worth doing next
