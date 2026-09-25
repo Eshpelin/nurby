@@ -339,3 +339,14 @@ Key corrections accepted:
 
 Build order (EM): 1 → 5; 2, 3, 4 independent; 6 after 1 (status truth); 7, 8
 anytime. All eight are independently shippable.
+
+## Status (end of day, 26 September 2026)
+
+All eight issues are implemented, merged to main, and closed, each with a
+completion comment documenting the change, the tests, and any scope notes:
+#320 (c64335f-era merge b1785ac), #291 (92624a4), #317 (backend 2c094a5 +
+frontend f35e2c6, landed with a parallel session working the same tickets),
+#304 (1fb4453), #293 (3440612), #319 (70eb3a5), #318 (b357aa0), #321 by the
+parallel session (f017ba8). Final suites: backend 3030 passed (2 pre-existing
+failures in test_agent_tools_package.py from unrelated in-flight work),
+frontend 125 passed, tsc clean, production build compiles.
