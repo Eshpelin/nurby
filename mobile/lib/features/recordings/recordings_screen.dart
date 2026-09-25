@@ -78,8 +78,7 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
 
   void _onScroll() {
     if (!_scroll.hasClients) return;
-    if (_scroll.position.pixels >
-        _scroll.position.maxScrollExtent - 400) {
+    if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 400) {
       _load();
     }
   }
@@ -97,7 +96,9 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
     }
     final offset = reset ? 0 : _items.length;
     try {
-      final page = await ref.read(recordingRepoProvider).list(
+      final page = await ref
+          .read(recordingRepoProvider)
+          .list(
             cameraId: _cameraId,
             from: _range.start,
             limit: _pageSize,
@@ -155,9 +156,9 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
   }
 
   Map<String, dynamic> _selectionFilters() => {
-        if (_cameraId != null) 'camera_id': _cameraId,
-        if (_range.start != null) 'from': _range.start!.toUtc().toIso8601String(),
-      };
+    if (_cameraId != null) 'camera_id': _cameraId,
+    if (_range.start != null) 'from': _range.start!.toUtc().toIso8601String(),
+  };
 
   void _selectAllMatching() {
     setState(() {
@@ -171,39 +172,55 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
     if (_selectedIds.isEmpty && !_allMatching) return;
     final ids = _selectedIds.toList(growable: false);
     try {
-      final preview = await ref.read(recordingRepoProvider).previewBulk(
-            ids: ids, allMatching: _allMatching, filters: _selectionFilters());
+      final preview = await ref
+          .read(recordingRepoProvider)
+          .previewBulk(
+            ids: ids,
+            allMatching: _allMatching,
+            filters: _selectionFilters(),
+          );
       if (!mounted) return;
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Delete recordings?'),
-          content: Text(
-            '${preview.matching} recording${preview.matching == 1 ? '' : 's'} from ${_allMatching ? 'all matching filters' : 'this selection'}\n'
-            'Estimated storage: ${_formatBytes(preview.estimatedBytes)}\n'
-            '${preview.missingFiles} file${preview.missingFiles == 1 ? '' : 's'} already missing.\n\n'
-            'This cannot be undone. Linked alerts are preserved.',
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Delete'),
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Delete recordings?'),
+              content: Text(
+                '${preview.matching} recording${preview.matching == 1 ? '' : 's'} from ${_allMatching ? 'all matching filters' : 'this selection'}\n'
+                'Estimated storage: ${_formatBytes(preview.estimatedBytes)}\n'
+                '${preview.missingFiles} file${preview.missingFiles == 1 ? '' : 's'} already missing.\n\n'
+                'This cannot be undone. Linked alerts are preserved.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Delete'),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       if (confirmed != true) return;
-      final result = await ref.read(recordingRepoProvider).deleteBulk(
-            ids: ids, allMatching: _allMatching, filters: _selectionFilters());
+      final result = await ref
+          .read(recordingRepoProvider)
+          .deleteBulk(
+            ids: ids,
+            allMatching: _allMatching,
+            filters: _selectionFilters(),
+          );
       if (!mounted) return;
       final deleted = result.deleted;
       setState(() {
         if (_allMatching) {
           _items.clear();
         } else {
-          _items.removeWhere((r) => !result.failedIds.contains(r.id) && ids.contains(r.id));
+          _items.removeWhere(
+            (r) => !result.failedIds.contains(r.id) && ids.contains(r.id),
+          );
         }
         _selectedIds.clear();
         _selectionMode = false;
@@ -211,17 +228,53 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
       });
       if (result.deleted > 0 && _items.isEmpty) await _load(reset: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Deleted $deleted recording${deleted == 1 ? '' : 's'}${result.failed > 0 ? '; ${result.failed} failed' : ''}'),
-      ));
+      final details = StringBuffer(
+        'Deleted $deleted recording${deleted == 1 ? '' : 's'}',
+      );
+      if (result.missing > 0) {
+        details.write(
+          '; ${result.missing} file${result.missing == 1 ? '' : 's'} already missing',
+        );
+      }
+      if (result.skipped > 0) details.write('; ${result.skipped} skipped');
+      if (result.failed > 0) details.write('; ${result.failed} failed');
+      if (result.failedIds.isNotEmpty) {
+        details.write(
+          '. Failed item ids: ${result.failedIds.take(5).join(', ')}',
+        );
+        if (result.failedIds.length > 5)
+          details.write(' and ${result.failedIds.length - 5} more');
+      }
+      await showDialog<void>(
+        context: context,
+        builder:
+            (ctx) => AlertDialog(
+              title: Text(
+                result.failed > 0 || result.skipped > 0
+                    ? 'Some recordings were not deleted'
+                    : 'Recordings deleted',
+              ),
+              content: Text(details.toString()),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+      );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
     }
   }
 
   static String _formatBytes(int bytes) {
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (bytes < 1024 * 1024 * 1024)
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
@@ -231,40 +284,40 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
     final cameraNames = {for (final c in cameras) c.id: c.name};
 
     final body = Column(
-        children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Row(
-              children: [
-                _CameraFilterChip(
-                  cameras: cameras,
-                  selectedId: _cameraId,
-                  onSelected: (id) {
-                    _cameraId = id;
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Row(
+            children: [
+              _CameraFilterChip(
+                cameras: cameras,
+                selectedId: _cameraId,
+                onSelected: (id) {
+                  _cameraId = id;
+                  _onFilterChanged();
+                },
+              ),
+              const SizedBox(width: 8),
+              for (final r in _TimeRange.values) ...[
+                ChoiceChip(
+                  label: Text(r.label),
+                  selected: _range == r,
+                  selectedColor: NurbyColors.accent.withValues(alpha: 0.18),
+                  onSelected: (_) {
+                    _range = r;
                     _onFilterChanged();
                   },
                 ),
                 const SizedBox(width: 8),
-                for (final r in _TimeRange.values) ...[
-                  ChoiceChip(
-                    label: Text(r.label),
-                    selected: _range == r,
-                    selectedColor: NurbyColors.accent.withValues(alpha: 0.18),
-                    onSelected: (_) {
-                      _range = r;
-                      _onFilterChanged();
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                ],
               ],
-            ),
+            ],
           ),
-          if (_selectionMode) _selectionBar(),
-          Expanded(child: _body(cameraNames)),
-        ],
-      );
+        ),
+        if (_selectionMode) _selectionBar(),
+        Expanded(child: _body(cameraNames)),
+      ],
+    );
     if (widget.embedded) return body;
     return Scaffold(
       appBar: AppBar(title: const Text('Recordings')),
@@ -281,12 +334,15 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!,
-                style: const TextStyle(color: NurbyColors.mutedForeground)),
+            Text(
+              _error!,
+              style: const TextStyle(color: NurbyColors.mutedForeground),
+            ),
             const SizedBox(height: 12),
             TextButton(
-                onPressed: () => _load(reset: true),
-                child: const Text('Retry')),
+              onPressed: () => _load(reset: true),
+              child: const Text('Retry'),
+            ),
           ],
         ),
       );
@@ -298,13 +354,17 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           children: const [
             SizedBox(height: 120),
-            Icon(Icons.video_library_outlined,
-                size: 44, color: NurbyColors.mutedForeground),
+            Icon(
+              Icons.video_library_outlined,
+              size: 44,
+              color: NurbyColors.mutedForeground,
+            ),
             SizedBox(height: 14),
             Center(
-              child: Text('No recordings',
-                  style:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              child: Text(
+                'No recordings',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
             ),
             SizedBox(height: 6),
             Center(
@@ -312,7 +372,9 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
                 'Enable recording on a camera to capture footage.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    color: NurbyColors.mutedForeground, fontSize: 13),
+                  color: NurbyColors.mutedForeground,
+                  fontSize: 13,
+                ),
               ),
             ),
           ],
@@ -349,8 +411,16 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
             thumbnailUrl: ref.read(recordingRepoProvider).thumbnailUrl(rec.id),
             selected: _selectedIds.contains(rec.id),
             selectionMode: _selectionMode,
-            onTap: () => _selectionMode ? _toggleSelected(rec.id) : _openPlayer(rec, cameraName),
-            onLongPress: () => _selectionMode ? _toggleSelected(rec.id) : _toggleSelected(rec.id),
+            onTap:
+                () =>
+                    _selectionMode
+                        ? _toggleSelected(rec.id)
+                        : _openPlayer(rec, cameraName),
+            onLongPress:
+                () =>
+                    _selectionMode
+                        ? _toggleSelected(rec.id)
+                        : _toggleSelected(rec.id),
             onMore: () => _showActions(rec, cameraName),
           );
         },
@@ -365,30 +435,56 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
         child: Row(
           children: [
-            Text(_allMatching ? 'All matching selected' : '${_selectedIds.length} selected', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              _allMatching
+                  ? 'All matching selected'
+                  : '${_selectedIds.length} selected',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             const Spacer(),
-            TextButton(onPressed: _selectPage, child: const Text('Select page')),
+            TextButton(
+              onPressed: _selectPage,
+              child: const Text('Select page'),
+            ),
             if (_hasMore && !_allMatching)
-              TextButton(onPressed: _selectAllMatching, child: const Text('All matching')),
+              TextButton(
+                onPressed: _selectAllMatching,
+                child: const Text('All matching'),
+              ),
             IconButton(
               tooltip: 'Download originals',
-              onPressed: (_selectedIds.isEmpty && !_allMatching) ? null : () => _download(
-                    ref.read(recordingRepoProvider).bundleUrl(
-                      ids: _selectedIds.toList(),
-                      filters: _allMatching
-                          ? _selectionFilters().map((k, v) => MapEntry(k, '$v'))
-                          : null,
-                    )),
+              onPressed:
+                  (_selectedIds.isEmpty && !_allMatching)
+                      ? null
+                      : () => _download(
+                        ref
+                            .read(recordingRepoProvider)
+                            .bundleUrl(
+                              ids: _selectedIds.toList(),
+                              filters:
+                                  _allMatching
+                                      ? _selectionFilters().map(
+                                        (k, v) => MapEntry(k, '$v'),
+                                      )
+                                      : null,
+                            ),
+                      ),
               icon: const Icon(Icons.download_outlined),
             ),
             IconButton(
               tooltip: 'Delete selected',
-              onPressed: (_selectedIds.isEmpty && !_allMatching) ? null : _bulkDelete,
+              onPressed:
+                  (_selectedIds.isEmpty && !_allMatching) ? null : _bulkDelete,
               icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
             ),
             IconButton(
               tooltip: 'Clear selection',
-              onPressed: () => setState(() { _selectedIds.clear(); _selectionMode = false; _allMatching = false; }),
+              onPressed:
+                  () => setState(() {
+                    _selectedIds.clear();
+                    _selectionMode = false;
+                    _allMatching = false;
+                  }),
               icon: const Icon(Icons.close),
             ),
           ],
@@ -412,40 +508,46 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: NurbyColors.cardElevated,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.ios_share),
-              title: const Text('Share a link'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _shareRecording(rec, cameraName);
-              },
+      builder:
+          (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.ios_share),
+                  title: const Text('Share a link'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _shareRecording(rec, cameraName);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.download_outlined),
+                  title: const Text('Download the whole file'),
+                  subtitle: Text(
+                    _size(rec),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _download(repo.downloadUrl(rec.id));
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.content_cut),
+                  title: const Text('Download a clip'),
+                  subtitle: const Text(
+                    'Pick a start and end',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickClip(rec);
+                  },
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.download_outlined),
-              title: const Text('Download the whole file'),
-              subtitle: Text(_size(rec), style: const TextStyle(fontSize: 12)),
-              onTap: () {
-                Navigator.pop(ctx);
-                _download(repo.downloadUrl(rec.id));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.content_cut),
-              title: const Text('Download a clip'),
-              subtitle: const Text('Pick a start and end',
-                  style: TextStyle(fontSize: 12)),
-              onTap: () {
-                Navigator.pop(ctx);
-                _pickClip(rec);
-              },
-            ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
@@ -462,7 +564,10 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Nothing on this device could open that.')));
+          const SnackBar(
+            content: Text('Nothing on this device could open that.'),
+          ),
+        );
       }
     }
   }
@@ -471,7 +576,8 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
     final total = rec.durationSeconds?.round() ?? 0;
     if (total < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('That recording is too short to clip.')));
+        const SnackBar(content: Text('That recording is too short to clip.')),
+      );
       return;
     }
     final range = await showDialog<RangeValues>(
@@ -479,11 +585,15 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
       builder: (ctx) => _ClipDialog(totalSeconds: total),
     );
     if (range == null) return;
-    _download(ref.read(recordingRepoProvider).clipUrl(
-          rec.id,
-          start: Duration(seconds: range.start.round()),
-          end: Duration(seconds: range.end.round()),
-        ));
+    _download(
+      ref
+          .read(recordingRepoProvider)
+          .clipUrl(
+            rec.id,
+            start: Duration(seconds: range.start.round()),
+            end: Duration(seconds: range.end.round()),
+          ),
+    );
   }
 
   void _shareRecording(Recording rec, String cameraName) {
@@ -498,14 +608,19 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
 
   void _openPlayer(Recording rec, String cameraName) {
     final url = ref.read(recordingRepoProvider).streamUrl(rec.id);
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _RecordingPlayerPage(
-        url: url,
-        title: cameraName,
-        subtitle: DateFormat('EEE, MMM d y · HH:mm').format(rec.startedAt),
-        onShare: () => _shareRecording(rec, cameraName),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder:
+            (_) => _RecordingPlayerPage(
+              url: url,
+              title: cameraName,
+              subtitle: DateFormat(
+                'EEE, MMM d y · HH:mm',
+              ).format(rec.startedAt),
+              onShare: () => _shareRecording(rec, cameraName),
+            ),
       ),
-    ));
+    );
   }
 }
 
@@ -540,6 +655,7 @@ class _RecordingRow extends StatelessWidget {
     if (f['has_audio'] == true) parts.add('speech');
     return parts.join(', ');
   }
+
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final bool selected;
@@ -576,8 +692,13 @@ class _RecordingRow extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: Icon(
-                    selected ? Icons.check_circle : Icons.radio_button_unchecked,
-                    color: selected ? NurbyColors.accent : NurbyColors.mutedForeground,
+                    selected
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    color:
+                        selected
+                            ? NurbyColors.accent
+                            : NurbyColors.mutedForeground,
                   ),
                 ),
               ClipRRect(
@@ -585,16 +706,17 @@ class _RecordingRow extends StatelessWidget {
                 child: SizedBox(
                   width: 64,
                   height: 42,
-                  child: thumbnailUrl == null
-                      ? const _PlayGlyph()
-                      : Image.network(
-                          thumbnailUrl!,
-                          fit: BoxFit.cover,
-                          // No thumbnail is normal for a recording still
-                          // being written. Fall back to the glyph rather
-                          // than a broken-image icon.
-                          errorBuilder: (_, __, ___) => const _PlayGlyph(),
-                        ),
+                  child:
+                      thumbnailUrl == null
+                          ? const _PlayGlyph()
+                          : Image.network(
+                            thumbnailUrl!,
+                            fit: BoxFit.cover,
+                            // No thumbnail is normal for a recording still
+                            // being written. Fall back to the glyph rather
+                            // than a broken-image icon.
+                            errorBuilder: (_, __, ___) => const _PlayGlyph(),
+                          ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -602,24 +724,32 @@ class _RecordingRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(cameraName,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 14),
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      cameraName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 3),
                     Text(
-                      DateFormat('MMM d y · HH:mm:ss')
-                          .format(recording.startedAt),
+                      DateFormat(
+                        'MMM d y · HH:mm:ss',
+                      ).format(recording.startedAt),
                       style: monoStyle,
                     ),
                     if (_activity.isNotEmpty) ...[
                       const SizedBox(height: 3),
-                      Text(_activity,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 11,
-                              color: NurbyColors.mutedForeground)),
+                      Text(
+                        _activity,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: NurbyColors.mutedForeground,
+                        ),
+                      ),
                     ],
                   ],
                 ),
@@ -628,9 +758,10 @@ class _RecordingRow extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(_duration,
-                      style: monoStyle.copyWith(
-                          color: NurbyColors.foreground)),
+                  Text(
+                    _duration,
+                    style: monoStyle.copyWith(color: NurbyColors.foreground),
+                  ),
                   const SizedBox(height: 3),
                   Text(_size, style: monoStyle.copyWith(fontSize: 10.5)),
                 ],
@@ -668,25 +799,30 @@ class _CameraFilterChip extends StatelessWidget {
     return PopupMenuButton<String>(
       color: NurbyColors.cardElevated,
       onSelected: (v) => onSelected(v.isEmpty ? null : v),
-      itemBuilder: (_) => [
-        const PopupMenuItem(value: '', child: Text('All cameras')),
-        for (final c in cameras)
-          PopupMenuItem(value: c.id, child: Text(c.name)),
-      ],
+      itemBuilder:
+          (_) => [
+            const PopupMenuItem(value: '', child: Text('All cameras')),
+            for (final c in cameras)
+              PopupMenuItem(value: c.id, child: Text(c.name)),
+          ],
       child: Chip(
         avatar: Icon(
           Icons.videocam_outlined,
           size: 16,
-          color: selectedId != null
-              ? NurbyColors.accent
-              : NurbyColors.mutedForeground,
+          color:
+              selectedId != null
+                  ? NurbyColors.accent
+                  : NurbyColors.mutedForeground,
         ),
         label: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(name, style: const TextStyle(fontSize: 13)),
-            const Icon(Icons.arrow_drop_down,
-                size: 18, color: NurbyColors.mutedForeground),
+            const Icon(
+              Icons.arrow_drop_down,
+              size: 18,
+              color: NurbyColors.mutedForeground,
+            ),
           ],
         ),
       ),
@@ -721,14 +857,17 @@ class _RecordingPlayerPageState extends State<_RecordingPlayerPage> {
   void initState() {
     super.initState();
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
-    _controller.initialize().then((_) {
-      if (!mounted) return;
-      setState(() {});
-      _controller.play();
-    }).catchError((Object e) {
-      if (!mounted) return;
-      setState(() => _error = 'Could not load video');
-    });
+    _controller
+        .initialize()
+        .then((_) {
+          if (!mounted) return;
+          setState(() {});
+          _controller.play();
+        })
+        .catchError((Object e) {
+          if (!mounted) return;
+          setState(() => _error = 'Could not load video');
+        });
   }
 
   @override
@@ -768,15 +907,19 @@ class _RecordingPlayerPageState extends State<_RecordingPlayerPage> {
         children: [
           Expanded(
             child: Center(
-              child: _error != null
-                  ? Text(_error!,
-                      style:
-                          const TextStyle(color: NurbyColors.mutedForeground))
-                  : _controller.value.isInitialized
+              child:
+                  _error != null
+                      ? Text(
+                        _error!,
+                        style: const TextStyle(
+                          color: NurbyColors.mutedForeground,
+                        ),
+                      )
+                      : _controller.value.isInitialized
                       ? AspectRatio(
-                          aspectRatio: _controller.value.aspectRatio,
-                          child: VideoPlayer(_controller),
-                        )
+                        aspectRatio: _controller.value.aspectRatio,
+                        child: VideoPlayer(_controller),
+                      )
                       : const CircularProgressIndicator(),
             ),
           ),
@@ -796,7 +939,9 @@ class _RecordingPlayerPageState extends State<_RecordingPlayerPage> {
                           _controller,
                           allowScrubbing: true,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 8),
+                            horizontal: 4,
+                            vertical: 8,
+                          ),
                           colors: const VideoProgressColors(
                             playedColor: NurbyColors.accent,
                             bufferedColor: NurbyColors.border,
@@ -808,16 +953,19 @@ class _RecordingPlayerPageState extends State<_RecordingPlayerPage> {
                             IconButton(
                               iconSize: 32,
                               color: NurbyColors.foreground,
-                              icon: Icon(value.isPlaying
-                                  ? Icons.pause_circle_filled
-                                  : Icons.play_circle_filled),
-                              onPressed: !value.isInitialized
-                                  ? null
-                                  : () {
-                                      value.isPlaying
-                                          ? _controller.pause()
-                                          : _controller.play();
-                                    },
+                              icon: Icon(
+                                value.isPlaying
+                                    ? Icons.pause_circle_filled
+                                    : Icons.play_circle_filled,
+                              ),
+                              onPressed:
+                                  !value.isInitialized
+                                      ? null
+                                      : () {
+                                        value.isPlaying
+                                            ? _controller.pause()
+                                            : _controller.play();
+                                      },
                             ),
                             const Spacer(),
                             Text(
@@ -839,20 +987,18 @@ class _RecordingPlayerPageState extends State<_RecordingPlayerPage> {
   }
 }
 
-
 class _PlayGlyph extends StatelessWidget {
   const _PlayGlyph();
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          color: NurbyColors.cardElevated,
-          border: Border.all(color: NurbyColors.border),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: const Icon(Icons.play_arrow,
-            color: NurbyColors.accent, size: 22),
-      );
+    decoration: BoxDecoration(
+      color: NurbyColors.cardElevated,
+      border: Border.all(color: NurbyColors.border),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: const Icon(Icons.play_arrow, color: NurbyColors.accent, size: 22),
+  );
 }
 
 /// Pick a start and end inside a recording.
@@ -866,8 +1012,10 @@ class _ClipDialog extends StatefulWidget {
 }
 
 class _ClipDialogState extends State<_ClipDialog> {
-  late RangeValues _range =
-      RangeValues(0, widget.totalSeconds.clamp(1, 60).toDouble());
+  late RangeValues _range = RangeValues(
+    0,
+    widget.totalSeconds.clamp(1, 60).toDouble(),
+  );
 
   String _fmt(double s) {
     final d = Duration(seconds: s.round());
@@ -877,34 +1025,38 @@ class _ClipDialogState extends State<_ClipDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        backgroundColor: NurbyColors.cardElevated,
-        title: const Text('Clip'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('${_fmt(_range.start)} to ${_fmt(_range.end)}',
-                style: const TextStyle(fontFamily: 'Menlo')),
-            RangeSlider(
-              values: _range,
-              min: 0,
-              max: widget.totalSeconds.toDouble(),
-              activeColor: NurbyColors.accent,
-              onChanged: (v) {
-                // Keep at least a second between the handles, or the
-                // server is asked for an empty clip.
-                if (v.end - v.start < 1) return;
-                setState(() => _range = v);
-              },
-            ),
-          ],
+    backgroundColor: NurbyColors.cardElevated,
+    title: const Text('Clip'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '${_fmt(_range.start)} to ${_fmt(_range.end)}',
+          style: const TextStyle(fontFamily: 'Menlo'),
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, _range),
-              child: const Text('Download')),
-        ],
-      );
+        RangeSlider(
+          values: _range,
+          min: 0,
+          max: widget.totalSeconds.toDouble(),
+          activeColor: NurbyColors.accent,
+          onChanged: (v) {
+            // Keep at least a second between the handles, or the
+            // server is asked for an empty clip.
+            if (v.end - v.start < 1) return;
+            setState(() => _range = v);
+          },
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, _range),
+        child: const Text('Download'),
+      ),
+    ],
+  );
 }
