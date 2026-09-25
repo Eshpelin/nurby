@@ -450,6 +450,8 @@ async def camera_activity_strip(
 
     from shared.models import MotionSample, Observation, Recording
 
+    await _require_camera_in_scope(camera_id, _current_user, db)
+
     end = datetime.now(timezone.utc)
     start = end - timedelta(hours=hours)
     span = (end - start).total_seconds()
@@ -1105,9 +1107,10 @@ def _extract_ip_port(stream_url: str) -> tuple[str, int]:
 
 
 async def _get_camera_for_ptz(
-    camera_id: uuid.UUID, db: AsyncSession
+    camera_id: uuid.UUID, current_user: User, db: AsyncSession
 ) -> Camera:
-    """Load a camera by ID and verify it supports PTZ (RTSP only)."""
+    """Load an in-scope camera and verify it supports PTZ (RTSP only)."""
+    await _require_camera_in_scope(camera_id, current_user, db)
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -1123,7 +1126,7 @@ async def ptz_move(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Start continuous PTZ movement on a camera."""
-    camera = await _get_camera_for_ptz(camera_id, db)
+    camera = await _get_camera_for_ptz(camera_id, _current_user, db)
     ip, port = _extract_ip_port(camera.stream_url)
     profile_token = "Profile_1"
 
@@ -1148,7 +1151,7 @@ async def ptz_stop_movement(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Stop all PTZ movement on a camera."""
-    camera = await _get_camera_for_ptz(camera_id, db)
+    camera = await _get_camera_for_ptz(camera_id, _current_user, db)
     ip, port = _extract_ip_port(camera.stream_url)
     profile_token = "Profile_1"
 
@@ -1170,7 +1173,7 @@ async def ptz_list_presets(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """List saved PTZ presets for a camera."""
-    camera = await _get_camera_for_ptz(camera_id, db)
+    camera = await _get_camera_for_ptz(camera_id, _current_user, db)
     ip, port = _extract_ip_port(camera.stream_url)
     profile_token = "Profile_1"
 
@@ -1191,7 +1194,7 @@ async def ptz_goto(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Move the camera to a saved preset position."""
-    camera = await _get_camera_for_ptz(camera_id, db)
+    camera = await _get_camera_for_ptz(camera_id, _current_user, db)
     ip, port = _extract_ip_port(camera.stream_url)
     profile_token = "Profile_1"
 

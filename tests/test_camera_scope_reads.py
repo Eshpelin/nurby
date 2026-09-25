@@ -27,6 +27,7 @@ from fastapi import HTTPException
 from services.api.routes import events as events_routes
 from services.api.routes import journeys as journeys_routes
 from services.api.routes import observations as observations_routes
+from services.api.routes import cameras as cameras_routes
 
 
 def _run(coro):
@@ -212,6 +213,26 @@ def test_vlm_passes_own_camera_returns_history():
     db = StubDB(grants=[CAM_A], get_map={"Observation": obs}, vlm_passes=[])
     out = _run(observations_routes.get_vlm_passes(observation_id=obs.id, current_user=_selected_user(CAM_A), db=db))
     assert out == []
+
+
+def test_activity_strip_on_foreign_camera_is_404_before_queries():
+    db = StubDB(grants=[CAM_A])
+    with pytest.raises(HTTPException) as ei:
+        _run(cameras_routes.camera_activity_strip(
+            camera_id=CAM_B, hours=3.0, buckets=90,
+            _current_user=_selected_user(CAM_A), db=db,
+        ))
+    assert ei.value.status_code == 404
+    # The ACL rejects the path before the activity queries can run.
+    assert len(db.executed) == 1
+
+
+def test_ptz_loader_rejects_foreign_camera_before_camera_or_onvif_access():
+    db = StubDB(grants=[CAM_A], get_map={"Camera": SimpleNamespace(stream_type="rtsp")})
+    with pytest.raises(HTTPException) as ei:
+        _run(cameras_routes._get_camera_for_ptz(CAM_B, _selected_user(CAM_A), db))
+    assert ei.value.status_code == 404
+    assert len(db.executed) == 1
 
 
 # ── single event + notes ─────────────────────────────────────────────
