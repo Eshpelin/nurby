@@ -12,7 +12,7 @@ from shared.auth import get_current_user, require_admin
 from shared.config import settings
 from shared.consequential import rule_is_consequential
 from shared.database import get_db
-from shared.models import Observation, Rule, User
+from shared.models import Observation, Rule, RuleEvaluation, User
 from shared.schemas import (
     RuleCreate,
     RuleReplayResponse,
@@ -207,6 +207,39 @@ async def list_rules(_current_user: User = Depends(get_current_user), db: AsyncS
     await _ensure_default_camera_health_rule(db)
     result = await db.execute(select(Rule).order_by(Rule.created_at))
     return result.scalars().all()
+
+
+@router.get("/{rule_id}/evaluations")
+async def list_rule_evaluations(
+    rule_id: uuid.UUID,
+    from_: datetime | None = Query(default=None, alias="from"),
+    to: datetime | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return decisive fired/suppressed outcomes for a rule."""
+    if await db.get(Rule, rule_id) is None:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    query = select(RuleEvaluation).where(RuleEvaluation.rule_id == rule_id)
+    if from_ is not None:
+        query = query.where(RuleEvaluation.evaluated_at >= from_)
+    if to is not None:
+        query = query.where(RuleEvaluation.evaluated_at <= to)
+    rows = (await db.execute(query.order_by(RuleEvaluation.evaluated_at.desc()).limit(limit))).scalars().all()
+    return [
+        {
+            "id": str(row.id),
+            "rule_id": str(row.rule_id),
+            "observation_id": str(row.observation_id) if row.observation_id else None,
+            "camera_id": str(row.camera_id) if row.camera_id else None,
+            "evaluated_at": row.evaluated_at,
+            "outcome": row.outcome,
+            "reason_code": row.reason_code,
+            "details": row.details or {},
+        }
+        for row in rows
+    ]
 
 
 @router.post("", response_model=RuleResponse, status_code=201)

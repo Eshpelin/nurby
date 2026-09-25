@@ -100,6 +100,7 @@ from shared.models.rules import (  # noqa: F401
     EventNote,
     ExpectedActivity,
     Rule,
+    RuleEvaluation,
     RuleSequenceInstance,
 )
 

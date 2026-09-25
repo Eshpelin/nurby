@@ -50,6 +50,23 @@ class Rule(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class RuleEvaluation(Base):
+    """Bounded evidence for a decisive rule evaluation outcome (#287)."""
+
+    __tablename__ = "rule_evaluations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rule_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rules.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    observation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    camera_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)  # fired | suppressed
+    reason_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
 class RuleSequenceInstance(Base):
     """An in-flight temporal sequence rule (docs/sequence-rules-design.md).
 
