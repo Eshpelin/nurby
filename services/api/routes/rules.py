@@ -13,6 +13,12 @@ from shared.camera_access import ALL, allowed_camera_ids
 from shared.config import settings
 from shared.consequential import rule_is_consequential
 from shared.database import get_db
+from shared.default_rules import (
+    CAMERA_HEALTH_RULE_NAME,
+    CAMERA_RECOVERY_RULE_NAME,
+    DEFAULT_RULES,
+    refresh_default_rule_messages,
+)
 from shared.models import Observation, Rule, RuleEvaluation, User
 from shared.schemas import (
     RuleCreate,
@@ -27,8 +33,8 @@ from shared.schemas import (
 
 router = APIRouter()
 
-DEFAULT_CAMERA_HEALTH_RULE_NAME = "Camera content health"
-DEFAULT_CAMERA_RECOVERY_RULE_NAME = "Camera content health recovered"
+DEFAULT_CAMERA_HEALTH_RULE_NAME = CAMERA_HEALTH_RULE_NAME
+DEFAULT_CAMERA_RECOVERY_RULE_NAME = CAMERA_RECOVERY_RULE_NAME
 
 
 async def _ensure_default_camera_health_rule(db: AsyncSession) -> None:
@@ -38,41 +44,38 @@ async def _ensure_default_camera_health_rule(db: AsyncSession) -> None:
     data, while migrations cannot reliably know which installation/user owns
     them. The trigger is edge-based, so one degraded period produces one
     notification and the recovery closes the loop.
+
+    Installs that already carry the pre-rewording message templates get
+    them rewritten in place (issue #320) — the old templates rendered as
+    "the camera camera health degraded: [reason]" in every preview.
     """
-    existing = await db.execute(
-        select(Rule.name).where(Rule.name.in_([
-            DEFAULT_CAMERA_HEALTH_RULE_NAME,
-            DEFAULT_CAMERA_RECOVERY_RULE_NAME,
+    existing = (await db.execute(
+        select(Rule).where(Rule.name.in_([
+            CAMERA_HEALTH_RULE_NAME,
+            CAMERA_RECOVERY_RULE_NAME,
         ]))
-    )
-    names = set(existing.scalars().all())
-    if DEFAULT_CAMERA_HEALTH_RULE_NAME not in names:
-        db.add(Rule(
-            name=DEFAULT_CAMERA_HEALTH_RULE_NAME,
-            enabled=True,
-            trigger_pattern={"type": "camera_degraded"},
-            conditions=None,
-            actions=[{
-                "type": "notify",
-                "message": "{camera_name} camera health degraded: {reason}",
-            }],
-            cooldown_seconds=3600,
-            severity="alert",
-        ))
-    if DEFAULT_CAMERA_RECOVERY_RULE_NAME not in names:
-        db.add(Rule(
-            name=DEFAULT_CAMERA_RECOVERY_RULE_NAME,
-            enabled=True,
-            trigger_pattern={"type": "camera_recovered"},
-            conditions=None,
-            actions=[{
-                "type": "notify",
-                "message": "{camera_name} camera health recovered",
-            }],
-            cooldown_seconds=3600,
-            severity="info",
-        ))
-    if names >= {DEFAULT_CAMERA_HEALTH_RULE_NAME, DEFAULT_CAMERA_RECOVERY_RULE_NAME}:
+    )).scalars().all()
+    by_name = {rule.name: rule for rule in existing}
+    dirty = False
+    for name, spec in DEFAULT_RULES.items():
+        rule = by_name.get(name)
+        if rule is None:
+            db.add(Rule(
+                name=name,
+                enabled=True,
+                trigger_pattern={"type": spec["trigger"]},
+                conditions=None,
+                actions=[{
+                    "type": "notify",
+                    "message": spec["message"],
+                }],
+                cooldown_seconds=3600,
+                severity=spec["severity"],
+            ))
+            dirty = True
+        elif refresh_default_rule_messages(rule.name, rule.actions):
+            dirty = True
+    if not dirty:
         return
     await db.commit()
 logger = logging.getLogger("nurby.api.rules")

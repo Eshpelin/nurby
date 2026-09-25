@@ -627,7 +627,7 @@ export default function SettingsPage() {
       <div className="mb-6 rounded-lg border border-border bg-card">
         <div className="px-4 py-3 border-b border-border">
           <h2 className="text-sm font-medium">Sharing</h2>
-          <p className="text-xs text-muted-foreground">Who outside the household can see what</p>
+          <p className="text-xs text-muted-foreground">Who outside the household can see, and what they can see.</p>
         </div>
         <div className="flex flex-wrap gap-2 px-4 py-3">
           <Link href="/guardian/admin" className={pillClass}>Guardians</Link>
@@ -1143,7 +1143,7 @@ export default function SettingsPage() {
                 {nudityLoading
                   ? "Loading."
                   : nudityBlur
-                    ? `Automatically blur exposed body parts in every recording. Min score ${nudityMinScore.toFixed(2)}.`
+                    ? "Automatically blur exposed body parts in every recording when the detector is confident."
                     : "Disabled. Recordings will not be scanned for nudity."}
               </div>
             </div>
