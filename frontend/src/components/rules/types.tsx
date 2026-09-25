@@ -3,6 +3,7 @@
 // Wave 1 mechanical decomposition. No behavior changes.
 
 import type React from "react";
+import { humanizeTemplate } from "@/lib/rule-preview";
 
 export const WEBRTC_URL =
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
@@ -535,20 +536,10 @@ export function describeTrigger(pattern: Record<string, unknown>): string {
   return "Unknown trigger";
 }
 
-// Display-time substitution for the template tokens the backend renders
-// at fire time. Known tokens get friendly names; any other {token} becomes
-// a readable bracketed placeholder instead of raw braces.
-export function humanizeTemplate(text: string, ruleName?: string): string {
-  return text
-    .replace(/\{\{?rule_name\}?\}/g, ruleName || "this rule")
-    .replace(/\{\{?camera_name\}?\}/g, "the camera")
-    .replace(/\{\{?camera_id\}?\}/g, "the camera")
-    .replace(/\{\{?timestamp(_local)?\}?\}/g, "the time")
-    .replace(/\{([a-z0-9_.]+)\}/gi, (_, key: string) => {
-      const tail = key.split(".").pop() || key;
-      return `[${tail.replace(/_/g, " ")}]`;
-    });
-}
+// Display-time substitution lives in @/lib/rule-preview (shared by every
+// surface that renders a rule template as a sentence). Re-exported here
+// for the rules components that import it from this module.
+export { humanizeTemplate };
 
 export function describeActions(actions: Record<string, unknown> | Record<string, unknown>[], ruleName?: string): string {
   const list = Array.isArray(actions) ? actions : [actions];

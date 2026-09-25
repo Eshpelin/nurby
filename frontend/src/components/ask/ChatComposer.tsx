@@ -6,6 +6,7 @@
 // the send button until a model is picked + text is non-empty.
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 import type { ProviderModel, UsageToday } from "./types";
 import ModelSelector from "./ModelSelector";
 import CostMeter from "./CostMeter";
@@ -70,6 +71,10 @@ export default function ChatComposer({
   }, [focusKey]);
 
   const canSend = value.trim().length > 0 && !!model && !inFlight;
+  // With no providers configured at all, the model chip and cost meter
+  // would point at an empty picker and a meaningless "$0.00". Offer the
+  // setup path instead (mirrors the page-level no-provider empty state).
+  const noProviders = !providersLoading && providers.length === 0;
 
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // The mention dropdown owns navigation keys while open.
@@ -108,15 +113,26 @@ export default function ChatComposer({
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <ModelSelector
-            value={model}
-            onChange={onModelChange}
-            providers={providers}
-            loading={providersLoading}
-            onDeployToolModel={onDeployToolModel}
-            deploying={deploying}
-          />
-          <CostMeter usage={usage} loading={usageLoading} />
+          {noProviders ? (
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-accent/40 text-accent hover:bg-accent/10"
+            >
+              Set up an AI model to start asking →
+            </Link>
+          ) : (
+            <>
+              <ModelSelector
+                value={model}
+                onChange={onModelChange}
+                providers={providers}
+                loading={providersLoading}
+                onDeployToolModel={onDeployToolModel}
+                deploying={deploying}
+              />
+              <CostMeter usage={usage} loading={usageLoading} />
+            </>
+          )}
           {onToggleDeepScan && (
             <label
               className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none"
@@ -160,7 +176,7 @@ export default function ChatComposer({
             </button>
           </div>
         </div>
-        {!model && !providersLoading && (
+        {!model && !providersLoading && !noProviders && (
           <div className="text-[10px] text-amber-400">
             Pick a model to send. Open the chip on the left.
           </div>

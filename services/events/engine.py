@@ -41,6 +41,7 @@ from services.perception.spatial_events import (
     _segments_cross,
 )
 from shared.database import async_session
+from shared.default_rules import DEFAULT_RULES, refresh_default_rule_messages
 from shared.models import Recording, Rule, RuleEvaluation
 
 # Redis pubsub channel that backend routes publish to whenever a rule
@@ -395,34 +396,30 @@ class RuleEngine:
                 # Camera content-health alerts are a product default, not a
                 # setup task. Install them from the worker as well as the API
                 # list endpoint so the first degraded camera is actionable
-                # even if nobody has opened the Rules page yet.
-                default_rules = {
-                    "Camera content health": (
-                        "camera_degraded",
-                        "{camera_name} camera health degraded: {reason}",
-                        "alert",
-                    ),
-                    "Camera content health recovered": (
-                        "camera_recovered",
-                        "{camera_name} camera health recovered",
-                        "info",
-                    ),
-                }
-                existing_names = set((await db.execute(
-                    select(Rule.name).where(Rule.name.in_(list(default_rules)))
-                )).scalars().all())
-                for name, (trigger, message, severity) in default_rules.items():
-                    if name not in existing_names:
+                # even if nobody has opened the Rules page yet. Existing
+                # installs carrying the pre-#320 wording get it rewritten
+                # here too, so previews never show the broken sentence.
+                existing_rows = (await db.execute(
+                    select(Rule).where(Rule.name.in_(list(DEFAULT_RULES)))
+                )).scalars().all()
+                by_name = {rule.name: rule for rule in existing_rows}
+                dirty = False
+                for name, spec in DEFAULT_RULES.items():
+                    rule = by_name.get(name)
+                    if rule is None:
                         db.add(Rule(
                             name=name,
                             enabled=True,
-                            trigger_pattern={"type": trigger},
+                            trigger_pattern={"type": spec["trigger"]},
                             conditions=None,
-                            actions=[{"type": "notify", "message": message}],
+                            actions=[{"type": "notify", "message": spec["message"]}],
                             cooldown_seconds=3600,
-                            severity=severity,
+                            severity=spec["severity"],
                         ))
-                if len(existing_names) < len(default_rules):
+                        dirty = True
+                    elif refresh_default_rule_messages(rule.name, rule.actions):
+                        dirty = True
+                if dirty:
                     await db.commit()
                 result = await db.execute(
                     select(Rule).where(Rule.enabled.is_(True))

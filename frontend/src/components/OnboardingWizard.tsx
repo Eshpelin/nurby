@@ -383,18 +383,12 @@ function stepNumber(s: Step): number {
 // Storage preamble (issue #251): where recordings live. Runs before any
 // camera exists, so the choice costs nothing — no files to migrate, no
 // recordings split across drives. Entirely skippable; the default keeps
-// working and Settings -> Storage location revisits it later.
+// working and Settings -> Storage location revisits it later. The form
+// renders its own heading, so this step adds none (issue #320: the two
+// headings used to read as a duplicate).
 function StorageStep({ onNext }: { onNext: () => void }) {
   return (
     <div className="space-y-5">
-      <div>
-        <h3 className="text-xl font-semibold">Where should recordings be stored?</h3>
-        <p className="text-sm text-muted-foreground leading-relaxed mt-1">
-          The one thing worth deciding before your first camera starts
-          writing video: which drive and folder keeps your footage.
-        </p>
-      </div>
-
       <StorageLocationForm />
 
       <p className="text-xs text-muted-foreground rounded-md border border-border bg-muted/20 px-3 py-2">
