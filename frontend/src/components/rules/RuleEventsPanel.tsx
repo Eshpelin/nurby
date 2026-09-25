@@ -20,11 +20,20 @@ export interface RuleEventsPanelProps {
   cameras: Camera[];
 }
 
+interface RuleEvaluation {
+  id: string;
+  evaluated_at: string;
+  outcome: "fired" | "suppressed";
+  reason_code: string;
+  details: Record<string, unknown>;
+}
+
 export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps) {
   const { authFetch } = useAuth();
   const [ruleEvents, setRuleEvents] = useState<EventEntry[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [evaluations, setEvaluations] = useState<RuleEvaluation[]>([]);
   // Local snooze state so the button reflects the action without a full
   // rules refetch. Seeded from the rule when the selection changes.
   const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);
@@ -38,6 +47,15 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
       /* silent */
     } finally {
       setEventsLoading(false);
+    }
+  }, [authFetch]);
+
+  const fetchEvaluations = useCallback(async (ruleId: string) => {
+    try {
+      const res = await authFetch(`/api/rules/${ruleId}/evaluations?limit=20`);
+      if (res.ok) setEvaluations(await res.json());
+    } catch {
+      /* silent */
     }
   }, [authFetch]);
 
@@ -114,12 +132,17 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
   useEffect(() => {
     if (!selectedRule) {
       setRuleEvents([]);
+      setEvaluations([]);
       return;
     }
     fetchRuleEvents(selectedRule.id);
-    const interval = setInterval(() => fetchRuleEvents(selectedRule.id), 30000);
+    fetchEvaluations(selectedRule.id);
+    const interval = setInterval(() => {
+      fetchRuleEvents(selectedRule.id);
+      fetchEvaluations(selectedRule.id);
+    }, 30000);
     return () => clearInterval(interval);
-  }, [selectedRule, fetchRuleEvents]);
+  }, [selectedRule, fetchRuleEvents, fetchEvaluations]);
 
   return (
     <aside className="col-span-1 lg:col-span-4">
@@ -347,6 +370,40 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                         </div>
                       )}
                       <EventNotesPanel eventId={ev.id} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedRule && (
+        <div className="mt-4 rounded-lg border border-border bg-card p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Evaluation evidence
+            </span>
+          </div>
+          {evaluations.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No decisive evaluations recorded yet.
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {evaluations.map((evaluation) => (
+                <div key={evaluation.id} className="rounded-md border border-border bg-background p-2.5 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={evaluation.outcome === "fired" ? "text-green-400" : "text-amber-300"}>
+                      {evaluation.outcome === "fired" ? "Fired" : "Suppressed"} · {evaluation.reason_code.replaceAll("_", " ")}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">{formatDateTime(evaluation.evaluated_at)}</span>
+                  </div>
+                  {Object.keys(evaluation.details || {}).length > 0 && (
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {Object.entries(evaluation.details).map(([key, value]) => `${key}: ${String(value)}`).join(" · ")}
                     </div>
                   )}
                 </div>
