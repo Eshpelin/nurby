@@ -51,6 +51,7 @@ from services.agent.tools.lookups import (  # noqa: F401
     get_daily_digest,
     get_incidents,
     get_vehicles,
+    explain_rule_evaluations,
     list_rules,
 )
 from services.agent.tools.observations import (  # noqa: F401
@@ -96,6 +97,7 @@ __all__ = [
     "get_events",
     "get_household_snapshot",
     "get_incidents",
+    "explain_rule_evaluations",
     "get_journeys",
     "get_last_sightings",
     "get_rule_schema",

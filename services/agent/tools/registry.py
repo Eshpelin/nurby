@@ -30,10 +30,12 @@ from services.agent.tools.lookups import (
     _GET_DAILY_DIGEST_SCHEMA,
     _GET_INCIDENTS_SCHEMA,
     _GET_VEHICLES_SCHEMA,
+    _EXPLAIN_RULE_EVALUATIONS_SCHEMA,
     _LIST_RULES_SCHEMA,
     get_daily_digest,
     get_incidents,
     get_vehicles,
+    explain_rule_evaluations,
     list_rules,
 )
 from services.agent.tools.observations import (
@@ -227,6 +229,18 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
         ),
         "input_schema": _LIST_RULES_SCHEMA,
         "fn": list_rules,
+        "side_effect": "read",
+        "cost_class": "cheap",
+    },
+    {
+        "name": "explain_rule_evaluations",
+        "description": (
+            "Explain why a rule fired or was suppressed using retained evaluation evidence. "
+            "Use this for why-no-alert questions; it reports real cooldown, schedule, mode, "
+            "camera, and confidence values instead of guessing."
+        ),
+        "input_schema": _EXPLAIN_RULE_EVALUATIONS_SCHEMA,
+        "fn": explain_rule_evaluations,
         "side_effect": "read",
         "cost_class": "cheap",
     },

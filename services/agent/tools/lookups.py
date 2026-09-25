@@ -23,6 +23,7 @@ from shared.models import (
     DailyDigest,
     Incident,
     Rule,
+    RuleEvaluation,
     Vehicle,
 )
 
@@ -149,6 +150,58 @@ async def list_rules(
     }
 
 
+_EXPLAIN_RULE_EVALUATIONS_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "rule_id": {"type": "string", "description": "Rule UUID from list_rules."},
+        "rule_name_contains": {"type": "string", "maxLength": 255},
+        "hours": {"type": "integer", "minimum": 1, "maximum": 720, "default": 24},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 25},
+    },
+}
+
+
+async def explain_rule_evaluations(
+    ctx: dict,
+    rule_id: str | None = None,
+    rule_name_contains: str | None = None,
+    hours: int = 24,
+    limit: int = 25,
+) -> dict:
+    """Return evidence for fired or suppressed rule candidates."""
+    db = ctx["db"]
+    hours = _clamp_hours(hours)
+    limit = _clamp_limit(limit, default=25, max_=100)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    stmt = select(RuleEvaluation, Rule).join(Rule, Rule.id == RuleEvaluation.rule_id).where(
+        RuleEvaluation.evaluated_at >= cutoff
+    )
+    if rule_id:
+        try:
+            stmt = stmt.where(RuleEvaluation.rule_id == uuid.UUID(rule_id))
+        except ValueError:
+            return {"count": 0, "evaluations": [], "error": "rule_id must be a UUID"}
+    if rule_name_contains:
+        stmt = stmt.where(func.lower(Rule.name).like(f"%{rule_name_contains.strip().lower()}%"))
+    rows = (await db.execute(stmt.order_by(RuleEvaluation.evaluated_at.desc()).limit(limit))).all()
+    out = [
+        {
+            "evaluation_id": str(ev.id),
+            "rule_id": str(ev.rule_id),
+            "rule_name": rule.name,
+            "observation_id": str(ev.observation_id) if ev.observation_id else None,
+            "camera_id": str(ev.camera_id) if ev.camera_id else None,
+            "evaluated_at": ev.evaluated_at.isoformat() if ev.evaluated_at else None,
+            "outcome": ev.outcome,
+            "reason": ev.reason_code,
+            "details": ev.details or {},
+        }
+        for ev, rule in rows
+    ]
+    return {"count": len(out), "hours": hours, "evaluations": out}
+
+
 _GET_INCIDENTS_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -256,5 +309,4 @@ async def get_daily_digest(ctx: dict, limit: int = 1) -> dict:
 
 
 # ── Registry ─────────────────────────────────────────────────────────
-
 
