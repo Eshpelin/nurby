@@ -224,40 +224,258 @@ _REMEMBER_SCHEMA = {
                 "sedan in the driveway is Dad's car'. A single sentence."
             ),
         },
+        "person": {
+            "type": "string",
+            "description": (
+                "Attach the note to this person: exact display_name or person "
+                "UUID. Only when the fact is about a specific person."
+            ),
+        },
+        "vehicle": {
+            "type": "string",
+            "description": (
+                "Attach the note to this vehicle: display_name, plate text, or "
+                "vehicle UUID. Only when the fact is about a specific vehicle."
+            ),
+        },
+        "camera": {
+            "type": "string",
+            "description": (
+                "Attach the note to this camera: exact camera name or UUID. "
+                "Only when the fact is about one specific camera."
+            ),
+        },
+        "days": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 0, "maximum": 6},
+            "minItems": 1,
+            "maxItems": 7,
+            "description": (
+                "When the statement is a recurring schedule: weekdays as ints, "
+                "Monday=0 (so Thursday is 3). e.g. 'comes Tuesdays' -> [1]. "
+                "Omit entirely for facts with no schedule."
+            ),
+        },
+        "start_time": {
+            "type": "string",
+            "description": (
+                "Schedule window start, local time 'HH:MM' (24h). Required "
+                "when days is given; e.g. '9:00' or '21:30'."
+            ),
+        },
+        "end_time": {
+            "type": "string",
+            "description": (
+                "Schedule window end, local time 'HH:MM' (24h), after "
+                "start_time, within the same day. e.g. '11:00'."
+            ),
+        },
     },
 }
 
 
-async def remember(ctx: dict, *, fact: str) -> dict:
-    """Propose remembering a household fact (#286).
+def _parse_hhmm(value: str | None) -> int | None:
+    """'9:00' / '09:30' / '21:05' -> minutes since midnight, or None."""
+    text = (value or "").strip()
+    if not text:
+        return None
+    parts = text.split(":")
+    if len(parts) != 2 or not all(p.isdigit() for p in parts):
+        return None
+    hour, minute = int(parts[0]), int(parts[1])
+    if hour > 23 or minute > 59:
+        return None
+    return hour * 60 + minute
 
-    Writes nothing: it returns a ``client_action`` the UI renders as a Confirm
-    card, and the fact is stored (source="user", so the curator never rewrites
-    it) only when the user confirms. Reuses the same confirm gate as draft_rule
-    (#284)."""
+
+async def _resolve_remember_person(db, name: str) -> dict:
+    """Resolve a person name/UUID for note attachment.
+
+    Returns {"ok": True, "key": str, "label": str} or {"ok": False,
+    "error": str}. Import lazily: the resolver lives with the
+    relationship tools that share its disambiguation semantics.
+    """
+    from services.agent.tools.relationships import _resolve_subject
+
+    desc = await _resolve_subject(name, db)
+    if desc["type"] == "person":
+        return {"ok": True, "key": str(desc["person_id"]), "label": desc.get("display") or desc["display_name"]}
+    if desc["type"] == "disambiguation":
+        names = ", ".join(c["display_name"] for c in desc["candidates"])
+        return {"ok": False, "error": f"More than one person matches {name!r}: {names}. Ask which one."}
+    return {"ok": False, "error": f"No person named {name!r} is in the people library"}
+
+
+async def _resolve_remember_vehicle(db, name: str) -> dict:
+    from shared.models import Vehicle
+
+    needle = name.strip()
+    rows = (
+        await db.execute(
+            select(Vehicle).where(
+                func.lower(Vehicle.display_name).like(f"%{needle.lower()}%")
+                | func.lower(func.coalesce(Vehicle.license_plate, "")).like(f"%{needle.lower()}%")
+            )
+        )
+    ).scalars().all()
+    if len(rows) > 1:
+        names = ", ".join(v.display_name for v in rows)
+        return {"ok": False, "error": f"More than one vehicle matches {name!r}: {names}. Ask which one."}
+    if len(rows) == 1:
+        return {"ok": True, "key": str(rows[0].id), "label": rows[0].display_name}
+    return {"ok": False, "error": f"No vehicle matching {name!r} is in the vehicles library"}
+
+
+async def _resolve_remember_camera(user, db, name: str) -> dict:
+    """Resolve a camera name/UUID within the caller's ACL."""
+    from services.agent.access import accessible_camera_ids
+
+    raw = name.strip()
+    try:
+        resolved = uuid.UUID(raw)
+    except ValueError:
+        if user is None:
+            return {"ok": False, "error": "camera must be a UUID"}
+        allowed = await accessible_camera_ids(user, db)
+        result = await db.execute(
+            select(Camera).where(func.lower(Camera.name) == raw.lower())
+        )
+        matches = [cam for cam in result.scalars().all() if cam.id in allowed]
+        if not matches:
+            return {"ok": False, "error": f"No accessible camera named {raw!r}"}
+        if len(matches) > 1:
+            return {"ok": False, "error": f"More than one camera is named {raw!r}; use its UUID."}
+        resolved = matches[0].id
+    cam = await db.get(Camera, resolved)
+    if cam is None:
+        return {"ok": False, "error": f"No camera with id {raw!r}"}
+    return {"ok": True, "key": str(cam.id), "label": cam.name}
+
+
+async def remember(
+    ctx: dict,
+    *,
+    fact: str,
+    person: str | None = None,
+    vehicle: str | None = None,
+    camera: str | None = None,
+    days: list[int] | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
+) -> dict:
+    """Propose remembering a household note (#185).
+
+    Writes nothing: it resolves the attachment and schedule, then returns a
+    ``client_action`` the UI renders as a Confirm card. The note is stored
+    (source="user", so the curator never rewrites it) only when the user
+    confirms. A schedule-bearing card also arms alert suppression for that
+    exact window — the card text says so, which makes the confirmation
+    explicit; the effect stays visible and reversible on the note
+    afterwards. Reuses the same confirm gate as draft_rule (#284)."""
     fact = (fact or "").strip()
     if not fact:
         return {"ok": False, "error": "fact must not be empty"}
     if len(fact) > 2000:
         fact = fact[:2000]
+    db = ctx["db"]
+    user = ctx.get("user")
+
+    given = [name for name in (person, vehicle, camera) if name]
+    if len(given) > 1:
+        return {"ok": False, "error": "attach the note to one thing: a person, a vehicle, or a camera"}
+
+    entity_kind = entity_key = entity_label = None
+    if person:
+        resolved = await _resolve_remember_person(db, person)
+        if not resolved["ok"]:
+            return resolved
+        entity_kind, entity_key, entity_label = "person", resolved["key"], resolved["label"]
+    elif vehicle:
+        resolved = await _resolve_remember_vehicle(db, vehicle)
+        if not resolved["ok"]:
+            return resolved
+        entity_kind, entity_key, entity_label = "vehicle", resolved["key"], resolved["label"]
+    elif camera:
+        resolved = await _resolve_remember_camera(user, db, camera)
+        if not resolved["ok"]:
+            return resolved
+        entity_kind, entity_key, entity_label = "camera", resolved["key"], resolved["label"]
+    else:
+        entity_kind, entity_key, entity_label = "household", "household", "Household"
+
+    # A schedule needs both ends and at least one weekday; anything
+    # half-specified is a question back to the user, not a guess.
+    schedule = None
+    if days or start_time or end_time:
+        start = _parse_hhmm(start_time)
+        end = _parse_hhmm(end_time)
+        if not days:
+            return {"ok": False, "error": "a schedule needs days (weekday ints, Monday=0)"}
+        if start is None or end is None:
+            return {"ok": False, "error": "a schedule needs start_time and end_time as HH:MM"}
+        if end <= start:
+            return {"ok": False, "error": "end_time must be after start_time, within the same day"}
+        schedule = {
+            "days": sorted({int(d) for d in days if isinstance(d, int) and 0 <= int(d) <= 6}),
+            "start_minute": start,
+            "end_minute": end,
+        }
+        if not schedule["days"]:
+            return {"ok": False, "error": "days must be weekday ints 0-6 (Monday=0)"}
+
+    body = {"text": fact, "kind": "note"}
+    if entity_kind != "household":
+        body["entity_kind"] = entity_kind
+        body["entity_key"] = entity_key
+    if schedule:
+        body["schedule"] = schedule
+        # One confirmation, two stated effects: remember the note, and mute
+        # matching alerts while the schedule holds. The message spells the
+        # second effect out so the confirm is informed.
+        body["suppress_alerts"] = True
+
+    where = (
+        "the household" if entity_kind == "household" else f"{entity_label} ({entity_kind})"
+    )
+    summary = fact
+    will_mute = ""
+    if schedule:
+        from shared.fact_schedule import WEEKDAY_NAMES
+
+        day_names = ", ".join(WEEKDAY_NAMES[d] for d in schedule["days"])
+        window = (
+            f"{schedule['start_minute'] // 60:02d}:{schedule['start_minute'] % 60:02d}"
+            "-"
+            f"{schedule['end_minute'] // 60:02d}:{schedule['end_minute'] % 60:02d}"
+        )
+        summary = f"{fact} — recurring {day_names} {window}"
+        will_mute = (
+            f" While that schedule holds, matching alerts for {where} will be "
+            "muted (you can undo that on the note any time)."
+        )
     return {
         "ok": True,
         "fact": fact,
+        "entity": {"kind": entity_kind, "key": entity_key, "label": entity_label},
+        "schedule": schedule,
         "client_action": {
             "kind": "remember_fact",
             "method": "POST",
             "path": "/api/household/facts",
             "title": "Remember this",
-            "summary": fact,
-            "body": {"text": fact, "kind": "note"},
+            "summary": summary,
+            "body": body,
         },
         "message_for_user": (
-            f"Want me to remember that? “{fact}” — confirm below and I'll "
-            "keep it in the household's memory (I won't save it until you do)."
+            f"Want me to remember that? “{summary}” — I'd note it under {where}. "
+            f"{will_mute}Confirm below and I'll keep it in the household's "
+            "memory (I won't save it until you do)."
         ),
         "instructions": (
             "Relay message_for_user; tell the user they can confirm below. Do not "
-            "claim you already saved it — it saves only on confirm."
+            "claim you already saved it — it saves only on confirm. If the note "
+            "carries a schedule, make sure they noticed that confirming also "
+            "mutes matching alerts during the window."
         ),
     }
 

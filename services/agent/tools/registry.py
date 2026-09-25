@@ -44,8 +44,10 @@ from services.agent.tools.observations import (
 )
 from services.agent.tools.relationships import (
     _GET_ASSOCIATIONS_SCHEMA,
+    _GET_HOUSEHOLD_FACTS_SCHEMA,
     _QUERY_RELATIONSHIPS_SCHEMA,
     get_associations,
+    get_household_facts,
     query_relationships,
 )
 from services.agent.tools.setup_tools import (
@@ -286,6 +288,22 @@ TOOL_REGISTRY: list[dict[str, Any]] = [
         ),
         "input_schema": _GET_ASSOCIATIONS_SCHEMA,
         "fn": get_associations,
+        "side_effect": "read",
+        "cost_class": "cheap",
+    },
+    {
+        "name": "get_household_facts",
+        "description": (
+            "Household notes: what the household has told Nurby on purpose "
+            "('the cleaner comes Thursdays', 'the white van is the "
+            "plumber's') plus established facts Nurby learned from "
+            "observations. Answers 'what do you know about the cleaner', "
+            "'when does the gardener come'. Each row says whether it came "
+            "from the household or was learned — keep that distinction "
+            "when you answer. Cheap; one indexed lookup."
+        ),
+        "input_schema": _GET_HOUSEHOLD_FACTS_SCHEMA,
+        "fn": get_household_facts,
         "side_effect": "read",
         "cost_class": "cheap",
     },

@@ -195,8 +195,8 @@ async def test_no_accessible_cameras_means_no_block():
 async def test_person_usual_cameras_come_from_the_same_sample():
     hc.clear_cache()
     cam = _camera_row("Kitchen")
-    person = SimpleNamespace(display_name="Mom", nickname=None, relationship="parent",
-                             is_starred=True)
+    person = SimpleNamespace(id=uuid.uuid4(), display_name="Mom", nickname=None,
+                             relationship="parent", is_starred=True)
     rows = [_obs(cam.id, 8, ["person"], ["Mom"]) for _ in range(30)]
     db = _FakeDB([cam], rows, [person], [])
     text = await hc.build_household_context(db, {cam.id})
