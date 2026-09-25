@@ -14,6 +14,15 @@ type UsageReport = {
   by_workload: SpendRow[];
   by_rule: SpendRow[];
   attribution_note: string;
+  perception_budget: {
+    stage: "normal" | "warn" | "blocked";
+    allowed: boolean;
+    reason: string;
+    used_cost_cents: number;
+    used_tokens: number;
+    cost_limit_cents: number;
+    token_limit: number;
+  };
 };
 
 function dollars(cents: number) {
@@ -46,6 +55,12 @@ export function CostUsageCard() {
       </div>
       {report && (
         <div className="border-t border-border px-4 py-3 space-y-3">
+          {report.perception_budget.stage !== "normal" && (
+            <div className={`rounded border px-3 py-2 text-xs ${report.perception_budget.stage === "blocked" ? "border-red-500/40 bg-red-500/10 text-red-200" : "border-amber-500/40 bg-amber-500/10 text-amber-200"}`}>
+              <div className="font-medium">Camera AI budget {report.perception_budget.stage}</div>
+              <div className="mt-0.5">{report.perception_budget.reason || "Perception usage is approaching its configured limit."}</div>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div><div className="text-muted-foreground">Calls</div><div className="font-medium">{report.totals.calls}</div></div>
             <div><div className="text-muted-foreground">Input tokens</div><div className="font-medium">{report.totals.tokens_in.toLocaleString()}</div></div>

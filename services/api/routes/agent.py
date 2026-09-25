@@ -29,6 +29,7 @@ from services.agent import runs as runs_mod
 from services.agent import ws as agent_ws
 from services.agent.budget import check_budget
 from services.agent.driver import AgentDriver
+from services.perception.usage import perception_budget_decision
 from shared.app_settings import get_setting
 from shared.auth import decode_access_token, get_current_user
 from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
@@ -413,6 +414,8 @@ async def usage_report(
     by_day: dict[str, dict] = {}
     by_workload: dict[str, dict] = {}
     by_rule: dict[str, dict] = {}
+    perception_today = {"cost_cents": 0, "tokens": 0}
+    today = datetime.now(timezone.utc).date()
 
     def add(bucket: dict, *, cost: int, tokens_in: int, tokens_out: int) -> None:
         bucket["cost_cents"] = bucket.get("cost_cents", 0) + cost
@@ -427,6 +430,9 @@ async def usage_report(
         add(by_workload.setdefault(workload, {"name": workload}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
         day = at.date().isoformat()
         add(by_day.setdefault(day, {"date": day}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
+        if at.date() == today and workload != "Ask Nurby":
+            perception_today["cost_cents"] += cost
+            perception_today["tokens"] += tokens_in + tokens_out
 
     vlm_rows = (await db.execute(vlm_stmt)).all()
     vlm_by_run: dict[uuid.UUID, dict[str, int]] = {}
@@ -489,6 +495,17 @@ async def usage_report(
             tokens_out=int(usage.tokens_out or 0),
         )
 
+    cost_limit = int(await get_setting("perception_daily_cost_budget_cents") or 0)
+    token_limit = int(await get_setting("perception_daily_token_budget") or 0)
+    budget = perception_budget_decision(
+        used_cost_cents=perception_today["cost_cents"],
+        used_tokens=perception_today["tokens"],
+        estimated_cost_cents=0,
+        estimated_tokens=0,
+        cost_limit_cents=cost_limit,
+        token_limit=token_limit,
+        warn_threshold_pct=int(await get_setting("perception_budget_warn_threshold_pct") or 80),
+    )
     return {
         "days": days,
         "estimated": True,
@@ -499,6 +516,15 @@ async def usage_report(
         "by_workload": sorted(by_workload.values(), key=lambda row: row["cost_cents"], reverse=True),
         "by_rule": sorted(by_rule.values(), key=lambda row: row["cost_cents"], reverse=True),
         "by_day": sorted(by_day.values(), key=lambda row: row["date"]),
+        "perception_budget": {
+            "stage": budget.stage,
+            "allowed": budget.allowed,
+            "reason": budget.reason,
+            "used_cost_cents": perception_today["cost_cents"],
+            "used_tokens": perception_today["tokens"],
+            "cost_limit_cents": cost_limit,
+            "token_limit": token_limit,
+        },
         "attribution_note": "Camera rows cover analyzer calls, camera VLM passes, and rule VLM calls. All perception figures are conservative estimates, not invoices.",
     }
 

@@ -40,7 +40,7 @@ from services.events.templates import (
     render,
     safe_eval_condition,
 )
-from services.perception.usage import record_vlm_usage
+from services.perception.usage import check_perception_budget, estimate_vlm_usage, record_vlm_usage
 from shared.database import async_session
 from shared.models import Event, Notification, Provider, TelegramChannel, WebhookSubscription
 
@@ -1035,6 +1035,24 @@ async def _execute_vlm_call(action, observation_data, rule, event_id, ctx):
         )
 
     image_b64 = _load_thumbnail_b64(observation_data) if attach_image else None
+
+    estimated_in, estimated_out, estimated_cost = estimate_vlm_usage(
+        provider,
+        system_prompt=system,
+        user_prompt=user_prompt,
+        output_text=None,
+        model=model,
+        image_tokens=765 if image_b64 else 0,
+    )
+    budget = await check_perception_budget(
+        observation_data.get("camera_id"),
+        estimated_cost_cents=estimated_cost,
+        estimated_tokens=estimated_in + estimated_out,
+    )
+    if not budget.allowed:
+        err = f"Perception budget reached: {budget.reason}"
+        await _update_event_status(event_id, "vlm_call", "failed", err)
+        return _apply_vlm_error(observation_data, output_name, on_error, fallback_value, err)
 
     last_error: str | None = None
     parsed = None

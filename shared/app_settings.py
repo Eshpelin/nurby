@@ -154,6 +154,12 @@ DEFAULTS: dict[str, Any] = {
     # The driver emits a banner to the user once usage crosses this
     # line; runs are still allowed up to 100%.
     "agent_warn_threshold_pct": 80,
+    # Optional per-camera daily perception budget. Zero keeps the guardrail
+    # disabled for existing installations; when set, the next call that
+    # would cross a limit is blocked before the provider request starts.
+    "perception_daily_cost_budget_cents": 0,
+    "perception_daily_token_budget": 0,
+    "perception_budget_warn_threshold_pct": 80,
     # ── VLM backlog (Redis-backed per-camera buffer) ─────────────────
     # Per-camera capacity of the VLM job backlog. 50 covers a typical
     # 30-sec walk-by even on a slow Ollama host that takes 15s/frame.
