@@ -277,6 +277,10 @@ class Camera(Base):
     ptz_smart_track_move_budget_per_minute: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     # ONVIF media profile token. Most cameras use "Profile_1".
     ptz_profile_token: Mapped[str] = mapped_column(String(64), default="Profile_1", nullable=False)
+    # PTZ is opt-in: an RTSP transport does not imply a motorized camera.
+    # Detection stores the ONVIF endpoint details used by control commands.
+    ptz_supported: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    onvif_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fps: Mapped[float | None] = mapped_column(Float, nullable=True)

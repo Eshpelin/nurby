@@ -8,6 +8,9 @@ export interface Camera {
   name: string;
   stream_url: string;
   stream_type: StreamType;
+  ptz_supported?: boolean;
+  onvif_port?: number | null;
+  ptz_profile_token?: string;
   location_label: string | null;
   status: "offline" | "live" | "recording";
   status_reason?: string | null;

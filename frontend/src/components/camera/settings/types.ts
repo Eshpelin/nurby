@@ -76,6 +76,8 @@ interface Camera {
   ptz_smart_track_min_confidence: number;
   ptz_smart_track_move_budget_per_minute: number;
   ptz_profile_token: string;
+  ptz_supported?: boolean;
+  onvif_port?: number | null;
   motion_zones: MotionZone[] | null;
   status: string;
   status_reason?: string | null;

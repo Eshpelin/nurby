@@ -141,7 +141,22 @@ export default function CameraConfigPage() {
   const [smartTrackMinConfidence, setSmartTrackMinConfidence] = useState(0.45);
   const [smartTrackMoveBudget, setSmartTrackMoveBudget] = useState(30);
   const [ptzProfileToken, setPtzProfileToken] = useState("Profile_1");
+  const [ptzDetecting, setPtzDetecting] = useState(false);
   const [smartTrackPresets, setSmartTrackPresets] = useState<{token: string; name: string}[]>([]);
+
+  const detectPtz = async () => {
+    setPtzDetecting(true);
+    try {
+      const res = await authFetch(`/api/cameras/${cameraId}/ptz/detect`, { method: "POST" });
+      const result = await res.json();
+      if (res.ok) {
+        setCamera((current) => current ? { ...current, ptz_supported: result.ptz_supported, onvif_port: result.onvif_port } : current);
+        if (result.ptz_profile_token) setPtzProfileToken(result.ptz_profile_token);
+      }
+    } finally {
+      setPtzDetecting(false);
+    }
+  };
   const [activeTab, setActiveTab] = useState<"settings" | "activity">("settings");
   const [motionZones, setMotionZones] = useState<MotionZone[]>([]);
 
@@ -860,7 +875,7 @@ export default function CameraConfigPage() {
         />
 
         {/* ── Smart Track (PTZ auto-follow) ── */}
-        {camera?.stream_type === "rtsp" && (
+        {camera?.stream_type === "rtsp" && camera.ptz_supported === true && (
           <SmartTrackSection
             ptzProfileToken={ptzProfileToken}
             setPtzProfileToken={setPtzProfileToken}
@@ -890,6 +905,15 @@ export default function CameraConfigPage() {
             smartTrackTargets={smartTrackTargets}
             smartTrackZoom={smartTrackZoom}
           />
+        )}
+
+        {streamType === "rtsp" && camera?.ptz_supported !== true && (
+          <Section title="Pan, tilt, and zoom" description="Nurby only shows PTZ controls after it confirms that this camera exposes ONVIF PTZ. Fixed RTSP cameras remain uncluttered.">
+            <button type="button" onClick={detectPtz} disabled={ptzDetecting} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">
+              {ptzDetecting ? "Checking camera…" : "Detect PTZ support"}
+            </button>
+            <p className="mt-2 text-xs text-muted-foreground">Uses a read-only ONVIF check across common camera ports. No movement command is sent.</p>
+          </Section>
         )}
 
         {/* ── YOLO-World prompts ── */}
@@ -932,7 +956,7 @@ export default function CameraConfigPage() {
         />
 
         {/* ── PTZ Control ── */}
-        {streamType === "rtsp" && (
+        {streamType === "rtsp" && camera?.ptz_supported === true && (
           <Section
             title="PTZ Control"
             description="Pan, tilt, and zoom controls for ONVIF-compatible cameras"

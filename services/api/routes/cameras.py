@@ -25,6 +25,7 @@ from services.api.camera_probe import (
 from services.api.motion_query import DEFAULT_BUCKET_SECONDS
 from services.discovery.onvif import (
     discover_onvif_cameras,
+    ptz_probe,
     ptz_continuous_move,
     ptz_get_presets,
     ptz_goto_preset,
@@ -1166,10 +1167,56 @@ def _extract_ip_port(stream_url: str) -> tuple[str, int]:
     return ip, port
 
 
+def _ptz_connection(camera: Camera) -> tuple[str, int, str]:
+    """Resolve the stored ONVIF endpoint and profile for a camera."""
+    ip, stream_port = _extract_ip_port(camera.stream_url)
+    return ip, camera.onvif_port or stream_port, camera.ptz_profile_token or "Profile_1"
+
+
 async def _get_camera_for_ptz(
     camera_id: uuid.UUID, current_user: User, db: AsyncSession
 ) -> Camera:
     """Load an in-scope camera and verify it supports PTZ (RTSP only)."""
+    await _require_camera_in_scope(camera_id, current_user, db)
+    camera = await db.get(Camera, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    if camera.stream_type != "rtsp":
+        raise HTTPException(status_code=400, detail="PTZ is only supported for RTSP cameras")
+    if not camera.ptz_supported:
+        raise HTTPException(status_code=409, detail="PTZ has not been detected for this camera")
+    return camera
+
+
+@router.post("/{camera_id}/ptz/detect")
+async def detect_ptz(
+    camera_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Probe common ONVIF ports with a read-only GetStatus call."""
+    camera = await _get_camera_for_ptz_unchecked(camera_id, _current_user, db)
+    ip, stream_port = _extract_ip_port(camera.stream_url)
+    candidates = []
+    for port in (camera.onvif_port, 80, 8000, 8080, stream_port):
+        if port and port not in candidates:
+            candidates.append(port)
+    password = unseal(camera.password) if camera.password else None
+    for port in candidates:
+        for profile in (camera.ptz_profile_token or "Profile_1", "Profile_1"):
+            if await ptz_probe(ip, port, camera.username, password, profile):
+                camera.ptz_supported = True
+                camera.onvif_port = port
+                camera.ptz_profile_token = profile
+                await db.commit()
+                return {"ptz_supported": True, "onvif_port": port, "ptz_profile_token": profile}
+    camera.ptz_supported = False
+    await db.commit()
+    return {"ptz_supported": False, "onvif_port": None, "ptz_profile_token": camera.ptz_profile_token}
+
+
+async def _get_camera_for_ptz_unchecked(
+    camera_id: uuid.UUID, current_user: User, db: AsyncSession
+) -> Camera:
     await _require_camera_in_scope(camera_id, current_user, db)
     camera = await db.get(Camera, camera_id)
     if not camera:
@@ -1187,8 +1234,7 @@ async def ptz_move(
 ):
     """Start continuous PTZ movement on a camera."""
     camera = await _get_camera_for_ptz(camera_id, _current_user, db)
-    ip, port = _extract_ip_port(camera.stream_url)
-    profile_token = "Profile_1"
+    ip, port, profile_token = _ptz_connection(camera)
 
     ok = await ptz_continuous_move(
         ip=ip,
@@ -1212,8 +1258,7 @@ async def ptz_stop_movement(
 ):
     """Stop all PTZ movement on a camera."""
     camera = await _get_camera_for_ptz(camera_id, _current_user, db)
-    ip, port = _extract_ip_port(camera.stream_url)
-    profile_token = "Profile_1"
+    ip, port, profile_token = _ptz_connection(camera)
 
     ok = await ptz_stop(
         ip=ip,
@@ -1234,8 +1279,7 @@ async def ptz_list_presets(
 ):
     """List saved PTZ presets for a camera."""
     camera = await _get_camera_for_ptz(camera_id, _current_user, db)
-    ip, port = _extract_ip_port(camera.stream_url)
-    profile_token = "Profile_1"
+    ip, port, profile_token = _ptz_connection(camera)
 
     presets = await ptz_get_presets(
         ip=ip,
@@ -1255,8 +1299,7 @@ async def ptz_goto(
 ):
     """Move the camera to a saved preset position."""
     camera = await _get_camera_for_ptz(camera_id, _current_user, db)
-    ip, port = _extract_ip_port(camera.stream_url)
-    profile_token = "Profile_1"
+    ip, port, profile_token = _ptz_connection(camera)
 
     ok = await ptz_goto_preset(
         ip=ip,

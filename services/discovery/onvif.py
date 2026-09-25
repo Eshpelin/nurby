@@ -551,6 +551,13 @@ _PTZ_GOTO_PRESET_ENVELOPE = """<?xml version="1.0" encoding="UTF-8"?>
   </s:Body>
 </s:Envelope>"""
 
+_PTZ_GET_STATUS_ENVELOPE = """<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:ptz="http://www.onvif.org/ver20/ptz/wsdl">
+  {header}
+  <s:Body><ptz:GetStatus><ptz:ProfileToken>{profile_token}</ptz:ProfileToken></ptz:GetStatus></s:Body>
+</s:Envelope>"""
+
 
 # ---------------------------------------------------------------------------
 # PTZ internal helpers
@@ -623,6 +630,24 @@ async def ptz_continuous_move(
         zoom_speed=zoom_speed,
     )
     return root is not None and not _is_auth_fault(root)
+
+
+async def ptz_probe(
+    ip: str,
+    port: int,
+    username: str | None,
+    password: str | None,
+    profile_token: str,
+    ignore_time_mismatch: bool | None = None,
+) -> bool:
+    """Return whether the camera accepts a read-only ONVIF PTZ GetStatus."""
+    root = await _ptz_command(
+        ip, port, username, password,
+        _PTZ_GET_STATUS_ENVELOPE,
+        ignore_time_mismatch=ignore_time_mismatch,
+        profile_token=profile_token,
+    )
+    return root is not None and not _is_auth_fault(root) and _find_recursive(root, "PTZStatus") is not None
 
 
 async def ptz_stop(

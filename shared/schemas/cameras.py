@@ -227,6 +227,8 @@ class CameraUpdate(BaseModel):
     ptz_smart_track_require_face: list[uuid.UUID] | None = None
     ptz_smart_track_move_budget_per_minute: int | None = Field(default=None, ge=1, le=600)
     ptz_profile_token: str | None = Field(default=None, max_length=64)
+    ptz_supported: bool | None = None
+    onvif_port: int | None = Field(default=None, ge=1, le=65535)
 
     @model_validator(mode="after")
     def _validate_stream_url(self):
@@ -331,6 +333,8 @@ class CameraResponse(BaseModel):
     ptz_smart_track_require_face: list[uuid.UUID] | None = None
     ptz_smart_track_move_budget_per_minute: int = 30
     ptz_profile_token: str = "Profile_1"
+    ptz_supported: bool = False
+    onvif_port: int | None = None
     width: int | None
     height: int | None
     fps: float | None

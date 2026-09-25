@@ -39,7 +39,7 @@ export function CameraSidebarCard({
   const router = useRouter();
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [ptzOpen, setPtzOpen] = useState(false);
-  const ptzCapable = camera.stream_type === "rtsp";
+  const ptzCapable = camera.stream_type === "rtsp" && camera.ptz_supported === true;
   const latestEvent = activityEvents[0];
   const frameW = camera.width || DEFAULT_FRAME_WIDTH;
   const frameH = camera.height || DEFAULT_FRAME_HEIGHT;
