@@ -297,12 +297,11 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
           )}
         </div>
 
-        {step !== "choose" && step !== "magic" && (
+        {step !== "choose" && step !== "magic" && step !== "camera" && (
         <div className="px-5 py-3 border-t border-border flex items-center justify-between">
           <button
             onClick={() => {
               if (step === "provider") setStep("camera");
-              else if (step === "camera") setStep("choose");
             }}
             className={`px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted ${
               step === "done" ? "invisible" : ""
@@ -310,14 +309,6 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
           >
             Back
           </button>
-          {step === "camera" && (
-            <button
-              onClick={() => setStep("provider")}
-              className="px-4 py-1.5 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground"
-            >
-              Skip for now
-            </button>
-          )}
           {step === "provider" && !cloudMode && (
             <button
               onClick={() => setStep("done")}

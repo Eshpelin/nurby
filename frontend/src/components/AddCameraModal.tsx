@@ -500,7 +500,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
         {!embedded && (
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-semibold">Add Camera</h2>
-            <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors text-xl leading-none">&times;</button>
+            <button type="button" onClick={onClose} aria-label="Close add camera" className="text-muted-foreground hover:text-foreground transition-colors text-xl leading-none">&times;</button>
           </div>
         )}
 
@@ -523,7 +523,6 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
         {activeTab === "scan" && (
           <div>
             <NetworkScanPanel onSelectDevice={handleOnvifDeviceSelect} />
-            {error && <p className="text-sm text-danger mt-3">{error}</p>}
           </div>
         )}
 
@@ -589,7 +588,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
                 {streamType === "usb" ? "Device Index or Path" : streamType === "file" ? "File Path" : streamType === "audio_rtsp" ? "Audio Stream URL" : "Stream URL"}
               </label>
               {["rtsp", "http_mjpeg", "http_snapshot", "hls"].includes(streamType) && (
-                <div className="mb-2">
+                <div className="mb-2 min-h-8">
                   <CameraBrandHelp
                     forceOpenSignal={brandHelpSignal}
                     onUseTemplate={(url) => {
@@ -672,12 +671,12 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
               </div>
             )}
 
-            {error && (
-              <div className="space-y-1">
+            <div className="min-h-[3.5rem] space-y-1" aria-live="polite">
+              {error && (
                 <p className="text-sm text-danger">{error}</p>
-                {errorHint && <p className="text-xs text-muted-foreground">{errorHint}</p>}
-              </div>
-            )}
+              )}
+              {errorHint && <p className="text-xs text-muted-foreground">{errorHint}</p>}
+            </div>
 
             <div className="flex flex-col items-end gap-1.5 pt-2">
               {(!name.trim() || (streamType === "webcam" ? !webcamStream : streamType === "browser_mic" ? false : !streamUrl.trim())) && !submitting && (
@@ -690,7 +689,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
                 </p>
               )}
               <div className="flex gap-2">
-                <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">Cancel</button>
+                <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">{embedded ? "Back to setup" : "Cancel"}</button>
                 <button type="submit" disabled={submitting || !name.trim() || (streamType === "webcam" ? !webcamStream : streamType === "browser_mic" ? false : !streamUrl.trim())} className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
                   {submitting ? (testingConnection ? "Testing connection..." : "Adding...") : streamType === "webcam" ? "Start Streaming" : "Add Camera"}
                 </button>
