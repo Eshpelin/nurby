@@ -59,6 +59,8 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
   bool _loadingMore = false;
   bool _hasMore = true;
   String? _error;
+  final Set<String> _selectedIds = <String>{};
+  bool _selectionMode = false;
 
   @override
   void initState() {
@@ -123,8 +125,78 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
   }
 
   void _onFilterChanged() {
-    setState(() => _items.clear());
+    setState(() {
+      _items.clear();
+      _selectedIds.clear();
+      _selectionMode = false;
+    });
     _load(reset: true);
+  }
+
+  void _toggleSelected(String id) {
+    setState(() {
+      _selectionMode = true;
+      if (!_selectedIds.add(id)) _selectedIds.remove(id);
+      if (_selectedIds.isEmpty) _selectionMode = false;
+    });
+  }
+
+  void _selectPage() {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds
+        ..clear()
+        ..addAll(_items.map((r) => r.id));
+    });
+  }
+
+  Future<void> _bulkDelete() async {
+    if (_selectedIds.isEmpty) return;
+    final ids = _selectedIds.toList(growable: false);
+    try {
+      final preview = await ref.read(recordingRepoProvider).previewBulk(ids: ids);
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Delete recordings?'),
+          content: Text(
+            '${preview.matching} recording${preview.matching == 1 ? '' : 's'}\n'
+            'Estimated storage: ${_formatBytes(preview.estimatedBytes)}\n'
+            '${preview.missingFiles} file${preview.missingFiles == 1 ? '' : 's'} already missing.\n\n'
+            'This cannot be undone. Linked alerts are preserved.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      final result = await ref.read(recordingRepoProvider).deleteBulk(ids: ids);
+      if (!mounted) return;
+      final deleted = result.deleted;
+      setState(() {
+        _items.removeWhere((r) => result.failedIds.contains(r.id) == false && ids.contains(r.id));
+        _selectedIds.clear();
+        _selectionMode = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Deleted $deleted recording${deleted == 1 ? '' : 's'}${result.failed > 0 ? '; ${result.failed} failed' : ''}'),
+      ));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+    }
+  }
+
+  static String _formatBytes(int bytes) {
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
   @override
@@ -163,6 +235,7 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
               ],
             ),
           ),
+          if (_selectionMode) _selectionBar(),
           Expanded(child: _body(cameraNames)),
         ],
       );
@@ -248,10 +321,44 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
             cameraName: cameraName,
             facets: _facets[rec.id],
             thumbnailUrl: ref.read(recordingRepoProvider).thumbnailUrl(rec.id),
-            onTap: () => _openPlayer(rec, cameraName),
-            onLongPress: () => _showActions(rec, cameraName),
+            selected: _selectedIds.contains(rec.id),
+            selectionMode: _selectionMode,
+            onTap: () => _selectionMode ? _toggleSelected(rec.id) : _openPlayer(rec, cameraName),
+            onLongPress: () => _selectionMode ? _toggleSelected(rec.id) : _toggleSelected(rec.id),
+            onMore: () => _showActions(rec, cameraName),
           );
         },
+      ),
+    );
+  }
+
+  Widget _selectionBar() {
+    return Material(
+      color: NurbyColors.cardElevated,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+        child: Row(
+          children: [
+            Text('${_selectedIds.length} selected', style: const TextStyle(fontWeight: FontWeight.w600)),
+            const Spacer(),
+            TextButton(onPressed: _selectPage, child: const Text('Select page')),
+            IconButton(
+              tooltip: 'Download originals',
+              onPressed: _selectedIds.isEmpty ? null : () => _download(ref.read(recordingRepoProvider).bundleUrl(ids: _selectedIds.toList())),
+              icon: const Icon(Icons.download_outlined),
+            ),
+            IconButton(
+              tooltip: 'Delete selected',
+              onPressed: _selectedIds.isEmpty ? null : _bulkDelete,
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+            ),
+            IconButton(
+              tooltip: 'Clear selection',
+              onPressed: () => setState(() { _selectedIds.clear(); _selectionMode = false; }),
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -374,6 +481,9 @@ class _RecordingRow extends StatelessWidget {
     required this.cameraName,
     required this.onTap,
     required this.onLongPress,
+    required this.selected,
+    required this.selectionMode,
+    required this.onMore,
     this.facets,
     this.thumbnailUrl,
   });
@@ -398,6 +508,9 @@ class _RecordingRow extends StatelessWidget {
   }
   final VoidCallback onTap;
   final VoidCallback onLongPress;
+  final bool selected;
+  final bool selectionMode;
+  final VoidCallback onMore;
 
   String get _duration {
     final secs = recording.durationSeconds;
@@ -425,6 +538,14 @@ class _RecordingRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
+              if (selectionMode)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Icon(
+                    selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                    color: selected ? NurbyColors.accent : NurbyColors.mutedForeground,
+                  ),
+                ),
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
                 child: SizedBox(
@@ -479,6 +600,11 @@ class _RecordingRow extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(_size, style: monoStyle.copyWith(fontSize: 10.5)),
                 ],
+              ),
+              IconButton(
+                tooltip: 'More recording actions',
+                onPressed: onMore,
+                icon: const Icon(Icons.more_vert),
               ),
             ],
           ),
