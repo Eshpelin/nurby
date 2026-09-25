@@ -5,8 +5,9 @@
  * and the controls that only make sense while you are looking at it.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type KeyboardEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useWebcamPublisher } from "@/lib/webcam-publisher";
 import { RetryCountdown } from "@/components/RetryCountdown";
 import { LiveCaptionOverlay } from "@/components/LiveCaptionOverlay";
@@ -42,6 +43,7 @@ export function CameraSidebarCard({
   // the wall can size each camera independently in width AND height.
   fill?: boolean;
 }) {
+  const router = useRouter();
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [ptzOpen, setPtzOpen] = useState(false);
   const ptzCapable = camera.stream_type === "rtsp";
@@ -96,13 +98,28 @@ export function CameraSidebarCard({
   const now = Date.now();
   const events1h = activityEvents.filter((e) => now - new Date(e.timestamp).getTime() < 3600000);
   const events24h = activityEvents.filter((e) => now - new Date(e.timestamp).getTime() < 86400000);
+  const openCamera = () => router.push(`/cameras/${camera.id}`);
+  const handleTileClick = () => {
+    onClick();
+    openCamera();
+  };
+  const handleTileKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openCamera();
+    }
+  };
 
   // List layout. Compact horizontal row
   if (layout === "list") {
     return (
       <div
-        onClick={onClick}
-        className={`rounded-md border overflow-hidden cursor-pointer transition-colors group flex items-center gap-2.5 px-2.5 py-2 ${
+        onClick={handleTileClick}
+        onKeyDown={handleTileKeyDown}
+        tabIndex={0}
+        aria-label={`Open ${camera.name} camera`}
+        className={`rounded-md border overflow-hidden cursor-pointer transition-colors group flex items-center gap-2.5 px-2.5 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent ${
           selected ? "border-accent bg-card" : "border-border bg-card hover:border-muted-foreground/30"
         }`}
       >
@@ -140,8 +157,9 @@ export function CameraSidebarCard({
           {events1h.length > 0 && <span className="text-[9px] font-mono text-accent bg-accent/10 px-1 py-0.5 rounded">{events1h.length} / 1h</span>}
           {events24h.length > 0 && <span className="text-[9px] font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded">{events24h.length} / 24h</span>}
         </div>
-        <button onClick={(e) => { e.stopPropagation(); window.location.href = `/cameras/${camera.id}`; }}
-          className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 flex-shrink-0">
+        <button type="button" aria-label={`Open ${camera.name} settings`} title="Open camera"
+          onClick={(e) => { e.stopPropagation(); openCamera(); }}
+          className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground flex-shrink-0">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
       </div>
@@ -153,8 +171,11 @@ export function CameraSidebarCard({
   // to 16:9, so the wall grid controls each camera's width and height.
   return (
     <div
-      onClick={onClick}
-      className={`rounded-lg border overflow-hidden cursor-pointer transition-colors group ${
+      onClick={handleTileClick}
+      onKeyDown={handleTileKeyDown}
+      tabIndex={0}
+      aria-label={`Open ${camera.name} camera`}
+      className={`rounded-lg border overflow-hidden cursor-pointer transition-colors group focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent ${
         fill ? "h-full flex flex-col" : ""
       } ${
         selected ? "border-accent bg-card" : "border-border bg-card hover:border-muted-foreground/30"
@@ -299,7 +320,8 @@ export function CameraSidebarCard({
         {camera.status !== "offline" && (
           <button
             onClick={(e) => { e.stopPropagation(); setOverlayVisible((v) => !v); }}
-            className="absolute top-1.5 right-9 z-10 w-6 h-6 rounded-md bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-colors opacity-0 group-hover:opacity-100"
+            aria-label={overlayVisible ? "Hide detections" : "Show detections"}
+            className="absolute top-1.5 right-9 z-10 w-6 h-6 rounded-md bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-colors"
             title={overlayVisible ? "Hide detections" : "Show detections"}
           >
             {overlayVisible ? (
@@ -320,8 +342,9 @@ export function CameraSidebarCard({
         {ptzCapable && camera.status !== "offline" && (
           <button
             onClick={(e) => { e.stopPropagation(); setPtzOpen((v) => !v); }}
+            aria-label="Open PTZ controls"
             className={`absolute top-1.5 right-[4.25rem] z-10 w-6 h-6 rounded-md backdrop-blur-sm border border-white/10 flex items-center justify-center transition-colors ${
-              ptzOpen ? "bg-accent text-black opacity-100" : "bg-black/60 text-white/70 hover:text-white hover:bg-black/80 opacity-0 group-hover:opacity-100"
+              ptzOpen ? "bg-accent text-black" : "bg-black/60 text-white/70 hover:text-white hover:bg-black/80"
             }`}
             title="PTZ control"
           >
@@ -343,8 +366,11 @@ export function CameraSidebarCard({
 
         {/* Settings gear */}
         <button
-          onClick={(e) => { e.stopPropagation(); window.location.href = `/cameras/${camera.id}`; }}
-          className="absolute top-1.5 right-1.5 z-10 w-6 h-6 rounded-md bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-colors opacity-0 group-hover:opacity-100"
+          type="button"
+          aria-label={`Open ${camera.name} settings`}
+          title="Open camera settings"
+          onClick={(e) => { e.stopPropagation(); openCamera(); }}
+          className="absolute top-1.5 right-1.5 z-10 w-6 h-6 rounded-md bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-colors"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>

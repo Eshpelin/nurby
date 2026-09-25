@@ -77,6 +77,7 @@ export function SummarizeNowButton({
   return (
     <button
       type="button"
+      aria-label={`Summarize last ${windowMinutes} minutes`}
       onClick={run}
       disabled={busy}
       title={
@@ -86,7 +87,7 @@ export function SummarizeNowButton({
             ? "Summary generated. Check the timeline."
             : `Summarize last ${windowMinutes} min`
       }
-      className={`absolute top-1.5 right-[5.5rem] z-10 w-6 h-6 rounded-md bg-black/60 backdrop-blur-sm border flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-colors opacity-0 group-hover:opacity-100 ${
+      className={`absolute top-1.5 right-[5.5rem] z-10 w-6 h-6 rounded-md bg-black/60 backdrop-blur-sm border flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-colors ${
         err
           ? "border-danger/50 text-danger"
           : done

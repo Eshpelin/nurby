@@ -71,12 +71,13 @@ export function FindNowButton({ cameraId, cameraName }: { cameraId: string; came
     <>
       <button
         type="button"
+        aria-label="Find anything in this camera now"
         title="Find anything in this camera now"
         onClick={(e) => {
           e.stopPropagation();
           setOpen(true);
         }}
-        className="absolute top-1.5 right-[6.75rem] z-10 w-6 h-6 rounded-md bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-colors opacity-0 group-hover:opacity-100"
+        className="absolute top-1.5 right-[6.75rem] z-10 w-6 h-6 rounded-md bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-colors"
       >
         <MagnifierIcon className="w-3 h-3" />
       </button>
