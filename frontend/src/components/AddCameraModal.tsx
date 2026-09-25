@@ -185,6 +185,9 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
   const [error, setError] = useState<string | null>(null);
   const [errorHint, setErrorHint] = useState<string | null>(null);
   const [brandHelpSignal, setBrandHelpSignal] = useState(0);
+  const [showAudioSources, setShowAudioSources] = useState(
+    initialStreamType === "audio_rtsp" || initialStreamType === "browser_mic",
+  );
 
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
   const [scanningDevices, setScanningDevices] = useState(false);
@@ -535,13 +538,19 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
             <div>
               <label className="block text-sm text-muted-foreground mb-1.5">Feed Type</label>
               <div className="grid grid-cols-3 gap-1.5">
-                {STREAM_TYPES.map((t) => (
+                {STREAM_TYPES.filter((t) => showAudioSources || !["audio_rtsp", "browser_mic"].includes(t.value)).map((t) => (
                   <button key={t.value} type="button" onClick={() => { setStreamType(t.value); setStreamUrl(""); setDevices([]); setScanError(null); setSelectedDeviceIndex(null); setManualInput(false); }}
+                    aria-label={`Use ${t.label} as the camera source`}
                     className={`px-2 py-2 text-xs rounded-md border transition-colors text-center ${streamType === t.value ? "border-accent bg-accent/10 text-accent-foreground" : "border-border hover:border-muted-foreground text-muted-foreground"}`}>
                     <div className="font-medium">{t.label}</div>
                   </button>
                 ))}
               </div>
+              {!showAudioSources && (
+                <button type="button" onClick={() => setShowAudioSources(true)} className="mt-2 text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2">
+                  Add a microphone instead
+                </button>
+              )}
               <p className="text-[11px] text-muted-foreground mt-1.5">{selectedType.hint}</p>
             </div>
 
@@ -640,6 +649,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
 
             <div>
               <label className="block text-sm text-muted-foreground mb-1.5">Location Label</label>
+              <p className="text-[11px] text-muted-foreground mb-1">Used in alerts, for example “Person at Front door (Porch)”.</p>
               <input type="text" value={locationLabel} onChange={(e) => setLocationLabel(e.target.value)} placeholder="Optional" className={inputClass} />
             </div>
 
