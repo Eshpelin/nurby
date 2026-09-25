@@ -360,7 +360,7 @@ async def list_review_items(
         association_rows = (
             await db.execute(
                 select(EntityAssociation)
-                .where(EntityAssociation.status == "candidate")
+                .where(EntityAssociation.status.in_(["candidate", "ambiguous", "deferred"]))
                 .order_by(EntityAssociation.last_seen_at.desc())
                 .limit(100)
             )
@@ -383,9 +383,10 @@ async def list_review_items(
                 source_type="association",
                 source_id=association.id,
                 kind=association_kind,
-                status="open",
+                status=association.status,
                 priority="normal",
                 title=("Possible name from audio" if association_kind == "identity_suggestion"
+                       else "Conflicting relationship needs review" if association.status == "ambiguous"
                        else "Possible relationship needs review"),
                 summary=(
                     f"{association.subject_key} may be {association.object_label or association.object_key}"
@@ -525,7 +526,7 @@ async def decide_relationship_suggestion(
     valid_status = (
         association is not None
         and (
-            association.status in {"candidate", "deferred"}
+            association.status in {"candidate", "ambiguous", "deferred"}
             or body.decision == "confirm" and association.status == "established" and association.user_confirmed
             or body.decision == "reject" and association.status == "rejected"
             or body.decision == "defer" and association.status == "deferred"
