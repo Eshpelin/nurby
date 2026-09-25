@@ -51,6 +51,7 @@ import { AskHintCard, LocalAIHintCard, SecureAccountNudge } from "@/components/d
 import { SystemStatusStrip } from "@/components/dashboard/SystemStatus";
 import { StorageLowSpaceBanner } from "@/components/settings/StorageLocation";
 import { computeSystemStatus } from "@/lib/systemStatus";
+import { PROVIDERS_CHANGED_EVENT } from "@/lib/providers-changed";
 
 // ── Main unified page ──
 
@@ -545,9 +546,12 @@ function DashboardContent() {
     return () => clearInterval(i);
   }, []);
   useEffect(() => {
-    authFetch("/api/providers").then(r => r.ok ? r.json() : []).then((providers: { active: boolean }[]) => {
+    const loadProviders = () => authFetch("/api/providers").then(r => r.ok ? r.json() : []).then((providers: { active: boolean }[]) => {
       setHasAiProvider(providers.some(p => p.active));
     }).catch(() => setHasAiProvider(false));
+    void loadProviders();
+    window.addEventListener(PROVIDERS_CHANGED_EVENT, loadProviders);
+    return () => window.removeEventListener(PROVIDERS_CHANGED_EVENT, loadProviders);
   }, [authFetch]);
   useEffect(() => { fetchCameras(); fetchPersons(); }, [fetchCameras, fetchPersons]);
   useEffect(() => { const i = setInterval(fetchCameras, 10000); return () => clearInterval(i); }, [fetchCameras]);

@@ -7,6 +7,7 @@ import { OllamaDeployPanel } from "@/components/OllamaDeployPanel";
 import { AddCameraModal } from "@/components/AddCameraModal";
 import { ONBOARDING_PRESETS } from "@/lib/provider-presets";
 import { StorageLocationForm } from "@/components/settings/StorageLocation";
+import { notifyProvidersChanged } from "@/lib/providers-changed";
 
 interface Provider {
   id: string;
@@ -105,6 +106,7 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
     } catch {
       /* non-fatal. The provider was created server-side regardless */
     }
+    notifyProvidersChanged();
     setStep("done");
   }
 
@@ -154,6 +156,7 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
       }
       const created: Provider = await res.json();
       setProviders((prev) => [...prev, created]);
+      notifyProvidersChanged();
       setCreatedProviderId(created.id);
       return created;
     } finally {

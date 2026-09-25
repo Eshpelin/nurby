@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { notifyProvidersChanged } from "@/lib/providers-changed";
 import { extractApiError } from "@/lib/api-error";
 import TelegramSection from "@/components/TelegramSection";
 import MqttSection from "@/components/MqttSection";
@@ -472,12 +473,13 @@ export default function SettingsPage() {
       }
       setShowProviderModal(false);
       fetchProviders();
+      notifyProvidersChanged();
     } catch { setFormError("Network error"); }
     finally { setSubmitting(false); }
   };
 
   const handleDelete = async (id: string) => {
-    try { await authFetch(`/api/providers/${id}`, { method: "DELETE" }); fetchProviders(); }
+    try { await authFetch(`/api/providers/${id}`, { method: "DELETE" }); fetchProviders(); notifyProvidersChanged(); }
     catch { /* silent */ }
   };
 

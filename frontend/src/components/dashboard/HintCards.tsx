@@ -10,6 +10,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { SecureAccountModal } from "@/components/SecureAccountModal";
+import { PROVIDERS_CHANGED_EVENT } from "@/lib/providers-changed";
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
 
 // Top-right nudge for a provisional owner. Nurby drops a first-run user
@@ -64,8 +65,6 @@ export function SecureAccountNudge({ hasFootage }: { hasFootage: boolean }) {
 export function LocalAIHintCard() {
   const { authFetch } = useAuth();
   const [show, setShow] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const cmd = "docker compose --profile local-ai up -d ollama";
 
   useEffect(() => {
     try {
@@ -74,7 +73,7 @@ export function LocalAIHintCard() {
       return;
     }
     let cancelled = false;
-    (async () => {
+    const loadProviders = async () => {
       try {
         const res = await authFetch("/api/providers");
         if (!res.ok) return;
@@ -86,9 +85,15 @@ export function LocalAIHintCard() {
       } catch {
         /* stay hidden on error */
       }
-    })();
+    };
+    void loadProviders();
+    const onChanged = () => {
+      void loadProviders();
+    };
+    window.addEventListener(PROVIDERS_CHANGED_EVENT, onChanged);
     return () => {
       cancelled = true;
+      window.removeEventListener(PROVIDERS_CHANGED_EVENT, onChanged);
     };
   }, [authFetch]);
 
@@ -99,16 +104,6 @@ export function LocalAIHintCard() {
       /* ignore */
     }
     setShow(false);
-  }
-
-  function copy() {
-    navigator.clipboard?.writeText(cmd).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      },
-      () => undefined
-    );
   }
 
   if (!show) return null;
@@ -128,26 +123,14 @@ export function LocalAIHintCard() {
       </div>
       <p className="text-[11px] text-muted-foreground leading-snug mb-2">
         Nurby already spots motion and faces. Want scene captions and Ask
-        Nurby? Run a local model. One command, no API key.
+        Nurby? Choose a provider in Settings. No provider is required for
+        detection, recording, or alerts.
       </p>
-      <div className="flex items-center gap-1.5 mb-2">
-        <code className="flex-1 text-[10px] font-mono bg-background border border-border rounded px-2 py-1.5 overflow-x-auto whitespace-nowrap">
-          {cmd}
-        </code>
-        <button
-          onClick={copy}
-          className="text-[10px] px-2 py-1.5 rounded border border-border hover:border-accent/50 hover:text-foreground text-muted-foreground transition-colors flex-shrink-0"
-        >
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
       <p className="text-[10px] text-muted-foreground leading-snug">
-        Then open{" "}
         <a href="/settings" className="text-accent hover:underline">
-          Settings → AI Providers
+          Open Settings → AI Providers
         </a>{" "}
-        and deploy a model in one click. Or skip it. everything else keeps
-        working.
+        to add one, or skip it. Everything else keeps working.
       </p>
     </div>
   );
@@ -219,4 +202,3 @@ export function AskHintCard() {
     </div>
   );
 }
-

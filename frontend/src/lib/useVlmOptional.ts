@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { PROVIDERS_CHANGED_EVENT } from "@/lib/providers-changed";
 
 interface VlmOptionalState {
   configured: boolean;
@@ -20,7 +21,7 @@ export function useVlmOptional(): VlmOptionalState {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const load = async () => {
       try {
         const res = await authFetch("/api/providers/health");
         if (res.ok) {
@@ -32,9 +33,16 @@ export function useVlmOptional(): VlmOptionalState {
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    };
+    void load();
+    const onChanged = () => {
+      setLoading(true);
+      void load();
+    };
+    window.addEventListener(PROVIDERS_CHANGED_EVENT, onChanged);
     return () => {
       cancelled = true;
+      window.removeEventListener(PROVIDERS_CHANGED_EVENT, onChanged);
     };
   }, [authFetch]);
 
