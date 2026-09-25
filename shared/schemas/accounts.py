@@ -231,6 +231,13 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+    # Present only on the first bootstrap response. The Settings endpoint
+    # provides it later to the authenticated provisional owner.
+    setup_code: str | None = None
+
+
+class SetupCodeAdoption(BaseModel):
+    code: str = Field(min_length=6, max_length=16, pattern=r"^[A-Za-z0-9-]+$")
 
 
 class PairStartResponse(BaseModel):

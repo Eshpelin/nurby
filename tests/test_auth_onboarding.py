@@ -28,7 +28,7 @@ from starlette.responses import Response
 
 from services.api.routes import auth as auth_routes
 from services.api.routes import cameras as camera_routes
-from shared.schemas import AccountClaim, AdminSetup
+from shared.schemas import AccountClaim, AdminSetup, SetupCodeAdoption
 
 
 def _run(coro):
@@ -51,6 +51,9 @@ class _FakeUser:
         self.is_provisional = provisional
         self.created_at = datetime.now(timezone.utc)
         self.last_login_at = None
+        self.bootstrap_secret_hash = None
+        self.setup_code_hash = None
+        self.setup_code_ciphertext = None
 
 
 def _exec_result(*, scalar=None, scalar_one_or_none=None, first=None, all=None):
@@ -95,6 +98,7 @@ def test_bootstrap_creates_provisional_owner_on_fresh_install():
     # A real, unique placeholder email was assigned.
     assert token.user.email.endswith("@nurby.local")
     assert "nurby_install_secret=" in response.headers["set-cookie"]
+    assert token.setup_code and len(token.setup_code) == 8
     db.add.assert_called_once()
     db.commit.assert_awaited()
 
@@ -139,6 +143,42 @@ def test_bootstrap_rejects_unbound_browser_for_unclaimed_owner():
 
     with pytest.raises(HTTPException) as ei:
         _run(auth_routes.bootstrap(request=_http(), db=db))
+    assert ei.value.status_code == 409
+
+
+def test_setup_code_adopts_once_and_rebinds_browser():
+    owner = _FakeUser(provisional=True)
+    code = "A1B2C3D4"
+    owner.setup_code_hash = hashlib.sha256(code.encode()).hexdigest()
+    owner.setup_code_ciphertext = auth_routes.seal(code)
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _exec_result(),
+        _exec_result(all=[owner]),
+    ]
+    db.commit = AsyncMock()
+    response = Response()
+    token = _run(auth_routes.adopt_provisional_owner(
+        body=SetupCodeAdoption(code=code.lower()),
+        response=response,
+        db=db,
+    ))
+    assert token.user.id == owner.id
+    assert owner.setup_code_hash is None
+    assert owner.setup_code_ciphertext is None
+    assert owner.bootstrap_secret_hash
+    assert "nurby_install_secret=" in response.headers["set-cookie"]
+
+
+def test_setup_code_is_single_use():
+    owner = _FakeUser(provisional=True)
+    owner.setup_code_hash = hashlib.sha256(b"A1B2C3D4").hexdigest()
+    db = AsyncMock()
+    db.execute.side_effect = [_exec_result(), _exec_result(all=[owner])]
+    with pytest.raises(HTTPException) as ei:
+        _run(auth_routes.adopt_provisional_owner(
+            body=SetupCodeAdoption(code="WRONG123"), db=db,
+        ))
     assert ei.value.status_code == 409
 
 

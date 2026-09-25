@@ -46,6 +46,11 @@ class User(Base):
     is_provisional: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Hash of the browser-bound install secret issued on first bootstrap.
     bootstrap_secret_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # One-time cross-device setup code. The hash is used for verification;
+    # the encrypted value is only returned to the already-authenticated
+    # provisional owner so it can be shown in Settings.
+    setup_code_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    setup_code_ciphertext: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # The invite key this user redeemed to create their account, if any. Lets

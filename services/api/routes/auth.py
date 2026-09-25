@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -38,6 +39,7 @@ from shared.auth import (
     verify_password,
 )
 from shared.config import settings
+from shared.camera_secrets import seal, unseal
 from shared.database import get_db
 from shared.models import ActivationMilestone, Event, InviteKey, Recording, Rule, User, UserCameraAccess
 from shared.onboarding import ExperiencePreferences, ExperienceResponse, experience_response
@@ -51,9 +53,28 @@ from shared.schemas import (
     UserCreate,
     UserLogin,
     UserResponse,
+    SetupCodeAdoption,
 )
 
 router = APIRouter()
+logger = logging.getLogger("nurby.api.auth")
+
+
+def _hash_setup_value(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _new_setup_code() -> str:
+    # Eight uppercase hex characters are easy to read aloud and paste, while
+    # still providing 32 bits of one-time entropy alongside the cookie bind.
+    return secrets.token_hex(4).upper()
+
+
+def _set_install_cookie(response: Response, install_secret: str) -> None:
+    response.set_cookie(
+        "nurby_install_secret", install_secret,
+        httponly=True, secure=False, samesite="strict", max_age=60 * 60 * 24 * 30,
+    )
 
 
 @router.get("/needs-setup")
@@ -146,15 +167,24 @@ async def bootstrap(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This Nurby is being set up on another device. Use the installing browser or claim the account.",
             )
+        setup_code = None
+        # Older provisional rows may predate the setup-code migration. Issue
+        # the code lazily when that owner returns through the bound browser.
+        if valid_cookie and not getattr(owner, "setup_code_hash", None):
+            setup_code = _new_setup_code()
+            owner.setup_code_hash = _hash_setup_value(setup_code)
+            owner.setup_code_ciphertext = seal(setup_code)
+            await db.commit()
         token = create_access_token(owner.id)
         return TokenResponse(
-            access_token=token, user=UserResponse.model_validate(owner)
+            access_token=token, user=UserResponse.model_validate(owner), setup_code=setup_code
         )
 
     # Random, unusable-by-design credentials. The user never sees these.
     # they exist only so the row is valid until the account is claimed.
     placeholder_email = f"owner+{secrets.token_hex(6)}@nurby.local"
     install_secret = secrets.token_urlsafe(32)
+    setup_code = _new_setup_code()
     user = User(
         email=placeholder_email,
         display_name="Owner",
@@ -164,18 +194,48 @@ async def bootstrap(
         is_active=True,
         is_provisional=True,
         bootstrap_secret_hash=hashlib.sha256(install_secret.encode()).hexdigest(),
+        setup_code_hash=_hash_setup_value(setup_code),
+        setup_code_ciphertext=seal(setup_code),
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
 
     token = create_access_token(user.id)
+    logger.warning("Nurby provisional setup code: %s", setup_code)
     if response is not None:
-        response.set_cookie(
-            "nurby_install_secret", install_secret,
-            httponly=True, secure=False, samesite="strict", max_age=60 * 60 * 24 * 30,
-        )
-    return TokenResponse(access_token=token, user=UserResponse.model_validate(user))
+        _set_install_cookie(response, install_secret)
+    return TokenResponse(access_token=token, user=UserResponse.model_validate(user), setup_code=setup_code)
+
+
+@router.post("/bootstrap/adopt", response_model=TokenResponse)
+async def adopt_provisional_owner(
+    body: SetupCodeAdoption,
+    request: Request = None,
+    response: Response = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Use the one-time setup code to move an unclaimed install to a new browser."""
+    await db.execute(text("SELECT pg_advisory_xact_lock(481566)"))
+    users = (await db.execute(select(User))).scalars().all()
+    owners = [u for u in users if u.is_provisional]
+    if not owners or any(not u.is_provisional for u in users):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Setup is already claimed")
+    owner = min(owners, key=lambda u: u.created_at)
+    expected = getattr(owner, "setup_code_hash", None)
+    if not expected or not secrets.compare_digest(_hash_setup_value(body.code.strip().upper()), expected):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Invalid or already-used setup code")
+
+    # Consume the code and bind the newly adopted browser to a fresh secret.
+    install_secret = secrets.token_urlsafe(32)
+    owner.setup_code_hash = None
+    owner.setup_code_ciphertext = None
+    owner.bootstrap_secret_hash = _hash_setup_value(install_secret)
+    await db.commit()
+    token = create_access_token(owner.id)
+    if response is not None:
+        _set_install_cookie(response, install_secret)
+    return TokenResponse(access_token=token, user=UserResponse.model_validate(owner))
 
 
 @router.post("/claim", response_model=UserResponse)
@@ -204,9 +264,23 @@ async def claim_account(
         current_user.display_name = body.display_name
     current_user.password_hash = hash_password(body.password)
     current_user.is_provisional = False
+    current_user.setup_code_hash = None
+    current_user.setup_code_ciphertext = None
+    current_user.bootstrap_secret_hash = None
     await db.commit()
     await db.refresh(current_user)
     return UserResponse.model_validate(current_user)
+
+
+@router.get("/setup-code")
+async def get_setup_code(current_user: User = Depends(get_current_user)):
+    """Return the setup code only to the authenticated, unclaimed owner."""
+    if not current_user.is_provisional:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No setup code available")
+    value = unseal(getattr(current_user, "setup_code_ciphertext", None))
+    if not value:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No setup code available")
+    return {"setup_code": value, "single_use": True}
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)

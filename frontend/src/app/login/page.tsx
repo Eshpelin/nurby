@@ -43,7 +43,7 @@ function ArrowRightIcon({ className }: { className?: string }) {
 }
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, adoptSetupCode } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -53,6 +53,9 @@ export default function LoginPage() {
   // users. Otherwise the link goes to /setup, which immediately bounces
   // back here and reads as a broken button.
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [provisionalOpen, setProvisionalOpen] = useState(false);
+  const [setupCode, setSetupCode] = useState("");
+  const [adopting, setAdopting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,7 +64,10 @@ export default function LoginPage() {
         const res = await fetch("/api/auth/needs-setup");
         if (res.ok) {
           const data = await res.json();
-          if (!cancelled) setNeedsSetup(data?.needs_setup === true);
+          if (!cancelled) {
+            setNeedsSetup(data?.needs_setup === true);
+            setProvisionalOpen(data?.provisional_open === true);
+          }
         }
       } catch {
         /* keep the link hidden if the check fails */
@@ -82,6 +88,19 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleAdopt(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setAdopting(true);
+    try {
+      await adoptSetupCode(setupCode);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Setup code was not accepted");
+    } finally {
+      setAdopting(false);
     }
   }
 
@@ -171,6 +190,30 @@ export default function LoginPage() {
               Create admin account
             </Link>
           </p>
+        )}
+
+        {provisionalOpen && (
+          <form onSubmit={handleAdopt} className="rounded-lg border border-yellow-500/35 bg-yellow-500/5 p-4 space-y-3">
+            <div>
+              <h2 className="text-sm font-medium text-yellow-100">Continue setting up this Nurby</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Enter the one-time setup code shown in the installing browser&apos;s Settings.</p>
+            </div>
+            <input
+              aria-label="One-time setup code"
+              value={setupCode}
+              onChange={(e) => setSetupCode(e.target.value.toUpperCase())}
+              inputMode="text"
+              autoCapitalize="characters"
+              autoComplete="one-time-code"
+              placeholder="XXXXXXXX"
+              maxLength={8}
+              required
+              className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm tracking-[0.2em] text-foreground"
+            />
+            <button type="submit" disabled={adopting || setupCode.length < 6} className="w-full rounded-md border border-yellow-500/40 px-3 py-2 text-sm text-yellow-100 hover:bg-yellow-500/10 disabled:opacity-50">
+              {adopting ? "Continuing..." : "Continue with setup code"}
+            </button>
+          </form>
         )}
 
         <div className="flex items-center gap-3">

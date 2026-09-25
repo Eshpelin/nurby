@@ -104,11 +104,29 @@ export default function SettingsPage() {
   const [journeyIdleSeconds, setJourneyIdleSeconds] = useState<number>(300);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [extraSaved, setExtraSaved] = useState(false);
+  const [setupCode, setSetupCode] = useState<string | null>(null);
   const [dailyDigestEnabled, setDailyDigestEnabled] = useState<boolean>(true);
   const [dailyDigestHour, setDailyDigestHour] = useState<number>(7);
   const [dailyDigestProviderId, setDailyDigestProviderId] = useState<string>("");
   const [systemTimezone, setSystemTimezone] = useState<string>("");
   const [extraSaving, setExtraSaving] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!user?.is_provisional) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch("/api/auth/setup-code");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && typeof data.setup_code === "string") setSetupCode(data.setup_code);
+      } catch {
+        // The cookie-bound installing browser does not need the code for the
+        // happy path; keep Settings usable if this optional lookup fails.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authFetch, user?.is_provisional]);
 
   // Ollama auto-deploy state
   const [ollamaStatus, setOllamaStatus] = useState<{
@@ -663,6 +681,21 @@ export default function SettingsPage() {
 
       {/* ─── Status Cards ─── */}
       <div className="space-y-3">
+
+        {user?.is_provisional && setupCode && (
+          <div className="rounded-lg border border-yellow-500/35 bg-yellow-500/5 p-4" id="account-security">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-medium text-yellow-200">Secure this Nurby install</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Your installing browser is already trusted. If you need to continue from another device, enter this one-time setup code there.
+                </p>
+              </div>
+              <code className="shrink-0 rounded border border-yellow-500/30 bg-background px-3 py-2 font-mono text-sm tracking-[0.2em] text-yellow-100">{setupCode}</code>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">After using it once, claim the account with a real email and password. The code cannot be reused.</p>
+          </div>
+        )}
 
         {/* Mobile app pairing card */}
         <PairMobileCard />

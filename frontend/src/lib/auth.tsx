@@ -42,6 +42,7 @@ interface AuthContextValue {
     password: string,
     displayName: string
   ) => Promise<void>;
+  adoptSetupCode: (code: string) => Promise<void>;
   // Secure a provisional owner account (set real email + password). On
   // success the in-memory user loses its is_provisional flag.
   claimAccount: (
@@ -238,6 +239,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [saveAuth, router]
   );
 
+  const adoptSetupCode = useCallback(
+    async (code: string) => {
+      const res = await fetch("/api/auth/bootstrap/adopt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code.trim() }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new ApiError(extractDetail(body, "Setup code was not accepted"), res.status);
+      }
+      const data: TokenResponse = await res.json();
+      saveAuth(data);
+      router.replace("/");
+    },
+    [saveAuth, router],
+  );
+
   const redeemInvite = useCallback(
     async (
       inviteKey: string,
@@ -331,8 +350,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ user, token, loading, login, logout, register, claimAccount, redeemInvite, authFetch }),
-    [user, token, loading, login, logout, register, claimAccount, redeemInvite, authFetch]
+    () => ({ user, token, loading, login, logout, register, adoptSetupCode, claimAccount, redeemInvite, authFetch }),
+    [user, token, loading, login, logout, register, adoptSetupCode, claimAccount, redeemInvite, authFetch]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

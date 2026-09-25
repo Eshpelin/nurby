@@ -105,6 +105,7 @@ from shared.schemas.accounts import (  # noqa: F401
     AccountClaim,
     UserUpdate,
     TokenResponse,
+    SetupCodeAdoption,
     PairStartResponse,
     PairClaim,
     AdminSetup,
