@@ -27,6 +27,9 @@ export interface Rule {
   actions: Record<string, unknown> | Record<string, unknown>[];
   cooldown_seconds: number;
   severity?: string;
+  // Product-default rules (camera content health) that Nurby installed.
+  // The UI groups and badges them; they can be paused but not deleted.
+  is_system?: boolean;
   snoozed_until?: string | null;
   created_at: string;
 }

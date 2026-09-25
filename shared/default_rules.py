@@ -15,6 +15,8 @@ in every preview surface.
 CAMERA_HEALTH_RULE_NAME = "Camera content health"
 CAMERA_RECOVERY_RULE_NAME = "Camera content health recovered"
 
+DEFAULT_RULE_NAMES = (CAMERA_HEALTH_RULE_NAME, CAMERA_RECOVERY_RULE_NAME)
+
 CAMERA_HEALTH_DEGRADED_MESSAGE = "Camera health degraded on {camera_name}: {reason}"
 CAMERA_HEALTH_RECOVERED_MESSAGE = "Camera health recovered on {camera_name}"
 
@@ -37,6 +39,25 @@ _LEGACY_MESSAGES = {
     "{camera_name} camera health degraded: {reason}": CAMERA_HEALTH_DEGRADED_MESSAGE,
     "{camera_name} camera health recovered": CAMERA_HEALTH_RECOVERED_MESSAGE,
 }
+
+
+def default_rule_kwargs(name: str) -> dict:
+    """Column kwargs for the lazily-installed system rule `name`.
+
+    Both install sites build their Rule from this so the flag, template,
+    trigger, and cooldown cannot drift between the API and the engine.
+    """
+    spec = DEFAULT_RULES[name]
+    return {
+        "name": name,
+        "enabled": True,
+        "is_system": True,
+        "trigger_pattern": {"type": spec["trigger"]},
+        "conditions": None,
+        "actions": [{"type": "notify", "message": spec["message"]}],
+        "cooldown_seconds": 3600,
+        "severity": spec["severity"],
+    }
 
 
 def refresh_default_rule_messages(name: str, actions: object) -> bool:

@@ -19,6 +19,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -47,6 +48,11 @@ class Rule(Base):
     # verify action with on_fail="demote" can downgrade a single event
     # from alert to detection at fire time.
     severity: Mapped[str] = mapped_column(String(16), default="alert")
+    # Product-default rules (camera content health) that Nurby installs and
+    # maintains itself. The UI groups and badges them; the API refuses to
+    # rename or delete them (pausing is allowed) because the ensure paths
+    # would otherwise recreate them under the canonical name.
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -16,7 +16,7 @@ from shared.database import get_db
 from shared.default_rules import (
     CAMERA_HEALTH_RULE_NAME,
     CAMERA_RECOVERY_RULE_NAME,
-    DEFAULT_RULES,
+    default_rule_kwargs,
     refresh_default_rule_messages,
 )
 from shared.models import Observation, Rule, RuleEvaluation, User
@@ -57,21 +57,10 @@ async def _ensure_default_camera_health_rule(db: AsyncSession) -> None:
     )).scalars().all()
     by_name = {rule.name: rule for rule in existing}
     dirty = False
-    for name, spec in DEFAULT_RULES.items():
+    for name in (CAMERA_HEALTH_RULE_NAME, CAMERA_RECOVERY_RULE_NAME):
         rule = by_name.get(name)
         if rule is None:
-            db.add(Rule(
-                name=name,
-                enabled=True,
-                trigger_pattern={"type": spec["trigger"]},
-                conditions=None,
-                actions=[{
-                    "type": "notify",
-                    "message": spec["message"],
-                }],
-                cooldown_seconds=3600,
-                severity=spec["severity"],
-            ))
+            db.add(Rule(**default_rule_kwargs(name)))
             dirty = True
         elif refresh_default_rule_messages(rule.name, rule.actions):
             dirty = True
@@ -491,6 +480,11 @@ async def update_rule(
         raise HTTPException(status_code=404, detail="Rule not found")
 
     updates = body.model_dump(exclude_unset=True)
+    if rule.is_system and updates.get("name") not in (None, rule.name):
+        raise HTTPException(
+            status_code=422,
+            detail="System rules can't be renamed. Pause the rule if you don't want it running.",
+        )
     stale = await _stale_rule_refs(
         db,
         updates.get("trigger_pattern", rule.trigger_pattern),
@@ -552,6 +546,14 @@ async def delete_rule(
     rule = await db.get(Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
+    if rule.is_system:
+        # Deleting is a trap: the lazy ensure paths would recreate the rule
+        # under the canonical name on the next rules load, which reads as a
+        # ghost. Pause it instead — that is the supported off switch.
+        raise HTTPException(
+            status_code=422,
+            detail="System rules can't be deleted. Disable the rule to pause it.",
+        )
     await db.delete(rule)
     await db.commit()
     await _publish_invalidation(rule_id)

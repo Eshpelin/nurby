@@ -41,7 +41,11 @@ from services.perception.spatial_events import (
     _segments_cross,
 )
 from shared.database import async_session
-from shared.default_rules import DEFAULT_RULES, refresh_default_rule_messages
+from shared.default_rules import (
+    DEFAULT_RULE_NAMES,
+    default_rule_kwargs,
+    refresh_default_rule_messages,
+)
 from shared.models import Recording, Rule, RuleEvaluation
 
 # Redis pubsub channel that backend routes publish to whenever a rule
@@ -400,22 +404,14 @@ class RuleEngine:
                 # installs carrying the pre-#320 wording get it rewritten
                 # here too, so previews never show the broken sentence.
                 existing_rows = (await db.execute(
-                    select(Rule).where(Rule.name.in_(list(DEFAULT_RULES)))
+                    select(Rule).where(Rule.name.in_(list(DEFAULT_RULE_NAMES)))
                 )).scalars().all()
                 by_name = {rule.name: rule for rule in existing_rows}
                 dirty = False
-                for name, spec in DEFAULT_RULES.items():
+                for name in DEFAULT_RULE_NAMES:
                     rule = by_name.get(name)
                     if rule is None:
-                        db.add(Rule(
-                            name=name,
-                            enabled=True,
-                            trigger_pattern={"type": spec["trigger"]},
-                            conditions=None,
-                            actions=[{"type": "notify", "message": spec["message"]}],
-                            cooldown_seconds=3600,
-                            severity=spec["severity"],
-                        ))
+                        db.add(Rule(**default_rule_kwargs(name)))
                         dirty = True
                     elif refresh_default_rule_messages(rule.name, rule.actions):
                         dirty = True

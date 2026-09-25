@@ -55,9 +55,9 @@ export function RulesList({
       </div>
     );
   }
-  return (
-    <section className="col-span-1 lg:col-span-8 space-y-3">
-      {rules.map((r) => (
+  const householdRules = rules.filter((r) => !r.is_system);
+  const systemRules = rules.filter((r) => r.is_system);
+  const renderRule = (r: Rule) => (
         <RuleCard
           key={r.id}
           rule={r}
@@ -72,7 +72,16 @@ export function RulesList({
           onDuplicate={() => onDuplicate(r)}
           onDelete={() => onDelete(r.id)}
         />
-      ))}
+  );
+  return (
+    <section className="col-span-1 lg:col-span-8 space-y-3">
+      {householdRules.map(renderRule)}
+      {systemRules.length > 0 && (
+        <details className="rounded-lg border border-border bg-card/40">
+          <summary className="cursor-pointer px-4 py-3 text-sm text-muted-foreground">System rules ({systemRules.length})</summary>
+          <div className="space-y-3 border-t border-border p-3">{systemRules.map(renderRule)}</div>
+        </details>
+      )}
     </section>
   );
 }

@@ -31,6 +31,7 @@ const MENUS: MenuDef[] = [
       { label: "Conversations", href: "/activity?kind=conversations", hint: "Speech near a camera" },
       { label: "Recordings", href: "/recordings", hint: "Browse & filter footage" },
       { label: "Camera recaps", href: "/activity?kind=recaps", hint: "What each camera concluded" },
+      { label: "Search", href: "/search", hint: "Find anything in your footage" },
     ],
   },
   {

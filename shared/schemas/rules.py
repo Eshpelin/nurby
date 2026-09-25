@@ -388,6 +388,9 @@ class RuleResponse(BaseModel):
     actions: dict | list
     cooldown_seconds: int
     severity: str = "alert"
+    # Product-default rules (camera content health). The UI badges and
+    # groups these; they cannot be renamed or deleted, only paused.
+    is_system: bool = False
     snoozed_until: datetime | None = None
     created_at: datetime
     # Set on create when the rule takes a real-world action and was forced

@@ -138,6 +138,19 @@ export function RuleCard({
           <div>
             <div className="font-medium flex items-center gap-2">
               <span>{rule.name}</span>
+              {rule.is_system && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded border border-sky-700 bg-sky-900/20 text-sky-300" title="Created by Nurby to watch camera health. You can pause it, but not edit or delete it.">
+                  System
+                </span>
+              )}
+              {rule.is_system && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded border border-sky-800 bg-sky-900/30 text-sky-300"
+                  title="Created by Nurby to watch camera health. You can pause it below; it can't be renamed or deleted."
+                >
+                  System
+                </span>
+              )}
               <span
                 className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${badgeClass}`}
                 title={lastFiredAt ? `Last fired ${lastFiredAt}` : "No events recorded for this rule"}
@@ -196,60 +209,71 @@ export function RuleCard({
           </div>
         </div>
         <div className="flex items-center gap-1 relative">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-            className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
-          >
-            Edit
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenuOpen((v) => !v);
-            }}
-            className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
-            title="More actions"
-          >
-            ⋯
-          </button>
-          {menuOpen && (
-            <div
-              className="absolute right-0 top-full mt-1 bg-card border border-border rounded shadow-lg z-10 min-w-[140px]"
-              onClick={(e) => e.stopPropagation()}
-              onMouseLeave={() => setMenuOpen(false)}
+          {rule.is_system ? (
+            <span
+              className="text-[11px] text-muted-foreground pr-1"
+              title="Created by Nurby to watch camera health. Use the toggle to pause or resume it."
             >
+              Managed by Nurby
+            </span>
+          ) : (
+            <>
               <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDuplicate();
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
                 }}
-                className="block w-full text-left px-3 py-1.5 text-xs hover:bg-muted"
+                className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
               >
-                Duplicate
+                Edit
               </button>
               <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  onToggleEnabled();
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen((v) => !v);
                 }}
-                className="block w-full text-left px-3 py-1.5 text-xs hover:bg-muted"
+                className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
+                title="More actions"
               >
-                {rule.enabled ? "Disable" : "Enable"}
+                ⋯
               </button>
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  // The page-level handler shows the styled confirm dialog.
-                  onDelete();
-                }}
-                className="block w-full text-left px-3 py-1.5 text-xs hover:bg-red-900/30 text-red-400"
-              >
-                Delete
-              </button>
-            </div>
+              {menuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1 bg-card border border-border rounded shadow-lg z-10 min-w-[140px]"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseLeave={() => setMenuOpen(false)}
+                >
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDuplicate();
+                    }}
+                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-muted"
+                  >
+                    Duplicate
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onToggleEnabled();
+                    }}
+                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-muted"
+                  >
+                    {rule.enabled ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      // The page-level handler shows the styled confirm dialog.
+                      onDelete();
+                    }}
+                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-red-900/30 text-red-400"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

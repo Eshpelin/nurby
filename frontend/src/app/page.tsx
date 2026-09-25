@@ -1011,6 +1011,11 @@ function DashboardContent() {
                   className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
                   title="Connect another camera (RTSP, ONVIF, webcam)"
                 >+ Camera</button>
+                <Link
+                  href="/rules"
+                  className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
+                  title="Create and manage alert rules"
+                >Rules</Link>
                 <button
                   onClick={() => setWidgetBuilder({ open: true, editing: null })}
                   className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"

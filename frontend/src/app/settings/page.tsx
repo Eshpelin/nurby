@@ -603,7 +603,6 @@ export default function SettingsPage() {
         <div className="grid gap-2 px-4 py-3 sm:grid-cols-2">
           <Link href="/settings#providers" className={pillClass}>AI models and providers</Link>
           <Link href="/cameras" className={pillClass}>Cameras and capture</Link>
-          <Link href="/rules" className={pillClass}>Alert rules</Link>
           <Link href="/settings#storage" className={pillClass}>Storage and retention</Link>
           <Link href="/settings#notifications" className={pillClass}>Notifications and integrations</Link>
           {user?.role === "admin" && <Link href="/settings/access" className={pillClass}>Camera access</Link>}
