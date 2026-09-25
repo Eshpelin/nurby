@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,8 +55,37 @@ def extract_name_mentions(text: str) -> list[dict[str, str]]:
                 "normalized": normalized,
                 "kind": kind,
                 "span": match.group(0),
+                "span_start": str(match.start()),
+                "span_end": str(match.end()),
             })
     return found
+
+
+def timing_for_span(words: list[dict] | None, text: str, start: int, end: int) -> list[dict]:
+    """Return provider word timings that overlap a transcript character span.
+
+    Providers disagree on word keys and may omit timing entirely.  We use the
+    stored word text to derive character offsets, then return only the words
+    supporting this mention; missing timing simply yields an empty list.
+    """
+    if not words:
+        return []
+    cursor = 0
+    result: list[dict] = []
+    for word in words:
+        value = str(word.get("word") or word.get("text") or "").strip()
+        if not value:
+            continue
+        position = text.casefold().find(value.casefold(), cursor)
+        if position < 0:
+            continue
+        word_end = position + len(value)
+        cursor = word_end
+        if position < end and word_end > start:
+            timing = {key: word.get(key) for key in ("word", "text", "start", "end") if word.get(key) is not None}
+            if timing:
+                result.append(timing)
+    return result
 
 
 async def _nearby_subjects(
@@ -140,6 +169,18 @@ async def process_transcript_name_mentions(db: AsyncSession, transcript: Transcr
                     "transcript_id": str(transcript.id),
                     "mention_kind": mention["kind"],
                     "name_span": mention["span"],
+                    "span_start": int(mention["span_start"]),
+                    "span_end": int(mention["span_end"]),
+                    "word_timing": timing_for_span(
+                        transcript.words,
+                        transcript.text,
+                        int(mention["span_start"]),
+                        int(mention["span_end"]),
+                    ),
+                    "segment_started_at": transcript.started_at.isoformat(),
+                    "segment_ended_at": transcript.ended_at.isoformat(),
+                    "provider": transcript.provider,
+                    "model": transcript.model,
                     "parser_version": "name-context-v1",
                 },
                 evidence_kind="audio_name_mention",
