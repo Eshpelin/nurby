@@ -2,6 +2,8 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from pydantic import BaseModel
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -615,6 +617,35 @@ async def get_daily_workflow(
 # ── Onboarding validation metrics (#204 phase 4) ─────────────────────
 
 
+class FunnelEventRequest(BaseModel):
+    event: str
+
+
+@router.post("/onboarding/funnel")
+async def record_funnel_event(
+    body: FunnelEventRequest,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Count one first-run wizard funnel event (#293).
+
+    Fire-and-forget from the client: failures are ignored there, and the
+    aggregate is only ever read by the admin metrics card. Counters live
+    in the onboarding_funnel app setting — no migration, no PII.
+    """
+    from shared.app_settings import get_setting, set_setting
+    from shared.onboarding_metrics import bump_funnel, normalize_funnel_event
+
+    event = normalize_funnel_event(body.event)
+    if event is None:
+        raise HTTPException(status_code=422, detail="Unknown funnel event")
+    counts = await get_setting("onboarding_funnel", {})
+    if not isinstance(counts, dict):
+        counts = {}
+    await set_setting("onboarding_funnel", bump_funnel(counts, event))
+    return {"ok": True}
+
+
 @router.get("/onboarding/metrics", response_model=OnboardingMetrics)
 async def onboarding_metrics(
     current_user: User = Depends(require_admin),
@@ -650,7 +681,17 @@ async def onboarding_metrics(
         for m in ms
     ]
 
-    return compute_metrics(preferences, milestones, now=datetime.now(timezone.utc))
+    from shared.app_settings import get_setting
+    from shared.onboarding_metrics import FUNNEL_EVENTS
+
+    funnel_raw = await get_setting("onboarding_funnel", {})
+    funnel = {
+        event: int((funnel_raw or {}).get(event, 0))
+        for event in FUNNEL_EVENTS
+        if isinstance(funnel_raw, dict)
+    }
+
+    return compute_metrics(preferences, milestones, now=datetime.now(timezone.utc), funnel=funnel)
 
 
 # ── Mobile QR pairing ────────────────────────────────────────────────

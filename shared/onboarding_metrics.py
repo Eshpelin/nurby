@@ -54,6 +54,26 @@ class OnboardingMetrics(BaseModel):
     synthetic_only_count: int  # tested only against the demo camera
     median_seconds_to_first_useful: float | None
     verified_by_goal: dict[str, int]
+    # First-run wizard funnel counters (#293), aggregated from the
+    # onboarding_funnel app setting. Absent keys mean zero.
+    funnel: dict[str, int] = {}
+
+
+FUNNEL_EVENTS = ("wizard_shown", "magic_clicked", "manual_clicked", "wizard_completed")
+
+
+def normalize_funnel_event(event: object) -> str | None:
+    """Return the canonical funnel event name, or None for anything that
+    is not one. Pure, for tests."""
+    if isinstance(event, str) and event in FUNNEL_EVENTS:
+        return event
+    return None
+
+
+def bump_funnel(counts: dict, event: str) -> dict:
+    """Return counts with `event` incremented (does not mutate the input).
+    Pure, for tests."""
+    return {**counts, event: int(counts.get(event, 0)) + 1}
 
 
 def _bump(counter: dict[str, int], key: str | None) -> None:
@@ -68,6 +88,7 @@ def compute_metrics(
     *,
     now: datetime,
     abandon_after_days: int = 7,
+    funnel: dict[str, int] | None = None,
 ) -> OnboardingMetrics:
     goal_counts: dict[str, int] = {}
     place_counts: dict[str, int] = {}
@@ -120,4 +141,5 @@ def compute_metrics(
         synthetic_only_count=synthetic_only_count,
         median_seconds_to_first_useful=round(median(durations), 2) if durations else None,
         verified_by_goal=verified_by_goal,
+        funnel=funnel or {},
     )
