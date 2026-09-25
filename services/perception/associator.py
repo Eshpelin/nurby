@@ -41,7 +41,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import estop
 from shared.app_settings import get_setting
 from shared.database import async_session
-from shared.models import AssociationEvidence, EntityAssociation, Journey, Observation, Vehicle
+from shared.models import (
+    AssociationEvidence,
+    AssociationReviewEvent,
+    EntityAssociation,
+    Journey,
+    Observation,
+    Vehicle,
+)
 
 logger = logging.getLogger("nurby.perception.associator")
 
@@ -50,6 +57,7 @@ logger = logging.getLogger("nurby.perception.associator")
 # coincidence. Three is low enough to be useful within a week and high
 # enough that a single unusual day cannot mint a fact on its own.
 DEFAULT_MIN_DISTINCT_DAYS = 3
+DEFAULT_ASSOCIATION_STALE_DAYS = 45
 COOCCURRENCE_GAP = timedelta(seconds=90)
 
 # Subject kinds worth associating. A body-cluster subject is appearance
@@ -120,6 +128,31 @@ def next_status(
     return "candidate"
 
 
+def should_archive_association(
+    association: EntityAssociation,
+    now: datetime,
+    stale_days: int = DEFAULT_ASSOCIATION_STALE_DAYS,
+) -> bool:
+    """Whether an unconfirmed learned claim has gone quiet long enough.
+
+    Human confirmation is deliberately immune to automated staleness. An
+    archived learned claim is recoverable: new evidence enters as candidate
+    through ``next_status`` rather than silently becoming established again.
+    """
+    if (
+        association is None
+        or association.status != "established"
+        or association.source != "learned"
+        or bool(association.user_confirmed)
+        or association.last_seen_at is None
+    ):
+        return False
+    last = association.last_seen_at
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    return now - last > timedelta(days=max(0, stale_days))
+
+
 def bump_key(histogram: dict | None, key: str | None) -> dict:
     """Increment a string-keyed counter, e.g. camera id. Pure, for tests."""
     out = dict(histogram or {})
@@ -146,6 +179,8 @@ def fold(
     if assoc.status in TERMINAL_STATUSES:
         return False
 
+    was_archived = assoc.status == "archived"
+
     day_key, hour, weekday = local_buckets(when, tz_name)
 
     assoc.evidence_count = int(assoc.evidence_count or 0) + 1
@@ -166,7 +201,43 @@ def fold(
         min_days,
         bool(assoc.user_confirmed),
     )
+    if was_archived:
+        assoc.archived_at = None
     return True
+
+
+async def archive_stale_associations(
+    db: AsyncSession,
+    *,
+    now: datetime,
+    stale_days: int = DEFAULT_ASSOCIATION_STALE_DAYS,
+) -> int:
+    """Archive quiet learned claims and record the automated transition."""
+    rows = (
+        await db.execute(
+            select(EntityAssociation)
+            .where(EntityAssociation.status == "established")
+            .where(EntityAssociation.source == "learned")
+            .where(EntityAssociation.user_confirmed.is_(False))
+            .where(EntityAssociation.last_seen_at.is_not(None))
+        )
+    ).scalars().all()
+    archived = 0
+    for association in rows:
+        if not should_archive_association(association, now, stale_days):
+            continue
+        association.status = "archived"
+        association.archived_at = now
+        db.add(AssociationReviewEvent(
+            association_id=association.id,
+            reviewer_user_id=None,
+            action="archive",
+            old_status="established",
+            new_status="archived",
+            note=f"No supporting evidence for {stale_days} days.",
+        ))
+        archived += 1
+    return archived
 
 
 def journey_window(journey: Journey) -> tuple[datetime | None, datetime | None]:
@@ -707,8 +778,14 @@ class Associator:
         min_days = int(
             await get_setting("association_min_distinct_days", DEFAULT_MIN_DISTINCT_DAYS)
         )
+        stale_days = int(
+            await get_setting("association_stale_days", DEFAULT_ASSOCIATION_STALE_DAYS)
+        )
         await self._sweep_absences(tz_name)
         async with async_session() as db:
+            archived = await archive_stale_associations(
+                db, now=datetime.now(timezone.utc), stale_days=stale_days
+            )
             pending = (
                 await db.execute(
                     select(Journey)
@@ -719,6 +796,8 @@ class Associator:
                 )
             ).scalars().all()
             if not pending:
+                if archived:
+                    await db.commit()
                 return
             touched = 0
             for journey in pending:
@@ -739,6 +818,6 @@ class Associator:
                 journey.associations_at = datetime.now(timezone.utc)
             await db.commit()
             logger.info(
-                "associator folded %d journeys, touched %d edges",
-                len(pending), touched,
+                "associator folded %d journeys, touched %d edges, archived %d stale claims",
+                len(pending), touched, archived,
             )

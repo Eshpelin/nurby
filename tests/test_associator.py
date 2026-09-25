@@ -20,6 +20,7 @@ from services.perception.associator import (
     journey_camera_ids,
     local_buckets,
     next_status,
+    should_archive_association,
     journeys_cooccur,
     vehicles_in,
 )
@@ -141,6 +142,24 @@ def test_user_confirmation_holds_an_edge_established():
     """A pattern that thins out does not un-confirm what a person said is
     true."""
     assert next_status("established", 0, 3, user_confirmed=True) == "established"
+
+
+def test_stale_unconfirmed_association_archives_deterministically():
+    edge = _edge(status="established", last_seen_at=_at(1, 8))
+    assert should_archive_association(edge, _at(1, 8) + timedelta(days=46), stale_days=45)
+    assert not should_archive_association(edge, _at(1, 8) + timedelta(days=45), stale_days=45)
+
+
+def test_confirmed_association_is_immune_to_automatic_decay():
+    edge = _edge(status="established", user_confirmed=True, last_seen_at=_at(1, 8))
+    assert not should_archive_association(edge, _at(1, 8) + timedelta(days=400), stale_days=45)
+
+
+def test_new_evidence_reenters_archived_claim_as_candidate():
+    edge = _edge(status="archived", last_seen_at=_at(1, 8), archived_at=_at(1, 8) + timedelta(days=49))
+    assert fold(edge, _at(1, 8) + timedelta(days=59), "UTC", min_days=3)
+    assert edge.status == "candidate"
+    assert edge.archived_at is None
 
 
 def test_an_archived_edge_returns_as_a_candidate_not_established():
