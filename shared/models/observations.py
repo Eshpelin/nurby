@@ -201,6 +201,12 @@ class ObservationVlmPass(Base):
     prompt_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     provider_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Provider usage is not exposed uniformly, so these are conservative
+    # estimates derived from prompt/response sizes. The cost report labels
+    # them explicitly as estimates rather than invoices.
+    tokens_in: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    tokens_out: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cost_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Structured extraction. objects, colors, text/plates read, counts,
     # time-of-day cues. Drives search and rules in later phases.

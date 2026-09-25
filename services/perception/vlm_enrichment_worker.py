@@ -35,6 +35,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from services.perception.prompt_registry import PromptRef, resolve, version_for
+from services.perception.usage import estimate_vlm_usage
 from shared.app_settings import get_setting
 from shared.database import async_session
 from shared.ffmpeg_safe import (
@@ -563,6 +564,12 @@ class EnrichmentManager:
             if obs is None:
                 return
             new_no = (obs.enrich_pass_count or 0) + 1
+            tokens_in, tokens_out, cost_cents = estimate_vlm_usage(
+                provider,
+                system_prompt=prompt.text if prompt else LENS_PROMPTS.get(lens),
+                user_prompt=None,
+                output_text=description,
+            )
             db.add(ObservationVlmPass(
                 observation_id=obs_id, pass_no=new_no, lens=lens,
                 prompt_key=prompt.key if prompt else lens,
@@ -570,6 +577,9 @@ class EnrichmentManager:
                 prompt_text=prompt.text if prompt else LENS_PROMPTS.get(lens),
                 provider_name=getattr(provider, "name", None),
                 model=getattr(provider, "default_model", None),
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                cost_cents=cost_cents,
                 description=description, attributes=attributes,
                 authoritative=False,
             ))
@@ -595,6 +605,12 @@ class EnrichmentManager:
                 .where(ObservationVlmPass.authoritative.is_(True))
             )).scalars().all():
                 p.authoritative = False
+            tokens_in, tokens_out, cost_cents = estimate_vlm_usage(
+                provider,
+                system_prompt=prompt.text if prompt else LENS_PROMPTS["summary"],
+                user_prompt=None,
+                output_text=summary,
+            )
             db.add(ObservationVlmPass(
                 observation_id=obs_id, pass_no=new_no, lens="summary",
                 prompt_key=prompt.key if prompt else "summary",
@@ -602,6 +618,9 @@ class EnrichmentManager:
                 prompt_text=prompt.text if prompt else LENS_PROMPTS["summary"],
                 provider_name=getattr(provider, "name", None),
                 model=getattr(provider, "default_model", None),
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                cost_cents=cost_cents,
                 description=summary, attributes=attributes, authoritative=True,
             ))
             obs.enrich_pass_count = new_no

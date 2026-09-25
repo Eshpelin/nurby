@@ -23,12 +23,14 @@ from datetime import datetime, timezone
 
 import cv2
 import numpy as np
+from sqlalchemy import select
 
 from services.perception.vlm import VLMClient
+from services.perception.usage import estimate_vlm_usage
 from services.search.embeddings import generate_embedding, get_embedding_provider
 from shared.config import settings
 from shared.database import async_session
-from shared.models import Observation, Provider
+from shared.models import Observation, ObservationVlmPass, Provider
 
 THUMBNAIL_DIR = os.path.join(settings.thumbnails_path, "observations")
 
@@ -628,6 +630,7 @@ class VLMQueue:
                         vlm_late=is_late, vlm_enqueued_at=eq_iso,
                         frame=job.frame, provider=job.provider,
                         prompt=prompt,
+                        usage_prompt=job.extra_context,
                     )
                     logger.info(
                         "VLM for camera %s completed in %.1fs. %s",
@@ -860,7 +863,7 @@ class VLMQueue:
         detections: list[dict], thumbnail_path: str | None = None,
         vlm_late: bool = False, vlm_enqueued_at: datetime | None = None,
         frame: np.ndarray | None = None, provider: Provider | None = None,
-        prompt=None,
+        prompt=None, usage_prompt: str | None = None,
     ):
         """Update observation record with VLM description and regenerate embedding."""
         try:
@@ -894,6 +897,38 @@ class VLMQueue:
                         obs.vlm_late = True
                         if vlm_enqueued_at is not None:
                             obs.vlm_enqueued_at = vlm_enqueued_at
+                    # Keep live captions in the same append-only pass ledger
+                    # used by idle enrichment so camera cost reports cover the
+                    # dominant path too.
+                    existing_live_pass = await db.scalar(
+                        select(ObservationVlmPass.id).where(
+                            ObservationVlmPass.observation_id == obs.id,
+                            ObservationVlmPass.pass_no == 1,
+                        )
+                    )
+                    if existing_live_pass is None:
+                        tokens_in, tokens_out, cost_cents = estimate_vlm_usage(
+                            provider,
+                            system_prompt=getattr(prompt, "text", None),
+                            user_prompt=usage_prompt,
+                            output_text=description,
+                        )
+                        db.add(ObservationVlmPass(
+                            observation_id=obs.id,
+                            pass_no=1,
+                            lens="live",
+                            prompt_key=getattr(prompt, "key", "live_caption"),
+                            prompt_version=getattr(prompt, "version", "legacy"),
+                            prompt_text=getattr(prompt, "text", None),
+                            provider_name=provider_name,
+                            model=getattr(provider, "default_model", None),
+                            tokens_in=tokens_in,
+                            tokens_out=tokens_out,
+                            cost_cents=cost_cents,
+                            description=description,
+                            authoritative=True,
+                        ))
+                        obs.enrich_pass_count = max(int(obs.enrich_pass_count or 0), 1)
                     await db.commit()
                     meal_inputs = (
                         obs.person_detections,

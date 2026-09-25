@@ -31,6 +31,7 @@ from services.agent.budget import check_budget
 from services.agent.driver import AgentDriver
 from shared.app_settings import get_setting
 from shared.auth import decode_access_token, get_current_user
+from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.database import async_session, get_db
 from shared.models import (
     AgentDailyUsage,
@@ -39,6 +40,7 @@ from shared.models import (
     AgentVlmCall,
     Camera,
     Observation,
+    ObservationVlmPass,
     Provider,
     User,
 )
@@ -381,10 +383,21 @@ async def usage_report(
     if current_user.role != "admin":
         run_stmt = run_stmt.where(AgentRun.user_id == current_user.id)
 
+    pass_stmt = (
+        select(ObservationVlmPass, Observation, Camera)
+        .join(Observation, Observation.id == ObservationVlmPass.observation_id)
+        .join(Camera, Camera.id == Observation.camera_id)
+        .where(ObservationVlmPass.created_at >= since)
+    )
+    allowed = await allowed_camera_ids(current_user, db)
+    if allowed is not ALL:
+        pass_stmt = pass_stmt.where(Observation.camera_id.in_(allowed))
+
     totals = {"cost_cents": 0, "tokens_in": 0, "tokens_out": 0, "calls": 0}
     by_camera: dict[str, dict] = {}
     by_provider: dict[str, dict] = {}
     by_day: dict[str, dict] = {}
+    by_workload: dict[str, dict] = {}
 
     def add(bucket: dict, *, cost: int, tokens_in: int, tokens_out: int) -> None:
         bucket["cost_cents"] = bucket.get("cost_cents", 0) + cost
@@ -392,10 +405,11 @@ async def usage_report(
         bucket["tokens_out"] = bucket.get("tokens_out", 0) + tokens_out
         bucket["calls"] = bucket.get("calls", 0) + 1
 
-    def add_call(*, camera: str, provider: str, at: datetime, cost: int, tokens_in: int, tokens_out: int) -> None:
+    def add_call(*, camera: str, provider: str, workload: str, at: datetime, cost: int, tokens_in: int, tokens_out: int) -> None:
         add(totals, cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
         add(by_camera.setdefault(camera, {"name": camera}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
         add(by_provider.setdefault(provider, {"name": provider}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
+        add(by_workload.setdefault(workload, {"name": workload}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
         day = at.date().isoformat()
         add(by_day.setdefault(day, {"date": day}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
 
@@ -409,6 +423,7 @@ async def usage_report(
         add_call(
             camera=camera.name if camera is not None else "Unassigned camera",
             provider=(provider.name if provider is not None else None) or call.model or "Unknown provider",
+            workload="Ask Nurby",
             at=call.created_at,
             cost=int(call.cost_cents or 0),
             tokens_in=int(call.tokens_in or 0),
@@ -420,10 +435,25 @@ async def usage_report(
         add_call(
             camera="Ask Nurby",
             provider=(provider.name if provider is not None else None) or run.model or "Unknown provider",
+            workload="Ask Nurby",
             at=run.started_at,
             cost=max(0, int(run.cost_cents or 0) - accounted.get("cost_cents", 0)),
             tokens_in=max(0, int(run.tokens_in or 0) - accounted.get("tokens_in", 0)),
             tokens_out=max(0, int(run.tokens_out or 0) - accounted.get("tokens_out", 0)),
+        )
+
+    # Camera captions and idle enrichment are stored as immutable passes. A
+    # pass is already a single billable workload, so include it directly;
+    # there is no user/rule-run nesting to de-duplicate here.
+    for vlm_pass, observation, camera in (await db.execute(pass_stmt)).all():
+        add_call(
+            camera=camera.name,
+            provider=vlm_pass.provider_name or vlm_pass.model or "Unknown provider",
+            workload=vlm_pass.lens,
+            at=vlm_pass.created_at,
+            cost=int(vlm_pass.cost_cents or 0),
+            tokens_in=int(vlm_pass.tokens_in or 0),
+            tokens_out=int(vlm_pass.tokens_out or 0),
         )
 
     return {
@@ -433,8 +463,9 @@ async def usage_report(
         "totals": totals,
         "by_camera": sorted(by_camera.values(), key=lambda row: row["cost_cents"], reverse=True),
         "by_provider": sorted(by_provider.values(), key=lambda row: row["cost_cents"], reverse=True),
+        "by_workload": sorted(by_workload.values(), key=lambda row: row["cost_cents"], reverse=True),
         "by_day": sorted(by_day.values(), key=lambda row: row["date"]),
-        "attribution_note": "Camera rows cover recorded analyzer calls. Rule-level perception accounting is the next accounting slice.",
+        "attribution_note": "Camera rows cover recorded analyzer calls and camera VLM passes. Pass costs are conservative estimates; rule-level perception accounting is the next accounting slice.",
     }
 
 
