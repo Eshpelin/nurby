@@ -62,7 +62,7 @@ export default function TelegramSection() {
   return (
     <>
       {/* Section card. Mirrors the Email card style */}
-      <div className="rounded-lg border border-border bg-card px-4 py-3.5">
+      <div id="telegram-alerts" className="rounded-lg border border-border bg-card px-4 py-3.5 scroll-mt-20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span
@@ -122,4 +122,3 @@ export default function TelegramSection() {
     </>
   );
 }
-

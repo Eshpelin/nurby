@@ -1170,6 +1170,24 @@ async def test_rule_alert(
     if not camera_id and isinstance(rule.conditions, dict):
         camera_id = rule.conditions.get("camera_id")
     observation = _synthesize_observation_for_trigger(pattern, _as_uuid(camera_id))
+    # Reuse the latest real snapshot for photo-capable test delivery. Rules
+    # without a camera target remain text-only synthetic tests.
+    try:
+        camera_uuid = _as_uuid(camera_id)
+        if camera_uuid is not None:
+            latest = (await db.execute(
+                select(Observation)
+                .where(Observation.camera_id == camera_uuid)
+                .order_by(Observation.started_at.desc())
+                .limit(1)
+            )).scalar_one_or_none()
+            if latest is not None:
+                observation["observation_id"] = str(latest.id)
+                observation["thumbnail_path"] = latest.thumbnail_path
+                observation["clean_frame_path"] = latest.clean_frame_path
+                observation["vlm_description"] = latest.vlm_description or ""
+    except Exception:
+        logger.exception("Could not attach latest snapshot to synthetic alert for rule %s", rule_id)
     observation["_test_alert"] = True
     observation["test_alert"] = True
     observation["timestamp"] = datetime.now(timezone.utc).isoformat()

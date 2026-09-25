@@ -667,6 +667,8 @@ async def _execute_notify(action, observation_data, rule, event_id, ctx):
 
     test_mode = bool(observation_data.get("_test_alert"))
     if test_mode:
+        message_text = f"[Test alert] {message_text}"
+    if test_mode:
         # Test dispatches are intentionally transient: no Event or
         # Notification row is created, so they cannot enter the review feed,
         # cooldown history, or activation metrics.
@@ -697,11 +699,12 @@ async def _execute_notify(action, observation_data, rule, event_id, ctx):
     # Household-wide (user_id=None fans out to every device), best-effort,
     # and never allowed to break the action path. No-ops when push is
     # unconfigured.
+    push_result: dict = {"sent": 0}
     try:
         from shared.push import send_push_to_user
 
         async with async_session() as db:
-            await send_push_to_user(
+            push_result = await send_push_to_user(
                 db,
                 None,
                 title=title_text or f"Nurby: {rule.name}",
@@ -741,7 +744,22 @@ async def _execute_notify(action, observation_data, rule, event_id, ctx):
         _set_test_result(observation_data, "failed", str(exc))
 
     if delivered:
-        _set_test_result(observation_data, "success", "In-app broadcast delivered")
+        if test_mode:
+            if push_result.get("sent", 0):
+                phone_detail = f"phone: {push_result['sent']} delivered"
+            elif push_result.get("skipped"):
+                phone_detail = "phone: push not configured"
+            elif push_result.get("errors"):
+                phone_detail = f"phone: {push_result['errors'][0]}"
+            else:
+                phone_detail = "phone: no paired device"
+            _set_test_result(
+                observation_data,
+                "success",
+                f"in-app broadcast delivered; {phone_detail}",
+            )
+        else:
+            _set_test_result(observation_data, "success", "In-app broadcast delivered")
 
     # Stamp the delivery and advance any verified-activation milestone that
     # tracks this rule (#193). Best-effort; never breaks the action path.
@@ -1993,6 +2011,8 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
         channel_label = ch.label
 
     text = _expand_telegram_template(template, ctx)
+    if observation_data.get("_test_alert"):
+        text = f"[Test alert] {text}"
     if not text.strip():
         await _update_event_status(event_id, "telegram", "failed", "Rendered template is empty")
         _set_test_result(observation_data, "failed", "Rendered template is empty")

@@ -143,7 +143,13 @@ export function ActionsSection(props: ActionsSectionProps) {
       <div className={`rounded-md border px-3 py-2 text-xs ${destinations.length === 1 ? "border-yellow-500/35 bg-yellow-500/5" : "border-border bg-muted/20"}`}>
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground">This alert reaches: <span className="text-foreground">{destinations.join(", ")}</span></span>
-          {destinations.length === 1 && <Link href="/settings#mobile-pairing" className="shrink-0 text-accent hover:underline">Add a phone</Link>}
+          {destinations.length === 1 && (
+            <span className="shrink-0 flex items-center gap-2">
+              <Link href="/settings#mobile-pairing" className="text-accent hover:underline">Add a phone</Link>
+              <span className="text-border" aria-hidden>·</span>
+              <Link href="/settings#telegram-alerts" className="text-accent hover:underline">Set up Telegram</Link>
+            </span>
+          )}
         </div>
         {destinations.length === 1 && <p className="mt-1 text-[11px] text-muted-foreground">In-app alerts work while Nurby is open. Add a phone or Telegram channel to receive alerts when you are away.</p>}
       </div>
