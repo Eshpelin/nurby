@@ -368,8 +368,17 @@ def vehicles_in(observations) -> dict[str, dict]:
                     "plate_text": entry.get("plate_text"),
                     "plate_reads": [],
                     "identity_kind": "plate" if entry.get("plate_text") else "appearance",
+                    "first_seen_at": None,
+                    "last_seen_at": None,
                 },
             )
+            observed_at = getattr(obs, "started_at", None)
+            if observed_at is not None:
+                current = out[str(vid)]
+                if current["first_seen_at"] is None or observed_at < current["first_seen_at"]:
+                    current["first_seen_at"] = observed_at
+                if current["last_seen_at"] is None or observed_at > current["last_seen_at"]:
+                    current["last_seen_at"] = observed_at
             observation_id = getattr(obs, "id", None)
             if observation_id and str(observation_id) not in out[str(vid)]["observation_ids"]:
                 out[str(vid)]["observation_ids"].append(str(observation_id))
@@ -387,6 +396,43 @@ def vehicles_in(observations) -> dict[str, dict]:
                 if read not in out[str(vid)]["plate_reads"]:
                     out[str(vid)]["plate_reads"].append(read)
     return out
+
+
+def vehicle_visit_timing(
+    vehicle: dict, visit_start: datetime, visit_end: datetime,
+) -> dict[str, object | None]:
+    """Describe timing without turning co-presence into ownership.
+
+    A vehicle appearing near both ends of a finalized journey is useful
+    evidence for a reviewer, but it is still only an observed temporal
+    relation.  Keep the hint deliberately conservative and retain the raw
+    timestamps for later policy changes.
+    """
+    first = vehicle.get("first_seen_at")
+    last = vehicle.get("last_seen_at")
+    if not (first and last and visit_start and visit_end):
+        return {
+            "relation_hint": "co_present",
+            "first_seen_at": first.isoformat() if hasattr(first, "isoformat") else first,
+            "last_seen_at": last.isoformat() if hasattr(last, "isoformat") else last,
+        }
+    arrival_gap = max(0.0, (first - visit_start).total_seconds())
+    departure_gap = max(0.0, (visit_end - last).total_seconds())
+    near_arrival = arrival_gap <= 60
+    near_departure = departure_gap <= 60
+    hint = (
+        "arrives_and_leaves_with" if near_arrival and near_departure
+        else "arrives_with" if near_arrival
+        else "leaves_with" if near_departure
+        else "co_present"
+    )
+    return {
+        "relation_hint": hint,
+        "arrival_gap_seconds": round(arrival_gap, 3),
+        "departure_gap_seconds": round(departure_gap, 3),
+        "first_seen_at": first.isoformat(),
+        "last_seen_at": last.isoformat(),
+    }
 
 
 # ---- persistence ---------------------------------------------------------
@@ -603,6 +649,7 @@ async def process_journey(
                 "identity_kind": seen.get("identity_kind"),
                 "plate_text": seen.get("plate_text"),
                 "plate_reads": seen.get("plate_reads") or [],
+                "visit_timing": vehicle_visit_timing(seen, start, end),
             },
             evidence_kind="vehicle_pairing",
             evidence_explanation="The subject and vehicle were observed in the same finalized visit episode.",

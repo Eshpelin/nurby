@@ -24,6 +24,7 @@ from services.perception.associator import (
     should_archive_association,
     journeys_cooccur,
     cooccurrence_metrics,
+    vehicle_visit_timing,
     vehicles_in,
 )
 
@@ -220,11 +221,13 @@ def test_vehicles_in_ignores_unidentified_detections():
             "camera_id": None,
             "observation_ids": [],
             "camera_ids": [],
-            "plate_text": None,
-            "plate_reads": [],
-            "identity_kind": "appearance",
+                "plate_text": None,
+                "plate_reads": [],
+                "identity_kind": "appearance",
+                "first_seen_at": None,
+                "last_seen_at": None,
+            }
         }
-    }
 
 
 def test_vehicles_in_preserves_each_plate_read_as_evidence_metadata():
@@ -274,6 +277,22 @@ def test_contradiction_provenance_explains_expected_edge_and_visit_window():
     assert result["present_vehicle_ids"] == ["vehicle-2"]
     assert result["observation_count"] == 2
     assert result["journey_last_seen_at"].endswith("+00:00")
+
+
+def test_vehicle_visit_timing_is_a_conservative_reviewer_hint():
+    start = _at(1, 8)
+    end = _at(1, 8, 10)
+    result = vehicle_visit_timing(
+        {"first_seen_at": _at(1, 8), "last_seen_at": _at(1, 8, 10)}, start, end
+    )
+    assert result["relation_hint"] == "arrives_and_leaves_with"
+    assert result["arrival_gap_seconds"] == 0
+    assert result["departure_gap_seconds"] == 0
+
+
+def test_vehicle_visit_timing_preserves_unknown_timing_as_co_presence():
+    result = vehicle_visit_timing({}, _at(1, 8), _at(1, 8, 10))
+    assert result["relation_hint"] == "co_present"
 
 
 def test_journey_camera_ids_dedupes_and_skips_junk():
