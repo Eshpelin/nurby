@@ -14,6 +14,12 @@ export interface SystemStatusInput {
   degraded: DegradedComponent[];
   wsStatus: string; // "connected" | "connecting" | "reconnecting" | "disconnected" | ...
   aiOffline: boolean; // configured provider unreachable
+  // Whether any non-demo camera exists. While a fresh install (or a
+  // demo-only one) has nothing to capture, a stopped worker is not an
+  // alarm: the banner calms to a neutral pointer at the empty wall (#318).
+  // Defaults to true — only a confirmed false may calm the message, never
+  // an unknown.
+  hasRealCameras?: boolean;
 }
 
 export interface SystemStatus {
@@ -25,8 +31,19 @@ export interface SystemStatus {
 
 // Priority: nothing recording is the most severe, then detection paused,
 // then a stale live view, then a degraded sub-component. Healthy is last.
-export function computeSystemStatus({ workersDown, degraded, wsStatus, aiOffline }: SystemStatusInput): SystemStatus {
+export function computeSystemStatus({ workersDown, degraded, wsStatus, aiOffline, hasRealCameras = true }: SystemStatusInput): SystemStatus {
   if (workersDown.length > 0) {
+    if (!hasRealCameras) {
+      // Nothing to capture yet: the red "Not recording" alarm on a fresh
+      // install read as breakage when the real next step was simply
+      // adding a camera (#318).
+      return {
+        level: "ok",
+        label: "No cameras yet",
+        detail: "Add a camera or try the demo — recording and alerts start once there is something to watch.",
+        href: "/cameras",
+      };
+    }
     const which = workersDown.join(" and ");
     return {
       level: "down",

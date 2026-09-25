@@ -13,48 +13,9 @@ import { SecureAccountModal } from "@/components/SecureAccountModal";
 import { PROVIDERS_CHANGED_EVENT } from "@/lib/providers-changed";
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
 
-// Top-right nudge for a provisional owner. Nurby drops a first-run user
-// straight into a working feed without forcing signup, so the trade is.
-// you're already watching footage, but the account has no password yet.
-// This box celebrates the footage and points at securing the account.
-// It opens the same claim modal as the navbar's red button.
-export function SecureAccountNudge({ hasFootage }: { hasFootage: boolean }) {
-  const { user } = useAuth();
-  const [open, setOpen] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-  if (!user?.is_provisional || dismissed) return null;
-  return (
-    <>
-      <div className="fixed top-[4.5rem] right-4 z-40 w-80 rounded-lg border border-red-500/40 bg-card-elevated shadow-xl p-3">
-        <div className="flex items-start justify-between gap-2 mb-1.5">
-          <div className="text-xs font-semibold flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 pulse-dot" />
-            {hasFootage ? "Your footage is live" : "One step left"}
-          </div>
-          <button
-            onClick={() => setDismissed(true)}
-            aria-label="Dismiss"
-            className="text-muted-foreground hover:text-foreground text-sm leading-none"
-          >
-            &times;
-          </button>
-        </div>
-        <p className="text-[11px] text-muted-foreground leading-snug mb-2.5">
-          {hasFootage
-            ? "Nurby is already watching, but you haven't set a password. Anyone who reaches this page is an admin. Lock it down."
-            : "You haven't set a password yet, so anyone who reaches this page is an admin. Lock it down."}
-        </p>
-        <button
-          onClick={() => setOpen(true)}
-          className="w-full px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 hover:bg-red-500 text-white transition-colors"
-        >
-          Secure your account
-        </button>
-      </div>
-      {open && <SecureAccountModal onClose={() => setOpen(false)} />}
-    </>
-  );
-}
+// The secure-account nudge card was removed in #318: it floated over the
+// Ask composer and duplicated the navbar's red "Secure account" button,
+// which is the single durable surface for a provisional owner.
 
 // Nudge to turn on local AI when no vision provider is configured. The
 // product works without a VLM (detection, faces, rules), but scene
@@ -108,7 +69,7 @@ export function LocalAIHintCard() {
 
   if (!show) return null;
   return (
-    <div className="hidden md:block fixed bottom-4 left-4 z-40 w-80 rounded-lg border border-accent/30 bg-card-elevated shadow-xl p-3">
+    <div className="hidden md:block fixed bottom-16 left-4 z-40 w-80 rounded-lg border border-accent/30 bg-card-elevated shadow-xl p-3">
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <div className="text-xs font-semibold flex items-center gap-1.5">
           <span>🧠</span> Add AI descriptions
@@ -141,14 +102,32 @@ export function LocalAIHintCard() {
 // once (per browser) with example questions that deep-link to a real
 // answer via /ask?q=. Hidden after dismissal or first click.
 export function AskHintCard() {
+  const { authFetch } = useAuth();
   const [dismissed, setDismissed] = useState(true);
+  // Null while unknown. With no active provider every example question
+  // would just error, so the card offers setup instead (#318) — mirroring
+  // the Ask page's own no-provider state.
+  const [hasProvider, setHasProvider] = useState<boolean | null>(null);
   useEffect(() => {
     try {
       setDismissed(localStorage.getItem("nurby-ask-hint-dismissed") === "1");
     } catch {
       setDismissed(true);
     }
-  }, []);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch("/api/providers");
+        if (!cancelled && res.ok) {
+          const list: { active?: boolean }[] = await res.json();
+          setHasProvider(Array.isArray(list) && list.some((p) => p.active));
+        }
+      } catch {
+        /* stay neutral */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authFetch]);
   function close() {
     try {
       localStorage.setItem("nurby-ask-hint-dismissed", "1");
@@ -163,8 +142,9 @@ export function AskHintCard() {
     "Was anyone at the door?",
     "Where's the dog right now?",
   ];
+  const providerKnown = hasProvider !== null;
   return (
-    <div className="hidden md:block fixed bottom-4 right-4 z-40 w-72 rounded-lg border border-accent/30 bg-card-elevated shadow-xl p-3">
+    <div className="hidden md:block fixed bottom-16 right-4 z-40 w-72 rounded-lg border border-accent/30 bg-card-elevated shadow-xl p-3">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="text-xs font-semibold flex items-center gap-1.5">
           <span>💬</span> Try asking Nurby
@@ -181,24 +161,33 @@ export function AskHintCard() {
         Ask in plain English. Nurby investigates your feed and answers with
         evidence.
       </p>
-      <div className="space-y-1.5">
-        {examples.map((q) => (
-          <a
-            key={q}
-            href={`/ask?q=${encodeURIComponent(q)}`}
-            onClick={() => {
-              try {
-                localStorage.setItem("nurby-ask-hint-dismissed", "1");
-              } catch {
-                /* ignore */
-              }
-            }}
-            className="block w-full text-left px-2.5 py-1.5 text-[11px] rounded-md border border-border bg-background hover:border-accent/50 hover:bg-accent/5 transition-colors"
-          >
-            {q}
-          </a>
-        ))}
-      </div>
+      {providerKnown && !hasProvider ? (
+        <a
+          href="/settings"
+          className="block w-full text-left px-2.5 py-1.5 text-[11px] rounded-md border border-accent/40 text-accent hover:bg-accent/5 transition-colors"
+        >
+          Ask needs an AI model — set one up →
+        </a>
+      ) : (
+        <div className="space-y-1.5">
+          {examples.map((q) => (
+            <a
+              key={q}
+              href={`/ask?q=${encodeURIComponent(q)}`}
+              onClick={() => {
+                try {
+                  localStorage.setItem("nurby-ask-hint-dismissed", "1");
+                } catch {
+                  /* ignore */
+                }
+              }}
+              className="block w-full text-left px-2.5 py-1.5 text-[11px] rounded-md border border-border bg-background hover:border-accent/50 hover:bg-accent/5 transition-colors"
+            >
+              {q}
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
