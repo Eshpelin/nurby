@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_admin
+from shared.camera_access import ALL, allowed_camera_ids
 from shared.config import settings
 from shared.consequential import rule_is_consequential
 from shared.database import get_db
@@ -222,6 +223,12 @@ async def list_rule_evaluations(
     if await db.get(Rule, rule_id) is None:
         raise HTTPException(status_code=404, detail="Rule not found")
     query = select(RuleEvaluation).where(RuleEvaluation.rule_id == rule_id)
+    # Evaluation evidence is camera-scoped just like the observations and
+    # events it explains.  A restricted user must not infer activity from a
+    # foreign camera, including by asking for a rule that spans cameras.
+    allowed = await allowed_camera_ids(_current_user, db)
+    if allowed is not ALL:
+        query = query.where(RuleEvaluation.camera_id.in_(allowed))
     if from_ is not None:
         query = query.where(RuleEvaluation.evaluated_at >= from_)
     if to is not None:

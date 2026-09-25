@@ -661,6 +661,8 @@ def test_registry_lookup():
         "suggest_rule",
         "draft_rule",
         "remember",
+        "get_household_facts",
+        "explain_rule_evaluations",
         "test_camera_connection",
         "run_doctor",
     }

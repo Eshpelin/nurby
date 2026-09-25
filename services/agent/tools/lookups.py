@@ -171,12 +171,18 @@ async def explain_rule_evaluations(
 ) -> dict:
     """Return evidence for fired or suppressed rule candidates."""
     db = ctx["db"]
+    user = ctx["user"]
     hours = _clamp_hours(hours)
     limit = _clamp_limit(limit, default=25, max_=100)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     stmt = select(RuleEvaluation, Rule).join(Rule, Rule.id == RuleEvaluation.rule_id).where(
         RuleEvaluation.evaluated_at >= cutoff
     )
+    # Keep Ask's evidence surface aligned with REST camera ACLs.  Null-camera
+    # evaluations are intentionally hidden from restricted users because they
+    # cannot be tied to an in-scope source.
+    allowed = await _common.accessible_camera_ids(user, db)
+    stmt = stmt.where(RuleEvaluation.camera_id.in_(allowed))
     if rule_id:
         try:
             stmt = stmt.where(RuleEvaluation.rule_id == uuid.UUID(rule_id))
@@ -309,4 +315,3 @@ async def get_daily_digest(ctx: dict, limit: int = 1) -> dict:
 
 
 # ── Registry ─────────────────────────────────────────────────────────
-
