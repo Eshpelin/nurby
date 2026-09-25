@@ -214,7 +214,7 @@ export default function RulesPage() {
     }
   };
 
-  const ruleCount = useMemo(() => rules.length, [rules]);
+  const ruleCount = useMemo(() => rules.filter((rule) => !rule.is_system).length, [rules]);
 
   return (
     <div className="px-6 py-6">
