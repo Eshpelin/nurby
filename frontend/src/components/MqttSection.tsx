@@ -29,6 +29,8 @@ export default function MqttSection() {
   const [port, setPort] = useState("1883");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [topicPrefix, setTopicPrefix] = useState("nurby");
+  const [savedTopicPrefix, setSavedTopicPrefix] = useState("nurby");
   const [tls, setTls] = useState(false);
   const [discovery, setDiscovery] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -47,6 +49,10 @@ export default function MqttSection() {
         if (typeof d.mqtt_username === "string") setUsername(d.mqtt_username || "");
         if (typeof d.mqtt_tls === "boolean") setTls(d.mqtt_tls);
         if (typeof d.mqtt_discovery_enabled === "boolean") setDiscovery(d.mqtt_discovery_enabled);
+        if (typeof d.mqtt_topic_prefix === "string") {
+          setTopicPrefix(d.mqtt_topic_prefix || "nurby");
+          setSavedTopicPrefix(d.mqtt_topic_prefix || "nurby");
+        }
       }
       const s = await authFetch("/api/integrations/mqtt");
       if (s.ok) setStatus(await s.json());
@@ -60,6 +66,12 @@ export default function MqttSection() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const timer = window.setInterval(refreshStatus, 15000);
+    return () => window.clearInterval(timer);
+  }, [enabled, refreshStatus]);
 
   const patch = useCallback(
     async (body: Record<string, unknown>) => {
@@ -104,10 +116,12 @@ export default function MqttSection() {
       mqtt_username: username.trim(),
       mqtt_tls: tls,
       mqtt_discovery_enabled: discovery,
+      mqtt_topic_prefix: topicPrefix.trim() || "nurby",
     };
     // Write-only: only PATCH when the user typed a new one (empty = keep).
     if (password) body.mqtt_password = password;
     await patch(body);
+    setSavedTopicPrefix(topicPrefix.trim() || "nurby");
     setPassword("");
     setTestResult("Saved");
     setTimeout(refreshStatus, 1500);
@@ -175,6 +189,21 @@ export default function MqttSection() {
               className="flex-1 text-xs font-mono bg-background border border-border rounded px-2 py-1"
             />
           </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground w-20">Topic prefix</label>
+            <input
+              value={topicPrefix}
+              disabled={!isAdmin}
+              onChange={(e) => setTopicPrefix(e.target.value)}
+              className="flex-1 text-xs font-mono bg-background border border-border rounded px-2 py-1"
+              placeholder="nurby"
+            />
+          </div>
+          {topicPrefix.trim() !== savedTopicPrefix && (
+            <p className="text-[11px] text-amber-300">
+              Changing this prefix leaves retained MQTT topics under “{savedTopicPrefix}/” on the broker. Clean those topics up separately if you no longer need them.
+            </p>
+          )}
           <div className="flex items-center gap-2">
             <label className="text-xs text-muted-foreground w-20">Port</label>
             <input
@@ -248,6 +277,11 @@ export default function MqttSection() {
               className={`text-[11px] ${status?.connected ? "text-emerald-400" : "text-amber-300"}`}
             >
               {statusLine}
+            </p>
+          )}
+          {status?.last_connected_at && (
+            <p className="text-[11px] text-muted-foreground">
+              Last connected {new Date(status.last_connected_at * 1000).toLocaleString()}
             </p>
           )}
           {!host.trim() && (

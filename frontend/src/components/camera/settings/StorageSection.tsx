@@ -242,20 +242,22 @@ export function StorageSection({
       description="Where this camera's recordings are written. Default keeps them with everything else; FTP locations upload segments to your own server (buffered locally first, so an outage never loses footage)."
     >
       <FieldRow label="Record to">
-        <select
-          value={storageProfileId ?? ""}
-          onChange={(e) => setStorageProfileId(e.target.value || null)}
-          className="text-xs bg-background border border-border rounded px-2 py-1.5 min-w-52"
-        >
-          <option value="">
-            {globalRoot ? `Default — ${globalRoot}` : "Default (global location)"}
-          </option>
-          {profiles.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} — {p.kind === "ftp" ? `ftp://${p.root}` : p.root}
+        <div className="min-w-0 flex-1">
+          <select
+            value={storageProfileId ?? ""}
+            onChange={(e) => setStorageProfileId(e.target.value || null)}
+            className="w-full max-w-full text-xs bg-background border border-border rounded px-2 py-1.5"
+          >
+            <option value="">
+              {globalRoot ? `Default — ${globalRoot}` : "Default (global location)"}
             </option>
-          ))}
-        </select>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} — {p.kind === "ftp" ? `ftp://${p.root}` : p.root}
+              </option>
+            ))}
+          </select>
+        </div>
       </FieldRow>
 
       {staleNotice && (
@@ -351,7 +353,7 @@ export function StorageSection({
               />
             ) : (
               <div className="space-y-2">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <input
                     value={host}
                     onChange={(e) => {
@@ -360,7 +362,7 @@ export function StorageSection({
                       setMsgOk(false);
                     }}
                     placeholder="ftp.example.com"
-                    className={`flex-1 font-mono ${inputCls}`}
+                    className={`min-w-0 flex-1 font-mono ${inputCls}`}
                   />
                   <input
                     value={port}
@@ -369,19 +371,19 @@ export function StorageSection({
                     title="Port"
                   />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <input
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Username (or anonymous)"
-                    className={`flex-1 font-mono ${inputCls}`}
+                    className={`min-w-0 flex-1 font-mono ${inputCls}`}
                   />
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Password (optional)"
-                    className={`flex-1 font-mono ${inputCls}`}
+                    className={`min-w-0 flex-1 font-mono ${inputCls}`}
                   />
                 </div>
                 <input
@@ -419,7 +421,7 @@ export function StorageSection({
                   onClick={testConnection}
                   className="px-2.5 py-1 text-[11px] rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
                 >
-                  Test connection
+                  {busy ? "Testing…" : "Test connection"}
                 </button>
               )}
               {kind === "local" && (

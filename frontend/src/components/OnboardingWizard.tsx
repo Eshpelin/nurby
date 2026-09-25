@@ -397,6 +397,10 @@ function StorageStep({ onNext }: { onNext: () => void }) {
 
       <StorageLocationForm />
 
+      <p className="text-xs text-muted-foreground rounded-md border border-border bg-muted/20 px-3 py-2">
+        The demo camera in “Show me some magic” uses this default location. You can change it any time in Settings → Storage location.
+      </p>
+
       <div className="flex items-center justify-between pt-1">
         <button
           type="button"
