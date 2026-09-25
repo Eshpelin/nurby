@@ -48,6 +48,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   bool _hasMore = true;
   final Set<String> _selectedIds = <String>{};
   bool _selectionMode = false;
+  bool _allMatching = false;
 
   EventsQuery get _query => (acked: _acked, cameraId: _cameraId);
 
@@ -78,11 +79,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   void _clearSelection() {
     _selectedIds.clear();
     _selectionMode = false;
+    _allMatching = false;
   }
 
   void _toggleSelected(String id) {
     setState(() {
       _selectionMode = true;
+      _allMatching = false;
       if (!_selectedIds.add(id)) _selectedIds.remove(id);
       if (_selectedIds.isEmpty) _selectionMode = false;
     });
@@ -91,31 +94,51 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   void _selectPage(List<Event> events) {
     setState(() {
       _selectionMode = true;
+      _allMatching = false;
       _selectedIds
         ..clear()
         ..addAll(events.map((e) => e.id));
     });
   }
 
+  Map<String, dynamic> _selectionFilters() => {
+        if (_cameraId != null) 'camera_id': _cameraId,
+        if (_acked != null) 'acked': _acked,
+      };
+
+  void _selectAllMatching() {
+    setState(() {
+      _selectionMode = true;
+      _allMatching = true;
+      _selectedIds.clear();
+    });
+  }
+
   Future<void> _downloadSelectedCsv() async {
-    final url = ref.read(eventRepoProvider).exportUrl(ids: _selectedIds.toList());
+    final url = ref.read(eventRepoProvider).exportUrl(
+          ids: _selectedIds.toList(),
+          filters: _allMatching
+              ? _selectionFilters().map((k, v) => MapEntry(k, '$v'))
+              : null,
+        );
     if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication) && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the event export.')));
     }
   }
 
   Future<void> _bulkDelete() async {
-    if (_selectedIds.isEmpty) return;
+    if (_selectedIds.isEmpty && !_allMatching) return;
     final ids = _selectedIds.toList(growable: false);
     try {
-      final preview = await ref.read(eventRepoProvider).previewBulk(ids: ids);
+      final preview = await ref.read(eventRepoProvider).previewBulk(
+            ids: ids, allMatching: _allMatching, filters: _selectionFilters());
       if (!mounted) return;
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Delete alerts?'),
           content: Text(
-            '${preview.matching} event${preview.matching == 1 ? '' : 's'}\n'
+            '${preview.matching} event${preview.matching == 1 ? '' : 's'} from ${_allMatching ? 'all matching filters' : 'this selection'}\n'
             'Linked recordings: ${preview.linkedRecordings} (preserved).\n\n'
             'This cannot be undone.',
           ),
@@ -130,7 +153,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         ),
       );
       if (confirmed != true) return;
-      final result = await ref.read(eventRepoProvider).deleteBulk(ids: ids);
+      final result = await ref.read(eventRepoProvider).deleteBulk(
+            ids: ids, allMatching: _allMatching, filters: _selectionFilters());
       if (!mounted) return;
       setState(() {
         _clearSelection();
@@ -305,17 +329,19 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
         child: Row(
           children: [
-            Text('${_selectedIds.length} selected', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(_allMatching ? 'All matching selected' : '${_selectedIds.length} selected', style: const TextStyle(fontWeight: FontWeight.w600)),
             const Spacer(),
             TextButton(onPressed: () => _selectPage(visible), child: const Text('Select page')),
+            if (visible.length >= _pageSize && !_allMatching)
+              TextButton(onPressed: _selectAllMatching, child: const Text('All matching')),
             IconButton(
               tooltip: 'Export CSV',
-              onPressed: _selectedIds.isEmpty ? null : _downloadSelectedCsv,
+              onPressed: (_selectedIds.isEmpty && !_allMatching) ? null : _downloadSelectedCsv,
               icon: const Icon(Icons.download_outlined),
             ),
             IconButton(
               tooltip: 'Delete selected',
-              onPressed: _selectedIds.isEmpty ? null : _bulkDelete,
+              onPressed: (_selectedIds.isEmpty && !_allMatching) ? null : _bulkDelete,
               icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
             ),
             IconButton(

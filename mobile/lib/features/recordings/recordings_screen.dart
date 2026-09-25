@@ -61,6 +61,7 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
   String? _error;
   final Set<String> _selectedIds = <String>{};
   bool _selectionMode = false;
+  bool _allMatching = false;
 
   @override
   void initState() {
@@ -129,6 +130,7 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
       _items.clear();
       _selectedIds.clear();
       _selectionMode = false;
+      _allMatching = false;
     });
     _load(reset: true);
   }
@@ -136,6 +138,7 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
   void _toggleSelected(String id) {
     setState(() {
       _selectionMode = true;
+      _allMatching = false;
       if (!_selectedIds.add(id)) _selectedIds.remove(id);
       if (_selectedIds.isEmpty) _selectionMode = false;
     });
@@ -144,24 +147,39 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
   void _selectPage() {
     setState(() {
       _selectionMode = true;
+      _allMatching = false;
       _selectedIds
         ..clear()
         ..addAll(_items.map((r) => r.id));
     });
   }
 
+  Map<String, dynamic> _selectionFilters() => {
+        if (_cameraId != null) 'camera_id': _cameraId,
+        if (_range.start != null) 'from': _range.start!.toUtc().toIso8601String(),
+      };
+
+  void _selectAllMatching() {
+    setState(() {
+      _selectionMode = true;
+      _allMatching = true;
+      _selectedIds.clear();
+    });
+  }
+
   Future<void> _bulkDelete() async {
-    if (_selectedIds.isEmpty) return;
+    if (_selectedIds.isEmpty && !_allMatching) return;
     final ids = _selectedIds.toList(growable: false);
     try {
-      final preview = await ref.read(recordingRepoProvider).previewBulk(ids: ids);
+      final preview = await ref.read(recordingRepoProvider).previewBulk(
+            ids: ids, allMatching: _allMatching, filters: _selectionFilters());
       if (!mounted) return;
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Delete recordings?'),
           content: Text(
-            '${preview.matching} recording${preview.matching == 1 ? '' : 's'}\n'
+            '${preview.matching} recording${preview.matching == 1 ? '' : 's'} from ${_allMatching ? 'all matching filters' : 'this selection'}\n'
             'Estimated storage: ${_formatBytes(preview.estimatedBytes)}\n'
             '${preview.missingFiles} file${preview.missingFiles == 1 ? '' : 's'} already missing.\n\n'
             'This cannot be undone. Linked alerts are preserved.',
@@ -177,14 +195,22 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
         ),
       );
       if (confirmed != true) return;
-      final result = await ref.read(recordingRepoProvider).deleteBulk(ids: ids);
+      final result = await ref.read(recordingRepoProvider).deleteBulk(
+            ids: ids, allMatching: _allMatching, filters: _selectionFilters());
       if (!mounted) return;
       final deleted = result.deleted;
       setState(() {
-        _items.removeWhere((r) => result.failedIds.contains(r.id) == false && ids.contains(r.id));
+        if (_allMatching) {
+          _items.clear();
+        } else {
+          _items.removeWhere((r) => !result.failedIds.contains(r.id) && ids.contains(r.id));
+        }
         _selectedIds.clear();
         _selectionMode = false;
+        _allMatching = false;
       });
+      if (result.deleted > 0 && _items.isEmpty) await _load(reset: true);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Deleted $deleted recording${deleted == 1 ? '' : 's'}${result.failed > 0 ? '; ${result.failed} failed' : ''}'),
       ));
@@ -339,22 +365,30 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
         child: Row(
           children: [
-            Text('${_selectedIds.length} selected', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(_allMatching ? 'All matching selected' : '${_selectedIds.length} selected', style: const TextStyle(fontWeight: FontWeight.w600)),
             const Spacer(),
             TextButton(onPressed: _selectPage, child: const Text('Select page')),
+            if (_hasMore && !_allMatching)
+              TextButton(onPressed: _selectAllMatching, child: const Text('All matching')),
             IconButton(
               tooltip: 'Download originals',
-              onPressed: _selectedIds.isEmpty ? null : () => _download(ref.read(recordingRepoProvider).bundleUrl(ids: _selectedIds.toList())),
+              onPressed: (_selectedIds.isEmpty && !_allMatching) ? null : () => _download(
+                    ref.read(recordingRepoProvider).bundleUrl(
+                      ids: _selectedIds.toList(),
+                      filters: _allMatching
+                          ? _selectionFilters().map((k, v) => MapEntry(k, '$v'))
+                          : null,
+                    )),
               icon: const Icon(Icons.download_outlined),
             ),
             IconButton(
               tooltip: 'Delete selected',
-              onPressed: _selectedIds.isEmpty ? null : _bulkDelete,
+              onPressed: (_selectedIds.isEmpty && !_allMatching) ? null : _bulkDelete,
               icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
             ),
             IconButton(
               tooltip: 'Clear selection',
-              onPressed: () => setState(() { _selectedIds.clear(); _selectionMode = false; }),
+              onPressed: () => setState(() { _selectedIds.clear(); _selectionMode = false; _allMatching = false; }),
               icon: const Icon(Icons.close),
             ),
           ],
