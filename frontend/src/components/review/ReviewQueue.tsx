@@ -25,6 +25,10 @@ type ReviewItem = {
 type RelationshipDetail = {
   evidence_count: number;
   distinct_days: number;
+  supporting_evidence_count?: number;
+  contradictory_evidence_count?: number;
+  confidence_score?: number | null;
+  decision_explanation?: string | null;
   review_events?: {
     id: string;
     action: string;
@@ -186,6 +190,14 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                         <p className="text-[10px] text-muted-foreground">
                           {relationshipDetails[item.id].distinct_days} independent visits · source episodes below
                         </p>
+                        {relationshipDetails[item.id].decision_explanation && (
+                          <p className="text-[10px] text-muted-foreground">
+                            {relationshipDetails[item.id].decision_explanation}
+                            {typeof relationshipDetails[item.id].confidence_score === "number"
+                              ? ` Balance ${Math.round(Number(relationshipDetails[item.id].confidence_score) * 100)}%`
+                              : ""}
+                          </p>
+                        )}
                         {relationshipDetails[item.id].evidence.slice(0, 5).map((evidence) => (
                           <div key={evidence.id} className="flex items-start gap-2 text-[10px] text-muted-foreground">
                             <span className={evidence.role === "contradictory" ? "text-amber-300" : "text-emerald-300"}>

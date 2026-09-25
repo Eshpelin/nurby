@@ -17,6 +17,7 @@ from services.perception.associator import (
     ASSOCIABLE_SUBJECT_KINDS,
     bump,
     fold,
+    evidence_balance,
     journey_camera_ids,
     local_buckets,
     next_status,
@@ -160,6 +161,16 @@ def test_new_evidence_reenters_archived_claim_as_candidate():
     assert fold(edge, _at(1, 8) + timedelta(days=59), "UTC", min_days=3)
     assert edge.status == "candidate"
     assert edge.archived_at is None
+
+
+def test_evidence_balance_is_explicitly_not_a_probability():
+    score, explanation = evidence_balance(3, 1)
+    assert score == 0.75
+    assert "not a calibrated probability" in explanation
+
+
+def test_ambiguous_claim_requires_review_before_repromotion():
+    assert next_status("ambiguous", 99, 3, user_confirmed=False) == "candidate"
 
 
 def test_an_archived_edge_returns_as_a_candidate_not_established():

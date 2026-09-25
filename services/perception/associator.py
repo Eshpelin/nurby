@@ -115,6 +115,10 @@ def next_status(
     """
     if current in TERMINAL_STATUSES:
         return current
+    if current == "ambiguous":
+        # New automated evidence must return to review; it cannot silently
+        # promote a previously conflicted claim back to an established fact.
+        return "candidate"
     if current == "deferred":
         # New evidence may bring a deferred suggestion back for review, but
         # it must not silently promote it to an established fact.
@@ -126,6 +130,22 @@ def next_status(
     # An archived edge that is seeing evidence again becomes a candidate
     # rather than jumping straight back to established.
     return "candidate"
+
+
+def evidence_balance(supporting: int, contradictory: int) -> tuple[float | None, str | None]:
+    """Return an uncalibrated support balance and a plain explanation."""
+    supporting = max(0, int(supporting or 0))
+    contradictory = max(0, int(contradictory or 0))
+    total = supporting + contradictory
+    if total == 0:
+        return None, None
+    score = round(supporting / total, 3)
+    explanation = (
+        f"{supporting} supporting episode{'s' if supporting != 1 else ''}; "
+        f"{contradictory} contradictory episode{'s' if contradictory != 1 else ''}. "
+        "This is an evidence balance, not a calibrated probability."
+    )
+    return score, explanation
 
 
 def should_archive_association(
@@ -184,6 +204,7 @@ def fold(
     day_key, hour, weekday = local_buckets(when, tz_name)
 
     assoc.evidence_count = int(assoc.evidence_count or 0) + 1
+    assoc.supporting_evidence_count = int(getattr(assoc, "supporting_evidence_count", 0) or 0) + 1
     if assoc.last_day != day_key:
         assoc.distinct_days = int(assoc.distinct_days or 0) + 1
         assoc.last_day = day_key
@@ -200,6 +221,10 @@ def fold(
         int(assoc.distinct_days or 0),
         min_days,
         bool(assoc.user_confirmed),
+    )
+    assoc.confidence_score, assoc.decision_explanation = evidence_balance(
+        assoc.supporting_evidence_count,
+        int(getattr(assoc, "contradictory_evidence_count", 0) or 0),
     )
     if was_archived:
         assoc.archived_at = None
@@ -479,6 +504,17 @@ async def process_journey(
             explanation="The subject was observed in a finalized visit without this usually associated vehicle.",
             evidence_metadata={"present_vehicle_ids": list(present_vehicle_ids)},
         ))
+        edge.contradictory_evidence_count = int(
+            getattr(edge, "contradictory_evidence_count", 0) or 0
+        ) + 1
+        edge.confidence_score, edge.decision_explanation = evidence_balance(
+            int(getattr(edge, "supporting_evidence_count", edge.evidence_count) or 0),
+            edge.contradictory_evidence_count,
+        )
+        if not edge.user_confirmed and edge.status == "established":
+            supporting = int(getattr(edge, "supporting_evidence_count", edge.evidence_count) or 0)
+            if edge.contradictory_evidence_count >= supporting:
+                edge.status = "ambiguous"
 
     touched = 0
     for vehicle_id, seen in seen_vehicles.items():

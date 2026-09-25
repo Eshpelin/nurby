@@ -313,6 +313,10 @@ class EntityAssociation(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="candidate")
     user_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     evidence_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    supporting_evidence_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    contradictory_evidence_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    decision_explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
     distinct_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Last local calendar date folded in, as YYYY-MM-DD in household time.
     # Guards distinct_days against a second sighting the same day counting
