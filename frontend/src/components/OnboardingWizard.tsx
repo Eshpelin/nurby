@@ -507,6 +507,12 @@ function MagicStep({
   const [vlmNote, setVlmNote] = useState<string | null>(null);
   const [deployedModel, setDeployedModel] = useState<string | null>(null);
   const [fellBackFrom, setFellBackFrom] = useState<string | null>(null);
+  // Why a fallback model is being tried, shown under the progress bar so
+  // the switch is never silent (#304).
+  const [fallbackNote, setFallbackNote] = useState<string | null>(null);
+  // True when the deployed model was already on the machine (#304): the
+  // summary says nothing was downloaded.
+  const [alreadyInstalled, setAlreadyInstalled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -570,6 +576,9 @@ function MagicStep({
             // Fall back once to a small proven model, then give up honestly.
             if (model !== "gemma3:4b") {
               setFellBackFrom(model);
+              setFallbackNote(
+                `This Ollama install can't run ${model} — trying Gemma 3 4B instead`,
+              );
               startDeploy("gemma3:4b");
             } else {
               finishWithoutVlm(s.message || "Model download failed. Set up AI later from Settings.");
@@ -599,11 +608,15 @@ function MagicStep({
         const data = await dr.json().catch(() => ({}));
         if (dr.ok && data.stage === "done") {
           setDeployedModel(data.model || model);
+          setAlreadyInstalled(!!data.already_installed);
           setTasks((t) => ({ ...t, vlm: "done" }));
           setPhase("summary");
           return;
         }
         if (dr.ok && data.stage === "pulling") {
+          // The server's message carries the catalog size ("Downloading
+          // gemma3:4b (about 3.3 GB)") — show it instead of our guess.
+          if (data.message) setPullMsg(data.message);
           pollDeploy(model);
           return;
         }
@@ -645,6 +658,7 @@ function MagicStep({
         const s = await sr.json();
         reachable = !!(s.installed || s.running);
         model = s.recommended_model || model;
+        if (s.recommended_installed) setAlreadyInstalled(true);
       }
     } catch {
       /* treat as no local AI */
@@ -795,9 +809,12 @@ function MagicStep({
               style={pullPct != null ? { width: `${pullPct}%` } : undefined}
             />
           </div>
+          {fallbackNote && (
+            <p className="text-[11px] text-amber-400">{fallbackNote}</p>
+          )}
           <div className="flex items-center justify-between">
             <p className="text-[11px] text-muted-foreground">
-              Big download; a few minutes on fast connections. Cancel keeps finished layers.
+              {fallbackNote ? "Cancel keeps finished layers; you can resume anytime from Settings." : "Big download; a few minutes on fast connections. Cancel keeps finished layers."}
             </p>
             <button
               type="button"
@@ -818,6 +835,9 @@ function MagicStep({
             {deployedModel ? (
               <div>
                 🧠 Local AI: <span className="font-mono">{deployedModel}</span>
+                {alreadyInstalled && !fellBackFrom && (
+                  <span className="text-muted-foreground"> — already on your machine, nothing downloaded</span>
+                )}
                 {fellBackFrom && (
                   <span className="text-muted-foreground"> (fell back from {fellBackFrom})</span>
                 )}
