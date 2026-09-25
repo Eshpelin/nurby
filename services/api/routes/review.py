@@ -526,8 +526,13 @@ async def decide_relationship_suggestion(
         association is not None
         and (
             association.status in {"candidate", "deferred"}
+            or body.decision == "confirm" and association.status == "established" and association.user_confirmed
+            or body.decision == "reject" and association.status == "rejected"
+            or body.decision == "defer" and association.status == "deferred"
             or body.decision == "revoke" and association.status == "established"
             or body.decision == "restore" and association.status == "archived"
+            or body.decision == "revoke" and association.status == "archived" and association.archived_at is not None
+            or body.decision == "restore" and association.status == "candidate" and association.archived_at is None
         )
     )
     if not valid_status:
@@ -538,6 +543,23 @@ async def decide_relationship_suggestion(
         allowed_ids = {str(camera_id) for camera_id in allowed}
         if not any(str(camera_id) in allowed_ids for camera_id in (association.camera_histogram or {})):
             raise HTTPException(status_code=404, detail="Relationship suggestion not found")
+
+    already_applied = (
+        body.decision == "confirm" and association.status == "established" and association.user_confirmed
+        or body.decision == "reject" and association.status == "rejected"
+        or body.decision == "defer" and association.status == "deferred"
+        or body.decision == "revoke" and association.status == "archived" and association.archived_at is not None
+        or body.decision == "restore" and association.status == "candidate" and association.archived_at is None
+    )
+    if already_applied:
+        return {
+            "id": str(association.id),
+            "status": association.status,
+            "user_confirmed": association.user_confirmed,
+            "reviewed_at": association.reviewed_at,
+            "archived_at": association.archived_at,
+            "idempotent": True,
+        }
 
     old_status = association.status
     association.status = {
