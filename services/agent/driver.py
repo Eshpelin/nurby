@@ -1183,6 +1183,7 @@ class AgentDriver:
             "total_cost_cents": getattr(run_row, "cost_cents", 0),
             "total_tokens": getattr(run_row, "tokens_in", 0) + getattr(run_row, "tokens_out", 0),
             "turns": getattr(run_row, "turns_used", state.turn_index),
+            "model": getattr(run_row, "model", None),
             "partial": partial,
         })
 

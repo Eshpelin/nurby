@@ -19,24 +19,30 @@ import CitationChip from "./CitationChip";
 // Render `[label](/internal/path)` markdown links in the answer as
 // client-side links (the agent uses these to point at e.g. the Rules
 // page). Only same-app paths are linked; anything else stays text.
-const MD_LINK_RE = /\[([^\]]+)\]\((\/[^\s)]*)\)/g;
+const ANSWER_TOKEN_RE = /\[obs:([^\]]+)\]|\[([^\]]+)\]\((\/[^\s)]*)\)/gi;
 
-function renderAnswer(text: string): React.ReactNode[] {
+export function renderAnswer(text: string, citations: Citation[]): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   let last = 0;
   let m: RegExpExecArray | null;
-  MD_LINK_RE.lastIndex = 0;
-  while ((m = MD_LINK_RE.exec(text)) !== null) {
+  ANSWER_TOKEN_RE.lastIndex = 0;
+  while ((m = ANSWER_TOKEN_RE.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index));
-    out.push(
-      <Link
-        key={`${m.index}`}
-        href={m[2]}
-        className="text-accent underline underline-offset-2 hover:opacity-80"
-      >
-        {m[1]}
-      </Link>,
-    );
+    if (m[1]) {
+      const observationId = m[1];
+      const citation = citations.find((item) => item.kind === "observation" && item.id === observationId);
+      if (citation) out.push(<CitationChip key={`${m.index}:${observationId}`} citation={citation} />);
+    } else {
+      out.push(
+        <Link
+          key={`${m.index}`}
+          href={m[3]}
+          className="text-accent underline underline-offset-2 hover:opacity-80"
+        >
+          {m[2]}
+        </Link>,
+      );
+    }
     last = m.index + m[0].length;
   }
   if (last < text.length) out.push(text.slice(last));
@@ -80,6 +86,8 @@ interface ViewModel {
   errorMessage: string | null;
   noEvidence: boolean;
   pendingActions: RuleDraftAction[];
+  model: string | null;
+  providerName: string | null;
 }
 
 function summarizeArgs(args: unknown): string {
@@ -120,6 +128,8 @@ function buildFromEvents(events: AgentEvent[]): ViewModel {
   let budgetExhausted = false;
   let failed = false;
   let errorMessage: string | null = null;
+  let model: string | null = null;
+  let providerName: string | null = null;
   const actionMap = new Map<string, RuleDraftAction>();
 
   for (const ev of events) {
@@ -198,6 +208,8 @@ function buildFromEvents(events: AgentEvent[]): ViewModel {
       case "done":
         done = true;
         if (typeof ev.text === "string") answer = ev.text;
+        if (typeof ev.model === "string") model = ev.model;
+        if (typeof ev.provider_name === "string") providerName = ev.provider_name;
         if (Array.isArray(ev.citations)) citations = ev.citations as Citation[];
         break;
       case "cancelled":
@@ -229,6 +241,8 @@ function buildFromEvents(events: AgentEvent[]): ViewModel {
     errorMessage,
     noEvidence,
     pendingActions: Array.from(actionMap.values()),
+    model,
+    providerName,
   };
 }
 
@@ -282,6 +296,8 @@ function buildFromDetail(detail: AgentRunDetail): ViewModel {
     errorMessage: detail.error_message,
     noEvidence: detail.status === "completed" && !(detail.final_answer ?? "").trim(),
     pendingActions: [],
+    model: detail.model,
+    providerName: detail.provider_name ?? null,
   };
 }
 
@@ -538,7 +554,7 @@ export default function AgentResponseCard({
         )}
 
         {vm.answer ? (
-          <div className="text-sm whitespace-pre-wrap leading-relaxed">{renderAnswer(vm.answer)}</div>
+          <div className="text-sm whitespace-pre-wrap leading-relaxed">{renderAnswer(vm.answer, vm.citations)}</div>
         ) : vm.done ? (
           vm.noEvidence ? (
             <div className="text-sm text-muted-foreground italic">
@@ -565,6 +581,12 @@ export default function AgentResponseCard({
             {vm.citations.map((c, i) => (
               <CitationChip key={`${c.kind}:${c.id}:${i}`} citation={c} />
             ))}
+          </div>
+        )}
+
+        {vm.done && vm.model && (
+          <div className="text-[10px] text-muted-foreground border-t border-border/60 pt-2">
+            Answered by <span className="font-mono text-foreground">{vm.providerName ? `${vm.providerName} / ` : ""}{vm.model}</span>.
           </div>
         )}
 
