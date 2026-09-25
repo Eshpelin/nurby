@@ -1500,7 +1500,20 @@ export default function PeoplePage() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">Nurby found saved references, but could not list them.</p>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">All listed references have been resolved. You can try deleting the person again.</p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const id = blockedDelete.personId;
+                    setBlockedDelete(null);
+                    await handleDelete(id);
+                  }}
+                  className="px-3 py-1.5 text-sm rounded-md bg-red-500 text-white hover:bg-red-600"
+                >
+                  Try delete again
+                </button>
+              </div>
             )}
             <div className="flex justify-end mt-5">
               <button type="button" onClick={() => setBlockedDelete(null)} className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">
