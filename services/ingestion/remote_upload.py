@@ -1,7 +1,9 @@
-"""Native FTP upload worker (issue #269).
+"""Remote upload worker: FTP (issue #269) and S3 (issue #270).
 
-Drains the buffer-then-upload outbox: recordings whose camera has an FTP
-storage profile are marked ``pending`` at finalize time (stream.py); this
+Drains the buffer-then-upload outbox. Recordings are marked ``pending``
+either at finalize time, when their camera records to a remote profile
+(stream.py), or by retention, when they age out of the local window and
+an archive destination is set (shared/archive.py). This
 worker transfers them (oldest first), verifies the upload, then deletes
 the local copy when the profile says so. A failed or unreachable FTP
 server never loses footage — the local file is only removed after a
@@ -16,17 +18,17 @@ mtime when the cache exceeds its cap).
 import asyncio
 import logging
 import os
-import time
 
 from sqlalchemy import select
 
 from shared.database import async_session
 from shared.models import Recording, StorageProfile
 from shared.remote_storage import (
-    ftp_download,
-    ftp_upload,
-    parse_ftp_config,
+    kind_label,
+    parse_remote_config,
+    remote_download,
     remote_path_for,
+    remote_upload,
 )
 
 logger = logging.getLogger(__name__)
@@ -99,12 +101,17 @@ class RemoteUploadWorker:
             if rec.remote_profile_id
             else None
         )
-        cfg = parse_ftp_config(profile.config_enc) if profile else None
+        cfg = parse_remote_config(profile.kind, profile.config_enc) if profile else None
         if profile is None or cfg is None:
-            # Profile deleted since upload — nothing to upload to. The local
-            # copy is the only copy, so keep it and stop retrying.
+            # Nothing to upload to. The local copy is the only copy, so keep
+            # it and stop retrying.
             rec.remote_state = "failed"
-            rec.remote_error = "storage profile removed"
+            rec.remote_error = (
+                "storage profile removed"
+                if profile is None
+                else "saved credentials could not be read (was the server secret key changed?). "
+                "Re-enter them on the storage location"
+            )
             return
 
         from services.ingestion.retention import _resolve_camera_path
@@ -117,12 +124,14 @@ class RemoteUploadWorker:
             return
 
         remote_path = rec.remote_path or remote_path_for(profile.root, rec.file_path)
-        ok, detail = await ftp_upload(cfg, profile.root, local_path, remote_path)
+        ok, detail = await remote_upload(profile.kind, cfg, profile.root, local_path, remote_path)
         if ok:
             rec.remote_state = "uploaded"
             rec.remote_path = remote_path
             rec.remote_error = None
-            if cfg.delete_after_upload:
+            # An archive move exists to free local disk, so it always drops
+            # the local copy once the upload is verified.
+            if cfg.delete_after_upload or await self._is_archive(profile.id):
                 try:
                     os.remove(local_path)
                 except OSError:
@@ -138,15 +147,21 @@ class RemoteUploadWorker:
             if rec.remote_attempts >= ATTEMPT_CAP:
                 rec.remote_state = "failed"
                 logger.error(
-                    "Recording %s failed FTP upload after %d attempts: %s",
-                    rec.id, rec.remote_attempts, rec.remote_error,
+                    "Recording %s failed %s upload after %d attempts: %s",
+                    rec.id, kind_label(profile.kind), rec.remote_attempts, rec.remote_error,
                 )
             else:
                 rec.remote_state = "pending"
                 logger.warning(
-                    "FTP upload attempt %d for recording %s failed: %s",
-                    rec.remote_attempts, rec.id, detail,
+                    "%s upload attempt %d for recording %s failed: %s",
+                    kind_label(profile.kind), rec.remote_attempts, rec.id, detail,
                 )
+
+    async def _is_archive(self, profile_id) -> bool:
+        from shared.archive import archive_target
+
+        target = await archive_target()
+        return target is not None and target.profile_id == profile_id
 
     # ── playback cache ───────────────────────────────────────────────
     async def sweep_cache(self) -> None:
@@ -193,11 +208,12 @@ def get_worker() -> RemoteUploadWorker:
 
 
 async def fetch_to_cache(recording: Recording) -> str | None:
-    """Playback fallback (issue #269): download a remotely stored recording
-    into the local cache and return the cache path. Returns the existing
-    cache entry when present. None when the recording is not remote, the
-    profile is gone, or the download fails — callers keep their local-only
-    error paths."""
+    """Playback fallback (issues #269, #270): download a remotely stored
+    recording into the local cache and return the cache path. Returns the
+    existing cache entry when present. None when the recording is not
+    remote, the profile is gone, or the download fails, so callers keep
+    their local-only error paths. Raises ``RestorePendingError`` when the object
+    is in an S3 archive class and a restore has been requested."""
     if (
         getattr(recording, "remote_state", None) != "uploaded"
         or not getattr(recording, "remote_profile_id", None)
@@ -205,7 +221,7 @@ async def fetch_to_cache(recording: Recording) -> str | None:
         return None
     async with async_session() as db:
         profile = await db.get(StorageProfile, recording.remote_profile_id)
-    cfg = parse_ftp_config(profile.config_enc) if profile else None
+    cfg = parse_remote_config(profile.kind, profile.config_enc) if profile else None
     if profile is None or cfg is None:
         return None
     cache_path = local_cache_path(recording.file_path)
@@ -214,8 +230,10 @@ async def fetch_to_cache(recording: Recording) -> str | None:
     remote_path = recording.remote_path or remote_path_for(
         profile.root, recording.file_path
     )
-    ok, detail = await ftp_download(cfg, remote_path, cache_path)
+    ok, detail = await remote_download(profile.kind, cfg, remote_path, cache_path)
     if not ok:
-        logger.warning("FTP playback download failed for %s: %s", recording.id, detail)
+        logger.warning(
+            "%s playback download failed for %s: %s", kind_label(profile.kind), recording.id, detail
+        )
         return None
     return cache_path

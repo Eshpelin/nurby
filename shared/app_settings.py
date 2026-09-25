@@ -183,6 +183,13 @@ DEFAULTS: dict[str, Any] = {
     # synthesized summary. On by default. system-wide toggle. budget caps
     # how many VLM-minutes per hour enrichment may consume so it never
     # competes with live work for long.
+    # ── Recording archive tier (issue #270) ──────────────────────────
+    # Remote storage profile (FTP or S3) that recordings move to when they
+    # age out of their camera's local retention window, instead of being
+    # deleted. None = archiving off. archive_retention_days is how long the
+    # archive keeps them (0 = forever). See shared/archive.py.
+    "archive_profile_id": None,
+    "archive_retention_days": 0,
     "vlm_enrichment_enabled": True,
     "vlm_enrichment_budget_minutes_per_hour": 20,
     "vlm_enrichment_max_passes": 6,
