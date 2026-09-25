@@ -13,6 +13,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -179,6 +180,12 @@ class HouseholdFact(Base):
     - ``rejected`` is permanent. A rejected fact is never proposed again,
       which is the difference between a system that learns and one that
       nags.
+
+    Issue #185 adds the capture/review/use loop on top: what the fact is
+    about (``entity_kind``/``entity_key``), an optional recurring schedule,
+    explicit alert suppression (armed only by a person, never by the
+    curator), who wrote and last edited the row, and the evidence the
+    belief rests on.
     """
 
     __tablename__ = "household_facts"
@@ -189,6 +196,11 @@ class HouseholdFact(Base):
     # A stable key for the thing the fact is about, so a re-derived fact
     # updates its row instead of creating a near-duplicate.
     subject_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    # What the fact is attached to: household | person | vehicle | camera.
+    # entity_key is that entity's stable key (UUID as string); "household"
+    # means the whole home. Null on rows from before #185.
+    entity_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    entity_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     kind: Mapped[str] = mapped_column(String(32), nullable=False, default="habit")
     # agent (distilled) | user (written by a person)
     source: Mapped[str] = mapped_column(String(16), nullable=False, default="agent")
@@ -196,6 +208,44 @@ class HouseholdFact(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="candidate")
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     evidence_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Optional recurrence: weekdays as ints (0=Monday, matching
+    # datetime.weekday()), a local-time window in minutes since midnight,
+    # and the IANA zone the window lives in (None = household zone).
+    schedule_days: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    schedule_start_minute: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    schedule_end_minute: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    schedule_tz: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Alert suppression is armed by a person, explicitly, after the fact is
+    # established; a learned habit never mutes anything on its own. Hits are
+    # counted so the household can see what the note silenced.
+    suppresses_alerts: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    suppression_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    suppression_confirmed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    suppression_hit_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_suppressed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Provenance: who wrote it, who last edited it, and through which
+    # surface (web | api | agent_chat | curator).
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_via: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Lifecycle transition timestamps beyond archive/re-confirm above.
+    established_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Why Nurby believes this: references into association/event/observation
+    # rows, written by the curator. A user note needs no evidence.
+    evidence_refs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Set when the curator last saw evidence for this fact. Staleness is
     # measured from here, never from created_at.
     last_confirmed_at: Mapped[datetime | None] = mapped_column(
@@ -210,4 +260,7 @@ class HouseholdFact(Base):
 
     __table_args__ = (
         UniqueConstraint("subject_key", "kind", "source", name="uq_household_fact"),
+        # Suppression checks run on the rule-engine tick; keep that lookup
+        # to the small armed subset.
+        Index("ix_household_facts_suppression", "suppresses_alerts", "status"),
     )
