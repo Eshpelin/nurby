@@ -61,6 +61,26 @@ def _as_utc(value: datetime | None) -> datetime:
     return value or datetime.now(timezone.utc)
 
 
+def _incident_review_reason(
+    incident: Incident,
+    fired_incident_ids: set[str],
+    review_all_open: bool = False,
+) -> tuple[bool, str]:
+    """Return whether an incident deserves the red review treatment.
+
+    Incident tracking is useful history, so an open row is not automatically
+    an actionable task. Rules and explicit unknown-subject signals are the
+    two product reasons that should interrupt a household.
+    """
+    if review_all_open and incident.status == "open":
+        return True, "Open incident in the assigned-workflow mode"
+    if str(incident.id) in fired_incident_ids:
+        return True, "A rule fired for this incident"
+    if incident.signature_kind in {"unknown", "body", "cluster"}:
+        return True, f"Unknown subject seen {incident.occurrence_count} times"
+    return False, "Recorded camera activity"
+
+
 def _item(
     *,
     source_type: str,
@@ -127,6 +147,23 @@ async def list_review_items(
     items: list[ReviewItemResponse] = []
 
     if "incident" in requested:
+        # Event payloads retain the incident link without adding another
+        # relationship table. Keep this set permission-scoped by camera.
+        event_query = apply_camera_filter(
+            select(Event).where(_review_visible(Event.camera_id)),
+            allowed,
+            Event.camera_id,
+        )
+        fired_incident_ids = {
+            str((event.payload or {}).get("incident_id"))
+            for event in (await db.execute(event_query.limit(1000))).scalars().all()
+            if (event.payload or {}).get("incident_id")
+        }
+        review_all_open = (await db.execute(
+            select(Incident.id)
+            .where(Incident.assigned_to_user_id.is_not(None))
+            .limit(1)
+        )).scalar_one_or_none() is not None
         query = apply_camera_filter(
             select(Incident).where(_review_visible(Incident.camera_id)).order_by(Incident.last_seen_at.desc()),
             allowed,
@@ -135,18 +172,22 @@ async def list_review_items(
         incidents = (await db.execute(query.limit(250))).scalars().all()
         for incident in incidents:
             status = getattr(incident, "status", "open")
+            needs_review, reason = _incident_review_reason(
+                incident, fired_incident_ids, review_all_open
+            )
+            actionable = status == "open" and needs_review
             items.append(_item(
                 source_type="incident",
                 source_id=incident.id,
                 kind="incident",
                 status="rejected" if status == "dismissed" else status,
-                priority="high" if status == "open" else "normal",
-                title="Incident needs review" if status == "open" else "Incident",
-                summary=incident.summary_text or f"{incident.occurrence_count} related sightings",
+                priority="high" if actionable else "normal",
+                title="Incident needs review" if actionable else "Incident history",
+                summary=f"{reason}. {incident.summary_text or f'{incident.occurrence_count} related sightings'}",
                 created_at=incident.created_at,
                 updated_at=incident.last_seen_at,
                 camera_id=incident.camera_id,
-                unread=status == "open",
+                unread=actionable,
                 evidence={
                     "occurrence_count": incident.occurrence_count,
                     "first_seen_at": incident.started_at,
@@ -326,6 +367,10 @@ async def list_review_items(
 
     if unread_only:
         items = [item for item in items if item.unread]
+    camera_names = await _camera_names(db, (item.camera_id for item in items if item.camera_id))
+    for item in items:
+        if item.camera_id:
+            item.camera_name = camera_names.get(item.camera_id)
     items.sort(key=lambda item: item.updated_at, reverse=True)
     total = len(items)
     page = items[offset:offset + limit]

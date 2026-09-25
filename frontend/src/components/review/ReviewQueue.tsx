@@ -16,6 +16,7 @@ type ReviewItem = {
   source_type: string;
   source_id: string;
   camera_id: string | null;
+  camera_name: string | null;
   unread: boolean;
   evidence: Record<string, unknown>;
   provenance: Record<string, unknown>;
@@ -156,9 +157,17 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium">{item.title}</span>
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{KIND_LABEL[item.kind]}</span>
-                  {item.camera_id && <span className="text-[10px] text-muted-foreground">Camera {item.camera_id.slice(0, 8)}</span>}
+                  {item.camera_name && <span className="text-[10px] text-muted-foreground">{item.camera_name}</span>}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.summary}</p>
+                {typeof item.evidence.peak_observation_id === "string" && token && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`/api/observations/${item.evidence.peak_observation_id}/thumbnail?token=${encodeURIComponent(token)}`}
+                    alt="Incident evidence"
+                    className="mt-2 h-16 w-24 rounded border border-border object-cover"
+                  />
+                )}
                 <span className="mt-1 block text-[10px] text-muted-foreground">{timeAgo(item.updated_at)}</span>
                 {item.source_type === "association" && expandedEvidence === item.id && (
                   <div className="mt-2 rounded border border-border/70 bg-background/50 p-2">

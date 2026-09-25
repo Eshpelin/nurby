@@ -35,6 +35,7 @@ class ReviewItemResponse(BaseModel):
     source_type: str
     source_id: uuid.UUID
     camera_id: uuid.UUID | None = None
+    camera_name: str | None = None
     unread: bool = False
     evidence: dict[str, Any] = Field(default_factory=dict)
     provenance: dict[str, Any] = Field(default_factory=dict)
