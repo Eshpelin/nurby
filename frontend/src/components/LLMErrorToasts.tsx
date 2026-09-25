@@ -72,12 +72,12 @@ export function LLMErrorToasts() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-16 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+    <div className="fixed bottom-16 left-3 right-3 sm:left-auto sm:right-4 z-50 flex flex-col gap-2 pointer-events-none">
       {toasts.map((t) => (
         <div
           key={t.id}
           role="alert"
-          className="pointer-events-auto rounded-lg border border-danger/50 bg-danger/10 backdrop-blur-md px-3 py-2 max-w-sm shadow-lg animate-[fadeIn_0.2s_ease-out]"
+          className="pointer-events-auto rounded-lg border border-danger/50 bg-danger/10 backdrop-blur-md px-3 py-2 w-full sm:w-auto sm:max-w-sm shadow-lg animate-[fadeIn_0.2s_ease-out]"
         >
           <div className="flex items-start gap-2 text-xs">
             <svg

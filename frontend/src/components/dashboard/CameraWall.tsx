@@ -192,7 +192,7 @@ export function CameraWall({
       {/* Mosaic */}
       <div
         ref={gridRef}
-        className="flex-1 overflow-y-auto scrollbar-thin"
+        className="flex-none lg:flex-1 overflow-visible lg:overflow-y-auto scrollbar-thin"
         style={{
           display: "grid",
           gridTemplateColumns: `repeat(${effectiveCols}, minmax(0, 1fr))`,
