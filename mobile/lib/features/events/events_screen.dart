@@ -171,9 +171,18 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         outcome.write('; ${result.failed} failed');
       }
       outcome.write('. Linked recordings were preserved.');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(outcome.toString()),
-      ));
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(result.failed > 0 || result.skipped > 0
+              ? 'Some alerts were not deleted'
+              : 'Alerts deleted'),
+          content: Text(outcome.toString()),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
+          ],
+        ),
+      );
     } catch (e) {
       if (mounted) _showMutationError(e);
     }

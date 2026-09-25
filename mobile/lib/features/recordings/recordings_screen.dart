@@ -211,9 +211,30 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
       });
       if (result.deleted > 0 && _items.isEmpty) await _load(reset: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Deleted $deleted recording${deleted == 1 ? '' : 's'}${result.failed > 0 ? '; ${result.failed} failed' : ''}'),
-      ));
+      final details = StringBuffer(
+        'Deleted $deleted recording${deleted == 1 ? '' : 's'}',
+      );
+      if (result.missing > 0) {
+        details.write('; ${result.missing} file${result.missing == 1 ? '' : 's'} already missing');
+      }
+      if (result.skipped > 0) details.write('; ${result.skipped} skipped');
+      if (result.failed > 0) details.write('; ${result.failed} failed');
+      if (result.failedIds.isNotEmpty) {
+        details.write('. Failed item ids: ${result.failedIds.take(5).join(', ')}');
+        if (result.failedIds.length > 5) details.write(' and ${result.failedIds.length - 5} more');
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(result.failed > 0 || result.skipped > 0
+              ? 'Some recordings were not deleted'
+              : 'Recordings deleted'),
+          content: Text(details.toString()),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
+          ],
+        ),
+      );
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
     }
