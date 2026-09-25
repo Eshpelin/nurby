@@ -6,7 +6,6 @@ keyframes to Redis for the perception pipeline.
 """
 
 import asyncio
-import json
 import logging
 import os
 import shutil
@@ -19,13 +18,12 @@ from urllib.parse import quote, urlparse, urlunparse
 import cv2
 import numpy as np
 
+from services.ingestion.video_writer import create_segment_writer
 from shared.config import settings
 from shared.database import async_session
 from shared.models import Camera, CameraStatusLog, Recording
 from shared.netpolicy import stream_target_rejection
 from shared.paths import safe_getsize
-
-from services.ingestion.video_writer import create_segment_writer
 
 logger = logging.getLogger("nurby.ingestion.stream")
 
@@ -1373,13 +1371,13 @@ class StreamWorker:
                 except Exception:
                     logger.exception("Failed to schedule blur for %s", recording.id)
 
-                # Native FTP (issue #269): a camera with an FTP storage
+                # Native FTP/S3 (issues #269, #270): a camera with a remote storage
                 # profile uploads this segment via the ingestion upload
                 # worker. The local copy is the buffer until then.
                 try:
-                    from shared.remote_storage import ftp_target_for
+                    from shared.remote_storage import remote_target_for
 
-                    target = await ftp_target_for(self.camera_id)
+                    target = await remote_target_for(self.camera_id)
                     if target is not None:
                         from shared.remote_storage import remote_path_for
 

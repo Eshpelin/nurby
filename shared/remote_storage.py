@@ -1,4 +1,4 @@
-"""Native FTP storage backend (issue #269).
+"""Native remote storage backends: FTP (issue #269) and S3 (issue #270).
 
 Buffer-then-upload: segments are always written locally first; recordings
 belonging to a camera with an ``kind="ftp"`` storage profile are marked
@@ -274,9 +274,9 @@ def invalidate_ftp_targets() -> None:
     _ftp_targets_at = 0.0
 
 
-async def ftp_target_for(camera_id) -> tuple[str, str] | None:
-    """(profile_id, remote root) for a camera with an enabled FTP profile,
-    else None. Cached ~30s like the local resolver."""
+async def remote_target_for(camera_id) -> tuple[str, str] | None:
+    """(profile_id, remote root) for a camera with an enabled remote (FTP
+    or S3) profile, else None. Cached ~30s like the local resolver."""
     global _ftp_targets, _ftp_targets_at
     key = str(camera_id)
     now = time.monotonic()
@@ -294,7 +294,7 @@ async def ftp_target_for(camera_id) -> tuple[str, str] | None:
                 select(Camera.id, StorageProfile.id, StorageProfile.root)
                 .join(StorageProfile, Camera.storage_profile_id == StorageProfile.id)
                 .where(StorageProfile.enabled.is_(True))
-                .where(StorageProfile.kind == "ftp")
+                .where(StorageProfile.kind.in_(REMOTE_KINDS))
             )
             _ftp_targets = {
                 str(cam_id): (str(pid), root) for cam_id, pid, root in rows.all()
@@ -302,3 +302,286 @@ async def ftp_target_for(camera_id) -> tuple[str, str] | None:
     except Exception:
         logger.debug("ftp target load failed", exc_info=True)
     return _ftp_targets.get(key)
+
+
+# Pre-S3 name, kept for existing imports.
+ftp_target_for = remote_target_for
+
+
+# ── S3-compatible backend (issue #270) ────────────────────────────────
+#
+# One implementation covers AWS S3, Cloudflare R2, Backblaze B2, Wasabi and
+# MinIO (endpoint_url selects the non-AWS ones). Same buffer-then-upload
+# contract as FTP: the local copy goes only after a verified PUT. The
+# profile ``root`` is the key prefix.
+
+S3_STORAGE_CLASSES = (
+    "STANDARD",
+    "STANDARD_IA",
+    "GLACIER_IR",
+    "GLACIER",
+    "DEEP_ARCHIVE",
+)
+# Classes whose objects must be restored before they can be read.
+S3_RESTORE_CLASSES = ("GLACIER", "DEEP_ARCHIVE")
+# How long a restored archive copy stays readable, and the retrieval tier.
+S3_RESTORE_DAYS = 7
+
+
+class RestorePendingError(Exception):
+    """The object sits in an archive class and a restore is in progress.
+    Playback should say "try again later", not "missing"."""
+
+
+@dataclass
+class S3Config:
+    bucket: str
+    access_key_id: str = ""
+    secret_access_key: str = ""
+    region: str = ""
+    endpoint_url: str = ""
+    storage_class: str = "STANDARD"
+    delete_after_upload: bool = True
+
+    def public_dict(self) -> dict:
+        """Safe-to-echo view (no secret) for API responses."""
+        return {
+            "bucket": self.bucket,
+            "access_key_id": self.access_key_id,
+            "region": self.region,
+            "endpoint_url": self.endpoint_url,
+            "storage_class": self.storage_class,
+            "delete_after_upload": self.delete_after_upload,
+        }
+
+    @property
+    def needs_restore(self) -> bool:
+        return self.storage_class in S3_RESTORE_CLASSES
+
+
+def seal_s3_config(cfg: dict) -> str:
+    """Validate + seal an inbound S3 config dict. Raises ValueError."""
+    bucket = str(cfg.get("bucket") or "").strip()
+    if not bucket:
+        raise ValueError("S3 bucket is required")
+    if "/" in bucket or " " in bucket:
+        raise ValueError("S3 bucket is a bucket name, not a path (put folders in the prefix)")
+    access_key_id = str(cfg.get("access_key_id") or "").strip()
+    secret = str(cfg.get("secret_access_key") or "")
+    if not access_key_id or not secret:
+        raise ValueError("S3 access key ID and secret access key are required")
+    endpoint = str(cfg.get("endpoint_url") or "").strip().rstrip("/")
+    if endpoint and not endpoint.startswith(("https://", "http://")):
+        raise ValueError("S3 endpoint URL must start with https://")
+    storage_class = str(cfg.get("storage_class") or "STANDARD").strip().upper()
+    if storage_class not in S3_STORAGE_CLASSES:
+        raise ValueError(f"Unknown S3 storage class {storage_class!r}")
+    out = {
+        "bucket": bucket,
+        "access_key_id": access_key_id,
+        "secret_access_key": secret,
+        "region": str(cfg.get("region") or "").strip(),
+        "endpoint_url": endpoint,
+        "storage_class": storage_class,
+        "delete_after_upload": bool(cfg.get("delete_after_upload", True)),
+    }
+    return seal(json.dumps(out))
+
+
+def parse_s3_config(config_enc: str | None) -> S3Config | None:
+    if not config_enc:
+        return None
+    try:
+        raw = json.loads(unseal(config_enc) or "{}")
+        if not raw.get("bucket"):
+            return None
+        return S3Config(
+            bucket=str(raw["bucket"]),
+            access_key_id=str(raw.get("access_key_id") or ""),
+            secret_access_key=str(raw.get("secret_access_key") or ""),
+            region=str(raw.get("region") or ""),
+            endpoint_url=str(raw.get("endpoint_url") or ""),
+            storage_class=str(raw.get("storage_class") or "STANDARD"),
+            delete_after_upload=bool(raw.get("delete_after_upload", True)),
+        )
+    except Exception:
+        logger.debug("s3 config parse failed", exc_info=True)
+        return None
+
+
+def s3_key(remote_path: str) -> str:
+    """S3 keys have no leading slash; remote_path_for produces one."""
+    return (remote_path or "").lstrip("/")
+
+
+def _s3_client(cfg: S3Config):
+    import boto3
+    from botocore.config import Config
+
+    return boto3.client(
+        "s3",
+        aws_access_key_id=cfg.access_key_id,
+        aws_secret_access_key=cfg.secret_access_key,
+        region_name=cfg.region or None,
+        endpoint_url=cfg.endpoint_url or None,
+        config=Config(
+            retries={"max_attempts": 3, "mode": "standard"},
+            connect_timeout=20,
+            read_timeout=120,
+        ),
+    )
+
+
+def _s3_error_code(exc: Exception) -> str:
+    return str(getattr(exc, "response", {}).get("Error", {}).get("Code", "")) or type(exc).__name__
+
+
+def _s3_probe_sync(cfg: S3Config, root: str) -> tuple[bool, str]:
+    """Verify credentials and write access with a tiny marker object.
+    The marker is always STANDARD so the probe never incurs archive-class
+    minimum storage charges."""
+    try:
+        client = _s3_client(cfg)
+        key = posixpath.join(s3_key(root), ".nurby-write-test")
+        client.put_object(Bucket=cfg.bucket, Key=key, Body=b"ok")
+        client.delete_object(Bucket=cfg.bucket, Key=key)
+        where = cfg.endpoint_url or f"AWS {cfg.region or 'default region'}"
+        return True, f"Connected to bucket {cfg.bucket} ({where})"
+    except Exception as exc:
+        code = _s3_error_code(exc)
+        hints = {
+            "NoSuchBucket": "the bucket does not exist (check the name and region)",
+            "AccessDenied": "the key cannot write to this bucket (it needs s3:PutObject and s3:DeleteObject)",
+            "InvalidAccessKeyId": "the access key ID is not recognised",
+            "SignatureDoesNotMatch": "the secret access key is wrong",
+            "PermanentRedirect": "the bucket is in a different region",
+            "AuthorizationHeaderMalformed": "the region does not match the bucket",
+        }
+        return False, f"S3 connection failed: {hints.get(code, exc)}"
+
+
+def _s3_upload_sync(cfg: S3Config, local_path: str, remote_path: str) -> tuple[bool, str]:
+    """Upload one file (multipart above 8 MB via upload_file) and verify
+    the stored size."""
+    try:
+        client = _s3_client(cfg)
+        key = s3_key(remote_path)
+        extra = {"ContentType": "video/mp4"}
+        if cfg.storage_class and cfg.storage_class != "STANDARD":
+            extra["StorageClass"] = cfg.storage_class
+        client.upload_file(local_path, cfg.bucket, key, ExtraArgs=extra)
+        expected = os.path.getsize(local_path)
+        actual = client.head_object(Bucket=cfg.bucket, Key=key).get("ContentLength")
+        if actual is not None and int(actual) != expected:
+            return False, f"size mismatch after upload: local {expected} vs remote {actual}"
+        return True, "uploaded"
+    except Exception as exc:
+        return False, f"{_s3_error_code(exc)}: {exc}"
+
+
+def _s3_delete_sync(cfg: S3Config, remote_path: str) -> tuple[bool, str]:
+    try:
+        _s3_client(cfg).delete_object(Bucket=cfg.bucket, Key=s3_key(remote_path))
+        return True, "deleted"
+    except Exception as exc:
+        return False, f"{_s3_error_code(exc)}: {exc}"
+
+
+def _s3_download_sync(cfg: S3Config, remote_path: str, local_path: str) -> tuple[bool, str]:
+    """Download into ``local_path``. Raises RestorePendingError for an archived
+    object, after requesting a restore if none is running yet."""
+    client = _s3_client(cfg)
+    key = s3_key(remote_path)
+    tmp = local_path + f".part{os.getpid()}"
+    try:
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        client.download_file(cfg.bucket, key, tmp)
+        os.replace(tmp, local_path)
+        return True, "downloaded"
+    except Exception as exc:
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        code = _s3_error_code(exc)
+        if code in ("InvalidObjectState", "403") or cfg.needs_restore:
+            restoring = _s3_request_restore(client, cfg.bucket, key)
+            if restoring is not None:
+                raise RestorePendingError(restoring) from exc
+        return False, f"{code}: {exc}"
+
+
+def _s3_request_restore(client, bucket: str, key: str) -> str | None:
+    """Start (or report) a restore for an archived object. Returns a
+    user-facing message, or None when the object is not archived."""
+    try:
+        head = client.head_object(Bucket=bucket, Key=key)
+    except Exception:
+        return None
+    klass = head.get("StorageClass") or "STANDARD"
+    if klass not in S3_RESTORE_CLASSES:
+        return None
+    eta = "up to 12 hours" if klass == "DEEP_ARCHIVE" else "3 to 5 hours"
+    if 'ongoing-request="true"' in (head.get("Restore") or ""):
+        return f"This recording is in {klass} cold storage and is being restored. Try again in {eta}."
+    try:
+        client.restore_object(
+            Bucket=bucket,
+            Key=key,
+            RestoreRequest={"Days": S3_RESTORE_DAYS, "GlacierJobParameters": {"Tier": "Standard"}},
+        )
+    except Exception as exc:
+        if _s3_error_code(exc) != "RestoreAlreadyInProgress":
+            logger.warning("S3 restore request failed for %s: %s", key, exc)
+            return None
+    return f"This recording is in {klass} cold storage. A restore has been requested. Try again in {eta}."
+
+
+# ── Kind dispatch: one surface for the upload worker, playback, retention ──
+
+REMOTE_KINDS = ("ftp", "s3")
+
+
+def parse_remote_config(kind: str, config_enc: str | None):
+    if kind == "ftp":
+        return parse_ftp_config(config_enc)
+    if kind == "s3":
+        return parse_s3_config(config_enc)
+    return None
+
+
+def seal_remote_config(kind: str, cfg: dict) -> str:
+    if kind == "ftp":
+        return seal_ftp_config(cfg)
+    if kind == "s3":
+        return seal_s3_config(cfg)
+    raise ValueError(f"{kind!r} is not a remote storage kind")
+
+
+async def remote_probe(kind: str, cfg, root: str) -> tuple[bool, str]:
+    if kind == "s3":
+        return await asyncio.to_thread(_s3_probe_sync, cfg, root)
+    return await probe_ftp(cfg, root)
+
+
+async def remote_upload(kind: str, cfg, root: str, local_path: str, remote_path: str) -> tuple[bool, str]:
+    if kind == "s3":
+        return await asyncio.to_thread(_s3_upload_sync, cfg, local_path, remote_path)
+    return await ftp_upload(cfg, root, local_path, remote_path)
+
+
+async def remote_download(kind: str, cfg, remote_path: str, local_path: str) -> tuple[bool, str]:
+    """Raises RestorePendingError for an S3 archive-class object."""
+    if kind == "s3":
+        return await asyncio.to_thread(_s3_download_sync, cfg, remote_path, local_path)
+    return await ftp_download(cfg, remote_path, local_path)
+
+
+async def remote_delete(kind: str, cfg, remote_path: str) -> tuple[bool, str]:
+    if kind == "s3":
+        return await asyncio.to_thread(_s3_delete_sync, cfg, remote_path)
+    return await ftp_delete(cfg, remote_path)
+
+
+def kind_label(kind: str | None) -> str:
+    return {"ftp": "FTP", "s3": "S3"}.get(kind or "", kind or "remote")

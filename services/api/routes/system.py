@@ -979,19 +979,6 @@ async def storage_location_status(
             warnings.append(
                 f"{loc.key.capitalize()} location {loc.path} is not writable by Nurby."
             )
-    # Remote uploads (issue #269): stuck recordings live only in the local
-    # buffer and will age out of retention without ever reaching the FTP
-    # server — that is exactly what the operator needs to know about.
-    from shared.models import Recording
-
-    failed_remote = await db.scalar(
-        select(func.count()).select_from(Recording).where(Recording.remote_state == "failed")
-    )
-    if failed_remote:
-        warnings.append(
-            f"{failed_remote} recording(s) failed to upload to their FTP location "
-            "and currently exist only in the local buffer."
-        )
         if loc.free_bytes is not None and loc.free_bytes < LOW_DISK_FREE_BYTES:
             low = True
             warnings.append(
@@ -999,6 +986,25 @@ async def storage_location_status(
                 "With retention on, old media will be deleted as space runs out; "
                 "with retention off, recording will fail when the disk fills."
             )
+    # Remote uploads (issues #269, #270): stuck recordings live only in the
+    # local buffer. That is exactly what the operator needs to know about.
+    from shared.models import Recording
+
+    failed_remote = await db.scalar(
+        select(func.count()).select_from(Recording).where(Recording.remote_state == "failed")
+    )
+    if failed_remote:
+        warnings.append(
+            f"{failed_remote} recording(s) failed to upload to their FTP/S3 location "
+            "and currently exist only on this machine."
+        )
+    from shared.archive import archive_misconfigured
+
+    if await archive_misconfigured():
+        warnings.append(
+            "The archive destination is missing or disabled, so old recordings are "
+            "being deleted instead of archived. Pick a destination under Archive."
+        )
     return StorageLocationStatus(
         locations=locations,
         docker=storage_paths.in_docker(),

@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { ArchiveCard } from "@/components/settings/ArchiveCard";
 
 interface StorageLocationInfo {
   key: string; // recordings | thumbnails | audio
@@ -437,11 +438,16 @@ export function StorageOverviewBlock() {
         <StorageLocationForm showCurrent={false} />
       </div>
 
+      <div className="border-t border-border pt-3">
+        <ArchiveCard />
+      </div>
+
       <p className="text-[11px] text-muted-foreground">
-        Retention is set per camera (Retention in each camera&apos;s
-        settings), and a camera can record to its own location (Storage
-        Location in camera settings). Recordings already written stay where
-        they are when locations change.
+        How long footage stays on this machine is set per camera (Retention
+        in each camera&apos;s settings), and a camera can record to its own
+        folder, FTP server or S3 bucket (Recordings location in camera
+        settings). Recordings already written stay where they are when
+        locations change.
       </p>
     </div>
   );

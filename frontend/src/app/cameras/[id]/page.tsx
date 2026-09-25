@@ -251,6 +251,24 @@ export default function CameraConfigPage() {
     fetchData();
   }, [fetchData, authLoading]);
 
+  // Archive destination (issue #270): retention then moves old footage there
+  // instead of deleting it, and the Retention copy says so. Admin-only
+  // endpoint; anyone else keeps the plain wording.
+  const [archiveName, setArchiveName] = useState<string | null>(null);
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await authFetch("/api/storage/archive");
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!cancelled) setArchiveName(d.active ? d.profile_name : null);
+      } catch {/* ignore */}
+    })();
+    return () => { cancelled = true; };
+  }, [authFetch, authLoading]);
+
   // Fetch class names from the selected detection models. Falls back to
   // yolov8n.pt when the list is empty (matches backend fallback).
   useEffect(() => {
@@ -560,6 +578,13 @@ export default function CameraConfigPage() {
           </svg>
           Audio
         </Link>
+        <Link
+          href={`/memory?entity_kind=camera&entity_key=${cameraId}&label=${encodeURIComponent(camera.name)}`}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground hover:border-foreground/30"
+          title="Household notes about this camera"
+        >
+          Notes
+        </Link>
       </div>
 
       {/* Presence + movement strip: when activity happened and who was there,
@@ -858,6 +883,7 @@ export default function CameraConfigPage() {
           setRetentionDays={setRetentionDays}
           setRetentionGb={setRetentionGb}
           setRetentionMode={setRetentionMode}
+          archiveName={archiveName}
         />
 
         {/* ── Recordings location ── */}

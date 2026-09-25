@@ -152,16 +152,22 @@ async def _get_disk_path_or_404(recording: Recording) -> str:
         # Remote storage (issue #269): the local buffer copy is removed
         # after a verified FTP upload — fetch it back into the playback
         # cache before giving up.
-        cached = await fetch_to_cache(recording)
+        from shared.remote_storage import RestorePendingError
+
+        try:
+            cached = await fetch_to_cache(recording)
+        except RestorePendingError as exc:
+            # Cold archive (S3 Glacier / Deep Archive): a restore is running.
+            raise HTTPException(status_code=409, detail=str(exc))
         if cached:
             return cached
         if getattr(recording, "remote_state", None) == "uploaded":
             # Issue #275: say WHERE the recording lives instead of claiming
             # it does not exist.
-            name = await _profile_name(recording.remote_profile_id)
+            name, kind = await _profile_name_kind(recording.remote_profile_id)
             raise HTTPException(
                 status_code=404,
-                detail=f"Stored on {name} (FTP), which is currently unreachable. "
+                detail=f"Stored on {name} ({kind}), which is currently unreachable. "
                 "Check the server, then try again.",
             )
     if path is None:
@@ -171,17 +177,21 @@ async def _get_disk_path_or_404(recording: Recording) -> str:
     return path
 
 
-async def _profile_name(profile_id) -> str:
-    """Human name for a storage profile snapshot, for error copy."""
+async def _profile_name_kind(profile_id) -> tuple[str, str]:
+    """Human name + kind label for a storage profile snapshot, for error copy."""
+    from shared.remote_storage import kind_label
+
+    fallback = ("your remote storage", "remote")
     if not profile_id:
-        return "your FTP server"
+        return fallback
     try:
+        from shared.database import async_session
+
         async with async_session() as db:
             profile = await db.get(StorageProfile, profile_id)
-        return profile.name if profile else "your FTP server"
+        return (profile.name, kind_label(profile.kind)) if profile else fallback
     except Exception:
-        return "your FTP server"
-    return path
+        return fallback
 
 
 def _recording_window_end():
