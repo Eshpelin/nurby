@@ -52,6 +52,8 @@ class Settings(BaseSettings):
 
     recordings_path: str = "./recordings"
     thumbnails_path: str = "./thumbnails"
+    # Encrypted backup archives. Point this at a mounted drive in production.
+    backup_path: str = "./backups"
     jwt_secret: str = _DEFAULT_JWT_SECRET
     jwt_expiry_hours: int = 24
     cors_origins: str = ""  # comma-separated additional origins

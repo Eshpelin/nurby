@@ -11,6 +11,7 @@ import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
 import { PairMobileCard } from "@/components/PairMobileCard";
 import { ShareLinksCard } from "@/components/ShareLinksCard";
 import { SystemDoctorPanel } from "@/components/SystemDoctorPanel";
+import { BackupCard } from "@/components/BackupCard";
 import { DevicesSection } from "@/components/DevicesSection";
 import { GroundingSettingsCard } from "@/components/settings/GroundingSettingsCard";
 import { StorageLocationCard, useStorageOverview } from "@/components/settings/StorageLocation";
@@ -919,6 +920,7 @@ export default function SettingsPage() {
         )}
 
         {/* System doctor card */}
+        <BackupCard />
         <div className="rounded-lg border border-border bg-card">
           <button
             onClick={() => setShowDoctor(!showDoctor)}

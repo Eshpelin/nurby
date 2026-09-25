@@ -70,6 +70,7 @@ services:
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
       AUDIO_STORAGE_PATH: /data/audio
+      BACKUP_PATH: /data/backups
       # Stable signing secret so issued tokens survive restarts. Sourced
       # from .env; without it each restart mints a fresh random secret and
       # invalidates every existing session/login.
@@ -85,6 +86,7 @@ services:
       - ${NURBY_RECORDINGS_VOLUME:-recordings}:/data/recordings
       - ${NURBY_THUMBNAILS_VOLUME:-thumbnails}:/data/thumbnails
       - ${NURBY_AUDIO_VOLUME:-audio}:/data/audio
+      - ${NURBY_BACKUP_VOLUME:-backups}:/data/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -334,6 +336,7 @@ volumes:
   recordings:
   thumbnails:
   audio:
+  backups:
   ollama_models:
   grounding_models:
   panns_data:

@@ -57,6 +57,14 @@ def _stream_config_hash(cam: Camera) -> str:
         str(cam.snapshot_interval or 2.0),
         getattr(cam, "webcam_device", "") or "",
         "audio_only" if getattr(cam, "audio_only", False) else "av",
+        # Recording changes must restart the worker too. Without these fields
+        # in the hash, a UI change from off -> always updates the database but
+        # leaves the existing worker in its previous recording mode.
+        "recording_enabled" if getattr(cam, "recording_enabled", True) else "recording_disabled",
+        getattr(cam, "recording_mode", "always") or "always",
+        ",".join(getattr(cam, "recording_trigger_objects", None) or []),
+        str(getattr(cam, "recording_clip_pre", 5)),
+        str(getattr(cam, "recording_clip_post", 10)),
     ]
     return hashlib.md5("|".join(parts).encode()).hexdigest()
 

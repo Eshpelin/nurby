@@ -8,6 +8,7 @@ piece the same picture together from docker logs.
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -369,6 +370,38 @@ async def _check_disk() -> DoctorCheck:
         )
 
 
+async def _check_backup() -> DoctorCheck:
+    """Report whether the configured backup job has produced a recent archive."""
+    from services.backup import backup_status
+
+    status = backup_status()
+    if not status.get("last_success_at"):
+        return DoctorCheck(
+            id="backup", label="Backups", status="warn",
+            detail="No successful backup has been recorded",
+            hint="Open Settings → Backups and run Back up now, or schedule scripts/nurby_backup.py.",
+        )
+    try:
+        created = datetime.fromisoformat(str(status["last_success_at"]).replace("Z", "+00:00"))
+        age_hours = (datetime.now(timezone.utc) - created).total_seconds() / 3600
+    except (TypeError, ValueError):
+        return DoctorCheck(
+            id="backup", label="Backups", status="warn",
+            detail="Backup status could not be read",
+            hint="Run a new backup from Settings.",
+        )
+    if age_hours > 24 * 7:
+        return DoctorCheck(
+            id="backup", label="Backups", status="warn",
+            detail=f"Last successful backup was {age_hours / 24:.0f} days ago",
+            hint="Run a new backup before relying on this installation.",
+        )
+    return DoctorCheck(
+        id="backup", label="Backups", status="ok",
+        detail=f"Last successful backup was {age_hours:.1f} hours ago",
+    )
+
+
 async def _run_with_timeout(coro, check_id: str, label: str) -> DoctorCheck:
     try:
         return await asyncio.wait_for(coro, timeout=_CHECK_TIMEOUT)
@@ -424,6 +457,7 @@ async def run_doctor(
         _run_with_timeout(_check_smtp(), "smtp", "Email (SMTP)"),
         _run_with_timeout(_check_alert_channels(), "alert_channels", "Alert delivery"),
         _run_with_timeout(_check_disk(), "disk", "Disk space"),
+        _run_with_timeout(_check_backup(), "backup", "Backups"),
         _run_with_timeout(
             _check_component_health(
                 component_health.OBSERVATION_WRITER, "Perception output",

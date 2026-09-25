@@ -1,6 +1,7 @@
 import asyncio
 import shutil
 import time
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -23,6 +24,35 @@ from shared.schemas import (
 )
 
 router = APIRouter()
+
+
+class BackupRequest(BaseModel):
+    passphrase: str
+    include_recordings: bool = False
+
+
+@router.get("/backup/status")
+async def get_backup_status(_current_user: User = Depends(require_admin)):
+    from services.backup import backup_status
+
+    status = backup_status()
+    status["backup_path"] = settings.backup_path
+    return status
+
+
+@router.post("/backup")
+async def run_backup(body: BackupRequest, _current_user: User = Depends(require_admin)):
+    from services.backup import create_backup
+
+    try:
+        archive = await asyncio.to_thread(
+            create_backup,
+            body.passphrase,
+            include_recordings=body.include_recordings,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"archive": archive.name, "backup_path": str(Path(settings.backup_path))}
 
 
 @router.get("/status", response_model=SystemStatus)
