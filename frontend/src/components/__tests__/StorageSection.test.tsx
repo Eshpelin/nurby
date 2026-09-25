@@ -50,7 +50,7 @@ describe("StorageSection stale assignment (#280)", () => {
     mocks.fetch.mockImplementation(router([profile]));
     const setStorageProfileId = vi.fn();
     render(<StorageSection storageProfileId="p1" setStorageProfileId={setStorageProfileId} />);
-    await screen.findByText(/on FTP/i);
+    await screen.findByText(/upload to FTP/i);
     await waitFor(() => expect(setStorageProfileId).not.toHaveBeenCalled());
   });
 

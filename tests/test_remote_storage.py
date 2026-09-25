@@ -171,7 +171,7 @@ async def test_successful_upload_marks_uploaded_and_removes_buffer(tmp_path):
 
     with patch("services.ingestion.retention._resolve_camera_path", new=AsyncMock(return_value=str(local))), \
          patch("os.path.exists", return_value=True), \
-         patch.object(ru, "ftp_upload", new=AsyncMock(return_value=(True, "uploaded"))), \
+         patch.object(ru, "remote_upload", new=AsyncMock(return_value=(True, "uploaded"))), \
          patch("os.remove") as remove:
         await ru.RemoteUploadWorker()._process_one(_fake_db(_profile()), rec)
 
@@ -191,7 +191,7 @@ async def test_failed_upload_increments_attempts_and_keeps_buffer(tmp_path):
 
     with patch("services.ingestion.retention._resolve_camera_path", new=AsyncMock(return_value=str(local))), \
          patch("os.path.exists", return_value=True), \
-         patch.object(ru, "ftp_upload", new=AsyncMock(return_value=(False, "550 failed"))), \
+         patch.object(ru, "remote_upload", new=AsyncMock(return_value=(False, "550 failed"))), \
          patch("os.remove") as remove:
         await ru.RemoteUploadWorker()._process_one(_fake_db(_profile()), rec)
 
@@ -211,7 +211,7 @@ async def test_attempts_cap_terminals_the_recording(tmp_path):
 
     with patch("services.ingestion.retention._resolve_camera_path", new=AsyncMock(return_value=str(local))), \
          patch("os.path.exists", return_value=True), \
-         patch.object(ru, "ftp_upload", new=AsyncMock(return_value=(False, "down"))), \
+         patch.object(ru, "remote_upload", new=AsyncMock(return_value=(False, "down"))), \
          patch("os.remove") as remove:
         await ru.RemoteUploadWorker()._process_one(_fake_db(_profile()), rec)
 
@@ -268,14 +268,14 @@ async def test_fetch_to_cache_downloads_when_cold(tmp_path, monkeypatch):
         remote_state="uploaded", file_path="abc/f.mp4", remote_path="/nurby/abc/f.mp4"
     )
 
-    async def fake_download(cfg, remote, local):
+    async def fake_download(kind, cfg, remote, local):
         os.makedirs(os.path.dirname(local), exist_ok=True)  # matches _download_sync
         with open(local, "wb") as f:
             f.write(b"from-ftp")
         return True, "downloaded"
 
     with patch("services.ingestion.remote_upload.async_session", new=_fake_db_session(_profile())), \
-         patch.object(ru, "ftp_download", new=fake_download):
+         patch.object(ru, "remote_download", new=fake_download):
         out = await ru.fetch_to_cache(rec)
     assert out and out.endswith(os.path.join(".remote_cache", "abc", "f.mp4"))
     assert open(out, "rb").read() == b"from-ftp"

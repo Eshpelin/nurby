@@ -45,7 +45,7 @@ drive, a USB disk, and — crucially — **mounts of remotes**:
 |---|---|
 | FTP / SFTP | `rclone mount remote: /mnt/ftp-recordings` (or sshfs) |
 | SMB / Windows share | mount.cifs / Docker volume of the host mount |
-| S3 / B2 / WebDAV | `rclone mount` with a `--vfs-cache` for writes |
+| WebDAV | `rclone mount` with a `--vfs-cache` for writes (S3 is native now) |
 | Another Nurby/file server | NFS export, or WebDAV via davfs2/rclone |
 
 Mounts are the honest v1 answer to "my own FTP": the app keeps treating
@@ -80,9 +80,54 @@ upload cadence leaves near-time analysis working); changing a camera's
 profile or deleting one can orphan already-uploaded remote files (the
 per-recording snapshot covers retention, not reassignments).
 
-**kind="s3" / "webdav" (designed, not built)** — the same
-buffer-then-upload skeleton applies (tracked in #270 for S3); the create
-API rejects unimplemented kinds with a pointer here.
+**kind="s3" (implemented, native, #270)** — AWS S3, Cloudflare R2,
+Backblaze B2, Wasabi and MinIO through one boto3 client (`endpoint_url`
+selects the non-AWS ones). Same buffer-then-upload pipeline and worker as
+FTP. `root` is the key prefix. Config: bucket, region, endpoint, access
+key, secret (sealed), storage class. The connection test writes and
+deletes a tiny `STANDARD` marker object, so it proves write access without
+archive-class minimum charges. Playback downloads into the same
+`.remote_cache`. For `GLACIER` / `DEEP_ARCHIVE` objects (set directly, or
+moved there by a bucket lifecycle rule) the first playback requests a
+7-day restore and answers 409 with an ETA; `GLACIER_IR` plays instantly.
+
+**kind="webdav" (designed, not built)** — the create API rejects
+unimplemented kinds.
+
+## Archive tier: keep recent footage local, move old footage out (#270)
+
+Settings → Storage → **Archive older recordings** picks a remote profile
+(S3 or FTP) as the archive (`archive_profile_id` app setting) and how long
+the archive keeps footage (`archive_retention_days`, 0 = forever).
+
+With an archive set, a camera's retention means *how long footage stays on
+this machine*:
+
+- **By age**: a recording older than `retention_days` is queued for the
+  archive (`remote_state=pending`, `remote_profile_id=<archive>`) instead of
+  deleted. The upload worker moves it and always removes the local copy
+  once the upload is verified.
+- **By size**: the budget counts local bytes only; the oldest local
+  recordings are queued for the archive until the camera is under it.
+- **Keep forever**: nothing is archived. The Archive card lists these
+  cameras.
+- A recording the archive owns (uploaded, pending, or failed) is never
+  deleted by local retention. A failed archive upload keeps its local file
+  (the only copy) and shows as a storage warning.
+- The archive is pruned hourly by `archive_retention_days`. A row is
+  dropped only after its remote object is deleted, so a failed delete
+  retries instead of leaving a billed orphan.
+- The archive destination cannot be deleted while it is selected, and a
+  destination that goes missing or disabled raises a storage warning
+  (recordings are then deleted as if archiving were off).
+
+No migration: the archive reuses `recordings.remote_*` and two app
+settings.
+
+Code: `shared/archive.py`, `services/ingestion/retention.py`
+(`mark_for_archive`, `_enforce_archive_retention`),
+`services/api/routes/storage_profiles.py` (`/api/storage/archive`),
+`frontend/src/components/settings/ArchiveCard.tsx`.
 
 ## Where resolution happens (code map)
 

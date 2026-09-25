@@ -3,6 +3,11 @@ Recording retention cleanup.
 
 Periodically checks each camera's retention policy and deletes
 old recordings that exceed time or size limits.
+
+With an archive destination set (shared/archive.py, issue #270), a
+recording that leaves its camera's local window is queued for upload to
+the archive instead of deleted, and the archive is pruned on its own
+lifetime (``archive_retention_days``).
 """
 
 import asyncio
@@ -57,30 +62,52 @@ def _resolve_path(file_path: str | None, camera_id=None) -> str | None:
     return os.path.join(os.path.abspath(settings.recordings_path), rel)
 
 
-async def _delete_remote_copy(rec) -> None:
-    """Best-effort removal of the FTP copy of an expired recording
-    (issue #269). Uses the profile snapshot stored at upload time, so the
-    remote is cleaned even after the camera moved to another profile. A
-    failed delete orphans one file on the remote — logged, not fatal."""
+async def _delete_remote_copy(rec) -> bool:
+    """Best-effort removal of the remote (FTP/S3) copy of an expired
+    recording (issues #269, #270). Uses the profile snapshot stored at
+    upload time, so the remote is cleaned even after the camera moved to
+    another profile. Returns True when there is no remote copy left to
+    worry about. A failed delete orphans one object, logged, not fatal."""
     if rec.remote_state != "uploaded" or not rec.remote_profile_id or not rec.remote_path:
-        return
+        return True
     try:
         from shared.models import StorageProfile
-        from shared.remote_storage import ftp_delete, parse_ftp_config
+        from shared.remote_storage import parse_remote_config, remote_delete
 
         async with async_session() as db:
             profile = await db.get(StorageProfile, rec.remote_profile_id)
-        cfg = parse_ftp_config(profile.config_enc) if profile else None
+        cfg = parse_remote_config(profile.kind, profile.config_enc) if profile else None
         if cfg is None:
             logger.warning(
                 "Cannot delete remote copy of %s: storage profile gone", rec.id
             )
-            return
-        ok, detail = await ftp_delete(cfg, rec.remote_path)
+            return False
+        ok, detail = await remote_delete(profile.kind, cfg, rec.remote_path)
         if not ok:
             logger.warning("Remote delete failed for %s: %s", rec.id, detail)
+        return ok
     except Exception:
         logger.exception("remote delete failed for %s", getattr(rec, "id", "?"))
+        return False
+
+
+def mark_for_archive(rec, archive) -> None:
+    """Queue ``rec`` for the upload worker to move into the archive. The
+    local file stays until the upload is verified."""
+    from shared.remote_storage import remote_path_for
+
+    rec.remote_state = "pending"
+    rec.remote_profile_id = archive.profile_id
+    rec.remote_path = remote_path_for(archive.root, rec.file_path)
+    rec.remote_attempts = 0
+    rec.remote_error = None
+
+
+def archive_owns(rec, archive) -> bool:
+    """True when the archive is (or is about to be) responsible for this
+    recording, so local retention must leave it alone. Includes a failed
+    archive upload: the local file is then the only copy."""
+    return archive is not None and rec.remote_profile_id == archive.profile_id
 
 
 async def _resolve_camera_path(file_path: str | None, camera_id) -> str | None:
@@ -206,6 +233,14 @@ class RetentionManager:
             # the user can lower them per camera.
             all_cams = list((await db.execute(select(Camera))).scalars().all())
 
+        from shared.archive import archive_target
+
+        try:
+            archive = await archive_target()
+        except Exception:
+            logger.exception("Could not read the archive destination; deleting as usual")
+            archive = None
+
         rec_cams = [c for c in all_cams if (c.retention_mode or "none") != "none"]
         if rec_cams:
             logger.info(
@@ -214,13 +249,18 @@ class RetentionManager:
             for cam in rec_cams:
                 try:
                     if cam.retention_mode == "time":
-                        await self._enforce_time(cam, cam.retention_days)
+                        await self._enforce_time(cam, cam.retention_days, archive)
                     elif cam.retention_mode == "size":
-                        await self._enforce_size(cam, cam.retention_gb)
+                        await self._enforce_size(cam, cam.retention_gb, archive)
                 except Exception:
                     logger.exception(
                         "Recording retention failed for camera %s", cam.id
                     )
+
+        try:
+            await self._enforce_archive_retention(archive)
+        except Exception:
+            logger.exception("Archive retention failed")
 
         # Audio + transcript retention. always time-based.
         for cam in all_cams:
@@ -516,8 +556,41 @@ class RetentionManager:
                 camera.name or camera.id, len(rows), cutoff.isoformat(), days,
             )
 
-    async def _enforce_time(self, camera: Camera, retention_days: int):
-        """Delete recordings older than retention_days."""
+    async def _enforce_archive_retention(self, archive, batch: int = 500) -> None:
+        """Delete archived recordings older than ``archive_retention_days``
+        (0 = keep forever). The row goes only once the remote object is
+        gone, so a failed delete retries next hour instead of orphaning a
+        billed object."""
+        if archive is None or archive.retention_days <= 0:
+            return
+        cutoff = datetime.now(timezone.utc) - timedelta(days=archive.retention_days)
+        async with async_session() as db:
+            rows = (await db.execute(
+                select(Recording)
+                .where(Recording.remote_profile_id == archive.profile_id)
+                .where(Recording.remote_state == "uploaded")
+                .where(Recording.started_at < cutoff)
+                .order_by(Recording.started_at.asc())
+                .limit(batch)
+            )).scalars().all()
+            deleted = 0
+            for rec in rows:
+                if not await _delete_remote_copy(rec):
+                    continue
+                _remove_file(await _resolve_camera_path(rec.file_path, rec.camera_id))
+                _remove_file(_resolve_path(rec.thumbnail_path))
+                await db.delete(rec)
+                deleted += 1
+            await db.commit()
+        if deleted:
+            logger.info(
+                "Archive retention. deleted %d recordings from %s older than %d days",
+                deleted, archive.name, archive.retention_days,
+            )
+
+    async def _enforce_time(self, camera: Camera, retention_days: int, archive=None):
+        """Recordings older than retention_days leave this machine: moved to
+        the archive when one is set, deleted otherwise."""
         cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
         reason = f"retention_time: older than {retention_days} days"
 
@@ -536,9 +609,16 @@ class RetentionManager:
                 return
 
             deleted_count = 0
+            archived_count = 0
             freed_bytes = 0
 
             for rec in old_recordings:
+                if archive_owns(rec, archive):
+                    continue  # archived or on its way; the archive lifetime governs it
+                if archive is not None and rec.remote_state is None:
+                    mark_for_archive(rec, archive)
+                    archived_count += 1
+                    continue
                 abs_path = await _resolve_camera_path(rec.file_path, rec.camera_id)
                 size, ok = _remove_file(abs_path)
                 if not ok:
@@ -560,19 +640,30 @@ class RetentionManager:
 
             freed_gb = freed_bytes / (1024 ** 3)
             logger.info(
-                "Time retention for camera %s. deleted %d recordings, freed %.2f GB (cutoff %s)",
-                camera.name or camera.id, deleted_count, freed_gb, cutoff.isoformat(),
+                "Time retention for camera %s. deleted %d recordings, freed %.2f GB, "
+                "queued %d for archive (cutoff %s)",
+                camera.name or camera.id, deleted_count, freed_gb, archived_count,
+                cutoff.isoformat(),
             )
 
-    async def _enforce_size(self, camera: Camera, max_gb: float):
-        """Delete oldest recordings until total size is under max_gb."""
+    async def _enforce_size(self, camera: Camera, max_gb: float, archive=None):
+        """Free oldest recordings until total size is under max_gb. With an
+        archive set, the budget is local disk: archived recordings do not
+        count, and the oldest local ones move to the archive instead of
+        being deleted."""
         max_bytes = int(max_gb * 1024 ** 3)
         reason = f"retention_size: exceeded {max_gb:.1f} GB limit"
+
+        local_only = []
+        if archive is not None:
+            local_only = [
+                (Recording.remote_state.is_(None)) | (Recording.remote_state != "uploaded")
+            ]
 
         async with async_session() as db:
             total_result = await db.execute(
                 select(func.coalesce(func.sum(Recording.file_size_bytes), 0)).where(
-                    Recording.camera_id == camera.id
+                    Recording.camera_id == camera.id, *local_only
                 )
             )
             total_bytes = total_result.scalar()
@@ -591,7 +682,7 @@ class RetentionManager:
 
             result = await db.execute(
                 select(Recording)
-                .where(Recording.camera_id == camera.id)
+                .where(Recording.camera_id == camera.id, *local_only)
                 .order_by(Recording.started_at.asc())
             )
             recordings = list(result.scalars().all())
@@ -604,6 +695,16 @@ class RetentionManager:
                     break
 
                 rec_size = rec.file_size_bytes or 0
+                if archive_owns(rec, archive):
+                    # Already queued: its bytes leave once the upload lands.
+                    # A failed upload is the only copy, so it stays.
+                    if rec.remote_state == "pending":
+                        freed_bytes += rec_size
+                    continue
+                if archive is not None and rec.remote_state is None:
+                    mark_for_archive(rec, archive)
+                    freed_bytes += rec_size
+                    continue
                 abs_path = await _resolve_camera_path(rec.file_path, rec.camera_id)
                 size, ok = _remove_file(abs_path)
                 if not ok:

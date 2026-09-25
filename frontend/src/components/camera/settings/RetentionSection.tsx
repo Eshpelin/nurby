@@ -13,6 +13,9 @@ interface RetentionSectionProps {
   setRetentionDays: Dispatch<SetStateAction<number>>;
   setRetentionGb: Dispatch<SetStateAction<number>>;
   setRetentionMode: Dispatch<SetStateAction<string>>;
+  /** Archive destination name when archiving is on (issue #270). Footage
+   *  then moves there instead of being deleted. */
+  archiveName?: string | null;
 }
 
 export function RetentionSection({
@@ -22,11 +25,17 @@ export function RetentionSection({
   setRetentionDays,
   setRetentionGb,
   setRetentionMode,
+  archiveName = null,
 }: RetentionSectionProps) {
+  const leaves = archiveName ? `move to ${archiveName}` : "be deleted";
   return (
         <Section
           title="Retention"
-          description="How long recordings are kept before deletion"
+          description={
+            archiveName
+              ? `How long recordings stay on this machine before moving to the archive (${archiveName})`
+              : "How long recordings are kept before deletion"
+          }
         >
           <FieldRow label="Retention Policy">
             <div className="flex gap-1.5">
@@ -52,7 +61,10 @@ export function RetentionSection({
           </FieldRow>
 
           {retentionMode === "time" && (
-            <FieldRow label="Keep Recordings For" hint="Delete recordings older than this">
+            <FieldRow
+              label={archiveName ? "Keep On This Machine For" : "Keep Recordings For"}
+              hint={archiveName ? `Older recordings move to ${archiveName}` : "Delete recordings older than this"}
+            >
               <div className="flex items-center gap-3">
                 <input
                   type="range"
@@ -91,7 +103,10 @@ export function RetentionSection({
           )}
 
           {retentionMode === "size" && (
-            <FieldRow label="Max Storage" hint="Delete oldest recordings when limit is reached">
+            <FieldRow
+              label={archiveName ? "Max On This Machine" : "Max Storage"}
+              hint={archiveName ? `Oldest recordings move to ${archiveName} past this` : "Delete oldest recordings when limit is reached"}
+            >
               <div className="flex items-center gap-3">
                 <input
                   type="range"
@@ -126,13 +141,24 @@ export function RetentionSection({
           )}
 
           {retentionMode !== "none" && (
-            <div className="rounded-md bg-warning/5 border border-warning/20 px-3 py-2">
-              <p className="text-xs text-warning">
+            <div
+              className={`rounded-md px-3 py-2 ${
+                archiveName ? "bg-muted/30 border border-border" : "bg-warning/5 border border-warning/20"
+              }`}
+            >
+              <p className={`text-xs ${archiveName ? "text-muted-foreground" : "text-warning"}`}>
                 {retentionMode === "time"
-                  ? `Recordings older than ${retentionDays} day${retentionDays !== 1 ? "s" : ""} will be automatically deleted from disk.`
-                  : `When recordings exceed ${retentionGb} GB, oldest files will be deleted to make space.`}
+                  ? `Recordings older than ${retentionDays} day${retentionDays !== 1 ? "s" : ""} will ${archiveName ? leaves : "be automatically deleted from disk"}.`
+                  : `When recordings exceed ${retentionGb} GB, the oldest will ${archiveName ? leaves : "be deleted to make space"}.`}
               </p>
             </div>
+          )}
+
+          {retentionMode === "none" && archiveName && (
+            <p className="text-[11px] text-muted-foreground">
+              This camera keeps everything on this machine, so nothing from it moves to
+              {" "}{archiveName}. Choose By Age or By Size to start archiving.
+            </p>
           )}
         </Section>
   );
