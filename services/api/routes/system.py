@@ -391,6 +391,18 @@ async def get_health(_current_user: User = Depends(get_current_user)):
         "perception": await heartbeat.is_alive(heartbeat.PERCEPTION),
     }
 
+    # Whether any non-demo camera exists (#318). A worker stopped on an
+    # install with nothing but the demo camera (or nothing at all) is not
+    # an alarm: there is nothing to capture yet. The dashboard calms the
+    # banner using this instead of hiding real outages.
+    from services.api.routes.cameras import resolve_demo_video_url
+
+    camera_rows = (await db.execute(select(Camera.stream_type, Camera.stream_url))).all()
+    _demo_url = resolve_demo_video_url()
+    has_real_cameras = any(
+        not (c.stream_type == "file" and c.stream_url == _demo_url) for c in camera_rows
+    )
+
     # Functional component health rides along too: a worker can be alive while
     # its pipeline is silently broken (model failed to load, every write
     # crashing). Surface any component reporting FAIL so the dashboard can warn,
@@ -409,6 +421,7 @@ async def get_health(_current_user: User = Depends(get_current_user)):
 
     return {
         "degraded": degraded,
+        "has_real_cameras": has_real_cameras,
         "cpu_percent": round(cpu, 1),
         "cpu_count": psutil.cpu_count(logical=True),
         "load_avg": load_avg,

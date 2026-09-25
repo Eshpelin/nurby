@@ -37,10 +37,15 @@ export function useWorkerHealth(): {
   down: string[];
   degraded: DegradedComponent[];
   loaded: boolean;
+  /** Whether any non-demo camera exists. Defaults to true while unknown
+   * so a slow poll never mutes a real outage — it only ever *calms* the
+   * banner once the server confirms there is nothing to capture (#318). */
+  hasRealCameras: boolean;
 } {
   const { authFetch, token } = useAuth();
   const [workers, setWorkers] = useState<Workers | null>(null);
   const [degraded, setDegraded] = useState<DegradedComponent[]>([]);
+  const [hasRealCameras, setHasRealCameras] = useState(true);
 
   const load = useCallback(async () => {
     try {
@@ -49,6 +54,9 @@ export function useWorkerHealth(): {
         const data = await res.json();
         setWorkers(data?.workers ?? null);
         setDegraded(Array.isArray(data?.degraded) ? data.degraded : []);
+        if (typeof data?.has_real_cameras === "boolean") {
+          setHasRealCameras(data.has_real_cameras);
+        }
       }
     } catch {
       /* leave the last known value; a transient poll failure is not a
@@ -70,5 +78,5 @@ export function useWorkerHealth(): {
       .map((k) => LABELS[k]);
   }, [workers]);
 
-  return { down, degraded, loaded: workers !== null };
+  return { down, degraded, loaded: workers !== null, hasRealCameras };
 }

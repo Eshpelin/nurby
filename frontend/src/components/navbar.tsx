@@ -39,7 +39,7 @@ export function Navbar() {
     }
   }, [isGuardian, pathname, router]);
   const { status: wsStatus, subscribe } = useWebSocket();
-  const { down: workersDown, degraded } = useWorkerHealth();
+  const { down: workersDown, degraded, hasRealCameras } = useWorkerHealth();
   const [vlmHealth, setVlmHealth] = useState<{
     configured: boolean; reachable: boolean; name?: string | null;
     kind?: string | null; message?: string | null;
@@ -259,6 +259,7 @@ export function Navbar() {
                 workersDown,
                 degraded,
                 wsStatus,
+                hasRealCameras,
                 aiOffline: vlmHealth ? vlmHealth.configured && !vlmHealth.reachable : false,
               })}
             />

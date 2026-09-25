@@ -48,7 +48,7 @@ import { useConfirm } from "@/lib/feedback";
 import { CameraSidebarCard } from "@/components/dashboard/CameraSidebarCard";
 import { PersonActivityModal } from "@/components/dashboard/PersonActivityModal";
 import { SEARCH_HINTS } from "@/components/dashboard/search-hints";
-import { AskHintCard, LocalAIHintCard, SecureAccountNudge } from "@/components/dashboard/HintCards";
+import { AskHintCard, LocalAIHintCard } from "@/components/dashboard/HintCards";
 import { SystemStatusStrip } from "@/components/dashboard/SystemStatus";
 import { StorageLowSpaceBanner } from "@/components/settings/StorageLocation";
 import { computeSystemStatus } from "@/lib/systemStatus";
@@ -59,7 +59,7 @@ import { PROVIDERS_CHANGED_EVENT } from "@/lib/providers-changed";
 function DashboardContent() {
   const { authFetch, token, user } = useAuth();
   const { status: wsStatus, subscribe } = useWebSocket();
-  const { down: workersDown, degraded: degradedComponents } = useWorkerHealth();
+  const { down: workersDown, degraded: degradedComponents, hasRealCameras } = useWorkerHealth();
   const searchParams = useSearchParams();
   const initialCamera = searchParams.get("camera");
   const [searchHint, setSearchHint] = useState(() => SEARCH_HINTS[Math.floor(Math.random() * SEARCH_HINTS.length)]);
@@ -982,6 +982,7 @@ function DashboardContent() {
               degraded: degradedComponents,
               wsStatus: "connected",
               aiOffline: false,
+              hasRealCameras,
             })}
           />
           {/* Setup guidance moved off the dashboard body into the corner
@@ -1537,10 +1538,15 @@ function DashboardContent() {
                         Clear filters ({activeFilterCount})
                       </button>
                     )}
-                    <button onClick={() => setTimeRange("30d")}
-                      className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted">
-                      Try last 30 days
-                    </button>
+                    {/* A five-minute-old install has no 30 days to try (#318):
+                        only offer the wider window once the wall has seen
+                        enough history for it to plausibly contain something. */}
+                    {cameras.some((c) => c.created_at && Date.now() - new Date(c.created_at).getTime() >= 30 * 86400_000) && (
+                      <button onClick={() => setTimeRange("30d")}
+                        className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted">
+                        Try last 30 days
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -2181,7 +2187,6 @@ function DashboardContent() {
           onSetup={() => setShowWizard(true)}
         />
       )}
-      <SecureAccountNudge hasFootage={cameras.length > 0} />
       {cameras.length > 0 && <LocalAIHintCard />}
       {cameras.length > 0 && <AskHintCard />}
       {showWizard && user?.role === "admin" && (
