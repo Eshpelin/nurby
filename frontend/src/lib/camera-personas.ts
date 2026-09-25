@@ -54,6 +54,24 @@ export interface Persona {
   patch: PersonaPatch;
 }
 
+/** Suggest a preset from a camera name without changing any settings. */
+export function suggestedPersonaForCameraName(
+  name: string,
+  personas: Persona[],
+): Persona | null {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return null;
+  const id = normalized.includes("driveway") || normalized.includes("garage")
+    ? "driveway"
+    : normalized.includes("front door") || normalized.includes("entrance") ||
+        normalized.includes("porch") || normalized === "front" || normalized.includes("gate")
+      ? "front-door"
+      : normalized.includes("traffic") || normalized.includes("parking")
+        ? "traffic"
+        : null;
+  return id ? personas.find((persona) => persona.id === id) ?? null : null;
+}
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 

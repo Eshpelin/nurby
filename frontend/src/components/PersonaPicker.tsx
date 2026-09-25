@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { usePersonas, type Persona, type PersonaPatch } from "@/lib/camera-personas";
+import { suggestedPersonaForCameraName, usePersonas, type Persona, type PersonaPatch } from "@/lib/camera-personas";
 
 interface Props {
   // Called with the merged patch when the user confirms a persona.
@@ -10,6 +10,7 @@ interface Props {
   variant?: "compact" | "card-grid";
   // Optional label override.
   title?: string;
+  cameraName?: string;
 }
 
 /**
@@ -21,9 +22,11 @@ export function PersonaPicker({
   onApply,
   variant = "card-grid",
   title = "Quick setup",
+  cameraName,
 }: Props) {
   const [previewing, setPreviewing] = useState<Persona | null>(null);
   const CAMERA_PERSONAS = usePersonas();
+  const suggested = cameraName ? suggestedPersonaForCameraName(cameraName, CAMERA_PERSONAS) : null;
 
   if (variant === "compact") {
     return (
@@ -45,6 +48,16 @@ export function PersonaPicker({
             </button>
           ))}
         </div>
+        {suggested && (
+          <div className="flex items-center justify-between gap-3 rounded-md border border-accent/30 bg-accent/5 px-2.5 py-2 text-xs">
+            <span className="text-muted-foreground">
+              Suggested for <span className="text-foreground">{cameraName}</span>: <span className="font-medium text-foreground">{suggested.label}</span>
+            </span>
+            <button type="button" onClick={() => onApply(suggested.patch, suggested)} className="shrink-0 rounded border border-accent/40 px-2 py-1 text-accent hover:bg-accent/10">
+              Apply
+            </button>
+          </div>
+        )}
       </div>
     );
   }

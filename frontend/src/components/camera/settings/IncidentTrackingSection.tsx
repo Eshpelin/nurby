@@ -23,6 +23,7 @@ export function IncidentTrackingSection({
   return (
         <Section
           title="Incident tracking"
+          advanced
           description="Group repeated observations of the same person or object on this camera into one persistent rolling card with a stable id, live updates, and a final summary on close."
         >
           <FieldRow label="Tracking">

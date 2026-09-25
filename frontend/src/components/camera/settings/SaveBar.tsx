@@ -49,10 +49,10 @@ export function SaveBar({
           )}
         </div>
         <Link
-          href="/"
+          href="/cameras"
           className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
         >
-          Done
+          Back to cameras
         </Link>
       </div>
   );

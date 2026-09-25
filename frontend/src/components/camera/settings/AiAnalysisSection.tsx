@@ -64,6 +64,7 @@ export function AiAnalysisSection({
   return (
         <Section
           title="AI Analysis"
+          advanced
           description="Configure which model analyzes this camera and how"
         >
           <FieldRow label="AI model" hint="Leave on System Default to use global setting">

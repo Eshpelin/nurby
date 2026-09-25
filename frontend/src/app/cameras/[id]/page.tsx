@@ -9,7 +9,6 @@ import { RetryCountdown } from "@/components/RetryCountdown";
 import { CameraPlayer } from "@/components/CameraPlayer";
 import type { PersonaPatch } from "@/lib/camera-personas";
 import { PrivacyZonesSection } from "@/components/PrivacyZonesSection";
-import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { ActivityStrip } from "@/components/ActivityStrip";
 import type { MotionZone } from "@/components/camera/types";
 import { ZoneEditorCanvas } from "@/components/camera/ZoneEditorCanvas";
@@ -637,11 +636,6 @@ export default function CameraConfigPage() {
         <ActivityStrip cameraId={cameraId} cameraName={camera.name} />
       </div>
 
-      {/* HAR activity timeline. Empty until human action recognition is enabled. */}
-      <div className="mb-6">
-        <ActivityTimeline cameraId={cameraId} />
-      </div>
-
       {/* Resolution + FPS info bar */}
       {(camera.width || camera.fps) && (
         <div className="flex gap-4 mb-6 text-xs text-muted-foreground font-mono">
@@ -685,7 +679,7 @@ export default function CameraConfigPage() {
           title="Quick setup"
           description="Apply a preset bundle to fill detection, recording, and summary settings in one click. Override anything afterward."
         >
-          <PersonaPicker variant="compact" onApply={(patch) => applyPersona(patch)} />
+          <PersonaPicker variant="compact" cameraName={name} onApply={(patch) => applyPersona(patch)} />
         </Section>
 
         {/* ── General ── */}
@@ -846,14 +840,16 @@ export default function CameraConfigPage() {
         />
 
         {/* ── Audio Conversations ── */}
-        <AudioConversationsSection
-          conversationGapSeconds={conversationGapSeconds}
-          conversationMinMessages={conversationMinMessages}
-          conversationSummaryEnabled={conversationSummaryEnabled}
-          setConversationGapSeconds={setConversationGapSeconds}
-          setConversationMinMessages={setConversationMinMessages}
-          setConversationSummaryEnabled={setConversationSummaryEnabled}
-        />
+        {(camera.audio_capture_enabled || camera.audio_transcribe_enabled) && (
+          <AudioConversationsSection
+            conversationGapSeconds={conversationGapSeconds}
+            conversationMinMessages={conversationMinMessages}
+            conversationSummaryEnabled={conversationSummaryEnabled}
+            setConversationGapSeconds={setConversationGapSeconds}
+            setConversationMinMessages={setConversationMinMessages}
+            setConversationSummaryEnabled={setConversationSummaryEnabled}
+          />
+        )}
 
         {/* ── Incident tracking ── */}
         <IncidentTrackingSection
@@ -971,4 +967,3 @@ export default function CameraConfigPage() {
     </div>
   );
 }
-

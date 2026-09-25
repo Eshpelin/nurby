@@ -16,6 +16,8 @@ interface Camera {
   recording_trigger_objects: string[] | null;
   recording_clip_pre: number;
   recording_clip_post: number;
+  audio_capture_enabled?: boolean;
+  audio_transcribe_enabled?: boolean;
   vlm_provider_id: string | null;
   vlm_prompt: string | null;
   vlm_interval: number;
