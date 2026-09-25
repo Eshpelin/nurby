@@ -23,6 +23,7 @@ from services.perception.associator import (
     next_status,
     should_archive_association,
     journeys_cooccur,
+    cooccurrence_metrics,
     vehicles_in,
 )
 
@@ -291,6 +292,21 @@ def test_journeys_cooccur_rejects_different_cameras_even_when_times_overlap():
         segments=[{"camera_id": str(_uuid.uuid4())}],
     )
     assert not journeys_cooccur(first, second)
+
+
+def test_cooccurrence_metrics_explain_overlap_and_arrival_gap():
+    first = SimpleNamespace(
+        started_at=_at(1, 8), last_seen_at=_at(1, 8, 10), ended_at=None,
+        segments=[{"camera_id": "camera-a"}],
+    )
+    second = SimpleNamespace(
+        started_at=_at(1, 8, 9), last_seen_at=_at(1, 8, 20), ended_at=None,
+        segments=[{"camera_id": "camera-a"}],
+    )
+    assert cooccurrence_metrics(first, second) == {
+        "overlap_seconds": 60.0,
+        "arrival_gap_seconds": 0.0,
+    }
 
 
 def test_body_subjects_are_not_associable():

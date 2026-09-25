@@ -297,6 +297,20 @@ def journeys_cooccur(first: Journey, second: Journey, gap: timedelta = COOCCURRE
     return max(first_start, second_start) <= min(first_end, second_end) + gap
 
 
+def cooccurrence_metrics(
+    first: Journey, second: Journey,
+) -> dict[str, float | None]:
+    """Explain the temporal relationship between two journey windows."""
+    first_start, first_end = journey_window(first)
+    second_start, second_end = journey_window(second)
+    if not (first_start and first_end and second_start and second_end):
+        return {"overlap_seconds": None, "arrival_gap_seconds": None}
+    overlap = (min(first_end, second_end) - max(first_start, second_start)).total_seconds()
+    if overlap >= 0:
+        return {"overlap_seconds": round(overlap, 3), "arrival_gap_seconds": 0.0}
+    return {"overlap_seconds": 0.0, "arrival_gap_seconds": round(abs(overlap), 3)}
+
+
 def vehicles_in(observations) -> dict[str, dict]:
     """``{vehicle_id: {"label", "camera_id"}}`` for identified vehicles.
 
@@ -625,7 +639,12 @@ async def process_cooccurrences(
             episode_key=episode_key,
             journey_id=journey.id,
             camera_ids=[str(camera_id) for camera_id in shared_cameras],
-            evidence_metadata={"other_journey_id": str(other.id)},
+            evidence_metadata={
+                "other_journey_id": str(other.id),
+                "other_subject_kind": other.subject_kind,
+                "other_subject_key": other.subject_key,
+                **cooccurrence_metrics(journey, other),
+            },
             evidence_kind="cooccurrence",
             evidence_explanation="Both subjects were observed in overlapping finalized visit episodes on a shared camera.",
         )
