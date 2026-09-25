@@ -216,6 +216,11 @@ class ExpectedActivity(Base):
     # person -> a named person must appear; any_person -> anyone; any_activity
     # -> any observation at all (motion counts).
     subject_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="person")
+    # Stable identity target. subject_key remains for legacy rows and display
+    # compatibility while installations migrate from name-only expectations.
+    subject_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("persons.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     subject_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Empty list = any camera the sweeper can see.
     camera_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)

@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.expected_activity import ExpectedWindow, evaluate_window
 from shared.database import async_session
-from shared.models import ExpectedActivity, Notification, Observation
+from shared.models import ExpectedActivity, Notification, Observation, Person
 
 logger = logging.getLogger("nurby.perception.expected_activity")
 
@@ -43,6 +43,17 @@ def _subject_key(exp: ExpectedActivity) -> str:
     if exp.subject_kind == "any_activity":
         return ANY_ACTIVITY
     return exp.subject_key or ""
+
+
+def _person_match_clause(exp: ExpectedActivity):
+    """Prefer person_id; legacy expectations continue matching by name."""
+    if getattr(exp, "subject_person_id", None):
+        return cast(Observation.person_detections, String).ilike(
+            f'%"person_id": "{exp.subject_person_id}"%'
+        )
+    return cast(Observation.person_detections, String).ilike(
+        f'%"person_name": "{exp.subject_key}"%'
+    )
 
 
 def _window_bounds(exp: ExpectedActivity, local_now: datetime) -> tuple[datetime, datetime]:
@@ -91,9 +102,7 @@ async def _gather_sightings(
         Observation.started_at >= start_utc, Observation.started_at <= end_utc
     )
     if exp.subject_kind == "person":
-        q = q.where(
-            cast(Observation.person_detections, String).ilike(f'%"person_name": "{exp.subject_key}"%')
-        )
+        q = q.where(_person_match_clause(exp))
     elif exp.subject_kind == "any_person":
         q = q.where(Observation.person_detections.isnot(None))
     q = q.order_by(Observation.started_at.asc())
@@ -108,9 +117,7 @@ async def _gather_sightings(
     # Last sighting overall (evidence), independent of the window.
     lq = select(Observation).order_by(Observation.started_at.desc())
     if exp.subject_kind == "person":
-        lq = lq.where(
-            cast(Observation.person_detections, String).ilike(f'%"person_name": "{exp.subject_key}"%')
-        )
+        lq = lq.where(_person_match_clause(exp))
     elif exp.subject_kind == "any_person":
         lq = lq.where(Observation.person_detections.isnot(None))
     last_seen = None
@@ -180,7 +187,7 @@ async def evaluate_one(
 async def _fire_absence_alert(db, exp, result, start_dt, end_dt) -> None:
     """Persist an in-app alert carrying honest absence evidence (#215)."""
     subject = {
-        "person": exp.subject_key,
+        "person": exp.subject_key or "that person",
         "any_person": "anyone",
         "any_activity": "any activity",
     }.get(exp.subject_kind, exp.subject_key or "activity")

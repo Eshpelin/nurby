@@ -41,6 +41,9 @@ from shared.models import (
     Person,
     Recording,
     Transcript,
+    ExpectedActivity,
+    Rule,
+    ScheduledReport,
     User,
 )
 from shared.paths import resolve_inside
@@ -842,34 +845,12 @@ async def _auto_star_top_persons(
 # ── Person CRUD endpoints ──
 
 
-async def _ensure_unique_display_name(
-    db: AsyncSession, name: str, exclude_id: uuid.UUID | None = None
-) -> None:
-    """Case-insensitive uniqueness check on persons.display_name.
-    Backs the DB constraint with a friendly 409 instead of an opaque
-    integrity error."""
-    name_norm = (name or "").strip().lower()
-    if not name_norm:
-        return
-    q = select(Person).where(sa_lower(Person.display_name) == name_norm)
-    if exclude_id is not None:
-        q = q.where(Person.id != exclude_id)
-    existing = (await db.execute(q.limit(1))).scalars().first()
-    if existing is not None:
-        raise HTTPException(
-            status_code=409,
-            detail=f"A person named '{existing.display_name}' already exists. "
-            "Two people cannot share a display name; journeys would fuse them.",
-        )
-
-
 @router.post("", response_model=PersonResponse, status_code=201)
 async def create_person(
     body: PersonCreate,
     _current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await _ensure_unique_display_name(db, body.display_name)
     person = Person(**body.model_dump())
     db.add(person)
     await db.commit()
@@ -901,10 +882,6 @@ async def update_person(
         raise HTTPException(status_code=404, detail="Person not found")
 
     updates = body.model_dump(exclude_unset=True)
-    if "display_name" in updates and updates["display_name"]:
-        await _ensure_unique_display_name(
-            db, updates["display_name"], exclude_id=person_id
-        )
     for field, value in updates.items():
         setattr(person, field, value)
 
@@ -922,8 +899,44 @@ async def delete_person(
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
+    references = await _person_references(db, person_id)
+    if references:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Person is still referenced. Reassign or disable these items before deleting.",
+                "references": references,
+            },
+        )
     await db.delete(person)
     await db.commit()
+
+
+def _replace_person_ids(value, source: str, target: str):
+    """Rewrite person_id fields in a rule JSON document without touching labels."""
+    if isinstance(value, dict):
+        return {
+            k: (target if k == "person_id" and str(v) == source else _replace_person_ids(v, source, target))
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_replace_person_ids(v, source, target) for v in value]
+    return value
+
+
+async def _person_references(db: AsyncSession, person_id: uuid.UUID) -> list[dict]:
+    """List configuration that would be orphaned by deleting this person."""
+    refs: list[dict] = []
+    reports = (await db.execute(select(ScheduledReport).where(ScheduledReport.person_id == person_id))).scalars().all()
+    refs.extend({"kind": "scheduled_report", "id": str(r.id), "name": r.name} for r in reports)
+    expectations = (await db.execute(select(ExpectedActivity).where(ExpectedActivity.subject_person_id == person_id))).scalars().all()
+    refs.extend({"kind": "expectation", "id": str(e.id), "name": e.name} for e in expectations)
+    rules = (await db.execute(select(Rule))).scalars().all()
+    needle = str(person_id)
+    for rule in rules:
+        if needle in str(rule.trigger_pattern) or needle in str(rule.conditions):
+            refs.append({"kind": "rule", "id": str(rule.id), "name": rule.name})
+    return refs
 
 
 class PersonMerge(PydanticBaseModel):
@@ -980,6 +993,13 @@ async def merge_person(
             text(f'UPDATE "{tbl}" SET "{col}" = :t WHERE "{col}" = :s'),
             {"t": str(target_id), "s": str(body.source_id)},
         )
+
+    # Rules store their trigger graph as JSON rather than FK columns.
+    rules = (await db.execute(select(Rule))).scalars().all()
+    source, target = str(body.source_id), str(target_id)
+    for rule in rules:
+        rule.trigger_pattern = _replace_person_ids(rule.trigger_pattern, source, target)
+        rule.conditions = _replace_person_ids(rule.conditions, source, target)
 
     # Rewrite the denormalized person id inside observation JSON (person_id is
     # a 36-char UUID, so a plain string replace cannot collide with another id).

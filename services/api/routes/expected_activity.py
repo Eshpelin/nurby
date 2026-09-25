@@ -19,7 +19,7 @@ from shared.auth import get_current_user
 from shared.camera_access import ALL, allowed_camera_ids
 from shared.database import get_db
 from shared.household_mode import MODES
-from shared.models import ExpectedActivity, User
+from shared.models import ExpectedActivity, Person, User
 
 router = APIRouter()
 
@@ -31,6 +31,7 @@ class ExpectedActivityBody(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     subject_kind: str = "person"
     subject_key: str | None = Field(default=None, max_length=255)
+    subject_person_id: uuid.UUID | None = None
     camera_ids: list[uuid.UUID] = Field(default_factory=list)
     weekdays: list[int] = Field(default_factory=list)
     start_time: str = Field(pattern=_HHMM)
@@ -43,8 +44,8 @@ class ExpectedActivityBody(BaseModel):
 def _validate(body: ExpectedActivityBody) -> None:
     if body.subject_kind not in _SUBJECT_KINDS:
         raise HTTPException(status_code=422, detail="invalid subject_kind")
-    if body.subject_kind == "person" and not (body.subject_key or "").strip():
-        raise HTTPException(status_code=422, detail="person expectation needs a subject_key")
+    if body.subject_kind == "person" and not (body.subject_person_id or (body.subject_key or "").strip()):
+        raise HTTPException(status_code=422, detail="person expectation needs a person selection")
     if not body.weekdays or any(d < 0 or d > 6 for d in body.weekdays):
         raise HTTPException(status_code=422, detail="weekdays must be a non-empty list of 0..6")
     if body.active_modes is not None and any(m not in MODES for m in body.active_modes):
@@ -68,6 +69,9 @@ def _serialize(e: ExpectedActivity) -> dict[str, Any]:
         "name": e.name,
         "subject_kind": e.subject_kind,
         "subject_key": e.subject_key,
+        "subject_person_id": str(getattr(e, "subject_person_id", None))
+        if getattr(e, "subject_person_id", None)
+        else None,
         "camera_ids": [str(c) for c in (e.camera_ids or [])],
         "weekdays": e.weekdays or [],
         "start_time": e.start_time,
@@ -78,6 +82,19 @@ def _serialize(e: ExpectedActivity) -> dict[str, Any]:
         "last_evaluated_on": e.last_evaluated_on,
         "last_status": e.last_status,
     }
+
+
+async def _resolve_person_target(body: ExpectedActivityBody, db: AsyncSession) -> tuple[uuid.UUID | None, str | None]:
+    """Return the stable target plus a display-name compatibility value."""
+    if body.subject_kind != "person":
+        return None, None
+    if body.subject_person_id:
+        person = await db.get(Person, body.subject_person_id)
+        if person is None:
+            raise HTTPException(status_code=404, detail="person not found")
+        return person.id, person.display_name
+    # Legacy clients may still submit a name during the migration window.
+    return None, (body.subject_key or "").strip() or None
 
 
 def _visible(e: ExpectedActivity, allowed) -> bool:
@@ -109,10 +126,12 @@ async def create_expected(
 ):
     _validate(body)
     await _require_cameras_in_scope(body.camera_ids, user, db)
+    person_id, display_name = await _resolve_person_target(body, db)
     row = ExpectedActivity(
         name=body.name,
         subject_kind=body.subject_kind,
-        subject_key=body.subject_key if body.subject_kind == "person" else None,
+        subject_person_id=person_id,
+        subject_key=display_name if body.subject_kind == "person" else None,
         camera_ids=[str(c) for c in body.camera_ids],
         weekdays=sorted(set(body.weekdays)),
         start_time=body.start_time,
@@ -148,9 +167,11 @@ async def update_expected(
     row = await _get_in_scope(expected_id, user, db)
     _validate(body)
     await _require_cameras_in_scope(body.camera_ids, user, db)
+    person_id, display_name = await _resolve_person_target(body, db)
     row.name = body.name
     row.subject_kind = body.subject_kind
-    row.subject_key = body.subject_key if body.subject_kind == "person" else None
+    row.subject_person_id = person_id
+    row.subject_key = display_name if body.subject_kind == "person" else None
     row.camera_ids = [str(c) for c in body.camera_ids]
     row.weekdays = sorted(set(body.weekdays))
     row.start_time = body.start_time

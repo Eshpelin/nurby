@@ -74,6 +74,18 @@ def test_create_person_requires_subject_key():
     assert "422" in str(e.value) or "subject_key" in str(e.value)
 
 
+def test_create_person_can_use_stable_id_without_name():
+    person_id = uuid.uuid4()
+    person = SimpleNamespace(id=person_id, display_name="Alex")
+    db = _DB()
+    async def get(model, ident):
+        return person if ident == person_id else None
+    db.get = get
+    out = _run(ea.create_expected(_body(subject_key=None, subject_person_id=person_id), _admin(), db))
+    assert out["subject_person_id"] == str(person_id)
+    assert db.added[0].subject_key == "Alex"
+
+
 def test_create_rejects_bad_weekdays():
     with pytest.raises(Exception):
         _run(ea.create_expected(_body(weekdays=[]), _admin(), _DB()))
