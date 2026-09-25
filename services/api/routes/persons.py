@@ -107,6 +107,9 @@ class NameClusterBody(PydanticBaseModel):
     # When the name already exists, set true to add this cluster's face to that
     # existing person instead of failing. The UI asks for confirmation first.
     merge_into_existing: bool = False
+    # Names are labels rather than identity keys.  A user may intentionally
+    # keep two people with the same name separate after the clash confirmation.
+    allow_duplicate_name: bool = False
 
 
 @router.get("/suggestions", response_model=list)
@@ -238,7 +241,11 @@ async def name_cluster(
         )
     ).scalars().first() if name_norm else None
 
-    if existing_person is not None and not body.merge_into_existing:
+    if (
+        existing_person is not None
+        and not body.merge_into_existing
+        and not body.allow_duplicate_name
+    ):
         raise HTTPException(
             status_code=409,
             detail={

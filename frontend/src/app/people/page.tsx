@@ -505,6 +505,7 @@ export default function PeoplePage() {
   const handleNameSuggestion = async (
     clusterId: string,
     mergeIntoExisting = false,
+    allowDuplicateName = false,
   ) => {
     const name = nameInputs[clusterId]?.trim();
     if (!name) return;
@@ -518,6 +519,7 @@ export default function PeoplePage() {
           display_name: name,
           relationship: relationshipInputs[clusterId]?.trim() || null,
           merge_into_existing: mergeIntoExisting,
+          allow_duplicate_name: allowDuplicateName,
         }),
       });
       if (res.ok) {
@@ -1180,6 +1182,15 @@ export default function PeoplePage() {
                 className="px-3 py-2 text-sm rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
               >
                 Cancel
+              </button>
+              <button
+                onClick={() => handleNameSuggestion(nameMergeConfirm.clusterId, false, true)}
+                disabled={namingSubmitting === nameMergeConfirm.clusterId}
+                className="px-3 py-2 text-sm rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                {namingSubmitting === nameMergeConfirm.clusterId
+                  ? "Saving."
+                  : "Keep separate"}
               </button>
               <button
                 onClick={() => handleNameSuggestion(nameMergeConfirm.clusterId, true)}
