@@ -66,6 +66,8 @@ services:
       TZ: ${TZ:-UTC}
       DATABASE_URL: postgresql+asyncpg://nurby:${POSTGRES_PASSWORD:-nurby_dev}@postgres:5432/nurby
       REDIS_URL: redis://redis:6379/0
+      # Per-install namespace for shared Redis keys/channels (#291).
+      NURBY_INSTANCE_ID: ${COMPOSE_PROJECT_NAME:-nurby}
       MEDIAMTX_API_URL: http://mediamtx:9997
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
@@ -205,6 +207,8 @@ services:
       TZ: ${TZ:-UTC}
       DATABASE_URL: postgresql+asyncpg://nurby:${POSTGRES_PASSWORD:-nurby_dev}@postgres:5432/nurby
       REDIS_URL: redis://redis:6379/0
+      # Per-install namespace for shared Redis keys/channels (#291).
+      NURBY_INSTANCE_ID: ${COMPOSE_PROJECT_NAME:-nurby}
       MEDIAMTX_API_URL: http://mediamtx:9997
       THUMBNAILS_PATH: /data/thumbnails
       NURBY_MCP_TOKEN: ${NURBY_MCP_TOKEN:-}
@@ -234,6 +238,8 @@ services:
       TZ: ${TZ:-UTC}
       DATABASE_URL: postgresql+asyncpg://nurby:${POSTGRES_PASSWORD:-nurby_dev}@postgres:5432/nurby
       REDIS_URL: redis://redis:6379/0
+      # Per-install namespace for shared Redis keys/channels (#291).
+      NURBY_INSTANCE_ID: ${COMPOSE_PROJECT_NAME:-nurby}
       MEDIAMTX_API_URL: http://mediamtx:9997
       MEDIAMTX_RTSP_URL: rtsp://mediamtx:8554
       # Fernet key for camera credentials is derived from JWT_SECRET. Must
@@ -281,6 +287,8 @@ services:
       TZ: ${TZ:-UTC}
       DATABASE_URL: postgresql+asyncpg://nurby:${POSTGRES_PASSWORD:-nurby_dev}@postgres:5432/nurby
       REDIS_URL: redis://redis:6379/0
+      # Per-install namespace for shared Redis keys/channels (#291).
+      NURBY_INSTANCE_ID: ${COMPOSE_PROJECT_NAME:-nurby}
       MEDIAMTX_RTSP_URL: rtsp://mediamtx:8554
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
