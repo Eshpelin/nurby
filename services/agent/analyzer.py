@@ -1341,6 +1341,27 @@ async def analyze_frame_target(
             return _error_result("redaction_failed")
         if provider is None:
             return _error_result("no_provider")
+        # Apply the same camera-level perception budget to analyzer-backed
+        # verify/Ask calls before contacting the provider.  This keeps a
+        # configured limit meaningful across rule_vlm_call and frame analysis
+        # rather than only protecting one action type.
+        from services.perception.usage import check_perception_budget, estimate_vlm_usage
+
+        estimated_in, estimated_out, estimated_cost = estimate_vlm_usage(
+            provider,
+            system_prompt=prompt.text,
+            user_prompt=question,
+            output_text=None,
+            model=model,
+            image_tokens=765 * len(redacted),
+        )
+        budget = await check_perception_budget(
+            str(obs.camera_id),
+            estimated_cost_cents=estimated_cost,
+            estimated_tokens=estimated_in + estimated_out,
+        )
+        if not budget.allowed:
+            return _error_result("perception_budget_exceeded")
         # VLM call.
         try:
             raw = await call_vlm_structured(provider, redacted, question, system_prompt=prompt.text)
@@ -1354,6 +1375,19 @@ async def analyze_frame_target(
         answer["prompt_key"] = prompt.key
         answer["prompt_version"] = prompt.version
         cost_cents = _estimate_cost_cents(provider, tokens_in, tokens_out)
+
+        from services.perception.usage import record_vlm_usage
+
+        await record_vlm_usage(
+            provider,
+            workload="agent_analyzer",
+            system_prompt=prompt.text,
+            user_prompt=question,
+            output_text=json.dumps(answer, separators=(",", ":")),
+            camera_id=str(obs.camera_id),
+            model=model,
+            image_tokens=765 * len(redacted),
+        )
 
         # Persist thumbnails + audit row.
         vlm_call_id = uuid.uuid4()
