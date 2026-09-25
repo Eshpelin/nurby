@@ -212,6 +212,13 @@ export default function VehiclesPage() {
                   <button onClick={() => toggleStar(v)} title="Star" className={`text-base ${v.is_starred ? "text-yellow-400" : "text-muted-foreground hover:text-foreground"}`}>
                     {v.is_starred ? "★" : "☆"}
                   </button>
+                  <Link
+                    href={`/memory?entity_kind=vehicle&entity_key=${v.id}`}
+                    title="Household notes about this vehicle"
+                    className="text-muted-foreground hover:text-foreground text-xs"
+                  >
+                    Notes
+                  </Link>
                   <button onClick={() => setEditing(v)} title="Edit" className="text-muted-foreground hover:text-foreground text-xs">Edit</button>
                 </div>
               </div>

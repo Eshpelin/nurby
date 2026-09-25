@@ -194,6 +194,14 @@ export function FollowFeedPage({ kind, id }: Props) {
           <FollowIcon className="w-5 h-5 text-accent" />
           Following {subjectName}
         </h1>
+        {kind === "person" && subjectName && (
+          <Link
+            href={`/memory?entity_kind=person&entity_key=${id}`}
+            className="ml-auto text-xs px-2.5 py-1 rounded-md border border-border text-muted-foreground hover:text-foreground"
+          >
+            Notes about {subjectName}
+          </Link>
+        )}
       </div>
 
       {bundle && (
