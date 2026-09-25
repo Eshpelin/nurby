@@ -234,7 +234,16 @@ export default function EventsPage() {
       });
       const preview = await previewRes.json().catch(() => ({}));
       if (!previewRes.ok) throw new Error(preview.detail || `Preview failed (${previewRes.status})`);
-      if (!window.confirm(`Delete ${preview.matching} event${preview.matching === 1 ? "" : "s"}? Linked recordings will be preserved.`)) return;
+      const camerasInScope = (preview.cameras || [])
+        .map((id: string) => cameraNames.get(id) || "Unknown camera")
+        .join(", ");
+      const scope = selectAllMatching ? "the current filters" : "the selected events";
+      if (!window.confirm(
+        `Delete ${preview.matching} event${preview.matching === 1 ? "" : "s"} from ${scope}?\n` +
+        `Cameras: ${camerasInScope || "none"}\n` +
+        `Linked recordings: ${preview.linked_recordings || 0} (preserved).\n` +
+        "This cannot be undone."
+      )) return;
       const res = await authFetch("/api/events/bulk/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -253,7 +262,7 @@ export default function EventsPage() {
     } finally {
       setBulkBusy(false);
     }
-  }, [authFetch, fetchEvents, selectedIds, selectAllMatching, selectionFilters]);
+  }, [authFetch, cameraNames, fetchEvents, selectedIds, selectAllMatching, selectionFilters]);
 
   useEffect(() => {
     setSelectedIds(new Set());

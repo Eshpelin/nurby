@@ -353,7 +353,19 @@ export default function RecordingsPage() {
       });
       const preview = await previewRes.json().catch(() => ({}));
       if (!previewRes.ok) throw new Error(preview.detail || `Preview failed (${previewRes.status})`);
-      if (!window.confirm(`Delete ${preview.matching} recording${preview.matching === 1 ? "" : "s"}? This removes the recording files and cannot be undone.${preview.missing_files ? ` ${preview.missing_files} file${preview.missing_files === 1 ? " is" : "s are"} already missing.` : ""}`)) return;
+      const camerasInScope = (preview.cameras || [])
+        .map((id: string) => cameraNames[id] || "Unknown camera")
+        .join(", ");
+      const scope = selectAllMatching ? "the current filters" : "the selected recordings";
+      const missing = preview.missing_files
+        ? ` ${preview.missing_files} file${preview.missing_files === 1 ? " is" : "s are"} already missing.`
+        : "";
+      const estimate = formatFileSize(preview.estimated_bytes || 0);
+      if (!window.confirm(
+        `Delete ${preview.matching} recording${preview.matching === 1 ? "" : "s"} from ${scope}?\n` +
+        `Cameras: ${camerasInScope || "none"}\nEstimated storage reclaimed: ${estimate}.${missing}\n` +
+        "This removes recording files and cannot be undone."
+      )) return;
       const res = await authFetch("/api/recordings/bulk/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -372,7 +384,7 @@ export default function RecordingsPage() {
     } finally {
       setBulkBusy(false);
     }
-  }, [authFetch, fetchRecordings, selectedIds, selectAllMatching, selectionFilters]);
+  }, [authFetch, cameraNames, fetchRecordings, selectedIds, selectAllMatching, selectionFilters]);
 
   useEffect(() => {
     setSelectedIds(new Set());
