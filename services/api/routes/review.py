@@ -41,7 +41,7 @@ _KINDS = {"incident", "alert", "notification", "identity_suggestion", "relations
 
 
 class RelationshipDecisionBody(BaseModel):
-    decision: Literal["confirm", "reject", "defer"]
+    decision: Literal["confirm", "reject", "defer", "revoke", "restore"]
     note: str | None = Field(default=None, max_length=1000)
 
 
@@ -514,15 +514,23 @@ async def decide_relationship_suggestion(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Confirm or reject a learned relationship without exposing hidden evidence.
+    """Apply an audited review decision without exposing hidden evidence.
 
-    Decisions are intentionally irreversible through this endpoint: rejected
-    associations must not be silently revived by later inference, and an
-    established edge must be changed through a future explicit relationship
-    editor rather than by replaying a notification action.
+    Revoke is reversible: it archives a confirmed relationship while keeping
+    its evidence and decision history. Restore returns it to candidate review
+    rather than silently re-confirming it. Reject remains terminal for learned
+    inference and cannot be undone by this endpoint.
     """
     association = await db.get(EntityAssociation, association_id)
-    if not association or association.status not in {"candidate", "deferred"}:
+    valid_status = (
+        association is not None
+        and (
+            association.status in {"candidate", "deferred"}
+            or body.decision == "revoke" and association.status == "established"
+            or body.decision == "restore" and association.status == "archived"
+        )
+    )
+    if not valid_status:
         raise HTTPException(status_code=404, detail="Relationship suggestion not found")
 
     allowed = await allowed_camera_ids(current_user, db)
@@ -536,8 +544,14 @@ async def decide_relationship_suggestion(
         "confirm": "established",
         "reject": "rejected",
         "defer": "deferred",
+        "revoke": "archived",
+        "restore": "candidate",
     }[body.decision]
     association.user_confirmed = body.decision == "confirm"
+    if body.decision == "revoke":
+        association.archived_at = datetime.now(timezone.utc)
+    elif body.decision == "restore":
+        association.archived_at = None
     association.reviewed_at = datetime.now(timezone.utc)
     association.reviewed_by_user_id = current_user.id
     association.review_note = body.note.strip() if body.note else None
@@ -555,6 +569,7 @@ async def decide_relationship_suggestion(
         "status": association.status,
         "user_confirmed": association.user_confirmed,
         "reviewed_at": association.reviewed_at,
+        "archived_at": association.archived_at,
     }
 
 
@@ -641,6 +656,7 @@ async def get_relationship_suggestion(
         "distinct_days": association.distinct_days,
         "first_seen_at": association.first_seen_at,
         "last_seen_at": association.last_seen_at,
+        "archived_at": association.archived_at,
         "review_events": [
             {
                 "id": str(event.id),

@@ -77,6 +77,15 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
     }
   };
 
+  const changeDecision = async (item: Association, decision: "revoke" | "restore") => {
+    const response = await authFetch(`/api/review/relationship-suggestions/${item.id}/decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    if (response.ok) void load();
+  };
+
   if (items === null || items.length === 0) return null;
 
   return (
@@ -107,6 +116,16 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
               </span>
               {item.status === "candidate" && (
                 <Link href="/events" className="text-[10px] text-accent hover:underline">Review</Link>
+              )}
+              {item.user_confirmed && item.status === "established" && (
+                <button type="button" onClick={() => void changeDecision(item, "revoke")} className="text-[10px] text-muted-foreground hover:text-foreground">
+                  Remove
+                </button>
+              )}
+              {item.status === "archived" && (
+                <button type="button" onClick={() => void changeDecision(item, "restore")} className="text-[10px] text-accent hover:underline">
+                  Restore for review
+                </button>
               )}
               <button type="button" onClick={() => void toggleEvidence(item)} className="text-[10px] text-muted-foreground hover:text-foreground">
                 {expanded === item.id ? "Hide evidence" : "Evidence"}
