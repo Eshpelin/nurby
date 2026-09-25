@@ -68,6 +68,7 @@ from services.agent.tools.registry import (  # noqa: F401
 from services.agent.tools.relationships import (  # noqa: F401
     _token_match,
     get_associations,
+    get_household_facts,
     query_relationships,
 )
 from services.agent.tools.setup_tools import (  # noqa: F401
@@ -95,6 +96,7 @@ __all__ = [
     "get_camera_layout",
     "get_daily_digest",
     "get_events",
+    "get_household_facts",
     "get_household_snapshot",
     "get_incidents",
     "explain_rule_evaluations",

@@ -10,7 +10,7 @@ All columns are nullable or defaulted so existing rows carry over as
 household-level notes.
 
 Revision ID: b8d2f6a4c1e9
-Revises: f4a5b6c7d8e9
+Revises: d3f6a8c1e5b7
 Create Date: 2026-09-25 09:00:00.000000
 """
 
@@ -22,7 +22,7 @@ from sqlalchemy.dialects.postgresql import JSON, UUID
 
 
 revision: str = 'b8d2f6a4c1e9'
-down_revision: Union[str, None] = 'f4a5b6c7d8e9'
+down_revision: Union[str, None] = 'd3f6a8c1e5b7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

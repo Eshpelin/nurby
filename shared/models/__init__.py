@@ -161,6 +161,7 @@ __all__ = [
     "Recording",
     "ResourceShare",
     "Rule",
+    "RuleEvaluation",
     "RuleSequenceInstance",
     "ScheduledReport",
     "SpeakerCapability",

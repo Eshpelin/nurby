@@ -447,7 +447,8 @@ async def _resolve_entity(
     if entity_kind is None:
         if entity_key:
             raise HTTPException(status_code=400, detail="entity_key requires entity_kind")
-        return None, None
+        # No attach point means the household itself, explicitly.
+        return "household", "household"
     if entity_kind not in ENTITY_KINDS:
         raise HTTPException(status_code=400, detail=f"unknown entity_kind: {entity_kind}")
     if entity_kind == "household":
@@ -528,7 +529,7 @@ async def create_fact(
         logger.info(
             "alert suppression ARMED on new fact %s by user %s", fact.id, user.id
         )
-    return _fact_view(fact)
+    return _fact_view(fact, await _entity_labels(db, [fact]))
 
 
 @router.patch("/facts/{fact_id}")
