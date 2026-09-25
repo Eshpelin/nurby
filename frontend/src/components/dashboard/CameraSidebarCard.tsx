@@ -16,7 +16,6 @@ import { AudioActiveDot } from "@/components/AudioActiveDot";
 import { VLMStatusBadge } from "@/components/VLMStatusBadge";
 import { SummarizeNowButton } from "@/components/SummarizeNowButton";
 import { FindNowButton } from "@/components/dashboard/FindNowButton";
-import { CameraStatsHover } from "@/components/CameraStatsHover";
 import { timeAgo } from "@/lib/time";
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
 import type { ActivityEvent, Camera } from "@/app/dashboard-types";
@@ -303,17 +302,6 @@ export function CameraSidebarCard({
             against this camera's latest frame. */}
         {camera.status !== "offline" && (
           <FindNowButton cameraId={camera.id} cameraName={camera.name} />
-        )}
-
-        {/* Stats hover. FPS / resolution / VLM latency / drops. Quiet
-            until the user hovers the tile. */}
-        {camera.status !== "offline" && (
-          <CameraStatsHover
-            cameraId={camera.id}
-            fps={camera.fps}
-            width={camera.width}
-            height={camera.height}
-          />
         )}
 
         {/* Overlay toggle (eye icon) */}
