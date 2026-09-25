@@ -390,6 +390,8 @@ class RuleResponse(BaseModel):
     severity: str = "alert"
     # Product-default rules (camera content health). The UI badges and
     # groups these; they cannot be renamed or deleted, only paused.
+    # A freshly constructed (pre-flush) ORM row reports None for columns
+    # whose default only applies at INSERT; treat that as False.
     is_system: bool = False
     snoozed_until: datetime | None = None
     created_at: datetime
@@ -398,6 +400,11 @@ class RuleResponse(BaseModel):
     review_first: bool = False
 
     model_config = {"from_attributes": True}
+
+    @field_validator("is_system", mode="before")
+    @classmethod
+    def _none_is_system_means_false(cls, v):
+        return False if v is None else v
 
 
 # ── Scheduled reports ──
