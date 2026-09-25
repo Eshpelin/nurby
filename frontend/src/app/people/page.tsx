@@ -118,9 +118,12 @@ export default function PeoplePage() {
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
   const [merging, setMerging] = useState(false);
   const [blockedDelete, setBlockedDelete] = useState<{
+    personId: string;
     personName: string;
     references: PersonReference[];
   } | null>(null);
+  const [referenceTargetIds, setReferenceTargetIds] = useState<Record<string, string>>({});
+  const [resolvingReference, setResolvingReference] = useState<string | null>(null);
   // Confirm folding a newly-named cluster into an existing same-name person.
   const [nameMergeConfirm, setNameMergeConfirm] = useState<
     { clusterId: string; existingName: string } | null
@@ -453,7 +456,7 @@ export default function PeoplePage() {
                   typeof (ref as PersonReference).name === "string",
               )
             : [];
-          setBlockedDelete({ personName: person?.display_name || "this person", references });
+          setBlockedDelete({ personId: id, personName: person?.display_name || "this person", references });
           return;
         }
         throw new Error();
@@ -463,6 +466,32 @@ export default function PeoplePage() {
       toast.success("Person deleted");
     } catch {
       toast.error("Could not delete this person.");
+    }
+  };
+
+  const resolveReference = async (reference: PersonReference, action: "reassign" | "disable") => {
+    const key = `${reference.kind}:${reference.id}`;
+    const targetId = referenceTargetIds[key];
+    if (action === "reassign" && !targetId) {
+      toast.error("Choose a replacement person first.");
+      return;
+    }
+    setResolvingReference(key);
+    try {
+      const res = await authFetch(
+        `/api/persons/${blockedDelete?.personId || ""}/references/${reference.kind}/${reference.id}/resolve`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, target_person_id: action === "reassign" ? targetId : null }) },
+      );
+      if (!res.ok) throw new Error();
+      setBlockedDelete((current) => current && {
+        ...current,
+        references: current.references.filter((item) => `${item.kind}:${item.id}` !== key),
+      });
+      toast.success(action === "reassign" ? "Reference reassigned." : "Reference disabled.");
+    } catch {
+      toast.error("Could not resolve this reference. Refresh and try again.");
+    } finally {
+      setResolvingReference(null);
     }
   };
 
@@ -1431,8 +1460,42 @@ export default function PeoplePage() {
               <ul className="space-y-2 max-h-56 overflow-y-auto text-sm">
                 {blockedDelete.references.map((reference) => (
                   <li key={`${reference.kind}:${reference.id}`} className="rounded border border-border px-3 py-2">
-                    <span className="text-muted-foreground">{reference.kind.replaceAll("_", " ")}</span>{" "}
-                    <span className="font-medium">{reference.name}</span>
+                    <div>
+                      <span className="text-muted-foreground">{reference.kind.replaceAll("_", " ")}</span>{" "}
+                      <span className="font-medium">{reference.name}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <select
+                        aria-label={`Replacement person for ${reference.name}`}
+                        value={referenceTargetIds[`${reference.kind}:${reference.id}`] || ""}
+                        onChange={(event) => setReferenceTargetIds((current) => ({
+                          ...current,
+                          [`${reference.kind}:${reference.id}`]: event.target.value,
+                        }))}
+                        className="min-w-0 flex-1 px-2 py-1 rounded bg-background border border-border text-xs"
+                      >
+                        <option value="">Reassign to…</option>
+                        {persons.filter((person) => person.id !== blockedDelete.personId).map((person) => (
+                          <option key={person.id} value={person.id}>{person.display_name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={resolvingReference === `${reference.kind}:${reference.id}`}
+                        onClick={() => resolveReference(reference, "reassign")}
+                        className="px-2 py-1 text-xs rounded border border-border hover:bg-muted disabled:opacity-50"
+                      >
+                        Reassign
+                      </button>
+                      <button
+                        type="button"
+                        disabled={resolvingReference === `${reference.kind}:${reference.id}`}
+                        onClick={() => resolveReference(reference, "disable")}
+                        className="px-2 py-1 text-xs rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 disabled:opacity-50"
+                      >
+                        Disable
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

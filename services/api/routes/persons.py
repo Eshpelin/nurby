@@ -4,6 +4,7 @@ import asyncio
 import os
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -110,6 +111,11 @@ class NameClusterBody(PydanticBaseModel):
     # Names are labels rather than identity keys.  A user may intentionally
     # keep two people with the same name separate after the clash confirmation.
     allow_duplicate_name: bool = False
+
+
+class ResolvePersonReferenceBody(PydanticBaseModel):
+    action: Literal["reassign", "disable"]
+    target_person_id: uuid.UUID | None = None
 
 
 @router.get("/suggestions", response_model=list)
@@ -917,6 +923,79 @@ async def delete_person(
         )
     await db.delete(person)
     await db.commit()
+
+
+@router.post("/{person_id}/references/{reference_kind}/{reference_id}/resolve")
+async def resolve_person_reference(
+    person_id: uuid.UUID,
+    reference_kind: Literal["rule", "scheduled_report", "expectation"],
+    reference_id: uuid.UUID,
+    body: ResolvePersonReferenceBody,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Resolve one configuration reference before deleting a person.
+
+    Reassignment keeps the workflow enabled and points it at another stable
+    person id. Disabling is the safe fallback when the workflow should not be
+    run until an administrator revisits it. The endpoint is deliberately
+    one-reference-at-a-time so the UI can show exactly what changed and a
+    failed item cannot partially resolve an entire delete operation.
+    """
+    source = await db.get(Person, person_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Person not found")
+    target = None
+    if body.action == "reassign":
+        if body.target_person_id is None or body.target_person_id == person_id:
+            raise HTTPException(status_code=422, detail="Choose a different target person")
+        target = await db.get(Person, body.target_person_id)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Target person not found")
+
+    if reference_kind == "rule":
+        row = await db.get(Rule, reference_id)
+        if row is None or not (
+            str(person_id) in str(row.trigger_pattern)
+            or str(person_id) in str(row.conditions)
+            or str(person_id) in str(row.actions)
+        ):
+            raise HTTPException(status_code=404, detail="Person reference not found")
+        if body.action == "reassign":
+            row.trigger_pattern = _replace_person_ids(row.trigger_pattern, str(person_id), str(target.id))
+            row.conditions = _replace_person_ids(row.conditions, str(person_id), str(target.id))
+            row.actions = _replace_person_ids(row.actions, str(person_id), str(target.id))
+        else:
+            row.enabled = False
+        name = row.name
+    elif reference_kind == "scheduled_report":
+        row = await db.get(ScheduledReport, reference_id)
+        if row is None or row.person_id != person_id:
+            raise HTTPException(status_code=404, detail="Person reference not found")
+        if body.action == "reassign":
+            row.person_id = target.id
+        else:
+            row.enabled = False
+        name = row.name
+    else:
+        row = await db.get(ExpectedActivity, reference_id)
+        if row is None or row.subject_person_id != person_id:
+            raise HTTPException(status_code=404, detail="Person reference not found")
+        if body.action == "reassign":
+            row.subject_person_id = target.id
+            row.subject_key = target.display_name
+        else:
+            row.enabled = False
+        name = row.name
+
+    await db.commit()
+    return {
+        "kind": reference_kind,
+        "id": str(reference_id),
+        "name": name,
+        "action": body.action,
+        "target_person_id": str(target.id) if target else None,
+    }
 
 
 def _replace_person_ids(value, source: str, target: str):
