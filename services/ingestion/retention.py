@@ -13,6 +13,7 @@ lifetime (``archive_retention_days``).
 import asyncio
 import logging
 import os
+import shutil
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, delete, func, select
@@ -24,7 +25,9 @@ from shared.models import (
     AudioDetection,
     Camera,
     Conversation,
+    Incident,
     Recording,
+    ResourceShare,
     Transcript,
 )
 
@@ -44,6 +47,13 @@ _THUMBNAIL_PREFIXES = ["./thumbnails/", "thumbnails/", "./"]
 # beat one huge one.
 OBSERVATION_PRUNE_BATCH = 500
 OBSERVATION_PRUNE_MAX_BATCHES = 20
+LOW_DISK_PERCENT = 0.05
+LOW_DISK_MIN_FREE_BYTES = 10 * 1024**3
+
+
+def low_disk_threshold(total_bytes: int) -> int:
+    """Free-space floor: 5% of the volume or 10 GiB, whichever is larger."""
+    return max(int(total_bytes * LOW_DISK_PERCENT), LOW_DISK_MIN_FREE_BYTES)
 
 
 def _resolve_path(file_path: str | None, camera_id=None) -> str | None:
@@ -262,6 +272,11 @@ class RetentionManager:
         except Exception:
             logger.exception("Archive retention failed")
 
+        try:
+            await self._enforce_low_disk_guard()
+        except Exception:
+            logger.exception("Low-disk recording guard failed")
+
         # Audio + transcript retention. always time-based.
         for cam in all_cams:
             try:
@@ -319,6 +334,79 @@ class RetentionManager:
             await self._enforce_observation_retention()
         except Exception:
             logger.exception("Observation retention failed")
+
+    async def _enforce_low_disk_guard(self) -> None:
+        """Reclaim oldest unprotected keep-forever footage under pressure.
+
+        Only completed recordings from cameras with retention disabled are
+        candidates. Active shares and every recording on a camera with an
+        open incident are protected, preferring a warning over deleting
+        evidence we cannot prove is safe to discard.
+        """
+        from shared.storage_paths import current_recordings_root
+
+        root = current_recordings_root()
+        try:
+            usage = shutil.disk_usage(root)
+        except OSError:
+            return
+        floor = low_disk_threshold(usage.total)
+        if usage.free >= floor:
+            return
+
+        async with async_session() as db:
+            cameras = list((await db.execute(
+                select(Camera).where(Camera.retention_mode == "none")
+            )).scalars().all())
+            candidate_camera_ids = {c.id for c in cameras}
+            if not candidate_camera_ids:
+                logger.warning("Low disk space (%s free) but no keep-forever footage is reclaimable", usage.free)
+                return
+
+            open_incident_cameras = set((await db.execute(
+                select(Incident.camera_id).where(Incident.status == "open")
+            )).scalars().all())
+            protected_camera_ids = candidate_camera_ids & open_incident_cameras
+            shared_ids = set((await db.execute(
+                select(ResourceShare.recording_id).where(ResourceShare.recording_id.is_not(None))
+            )).scalars().all())
+            recordings = list((await db.execute(
+                select(Recording).where(
+                    Recording.camera_id.in_(candidate_camera_ids),
+                    Recording.ended_at.is_not(None),
+                ).order_by(Recording.started_at.asc())
+            )).scalars().all())
+
+            deleted = 0
+            skipped = 0
+            freed = 0
+            for rec in recordings:
+                if shutil.disk_usage(root).free >= floor:
+                    break
+                if rec.id in shared_ids or rec.camera_id in protected_camera_ids:
+                    skipped += 1
+                    continue
+                path = await _resolve_camera_path(rec.file_path, rec.camera_id)
+                size, ok = _remove_file(path)
+                if not ok:
+                    continue
+                _remove_file(_resolve_path(rec.thumbnail_path))
+                await db.delete(rec)
+                deleted += 1
+                freed += size
+            await db.commit()
+
+        remaining = shutil.disk_usage(root).free
+        if deleted:
+            logger.warning(
+                "Low-disk guard deleted %d oldest keep-forever recordings and freed %.2f GB; %s free remains",
+                deleted, freed / (1024 ** 3), remaining,
+            )
+        if remaining < floor:
+            logger.error(
+                "Low-disk guard could not reach the safety floor: %s free, %d protected/unavailable recordings skipped",
+                remaining, skipped,
+            )
 
     async def _enforce_motion_sample_retention(self) -> None:
         """Delete motion_samples rows older than ``motion_series_retention_days``.
