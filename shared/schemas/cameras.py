@@ -101,7 +101,9 @@ class CameraCreate(BaseModel):
     digest_period: str = "24h"
     digest_provider_id: uuid.UUID | None = None
     digest_prompt: str | None = Field(default=None, max_length=4096)
-    retention_mode: str = Field(default="none", max_length=16)  # none, time, size
+    # New cameras keep a bounded local history by default. Existing database
+    # rows are not rewritten by this application default change.
+    retention_mode: str = Field(default="time", max_length=16)  # none, time, size
     retention_days: int = Field(default=30, ge=1, le=3650)
     retention_gb: float = Field(default=50.0, ge=1.0, le=10000.0)
     motion_zones: list[dict] | None = None

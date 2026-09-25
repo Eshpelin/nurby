@@ -139,7 +139,7 @@ class Camera(Base):
     )
     digest_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Retention policy
-    retention_mode: Mapped[str] = mapped_column(String(16), default="none")  # none, time, size
+    retention_mode: Mapped[str] = mapped_column(String(16), default="time")  # none, time, size
     retention_days: Mapped[int] = mapped_column(Integer, default=30)  # days to keep recordings
     retention_gb: Mapped[float] = mapped_column(Float, default=50.0)  # max GB per camera
     # Motion zones: [{"name": "Zone 1", "points": [[x,y], ...], "type": "include"|"exclude"}]

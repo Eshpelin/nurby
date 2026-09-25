@@ -174,6 +174,8 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
   const [webcamError, setWebcamError] = useState<string | null>(null);
   const webcamPreviewRef = useRef<HTMLVideoElement | null>(null);
   const [locationLabel, setLocationLabel] = useState("");
+  const [retentionMode, setRetentionMode] = useState<"time" | "none" | "size">("time");
+  const [retentionDays, setRetentionDays] = useState(30);
   const [showAuth, setShowAuth] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -465,6 +467,8 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
       stream_url: streamUrl.trim(),
       stream_type: streamType,
       location_label: locationLabel.trim() || null,
+      retention_mode: retentionMode,
+      retention_days: retentionDays,
     };
     if (supportsAuth && username.trim()) {
       payload.username = username.trim();
@@ -650,6 +654,32 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
               <label className="block text-sm text-muted-foreground mb-1.5">Location Label</label>
               <p className="text-[11px] text-muted-foreground mb-1">Used in alerts, for example “Person at Front door (Porch)”.</p>
               <input type="text" value={locationLabel} onChange={(e) => setLocationLabel(e.target.value)} placeholder="Optional" className={inputClass} />
+            </div>
+
+            <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+              <div>
+                <label className="block text-sm text-foreground">Recording retention</label>
+                <p className="text-[11px] text-muted-foreground">New cameras keep the last 30 days by default. Change this if you need a different local history.</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  ["time", "30 days"],
+                  ["size", "By size"],
+                  ["none", "Keep forever"],
+                ] as const).map(([value, label]) => (
+                  <button key={value} type="button" onClick={() => setRetentionMode(value)} className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${retentionMode === value ? "border-accent bg-accent/10 text-accent-foreground" : "border-border text-muted-foreground hover:border-muted-foreground"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {retentionMode === "time" && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <label htmlFor="new-camera-retention-days">Keep for</label>
+                  <select id="new-camera-retention-days" value={retentionDays} onChange={(e) => setRetentionDays(Number(e.target.value))} className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground">
+                    {[7, 14, 30, 90, 180, 365].map((days) => <option key={days} value={days}>{days} days</option>)}
+                  </select>
+                </div>
+              )}
             </div>
 
             {supportsAuth && (
