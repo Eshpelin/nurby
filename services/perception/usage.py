@@ -62,13 +62,34 @@ def perception_budget_decision(
     )
 
 
+def combine_perception_usage(
+    ledger_cost_cents: int,
+    ledger_tokens: int,
+    pass_cost_cents: int,
+    pass_tokens: int,
+) -> tuple[int, int]:
+    """Combine the two camera-scoped VLM accounting stores.
+
+    ``PerceptionVlmUsage`` covers rule/action/analyzer calls while
+    ``ObservationVlmPass`` is the append-only ledger for captions and idle
+    enrichment.  They are intentionally kept separate because the usage
+    report presents them differently, but both must consume the same camera
+    budget.  Clamp null/negative values defensively so old or partially
+    migrated rows cannot make a budget appear lower than it is.
+    """
+    return (
+        max(0, int(ledger_cost_cents or 0)) + max(0, int(pass_cost_cents or 0)),
+        max(0, int(ledger_tokens or 0)) + max(0, int(pass_tokens or 0)),
+    )
+
+
 async def check_perception_budget(
     camera_id: str | None, *, estimated_cost_cents: int, estimated_tokens: int,
 ) -> PerceptionBudgetDecision:
     """Read today's camera ledger and decide whether one call may start."""
     from shared.app_settings import get_setting
     from shared.database import async_session
-    from shared.models import PerceptionVlmUsage
+    from shared.models import Observation, ObservationVlmPass, PerceptionVlmUsage
 
     cost_limit = int(await get_setting("perception_daily_cost_budget_cents") or 0)
     token_limit = int(await get_setting("perception_daily_token_budget") or 0)
@@ -85,7 +106,7 @@ async def check_perception_budget(
         return PerceptionBudgetDecision(True, "normal", "", estimated_cost_cents, estimated_tokens)
     start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     async with async_session() as db:
-        row = (await db.execute(
+        ledger_row = (await db.execute(
             select(
                 func.coalesce(func.sum(PerceptionVlmUsage.cost_cents), 0),
                 func.coalesce(func.sum(PerceptionVlmUsage.tokens_in + PerceptionVlmUsage.tokens_out), 0),
@@ -94,8 +115,22 @@ async def check_perception_budget(
                 PerceptionVlmUsage.created_at >= start,
             )
         )).one()
+        pass_row = (await db.execute(
+            select(
+                func.coalesce(func.sum(ObservationVlmPass.cost_cents), 0),
+                func.coalesce(func.sum(ObservationVlmPass.tokens_in + ObservationVlmPass.tokens_out), 0),
+            )
+            .join(Observation, Observation.id == ObservationVlmPass.observation_id)
+            .where(
+                Observation.camera_id == camera_uuid,
+                ObservationVlmPass.created_at >= start,
+            )
+        )).one()
+    used_cost_cents, used_tokens = combine_perception_usage(
+        ledger_row[0], ledger_row[1], pass_row[0], pass_row[1],
+    )
     return perception_budget_decision(
-        used_cost_cents=int(row[0] or 0), used_tokens=int(row[1] or 0),
+        used_cost_cents=used_cost_cents, used_tokens=used_tokens,
         estimated_cost_cents=estimated_cost_cents, estimated_tokens=estimated_tokens,
         cost_limit_cents=cost_limit, token_limit=token_limit, warn_threshold_pct=warn_pct,
     )

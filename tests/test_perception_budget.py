@@ -1,4 +1,12 @@
-from services.perception.usage import perception_budget_decision
+from services.perception.usage import combine_perception_usage, perception_budget_decision
+
+
+def test_perception_budget_combines_rule_and_enrichment_ledgers():
+    assert combine_perception_usage(7, 100, 5, 40) == (12, 140)
+
+
+def test_perception_budget_ignores_invalid_negative_ledger_values():
+    assert combine_perception_usage(-1, 20, 3, -4) == (3, 20)
 
 
 def test_perception_budget_allows_below_limit():
