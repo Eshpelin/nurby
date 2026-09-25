@@ -43,6 +43,10 @@ _KINDS = {"incident", "alert", "notification", "identity_suggestion", "relations
 class RelationshipDecisionBody(BaseModel):
     decision: Literal["confirm", "reject", "defer", "revoke", "restore"]
     note: str | None = Field(default=None, max_length=1000)
+    # Clients may send the review timestamp they saw.  This prevents an old
+    # open tab from overwriting a newer review while preserving retry-safe
+    # behavior when the same decision is submitted again.
+    expected_reviewed_at: datetime | None = None
 
 
 def _association_visible(association: EntityAssociation, allowed) -> bool:
@@ -522,7 +526,25 @@ async def decide_relationship_suggestion(
     rather than silently re-confirming it. Reject remains terminal for learned
     inference and cannot be undone by this endpoint.
     """
-    association = await db.get(EntityAssociation, association_id)
+    # Serialize decisions for this edge.  Without the row lock two reviewers
+    # can both observe a candidate, append conflicting audit events, and let
+    # the last commit silently win.
+    association = (
+        await db.execute(
+            select(EntityAssociation)
+            .where(EntityAssociation.id == association_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if (
+        association is not None
+        and body.expected_reviewed_at is not None
+        and association.reviewed_at != body.expected_reviewed_at
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Relationship was reviewed after this page loaded; refresh before deciding again.",
+        )
     valid_status = (
         association is not None
         and (

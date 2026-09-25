@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from services.api.routes.review import RelationshipDecisionBody
@@ -29,3 +30,11 @@ def test_decision_names_have_stable_idempotent_terminal_pairs():
         "restore": ("candidate", False),
     }
     assert set(pairs) == {"confirm", "reject", "defer", "revoke", "restore"}
+
+
+def test_decision_payload_can_carry_review_timestamp_for_stale_tab_detection():
+    reviewed_at = datetime.now(timezone.utc)
+    body = RelationshipDecisionBody(
+        decision="confirm", expected_reviewed_at=reviewed_at
+    )
+    assert body.expected_reviewed_at == reviewed_at
