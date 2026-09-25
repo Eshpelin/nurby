@@ -11,6 +11,7 @@ from shared.default_rules import (
     CAMERA_HEALTH_RULE_NAME,
     CAMERA_RECOVERY_RULE_NAME,
     DEFAULT_RULES,
+    DEFAULT_RULE_NAMES,
     refresh_default_rule_messages,
 )
 
@@ -73,3 +74,18 @@ def test_install_sites_use_the_shared_module():
         assert '"{camera_name} camera health degraded' not in source, (
             f"{path} still hard-codes the legacy template"
         )
+
+
+def test_default_rule_factory_marks_system_rules():
+    """The lazily-installed rules must carry is_system so the UI can group
+    them and the API can guard rename/delete (#317)."""
+    from shared.default_rules import default_rule_kwargs
+
+    for name in DEFAULT_RULE_NAMES:
+        kwargs = default_rule_kwargs(name)
+        assert kwargs["is_system"] is True
+        assert kwargs["enabled"] is True
+        assert kwargs["cooldown_seconds"] == 3600
+        assert kwargs["severity"] == DEFAULT_RULES[name]["severity"]
+        assert kwargs["actions"] == [{"type": "notify", "message": DEFAULT_RULES[name]["message"]}]
+        assert kwargs["trigger_pattern"] == {"type": DEFAULT_RULES[name]["trigger"]}
