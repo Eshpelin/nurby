@@ -85,7 +85,7 @@ export function PairMobileCard() {
       : null;
 
   return (
-    <div className="rounded-lg border border-border bg-card">
+    <div id="mobile-pairing" className="rounded-lg border border-border bg-card scroll-mt-20">
       <button
         onClick={() => setOpen(!open)}
         className="w-full px-4 py-3.5 flex items-center justify-between text-left"

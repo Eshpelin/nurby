@@ -125,10 +125,11 @@ export function ActionsSection(props: ActionsSectionProps) {
   const pairedTelegram = telegramChannels.filter(
     (channel) => channel.enabled && channel.pairing_status === "paired",
   ).length;
+  const hasTelegramAction = formActions.some((action) => action.type === "telegram");
   const destinations = [
     "In-app bell",
     ...(pairedPhones > 0 ? [`${pairedPhones} paired phone${pairedPhones === 1 ? "" : "s"}`] : []),
-    ...(pairedTelegram > 0 ? [`${pairedTelegram} Telegram channel${pairedTelegram === 1 ? "" : "s"}`] : []),
+    ...(hasTelegramAction && pairedTelegram > 0 ? [`${pairedTelegram} Telegram channel${pairedTelegram === 1 ? "" : "s"}`] : []),
   ];
 
   return (
@@ -142,7 +143,7 @@ export function ActionsSection(props: ActionsSectionProps) {
       <div className={`rounded-md border px-3 py-2 text-xs ${destinations.length === 1 ? "border-yellow-500/35 bg-yellow-500/5" : "border-border bg-muted/20"}`}>
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground">This alert reaches: <span className="text-foreground">{destinations.join(", ")}</span></span>
-          {destinations.length === 1 && <Link href="/settings#notifications" className="shrink-0 text-accent hover:underline">Add a phone</Link>}
+          {destinations.length === 1 && <Link href="/settings#mobile-pairing" className="shrink-0 text-accent hover:underline">Add a phone</Link>}
         </div>
         {destinations.length === 1 && <p className="mt-1 text-[11px] text-muted-foreground">In-app alerts work while Nurby is open. Add a phone or Telegram channel to receive alerts when you are away.</p>}
       </div>
