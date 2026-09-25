@@ -25,6 +25,7 @@ from shared.models.agent import (  # noqa: F401
     AgentRun,
     AgentToolCall,
     AgentVlmCall,
+    PerceptionVlmUsage,
     VlmFrameAnalysis,
 )
 from shared.models.audio import (  # noqa: F401
@@ -155,6 +156,7 @@ __all__ = [
     "ObservationVlmPass",
     "Person",
     "PersonActionSegment",
+    "PerceptionVlmUsage",
     "PrivacyZone",
     "Provider",
     "PushDevice",

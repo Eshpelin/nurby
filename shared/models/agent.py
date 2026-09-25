@@ -186,6 +186,33 @@ class VlmFrameAnalysis(Base):
     )
 
 
+class PerceptionVlmUsage(Base):
+    """One estimated usage record for a non-agent perception VLM call."""
+
+    __tablename__ = "perception_vlm_usage"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    camera_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    rule_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rules.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True
+    )
+    provider_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    workload: Mapped[str] = mapped_column(String(64), nullable=False)
+    tokens_in: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    tokens_out: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cost_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    estimated: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    succeeded: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class AgentDailyUsage(Base):
     """Per-user per-day rollup used by ``services.agent.budget``.
 

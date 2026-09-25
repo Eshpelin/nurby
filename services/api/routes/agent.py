@@ -41,7 +41,9 @@ from shared.models import (
     Camera,
     Observation,
     ObservationVlmPass,
+    PerceptionVlmUsage,
     Provider,
+    Rule,
     User,
 )
 from shared.schemas import (
@@ -393,11 +395,24 @@ async def usage_report(
     if allowed is not ALL:
         pass_stmt = pass_stmt.where(Observation.camera_id.in_(allowed))
 
+    rule_usage_stmt = (
+        select(PerceptionVlmUsage, Camera, Rule, Provider)
+        .outerjoin(Camera, Camera.id == PerceptionVlmUsage.camera_id)
+        .outerjoin(Rule, Rule.id == PerceptionVlmUsage.rule_id)
+        .outerjoin(Provider, Provider.id == PerceptionVlmUsage.provider_id)
+        .where(PerceptionVlmUsage.created_at >= since)
+    )
+    if allowed is not ALL:
+        rule_usage_stmt = rule_usage_stmt.where(
+            PerceptionVlmUsage.camera_id.in_(allowed)
+        )
+
     totals = {"cost_cents": 0, "tokens_in": 0, "tokens_out": 0, "calls": 0}
     by_camera: dict[str, dict] = {}
     by_provider: dict[str, dict] = {}
     by_day: dict[str, dict] = {}
     by_workload: dict[str, dict] = {}
+    by_rule: dict[str, dict] = {}
 
     def add(bucket: dict, *, cost: int, tokens_in: int, tokens_out: int) -> None:
         bucket["cost_cents"] = bucket.get("cost_cents", 0) + cost
@@ -456,6 +471,24 @@ async def usage_report(
             tokens_out=int(vlm_pass.tokens_out or 0),
         )
 
+    for usage, camera, rule, provider in (await db.execute(rule_usage_stmt)).all():
+        add_call(
+            camera=camera.name if camera is not None else "Unassigned camera",
+            provider=(provider.name if provider is not None else None) or usage.model or "Unknown provider",
+            workload="Rule VLM call",
+            at=usage.created_at,
+            cost=int(usage.cost_cents or 0),
+            tokens_in=int(usage.tokens_in or 0),
+            tokens_out=int(usage.tokens_out or 0),
+        )
+        rule_name = rule.name if rule is not None else "Deleted rule"
+        add(
+            by_rule.setdefault(rule_name, {"name": rule_name}),
+            cost=int(usage.cost_cents or 0),
+            tokens_in=int(usage.tokens_in or 0),
+            tokens_out=int(usage.tokens_out or 0),
+        )
+
     return {
         "days": days,
         "estimated": True,
@@ -464,8 +497,9 @@ async def usage_report(
         "by_camera": sorted(by_camera.values(), key=lambda row: row["cost_cents"], reverse=True),
         "by_provider": sorted(by_provider.values(), key=lambda row: row["cost_cents"], reverse=True),
         "by_workload": sorted(by_workload.values(), key=lambda row: row["cost_cents"], reverse=True),
+        "by_rule": sorted(by_rule.values(), key=lambda row: row["cost_cents"], reverse=True),
         "by_day": sorted(by_day.values(), key=lambda row: row["date"]),
-        "attribution_note": "Camera rows cover recorded analyzer calls and camera VLM passes. Pass costs are conservative estimates; rule-level perception accounting is the next accounting slice.",
+        "attribution_note": "Camera rows cover analyzer calls, camera VLM passes, and rule VLM calls. All perception figures are conservative estimates, not invoices.",
     }
 
 

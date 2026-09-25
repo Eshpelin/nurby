@@ -12,6 +12,7 @@ type UsageReport = {
   by_camera: SpendRow[];
   by_provider: SpendRow[];
   by_workload: SpendRow[];
+  by_rule: SpendRow[];
   attribution_note: string;
 };
 
@@ -65,6 +66,16 @@ export function CostUsageCard() {
               <div className="text-xs font-medium mb-1">By workload</div>
               <div className="space-y-1">
                 {report.by_workload.slice(0, 6).map((row) => (
+                  <div key={row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} calls</span></div>
+                ))}
+              </div>
+            </div>
+          )}
+          {report.by_rule.length > 0 && (
+            <div>
+              <div className="text-xs font-medium mb-1">By rule</div>
+              <div className="space-y-1">
+                {report.by_rule.slice(0, 6).map((row) => (
                   <div key={row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} calls</span></div>
                 ))}
               </div>

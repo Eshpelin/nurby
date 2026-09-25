@@ -40,6 +40,7 @@ from services.events.templates import (
     render,
     safe_eval_condition,
 )
+from services.perception.usage import record_vlm_usage
 from shared.database import async_session
 from shared.models import Event, Notification, Provider, TelegramChannel, WebhookSubscription
 
@@ -1046,10 +1047,48 @@ async def _execute_vlm_call(action, observation_data, rule, event_id, ctx):
                 _call_vlm(provider_kind, provider, model, system, attempt_prompt, image_b64, schema, timeout_s),
                 timeout=timeout_s,
             )
+            await record_vlm_usage(
+                provider,
+                workload="rule_vlm_call",
+                system_prompt=system,
+                user_prompt=attempt_prompt,
+                output_text=raw_text,
+                camera_id=observation_data.get("camera_id"),
+                rule_id=str(getattr(rule, "id", "")) if rule is not None else None,
+                event_id=str(event_id) if event_id else None,
+                model=model,
+                image_tokens=765 if image_b64 else 0,
+            )
         except asyncio.TimeoutError:
+            await record_vlm_usage(
+                provider,
+                workload="rule_vlm_call",
+                system_prompt=system,
+                user_prompt=attempt_prompt,
+                output_text=None,
+                camera_id=observation_data.get("camera_id"),
+                rule_id=str(getattr(rule, "id", "")) if rule is not None else None,
+                event_id=str(event_id) if event_id else None,
+                model=model,
+                image_tokens=765 if image_b64 else 0,
+                succeeded=False,
+            )
             last_error = f"timeout after {timeout_ms}ms"
             continue
         except Exception as exc:
+            await record_vlm_usage(
+                provider,
+                workload="rule_vlm_call",
+                system_prompt=system,
+                user_prompt=attempt_prompt,
+                output_text=None,
+                camera_id=observation_data.get("camera_id"),
+                rule_id=str(getattr(rule, "id", "")) if rule is not None else None,
+                event_id=str(event_id) if event_id else None,
+                model=model,
+                image_tokens=765 if image_b64 else 0,
+                succeeded=False,
+            )
             last_error = f"provider error. {exc}"
             continue
 
