@@ -129,12 +129,12 @@ def test_only_established_facts_are_archived():
 
 
 def test_an_established_edge_becomes_a_fact():
-    key, text = fact_from_association(_edge())
+    derived = fact_from_association(_edge())
 
-    assert key == "assoc:e-1"
-    assert "Ahmed usually uses Harrier" in text
-    assert "08:00" in text
-    assert "30 separate days" in text
+    assert derived["subject_key"] == "assoc:e-1"
+    assert "Ahmed usually uses Harrier" in derived["text"]
+    assert "08:00" in derived["text"]
+    assert "30 separate days" in derived["text"]
 
 
 def test_a_candidate_edge_is_not_a_fact_yet():
@@ -151,9 +151,19 @@ def test_phrasing_works_without_a_model():
     """Deterministic, so a household with no model configured still gets
     its orientation. An auxiliary model may improve the wording later,
     but it never decides whether the fact is true."""
-    _, text = fact_from_association(_edge(hour_histogram={}))
-    assert text.startswith("Ahmed usually uses Harrier")
-    assert "around" not in text
+    derived = fact_from_association(_edge(hour_histogram={}))
+    assert derived["text"].startswith("Ahmed usually uses Harrier")
+    assert "around" not in derived["text"]
+
+
+def test_a_derived_fact_carries_its_evidence_and_entity():
+    """#185: a fact says what it is about and where the belief came
+    from, so the review UI can show 'why Nurby believes this'."""
+    edge = _edge(subject_kind="person")
+    derived = fact_from_association(edge)
+    assert derived["entity_kind"] == "person"
+    assert derived["entity_key"] == "Ahmed"
+    assert derived["evidence_refs"] == [{"kind": "association", "id": str(edge.id)}]
 
 
 # ---- the orientation block ----------------------------------------------

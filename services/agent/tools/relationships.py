@@ -204,6 +204,148 @@ async def get_associations(
 
 
 
+_GET_HOUSEHOLD_FACTS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "subject": {
+            "type": "string",
+            "description": (
+                "Attach-point to look up: a person display_name/UUID, a "
+                "vehicle display_name/plate/UUID, a camera name/UUID, or "
+                "'household' for whole-home notes. Omit for every "
+                "established note."
+            ),
+        },
+        "include_candidates": {
+            "type": "boolean",
+            "description": (
+                "Include Nurby's unreviewed proposals. Default false: "
+                "proposals are not yet knowledge."
+            ),
+        },
+    },
+    "required": [],
+    "additionalProperties": False,
+}
+
+
+async def get_household_facts(
+    ctx: dict,
+    *,
+    subject: str | None = None,
+    include_candidates: bool = False,
+) -> dict:
+    """What the household has told Nurby, plus what Nurby has learned.
+
+    Answers "what do you know about the cleaner" from the durable note
+    store, in one cheap indexed lookup. Established rows only unless
+    ``include_candidates`` — a candidate is a pending proposal, not
+    knowledge. The response says which notes came from the household and
+    which were learned from observation, and the agent must keep that
+    distinction when answering.
+    """
+    from shared.models import HouseholdFact
+
+    db = ctx["db"]
+    q = select(HouseholdFact)
+    if include_candidates:
+        q = q.where(HouseholdFact.status.in_(("established", "candidate")))
+    else:
+        q = q.where(HouseholdFact.status == "established")
+
+    attach = None
+    if subject and str(subject).strip().lower() != "household":
+        attach = await _resolve_remember_attachment(str(subject), db)
+        if attach is not None:
+            kind, key = attach
+            q = q.where(
+                HouseholdFact.entity_kind == kind,
+                HouseholdFact.entity_key == key,
+            )
+        else:
+            return {
+                "facts": [],
+                "count": 0,
+                "note": f"nothing in the library matches {subject!r}; "
+                "household-wide notes are returned only when subject is omitted "
+                "or 'household'.",
+            }
+
+    q = q.order_by(
+        HouseholdFact.pinned.desc(),
+        HouseholdFact.evidence_count.desc(),
+        HouseholdFact.created_at.desc(),
+    ).limit(50)
+    rows = (await db.execute(q)).scalars().all()
+
+    out = []
+    for f in rows:
+        entry = {
+            "id": str(f.id),
+            "text": f.text,
+            "source": f.source,  # user = the household said so; agent = learned
+            "status": f.status,
+            "pinned": bool(f.pinned),
+            "evidence_count": int(f.evidence_count or 0),
+            "entity_kind": f.entity_kind or "household",
+            "schedule": None
+            if getattr(f, "schedule_days", None) is None
+            else {
+                "days": f.schedule_days,
+                "start_minute": f.schedule_start_minute,
+                "end_minute": f.schedule_end_minute,
+            },
+        }
+        out.append(entry)
+    return {
+        "facts": out,
+        "count": len(out),
+        "note": (
+            "source='user' notes are what the household said on purpose; "
+            "source='agent' facts are distilled from observations and may be "
+            "wrong. Never present a learned fact as something the household "
+            "told you."
+        ),
+    }
+
+
+async def _resolve_remember_attachment(subject: str, db) -> tuple[str, str] | None:
+    """Resolve 'the cleaner' style input to an (entity_kind, entity_key)
+    attach point, or None. Person first, then vehicle, then camera."""
+    subj = subject.strip()
+    person = await _resolve_subject(subj, db)
+    if person["type"] == "person":
+        return "person", str(person["person_id"])
+    try:
+        return "camera", str(await _camera_id_by_name(subj, db))
+    except Exception:
+        pass
+    from shared.models import Vehicle
+
+    rows = (
+        await db.execute(
+            select(Vehicle).where(
+                func.lower(Vehicle.display_name).like(f"%{subj.lower()}%")
+                | func.lower(func.coalesce(Vehicle.license_plate, "")).like(f"%{subj.lower()}%")
+            )
+        )
+    ).scalars().all()
+    if len(rows) == 1:
+        return "vehicle", str(rows[0].id)
+    return None
+
+
+async def _camera_id_by_name(name: str, db) -> "uuid.UUID":
+    from shared.models import Camera
+
+    row = (
+        await db.execute(select(Camera).where(func.lower(Camera.name) == name.lower()))
+    ).scalars().first()
+    if row is None:
+        raise LookupError(name)
+    return row.id
+
+
 def _looks_like_uuid(value: str) -> bool:
     return bool(_UUID_RE.match(value.strip()))
 

@@ -97,12 +97,17 @@ def should_archive(fact, now: datetime, stale_days: int = DEFAULT_STALE_DAYS) ->
     return (now - last) > timedelta(days=stale_days)
 
 
-def fact_from_association(edge) -> tuple[str, str] | None:
-    """``(subject_key, text)`` for an established edge, or None. Pure.
+def fact_from_association(edge) -> dict | None:
+    """Everything needed to upsert a fact for an established edge. Pure.
 
     Deterministic phrasing. The auxiliary model may improve the wording
     later, but the fact exists and is correct without it, so a household
     with no model configured still gets its orientation.
+
+    Returns ``None`` for edges that are not established learned habits;
+    otherwise a dict with the subject key, the plain-language text, the
+    entity the fact is attached to (the edge's subject), and the evidence
+    reference that says where the belief came from.
     """
     if getattr(edge, "status", None) != "established":
         return None
@@ -121,7 +126,13 @@ def fact_from_association(edge) -> tuple[str, str] | None:
         f"{subject} usually {edge.relation} {obj}{when}"
         f" (seen on {int(edge.distinct_days or 0)} separate days)."
     )
-    return f"assoc:{edge.id}", text
+    return {
+        "subject_key": f"assoc:{edge.id}",
+        "text": text,
+        "entity_kind": getattr(edge, "subject_kind", None),
+        "entity_key": str(subject),
+        "evidence_refs": [{"kind": "association", "id": str(edge.id)}],
+    }
 
 
 def merge_fact(existing, text: str, now: datetime):
@@ -167,7 +178,7 @@ async def curate_once(db, *, now: datetime | None = None,
         derived = fact_from_association(edge)
         if derived is None:
             continue
-        subject_key, text = derived
+        subject_key = derived["subject_key"]
         existing = (
             await db.execute(
                 select(HouseholdFact)
@@ -180,17 +191,32 @@ async def curate_once(db, *, now: datetime | None = None,
 
         if existing is None:
             db.add(HouseholdFact(
-                text=text,
+                text=derived["text"],
                 subject_key=subject_key,
                 kind="habit",
                 source=AGENT_SOURCE,
                 status="candidate",
                 evidence_count=1,
                 last_confirmed_at=now,
+                created_via="curator",
+                entity_kind=derived["entity_kind"],
+                entity_key=derived["entity_key"],
+                evidence_refs=derived["evidence_refs"],
             ))
             created += 1
-        elif merge_fact(existing, text, now):
-            updated += 1
+        else:
+            # Backfill the attachment and evidence on rows created before
+            # #185; the text/evidence bump goes through merge_fact, which
+            # still refuses anything the curator may not modify.
+            if not existing.entity_key:
+                existing.entity_kind = derived["entity_kind"]
+                existing.entity_key = derived["entity_key"]
+            if not existing.evidence_refs:
+                existing.evidence_refs = derived["evidence_refs"]
+            if not existing.created_via:
+                existing.created_via = "curator"
+            if merge_fact(existing, derived["text"], now):
+                updated += 1
 
     stale = (
         await db.execute(

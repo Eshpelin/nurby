@@ -42,7 +42,7 @@ MAX_CAMERAS = 12
 MAX_PEOPLE = 10
 MAX_VEHICLES = 8
 MAX_PATTERNS = 8
-MAX_FACTS = 8
+MAX_FACTS = 12
 MAX_LABELS_PER_CAMERA = 3
 # A camera with less than this in the window gets listed without a habit line
 # rather than one built from two frames.
@@ -110,10 +110,37 @@ def _camera_line(name: str, role: str, location: str | None, habits: dict | None
     return head + " — " + "; ".join(bits) + "."
 
 
+def _fact_line(fact) -> str:
+    """One facts-block line. Accepts a plain string or a #185 dict with
+    ``text``, ``source`` (user|agent), optional ``entity_label`` and
+    ``schedule_summary``."""
+    if isinstance(fact, str):
+        return fact
+    bits = [fact.get("text", "")]
+    if fact.get("schedule_summary"):
+        bits.append(f"recurring {fact['schedule_summary']}")
+    if fact.get("entity_label"):
+        bits.append(f"about {fact['entity_label']}")
+    line = bits[0]
+    tail = "; ".join(b for b in bits[1:] if b)
+    if tail:
+        line += f" ({tail})"
+    return line
+
+
+def _fact_lines(facts) -> list[str]:
+    """Group notes by who is speaking (#185): the household's own words
+    carry different weight than a distilled pattern, so they get their
+    own heading instead of blending into one list."""
+    user = [_fact_line(f) for f in (facts or []) if not isinstance(f, str) and f.get("source") == "user"]
+    learned = [_fact_line(f) for f in (facts or []) if isinstance(f, str) or f.get("source") != "user"]
+    return user, learned
+
+
 def format_household_context(cameras: list[dict], people: list[dict],
                              vehicles: list[dict],
                              patterns: list[dict] | None = None,
-                             facts: list[str] | None = None) -> str | None:
+                             facts: list | None = None) -> str | None:
     """Render the block. None when there is nothing worth saying yet.
     Pure, for tests."""
     if not cameras:
@@ -149,9 +176,14 @@ def format_household_context(cameras: list[dict], people: list[dict],
                 label += f" (plate {v['plate']})"
             lines.append("  - " + label)
 
-    if facts:
+    user_lines, learned_lines = _fact_lines(facts)
+    if user_lines:
+        lines.append("The household wrote (things people said on purpose):")
+        for f in user_lines[:MAX_FACTS]:
+            lines.append("  - " + f)
+    if learned_lines:
         lines.append("Learned about this household (distilled, may be stale):")
-        for f in facts[:MAX_FACTS]:
+        for f in learned_lines[:MAX_FACTS]:
             lines.append("  - " + f)
 
     if patterns:
@@ -273,15 +305,43 @@ async def build_household_context(db, allowed_camera_ids) -> str | None:
         for a in pattern_rows
     ]
 
-    # Curated facts. Established only, and agent-created or user-written
-    # alike: both are things the household has accepted as true.
+    # Household knowledge (#185). Established only. The household's own
+    # notes lead; learned facts follow. Entity labels resolve from the
+    # rows already loaded above — no extra queries.
+    from shared.fact_schedule import schedule_summary
+
+    person_names = {str(p.id): p.display_name for p in person_rows}
+    vehicle_names = {str(v.id): v.display_name for v in vehicle_rows}
+    camera_names_by_id = {str(c.id): c.name for c in cam_rows}
+
     fact_rows = (await db.execute(
         select(HouseholdFact)
         .where(HouseholdFact.status == "established")
         .order_by(HouseholdFact.pinned.desc(), HouseholdFact.evidence_count.desc())
-        .limit(MAX_FACTS)
+        .limit(MAX_FACTS * 2)
     )).scalars().all()
-    facts = [f.text for f in fact_rows]
+
+    def _fact_dict(f) -> dict:
+        entity_label = None
+        if f.entity_kind == "person":
+            entity_label = person_names.get(f.entity_key)
+        elif f.entity_kind == "vehicle":
+            entity_label = vehicle_names.get(f.entity_key)
+        elif f.entity_kind == "camera":
+            entity_label = camera_names_by_id.get(f.entity_key)
+        elif f.entity_kind == "household":
+            entity_label = None  # the household itself needs no naming
+        return {
+            "text": f.text,
+            "source": f.source,
+            "entity_label": entity_label,
+            "schedule_summary": schedule_summary(f),
+        }
+
+    # Two groups, household notes first; each capped so a handful of
+    # pinned notes cannot crowd the block.
+    facts = [_fact_dict(f) for f in fact_rows if f.source == "user"][:MAX_FACTS] + \
+            [_fact_dict(f) for f in fact_rows if f.source != "user"][:MAX_FACTS]
 
     return format_household_context(cameras, people, vehicles, patterns, facts)
 

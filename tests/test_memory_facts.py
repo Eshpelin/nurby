@@ -73,6 +73,14 @@ def _fact(**kw):
         id=uuid.uuid4(), text="dad's car is grey", subject_key="user:abc", kind="note",
         source="user", status="established", pinned=False, evidence_count=0,
         created_at=None, last_confirmed_at=None, archived_at=None,
+        entity_kind="household", entity_key="household",
+        schedule_days=None, schedule_start_minute=None, schedule_end_minute=None,
+        schedule_tz=None, suppresses_alerts=False, suppression_confirmed_at=None,
+        suppression_hit_count=0, last_suppressed_at=None, created_via="web",
+        established_at=None, rejected_at=None, rejection_reason=None,
+        evidence_refs=None, updated_at=None,
+        created_by_user_id=None, updated_by_user_id=None,
+        suppression_confirmed_by_user_id=None,
     )
     base.update(kw)
     return SimpleNamespace(**base)
@@ -124,6 +132,6 @@ def test_delete_fact():
 
 def test_list_facts_shapes_source_and_enabled():
     db = _FactsDB(rows=[_fact(source="user", status="established"), _fact(source="agent", status="archived")])
-    out = _run(hh.list_facts(True, SimpleNamespace(id=uuid.uuid4()), db))
+    out = _run(hh.list_facts(include_archived=True, user=SimpleNamespace(id=uuid.uuid4(), role="admin"), db=db))
     assert {r["source"] for r in out} == {"user", "agent"}
     assert out[0]["enabled"] is True and out[1]["enabled"] is False
