@@ -37,6 +37,9 @@ function fetchRouter(overview: unknown | null) {
     if (url.includes("/api/system/storage")) {
       return overview === null ? { ok: false, json: async () => ({}) } : Promise.resolve(ok(overview));
     }
+    if (url.includes("/api/storage-profiles")) {
+      return Promise.resolve(ok([]));
+    }
     return Promise.resolve(ok({}));
   };
 }
@@ -124,5 +127,18 @@ describe("StorageLocationCard gating (#279)", () => {
     render(<StorageLocationCard />);
     expect(await screen.findByText("Recordings location")).toBeInTheDocument();
     expect(await screen.findByText("Recordings")).toBeInTheDocument();
+  });
+
+  it("shows uploaded usage for FTP locations", async () => {
+    mocks.fetch.mockImplementation((url: string) => {
+      if (url.includes("/api/system/storage")) return Promise.resolve(ok(overview()));
+      if (url.includes("/api/storage-profiles")) {
+        return Promise.resolve(ok([{ id: "ftp-1", name: "NAS", kind: "ftp", stats: { uploaded_bytes: 2 * 1024 ** 3 } }]));
+      }
+      return Promise.resolve(ok({}));
+    });
+    render(<StorageOverviewBlock />);
+    expect(await screen.findByText("2.0 GB stored")).toBeInTheDocument();
+    expect(screen.getByText(/FTP capacity is not queried/i)).toBeInTheDocument();
   });
 });

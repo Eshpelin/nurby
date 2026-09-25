@@ -41,6 +41,13 @@ interface StorageValidation {
   detail: string;
 }
 
+interface StorageProfileSummary {
+  id: string;
+  name: string;
+  kind: string;
+  stats?: { uploaded_bytes?: number } | null;
+}
+
 export function useStorageOverview(enabled: boolean, pollMs?: number) {
   // One overview fetch (GET /api/system/storage, admin-only) shared by the
   // settings card, the dashboard low-space banner and the forms. `enabled`
@@ -339,8 +346,17 @@ function CopyableEnvBlock({ docker }: { docker: boolean }) {
 }
 
 export function StorageOverviewBlock() {
-  const { user } = useAuth();
+  const { user, authFetch } = useAuth();
   const { overview: status } = useStorageOverview(user?.role === "admin");
+  const [profiles, setProfiles] = useState<StorageProfileSummary[]>([]);
+
+  useEffect(() => {
+    if (user?.role !== "admin") return;
+    authFetch("/api/storage-profiles")
+      .then(async (res) => (res.ok ? res.json() : []))
+      .then((data) => setProfiles(Array.isArray(data) ? data : []))
+      .catch(() => setProfiles([]));
+  }, [authFetch, user?.role]);
 
   return (
     <div className="space-y-4">
@@ -396,6 +412,25 @@ export function StorageOverviewBlock() {
         )}
       </div>
 
+      {profiles.some((p) => p.kind === "ftp") && (
+        <div className="space-y-1.5">
+          <div className="text-xs font-medium">FTP locations</div>
+          {profiles.filter((p) => p.kind === "ftp").map((profile) => (
+            <div key={profile.id} className="flex items-center justify-between gap-3 text-xs">
+              <span className="text-muted-foreground truncate">{profile.name}</span>
+              <span className="text-[11px] text-muted-foreground flex-shrink-0">
+                {profile.stats?.uploaded_bytes
+                  ? `${formatBytesStored(profile.stats.uploaded_bytes)} stored`
+                  : "0 bytes stored"}
+              </span>
+            </div>
+          ))}
+          <p className="text-[11px] text-muted-foreground">
+            Usage reflects recordings confirmed uploaded to each FTP server; FTP capacity is not queried.
+          </p>
+        </div>
+      )}
+
       <CopyableEnvBlock docker={Boolean(status?.docker)} />
 
       <div className="border-t border-border pt-3">
@@ -410,6 +445,12 @@ export function StorageOverviewBlock() {
       </p>
     </div>
   );
+}
+
+function formatBytesStored(bytes: number): string {
+  if (bytes < 1024 ** 2) return `${Math.max(0, bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
 export function StorageLowSpaceBanner() {
