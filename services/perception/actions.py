@@ -362,6 +362,8 @@ async def extract_for_observation(
                 "posture": parsed["posture"],
                 "confidence": parsed["confidence"],
                 "detail": parsed.get("detail"),
+                "prompt_key": parsed.get("prompt_key"),
+                "prompt_version": parsed.get("prompt_version"),
             }
         )
 
@@ -401,6 +403,8 @@ async def _store_actions(observation_id, camera_id, observed_at, rows: list[dict
                         posture=r.get("posture"),
                         confidence=r.get("confidence"),
                         detail=r.get("detail"),
+                        prompt_key=r.get("prompt_key") or "legacy/unknown",
+                        prompt_version=r.get("prompt_version") or "legacy",
                         observed_at=observed_at,
                     )
                 )
@@ -411,15 +415,19 @@ async def _store_actions(observation_id, camera_id, observed_at, rows: list[dict
 
 async def classify_crop(vlm, frame, bbox, provider) -> dict:
     """Crop ``frame`` to ``bbox`` and ask the VLM what the single person is
-    doing. Returns a parsed ``{action, posture, confidence}``. On any error or
+    doing. Returns a parsed ``{action, posture, confidence}`` stamped with the
+    ``prompt_key`` / ``prompt_version`` that produced it (#218). On any error or
     empty crop, returns ``action="unknown"`` so callers can decide their own
     fail-open / fail-closed policy."""
     crop = _crop(frame, bbox)
     if crop is None or getattr(crop, "size", 0) == 0:
         return {"action": "unknown", "posture": "unknown", "confidence": None}
+    from services.perception.prompt_registry import resolve
+
+    prompt = await resolve("action_classify")
     try:
-        raw = await vlm.classify_action(crop, provider)
+        raw = await vlm.classify_action(crop, provider, prompt=prompt)
     except Exception:  # noqa: BLE001
         logger.debug("action classify call failed", exc_info=True)
         return {"action": "unknown", "posture": "unknown", "confidence": None}
-    return parse_action(raw)
+    return {**parse_action(raw), "prompt_key": prompt.key, "prompt_version": prompt.version}

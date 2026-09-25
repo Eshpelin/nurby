@@ -201,8 +201,32 @@ def normalize_question(q: str) -> str:
     return s.strip()
 
 
+async def resolve_prompt(key: str):
+    from services.perception.prompt_registry import resolve
+
+    return await resolve(key)
+
+
+def _cached_prompt_matches(cached: dict, prompt) -> bool:
+    """A cached answer is only reusable if the same prompt version wrote it
+    (#218), so a promotion or rollback is not masked by stale answers. Rows
+    cached before stamping were written by the shipped v1 text."""
+    resp = cached.get("response_json") or {}
+    return resp.get("prompt_version", "v1") == prompt.version
+
+
 def question_hash(q: str) -> str:
     return hashlib.sha256(normalize_question(q).encode("utf-8")).hexdigest()
+
+
+def prompt_scoped_hash(q: str, prompt) -> str:
+    """Cache key for ``q`` under a prompt version. The unique cache index
+    would otherwise keep a stale answer from an older prompt in the slot
+    forever. v1 keeps the plain hash so existing cache rows stay valid."""
+    if prompt.version == "v1":
+        return question_hash(q)
+    scoped = f"{prompt.key}@{prompt.version}\n{normalize_question(q)}"
+    return hashlib.sha256(scoped.encode("utf-8")).hexdigest()
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -720,13 +744,18 @@ async def call_vlm_structured(
     provider: Provider,
     frames: list[np.ndarray],
     question: str,
+    system_prompt: str | None = None,
 ) -> dict:
     """Send multi-image structured request. Returns the parsed JSON.
+
+    ``system_prompt`` is the resolved ``agent_analyzer`` prompt text (#218);
+    None uses the shipped default.
 
     Honors :data:`ANALYZER_RESPONSE_SCHEMA` via the provider's structured
     output feature where possible. Falls back to JSON-mode + defensive
     parsing for providers without a strict schema knob (Ollama).
     """
+    system = system_prompt or ANALYZER_SYSTEM_PROMPT
     b64s = [_encode_jpeg_b64(f) for f in frames]
     user_text = (
         f"Question. {question}\n\n"
@@ -734,17 +763,20 @@ async def call_vlm_structured(
         " Respond ONLY with JSON matching the response schema."
     )
     if provider.kind == "openai":
-        return await _call_openai_structured(provider, b64s, user_text)
+        return await _call_openai_structured(provider, b64s, user_text, system)
     if provider.kind == "anthropic":
-        return await _call_anthropic_structured(provider, b64s, user_text)
+        return await _call_anthropic_structured(provider, b64s, user_text, system)
     if provider.kind == "google":
-        return await _call_google_structured(provider, b64s, user_text)
+        return await _call_google_structured(provider, b64s, user_text, system)
     if provider.kind == "ollama":
-        return await _call_ollama_structured(provider, b64s, user_text)
+        return await _call_ollama_structured(provider, b64s, user_text, system)
     raise ValueError(f"Unsupported VLM provider kind. {provider.kind}")
 
 
-async def _call_openai_structured(provider: Provider, b64s: list[str], user_text: str) -> dict:
+async def _call_openai_structured(
+    provider: Provider, b64s: list[str], user_text: str,
+    system: str = ANALYZER_SYSTEM_PROMPT,
+) -> dict:
     http = await _get_http()
     model = provider.default_model or "gpt-4o-mini"
     content: list[dict] = [{"type": "text", "text": user_text}]
@@ -758,7 +790,7 @@ async def _call_openai_structured(provider: Provider, b64s: list[str], user_text
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": ANALYZER_SYSTEM_PROMPT},
+            {"role": "system", "content": system},
             {"role": "user", "content": content},
         ],
         "response_format": {
@@ -794,7 +826,10 @@ async def _call_openai_structured(provider: Provider, b64s: list[str], user_text
     return await call_with_retry(_do, provider_name=provider.name, provider_kind="openai", op="agent_vlm")
 
 
-async def _call_anthropic_structured(provider: Provider, b64s: list[str], user_text: str) -> dict:
+async def _call_anthropic_structured(
+    provider: Provider, b64s: list[str], user_text: str,
+    system: str = ANALYZER_SYSTEM_PROMPT,
+) -> dict:
     http = await _get_http()
     model = provider.default_model or "claude-sonnet-4-20250514"
     content: list[dict] = []
@@ -811,7 +846,7 @@ async def _call_anthropic_structured(provider: Provider, b64s: list[str], user_t
     body = {
         "model": model,
         "max_tokens": provider.max_output_tokens or 1024,
-        "system": ANALYZER_SYSTEM_PROMPT,
+        "system": system,
         "tools": [
             {
                 "name": "submit_analysis",
@@ -849,14 +884,17 @@ async def _call_anthropic_structured(provider: Provider, b64s: list[str], user_t
     return await call_with_retry(_do, provider_name=provider.name, provider_kind="anthropic", op="agent_vlm")
 
 
-async def _call_google_structured(provider: Provider, b64s: list[str], user_text: str) -> dict:
+async def _call_google_structured(
+    provider: Provider, b64s: list[str], user_text: str,
+    system: str = ANALYZER_SYSTEM_PROMPT,
+) -> dict:
     http = await _get_http()
     model = provider.default_model or "gemini-2.0-flash"
     parts: list[dict] = [{"text": user_text}]
     for b in b64s:
         parts.append({"inlineData": {"mimeType": "image/jpeg", "data": b}})
     payload = {
-        "systemInstruction": {"parts": [{"text": ANALYZER_SYSTEM_PROMPT}]},
+        "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"parts": parts}],
         "generationConfig": {
             "responseMimeType": "application/json",
@@ -903,12 +941,15 @@ def _gemini_schema(schema: dict) -> dict:
     return out
 
 
-async def _call_ollama_structured(provider: Provider, b64s: list[str], user_text: str) -> dict:
+async def _call_ollama_structured(
+    provider: Provider, b64s: list[str], user_text: str,
+    system: str = ANALYZER_SYSTEM_PROMPT,
+) -> dict:
     http = await _get_http()
     model = provider.default_model or "llava"
     payload = {
         "model": model,
-        "prompt": f"{ANALYZER_SYSTEM_PROMPT}\n\n{user_text}",
+        "prompt": f"{system}\n\n{user_text}",
         "images": b64s,
         "stream": False,
         "format": "json",
@@ -1224,7 +1265,8 @@ async def analyze_frame_target(
         provider = await _resolve_provider(db, explicit_id=provider_id, camera=camera)
         model = (provider.default_model if provider else None) or ""
 
-        qhash = question_hash(question)
+        prompt = await resolve_prompt("agent_analyzer")
+        qhash = prompt_scoped_hash(question, prompt)
 
         # Cache lookup first.
         cached = await cache_lookup(
@@ -1235,7 +1277,7 @@ async def analyze_frame_target(
             provider_id=provider.id if provider else None,
             model=model,
         )
-        if cached is not None:
+        if cached is not None and _cached_prompt_matches(cached, prompt):
             vlm_call_id = uuid.uuid4()
             answer = _strip_usage(cached["response_json"])
             await _record_vlm_call(
@@ -1301,7 +1343,7 @@ async def analyze_frame_target(
             return _error_result("no_provider")
         # VLM call.
         try:
-            raw = await call_vlm_structured(provider, redacted, question)
+            raw = await call_vlm_structured(provider, redacted, question, system_prompt=prompt.text)
         except Exception:
             logger.exception("VLM call failed")
             return _error_result("vlm_call_failed")
@@ -1309,6 +1351,8 @@ async def analyze_frame_target(
         tokens_in = int(usage.get("input_tokens", 0) or 0)
         tokens_out = int(usage.get("output_tokens", 0) or 0)
         answer = _validate_response(raw)
+        answer["prompt_key"] = prompt.key
+        answer["prompt_version"] = prompt.version
         cost_cents = _estimate_cost_cents(provider, tokens_in, tokens_out)
 
         # Persist thumbnails + audit row.
@@ -1443,7 +1487,8 @@ async def analyze_clip_target(
         # Cache key. anchor on first recording in sorted list.
         first_rec_id = rows[0].id
         rec_ids_sorted = [str(r.id) for r in rows]
-        qhash = question_hash(question)
+        prompt = await resolve_prompt("agent_analyzer")
+        qhash = prompt_scoped_hash(question, prompt)
 
         cached = await cache_lookup(
             db,
@@ -1453,7 +1498,7 @@ async def analyze_clip_target(
             provider_id=provider.id if provider else None,
             model=model,
         )
-        if cached is not None:
+        if cached is not None and _cached_prompt_matches(cached, prompt):
             cached_recs = (cached["response_json"] or {}).get("recordings") or []
             if cached_recs == rec_ids_sorted:
                 vlm_call_id = uuid.uuid4()
@@ -1508,7 +1553,7 @@ async def analyze_clip_target(
         if provider is None:
             return _error_result("no_provider")
         try:
-            raw = await call_vlm_structured(provider, redacted, question)
+            raw = await call_vlm_structured(provider, redacted, question, system_prompt=prompt.text)
         except Exception:
             logger.exception("VLM call failed")
             return _error_result("vlm_call_failed")
@@ -1516,6 +1561,8 @@ async def analyze_clip_target(
         tokens_in = int(usage.get("input_tokens", 0) or 0)
         tokens_out = int(usage.get("output_tokens", 0) or 0)
         answer = _validate_response(raw)
+        answer["prompt_key"] = prompt.key
+        answer["prompt_version"] = prompt.version
         # Stamp the recording set for cache-key correctness checks.
         answer["recordings"] = rec_ids_sorted
         cost_cents = _estimate_cost_cents(provider, tokens_in, tokens_out)

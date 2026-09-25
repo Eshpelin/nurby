@@ -230,7 +230,7 @@ class VLMClient:
             logger.exception("VLM call failed for provider %s", provider.name)
             return None
 
-    async def classify_action(self, crop: np.ndarray, provider: Provider) -> str | None:
+    async def classify_action(self, crop: np.ndarray, provider: Provider, prompt=None) -> str | None:
         """Ask the VLM what the single person in ``crop`` is doing and return the
         raw reply. The caller (services.perception.actions) parses it into the
         closed action vocabulary. Uses a constrained system prompt and a tiny
@@ -238,8 +238,12 @@ class VLMClient:
 
         Kept separate from ``describe`` so the action classifier never inherits
         the scene-description prompt, which would pull the model back toward
-        prose instead of a single label."""
+        prose instead of a single label.
+
+        ``prompt`` is the resolved ``action_classify`` PromptRef (#218); when
+        omitted the active registry version is resolved here."""
         from services.perception import actions as _actions
+        from services.perception import prompt_registry
 
         try:
             ok, jpeg_buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 80])
@@ -251,7 +255,9 @@ class VLMClient:
             logger.debug("action crop encode failed", exc_info=True)
             return None
 
-        system = _actions.CLASSIFY_SYSTEM_PROMPT
+        if prompt is None:
+            prompt = await prompt_registry.resolve("action_classify")
+        system = prompt.text
         user = _actions.CLASSIFY_USER_PROMPT
         cap = 80  # one small JSON object
 

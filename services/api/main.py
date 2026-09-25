@@ -38,11 +38,12 @@ from services.api.routes import (
     ollama_deploy,
     persons,
     privacy_zones,
+    prompts,
     providers,
     push,
     recordings,
-    review,
     reports,
+    review,
     rules,
     rules_nl,
     search,
@@ -55,8 +56,8 @@ from services.api.routes import (
     transcripts,
     users,
     vehicles,
-    webhook_subscriptions,
     voice,
+    webhook_subscriptions,
 )
 from services.api.ws import router as ws_router
 from services.digest.scheduler import run_digest_loop
@@ -328,6 +329,7 @@ app.include_router(rules.router, prefix="/api/rules", tags=["rules"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
 app.include_router(expected_activity.router, prefix="/api/expected-activity", tags=["expected-activity"])
+app.include_router(prompts.router, prefix="/api/prompts", tags=["prompts"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(push.router, prefix="/api/push", tags=["push"])
 app.include_router(providers.router, prefix="/api/providers", tags=["providers"])

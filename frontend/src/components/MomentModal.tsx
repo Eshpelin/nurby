@@ -58,6 +58,18 @@ interface VlmPass {
   created_at?: string | null;
 }
 
+interface PromptEntry {
+  key: string;
+  version: string | null;
+  text: string | null;
+}
+
+interface PromptProvenance {
+  caption: (PromptEntry & { provider_name?: string | null }) | null;
+  passes: (PromptEntry & { pass_no: number; lens: string; model?: string | null; authoritative: boolean })[];
+  actions: (PromptEntry & { person_name?: string | null; action: string })[];
+}
+
 export interface MomentModalProps {
   observationId: string;
   cameraId: string;
@@ -253,6 +265,10 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
             </div>
           )}
 
+          {(obs?.vlm_description || passes.length > 0) && (
+            <PromptsUsed observationId={observationId} />
+          )}
+
           <div className="flex items-center justify-between pt-1">
             <a href={`/cameras/${cameraId}`} className="text-[11px] text-accent hover:underline">
               Open this camera →
@@ -263,6 +279,88 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Debug view (#218): the exact prompt text and version behind the caption,
+ *  each enrichment pass and each action label. Loaded only when opened. */
+function PromptsUsed({ observationId }: { observationId: string }) {
+  const { authFetch } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<PromptProvenance | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!open || data) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await authFetch(`/api/observations/${observationId}/prompt-provenance`);
+        if (!r.ok) throw new Error(String(r.status));
+        const body: PromptProvenance = await r.json();
+        if (!cancelled) setData(body);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, data, authFetch, observationId]);
+
+  const rows: { id: string; label: string; entry: PromptEntry }[] = data
+    ? [
+        ...(data.caption ? [{ id: "caption", label: "Live caption", entry: data.caption }] : []),
+        ...data.passes
+          .filter((p) => p.lens !== "live")
+          .map((p) => ({ id: `pass-${p.pass_no}`, label: `Pass ${p.pass_no} · ${p.lens}`, entry: p })),
+        ...data.actions.map((a, i) => ({
+          id: `action-${i}`,
+          label: `Action · ${a.person_name || "person"} · ${a.action}`,
+          entry: a,
+        })),
+      ]
+    : [];
+
+  return (
+    <div className="rounded-md border border-border bg-muted/20">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <span>Prompts used</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          className={`transition-transform ${open ? "rotate-180" : ""}`}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-2">
+          {failed && <p className="text-xs text-muted-foreground">Could not load prompt details.</p>}
+          {!failed && !data && <p className="text-xs text-muted-foreground">Loading prompts.</p>}
+          {data && rows.length === 0 && (
+            <p className="text-xs text-muted-foreground">No VLM output on this frame.</p>
+          )}
+          {rows.map(({ id, label, entry }) => (
+            <details key={id} className="text-xs border-l-2 border-border pl-2.5">
+              <summary className="cursor-pointer flex items-center gap-1.5 list-none">
+                <span className="text-foreground/80">{label}</span>
+                <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+                  {entry.key} · {entry.version ?? "?"}
+                </span>
+              </summary>
+              {entry.text ? (
+                <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[10px] leading-snug text-muted-foreground bg-muted/40 rounded p-2">
+                  {entry.text}
+                </pre>
+              ) : (
+                <p className="mt-1 text-[10px] text-muted-foreground italic">
+                  Recorded before prompt versioning. The exact text is unknown.
+                </p>
+              )}
+            </details>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

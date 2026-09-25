@@ -16,7 +16,7 @@ from shared.camera_access import (
 )
 from shared.config import settings
 from shared.database import get_db
-from shared.models import Camera, Observation, ObservationVlmPass, Person, User
+from shared.models import Camera, Observation, ObservationAction, ObservationVlmPass, Person, User
 from shared.paths import escape_like, resolve_inside
 from shared.schemas import ObservationResponse
 
@@ -71,6 +71,7 @@ async def get_vlm_passes(
         {
             "pass_no": p.pass_no,
             "lens": p.lens,
+            "prompt_key": p.prompt_key,
             "prompt_version": p.prompt_version,
             "provider_name": p.provider_name,
             "model": p.model,
@@ -83,6 +84,72 @@ async def get_vlm_passes(
         }
         for p in rows
     ]
+
+
+def _prompt_entry(key: str | None, version: str | None, stored_text: str | None) -> dict:
+    """One provenance entry. Stored text wins (it is what was sent); else the
+    registry resolves the version to its immutable text. Unstamped rows are
+    reported as legacy/unknown with no text rather than a guess."""
+    from services.perception import prompt_registry
+
+    if not key or key == "legacy/unknown":
+        return {"key": "legacy/unknown", "version": version or "legacy", "text": stored_text}
+    text = stored_text
+    if text is None and version:
+        text = prompt_registry.text_for(key, version)
+    return {"key": key, "version": version, "text": text}
+
+
+@router.get("/{observation_id}/prompt-provenance")
+async def get_prompt_provenance(
+    observation_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The exact prompt behind every VLM output on this frame (#218): the live
+    caption, each enrichment pass and each action label. Camera-scoped like
+    ``get_vlm_passes``."""
+    obs = await db.get(Observation, observation_id)
+    allowed = await allowed_camera_ids(current_user, db)
+    if obs is None or not _camera_in_scope(allowed, obs.camera_id):
+        raise HTTPException(status_code=404, detail="Observation not found")
+    passes = (await db.execute(
+        select(ObservationVlmPass)
+        .where(ObservationVlmPass.observation_id == observation_id)
+        .order_by(ObservationVlmPass.pass_no.asc())
+    )).scalars().all()
+    actions = (await db.execute(
+        select(ObservationAction)
+        .where(ObservationAction.observation_id == observation_id)
+        .order_by(ObservationAction.created_at.asc())
+    )).scalars().all()
+    caption = None
+    if obs.vlm_description:
+        caption = {
+            **_prompt_entry(obs.caption_prompt_key, obs.caption_prompt_version, obs.caption_prompt_text),
+            "provider_name": obs.vlm_provider,
+        }
+    return {
+        "caption": caption,
+        "passes": [
+            {
+                "pass_no": p.pass_no,
+                "lens": p.lens,
+                "model": p.model,
+                "authoritative": p.authoritative,
+                **_prompt_entry(p.prompt_key, p.prompt_version, p.prompt_text),
+            }
+            for p in passes
+        ],
+        "actions": [
+            {
+                "person_name": a.person_name,
+                "action": a.action,
+                **_prompt_entry(a.prompt_key, a.prompt_version, None),
+            }
+            for a in actions
+        ],
+    }
 
 
 @router.get("", response_model=list[ObservationResponse])

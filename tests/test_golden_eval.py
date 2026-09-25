@@ -154,6 +154,7 @@ def test_scorecard_metrics_and_provenance():
     d = card.to_dict()
     assert d["provenance"] == {
         "provider": "gemini", "model": "flash", "prompt_version": "v3",
+        "prompt_key": None, "prompt_sha": None,
         "judge": "keyword-jaccard-v1", "generated_at": card.generated_at,
     }
     assert d["metrics"]["n_scored"] == 2
@@ -239,3 +240,80 @@ def test_shipped_examples_load_and_score():
     # The curated examples are written to pass their own checks.
     assert card.event_accuracy == 1.0
     assert card.metrics()["n_scored"] == len(cases)
+
+
+# ── prompt-version comparison (#218) ──
+
+def _versioned_cases():
+    good = "a courier drops a package at the door"
+    bad = "an empty porch"
+    return [
+        _case(id="a", recorded_outputs={"v1": good, "v2": good}),
+        _case(id="b", recorded_outputs={"v1": bad, "v2": good}),
+        _case(id="c", recorded_outputs={"v1": good, "v2": bad}),
+    ]
+
+
+def test_recorded_outputs_are_picked_per_prompt_version():
+    cases = _versioned_cases()
+    v1 = run_scorecard(cases, provider="p", model="m", prompt_version="v1")
+    v2 = run_scorecard(cases, provider="p", model="m", prompt_version="v2")
+    assert {c["id"]: c["passed"] for c in v1.to_dict()["cases"]} == {"a": True, "b": False, "c": True}
+    assert {c["id"]: c["passed"] for c in v2.to_dict()["cases"]} == {"a": True, "b": True, "c": False}
+    # A version with no recorded output falls back to recorded_output.
+    v3 = run_scorecard([_case()], provider="p", model="m", prompt_version="v3")
+    assert v3.to_dict()["cases"] == [{"id": "t1", "passed": True}]
+
+
+def test_compare_flags_case_regressions_even_when_rate_is_flat():
+    from services.agent.eval.golden.harness import compare_scorecards
+
+    cases = _versioned_cases()
+    base = run_scorecard(cases, provider="p", model="m", prompt_version="v1").to_dict()
+    cand = run_scorecard(cases, provider="p", model="m", prompt_version="v2").to_dict()
+    cmp = compare_scorecards(base, cand)
+    assert cmp.deltas["pass_rate"] == 0.0
+    assert cmp.newly_failing == ["c"] and cmp.newly_passing == ["b"]
+    assert not cmp.promotable
+    md = cmp.to_markdown()
+    assert "do not promote" in md and "`c`" in md
+
+
+def test_compare_promotes_a_strict_improvement():
+    from services.agent.eval.golden.harness import compare_scorecards
+
+    good = "a courier drops a package at the door"
+    cases = [_case(id="a", recorded_outputs={"v1": "an empty porch", "v2": good})]
+    base = run_scorecard(cases, provider="p", model="m", prompt_version="v1").to_dict()
+    cand = run_scorecard(cases, provider="p", model="m", prompt_version="v2").to_dict()
+    cmp = compare_scorecards(base, cand)
+    assert cmp.promotable and cmp.regressions == []
+    assert cmp.deltas["pass_rate"] > 0
+
+
+def test_scorecard_pins_registered_prompt_sha():
+    from services.perception import prompt_registry as reg
+
+    card = run_scorecard([_case()], provider="p", model="m", prompt_version="v1", prompt_key="live_caption")
+    prov = card.to_dict()["provenance"]
+    assert prov["prompt_key"] == "live_caption"
+    assert prov["prompt_sha"] == reg.REGISTRY["live_caption"].sha
+    with pytest.raises(ValueError):
+        run_scorecard([_case()], provider="p", model="m", prompt_version="v99", prompt_key="live_caption")
+
+
+def test_compare_cli_exit_code(tmp_path):
+    import json
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import golden_eval
+
+    cases = _versioned_cases()
+    base = tmp_path / "base.json"
+    cand = tmp_path / "cand.json"
+    base.write_text(json.dumps(run_scorecard(cases, provider="p", model="m", prompt_version="v1").to_dict()))
+    cand.write_text(json.dumps(run_scorecard(cases, provider="p", model="m", prompt_version="v2").to_dict()))
+    assert golden_eval.main(["compare", str(base), str(cand)]) == 1
+    assert golden_eval.main(["compare", str(base), str(base)]) == 0

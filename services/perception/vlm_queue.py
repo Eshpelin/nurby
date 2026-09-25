@@ -163,6 +163,17 @@ async def read_published_stats() -> dict[str, dict]:
         return {}
 
 
+async def caption_prompt(system_prompt: str | None):
+    """The exact prompt a live caption call uses (#218). A camera's own
+    prompt is a custom ref (versioned by content hash); otherwise the active
+    registry version of ``live_caption``, so promotion/rollback applies."""
+    from services.perception import prompt_registry
+
+    if system_prompt:
+        return prompt_registry.custom("live_caption", system_prompt)
+    return await prompt_registry.resolve("live_caption")
+
+
 @dataclass
 class VLMJob:
     """A pending VLM call."""
@@ -568,12 +579,13 @@ class VLMQueue:
             # analyze" instead of silently dropping back to idle.
             failed_reason: str | None = None
             try:
+                prompt = await caption_prompt(job.system_prompt)
                 description = await asyncio.wait_for(
                     self._vlm.describe(
                         job.frame,
                         job.detections,
                         job.provider,
-                        system_prompt=job.system_prompt,
+                        system_prompt=prompt.text,
                         max_tokens=job.max_tokens,
                         heard_text=job.heard_text,
                         extra_context=job.extra_context,
@@ -615,6 +627,7 @@ class VLMQueue:
                         job.detections, thumbnail_path=thumb_path,
                         vlm_late=is_late, vlm_enqueued_at=eq_iso,
                         frame=job.frame, provider=job.provider,
+                        prompt=prompt,
                     )
                     logger.info(
                         "VLM for camera %s completed in %.1fs. %s",
@@ -742,11 +755,12 @@ class VLMQueue:
 
         start = time.monotonic()
         try:
+            prompt = await caption_prompt(job.system_prompt)
             refined = await self._vlm.describe(
                 job.frame,
                 job.detections,
                 provider,
-                system_prompt=job.system_prompt,
+                system_prompt=prompt.text,
                 max_tokens=job.refiner_max_tokens or job.max_tokens,
                 heard_text=job.heard_text,
                 extra_context=merged_context,
@@ -846,6 +860,7 @@ class VLMQueue:
         detections: list[dict], thumbnail_path: str | None = None,
         vlm_late: bool = False, vlm_enqueued_at: datetime | None = None,
         frame: np.ndarray | None = None, provider: Provider | None = None,
+        prompt=None,
     ):
         """Update observation record with VLM description and regenerate embedding."""
         try:
@@ -854,6 +869,14 @@ class VLMQueue:
                 if obs:
                     obs.vlm_description = description
                     obs.vlm_provider = provider_name
+                    if prompt is not None:
+                        obs.caption_prompt_key = prompt.key
+                        obs.caption_prompt_version = prompt.version
+                        # Registry texts resolve by version; only a camera's
+                        # custom prompt needs its text kept on the row.
+                        obs.caption_prompt_text = (
+                            prompt.text if prompt.key.endswith("/custom") else None
+                        )
                     # Real observation confidence (#221). The caption itself has
                     # no calibrated confidence, so never stamp a placeholder.
                     # Carry the strongest object detection's own detector score,

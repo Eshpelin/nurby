@@ -34,7 +34,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from services.perception.prompt_registry import version_for
+from services.perception.prompt_registry import PromptRef, resolve, version_for
 from shared.app_settings import get_setting
 from shared.database import async_session
 from shared.ffmpeg_safe import (
@@ -365,13 +365,14 @@ class EnrichmentManager:
         frame = _load_frame(thumb)
         if frame is None:
             return False
+        prompt = await resolve(lens)
         extra_context = None
         if lens == "temporal":
             montage = await self._temporal_montage(camera_id, ts, frame)
             if montage is None:
                 # No usable neighbors. record the lens as attempted so we do
                 # not retry forever, with an empty description.
-                await self._append_pass(obs_id, lens, provider, None, None)
+                await self._append_pass(obs_id, lens, provider, None, None, prompt)
                 return True
             frame = montage
             # Three frames is seconds of memory. The pipeline has already
@@ -388,12 +389,12 @@ class EnrichmentManager:
             )
         text = await self._vlm.describe(
             frame, detections, provider,
-            system_prompt=LENS_PROMPTS[lens], extra_context=extra_context,
+            system_prompt=prompt.text, extra_context=extra_context,
             max_tokens=160,
         )
         text = (text or "").strip()
         attrs = build_attributes(text, detections) if lens == "attributes" else None
-        await self._append_pass(obs_id, lens, provider, text or None, attrs)
+        await self._append_pass(obs_id, lens, provider, text or None, attrs, prompt)
         logger.info("enriched %s lens=%s. %s", obs_id, lens, (text or "")[:70])
         return True
 
@@ -433,9 +434,10 @@ class EnrichmentManager:
         )
         if not body:
             return False
+        prompt = await resolve("summary")
         summary = await self._vlm.describe(
             frame, detections, provider,
-            system_prompt=LENS_PROMPTS["summary"],
+            system_prompt=prompt.text,
             extra_context=f"Observations:\n{body}", max_tokens=160,
         )
         summary = (summary or "").strip()
@@ -459,7 +461,7 @@ class EnrichmentManager:
                     # alone AND the observation stops looking summary-stale,
                     # which would otherwise re-run these calls every cooldown.
                     await self._append_pass(
-                        obs_id, "summary", provider, None, {"verify": verdict}
+                        obs_id, "summary", provider, None, {"verify": verdict}, prompt
                     )
                     logger.info(
                         "summary for %s failed verification with no usable raw "
@@ -472,7 +474,7 @@ class EnrichmentManager:
         embedding = await self._embed(summary)
         attrs = build_attributes(summary, detections)
         attrs["verify"] = verdict
-        await self._write_summary(obs_id, summary, attrs, embedding, provider)
+        await self._write_summary(obs_id, summary, attrs, embedding, provider, prompt)
         logger.info("summarized %s [%s]. %s", obs_id, verdict.get("status"), summary[:70])
         return True
 
@@ -490,9 +492,10 @@ class EnrichmentManager:
         # configured (issue #132). None means keep the current provider.
         stronger = await self._stronger_provider(provider)
         repair_provider = stronger or provider
+        repair_prompt = await resolve("repair")
         rewritten = await self._vlm.describe(
             frame, detections, repair_provider,
-            system_prompt=REPAIR_PROMPT,
+            system_prompt=repair_prompt.text,
             extra_context=(
                 f"OBSERVATIONS:\n{body}\n\nREJECTED SUMMARY:\n{summary}\n\n"
                 f"REJECTION:\n{note}"
@@ -501,14 +504,17 @@ class EnrichmentManager:
         )
         rewritten = (rewritten or "").strip()
         escalated = getattr(stronger, "name", None)
+        # The summary pass stamps the summary prompt; the repair prompt that
+        # rewrote it is recorded here so the rewrite stays attributable.
+        stamp = {"repair_prompt_version": repair_prompt.version}
         if not rewritten:
-            return None, dict(verdict, repair="failed", escalated_to=escalated)
+            return None, dict(verdict, repair="failed", escalated_to=escalated, **stamp)
         # Verify on the same model that wrote the repair, so the check is not
         # the weaker model grading the stronger one's work.
         recheck = await self._verify(rewritten, body, repair_provider)
         if recheck.get("status") == "unsupported":
-            return None, dict(recheck, repair="failed", escalated_to=escalated)
-        return rewritten, dict(recheck, repair="ok", escalated_to=escalated)
+            return None, dict(recheck, repair="failed", escalated_to=escalated, **stamp)
+        return rewritten, dict(recheck, repair="ok", escalated_to=escalated, **stamp)
 
     async def _verify(self, summary: str, body: str, provider) -> dict:
         """Cheap anti-hallucination check. ask the model whether the summary
@@ -519,17 +525,19 @@ class EnrichmentManager:
             # passing the texts as context. a tiny frame keeps the call valid.
             import numpy as np
             blank = np.zeros((64, 64, 3), dtype=np.uint8)
+            prompt = await resolve("verify")
             out = await self._vlm.describe(
-                blank, [], provider, system_prompt=VERIFY_PROMPT,
+                blank, [], provider, system_prompt=prompt.text,
                 extra_context=f"SUMMARY:\n{summary}\n\nOBSERVATIONS:\n{body}",
                 max_tokens=60,
             )
             out = (out or "").strip()
+            stamp = {"verify_prompt_version": prompt.version}
             if out.upper().startswith("OK"):
-                return {"status": "ok"}
+                return {"status": "ok", **stamp}
             if "UNSUPPORTED" in out.upper():
-                return {"status": "unsupported", "note": out[:200]}
-            return {"status": "unclear", "note": out[:200]}
+                return {"status": "unsupported", "note": out[:200], **stamp}
+            return {"status": "unclear", "note": out[:200], **stamp}
         except Exception:
             return {"status": "unchecked"}
 
@@ -547,7 +555,8 @@ class EnrichmentManager:
 
     # ---- immutable writes -------------------------------------------
 
-    async def _append_pass(self, obs_id, lens, provider, description, attributes):
+    async def _append_pass(self, obs_id, lens, provider, description, attributes,
+                           prompt: PromptRef | None = None):
         """Append one immutable pass. never touches the observation caption."""
         async with async_session() as db:
             obs = await db.get(Observation, obs_id)
@@ -556,9 +565,9 @@ class EnrichmentManager:
             new_no = (obs.enrich_pass_count or 0) + 1
             db.add(ObservationVlmPass(
                 observation_id=obs_id, pass_no=new_no, lens=lens,
-                prompt_key=lens,
-                prompt_version=version_for(lens),
-                prompt_text=LENS_PROMPTS.get(lens),
+                prompt_key=prompt.key if prompt else lens,
+                prompt_version=prompt.version if prompt else version_for(lens),
+                prompt_text=prompt.text if prompt else LENS_PROMPTS.get(lens),
                 provider_name=getattr(provider, "name", None),
                 model=getattr(provider, "default_model", None),
                 description=description, attributes=attributes,
@@ -568,7 +577,8 @@ class EnrichmentManager:
             obs.last_enriched_at = datetime.now(timezone.utc)
             await db.commit()
 
-    async def _write_summary(self, obs_id, summary, attributes, embedding, provider):
+    async def _write_summary(self, obs_id, summary, attributes, embedding, provider,
+                             prompt: PromptRef | None = None):
         """Append an immutable summary pass AND repoint the fields the rest of
         the app uses (vlm_description + search embedding) at it. Raw passes are
         never modified. only the derived summary view moves forward."""
@@ -587,9 +597,9 @@ class EnrichmentManager:
                 p.authoritative = False
             db.add(ObservationVlmPass(
                 observation_id=obs_id, pass_no=new_no, lens="summary",
-                prompt_key="summary",
-                prompt_version=version_for("summary"),
-                prompt_text=LENS_PROMPTS["summary"],
+                prompt_key=prompt.key if prompt else "summary",
+                prompt_version=prompt.version if prompt else version_for("summary"),
+                prompt_text=prompt.text if prompt else LENS_PROMPTS["summary"],
                 provider_name=getattr(provider, "name", None),
                 model=getattr(provider, "default_model", None),
                 description=summary, attributes=attributes, authoritative=True,

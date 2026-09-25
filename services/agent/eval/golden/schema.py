@@ -119,6 +119,9 @@ class GoldenCase:
     # A previously captured model output, so CI / unit tests can score
     # without footage or a live model. Real runs ignore this.
     recorded_output: str | None = None
+    # Captured outputs keyed by prompt version (#218), so two prompt versions
+    # can be scored and compared offline. Falls back to recorded_output.
+    recorded_outputs: dict[str, str] | None = None
     source: str = "curated"         # "curated" | "feedback:<event_id>"
 
     def __post_init__(self) -> None:
@@ -139,7 +142,7 @@ class GoldenCase:
         }
         if self.media is not None:
             out["media"] = self.media.to_dict()
-        for k in ("question", "prompt", "recorded_output"):
+        for k in ("question", "prompt", "recorded_output", "recorded_outputs"):
             v = getattr(self, k)
             if v is not None:
                 out[k] = v
@@ -156,6 +159,7 @@ class GoldenCase:
             question=d.get("question"),
             prompt=d.get("prompt"),
             recorded_output=d.get("recorded_output"),
+            recorded_outputs=d.get("recorded_outputs"),
             source=d.get("source", "curated"),
         )
 

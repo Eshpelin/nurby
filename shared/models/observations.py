@@ -69,6 +69,14 @@ class Observation(Base):
     primary_vlm_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     refined_by_provider_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     refined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Prompt provenance for the live caption (#218). Key + version resolve to
+    # the exact text through services.perception.prompt_registry. The text is
+    # stored only for a camera's own custom prompt, which the registry does
+    # not hold. NULL on rows captioned before stamping existed: shown as
+    # legacy/unknown rather than guessed.
+    caption_prompt_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    caption_prompt_version: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    caption_prompt_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Primary incident link. Set by the perception pipeline at insert
     # time when incident tracking is enabled on the camera. Null means
     # the observation stands alone or tracking was off when it landed.
@@ -129,6 +137,9 @@ class ObservationAction(Base):
     # nuance the enum cannot.
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    # Which classification prompt produced this label (#218).
+    prompt_key: Mapped[str] = mapped_column(String(64), default="legacy/unknown", nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(24), default="legacy", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

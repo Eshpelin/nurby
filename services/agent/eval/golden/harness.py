@@ -41,6 +41,10 @@ class ScoreCard:
     prompt_version: str
     judge: str
     generated_at: str
+    # Registry key + text sha when the version is a registered prompt (#218),
+    # so the scorecard pins the exact text, not just a label.
+    prompt_key: str | None = None
+    prompt_sha: str | None = None
     scores: list[CaseScore] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     coverage_counts: dict[str, int] = field(default_factory=dict)
@@ -100,6 +104,8 @@ class ScoreCard:
                 "provider": self.provider,
                 "model": self.model,
                 "prompt_version": self.prompt_version,
+                "prompt_key": self.prompt_key,
+                "prompt_sha": self.prompt_sha,
                 "judge": self.judge,
                 "generated_at": self.generated_at,
             },
@@ -116,6 +122,8 @@ class ScoreCard:
                 if not s.passed
             ],
             "skipped": self.skipped,
+            # Per-case outcome, so two scorecards can be compared case by case.
+            "cases": [{"id": s.case_id, "passed": s.passed} for s in self.scores],
         }
 
     def to_json(self) -> str:
@@ -131,7 +139,8 @@ class ScoreCard:
             "# Golden-set scorecard",
             "",
             f"- **Provider/model:** {self.provider} / {self.model}",
-            f"- **Prompt version:** {self.prompt_version}",
+            f"- **Prompt version:** {self.prompt_version}"
+            + (f" ({self.prompt_key}, sha {self.prompt_sha})" if self.prompt_key else ""),
             f"- **Judge:** {self.judge}",
             f"- **Generated:** {self.generated_at}",
             f"- **Scored:** {m['n_scored']} · **Skipped:** {m['n_skipped']}",
@@ -177,6 +186,7 @@ def run_scorecard(
     prompt_version: str,
     judge: Judge | None = None,
     runner: CaseRunner | None = None,
+    prompt_key: str | None = None,
 ) -> ScoreCard:
     """Score ``cases`` and return a :class:`ScoreCard`.
 
@@ -185,10 +195,20 @@ def run_scorecard(
     with no available output are skipped, never scored as passing.
     """
     judge = judge or KeywordJudge()
+    prompt_sha = None
+    if prompt_key is not None:
+        from services.perception import prompt_registry
+
+        text = prompt_registry.text_for(prompt_key, prompt_version)
+        if text is None:
+            raise ValueError(f"{prompt_key} has no registered version {prompt_version!r}")
+        prompt_sha = prompt_registry.content_hash(text)
     card = ScoreCard(
         provider=provider,
         model=model,
         prompt_version=prompt_version,
+        prompt_key=prompt_key,
+        prompt_sha=prompt_sha,
         judge=judge.name,
         generated_at=datetime.now(timezone.utc).isoformat(),
         coverage_counts=coverage(cases),
@@ -203,9 +223,101 @@ def run_scorecard(
                 card.skipped.append(f"{case.id}: runner error: {type(e).__name__}: {e}")
                 continue
         if output is None:
-            output = case.recorded_output
+            output = (case.recorded_outputs or {}).get(prompt_version, case.recorded_output)
         if output is None:
             card.skipped.append(f"{case.id}: no runner output and no recorded_output")
             continue
         card.scores.append(score_case(case, output, judge))
     return card
+
+
+# ── Prompt-version comparison (#218) ──
+
+_COMPARED_METRICS = ("event_accuracy", "caption_faithfulness", "answer_correctness", "pass_rate")
+
+
+@dataclass
+class Comparison:
+    """Candidate scorecard vs baseline. ``promotable`` is the gate: no metric
+    regresses beyond ``tolerance`` and no case that passed now fails."""
+
+    baseline: dict
+    candidate: dict
+    deltas: dict[str, float | None]
+    regressions: list[str]
+    newly_failing: list[str]
+    newly_passing: list[str]
+    tolerance: float
+
+    @property
+    def promotable(self) -> bool:
+        return not self.regressions and not self.newly_failing
+
+    def to_dict(self) -> dict:
+        return {
+            "baseline": self.baseline["provenance"],
+            "candidate": self.candidate["provenance"],
+            "deltas": self.deltas,
+            "regressions": self.regressions,
+            "newly_failing": self.newly_failing,
+            "newly_passing": self.newly_passing,
+            "tolerance": self.tolerance,
+            "promotable": self.promotable,
+        }
+
+    def to_markdown(self) -> str:
+        b, c = self.baseline, self.candidate
+
+        def pct(v):
+            return "n/a" if v is None else f"{v * 100:.1f}%"
+
+        def signed(v):
+            return "n/a" if v is None else f"{v * 100:+.1f} pts"
+
+        lines = [
+            "# Prompt comparison",
+            "",
+            f"- **Baseline:** {b['provenance']['prompt_version']} "
+            f"({b['provenance']['provider']} / {b['provenance']['model']})",
+            f"- **Candidate:** {c['provenance']['prompt_version']} "
+            f"({c['provenance']['provider']} / {c['provenance']['model']})",
+            f"- **Verdict:** {'promotable' if self.promotable else 'do not promote'}",
+            "",
+            "| Metric | Baseline | Candidate | Delta |",
+            "| --- | --- | --- | --- |",
+        ]
+        for m in _COMPARED_METRICS:
+            lines.append(
+                f"| {m} | {pct(b['metrics'].get(m))} | {pct(c['metrics'].get(m))} | {signed(self.deltas[m])} |"
+            )
+        if self.newly_failing:
+            lines += ["", "## Newly failing", ""] + [f"- `{i}`" for i in self.newly_failing]
+        if self.newly_passing:
+            lines += ["", "## Newly passing", ""] + [f"- `{i}`" for i in self.newly_passing]
+        return "\n".join(lines) + "\n"
+
+
+def compare_scorecards(baseline: dict, candidate: dict, *, tolerance: float = 0.0) -> Comparison:
+    """Compare two ``ScoreCard.to_dict()`` payloads (saved JSON works)."""
+    deltas: dict[str, float | None] = {}
+    regressions: list[str] = []
+    for m in _COMPARED_METRICS:
+        bv, cv = baseline["metrics"].get(m), candidate["metrics"].get(m)
+        if bv is None or cv is None:
+            deltas[m] = None
+            continue
+        deltas[m] = round(cv - bv, 4)
+        if cv < bv - tolerance:
+            regressions.append(m)
+    b_cases = {x["id"]: x["passed"] for x in baseline.get("cases", [])}
+    c_cases = {x["id"]: x["passed"] for x in candidate.get("cases", [])}
+    shared = sorted(b_cases.keys() & c_cases.keys())
+    return Comparison(
+        baseline=baseline,
+        candidate=candidate,
+        deltas=deltas,
+        regressions=regressions,
+        newly_failing=[i for i in shared if b_cases[i] and not c_cases[i]],
+        newly_passing=[i for i in shared if not b_cases[i] and c_cases[i]],
+        tolerance=tolerance,
+    )

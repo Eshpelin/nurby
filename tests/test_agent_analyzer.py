@@ -106,7 +106,7 @@ class _StubVLM:
         self.call_count = 0
         self.last_frames: list[np.ndarray] | None = None
 
-    async def __call__(self, provider, frames, question):
+    async def __call__(self, provider, frames, question, system_prompt=None):
         self.call_count += 1
         self.last_frames = frames
         # Inject the usage block the real callers strip out.

@@ -135,13 +135,23 @@ def _manager(replies, monkeypatch):
     mgr._vlm = _FakeVLM(replies)
     monkeypatch.setattr(w, "_load_frame", lambda thumb: np.zeros((8, 8, 3), dtype=np.uint8))
 
+    # Shipped prompt versions, without touching the settings table.
+    from services.perception import prompt_registry
+
+    async def _no_overrides(*, fresh=False):
+        return {}
+
+    monkeypatch.setattr(prompt_registry, "active_overrides", _no_overrides)
+
     writes, appends = [], []
 
-    async def _write_summary(obs_id, summary, attributes, embedding, provider):
-        writes.append({"summary": summary, "attributes": attributes, "embedding": embedding})
+    async def _write_summary(obs_id, summary, attributes, embedding, provider, prompt=None):
+        writes.append({"summary": summary, "attributes": attributes, "embedding": embedding,
+                       "prompt": prompt})
 
-    async def _append_pass(obs_id, lens, provider, description, attributes):
-        appends.append({"lens": lens, "description": description, "attributes": attributes})
+    async def _append_pass(obs_id, lens, provider, description, attributes, prompt=None):
+        appends.append({"lens": lens, "description": description, "attributes": attributes,
+                        "prompt": prompt})
 
     async def _embed(text):
         return [0.0]
@@ -169,7 +179,9 @@ async def test_supported_summary_is_written_unchanged(monkeypatch):
     assert await mgr._run_summary("obs", "t.jpg", [], PASSES, object()) is True
     assert len(writes) == 1
     assert writes[0]["summary"] == "A red van sits at the curb."
-    assert writes[0]["attributes"]["verify"] == {"status": "ok"}
+    assert writes[0]["attributes"]["verify"] == {"status": "ok", "verify_prompt_version": "v1"}
+    # The published summary is stamped with the exact prompt that wrote it.
+    assert (writes[0]["prompt"].key, writes[0]["prompt"].version) == ("summary", "v1")
     assert writes[0]["embedding"] is not None
     assert appends == []
 
@@ -190,7 +202,8 @@ async def test_unsupported_summary_is_repaired_and_the_repair_is_published(monke
     # The rejected text never reaches the caption.
     assert writes[0]["summary"] == "A red van sits at the curb."
     assert writes[0]["attributes"]["verify"] == {
-        "status": "ok", "repair": "ok", "escalated_to": None
+        "status": "ok", "repair": "ok", "escalated_to": None,
+        "verify_prompt_version": "v1", "repair_prompt_version": "v1",
     }
     # And the repair round was actually a repair prompt, not a re-summary.
     import services.perception.vlm_enrichment_worker as w
@@ -420,7 +433,10 @@ async def test_no_montage_means_no_episode_lookup(monkeypatch):
 
     assert await mgr._run_raw_lens("temporal", "obs", "cam", "ts", "t.jpg", [],
                                    object(), None, None) is True
+    prompt = appends[0].pop("prompt")
     assert appends[0] == {"lens": "temporal", "description": None, "attributes": None}
+    # Even the attempted-but-empty pass records which prompt version it ran under.
+    assert (prompt.key, prompt.version) == ("temporal", "v1")
 
 
 # ---- repair escalates to a stronger model (G6, #132) --------------------
