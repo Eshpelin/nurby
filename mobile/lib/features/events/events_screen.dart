@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
@@ -45,6 +46,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   String? _cameraId;
   bool _loadingMore = false;
   bool _hasMore = true;
+  final Set<String> _selectedIds = <String>{};
+  bool _selectionMode = false;
 
   EventsQuery get _query => (acked: _acked, cameraId: _cameraId);
 
@@ -70,6 +73,76 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     _extra.clear();
     _hasMore = true;
     _loadingMore = false;
+  }
+
+  void _clearSelection() {
+    _selectedIds.clear();
+    _selectionMode = false;
+  }
+
+  void _toggleSelected(String id) {
+    setState(() {
+      _selectionMode = true;
+      if (!_selectedIds.add(id)) _selectedIds.remove(id);
+      if (_selectedIds.isEmpty) _selectionMode = false;
+    });
+  }
+
+  void _selectPage(List<Event> events) {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds
+        ..clear()
+        ..addAll(events.map((e) => e.id));
+    });
+  }
+
+  Future<void> _downloadSelectedCsv() async {
+    final url = ref.read(eventRepoProvider).exportUrl(ids: _selectedIds.toList());
+    if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication) && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the event export.')));
+    }
+  }
+
+  Future<void> _bulkDelete() async {
+    if (_selectedIds.isEmpty) return;
+    final ids = _selectedIds.toList(growable: false);
+    try {
+      final preview = await ref.read(eventRepoProvider).previewBulk(ids: ids);
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Delete alerts?'),
+          content: Text(
+            '${preview.matching} event${preview.matching == 1 ? '' : 's'}\n'
+            'Linked recordings: ${preview.linkedRecordings} (preserved).\n\n'
+            'This cannot be undone.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      final result = await ref.read(eventRepoProvider).deleteBulk(ids: ids);
+      if (!mounted) return;
+      setState(() {
+        _clearSelection();
+        _resetPaging();
+      });
+      ref.invalidate(eventsProvider);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Deleted ${result.deleted} alert${result.deleted == 1 ? '' : 's'}. Linked recordings were preserved.'),
+      ));
+    } catch (e) {
+      if (mounted) _showMutationError(e);
+    }
   }
 
   Future<void> _refresh() async {
@@ -158,6 +231,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     final body = Column(
         children: [
           _filterBar(cameras),
+          if (_selectionMode) _selectionBar(visible),
           Expanded(
             child: firstPage.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -199,10 +273,12 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         children: [
           _chip('Unreviewed', _acked == false, () => setState(() {
                 _acked = false;
+                _clearSelection();
                 _resetPaging();
               })),
           _chip('All', _acked == null, () => setState(() {
                 _acked = null;
+                _clearSelection();
                 _resetPaging();
               })),
           Container(
@@ -214,9 +290,41 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
           for (final c in cameras)
             _chip(c.name, _cameraId == c.id, () => setState(() {
                   _cameraId = _cameraId == c.id ? null : c.id;
+                  _clearSelection();
                   _resetPaging();
                 })),
         ],
+      ),
+    );
+  }
+
+  Widget _selectionBar(List<Event> visible) {
+    return Material(
+      color: NurbyColors.cardElevated,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+        child: Row(
+          children: [
+            Text('${_selectedIds.length} selected', style: const TextStyle(fontWeight: FontWeight.w600)),
+            const Spacer(),
+            TextButton(onPressed: () => _selectPage(visible), child: const Text('Select page')),
+            IconButton(
+              tooltip: 'Export CSV',
+              onPressed: _selectedIds.isEmpty ? null : _downloadSelectedCsv,
+              icon: const Icon(Icons.download_outlined),
+            ),
+            IconButton(
+              tooltip: 'Delete selected',
+              onPressed: _selectedIds.isEmpty ? null : _bulkDelete,
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+            ),
+            IconButton(
+              tooltip: 'Clear selection',
+              onPressed: () => setState(_clearSelection),
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -305,7 +413,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       child: Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => _showDetailSheet(event),
+          onTap: () => _selectionMode ? _toggleSelected(event.id) : _showDetailSheet(event),
+          onLongPress: () => _toggleSelected(event.id),
           child: IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -317,6 +426,14 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                         horizontal: 12, vertical: 10),
                     child: Row(
                       children: [
+                        if (_selectionMode)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Icon(
+                              _selectedIds.contains(event.id) ? Icons.check_circle : Icons.radio_button_unchecked,
+                              color: _selectedIds.contains(event.id) ? NurbyColors.accent : NurbyColors.mutedForeground,
+                            ),
+                          ),
                         Expanded(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
