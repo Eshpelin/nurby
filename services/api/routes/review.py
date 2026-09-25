@@ -52,6 +52,47 @@ def _association_visible(association: EntityAssociation, allowed) -> bool:
     return bool(allowed_ids.intersection(str(camera_id) for camera_id in (association.camera_histogram or {})))
 
 
+def _scoped_evidence(row: AssociationEvidence, allowed_ids: set[str] | None) -> dict | None:
+    """Project one evidence episode without leaking restricted camera sources.
+
+    An episode may contain observations from more than one camera.  We cannot
+    safely expose observation ids or a journey URL for a mixed episode unless
+    every contributing camera is visible to the caller, so those source
+    pointers are redacted while the permitted camera names/ids remain useful.
+    """
+    cameras = {str(camera_id) for camera_id in (row.camera_ids or [])}
+    if allowed_ids is not None:
+        visible_cameras = cameras.intersection(allowed_ids)
+        if cameras and not visible_cameras:
+            return None
+        fully_visible = not cameras or cameras <= allowed_ids
+        camera_ids = sorted(visible_cameras)
+    else:
+        fully_visible = True
+        camera_ids = sorted(cameras)
+    metadata = dict(row.evidence_metadata or {})
+    transcript_id = metadata.get("transcript_id")
+    if not fully_visible:
+        # A mixed episode must not carry a hidden transcript/source identifier
+        # in an otherwise harmless metadata payload.
+        metadata.pop("transcript_id", None)
+    return {
+        "id": str(row.id),
+        "episode_key": row.episode_key,
+        "kind": row.evidence_kind,
+        "role": row.role,
+        "journey_id": str(row.journey_id) if row.journey_id and fully_visible else None,
+        "observation_ids": (row.observation_ids or []) if fully_visible else [],
+        "camera_ids": camera_ids,
+        "observed_at": row.observed_at,
+        "score": row.score,
+        "explanation": row.explanation,
+        "metadata": metadata,
+        "fully_visible": fully_visible,
+        "transcript_id": transcript_id if fully_visible else None,
+    }
+
+
 def _review_visible(camera_id):
     """Match the existing Events review policy for excluded cameras."""
     excluded = select(Camera.id).where(Camera.exclude_from_review.is_(True))
@@ -394,6 +435,10 @@ async def list_entity_associations(
     subject_key: str | None = Query(default=None),
     object_kind: str | None = Query(default=None),
     object_key: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    camera_id: uuid.UUID | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -421,9 +466,17 @@ async def list_entity_associations(
         query = query.where(EntityAssociation.object_kind == object_kind)
     if object_key:
         query = query.where(EntityAssociation.object_key == object_key)
-    rows = (
-        await db.execute(query.order_by(EntityAssociation.last_seen_at.desc()).limit(100))
-    ).scalars().all()
+    if status:
+        query = query.where(EntityAssociation.status == status)
+    # Scope before applying offset/limit.  The histogram is an aggregate of
+    # visible source cameras, so a restricted caller must never page through
+    # hidden rows and infer their existence from a short page.
+    candidates = (await db.execute(query.order_by(EntityAssociation.last_seen_at.desc()).limit(1000))).scalars().all()
+    rows = [
+        row for row in candidates
+        if _association_visible(row, allowed)
+        and (camera_id is None or str(camera_id) in {str(value) for value in (row.camera_histogram or {})})
+    ][offset:offset + limit]
     result = []
     for row in rows:
         viewed_as_subject = row.subject_kind == subject_kind and row.subject_key == subject_key
@@ -439,6 +492,10 @@ async def list_entity_associations(
             "source": row.source,
             "user_confirmed": row.user_confirmed,
             "evidence_count": row.evidence_count,
+            "supporting_evidence_count": getattr(row, "supporting_evidence_count", row.evidence_count),
+            "contradictory_evidence_count": getattr(row, "contradictory_evidence_count", 0),
+            "confidence_score": row.confidence_score,
+            "decision_explanation": row.decision_explanation,
             "distinct_days": row.distinct_days,
             "first_seen_at": row.first_seen_at,
             "last_seen_at": row.last_seen_at,
@@ -447,7 +504,7 @@ async def list_entity_associations(
             ),
             "evidence_url": f"/api/review/relationship-suggestions/{row.id}",
         })
-    return [item for row, item in zip(rows, result) if _association_visible(row, allowed)]
+    return result
 
 
 @router.post("/relationship-suggestions/{association_id}/decision")
@@ -527,11 +584,11 @@ async def get_relationship_suggestion(
     ).scalars().all()
     evidence = []
     for row in rows:
-        cameras = {str(camera_id) for camera_id in (row.camera_ids or [])}
-        if allowed_ids is not None and not cameras.intersection(allowed_ids):
+        scoped = _scoped_evidence(row, allowed_ids)
+        if scoped is None:
             continue
-        metadata = row.evidence_metadata or {}
-        transcript_id = metadata.get("transcript_id")
+        metadata = scoped["metadata"]
+        transcript_id = scoped["transcript_id"]
         transcript_exists = True
         transcript_edited = False
         if transcript_id:
@@ -550,21 +607,11 @@ async def get_relationship_suggestion(
         else:
             source_status = "available" if row.observation_ids or row.journey_id or transcript_id else "source_expired"
         evidence.append({
-            "id": str(row.id),
-            "episode_key": row.episode_key,
-            "kind": row.evidence_kind,
-            "role": row.role,
-            "journey_id": str(row.journey_id) if row.journey_id else None,
-            "observation_ids": row.observation_ids or [],
-            "camera_ids": row.camera_ids or [],
-            "observed_at": row.observed_at,
-            "score": row.score,
-            "explanation": row.explanation,
-            "metadata": metadata,
+            **scoped,
             "source_status": source_status,
             "source_url": (
                 f"/api/transcripts/{transcript_id}" if transcript_id and transcript_exists
-                else f"/api/journeys/{row.journey_id}" if row.journey_id
+                else f"/api/journeys/{row.journey_id}" if row.journey_id and scoped["fully_visible"]
                 else None
             ),
         })

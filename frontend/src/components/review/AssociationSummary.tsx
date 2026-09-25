@@ -15,6 +15,10 @@ type Association = {
   status: string;
   user_confirmed: boolean;
   evidence_count: number;
+  supporting_evidence_count?: number;
+  contradictory_evidence_count?: number;
+  confidence_score?: number | null;
+  decision_explanation?: string | null;
   distinct_days: number;
   counterpart_label: string;
   evidence_url: string;
@@ -91,7 +95,12 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
                 </div>
                 <div className="text-[10px] text-muted-foreground">
                   {item.distinct_days} independent {item.distinct_days === 1 ? "visit" : "visits"} · {item.evidence_count} evidence episodes
+                  {(item.supporting_evidence_count ?? 0) > 0 && ` · ${item.supporting_evidence_count} support`}
+                  {(item.contradictory_evidence_count ?? 0) > 0 && ` · ${item.contradictory_evidence_count} conflict`}
                 </div>
+                {item.decision_explanation && (
+                  <div className="mt-1 text-[10px] text-muted-foreground">{item.decision_explanation}</div>
+                )}
               </div>
               <span className={`text-[10px] ${item.status === "established" ? "text-emerald-400" : "text-amber-300"}`}>
                 {item.user_confirmed ? "confirmed" : item.status === "candidate" ? "suggested" : item.status}
