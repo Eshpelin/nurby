@@ -30,6 +30,7 @@ from shared.models import (
     FaceCluster,
     Incident,
     Notification,
+    Person,
     Transcript,
     User,
 )
@@ -47,6 +48,9 @@ class RelationshipDecisionBody(BaseModel):
     # open tab from overwriting a newer review while preserving retry-safe
     # behavior when the same decision is submitted again.
     expected_reviewed_at: datetime | None = None
+    # Only a confirmed audio-name hypothesis may be explicitly linked to an
+    # existing person.  This is a review action, never an automatic rename.
+    link_person_id: uuid.UUID | None = None
 
 
 def _association_visible(association: EntityAssociation, allowed) -> bool:
@@ -561,6 +565,16 @@ async def decide_relationship_suggestion(
     if not valid_status:
         raise HTTPException(status_code=404, detail="Relationship suggestion not found")
 
+    if body.link_person_id is not None:
+        if body.decision != "confirm" or association.relation != "possibly_named":
+            raise HTTPException(
+                status_code=422,
+                detail="A person link is only valid when confirming a spoken-name hypothesis.",
+            )
+        linked_person = await db.get(Person, body.link_person_id)
+        if linked_person is None:
+            raise HTTPException(status_code=404, detail="Person not found")
+
     allowed = await allowed_camera_ids(current_user, db)
     if allowed is not ALL:
         allowed_ids = {str(camera_id) for camera_id in allowed}
@@ -600,6 +614,12 @@ async def decide_relationship_suggestion(
     association.reviewed_at = datetime.now(timezone.utc)
     association.reviewed_by_user_id = current_user.id
     association.review_note = body.note.strip() if body.note else None
+    if body.link_person_id is not None:
+        association.object_kind = "person"
+        association.object_key = str(body.link_person_id)
+        association.object_label = linked_person.nickname or linked_person.display_name
+        if not association.review_note:
+            association.review_note = "Linked spoken-name hypothesis to this person after review."
     db.add(AssociationReviewEvent(
         association_id=association.id,
         reviewer_user_id=current_user.id,

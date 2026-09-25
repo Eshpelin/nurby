@@ -38,3 +38,9 @@ def test_decision_payload_can_carry_review_timestamp_for_stale_tab_detection():
         decision="confirm", expected_reviewed_at=reviewed_at
     )
     assert body.expected_reviewed_at == reviewed_at
+
+
+def test_spoken_name_decision_can_carry_an_explicit_person_link():
+    person_id = uuid4()
+    body = RelationshipDecisionBody(decision="confirm", link_person_id=person_id)
+    assert body.link_person_id == person_id

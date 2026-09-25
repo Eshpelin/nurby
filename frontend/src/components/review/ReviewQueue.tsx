@@ -50,6 +50,12 @@ type RelationshipDetail = {
   }[];
 };
 
+type PersonOption = {
+  id: string;
+  display_name: string;
+  nickname?: string | null;
+};
+
 type ReviewQueueProps = {
   onOpenEvent?: (eventId: string) => void;
 };
@@ -73,6 +79,8 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
   const [expandedEvidence, setExpandedEvidence] = useState<string | null>(null);
   const [relationshipDetails, setRelationshipDetails] = useState<Record<string, RelationshipDetail>>({});
   const [evidenceLoading, setEvidenceLoading] = useState<string | null>(null);
+  const [persons, setPersons] = useState<PersonOption[]>([]);
+  const [linkedPerson, setLinkedPerson] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,6 +104,12 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    void authFetch("/api/persons").then(async (res) => {
+      if (res.ok) setPersons(await res.json());
+    }).catch(() => undefined);
+  }, [authFetch]);
+
   const markNotificationRead = async (item: ReviewItem) => {
     if (item.kind !== "notification" || !item.unread) return;
     const res = await authFetch(`/api/notifications/${item.source_id}/read`, { method: "PATCH" });
@@ -109,7 +123,12 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
       const res = await authFetch(`/api/review/relationship-suggestions/${item.source_id}/decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision }),
+        body: JSON.stringify({
+          decision,
+          ...(decision === "confirm" && linkedPerson[item.id]
+            ? { link_person_id: linkedPerson[item.id] }
+            : {}),
+        }),
       });
       if (!res.ok) throw new Error(`Could not ${decision} relationship (${res.status})`);
       setItems((current) => current.filter((candidate) => candidate.id !== item.id));
@@ -261,6 +280,21 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                 )}
                 {item.source_type === "association" && (
                   <>
+                    {item.kind === "identity_suggestion" && item.provenance.relation === "possibly_named" && (
+                      <select
+                        aria-label={`Link ${item.title} to a person`}
+                        value={linkedPerson[item.id] || ""}
+                        onChange={(event) => setLinkedPerson((current) => ({ ...current, [item.id]: event.target.value }))}
+                        className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
+                      >
+                        <option value="">Confirm name only</option>
+                        {persons.map((person) => (
+                          <option key={person.id} value={person.id}>
+                            Link to {person.nickname || person.display_name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <button
                       type="button"
                       onClick={() => void toggleEvidence(item)}
