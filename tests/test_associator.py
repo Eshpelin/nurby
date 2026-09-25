@@ -252,6 +252,30 @@ def test_vehicles_in_preserves_each_plate_read_as_evidence_metadata():
     }]
 
 
+def test_contradiction_provenance_explains_expected_edge_and_visit_window():
+    from services.perception.associator import contradiction_provenance
+
+    when = _at(1, 8)
+    edge = SimpleNamespace(
+        subject_kind="person", subject_key="Simon", relation="uses",
+        object_kind="vehicle", object_key="vehicle-1", object_label="Blue car",
+    )
+    journey = SimpleNamespace(
+        started_at=when, last_seen_at=_at(1, 8, 45),
+    )
+
+    result = contradiction_provenance(
+        edge, journey, {"vehicle-2"}, ["obs-1", "obs-2"], ["camera-a"]
+    )
+
+    assert result["policy"] == "absence_in_finalized_journey"
+    assert result["expected_object_key"] == "vehicle-1"
+    assert result["expected_object_label"] == "Blue car"
+    assert result["present_vehicle_ids"] == ["vehicle-2"]
+    assert result["observation_count"] == 2
+    assert result["journey_last_seen_at"].endswith("+00:00")
+
+
 def test_journey_camera_ids_dedupes_and_skips_junk():
     import uuid as _uuid
 

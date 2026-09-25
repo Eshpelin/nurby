@@ -148,6 +148,36 @@ def evidence_balance(supporting: int, contradictory: int) -> tuple[float | None,
     return score, explanation
 
 
+def contradiction_provenance(
+    edge: EntityAssociation,
+    journey: Journey,
+    present_vehicle_ids: set[str],
+    observation_ids: list[str],
+    camera_ids: list[str],
+) -> dict:
+    """Describe why a visit contradicts a learned vehicle association.
+
+    The aggregate counter is intentionally insufficient for review. Keep the
+    expected edge, finalized-visit policy, and bounded source counts beside
+    the evidence row so a reviewer can distinguish "vehicle absent" from a
+    missing/low-quality observation without exposing raw frames here.
+    """
+    return {
+        "policy": "absence_in_finalized_journey",
+        "subject_kind": edge.subject_kind,
+        "subject_key": edge.subject_key,
+        "relation": edge.relation,
+        "expected_object_kind": edge.object_kind,
+        "expected_object_key": edge.object_key,
+        "expected_object_label": edge.object_label,
+        "present_vehicle_ids": sorted(str(value) for value in present_vehicle_ids),
+        "observation_count": len(observation_ids),
+        "camera_count": len(camera_ids),
+        "journey_started_at": journey.started_at.isoformat() if journey.started_at else None,
+        "journey_last_seen_at": journey.last_seen_at.isoformat() if journey.last_seen_at else None,
+    }
+
+
 def should_archive_association(
     association: EntityAssociation,
     now: datetime,
@@ -528,7 +558,9 @@ async def process_journey(
             camera_ids=camera_ids,
             observed_at=start,
             explanation="The subject was observed in a finalized visit without this usually associated vehicle.",
-            evidence_metadata={"present_vehicle_ids": list(present_vehicle_ids)},
+            evidence_metadata=contradiction_provenance(
+                edge, journey, present_vehicle_ids, observation_ids, camera_ids
+            ),
         ))
         edge.contradictory_evidence_count = int(
             getattr(edge, "contradictory_evidence_count", 0) or 0
