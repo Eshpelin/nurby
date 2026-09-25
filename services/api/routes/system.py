@@ -3,7 +3,7 @@ import shutil
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +14,7 @@ from shared.auth import get_current_user, require_admin
 from shared.config import settings
 from shared.database import get_db
 from shared.email import send_email
-from shared.models import Camera, Observation, Recording, User
+from shared.models import Camera, Event, Notification, Observation, Recording, User
 from shared.schemas import (
     CameraStorageStats,
     StorageResponse,
@@ -24,6 +24,20 @@ from shared.schemas import (
 )
 
 router = APIRouter()
+
+
+def _percentile(values: list[float], percentile: float) -> float | None:
+    """Linear-interpolated percentile for the operational latency report."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    position = (len(ordered) - 1) * percentile
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    fraction = position - lower
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
 
 
 class BackupRequest(BaseModel):
@@ -53,6 +67,69 @@ async def run_backup(body: BackupRequest, _current_user: User = Depends(require_
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"archive": archive.name, "backup_path": str(Path(settings.backup_path))}
+
+
+@router.get("/alert-latency")
+async def get_alert_latency(
+    hours: int = Query(default=24, ge=1, le=720),
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Report fast-lane event-to-delivery latency by camera."""
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    rows = (await db.execute(
+        select(Event.id, Event.camera_id, Event.fired_at, Notification.delivered_at)
+        .outerjoin(
+            Notification,
+            (Notification.observation_id == Event.observation_id)
+            & (Notification.camera_id == Event.camera_id),
+        )
+        .where(Event.fired_at >= cutoff)
+        .where(Event.camera_id.is_not(None))
+        .order_by(Event.fired_at.desc())
+        .limit(10000)
+    )).all()
+
+    # Several channels may create notification rows for one event. Measure
+    # the first successful delivery, so retries cannot inflate the sample.
+    by_event: dict[object, tuple[object, object, object]] = {}
+    for event_id, camera_id, fired_at, delivered_at in rows:
+        previous = by_event.get(event_id)
+        if previous is None or (
+            delivered_at is not None
+            and (previous[2] is None or delivered_at < previous[2])
+        ):
+            by_event[event_id] = (camera_id, fired_at, delivered_at)
+
+    camera_ids = {row[0] for row in by_event.values()}
+    camera_rows = (await db.execute(
+        select(Camera.id, Camera.name).where(Camera.id.in_(camera_ids))
+    )).all() if camera_ids else []
+    names = {camera_id: name for camera_id, name in camera_rows}
+    grouped: dict[object, dict[str, object]] = {}
+    for camera_id, fired_at, delivered_at in by_event.values():
+        bucket = grouped.setdefault(camera_id, {"latencies": [], "total": 0, "failed": 0})
+        bucket["total"] = int(bucket["total"]) + 1
+        if delivered_at is None:
+            bucket["failed"] = int(bucket["failed"]) + 1
+            continue
+        bucket["latencies"].append(max(0.0, (delivered_at - fired_at).total_seconds()))
+
+    cameras = []
+    for camera_id, bucket in sorted(grouped.items(), key=lambda item: names.get(item[0], str(item[0]))):
+        latencies = bucket["latencies"]
+        cameras.append({
+            "camera_id": str(camera_id),
+            "camera_name": names.get(camera_id, str(camera_id)),
+            "sample_count": len(latencies),
+            "total_events": bucket["total"],
+            "failed_delivery": bucket["failed"],
+            "p50_seconds": round(_percentile(latencies, 0.50), 3) if latencies else None,
+            "p95_seconds": round(_percentile(latencies, 0.95), 3) if latencies else None,
+        })
+    return {"window_hours": hours, "cameras": cameras}
 
 
 @router.get("/status", response_model=SystemStatus)

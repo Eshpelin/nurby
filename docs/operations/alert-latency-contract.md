@@ -30,6 +30,12 @@ rolling operational window. The persisted `Event.fired_at` and
 measurement; a missing delivery timestamp is excluded from delivered-latency
 percentiles and counted as a delivery failure.
 
+Administrators can read the rolling report from
+`GET /api/system/alert-latency?hours=24` (the window is limited to 30 days).
+It returns one row per camera with p50, p95, sample count, total events, and
+undelivered events. Multiple in-app delivery rows for one event count once,
+using the earliest successful delivery.
+
 ## Follow-up work
 
 Web and Telegram update-in-place need to carry the demotion/correction and
