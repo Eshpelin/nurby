@@ -166,13 +166,21 @@ export default function RecordingsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [cameraFilter, setCameraFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  // Default to the last 24h so the page opens with recent footage instead of an
+  // empty screen wrapped in a wall of filters.
+  const [dateFrom, setDateFrom] = useState(() =>
+    toLocalInput(new Date(Date.now() - 24 * 3600 * 1000)));
+  const [dateTo, setDateTo] = useState(() => toLocalInput(new Date()));
   const [objectFilters, setObjectFilters] = useState<string[]>([]);
   const [personFilter, setPersonFilter] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [showBoxes, setShowBoxes] = useState(true);
+  // Redesigned filter bar (#recordings-ux): disclosures + unified "Contains".
+  const [containsQuery, setContainsQuery] = useState("");
+  const [showCustomRange, setShowCustomRange] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
   // "Search what was said" mode: transcript full-text search that deep-links
   // into the covering recording, seeked to the utterance.
   const [speechQuery, setSpeechQuery] = useState("");
@@ -533,14 +541,69 @@ export default function RecordingsPage() {
     setObjectFilters([]);
     setPersonFilter("");
     setVehicleFilter("");
+    setLocationFilter("");
+    setContainsQuery("");
     setPage(0);
     setSelectedIds(new Set());
     setSelectAllMatching(false);
   };
 
+  // ── Unified "Contains" (people + vehicles + object classes) ──────────
+  // One search-to-add field replaces the separate Anyone / Any vehicle
+  // dropdowns and the fixed object-chip row. Named people/vehicles resolve to
+  // their id; generic words resolve to an object class.
+  type ContainsChip = { key: string; kind: "person" | "vehicle" | "object"; id: string; label: string };
+  const containsChips: ContainsChip[] = [];
+  if (personFilter) {
+    const p = persons.find((x) => x.id === personFilter);
+    containsChips.push({ key: `p:${personFilter}`, kind: "person", id: personFilter, label: p ? (p.nickname || p.display_name) : "Person" });
+  }
+  if (vehicleFilter) {
+    const v = vehicles.find((x) => x.id === vehicleFilter);
+    containsChips.push({ key: `v:${vehicleFilter}`, kind: "vehicle", id: vehicleFilter, label: v ? (v.license_plate || v.display_name) : "Vehicle" });
+  }
+  for (const o of objectFilters) {
+    containsChips.push({ key: `o:${o}`, kind: "object", id: o, label: o[0].toUpperCase() + o.slice(1) });
+  }
+
+  const containsSuggestions = useMemo<ContainsChip[]>(() => {
+    const q = containsQuery.trim().toLowerCase();
+    if (!q) return [];
+    const out: ContainsChip[] = [];
+    for (const p of persons) {
+      const name = p.nickname || p.display_name;
+      if (name.toLowerCase().includes(q) && p.id !== personFilter)
+        out.push({ key: `p:${p.id}`, kind: "person", id: p.id, label: name });
+    }
+    for (const v of vehicles) {
+      const name = v.license_plate || v.display_name;
+      if (name.toLowerCase().includes(q) && v.id !== vehicleFilter)
+        out.push({ key: `v:${v.id}`, kind: "vehicle", id: v.id, label: name });
+    }
+    for (const o of COMMON_OBJECTS) {
+      if (o.includes(q) && !objectFilters.includes(o))
+        out.push({ key: `o:${o}`, kind: "object", id: o, label: o[0].toUpperCase() + o.slice(1) });
+    }
+    return out.slice(0, 8);
+  }, [containsQuery, persons, vehicles, personFilter, vehicleFilter, objectFilters]);
+
+  const addContains = (c: ContainsChip) => {
+    if (c.kind === "person") setPersonFilter(c.id);
+    else if (c.kind === "vehicle") setVehicleFilter(c.id);
+    else if (!objectFilters.includes(c.id)) setObjectFilters((prev) => [...prev, c.id]);
+    setContainsQuery("");
+    setPage(0);
+  };
+  const removeContains = (c: ContainsChip) => {
+    if (c.kind === "person") setPersonFilter("");
+    else if (c.kind === "vehicle") setVehicleFilter("");
+    else setObjectFilters((prev) => prev.filter((o) => o !== c.id));
+    setPage(0);
+  };
+
   const hasActiveFilters =
-    !!cameraFilter || !!dateFrom || !!dateTo ||
-    objectFilters.length > 0 || !!personFilter || !!vehicleFilter;
+    !!cameraFilter || objectFilters.length > 0 || !!personFilter ||
+    !!vehicleFilter || !!locationFilter || !!containsQuery;
 
   const applyPreset = (hours: number) => {
     const now = new Date();
