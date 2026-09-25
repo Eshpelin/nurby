@@ -24,6 +24,35 @@ void main() {
       expect(Uri.parse(repo.downloadUrl('r1')).path,
           '/api/recordings/r1/download');
     });
+
+    test('bulk bundle URL carries selected recording ids', () {
+      final u = Uri.parse(repo.bundleUrl(ids: const ['r1', 'r2']));
+      expect(u.path, '/api/recordings/download-bundle');
+      expect(u.queryParametersAll['recording_id'], ['r1', 'r2']);
+    });
+
+    test('bulk preview and delete responses preserve safety details', () {
+      final preview = BulkPreview.fromJson({
+        'resource': 'recordings',
+        'requested': 2,
+        'matching': 1,
+        'estimated_bytes': 2048,
+        'cameras': ['c1'],
+        'missing_files': 1,
+      });
+      final result = BulkDeleteResult.fromJson({
+        'resource': 'recordings',
+        'requested': 2,
+        'deleted': 1,
+        'skipped': 1,
+        'failed_ids': [],
+      });
+      expect(preview.matching, 1);
+      expect(preview.missingFiles, 1);
+      expect(preview.cameras, ['c1']);
+      expect(result.deleted, 1);
+      expect(result.skipped, 1);
+    });
   });
 
   test('facets is a no-op for an empty page', () async {

@@ -5,6 +5,11 @@ import 'outbox.dart';
 import '../models/models.dart';
 import '../models/household_mode.dart';
 
+String _appendRepeatedQuery(String url, String key, List<String> values) {
+  if (values.isEmpty) return url;
+  final separator = url.contains('?') ? '&' : '?';
+  return '$url$separator${values.map((v) => '$key=${Uri.encodeQueryComponent(v)}').join('&')}';
+}
 /// One repository per API resource group. Thin: shape mapping only,
 /// no caching (Riverpod providers own lifecycle).
 class AuthRepository {
@@ -234,6 +239,37 @@ class EventRepository {
   Future<int> unreviewedCount() async {
     final j = await _api.getJson('/api/events/count') as Map;
     return j['unreviewed_count'] as int? ?? 0;
+  }
+
+  Future<BulkPreview> previewBulk({
+    List<String> ids = const [],
+    bool allMatching = false,
+    Map<String, dynamic>? filters,
+  }) async {
+    final j = await _api.postJson('/api/events/bulk/preview', body: {
+      'ids': ids,
+      'all_matching': allMatching,
+      if (filters != null) 'filters': filters,
+    }) as Map;
+    return BulkPreview.fromJson(j.cast<String, dynamic>());
+  }
+
+  Future<BulkDeleteResult> deleteBulk({
+    List<String> ids = const [],
+    bool allMatching = false,
+    Map<String, dynamic>? filters,
+  }) async {
+    final j = await _api.postJson('/api/events/bulk/delete', body: {
+      'ids': ids,
+      'all_matching': allMatching,
+      if (filters != null) 'filters': filters,
+    }) as Map;
+    return BulkDeleteResult.fromJson(j.cast<String, dynamic>());
+  }
+
+  String exportUrl({List<String> ids = const [], Map<String, String>? filters}) {
+    return _appendRepeatedQuery(
+      _api.mediaUrl('/api/events/export.csv', filters), 'event_id', ids);
   }
 
   /// Offline-safe: on a connectivity failure the ack is queued in the
@@ -560,6 +596,43 @@ class RecordingRepository {
     };
   }
 
+  Future<BulkPreview> previewBulk({
+    List<String> ids = const [],
+    bool allMatching = false,
+    Map<String, dynamic>? filters,
+  }) async {
+    final j = await _api.postJson('/api/recordings/bulk/preview', body: {
+      'ids': ids,
+      'all_matching': allMatching,
+      if (filters != null) 'filters': filters,
+    }) as Map;
+    return BulkPreview.fromJson(j.cast<String, dynamic>());
+  }
+
+  Future<BulkDeleteResult> deleteBulk({
+    List<String> ids = const [],
+    bool allMatching = false,
+    Map<String, dynamic>? filters,
+  }) async {
+    final j = await _api.postJson('/api/recordings/bulk/delete', body: {
+      'ids': ids,
+      'all_matching': allMatching,
+      if (filters != null) 'filters': filters,
+    }) as Map;
+    return BulkDeleteResult.fromJson(j.cast<String, dynamic>());
+  }
+
+  String bundleUrl({
+    List<String> ids = const [],
+    Map<String, String>? filters,
+    bool evidence = false,
+  }) {
+    return _appendRepeatedQuery(_api.mediaUrl(
+      '/api/recordings/${evidence ? 'evidence-bundle' : 'download-bundle'}',
+      filters,
+    ), 'recording_id', ids);
+  }
+
   /// A downloadable URL for the whole file, or a clip of it. Both carry
   /// the media token, since whatever saves the file cannot send headers.
   String downloadUrl(String id) =>
@@ -572,6 +645,66 @@ class RecordingRepository {
         'start': '${start.inSeconds}',
         'end': '${end.inSeconds}',
       });
+}
+
+class BulkPreview {
+  const BulkPreview({
+    required this.resource,
+    required this.requested,
+    required this.matching,
+    this.estimatedBytes = 0,
+    this.cameras = const [],
+    this.missingFiles = 0,
+    this.linkedRecordings = 0,
+  });
+
+  factory BulkPreview.fromJson(Map<String, dynamic> j) => BulkPreview(
+        resource: j['resource'] as String? ?? '',
+        requested: (j['requested'] as num?)?.toInt() ?? 0,
+        matching: (j['matching'] as num?)?.toInt() ?? 0,
+        estimatedBytes: (j['estimated_bytes'] as num?)?.toInt() ?? 0,
+        cameras: [for (final c in j['cameras'] as List? ?? const []) '$c'],
+        missingFiles: (j['missing_files'] as num?)?.toInt() ?? 0,
+        linkedRecordings: (j['linked_recordings'] as num?)?.toInt() ?? 0,
+      );
+
+  final String resource;
+  final int requested;
+  final int matching;
+  final int estimatedBytes;
+  final List<String> cameras;
+  final int missingFiles;
+  final int linkedRecordings;
+}
+
+class BulkDeleteResult {
+  const BulkDeleteResult({
+    required this.resource,
+    required this.requested,
+    required this.deleted,
+    this.missing = 0,
+    this.skipped = 0,
+    this.failed = 0,
+    this.failedIds = const [],
+  });
+
+  factory BulkDeleteResult.fromJson(Map<String, dynamic> j) => BulkDeleteResult(
+        resource: j['resource'] as String? ?? '',
+        requested: (j['requested'] as num?)?.toInt() ?? 0,
+        deleted: (j['deleted'] as num?)?.toInt() ?? 0,
+        missing: (j['missing'] as num?)?.toInt() ?? 0,
+        skipped: (j['skipped'] as num?)?.toInt() ?? 0,
+        failed: (j['failed'] as num?)?.toInt() ?? 0,
+        failedIds: [for (final id in j['failed_ids'] as List? ?? const []) '$id'],
+      );
+
+  final String resource;
+  final int requested;
+  final int deleted;
+  final int missing;
+  final int skipped;
+  final int failed;
+  final List<String> failedIds;
 }
 
 class ShareRepository {
