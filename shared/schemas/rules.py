@@ -535,6 +535,19 @@ class RuleTestResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class RuleTestAlertResult(BaseModel):
+    index: int
+    action_type: str
+    status: str
+    detail: str | None = None
+
+
+class RuleTestAlertResponse(BaseModel):
+    synthetic: bool = True
+    message: str
+    results: list[RuleTestAlertResult] = Field(default_factory=list)
+
+
 class RuleReplaySample(BaseModel):
     observation_id: uuid.UUID
     timestamp: datetime

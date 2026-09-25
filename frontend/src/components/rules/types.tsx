@@ -667,6 +667,19 @@ export interface RuleTestResponse {
   warnings?: string[];
 }
 
+export interface RuleTestAlertResult {
+  index: number;
+  action_type: string;
+  status: string;
+  detail?: string | null;
+}
+
+export interface RuleTestAlertResponse {
+  synthetic: boolean;
+  message: string;
+  results: RuleTestAlertResult[];
+}
+
 export interface RuleReplaySample {
   observation_id: string;
   timestamp: string;

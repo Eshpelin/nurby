@@ -26,6 +26,8 @@ from shared.schemas import (
     RuleReplaySample,
     RuleResponse,
     RuleTestActionPreview,
+    RuleTestAlertResponse,
+    RuleTestAlertResult,
     RuleTestRequest,
     RuleTestResponse,
     RuleUpdate,
@@ -1141,6 +1143,52 @@ async def test_rule(
         synthesized_observation=observation,
         would_fire=would_fire,
         warnings=warnings,
+    )
+
+
+@router.post("/{rule_id}/test-alert", response_model=RuleTestAlertResponse)
+async def test_rule_alert(
+    rule_id: uuid.UUID,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Dispatch a clearly synthetic alert through a saved rule's channels.
+
+    This deliberately bypasses the event engine: no Event/Notification row,
+    cooldown, rule evaluation, or activation milestone is created. The same
+    action executors are used, so push/Telegram/email configuration is tested
+    at the delivery seam rather than only previewed.
+    """
+    rule = await db.get(Rule, rule_id)
+    if rule is None:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    from services.events.actions import execute_action
+
+    camera_id = None
+    pattern = rule.trigger_pattern if isinstance(rule.trigger_pattern, dict) else {}
+    camera_id = pattern.get("camera_id")
+    if not camera_id and isinstance(rule.conditions, dict):
+        camera_id = rule.conditions.get("camera_id")
+    observation = _synthesize_observation_for_trigger(pattern, _as_uuid(camera_id))
+    observation["_test_alert"] = True
+    observation["test_alert"] = True
+    observation["timestamp"] = datetime.now(timezone.utc).isoformat()
+    fake_event_id = uuid.uuid4()
+    actions = rule.actions if isinstance(rule.actions, list) else [rule.actions]
+    results: list[RuleTestAlertResult] = []
+    for index, action in enumerate(actions):
+        if not isinstance(action, dict):
+            continue
+        action_type = str(action.get("type") or "unknown")
+        try:
+            await execute_action(action, observation, rule, fake_event_id)
+            results.append(RuleTestAlertResult(index=index, action_type=action_type, status="dispatched"))
+        except Exception as exc:
+            logger.exception("Synthetic alert action failed for rule %s", rule_id)
+            results.append(RuleTestAlertResult(index=index, action_type=action_type, status="failed", detail=str(exc)))
+    return RuleTestAlertResponse(
+        message="Synthetic test alert dispatched. It does not create an event or affect cooldowns.",
+        results=results,
     )
 
 

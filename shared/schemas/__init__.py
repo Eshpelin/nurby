@@ -67,6 +67,8 @@ from shared.schemas.rules import (  # noqa: F401
     RuleTestRequest,
     RuleTestActionPreview,
     RuleTestResponse,
+    RuleTestAlertResult,
+    RuleTestAlertResponse,
     RuleReplaySample,
     RuleReplayResponse,
 )

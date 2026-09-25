@@ -625,26 +625,33 @@ async def _execute_notify(action, observation_data, rule, event_id, ctx):
     message_text = render(legacy, ctx)
     title_text = render(action.get("title", ""), ctx) if action.get("title") else None
 
-    try:
-        async with async_session() as db:
-            notif = Notification(
-                message=message_text,
-                severity=action.get("severity", "info"),
-                rule_id=rule.id,
-                camera_id=uuid.UUID(observation_data["camera_id"]) if observation_data.get("camera_id") else None,
-                observation_id=(
-                    uuid.UUID(observation_data["observation_id"])
-                    if observation_data.get("observation_id") else None
-                ),
-                event_id=event_id,
-            )
-            db.add(notif)
-            await db.commit()
-            await db.refresh(notif)
-            notif_id = str(notif.id)
-    except Exception:
-        logger.exception("Failed to persist notification for rule '%s'", rule.name)
+    test_mode = bool(observation_data.get("_test_alert"))
+    if test_mode:
+        # Test dispatches are intentionally transient: no Event or
+        # Notification row is created, so they cannot enter the review feed,
+        # cooldown history, or activation metrics.
         notif_id = str(uuid.uuid4())
+    else:
+        try:
+            async with async_session() as db:
+                notif = Notification(
+                    message=message_text,
+                    severity=action.get("severity", "info"),
+                    rule_id=rule.id,
+                    camera_id=uuid.UUID(observation_data["camera_id"]) if observation_data.get("camera_id") else None,
+                    observation_id=(
+                        uuid.UUID(observation_data["observation_id"])
+                        if observation_data.get("observation_id") else None
+                    ),
+                    event_id=event_id,
+                )
+                db.add(notif)
+                await db.commit()
+                await db.refresh(notif)
+                notif_id = str(notif.id)
+        except Exception:
+            logger.exception("Failed to persist notification for rule '%s'", rule.name)
+            notif_id = str(uuid.uuid4())
 
     # Mirror the in-app notification to registered mobile devices.
     # Household-wide (user_id=None fans out to every device), best-effort,
@@ -685,13 +692,17 @@ async def _execute_notify(action, observation_data, rule, event_id, ctx):
     delivered = False
     try:
         await broadcast(notification)
-        await _update_event_status(event_id, "notify", "success")
+        if not test_mode:
+            await _update_event_status(event_id, "notify", "success")
         delivered = True
     except Exception as exc:
-        await _update_event_status(event_id, "notify", "failed", str(exc))
+        if not test_mode:
+            await _update_event_status(event_id, "notify", "failed", str(exc))
 
     # Stamp the delivery and advance any verified-activation milestone that
     # tracks this rule (#193). Best-effort; never breaks the action path.
+    if test_mode:
+        return
     try:
         from shared.activation_recorder import record_event_for_activation
 

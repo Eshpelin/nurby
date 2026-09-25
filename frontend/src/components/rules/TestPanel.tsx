@@ -11,6 +11,7 @@ import type {
   RulePayload,
   RuleReplayResponse,
   RuleTestActionPreview,
+  RuleTestAlertResponse,
   RuleTestResponse,
 } from "./types";
 import { timeAgo as timeAgoBase } from "@/lib/time";
@@ -64,6 +65,8 @@ export default function TestPanel({
   const [testResult, setTestResult] = useState<RuleTestResponse | null>(null);
   const [replayResult, setReplayResult] = useState<RuleReplayResponse | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
+  const [alertResult, setAlertResult] = useState<RuleTestAlertResponse | null>(null);
+  const [alertTesting, setAlertTesting] = useState(false);
   const [replayError, setReplayError] = useState<string | null>(null);
   const [replayHours, setReplayHours] = useState<number>(24);
   const [showObs, setShowObs] = useState(false);
@@ -198,6 +201,23 @@ export default function TestPanel({
     }
   };
 
+  const runAlertTest = async () => {
+    if (!existingRuleId) return;
+    setAlertTesting(true);
+    setTestError(null);
+    setAlertResult(null);
+    try {
+      const res = await authFetch(`/api/rules/${existingRuleId}/test-alert`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || `Test alert failed (${res.status})`);
+      setAlertResult(data as RuleTestAlertResponse);
+    } catch (e) {
+      setTestError(e instanceof Error ? e.message : "Test alert failed.");
+    } finally {
+      setAlertTesting(false);
+    }
+  };
+
   // Trigger pattern type must be set for /test to be meaningful.
   let triggerTypeSet = false;
   try {
@@ -234,6 +254,17 @@ export default function TestPanel({
           >
             {testing ? "Testing." : formChangedSinceTest && testResult ? "Re-test now" : "Test rule"}
           </button>
+          {existingRuleId && (
+            <button
+              type="button"
+              onClick={runAlertTest}
+              disabled={alertTesting}
+              className="px-3 py-1.5 text-sm rounded-md border border-accent/50 text-accent hover:bg-accent/10 disabled:opacity-50"
+              title="Send a synthetic alert through this saved rule's configured delivery channels"
+            >
+              {alertTesting ? "Sending." : "Send test alert"}
+            </button>
+          )}
           <div className="flex items-center gap-1">
             <select
               value={replayHours}
@@ -268,6 +299,22 @@ export default function TestPanel({
       {testError && (
         <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2 whitespace-pre-wrap">
           {testError}
+        </div>
+      )}
+
+      {alertResult && (
+        <div className="rounded-md border border-accent/30 bg-accent/5 p-3 space-y-2">
+          <div className="text-xs text-accent font-medium">{alertResult.message}</div>
+          <div className="space-y-1">
+            {alertResult.results.map((result) => (
+              <div key={result.index} className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-muted-foreground">{result.action_type}</span>
+                <span className={result.status === "dispatched" ? "text-emerald-400" : "text-red-400"}>
+                  {result.status}{result.detail ? ` · ${result.detail}` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
