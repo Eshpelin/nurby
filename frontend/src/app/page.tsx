@@ -253,6 +253,12 @@ function DashboardContent() {
             setLiveEvents((prev) => [data, ...prev].slice(0, 20));
             fetchTimeline();
           }
+          if (data.type === "notification_updated") {
+            // A verify/enrichment pass revised an already-visible fast alert.
+            // Re-read the unified timeline so its narrative and severity do
+            // not remain stale until the next periodic refresh.
+            fetchTimeline();
+          }
           if (data.type === "event_fired") {
             // Every rule fire lands on the live strip instantly, without
             // waiting for the 15s timeline poll.

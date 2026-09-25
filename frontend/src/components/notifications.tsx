@@ -12,6 +12,8 @@ export interface NotificationItem {
   observation_id: string | null;
   read: boolean;
   created_at: string;
+  delivered_at?: string | null;
+  updated_at?: string | null;
 }
 
 interface NotificationsDropdownProps {
@@ -88,7 +90,7 @@ export function NotificationsDropdown({
               <div className="flex-1 min-w-0">
                 <p className="text-sm leading-snug break-words">{n.message}</p>
                 <span className="text-xs text-muted-foreground">
-                  {timeAgo(n.created_at)}
+                  {n.updated_at ? `Updated ${timeAgo(n.updated_at)}` : timeAgo(n.created_at)}
                 </span>
               </div>
               {!n.read && (

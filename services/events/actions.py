@@ -41,7 +41,7 @@ from services.events.templates import (
     safe_eval_condition,
 )
 from shared.database import async_session
-from shared.models import Event, Notification, Provider, WebhookSubscription
+from shared.models import Event, Notification, Provider, TelegramChannel, WebhookSubscription
 
 logger = logging.getLogger("nurby.events.actions")
 
@@ -636,6 +636,7 @@ async def _execute_notify(action, observation_data, rule, event_id, ctx):
                     uuid.UUID(observation_data["observation_id"])
                     if observation_data.get("observation_id") else None
                 ),
+                event_id=event_id,
             )
             db.add(notif)
             await db.commit()
@@ -1044,6 +1045,112 @@ async def _record_verify_on_event(event_id: uuid.UUID, verify_result: dict) -> N
         logger.exception("Failed to record verify result on event %s", event_id)
 
 
+async def _update_alerts_after_verify(
+    event_id: uuid.UUID,
+    verify_result: dict,
+    *,
+    passed: bool,
+    demoted: bool = False,
+) -> None:
+    """Revise fast-lane deliveries after the slower verification pass."""
+    from services.api.ws import broadcast
+
+    now = datetime.now(timezone.utc)
+    telegram_delivery: dict = {}
+    async with async_session() as db:
+        event = await db.get(Event, event_id)
+        if event is None:
+            return
+        payload = dict(event.payload or {})
+        verify = dict(payload.get("verify") or {})
+        verify.update({"analysis_at": now.isoformat(), "alert_updated": True})
+        payload["verify"] = verify
+        telegram_delivery = dict(payload.get("deliveries") or {}).get("telegram") or {}
+        if demoted:
+            event.severity = "detection"
+
+        result = await db.execute(select(Notification).where(Notification.event_id == event_id))
+        notifications = result.scalars().all()
+        outcome = "verified" if passed else ("demoted after review" if demoted else "not verified")
+        detail = verify_result.get("summary") or verify_result.get("verdict") or "no conclusion"
+        fired_at = event.fired_at.isoformat() if event.fired_at else "unknown"
+        suffix = (
+            f"\n\nUpdated after analysis at {now.isoformat()}: {outcome} ({detail})."
+            f" Original alert: {fired_at}."
+        )
+        for notification in notifications:
+            if "Updated after analysis at " not in notification.message:
+                notification.message += suffix
+            if demoted:
+                notification.severity = "info"
+            notification.updated_at = now
+        event.payload = payload
+        await db.commit()
+
+        update_payload = {
+            "type": "notification_updated",
+            "event_id": str(event_id),
+            "notification_ids": [str(n.id) for n in notifications],
+            "message": notifications[0].message if notifications else None,
+            "severity": notifications[0].severity if notifications else event.severity,
+            "original_fired_at": fired_at if fired_at != "unknown" else None,
+            "analysis_at": now.isoformat(),
+        }
+
+    try:
+        await broadcast(update_payload)
+    except Exception:
+        logger.warning("Web notification update broadcast failed for event %s", event_id, exc_info=True)
+
+    if telegram_delivery.get("channel_id") and telegram_delivery.get("message_id"):
+        try:
+            async with async_session() as db:
+                channel = await db.get(TelegramChannel, uuid.UUID(telegram_delivery["channel_id"]))
+                if channel is None or not channel.chat_id:
+                    return
+                from shared.crypto import decrypt_secret
+                token = decrypt_secret(channel.bot_token_enc)
+            from services.notify.telegram import TelegramAPI
+            text = update_payload["message"] or f"Nurby alert {outcome}. Original alert: {fired_at}."
+            if telegram_delivery.get("kind") == "photo":
+                await TelegramAPI.edit_message_caption(token, channel.chat_id, int(telegram_delivery["message_id"]), text)
+            else:
+                await TelegramAPI.edit_message_text(token, channel.chat_id, int(telegram_delivery["message_id"]), text)
+        except Exception:
+            logger.warning("Could not update Telegram alert for event %s", event_id, exc_info=True)
+
+
+async def _record_telegram_delivery(
+    event_id: uuid.UUID, channel_id: uuid.UUID, message_id: int, kind: str,
+) -> None:
+    """Keep the Telegram message locator on the event for later revisions."""
+    try:
+        async with async_session() as db:
+            event = await db.get(Event, event_id)
+            if event is None:
+                return
+            payload = dict(event.payload or {})
+            deliveries = dict(payload.get("deliveries") or {})
+            deliveries["telegram"] = {
+                "channel_id": str(channel_id), "message_id": int(message_id), "kind": kind,
+            }
+            payload["deliveries"] = deliveries
+            event.payload = payload
+            await db.commit()
+    except Exception:
+        logger.exception("Failed to persist Telegram delivery locator for event %s", event_id)
+
+
+async def _best_effort_update_alerts_after_verify(
+    event_id: uuid.UUID, verify_result: dict, *, passed: bool, demoted: bool = False,
+) -> None:
+    """Never let a channel revision outage change the rule outcome."""
+    try:
+        await _update_alerts_after_verify(event_id, verify_result, passed=passed, demoted=demoted)
+    except Exception:
+        logger.warning("Verification alert revision failed for event %s", event_id, exc_info=True)
+
+
 async def _execute_verify(action, observation_data, rule, event_id, ctx):
     """Confirm the triggering observation actually shows what the rule
     claims before the rest of the chain runs.
@@ -1188,6 +1295,7 @@ async def _apply_verify_outcome(
     await _record_verify_on_event(event_id, verify_result)
 
     if passed:
+        await _best_effort_update_alerts_after_verify(event_id, verify_result, passed=True)
         logger.info(
             "verify PASSED for rule '%s'. verdict=%s conf=%.2f", rule.name, verdict, confidence,
         )
@@ -1211,6 +1319,7 @@ async def _apply_verify_outcome(
                     await db.commit()
         except Exception:
             logger.exception("verify demote failed to update event %s", event_id)
+        await _best_effort_update_alerts_after_verify(event_id, verify_result, passed=False, demoted=True)
         await _update_event_status(
             event_id, "verify", "skipped",
             f"verify failed. demoted to detection ({verdict} conf={confidence:.2f})",
@@ -1225,12 +1334,14 @@ async def _apply_verify_outcome(
         await _update_event_status(
             event_id, "verify", "skipped", f"verify failed. {verdict} conf={confidence:.2f}",
         )
+        await _best_effort_update_alerts_after_verify(event_id, verify_result, passed=False)
         raise RuntimeError(f"verify failed: {verdict} conf={confidence}")
 
     logger.info(
         "verify FAILED for rule '%s'. verdict=%s conf=%.2f. continuing (on_fail=continue)",
         rule.name, verdict, confidence,
     )
+    await _best_effort_update_alerts_after_verify(event_id, verify_result, passed=False)
     await _update_event_status(
         event_id, "verify", "success", f"verify failed but on_fail=continue. {verdict}",
     )
@@ -1874,6 +1985,7 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
             # reply resolves back to this Event for note-taking.
             sent_msg_id = photo_result.get("message_id")
             if sent_msg_id:
+                await _record_telegram_delivery(event_id, channel_uuid, int(sent_msg_id), "photo")
                 await store_message_index(
                     channel_uuid, int(sent_msg_id),
                     {
@@ -1902,6 +2014,7 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
             )
             sent_msg_id = result.get("message_id")
             if sent_msg_id:
+                await _record_telegram_delivery(event_id, channel_uuid, int(sent_msg_id), "text")
                 await store_message_index(
                     channel_uuid, int(sent_msg_id),
                     {

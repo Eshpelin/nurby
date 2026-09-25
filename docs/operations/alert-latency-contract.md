@@ -36,9 +36,17 @@ It returns one row per camera with p50, p95, sample count, total events, and
 undelivered events. Multiple in-app delivery rows for one event count once,
 using the earliest successful delivery.
 
-## Follow-up work
+## Delivery revisions
 
-Web and Telegram update-in-place need to carry the demotion/correction and
-display both timestamps. Until those channel updates are complete, the
-original fast notification remains the source of truth and the event history
-records the later verification result.
+When a post-alert `verify` action completes, the original event remains
+immutable as evidence of what was detected, while its linked web notification
+is revised in place. The revision appends the outcome, the analysis timestamp,
+and the original alert timestamp; a WebSocket `notification_updated` event
+updates open dashboards immediately. A demotion changes the notification to
+the quiet `info` severity but does not erase the alert or its audit trail.
+
+Telegram alerts persist their channel and message locator on the event and are
+edited in place with the same correction. If a channel is unavailable or an
+edit is rejected by Telegram, the event and web notification still retain the
+correction and the failure is logged; delivery revision is best-effort and
+never changes the rule outcome.

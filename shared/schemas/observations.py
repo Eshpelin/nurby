@@ -43,8 +43,11 @@ class NotificationResponse(BaseModel):
     rule_id: uuid.UUID | None
     camera_id: uuid.UUID | None
     observation_id: uuid.UUID | None
+    event_id: uuid.UUID | None = None
     read: bool
     created_at: datetime
+    delivered_at: datetime | None = None
+    updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

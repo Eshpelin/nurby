@@ -71,6 +71,9 @@ class Notification(Base):
     rule_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     camera_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     observation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     # Per-guardian inbox. Null = household/operator-wide notification (the
     # original behaviour); set = a private copy for one guardian user.
     user_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -82,6 +85,7 @@ class Notification(Base):
     # Telegram, email). Null means persisted-only, never delivered. Used by
     # verified-activation (#193) to prove a real delivery, not just a write.
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ScheduledReport(Base):

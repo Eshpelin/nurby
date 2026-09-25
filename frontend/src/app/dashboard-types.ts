@@ -266,6 +266,8 @@ export interface Notification {
   observation_id: string | null;
   read: boolean;
   created_at: string;
+  delivered_at?: string | null;
+  updated_at?: string | null;
 }
 
 export type TimeRange = "today" | "7d" | "30d";

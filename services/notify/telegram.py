@@ -372,6 +372,26 @@ class TelegramAPI:
             payload["reply_markup"] = reply_markup
         return await cls._post(token, "editMessageReplyMarkup", payload, timeout=10.0)
 
+    @classmethod
+    async def edit_message_text(
+        cls, token: str, chat_id: str | int, message_id: int, text: str,
+        parse_mode: str | None = "HTML",
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"chat_id": chat_id, "message_id": message_id, "text": text}
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+        return await cls._post(token, "editMessageText", payload, timeout=10.0)
+
+    @classmethod
+    async def edit_message_caption(
+        cls, token: str, chat_id: str | int, message_id: int, caption: str,
+        parse_mode: str | None = "HTML",
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"chat_id": chat_id, "message_id": message_id, "caption": caption}
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+        return await cls._post(token, "editMessageCaption", payload, timeout=10.0)
+
     # ------------------------------------------------------------------
     # Phase 3. webhook delivery helpers.
     # ------------------------------------------------------------------

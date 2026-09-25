@@ -219,6 +219,24 @@ async def test_send_message_builds_expected_payload(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_edit_alert_methods_build_expected_payloads(monkeypatch):
+    captured = []
+
+    async def _fake_post(token, method, payload=None, timeout=10.0):
+        captured.append((method, payload))
+        return {"ok": True}
+
+    monkeypatch.setattr(tg.TelegramAPI, "_post", _fake_post)
+    await tg.TelegramAPI.edit_message_text("tok", 123, 7, "revised")
+    await tg.TelegramAPI.edit_message_caption("tok", 123, 8, "revised caption")
+
+    assert captured == [
+        ("editMessageText", {"chat_id": 123, "message_id": 7, "text": "revised", "parse_mode": "HTML"}),
+        ("editMessageCaption", {"chat_id": 123, "message_id": 8, "caption": "revised caption", "parse_mode": "HTML"}),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_send_message_omits_parse_mode_when_none(monkeypatch):
     captured = {}
 

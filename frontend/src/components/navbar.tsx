@@ -82,7 +82,7 @@ export function Navbar() {
     }
   }, [isGuardian, pathname, router]);
   const { resolvedTheme, setTheme } = useTheme();
-  const { status: wsStatus } = useWebSocket();
+  const { status: wsStatus, subscribe } = useWebSocket();
   const { down: workersDown, degraded } = useWorkerHealth();
   const [vlmHealth, setVlmHealth] = useState<{
     configured: boolean; reachable: boolean; name?: string | null;
@@ -194,6 +194,21 @@ export function Navbar() {
       clearInterval(countInterval);
     };
   }, [fetchProvider, fetchUnreadCount, isGuardian]);
+
+  useEffect(() => subscribe("notification_updated", (message) => {
+    const data = message as {
+      notification_ids?: string[];
+      message?: string | null;
+      severity?: string;
+      analysis_at?: string;
+    };
+    if (!data.notification_ids?.length) return;
+    setNotifications((previous) => previous.map((item) =>
+      data.notification_ids!.includes(item.id)
+        ? { ...item, message: data.message || item.message, severity: data.severity || item.severity, updated_at: data.analysis_at || item.updated_at }
+        : item,
+    ));
+  }), [subscribe]);
 
   return (
     <div className="border-b border-border bg-background sticky top-0 z-50">
