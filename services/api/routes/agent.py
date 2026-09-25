@@ -37,6 +37,8 @@ from shared.models import (
     AgentRun,
     AgentToolCall,
     AgentVlmCall,
+    Camera,
+    Observation,
     Provider,
     User,
 )
@@ -343,6 +345,96 @@ async def usage_today(
         )),
         "warn": budget.warn,
         "ok": budget.ok,
+    }
+
+
+@router.get("/usage/report")
+async def usage_report(
+    days: int = Query(default=7, ge=1, le=31),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return estimated VLM spend grouped for an operator-facing report.
+
+    Analyzer calls are attributable to observations/cameras; Ask runs are
+    reported under ``Ask Nurby``. Values are estimates from the configured
+    provider pricing table, not invoices. Non-admins only see their own Ask
+    activity, while camera analysis remains household-scoped.
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    vlm_stmt = (
+        select(AgentVlmCall, Observation, Camera, Provider)
+        .join(AgentRun, AgentRun.id == AgentVlmCall.run_id)
+        .outerjoin(Observation, Observation.id == AgentVlmCall.observation_id)
+        .outerjoin(Camera, Camera.id == Observation.camera_id)
+        .outerjoin(Provider, Provider.id == AgentVlmCall.provider_id)
+        .where(AgentVlmCall.created_at >= since)
+    )
+    if current_user.role != "admin":
+        vlm_stmt = vlm_stmt.where(AgentRun.user_id == current_user.id)
+
+    run_stmt = (
+        select(AgentRun, Provider)
+        .outerjoin(Provider, Provider.id == AgentRun.provider_id)
+        .where(AgentRun.started_at >= since)
+    )
+    if current_user.role != "admin":
+        run_stmt = run_stmt.where(AgentRun.user_id == current_user.id)
+
+    totals = {"cost_cents": 0, "tokens_in": 0, "tokens_out": 0, "calls": 0}
+    by_camera: dict[str, dict] = {}
+    by_provider: dict[str, dict] = {}
+    by_day: dict[str, dict] = {}
+
+    def add(bucket: dict, *, cost: int, tokens_in: int, tokens_out: int) -> None:
+        bucket["cost_cents"] = bucket.get("cost_cents", 0) + cost
+        bucket["tokens_in"] = bucket.get("tokens_in", 0) + tokens_in
+        bucket["tokens_out"] = bucket.get("tokens_out", 0) + tokens_out
+        bucket["calls"] = bucket.get("calls", 0) + 1
+
+    def add_call(*, camera: str, provider: str, at: datetime, cost: int, tokens_in: int, tokens_out: int) -> None:
+        add(totals, cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
+        add(by_camera.setdefault(camera, {"name": camera}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
+        add(by_provider.setdefault(provider, {"name": provider}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
+        day = at.date().isoformat()
+        add(by_day.setdefault(day, {"date": day}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
+
+    vlm_rows = (await db.execute(vlm_stmt)).all()
+    vlm_by_run: dict[uuid.UUID, dict[str, int]] = {}
+    for call, observation, camera, provider in vlm_rows:
+        accounted = vlm_by_run.setdefault(call.run_id, {"cost_cents": 0, "tokens_in": 0, "tokens_out": 0})
+        accounted["cost_cents"] += int(call.cost_cents or 0)
+        accounted["tokens_in"] += int(call.tokens_in or 0)
+        accounted["tokens_out"] += int(call.tokens_out or 0)
+        add_call(
+            camera=camera.name if camera is not None else "Unassigned camera",
+            provider=(provider.name if provider is not None else None) or call.model or "Unknown provider",
+            at=call.created_at,
+            cost=int(call.cost_cents or 0),
+            tokens_in=int(call.tokens_in or 0),
+            tokens_out=int(call.tokens_out or 0),
+        )
+
+    for run, provider in (await db.execute(run_stmt)).all():
+        accounted = vlm_by_run.get(run.id, {})
+        add_call(
+            camera="Ask Nurby",
+            provider=(provider.name if provider is not None else None) or run.model or "Unknown provider",
+            at=run.started_at,
+            cost=max(0, int(run.cost_cents or 0) - accounted.get("cost_cents", 0)),
+            tokens_in=max(0, int(run.tokens_in or 0) - accounted.get("tokens_in", 0)),
+            tokens_out=max(0, int(run.tokens_out or 0) - accounted.get("tokens_out", 0)),
+        )
+
+    return {
+        "days": days,
+        "estimated": True,
+        "pricing_note": "Costs are estimates from the configured model pricing table; local providers are estimated at $0.",
+        "totals": totals,
+        "by_camera": sorted(by_camera.values(), key=lambda row: row["cost_cents"], reverse=True),
+        "by_provider": sorted(by_provider.values(), key=lambda row: row["cost_cents"], reverse=True),
+        "by_day": sorted(by_day.values(), key=lambda row: row["date"]),
+        "attribution_note": "Camera rows cover recorded analyzer calls. Rule-level perception accounting is the next accounting slice.",
     }
 
 

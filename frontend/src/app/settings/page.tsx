@@ -19,6 +19,7 @@ import { ALL_PROVIDERS, PROVIDER_KINDS } from "@/lib/provider-presets";
 import { ProviderFields } from "@/components/ProviderFields";
 import { timezoneOptions } from "@/lib/timezones";
 import { rememberPreferredAgentModel } from "@/lib/agent-model-preference";
+import { CostUsageCard } from "@/components/CostUsageCard";
 
 import InviteKeysModal from "./InviteKeysModal";
 import type {
@@ -660,6 +661,7 @@ export default function SettingsPage() {
         <ShareLinksCard />
 
         {/* AI Providers card */}
+        <CostUsageCard />
         <div id="providers" className="rounded-lg border border-border bg-card scroll-mt-20">
           <button
             onClick={() => setShowProviders(!showProviders)}
