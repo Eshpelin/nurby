@@ -17,11 +17,12 @@ from urllib.parse import quote, urlparse, urlunparse
 
 import cv2
 import numpy as np
+from sqlalchemy import update
 
 from services.ingestion.video_writer import create_segment_writer
 from shared.config import settings
 from shared.database import async_session
-from shared.models import Camera, CameraStatusLog, Recording
+from shared.models import Camera, CameraStatusLog, Event, Recording
 from shared.netpolicy import stream_target_rejection
 from shared.paths import safe_getsize
 
@@ -1362,6 +1363,21 @@ class StreamWorker:
                 await db.commit()
                 await db.refresh(recording)
                 logger.info("Saved recording segment %s (%.1fs)", file_path, duration)
+
+                # Alerts can fire while this segment is still open. Once the
+                # finalized Recording exists, attach any matching events that
+                # were waiting for it. Never overwrite an already-resolved
+                # clip, and keep the association bounded to this camera and
+                # segment window.
+                await db.execute(
+                    update(Event)
+                    .where(Event.camera_id == self.camera_id)
+                    .where(Event.recording_id.is_(None))
+                    .where(Event.fired_at >= started_at)
+                    .where(Event.fired_at <= ended_at)
+                    .values(recording_id=recording.id)
+                )
+                await db.commit()
 
                 # Kick off privacy-blur pass. Checks whether any protected
                 # person is configured before opening the file.

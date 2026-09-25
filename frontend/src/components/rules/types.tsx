@@ -34,6 +34,7 @@ export interface EventEntry {
   id: string;
   rule_id: string | null;
   observation_id: string | null;
+  recording_id?: string | null;
   fired_at: string;
   payload: Record<string, unknown> | null;
   acknowledged_at: string | null;

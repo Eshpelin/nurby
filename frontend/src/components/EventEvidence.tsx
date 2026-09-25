@@ -7,7 +7,7 @@
  * disclosure for debugging, never as the primary surface.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 
 type Payload = Record<string, unknown>;
@@ -73,14 +73,75 @@ export function summarizePayload(payload: Payload): string {
   return parts.join(" ");
 }
 
-export function EventEvidence({ payload }: { payload: Payload }) {
+export function EventEvidence({
+  payload,
+  recordingId: eventRecordingId,
+  cameraId,
+  firedAt,
+}: {
+  payload: Payload;
+  recordingId?: string | null;
+  cameraId?: string | null;
+  firedAt?: string | null;
+}) {
   const { token } = useAuth();
   const [imgFailed, setImgFailed] = useState(false);
   const [imgLightbox, setImgLightbox] = useState(false);
+  const [resolvedRecordingId, setResolvedRecordingId] = useState<string | null>(null);
+  const [clipPending, setClipPending] = useState(false);
 
   const summary = useMemo(() => summarizePayload(payload), [payload]);
   const observationId = (payload.observation_id as string) || null;
-  const recordingId = (payload.recording_id as string) || null;
+  const recordingId = eventRecordingId || (payload.recording_id as string) || resolvedRecordingId;
+  const resolvedCameraId = cameraId || (payload.camera_id as string) || null;
+  const eventTime = firedAt || (payload.timestamp as string) || null;
+
+  useEffect(() => {
+    if (eventRecordingId || payload.recording_id || !resolvedCameraId || !eventTime || !token) {
+      setClipPending(false);
+      return;
+    }
+
+    const triggerMs = new Date(eventTime).getTime();
+    if (!Number.isFinite(triggerMs)) return;
+    let cancelled = false;
+    const young = () => Date.now() - triggerMs < 6 * 60 * 1000;
+
+    const resolve = async () => {
+      try {
+        const from = new Date(triggerMs - 3000).toISOString();
+        const to = new Date(triggerMs + 3000).toISOString();
+        const response = await fetch(
+          `/api/recordings?camera_id=${encodeURIComponent(resolvedCameraId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=5`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        const recordings = Array.isArray(data) ? data : data.recordings || [];
+        const match = recordings.find((item: Record<string, unknown>) => {
+          const start = new Date(String(item.started_at || "")).getTime();
+          const end = item.ended_at
+            ? new Date(String(item.ended_at)).getTime()
+            : start + Number(item.duration_seconds || 0) * 1000;
+          return Number.isFinite(start) && triggerMs >= start - 3000 && triggerMs <= end + 3000;
+        });
+        if (!cancelled && match?.id) {
+          setResolvedRecordingId(String(match.id));
+          setClipPending(false);
+        }
+      } catch {
+        // The evidence card remains useful if the best-effort lookup fails.
+      }
+    };
+
+    setClipPending(young());
+    void resolve();
+    const timer = young() ? window.setInterval(resolve, 30000) : undefined;
+    return () => {
+      cancelled = true;
+      if (timer) window.clearInterval(timer);
+    };
+  }, [eventRecordingId, eventTime, payload.recording_id, resolvedCameraId, token]);
 
   const thumbUrl =
     observationId && token
@@ -133,7 +194,12 @@ export function EventEvidence({ payload }: { payload: Payload }) {
             ▶ Watch clip
           </a>
         )}
-        {!clipUrl && observationId && (
+        {!clipUrl && clipPending && (
+          <span className="text-[11px] text-muted-foreground">
+            Clip is still being saved. It should appear here shortly.
+          </span>
+        )}
+        {!clipUrl && !clipPending && observationId && (
           <span className="text-[11px] text-muted-foreground">
             No recording covered this moment.
           </span>
