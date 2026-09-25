@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.vlm_queue import get_vlm_stats
+from services.ingestion.retention import low_disk_threshold
 from shared import heartbeat
 from shared.auth import get_current_user, require_admin
 from shared.config import settings
@@ -894,8 +895,8 @@ async def trigger_update(_current_user: User = Depends(require_admin)):
 # by shared/storage_paths; these endpoints report the effective root and
 # validate a candidate before it is saved.
 
-
-# #266: warn well before retention starts deleting (or recording fails).
+# Backwards-compatible name for callers/tests that used the old fixed floor;
+# actual warnings now use low_disk_threshold(total_bytes).
 LOW_DISK_FREE_BYTES = 10 * 1024**3
 
 
@@ -998,7 +999,7 @@ def validate_storage_dir(raw: str) -> StorageValidateResponse:
     except OSError:
         pass
     detail = "Ready." if existed else "Directory created."
-    if free is not None and free < LOW_DISK_FREE_BYTES:
+    if free is not None and total is not None and free < low_disk_threshold(total):
         detail += f" Warning: only {_gb(free)} free on this volume."
     return StorageValidateResponse(
         ok=True,
@@ -1069,7 +1070,7 @@ async def storage_location_status(
             warnings.append(
                 f"{loc.key.capitalize()} location {loc.path} is not writable by Nurby."
             )
-        if loc.free_bytes is not None and loc.free_bytes < LOW_DISK_FREE_BYTES:
+        if loc.free_bytes is not None and loc.total_bytes is not None and loc.free_bytes < low_disk_threshold(loc.total_bytes):
             low = True
             warnings.append(
                 f"Only {_gb(loc.free_bytes)} free at {loc.path}. "
