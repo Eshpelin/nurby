@@ -54,6 +54,30 @@ logger = logging.getLogger("nurby.api.cameras")
 RESTART_KEY_PREFIX = "nurby:stream_restart:"
 
 
+def _require_claimed_for_remote_camera_write(user: User, request: Request | None) -> None:
+    """Do not let a remote browser add cameras before claiming the install."""
+    if not getattr(user, "is_provisional", False) or settings.allow_open_admin or request is None:
+        return
+    local = False
+    for value in (request.headers.get("origin"), request.headers.get("referer")):
+        if not value:
+            continue
+        try:
+            host = urlparse(value).hostname
+        except ValueError:
+            host = None
+        if host in {"localhost", "127.0.0.1", "::1"}:
+            local = True
+            break
+    if not local and request.client and request.client.host in {"localhost", "127.0.0.1", "::1"}:
+        local = True
+    if not local:
+        raise HTTPException(
+            status_code=403,
+            detail="Claim this Nurby account before adding cameras from another device.",
+        )
+
+
 def _camera_to_response(camera: Camera) -> dict:
     """Convert Camera model to response dict, masking credentials."""
     data = {c.name: getattr(camera, c.name) for c in Camera.__table__.columns}
@@ -805,9 +829,11 @@ async def camera_motion_review_items(
 @router.post("", status_code=201)
 async def create_camera(
     body: CameraCreate,
+    request: Request = None,
     _current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    _require_claimed_for_remote_camera_write(_current_user, request)
     payload = body.model_dump()
     # Credentials are sealed at rest (see shared/camera_secrets).
     payload["password"] = seal(payload.get("password"))
@@ -853,10 +879,11 @@ def resolve_demo_video_url() -> str:
 
 
 @router.post("/demo", status_code=201)
-async def create_demo_camera(_current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def create_demo_camera(request: Request = None, _current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Create a ready-to-use demo camera that streams looping sample
     footage, so a new user can try Nurby without owning a camera. The
     source URL is configurable via NURBY_DEMO_VIDEO_URL."""
+    _require_claimed_for_remote_camera_write(_current_user, request)
     demo_url = resolve_demo_video_url()
     # Idempotent. If a demo camera already exists (magic run twice, or the
     # dashboard demo button clicked again), reuse it instead of stacking
