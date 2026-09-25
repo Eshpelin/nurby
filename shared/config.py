@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     thumbnails_path: str = "./thumbnails"
     # Encrypted backup archives. Point this at a mounted drive in production.
     backup_path: str = "./backups"
+    # Optional in-process scheduler. Keep the secret in the deployment
+    # environment, never in the database or a checked-in file.
+    backup_schedule_hours: float = 0
+    backup_passphrase: str = ""
+    backup_retention_count: int = 7
+    backup_include_recordings: bool = False
     jwt_secret: str = _DEFAULT_JWT_SECRET
     jwt_expiry_hours: int = 24
     cors_origins: str = ""  # comma-separated additional origins

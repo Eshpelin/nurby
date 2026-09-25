@@ -185,6 +185,11 @@ async def lifespan(app: FastAPI):
     from services.api.report_scheduler import ReportScheduler
     report_scheduler = ReportScheduler()
     report_task = asyncio.create_task(report_scheduler.run())
+    # Opt-in scheduled backups. Deployments with multiple API replicas should
+    # use the documented CLI/systemd timer instead to avoid duplicate work.
+    from services.backup_scheduler import BackupScheduler
+    backup_scheduler = BackupScheduler()
+    backup_task = asyncio.create_task(backup_scheduler.run())
     # Cross-process WS relay: forwards perception/ingestion broadcasts
     # (vlm_status, detections, incidents, notify) to browsers connected
     # to this process. Without it the dashboard never updates live.
@@ -196,6 +201,8 @@ async def lifespan(app: FastAPI):
     relay_task.cancel()
     report_scheduler.stop()
     report_task.cancel()
+    backup_scheduler.stop()
+    backup_task.cancel()
     digest_task.cancel()
     reid_sweeper.stop()
     reid_task.cancel()

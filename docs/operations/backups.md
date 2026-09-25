@@ -46,5 +46,19 @@ host, but it will see the restored household, cameras and history.
 
 The CLI is safe to call from cron or a systemd timer. Prefer a passphrase file
 with permissions `0600` and a wrapper that passes it to the command, or use a
-secret manager; never put the passphrase in a repository. The Settings page
-and System Doctor show the last successful archive and warn after seven days.
+secret manager; never put the passphrase in a repository.
+
+For a single-API deployment, an opt-in in-process scheduler is also available:
+
+```dotenv
+NURBY_BACKUP_SCHEDULE_HOURS=24
+NURBY_BACKUP_PASSPHRASE=from-your-secret-manager
+NURBY_BACKUP_RETENTION_COUNT=7
+NURBY_BACKUP_INCLUDE_RECORDINGS=false
+```
+
+The scheduler runs after startup, writes to `NURBY_BACKUP_VOLUME`, retains the
+newest configured number of `nurby-*.nurby` archives, and leaves the previous
+archive intact when a run fails. Do not enable it in multiple API replicas;
+use one external timer instead. The Settings page and System Doctor show the
+last successful archive and warn after seven days.
