@@ -468,12 +468,25 @@ async def scaffold_draft_rule(
         raise HTTPException(status_code=404, detail=f"Unknown starter for goal {body.goal!r}")
     # The whole point: created off, so a saved preference never arms a rule.
     payload["enabled"] = False
-    rule = Rule(**payload)
-    db.add(rule)
-    await db.commit()
-    await db.refresh(rule)
-
     milestone = await _get_milestone(db, current_user, body.goal)
+    # The wizard is resumable and users can arrive here from both the goal
+    # flow and the rule templates. Reuse the milestone's draft first, then
+    # an equivalent starter rule, so retries never create duplicates.
+    rule = None
+    if milestone and milestone.draft_rule_id:
+        rule = await db.get(Rule, milestone.draft_rule_id)
+    if rule is None:
+        rule = (await db.execute(
+            select(Rule).where(
+                Rule.name == payload["name"],
+                Rule.trigger_pattern == payload["trigger_pattern"],
+            ).order_by(Rule.created_at.asc()).limit(1)
+        )).scalar_one_or_none()
+    if rule is None:
+        rule = Rule(**payload)
+        db.add(rule)
+        await db.commit()
+        await db.refresh(rule)
     now = datetime.now(timezone.utc)
     if milestone is None:
         milestone = ActivationMilestone(user_id=current_user.id, goal=body.goal, install_ready_at=now)

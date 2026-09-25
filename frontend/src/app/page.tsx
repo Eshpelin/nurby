@@ -103,6 +103,7 @@ function DashboardContent() {
     return () => { cancelled = true; };
   }, [user, camerasLoading, cameras, authFetch]);
   const [showWizard, setShowWizard] = useState(false);
+  const [resumeSetupAfterCamera, setResumeSetupAfterCamera] = useState(false);
   // True once the auto-open check ran (one attempt per session), so a
   // slow settings fetch cannot re-trigger it later (#293).
   const autoOpenRanRef = useRef(false);
@@ -2184,7 +2185,7 @@ function DashboardContent() {
           isAdmin={user.role === "admin"}
           cameraCount={cameras.length}
           camerasLoading={camerasLoading}
-          onSetup={() => setShowWizard(true)}
+          onSetup={() => { setResumeSetupAfterCamera(true); setShowWizard(true); }}
         />
       )}
       {cameras.length > 0 && <LocalAIHintCard />}
@@ -2195,6 +2196,10 @@ function DashboardContent() {
           onComplete={() => {
             setShowWizard(false);
             fetchCameras();
+            if (resumeSetupAfterCamera) {
+              setResumeSetupAfterCamera(false);
+              window.dispatchEvent(new Event("nurby:setup-resume"));
+            }
           }}
         />
       )}

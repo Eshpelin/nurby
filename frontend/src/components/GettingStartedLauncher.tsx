@@ -75,6 +75,19 @@ export function GettingStartedLauncher({ cameraCount, camerasLoading, onSetup, i
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    void refresh();
+  }, [cameraCount, refresh]);
+
+  // The camera wizard lives in the page-level modal. When it finishes, the
+  // setup panel reopens at the exact rule step instead of making the user
+  // rediscover the small launcher pill.
+  useEffect(() => {
+    const resume = () => { setOpen(true); void refresh(); };
+    window.addEventListener("nurby:setup-resume", resume);
+    return () => window.removeEventListener("nurby:setup-resume", resume);
+  }, [refresh]);
+
   if (!isAdmin || !badge || badge.hidden) return null;
 
   const pill = badge.complete
