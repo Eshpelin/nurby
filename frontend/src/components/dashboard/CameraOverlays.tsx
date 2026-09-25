@@ -7,17 +7,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
 
-// An observation older than this is not "what's on screen now", so its boxes
-// must not be painted on load (avoids stale Anuf/phone boxes flashing in).
-const OVERLAY_STALE_MS = 15000;
-import type { Observation } from "@/app/dashboard-types";
 
 // ── Detection Overlay ──
 
 export const DEFAULT_FRAME_WIDTH = 1920;
 export const DEFAULT_FRAME_HEIGHT = 1080;
 const DETECTION_FADE_MS = 3500;
-const DETECTION_POLL_MS = 700;
+const DETECTION_POLL_MS = 2000;
 
 interface OverlayDetection {
   label: string;
@@ -158,7 +154,6 @@ export function DetectionOverlay({ cameraId, visible, frameWidth, frameHeight }:
   const [detections, setDetections] = useState<OverlayDetection[]>([]);
   const [lastUpdated, setLastUpdated] = useState(0);
   const [faded, setFaded] = useState(false);
-  const lastObsIdRef = useRef<string | null>(null);
   // Live pose skeletons from the HAR pipeline (person_actions WS).
   const [skeletons, setSkeletons] = useState<{
     people: { keypoints?: number[][]; bbox?: number[] | null; action?: string; person_name?: string | null }[];
@@ -192,6 +187,7 @@ export function DetectionOverlay({ cameraId, visible, frameWidth, frameHeight }:
     let cancelled = false;
 
     async function poll() {
+      if (document.hidden) return;
       try {
         // Fast lane first. Live YOLO cache refreshes per frame.
         const liveRes = await authFetch(`/api/cameras/${cameraId}/live-detections`);
@@ -215,54 +211,9 @@ export function DetectionOverlay({ cameraId, visible, frameWidth, frameHeight }:
           }
         }
 
-        // Fallback. Observation record (slower cadence, includes faces).
-        const res = await authFetch(`/api/observations?camera_id=${cameraId}&limit=1`);
-        if (!res.ok || cancelled) return;
-        const obs: Observation[] = await res.json();
-        if (cancelled || obs.length === 0) return;
-
-        const latest = obs[0];
-        // Don't paint boxes from a stale observation (the last person who was
-        // here minutes ago). Without this the old boxes flash on load until a
-        // live frame arrives and clears them. Only overlay a recent one.
-        if (Date.now() - new Date(latest.started_at).getTime() > OVERLAY_STALE_MS) return;
-        if (latest.id === lastObsIdRef.current) return;
-        lastObsIdRef.current = latest.id;
-
-        const boxes: OverlayDetection[] = [];
-
-        if (latest.object_detections?.objects) {
-          for (const obj of latest.object_detections.objects) {
-            if (obj.bbox && obj.bbox.length === 4) {
-              boxes.push({
-                label: `${obj.label} ${Math.round(obj.confidence * 100)}%`,
-                bbox: obj.bbox,
-                color: "rgba(34, 197, 94, 0.15)",
-                borderColor: "rgb(34, 197, 94)",
-              });
-            }
-          }
-        }
-
-        if (latest.person_detections?.faces) {
-          for (const face of latest.person_detections.faces) {
-            if (face.bbox && face.bbox.length === 4) {
-              const isKnown = !!face.person_name;
-              boxes.push({
-                label: face.person_name || "Unknown",
-                bbox: face.bbox,
-                color: isKnown ? "rgba(59, 130, 246, 0.15)" : "rgba(234, 179, 8, 0.15)",
-                borderColor: isKnown ? "rgb(59, 130, 246)" : "rgb(234, 179, 8)",
-              });
-            }
-          }
-        }
-
-        if (boxes.length > 0) {
-          setDetections(boxes);
-          setLastUpdated(Date.now());
-          setFaded(false);
-        }
+        // Do not fall back to the historical observations endpoint here. A
+        // tile with no live cache should show no current boxes, not spend a
+        // request fetching an old frame that may be misleading.
       } catch { /* silent */ }
     }
 
@@ -449,5 +400,3 @@ export function MiniPTZ({ cameraId, onClose }: { cameraId: string; onClose: () =
     </div>
   );
 }
-
-

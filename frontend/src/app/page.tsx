@@ -56,7 +56,7 @@ import { computeSystemStatus } from "@/lib/systemStatus";
 
 function DashboardContent() {
   const { authFetch, token, user } = useAuth();
-  const { status: wsStatus } = useWebSocket();
+  const { status: wsStatus, subscribe } = useWebSocket();
   const { down: workersDown, degraded: degradedComponents } = useWorkerHealth();
   const searchParams = useSearchParams();
   const initialCamera = searchParams.get("camera");
@@ -215,125 +215,10 @@ function DashboardContent() {
     }, 4_000);
     return () => clearInterval(t);
   }, []);
-  const [wsConnected, setWsConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-
   // Digest
   const [digest, setDigest] = useState<Digest | null>(null);
   const [digestPeriod, setDigestPeriod] = useState<"daily" | "hourly">("hourly");
   const [digestLoading, setDigestLoading] = useState(false);
-
-  // WebSocket
-  useEffect(() => {
-    // The /ws socket is token-authenticated (issue #40). Skip connecting
-    // until a token exists; the effect re-runs when it appears.
-    if (!token) return;
-    const explicit = process.env.NEXT_PUBLIC_WS_URL;
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    // Next.js rewrites do not proxy WebSocket upgrades, so same-origin /ws
-    // only works when the API itself serves the page. Use the configured
-    // WS endpoint (compose passes NEXT_PUBLIC_WS_URL) and fall back to
-    // same-origin for setups that terminate WS at a real reverse proxy.
-    const WSURL_BASE = explicit
-      ? explicit.replace(/^http/, "ws").replace(/\/+$/, "")
-      : `${protocol}//${window.location.host}`;
-    const wsUrl = `${WSURL_BASE}/ws?token=${encodeURIComponent(token)}`;
-    let reconnectTimer: ReturnType<typeof setTimeout>;
-
-    function connect() {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-      ws.onopen = () => setWsConnected(true);
-      ws.onclose = () => { setWsConnected(false); reconnectTimer = setTimeout(connect, 5000); };
-      ws.onerror = () => ws.close();
-      ws.onmessage = (evt) => {
-        try {
-          const data = JSON.parse(evt.data);
-          if (data.type === "event" || data.type === "notification") {
-            setLiveEvents((prev) => [data, ...prev].slice(0, 20));
-            fetchTimeline();
-          }
-          if (data.type === "notification_updated") {
-            // A verify/enrichment pass revised an already-visible fast alert.
-            // Re-read the unified timeline so its narrative and severity do
-            // not remain stale until the next periodic refresh.
-            fetchTimeline();
-          }
-          if (data.type === "event_fired") {
-            // Every rule fire lands on the live strip instantly, without
-            // waiting for the 15s timeline poll.
-            setLiveTriggers((prev) => [
-              { kind: "trigger" as const, id: data.event_id, label: data.rule_name,
-                camera: data.camera_name || "", severity: data.severity || "alert",
-                ts: Date.now() },
-              ...prev.filter((t) => t.id !== data.event_id),
-            ].slice(0, 8));
-            fetchTimeline();
-          }
-          if (data.type === "vlm_status" && data.camera_id) {
-            const status = data.vlm?.status;
-            const active = status === "queued" || status === "processing" || status === "refining";
-            const failed = status === "failed";
-            setLiveTriggers((prev) => {
-              const others = prev.filter((t) => !(t.kind === "vlm" && t.id === data.camera_id));
-              if (failed) {
-                // Surface the failure briefly so it does not vanish silently.
-                const reason = (data.vlm?.reason as string) || "";
-                return [
-                  { kind: "vlm" as const, id: data.camera_id,
-                    label: reason ? `Couldn't analyze · ${reason}` : "Couldn't analyze",
-                    camera: "", severity: "warn", ts: Date.now(), failed: true },
-                  ...others,
-                ].slice(0, 8);
-              }
-              if (!active) return others;
-              return [
-                { kind: "vlm" as const, id: data.camera_id,
-                  label: status === "refining" ? "Refining description" : "AI describing scene",
-                  camera: "", severity: "info", ts: Date.now() },
-                ...others,
-              ].slice(0, 8);
-            });
-          }
-          if (data.type === "transcript_created") {
-            fetchTimeline();
-          }
-          if (data.type === "summary_created") {
-            fetchTimeline();
-          }
-          if (data.type === "conversation_updated" || data.type === "conversation_finalized") {
-            fetchTimeline();
-          }
-          if (data.type === "vlm_refined") {
-            // Cascade refiner replaced the primary description on an
-            // observation. Refetch so the timeline picks up the
-            // upgraded text and refined badge.
-            fetchTimeline();
-          }
-          if (
-            data.type === "incident_opened" ||
-            data.type === "incident_updated" ||
-            data.type === "incident_finalized"
-          ) {
-            // The IncidentCard already splices live state from
-            // incident_updated and incident_finalized payloads. The
-            // timeline refetch picks up new rows for incident_opened.
-            fetchTimeline();
-          }
-          if (
-            data.type === "journey_opened" ||
-            data.type === "journey_updated" ||
-            data.type === "journey_finalized"
-          ) {
-            fetchTimeline();
-          }
-        } catch { /* ignore */ }
-      };
-    }
-
-    connect();
-    return () => { clearTimeout(reconnectTimer); wsRef.current?.close(); };
-  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch cameras
   const fetchCameras = useCallback(async () => {
@@ -475,6 +360,78 @@ function DashboardContent() {
     finally { setTimelineLoading(false); }
   }, [selectedCamera, timeRange, authFetch]);
 
+  // The shared websocket is the single connection for the dashboard. Coalesce
+  // bursts of observation/incident messages into one trailing refresh, and do
+  // not spend requests while the tab is hidden.
+  const fetchTimelineRef = useRef(fetchTimeline);
+  useEffect(() => {
+    fetchTimelineRef.current = fetchTimeline;
+  }, [fetchTimeline]);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const refresh = () => {
+      if (document.hidden) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        void fetchTimelineRef.current();
+      }, 2500);
+    };
+    const unsubscribe = subscribe("*", (data) => {
+      if (data.type === "event" || data.type === "notification") {
+        setLiveEvents((prev) => [data, ...prev].slice(0, 20));
+      }
+      if (data.type === "event_fired") {
+        setLiveTriggers((prev) => [
+          { kind: "trigger" as const, id: String(data.event_id || crypto.randomUUID()), label: String(data.rule_name || "Rule fired"),
+            camera: String(data.camera_name || ""), severity: String(data.severity || "alert"), ts: Date.now() },
+          ...prev.filter((t) => t.id !== data.event_id),
+        ].slice(0, 8));
+      }
+      if (data.type === "vlm_status" && data.camera_id) {
+        const cameraId = String(data.camera_id);
+        const vlm = data.vlm as { status?: string; reason?: string } | undefined;
+        const status = vlm?.status;
+        const active = status === "queued" || status === "processing" || status === "refining";
+        const failed = status === "failed";
+        setLiveTriggers((prev) => {
+          const others = prev.filter((t) => !(t.kind === "vlm" && t.id === cameraId));
+          if (failed) {
+            const reason = vlm?.reason || "";
+            return [
+              { kind: "vlm" as const, id: cameraId,
+                label: reason ? `Couldn't analyze · ${reason}` : "Couldn't analyze",
+                camera: "", severity: "warn", ts: Date.now(), failed: true },
+              ...others,
+            ].slice(0, 8);
+          }
+          if (!active) return others;
+          return [
+            { kind: "vlm" as const, id: cameraId,
+              label: status === "refining" ? "Refining description" : "AI describing scene",
+              camera: "", severity: "info", ts: Date.now() },
+            ...others,
+          ].slice(0, 8);
+        });
+      }
+      if ([
+        "event", "notification", "notification_updated", "event_fired",
+        "transcript_created", "summary_created", "conversation_updated",
+        "conversation_finalized", "vlm_refined", "incident_opened",
+        "incident_finalized", "journey_opened", "journey_finalized",
+      ].includes(data.type)) refresh();
+    });
+    const onVisibility = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      unsubscribe();
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [subscribe]);
+
   const fetchDigest = useCallback(async () => {
     setDigestLoading(true);
     try {
@@ -594,7 +551,14 @@ function DashboardContent() {
   }, [authFetch]);
   useEffect(() => { fetchCameras(); fetchPersons(); }, [fetchCameras, fetchPersons]);
   useEffect(() => { const i = setInterval(fetchCameras, 10000); return () => clearInterval(i); }, [fetchCameras]);
-  useEffect(() => { fetchTimeline(); const i = setInterval(fetchTimeline, 15000); return () => clearInterval(i); }, [fetchTimeline]);
+  useEffect(() => {
+    const run = () => {
+      if (!document.hidden) void fetchTimeline();
+    };
+    run();
+    const i = setInterval(run, 15000);
+    return () => clearInterval(i);
+  }, [fetchTimeline]);
   useEffect(() => { if (cameras.length > 0) cameras.forEach((cam) => { if (!activityEvents[cam.id]) fetchActivity(cam.id); }); }, [cameras]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (cameras.length === 0) return; const i = setInterval(() => cameras.forEach((c) => fetchActivity(c.id)), 15000); return () => clearInterval(i); }, [cameras, fetchActivity]);
 
