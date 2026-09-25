@@ -6,6 +6,7 @@ import { extractApiError } from "@/lib/api-error";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PersonaPicker } from "@/components/PersonaPicker";
 import { RetryCountdown } from "@/components/RetryCountdown";
+import { CameraPlayer } from "@/components/CameraPlayer";
 import type { PersonaPatch } from "@/lib/camera-personas";
 import { PrivacyZonesSection } from "@/components/PrivacyZonesSection";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
@@ -73,6 +74,14 @@ export default function CameraConfigPage() {
   const [vlmProviderId, setVlmProviderId] = useState<string | null>(null);
   const [vlmPrompt, setVlmPrompt] = useState("");
   const [showDefaultVlmPrompt, setShowDefaultVlmPrompt] = useState(false);
+  // Live view starts open; a camera the user collapsed stays collapsed.
+  const [liveViewOpen, setLiveViewOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      try { return localStorage.getItem(`nurby-cam-live-${window.location.pathname.split("/")[2]}`) !== "0"; }
+      catch { /* ignore */ }
+    }
+    return true;
+  });
   const [vlmInterval, setVlmInterval] = useState(0);
   const [vlmMaxTokens, setVlmMaxTokens] = useState(200);
   const [vlmMaxInputTokens, setVlmMaxInputTokens] = useState<string>("");
@@ -545,7 +554,16 @@ export default function CameraConfigPage() {
         <span className="text-muted-foreground">/</span>
         <h1 className="text-lg font-semibold">{camera.name}</h1>
         <StatusDot status={camera.status} />
-        <span className="text-xs text-muted-foreground capitalize">{camera.status}</span>
+        {camera.status === "offline" && camera.stream_type === "file" ? (
+          <span
+            className="text-xs text-muted-foreground"
+            title="The clip plays in your browser below, but Nurby's decoder is not running, so nothing is being detected or recorded right now."
+          >
+            file · player only
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground capitalize">{camera.status}</span>
+        )}
         {camera.status === "offline" && (
           <RetryCountdown
             className="text-xs"
@@ -585,6 +603,31 @@ export default function CameraConfigPage() {
         >
           Notes
         </Link>
+      </div>
+
+      {/* Live view (#319). The workspace used to show everything about the
+          camera except the camera. Collapsible; the choice is remembered
+          per camera. Uses the exact feed component the dashboard wall
+          uses, so every stream type plays with the same fallbacks. */}
+      <div className="mb-6">
+        <button
+          type="button"
+          onClick={() => {
+            const next = !liveViewOpen;
+            setLiveViewOpen(next);
+            try { localStorage.setItem(`nurby-cam-live-${cameraId}`, next ? "1" : "0"); } catch { /* ignore */ }
+          }}
+          aria-expanded={liveViewOpen}
+          className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-2"
+        >
+          <span className={`inline-block transition-transform ${liveViewOpen ? "rotate-90" : ""}`}>▸</span>
+          Live view
+        </button>
+        {liveViewOpen && (
+          <div className="relative w-full aspect-video bg-black rounded-lg border border-border overflow-hidden">
+            <CameraPlayer camera={camera} objectFit="contain" />
+          </div>
+        )}
       </div>
 
       {/* Presence + movement strip: when activity happened and who was there,
