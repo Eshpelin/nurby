@@ -80,6 +80,12 @@ interface ClusterSample {
   captured_at: string | null;
 }
 
+interface PersonReference {
+  kind: string;
+  id: string;
+  name: string;
+}
+
 const timeAgo = (iso: string | null) => timeAgoBase(iso, { fallback: "unknown" });
 
 function formatTime(iso: string): string {
@@ -111,6 +117,10 @@ export default function PeoplePage() {
   const [mergePerson, setMergePerson] = useState<Person | null>(null);
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
   const [merging, setMerging] = useState(false);
+  const [blockedDelete, setBlockedDelete] = useState<{
+    personName: string;
+    references: PersonReference[];
+  } | null>(null);
   // Confirm folding a newly-named cluster into an existing same-name person.
   const [nameMergeConfirm, setNameMergeConfirm] = useState<
     { clusterId: string; existingName: string } | null
@@ -431,7 +441,23 @@ export default function PeoplePage() {
     if (!ok) return;
     try {
       const res = await authFetch(`/api/persons/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 204) throw new Error();
+      if (!res.ok && res.status !== 204) {
+        if (res.status === 409) {
+          const body = await res.json().catch(() => null);
+          const references = Array.isArray(body?.detail?.references)
+            ? body.detail.references.filter(
+                (ref: unknown): ref is PersonReference =>
+                  !!ref && typeof ref === "object" &&
+                  typeof (ref as PersonReference).kind === "string" &&
+                  typeof (ref as PersonReference).id === "string" &&
+                  typeof (ref as PersonReference).name === "string",
+              )
+            : [];
+          setBlockedDelete({ personName: person?.display_name || "this person", references });
+          return;
+        }
+        throw new Error();
+      }
       fetchPersons();
       fetchSummaries();
       toast.success("Person deleted");
@@ -1387,6 +1413,35 @@ export default function PeoplePage() {
                 className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
               >
                 {submitting ? "Saving." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {blockedDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setBlockedDelete(null)} />
+          <div role="alertdialog" aria-modal="true" className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
+            <h2 className="text-lg font-semibold mb-2">Can’t delete {blockedDelete.personName}</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              This person is still used by saved workflows. Reassign or disable these references before deleting them.
+            </p>
+            {blockedDelete.references.length > 0 ? (
+              <ul className="space-y-2 max-h-56 overflow-y-auto text-sm">
+                {blockedDelete.references.map((reference) => (
+                  <li key={`${reference.kind}:${reference.id}`} className="rounded border border-border px-3 py-2">
+                    <span className="text-muted-foreground">{reference.kind.replaceAll("_", " ")}</span>{" "}
+                    <span className="font-medium">{reference.name}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">Nurby found saved references, but could not list them.</p>
+            )}
+            <div className="flex justify-end mt-5">
+              <button type="button" onClick={() => setBlockedDelete(null)} className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">
+                Done
               </button>
             </div>
           </div>
