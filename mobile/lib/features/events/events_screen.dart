@@ -161,8 +161,18 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         _resetPaging();
       });
       ref.invalidate(eventsProvider);
+      final outcome = StringBuffer(
+        'Deleted ${result.deleted} alert${result.deleted == 1 ? '' : 's'}',
+      );
+      if (result.skipped > 0) {
+        outcome.write('; ${result.skipped} skipped');
+      }
+      if (result.failed > 0) {
+        outcome.write('; ${result.failed} failed');
+      }
+      outcome.write('. Linked recordings were preserved.');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Deleted ${result.deleted} alert${result.deleted == 1 ? '' : 's'}. Linked recordings were preserved.'),
+        content: Text(outcome.toString()),
       ));
     } catch (e) {
       if (mounted) _showMutationError(e);

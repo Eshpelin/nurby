@@ -53,6 +53,19 @@ void main() {
       expect(result.deleted, 1);
       expect(result.skipped, 1);
     });
+
+    test('bulk delete responses preserve failed ids for partial-result UI', () {
+      final result = BulkDeleteResult.fromJson({
+        'resource': 'events',
+        'requested': 3,
+        'deleted': 1,
+        'skipped': 1,
+        'failed': 1,
+        'failed_ids': ['e3'],
+      });
+      expect(result.failed, 1);
+      expect(result.failedIds, ['e3']);
+    });
   });
 
   test('facets is a no-op for an empty page', () async {
