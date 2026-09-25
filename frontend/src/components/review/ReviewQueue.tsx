@@ -25,6 +25,14 @@ type ReviewItem = {
 type RelationshipDetail = {
   evidence_count: number;
   distinct_days: number;
+  review_events?: {
+    id: string;
+    action: string;
+    old_status: string;
+    new_status: string;
+    note: string | null;
+    created_at: string;
+  }[];
   evidence: {
     id: string;
     observed_at: string;
@@ -173,7 +181,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                   <div className="mt-2 rounded border border-border/70 bg-background/50 p-2">
                     {evidenceLoading === item.id ? (
                       <p className="text-[10px] text-muted-foreground">Loading supporting episodes…</p>
-                    ) : relationshipDetails[item.id]?.evidence.length ? (
+                    ) : relationshipDetails[item.id]?.evidence.length || relationshipDetails[item.id]?.review_events?.length ? (
                       <div className="space-y-1.5">
                         <p className="text-[10px] text-muted-foreground">
                           {relationshipDetails[item.id].distinct_days} independent visits · source episodes below
@@ -211,6 +219,17 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                             </div>
                           </div>
                         ))}
+                        {relationshipDetails[item.id].review_events?.length ? (
+                          <div className="border-t border-border/60 pt-1.5 text-[10px] text-muted-foreground">
+                            <div className="mb-1 uppercase tracking-wide">Decision history</div>
+                            {relationshipDetails[item.id].review_events?.slice(0, 5).map((event) => (
+                              <div key={event.id}>
+                                {new Date(event.created_at).toLocaleString()} · {event.action} · {event.old_status} → {event.new_status}
+                                {event.note ? ` — ${event.note}` : ""}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     ) : (
                       <p className="text-[10px] text-muted-foreground">No visible evidence episodes remain.</p>

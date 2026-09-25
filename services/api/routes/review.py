@@ -22,6 +22,7 @@ from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.database import get_db
 from shared.models import (
     AssociationEvidence,
+    AssociationReviewEvent,
     BodyCluster,
     Camera,
     EntityAssociation,
@@ -469,6 +470,7 @@ async def decide_relationship_suggestion(
         if not any(str(camera_id) in allowed_ids for camera_id in (association.camera_histogram or {})):
             raise HTTPException(status_code=404, detail="Relationship suggestion not found")
 
+    old_status = association.status
     association.status = {
         "confirm": "established",
         "reject": "rejected",
@@ -478,6 +480,14 @@ async def decide_relationship_suggestion(
     association.reviewed_at = datetime.now(timezone.utc)
     association.reviewed_by_user_id = current_user.id
     association.review_note = body.note.strip() if body.note else None
+    db.add(AssociationReviewEvent(
+        association_id=association.id,
+        reviewer_user_id=current_user.id,
+        action=body.decision,
+        old_status=old_status,
+        new_status=association.status,
+        note=association.review_note,
+    ))
     await db.commit()
     return {
         "id": str(association.id),
@@ -554,6 +564,13 @@ async def get_relationship_suggestion(
                 else None
             ),
         })
+    review_events = (
+        await db.execute(
+            select(AssociationReviewEvent)
+            .where(AssociationReviewEvent.association_id == association.id)
+            .order_by(AssociationReviewEvent.created_at.desc())
+        )
+    ).scalars().all()
     return {
         "id": str(association.id),
         "subject_kind": association.subject_kind,
@@ -569,5 +586,17 @@ async def get_relationship_suggestion(
         "distinct_days": association.distinct_days,
         "first_seen_at": association.first_seen_at,
         "last_seen_at": association.last_seen_at,
+        "review_events": [
+            {
+                "id": str(event.id),
+                "action": event.action,
+                "old_status": event.old_status,
+                "new_status": event.new_status,
+                "note": event.note,
+                "reviewer_user_id": str(event.reviewer_user_id) if event.reviewer_user_id else None,
+                "created_at": event.created_at,
+            }
+            for event in review_events
+        ],
         "evidence": evidence,
     }

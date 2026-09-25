@@ -66,6 +66,7 @@ from shared.models.guardian import (  # noqa: F401
 )
 from shared.models.identity import (  # noqa: F401
     AssociationEvidence,
+    AssociationReviewEvent,
     BodyCluster,
     BodyClusterSample,
     EntityAssociation,
@@ -114,6 +115,7 @@ __all__ = [
     "AgentVlmCall",
     "ApiKey",
     "AssociationEvidence",
+    "AssociationReviewEvent",
     "AppSetting",
     "ApprovedPickup",
     "AudioAuditLog",
