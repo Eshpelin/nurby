@@ -116,17 +116,26 @@ async def identify_vehicles(db, camera_id, detections: list, ts, frame=None,
         vbox = v.get("bbox") or []
         # Find a plate whose center falls inside this vehicle box.
         plate_text = None
+        plate_confidence = None
+        plate_source = None
         for p in plates:
             if _bbox_center_inside(p.get("bbox") or [], vbox):
                 plate_text = _norm_plate(p.get("plate_text"))
+                plate_confidence = p.get("confidence")
+                plate_source = "ocr"
                 break
-        plate_text = plate_text or _norm_plate(v.get("plate_text"))
+        if not plate_text and v.get("plate_text"):
+            plate_text = _norm_plate(v.get("plate_text"))
+            plate_confidence = v.get("plate_confidence")
+            plate_source = "detector"
 
         entry = {
             "bbox": vbox,
             "label": v.get("label"),
             "confidence": v.get("confidence"),
             "plate_text": plate_text,
+            "plate_confidence": plate_confidence,
+            "plate_source": plate_source,
             "vehicle_id": None,
             "identity_key": None,
         }

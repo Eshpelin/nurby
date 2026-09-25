@@ -220,9 +220,35 @@ def test_vehicles_in_ignores_unidentified_detections():
             "observation_ids": [],
             "camera_ids": [],
             "plate_text": None,
+            "plate_reads": [],
             "identity_kind": "appearance",
         }
     }
+
+
+def test_vehicles_in_preserves_each_plate_read_as_evidence_metadata():
+    observation_id = "obs-1"
+    rows = [SimpleNamespace(
+        id=observation_id,
+        camera_id="camera-a",
+        vehicle_detections={"vehicles": [{
+            "vehicle_id": "v-1",
+            "identity_key": "ABCDXYZ",
+            "plate_text": "ABCDXYZ",
+            "plate_confidence": 0.91,
+            "plate_source": "ocr",
+        }]},
+    )]
+
+    result = vehicles_in(rows)["v-1"]
+
+    assert result["plate_reads"] == [{
+        "text": "ABCDXYZ",
+        "confidence": 0.91,
+        "source": "ocr",
+        "observation_id": observation_id,
+        "camera_id": "camera-a",
+    }]
 
 
 def test_journey_camera_ids_dedupes_and_skips_junk():

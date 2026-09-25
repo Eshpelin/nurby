@@ -322,6 +322,7 @@ def vehicles_in(observations) -> dict[str, dict]:
                     "observation_ids": [],
                     "camera_ids": [],
                     "plate_text": entry.get("plate_text"),
+                    "plate_reads": [],
                     "identity_kind": "plate" if entry.get("plate_text") else "appearance",
                 },
             )
@@ -330,6 +331,17 @@ def vehicles_in(observations) -> dict[str, dict]:
                 out[str(vid)]["observation_ids"].append(str(observation_id))
             if cam and str(cam) not in out[str(vid)]["camera_ids"]:
                 out[str(vid)]["camera_ids"].append(str(cam))
+            plate_text = entry.get("plate_text")
+            if plate_text:
+                read = {
+                    "text": str(plate_text),
+                    "confidence": entry.get("plate_confidence"),
+                    "source": entry.get("plate_source") or "unknown",
+                    "observation_id": str(observation_id) if observation_id else None,
+                    "camera_id": str(cam) if cam else None,
+                }
+                if read not in out[str(vid)]["plate_reads"]:
+                    out[str(vid)]["plate_reads"].append(read)
     return out
 
 
@@ -544,6 +556,7 @@ async def process_journey(
             evidence_metadata={
                 "identity_kind": seen.get("identity_kind"),
                 "plate_text": seen.get("plate_text"),
+                "plate_reads": seen.get("plate_reads") or [],
             },
             evidence_kind="vehicle_pairing",
             evidence_explanation="The subject and vehicle were observed in the same finalized visit episode.",
