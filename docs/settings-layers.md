@@ -35,3 +35,11 @@ seconds, or a threshold is Advanced unless it has a household meaning.
 | Household layer | Advanced |
 |---|---|
 | let cameras speak; hold a conversation; quiet hours; what a camera may confirm; never say | maximum volume; end a conversation after (turns, seconds) |
+
+## Save conventions
+
+Household settings use immediate save with a brief inline `Saved` confirmation;
+there is no hidden Save button. Advanced tuning follows the same immediate-save
+convention because sliders and toggles are applied as soon as they change. The
+Advanced fold is an information-architecture boundary, not a separate draft
+or staging area.

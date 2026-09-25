@@ -102,6 +102,8 @@ export default function SettingsPage() {
   const [detectSaving, setDetectSaving] = useState<boolean>(false);
   const [classSearch, setClassSearch] = useState<string>("");
   const [journeyIdleSeconds, setJourneyIdleSeconds] = useState<number>(300);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [extraSaved, setExtraSaved] = useState(false);
   const [dailyDigestEnabled, setDailyDigestEnabled] = useState<boolean>(true);
   const [dailyDigestHour, setDailyDigestHour] = useState<number>(7);
   const [dailyDigestProviderId, setDailyDigestProviderId] = useState<string>("");
@@ -321,11 +323,15 @@ export default function SettingsPage() {
   const saveExtra = useCallback(async (patch: Record<string, unknown>) => {
     setExtraSaving(true);
     try {
-      await authFetch("/api/system/settings", {
+      const res = await authFetch("/api/system/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
+      if (res.ok) {
+        setExtraSaved(true);
+        window.setTimeout(() => setExtraSaved(false), 1800);
+      }
     } catch { /* silent */ }
     finally { setExtraSaving(false); }
   }, [authFetch]);
@@ -593,6 +599,9 @@ export default function SettingsPage() {
     <div className="px-6 py-6 max-w-3xl">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="text-xs text-muted-foreground mt-1">
+          Most settings save immediately. Forms with a Save button show a confirmation when they are applied.
+        </p>
       </div>
 
       <div className="mb-6 rounded-lg border border-border bg-card">
@@ -1212,6 +1221,31 @@ export default function SettingsPage() {
           )}
         </div>
 
+        {/* Pipeline tuning is intentionally secondary to household choices. */}
+        <div className="rounded-lg border border-border bg-card">
+          <button
+            type="button"
+            onClick={() => setShowAdvancedSettings((open) => !open)}
+            className="w-full px-4 py-3.5 flex items-center justify-between text-left"
+            aria-expanded={showAdvancedSettings}
+          >
+            <div>
+              <div className="text-sm font-medium">Advanced tuning</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Pipeline timing and background AI behavior
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {extraSaved && <span className="text-[11px] text-green-400">Saved</span>}
+              <svg
+                width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                className={`text-muted-foreground transition-transform ${showAdvancedSettings ? "rotate-180" : ""}`}
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </div>
+          </button>
+          {showAdvancedSettings && <div className="px-4 pb-4 border-t border-border pt-3 space-y-3">
         {/* Cross-camera journey idle */}
         <div className="rounded-lg border border-border bg-card px-4 py-3.5">
           <div className="text-sm font-medium mb-2">Journey idle window</div>
@@ -1263,6 +1297,9 @@ export default function SettingsPage() {
           >
             <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${enrichEnabled ? "left-[1.375rem]" : "left-0.5"}`} />
           </button>
+        </div>
+
+        </div>}
         </div>
 
         {/* FindAnything (visual grounding) */}
