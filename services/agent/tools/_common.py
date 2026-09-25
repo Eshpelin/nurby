@@ -10,10 +10,11 @@ from datetime import datetime
 
 from sqlalchemy import select
 
-# Re-exported, not just imported: every tool reaches the access filter and
-# the embedder through this module, so a test can replace either one here
-# and have all twenty-one tools honour the replacement.
-from services.agent.access import accessible_camera_ids  # noqa: F401
+# Every tool reaches the access filter through this module, so a test or
+# embedding application can replace this seam in one place.  Delegate at call
+# time rather than capturing the function object at import time: legacy
+# integrations that patch services.agent.access remain effective as well.
+from services.agent import access as _agent_access
 from shared.models import (
     Journey,
     Person,
@@ -24,6 +25,10 @@ logger = logging.getLogger("nurby.agent.tools")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
+
+
+async def accessible_camera_ids(user, db):
+    return await _agent_access.accessible_camera_ids(user, db)
 
 
 _MAX_WINDOW_HOURS = 720  # 30 days, matches docs/agent-design.md
@@ -198,5 +203,4 @@ def _seg_camera_id(seg) -> uuid.UUID | None:
 
 
 # ── Tool 1. query_observations ────────────────────────────────────────
-
 

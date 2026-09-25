@@ -1070,7 +1070,9 @@ async def storage_location_status(
             warnings.append(
                 f"{loc.key.capitalize()} location {loc.path} is not writable by Nurby."
             )
-        if loc.free_bytes is not None and loc.total_bytes is not None and loc.free_bytes < low_disk_threshold(loc.total_bytes):
+        if loc.free_bytes is not None and loc.total_bytes is not None and loc.free_bytes < max(
+            low_disk_threshold(loc.total_bytes), LOW_DISK_FREE_BYTES
+        ):
             low = True
             warnings.append(
                 f"Only {_gb(loc.free_bytes)} free at {loc.path}. "

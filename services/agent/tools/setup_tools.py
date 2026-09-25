@@ -328,7 +328,7 @@ async def _resolve_remember_vehicle(db, name: str) -> dict:
 
 async def _resolve_remember_camera(user, db, name: str) -> dict:
     """Resolve a camera name/UUID within the caller's ACL."""
-    from services.agent.access import accessible_camera_ids
+    from services.agent.tools import _common
 
     raw = name.strip()
     try:
@@ -336,7 +336,7 @@ async def _resolve_remember_camera(user, db, name: str) -> dict:
     except ValueError:
         if user is None:
             return {"ok": False, "error": "camera must be a UUID"}
-        allowed = await accessible_camera_ids(user, db)
+        allowed = await _common.accessible_camera_ids(user, db)
         result = await db.execute(
             select(Camera).where(func.lower(Camera.name) == raw.lower())
         )
@@ -516,9 +516,9 @@ async def test_camera_connection(ctx: dict, *, camera_id: str) -> dict:
         user = ctx.get("user")
         if user is None:
             return {"ok": False, "error": "camera_id must be a UUID or camera name"}
-        from services.agent.access import accessible_camera_ids
+        from services.agent.tools import _common
 
-        allowed = await accessible_camera_ids(user, db)
+        allowed = await _common.accessible_camera_ids(user, db)
         result = await db.execute(
             select(Camera).where(func.lower(Camera.name) == raw_camera_id.lower())
         )
@@ -581,4 +581,3 @@ async def run_doctor(ctx: dict) -> dict:
 
     checks = await doctor_endpoint(_current_user=ctx["user"], db=ctx["db"])
     return {"checks": [c.model_dump() for c in checks]}
-
