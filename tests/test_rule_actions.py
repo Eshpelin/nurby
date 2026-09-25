@@ -130,6 +130,25 @@ def test_condition_evaluated_by_runner(monkeypatch):
     assert calls == ["go"]
 
 
+def test_synthetic_action_outcome_is_recorded():
+    from services.events import actions as actions_mod
+
+    observation = {"_test_alert": True, "_test_action_index": 2}
+    actions_mod._set_test_result(observation, "failed", "provider rejected request")
+    assert observation["_test_results"]["2"] == {
+        "status": "failed",
+        "detail": "provider rejected request",
+    }
+
+
+def test_normal_action_does_not_record_synthetic_outcome():
+    from services.events import actions as actions_mod
+
+    observation = {"_test_action_index": 2}
+    actions_mod._set_test_result(observation, "success")
+    assert "_test_results" not in observation
+
+
 def test_chained_output_writes_vars(monkeypatch):
     import asyncio
 

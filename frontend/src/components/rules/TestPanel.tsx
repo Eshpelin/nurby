@@ -309,7 +309,12 @@ export default function TestPanel({
             {alertResult.results.map((result) => (
               <div key={result.index} className="flex items-center justify-between gap-2 text-xs">
                 <span className="text-muted-foreground">{result.action_type}</span>
-                <span className={result.status === "dispatched" ? "text-emerald-400" : "text-red-400"}>
+                <span className={
+                  result.status === "success"
+                    ? "text-emerald-400"
+                    : result.status === "skipped" || result.status === "attempted"
+                      ? "text-amber-400" : "text-red-400"
+                }>
                   {result.status}{result.detail ? ` · ${result.detail}` : ""}
                 </span>
               </div>

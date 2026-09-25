@@ -311,6 +311,24 @@ async def _update_event_status(
         logger.exception("Failed to update event %s status", event_id)
 
 
+def _set_test_result(observation_data: dict, status: str, detail: str | None = None) -> None:
+    """Record an outcome for the transient rule test endpoint.
+
+    Normal event execution continues to use Event.action_status.  Synthetic
+    tests have no Event row, so executors explicitly report the provider
+    outcome here for the route to return to the UI.
+    """
+    if not observation_data.get("_test_alert"):
+        return
+    index = observation_data.get("_test_action_index")
+    if index is None:
+        return
+    observation_data.setdefault("_test_results", {})[str(index)] = {
+        "status": status,
+        "detail": detail,
+    }
+
+
 def _check_condition(action: dict, ctx: dict, rule_name: str) -> bool:
     expr = action.get("condition")
     if not expr:
@@ -336,6 +354,7 @@ async def execute_action(
 
     ctx = _build_template_context(observation_data, rule, event_id)
     if not _check_condition(action, ctx, rule.name):
+        _set_test_result(observation_data, "skipped", "Action condition did not match")
         return
 
     if action_type == "webhook":
@@ -363,6 +382,13 @@ async def execute_action(
     else:
         logger.warning("Unknown action type '%s' in rule '%s'", action_type, rule.name)
         await _update_event_status(event_id, action_type or "unknown", "failed", f"Unknown action type '{action_type}'")
+        _set_test_result(observation_data, "failed", f"Unknown action type '{action_type}'")
+
+    if observation_data.get("_test_alert"):
+        observation_data.setdefault("_test_results", {}).setdefault(
+            str(observation_data.get("_test_action_index")),
+            {"status": "attempted", "detail": "Action completed without a provider outcome"},
+        )
 
 
 def render_payload(template, ctx: dict):
@@ -497,14 +523,17 @@ async def _execute_device(action, observation_data, rule, event_id, ctx):
     )
     if ok:
         await _update_event_status(event_id, "device", "success")
+        _set_test_result(observation_data, "success", detail)
     else:
         await _update_event_status(event_id, "device", "failed", detail)
+        _set_test_result(observation_data, "failed", detail)
 
 
 async def _execute_webhook(action, observation_data, rule, event_id, ctx):
     url_tpl = action.get("url")
     if not url_tpl:
         await _update_event_status(event_id, "webhook", "failed", "Missing 'url' in webhook action")
+        _set_test_result(observation_data, "failed", "Missing 'url' in webhook action")
         return
     url = render(url_tpl, ctx)
 
@@ -525,14 +554,17 @@ async def _execute_webhook(action, observation_data, rule, event_id, ctx):
     if ok:
         logger.info("Webhook fired for rule '%s' -> %s (%s)", rule.name, url, detail)
         await _update_event_status(event_id, "webhook", "success")
+        _set_test_result(observation_data, "success", detail)
     else:
         await _update_event_status(event_id, "webhook", "failed", detail)
+        _set_test_result(observation_data, "failed", detail)
 
 
 async def _execute_api_call(action, observation_data, rule, event_id, ctx):
     url_tpl = action.get("url")
     if not url_tpl:
         await _update_event_status(event_id, "api_call", "failed", "Missing 'url' in api_call action")
+        _set_test_result(observation_data, "failed", "Missing 'url' in api_call action")
         return
     url = render(url_tpl, ctx)
     method = render(action.get("method", "POST"), ctx).upper()
@@ -563,6 +595,7 @@ async def _execute_api_call(action, observation_data, rule, event_id, ctx):
             await _update_event_status(
                 event_id, "api_call", "failed", f"target refused: {rejection}"
             )
+            _set_test_result(observation_data, "failed", f"target refused: {rejection}")
             return
         async with httpx.AsyncClient() as client:
             try:
@@ -575,10 +608,13 @@ async def _execute_api_call(action, observation_data, rule, event_id, ctx):
                 )
                 status = "success" if resp.status_code < 400 else "failed"
                 await _update_event_status(event_id, "api_call", status)
+                _set_test_result(observation_data, status, f"HTTP {resp.status_code}")
             except httpx.TimeoutException:
                 await _update_event_status(event_id, "api_call", "failed", f"Timeout on {method} {url}")
+                _set_test_result(observation_data, "failed", f"Timeout on {method} {url}")
             except httpx.RequestError as exc:
                 await _update_event_status(event_id, "api_call", "failed", str(exc))
+                _set_test_result(observation_data, "failed", str(exc))
         return
 
     ok, detail = await deliver_signed(
@@ -588,8 +624,10 @@ async def _execute_api_call(action, observation_data, rule, event_id, ctx):
     if ok:
         logger.info("API call fired for rule '%s' -> %s %s (%s)", rule.name, method, url, detail)
         await _update_event_status(event_id, "api_call", "success")
+        _set_test_result(observation_data, "success", detail)
     else:
         await _update_event_status(event_id, "api_call", "failed", detail)
+        _set_test_result(observation_data, "failed", detail)
 
 
 async def _execute_broadcast(action, observation_data, rule, event_id, ctx):
@@ -610,8 +648,10 @@ async def _execute_broadcast(action, observation_data, rule, event_id, ctx):
     try:
         await broadcast(message)
         await _update_event_status(event_id, "broadcast", "success")
+        _set_test_result(observation_data, "success")
     except Exception as exc:
         await _update_event_status(event_id, "broadcast", "failed", str(exc))
+        _set_test_result(observation_data, "failed", str(exc))
 
 
 async def _execute_notify(action, observation_data, rule, event_id, ctx):
@@ -698,6 +738,10 @@ async def _execute_notify(action, observation_data, rule, event_id, ctx):
     except Exception as exc:
         if not test_mode:
             await _update_event_status(event_id, "notify", "failed", str(exc))
+        _set_test_result(observation_data, "failed", str(exc))
+
+    if delivered:
+        _set_test_result(observation_data, "success", "In-app broadcast delivered")
 
     # Stamp the delivery and advance any verified-activation milestone that
     # tracks this rule (#193). Best-effort; never breaks the action path.
@@ -729,6 +773,7 @@ async def _execute_email(action, observation_data, rule, event_id, ctx):
     recipient_tpl = action.get("to")
     if not recipient_tpl:
         await _update_event_status(event_id, "email", "failed", "Missing 'to' in email action")
+        _set_test_result(observation_data, "failed", "Missing 'to' in email action")
         return
     recipient = render(recipient_tpl, ctx)
 
@@ -736,6 +781,7 @@ async def _execute_email(action, observation_data, rule, event_id, ctx):
     smtp_cfg = await resolve_smtp()
     if not smtp_cfg["host"]:
         await _update_event_status(event_id, "email", "failed", "SMTP not configured (Settings -> Email alerts)")
+        _set_test_result(observation_data, "failed", "SMTP not configured (Settings -> Email alerts)")
         return
 
     subject = render(action.get("subject", "Nurby alert. {{rule_name}}"), ctx)
@@ -744,8 +790,10 @@ async def _execute_email(action, observation_data, rule, event_id, ctx):
     try:
         await send_email(to=recipient, subject=subject, body=body)
         await _update_event_status(event_id, "email", "success")
+        _set_test_result(observation_data, "success")
     except Exception as exc:
         await _update_event_status(event_id, "email", "failed", str(exc))
+        _set_test_result(observation_data, "failed", str(exc))
 
 
 # ── VLM call action ──
@@ -1889,22 +1937,27 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
     channel_id_raw = action.get("channel_id")
     if not channel_id_raw:
         await _update_event_status(event_id, "telegram", "failed", "Missing channel_id")
+        _set_test_result(observation_data, "failed", "Missing channel_id")
         return
 
     try:
         channel_uuid = uuid.UUID(str(channel_id_raw))
     except (ValueError, TypeError):
         await _update_event_status(event_id, "telegram", "failed", "Invalid channel_id")
+        _set_test_result(observation_data, "failed", "Invalid channel_id")
         return
 
     # Suppression. Check before loading the channel so we don't waste
     # a DB round trip when the rule is snoozed.
-    suppress_reason = await _telegram_suppression_reason(rule, event_id, observation_data)
+    suppress_reason = None if observation_data.get("_test_alert") else await _telegram_suppression_reason(
+        rule, event_id, observation_data
+    )
     if suppress_reason:
         logger.info(
             "telegram send suppressed for rule='%s' reason=%s", rule.name, suppress_reason,
         )
         await _update_event_status(event_id, "telegram", "skipped", suppress_reason)
+        _set_test_result(observation_data, "skipped", suppress_reason)
         return
 
     template = action.get("template") or "Rule {rule_name} fired on {camera_name}"
@@ -1916,12 +1969,15 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
         ch = await db.get(TelegramChannel, channel_uuid)
         if ch is None:
             await _update_event_status(event_id, "telegram", "failed", "Channel not found")
+            _set_test_result(observation_data, "failed", "Channel not found")
             return
         if not ch.enabled:
             await _update_event_status(event_id, "telegram", "failed", "Channel is disabled")
+            _set_test_result(observation_data, "failed", "Channel is disabled")
             return
         if ch.paired_at is None or not ch.chat_id:
             await _update_event_status(event_id, "telegram", "failed", "Channel is not paired")
+            _set_test_result(observation_data, "failed", "Channel is not paired")
             return
         try:
             token = decrypt_secret(ch.bot_token_enc)
@@ -1930,6 +1986,7 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
                 event_id, "telegram", "failed",
                 "Bot token unreadable (jwt_secret rotated?). Replace it on the channel.",
             )
+            _set_test_result(observation_data, "failed", "Bot token unreadable (jwt_secret rotated?). Replace it on the channel.")
             return
         chat_id = ch.chat_id
         default_silent = bool(ch.default_silent)
@@ -1938,6 +1995,7 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
     text = _expand_telegram_template(template, ctx)
     if not text.strip():
         await _update_event_status(event_id, "telegram", "failed", "Rendered template is empty")
+        _set_test_result(observation_data, "failed", "Rendered template is empty")
         return
 
     reply_markup = _build_inline_keyboard(buttons_spec, event_id, rule.id, ctx)
@@ -1995,7 +2053,7 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
             # Phase 4. Index the outbound message so a later user
             # reply resolves back to this Event for note-taking.
             sent_msg_id = photo_result.get("message_id")
-            if sent_msg_id:
+            if sent_msg_id and not observation_data.get("_test_alert"):
                 await _record_telegram_delivery(event_id, channel_uuid, int(sent_msg_id), "photo")
                 await store_message_index(
                     channel_uuid, int(sent_msg_id),
@@ -2010,6 +2068,7 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
                 "success" if not note else "success",
                 note,
             )
+            _set_test_result(observation_data, "success", note)
         else:
             result = await TelegramAPI.send_message(
                 token,
@@ -2024,7 +2083,7 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
                 rule.name, channel_label, result.get("message_id"),
             )
             sent_msg_id = result.get("message_id")
-            if sent_msg_id:
+            if sent_msg_id and not observation_data.get("_test_alert"):
                 await _record_telegram_delivery(event_id, channel_uuid, int(sent_msg_id), "text")
                 await store_message_index(
                     channel_uuid, int(sent_msg_id),
@@ -2036,8 +2095,10 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
                 )
             note = "thumbnail_missing" if (include_thumbnail and not have_thumb) else None
             await _update_event_status(event_id, "telegram", "success", note)
+            _set_test_result(observation_data, "success", note)
     except TelegramError as exc:
         await _update_event_status(event_id, "telegram", "failed", exc.description[:500])
+        _set_test_result(observation_data, "failed", exc.description[:500])
         if exc.is_forbidden:
             # Bot blocked or chat gone. Disable channel + persist error
             # so the settings UI flips to "Blocked" and stops alerts

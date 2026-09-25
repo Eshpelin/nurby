@@ -1180,14 +1180,21 @@ async def test_rule_alert(
         if not isinstance(action, dict):
             continue
         action_type = str(action.get("type") or "unknown")
+        observation["_test_action_index"] = index
         try:
             await execute_action(action, observation, rule, fake_event_id)
-            results.append(RuleTestAlertResult(index=index, action_type=action_type, status="dispatched"))
+            outcome = (observation.get("_test_results") or {}).get(str(index), {})
+            results.append(RuleTestAlertResult(
+                index=index,
+                action_type=action_type,
+                status=outcome.get("status", "attempted"),
+                detail=outcome.get("detail"),
+            ))
         except Exception as exc:
             logger.exception("Synthetic alert action failed for rule %s", rule_id)
             results.append(RuleTestAlertResult(index=index, action_type=action_type, status="failed", detail=str(exc)))
     return RuleTestAlertResponse(
-        message="Synthetic test alert dispatched. It does not create an event or affect cooldowns.",
+        message="Synthetic test alert completed. Results reflect provider responses; no event or cooldown was created.",
         results=results,
     )
 
