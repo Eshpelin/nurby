@@ -5,11 +5,9 @@
  * and the controls that only make sense while you are looking at it.
  */
 
-import { useState, useEffect, useRef, type KeyboardEvent } from "react";
-import Link from "next/link";
+import { useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import { useWebcamPublisher } from "@/lib/webcam-publisher";
-import { RetryCountdown } from "@/components/RetryCountdown";
+import { CameraPlayer } from "@/components/CameraPlayer";
 import { LiveCaptionOverlay } from "@/components/LiveCaptionOverlay";
 import { ActivityStrip } from "@/components/ActivityStrip";
 import { AudioActiveDot } from "@/components/AudioActiveDot";
@@ -17,12 +15,8 @@ import { VLMStatusBadge } from "@/components/VLMStatusBadge";
 import { SummarizeNowButton } from "@/components/SummarizeNowButton";
 import { FindNowButton } from "@/components/dashboard/FindNowButton";
 import { timeAgo } from "@/lib/time";
-  process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
 import type { ActivityEvent, Camera } from "@/app/dashboard-types";
-import { extractStreamName } from "@/app/dashboard-helpers";
 import { AnalyzingShimmer, DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, DetectionOverlay, MiniPTZ, SignalBadge } from "@/components/dashboard/CameraOverlays";
-import { WEBRTC_URL } from "@/app/dashboard-helpers";
-import { useAuth } from "@/lib/auth";
 
 export type CameraLayout = "single" | "double" | "list";
 export function CameraSidebarCard({
@@ -46,49 +40,6 @@ export function CameraSidebarCard({
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [ptzOpen, setPtzOpen] = useState(false);
   const ptzCapable = camera.stream_type === "rtsp";
-  // MediaMTX serves the muxed copy under a canonical slug (mux_slug on the
-  // backend), NOT the camera's own URL path. rtsp/hls pull-mux under
-  // cam-<id>; webcam/usb push under webcam-<id>. Using the URL's last path
-  // segment ("stream1") requests a path MediaMTX does not have, so the tile
-  // shows "stream not found".
-  const streamName =
-    camera.stream_type === "rtsp" || camera.stream_type === "hls"
-      ? `cam-${camera.id}`
-      : camera.stream_type === "webcam" || camera.stream_type === "usb"
-        ? `webcam-${camera.id}`
-        : extractStreamName(camera.stream_url);
-  const iframeSrc = `${WEBRTC_URL}/${streamName}/`;
-  // A remote-file camera (the demo, or any http(s) clip) is not muxed into
-  // MediaMTX, so the WebRTC path would be empty and the tile black. The
-  // browser can play the URL directly, so render a looping <video>. This
-  // also means the demo shows footage in a second, independent of the
-  // ingestion poll + connect cycle.
-  const isRemoteFile =
-    camera.stream_type === "file" && /^https?:\/\//.test(camera.stream_url);
-  const { token } = useAuth();
-  const isLocalFile = camera.stream_type === "file" && !isRemoteFile;
-  const localFilePreview = isLocalFile && token
-    ? `/api/cameras/${camera.id}/preview?token=${encodeURIComponent(token)}`
-    : null;
-  const isPlayableFile = isRemoteFile || Boolean(localFilePreview);
-
-  // Webcam publisher state for this tile. If this tab owns the capture
-  // we render the local MediaStream directly in a <video> element.
-  const { publishers, resumeIntent } = useWebcamPublisher();
-  const isWebcam = camera.stream_type === "webcam";
-  const myPublisher = publishers.find((p) => p.cameraId === camera.id);
-  const localStream = myPublisher?.status === "live" ? myPublisher.stream : null;
-  const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
-  useEffect(() => {
-    const el = webcamVideoRef.current;
-    if (!el) return;
-    if (localStream && el.srcObject !== localStream) {
-      el.srcObject = localStream;
-      el.play().catch(() => undefined);
-    } else if (!localStream && el.srcObject) {
-      el.srcObject = null;
-    }
-  }, [localStream]);
   const latestEvent = activityEvents[0];
   const frameW = camera.width || DEFAULT_FRAME_WIDTH;
   const frameH = camera.height || DEFAULT_FRAME_HEIGHT;
@@ -124,24 +75,7 @@ export function CameraSidebarCard({
       >
         {/* Tiny preview */}
         <div className="relative w-16 h-10 bg-black rounded overflow-hidden flex-shrink-0">
-          {camera.audio_only ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-emerald-900/30 to-zinc-900">
-              <svg className="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-            </div>
-          ) : isPlayableFile ? (
-            <video src={isRemoteFile ? camera.stream_url : localFilePreview ?? undefined} autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
-          ) : isWebcam && localStream ? (
-            <video ref={webcamVideoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" />
-          ) : camera.status !== "offline" ? (
-            <iframe src={iframeSrc} className="absolute inset-0 w-full h-full border-0 pointer-events-none scale-[1.5] origin-center" allow="autoplay; encrypted-media" sandbox="allow-scripts allow-same-origin" />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center"><span className="text-[8px] text-muted-foreground font-mono">OFF</span></div>
-          )}
+          <CameraPlayer camera={camera} objectFit="cover" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
@@ -182,80 +116,7 @@ export function CameraSidebarCard({
     >
       {/* Feed preview */}
       <div className={`relative bg-black ${fill ? "flex-1 min-h-0" : "aspect-video"}`}>
-        {camera.audio_only ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-emerald-950/40 via-zinc-950 to-zinc-900">
-            <div className="relative">
-              <span className="absolute inset-0 rounded-full animate-ping bg-emerald-500/30" />
-              <svg className="relative w-12 h-12 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-            </div>
-            <div className="text-[10px] uppercase tracking-wider text-emerald-300/80">
-              Audio-only mic
-            </div>
-            {camera.stream_type === "browser_mic" && (
-              <Link
-                href={`/mic/${camera.id}`}
-                onClick={(e) => e.stopPropagation()}
-                className="text-[11px] px-2.5 py-1 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
-              >
-                Open mic page →
-              </Link>
-            )}
-          </div>
-        ) : isPlayableFile ? (
-          <video
-            src={isRemoteFile ? camera.stream_url : localFilePreview ?? undefined}
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="absolute inset-0 w-full h-full object-contain"
-          />
-        ) : isWebcam && localStream ? (
-          <video
-            ref={webcamVideoRef}
-            autoPlay
-            muted
-            playsInline
-            className="absolute inset-0 w-full h-full object-contain"
-          />
-        ) : camera.status !== "offline" ? (
-          <iframe
-            src={iframeSrc}
-            className="absolute inset-0 w-full h-full border-0 pointer-events-none"
-            allow="autoplay; encrypted-media"
-            sandbox="allow-scripts allow-same-origin"
-          />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <span className="text-[10px] text-muted-foreground font-mono">OFFLINE</span>
-            {!isWebcam && (camera.status_reason || camera.next_retry_at) && (
-              <RetryCountdown
-                className="text-[10px] text-center px-2"
-                nextRetryAt={camera.next_retry_at}
-                reason={camera.status_reason}
-              />
-            )}
-            {isWebcam && myPublisher?.status === "needs-permission" && (
-              <button
-                onClick={(e) => { e.stopPropagation(); resumeIntent(camera.id); }}
-                className="text-[11px] px-2.5 py-1 rounded-md bg-amber-500 text-black font-medium hover:bg-amber-400"
-              >
-                Enable camera
-              </button>
-            )}
-            {isWebcam && myPublisher?.status === "connecting" && (
-              <span className="text-[10px] text-amber-400">connecting.</span>
-            )}
-            {isWebcam && myPublisher?.status === "held-by-other-tab" && (
-              <span className="text-[10px] text-muted-foreground">streaming in another tab</span>
-            )}
-          </div>
-        )}
+        <CameraPlayer camera={camera} objectFit="cover" />
 
         {/* Detection bounding box overlay. Skipped for remote-file cameras
             (the demo). the browser plays the clip on its own clock while the
@@ -263,9 +124,10 @@ export function CameraSidebarCard({
             "latest" box would land on the wrong frame. Detections for these
             stay frame-accurate in the timeline (the thumbnail is the exact
             analyzed frame). Near-live cameras (rtsp/webrtc) keep the overlay. */}
-        {camera.status !== "offline" && !isPlayableFile && (
-          <DetectionOverlay cameraId={camera.id} visible={overlayVisible} frameWidth={frameW} frameHeight={frameH} />
-        )}
+        {camera.status !== "offline" &&
+          !(camera.stream_type === "file" && /^https?:\/\//.test(camera.stream_url)) && (
+            <DetectionOverlay cameraId={camera.id} visible={overlayVisible} frameWidth={frameW} frameHeight={frameH} />
+          )}
 
         {/* AI-analyzing sweep while a VLM call is in flight for this camera */}
         {camera.status !== "offline" && <AnalyzingShimmer cameraId={camera.id} />}
@@ -391,7 +253,13 @@ export function CameraSidebarCard({
               <span className={`w-1.5 h-1.5 rounded-full ${
                 camera.status === "recording" ? "bg-danger" : camera.status === "live" ? "bg-green-500" : "bg-gray-400"
               } ${camera.status !== "offline" ? "pulse-dot" : ""}`} />
-              {camera.status === "recording" ? "REC" : camera.status === "live" ? "LIVE" : "OFF"}
+              {camera.status === "recording"
+                ? "REC"
+                : camera.status === "live"
+                  ? "LIVE"
+                  : camera.stream_type === "file"
+                    ? "FILE"
+                    : "OFF"}
             </span>
           </div>
         </div>
