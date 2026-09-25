@@ -18,10 +18,16 @@ import json
 import logging
 
 from shared.config import settings
+from shared.redis_keys import LEGACY_MQTT_BUS_CHANNEL, mqtt_bus_channel
 
 logger = logging.getLogger(__name__)
 
-MQTT_BUS_CHANNEL = "nurby:mqtt:out"
+# Namespaced per install (#291): the bus is a consumed queue in spirit —
+# two stacks sharing Redis would split each other's MQTT publishes between
+# their bridges. The bridge also listens on the legacy channel for one
+# release so pre-update producers are heard. Remove the LEGACY name in a
+# future release.
+MQTT_BUS_CHANNEL = mqtt_bus_channel()
 
 _redis = None
 

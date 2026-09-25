@@ -31,7 +31,12 @@ from sqlalchemy import select
 
 from shared.database import async_session
 from shared.models import Camera
-from shared.mqtt_bus import MQTT_BUS_CHANNEL, bus_redis, decode_bus_message
+from shared.mqtt_bus import (
+    LEGACY_MQTT_BUS_CHANNEL,
+    MQTT_BUS_CHANNEL,
+    bus_redis,
+    decode_bus_message,
+)
 from shared.mqtt_topics import (
     camera_slug,
     camera_state_topic,
@@ -227,7 +232,11 @@ class MqttBridge:
         self, client: aiomqtt.Client, cfg: MqttConfig, stop: asyncio.Event
     ) -> None:
         ps = bus_redis().pubsub()
-        await ps.subscribe(MQTT_BUS_CHANNEL)
+        # One-release rolling-update compatibility (#291): also listen on
+        # the legacy channel so producers from the previous release are
+        # still forwarded until the whole stack has restarted.
+        channels = (MQTT_BUS_CHANNEL, LEGACY_MQTT_BUS_CHANNEL)
+        await ps.subscribe(*channels)
         try:
             while not stop.is_set():
                 msg = await ps.get_message(ignore_subscribe_messages=True, timeout=1.0)

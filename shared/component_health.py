@@ -20,6 +20,7 @@ import json
 import logging
 
 from shared.clock import stamp_now
+from shared.redis_keys import LEGACY_HEALTH_PREFIX, health_key
 from shared.config import settings
 
 logger = logging.getLogger("nurby.component_health")
@@ -39,7 +40,14 @@ DEFAULT_TTL_SECONDS = 900
 
 
 def _key(component: str) -> str:
-    return f"nurby:health:{component}"
+    return health_key(component)
+
+
+def _read_keys(component: str) -> tuple[str, str]:
+    """Namespaced key first, legacy key as a one-release fallback (#291),
+    so the doctor doesn't read a just-updated component as broken for up
+    to one TTL after an update."""
+    return (health_key(component), f"{LEGACY_HEALTH_PREFIX}{component}")
 
 
 def _payload(status: str, detail: str | None) -> str:
@@ -89,8 +97,11 @@ async def get(component: str) -> dict | None:
         import redis.asyncio as aioredis
 
         client = aioredis.from_url(settings.redis_url, decode_responses=True)
+        primary, legacy = _read_keys(component)
         try:
-            raw = await client.get(_key(component))
+            raw = await client.get(primary)
+            if raw is None:
+                raw = await client.get(legacy)
         finally:
             await client.aclose()
         return json.loads(raw) if raw else None

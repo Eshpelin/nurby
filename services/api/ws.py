@@ -9,6 +9,10 @@ from shared.auth import decode_access_token
 from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids
 from shared.database import async_session
 from shared.models import User
+from shared.redis_keys import (
+    LEGACY_WS_BROADCAST_CHANNEL,
+    ws_broadcast_channel,
+)
 
 logger = logging.getLogger("nurby.api.ws")
 
@@ -103,7 +107,13 @@ def _allowed_to_receive(allowed: AllowedCameras, message: dict) -> bool:
 # from other processes out to its local browsers. The src token stops
 # the API process re-delivering its own messages.
 
-WS_RELAY_CHANNEL = "nurby:ws:broadcast"
+# Namespaced per install (#291): two stacks sharing a Redis server used to
+# relay each other's live alerts into each other's dashboards. The relay
+# also listens on the legacy channel for one release so processes from the
+# previous release (still publishing there during a rolling update) are
+# heard. Remove LEGACY_WS_BROADCAST_CHANNEL in a future release.
+WS_RELAY_CHANNEL = ws_broadcast_channel()
+_RELAY_CHANNELS = (WS_RELAY_CHANNEL, LEGACY_WS_BROADCAST_CHANNEL)
 _PROCESS_SRC = uuid.uuid4().hex
 _relay_redis = None
 
@@ -227,8 +237,8 @@ async def relay_loop(stop_event: asyncio.Event | None = None) -> None:
         try:
             r = await _get_relay_redis()
             pubsub = r.pubsub()
-            await pubsub.subscribe(WS_RELAY_CHANNEL)
-            logger.info("WS relay listening on %s", WS_RELAY_CHANNEL)
+            await pubsub.subscribe(*_RELAY_CHANNELS)
+            logger.info("WS relay listening on %s", ", ".join(_RELAY_CHANNELS))
             while stop_event is None or not stop_event.is_set():
                 msg = await pubsub.get_message(
                     ignore_subscribe_messages=True, timeout=1.0

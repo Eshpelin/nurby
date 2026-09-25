@@ -46,12 +46,20 @@ from shared.default_rules import (
     default_rule_kwargs,
     refresh_default_rule_messages,
 )
+from shared.redis_keys import (
+    LEGACY_RULES_INVALIDATE_CHANNEL,
+    rules_invalidate_channel,
+)
 from shared.models import Recording, Rule, RuleEvaluation
 
 # Redis pubsub channel that backend routes publish to whenever a rule
 # is created, updated, or deleted. The perception process listens and
 # zeros out _last_load so the next evaluate() refreshes immediately.
-RULES_INVALIDATE_CHANNEL = "nurby:rules:invalidate"
+# Namespaced per install (#291). The listener also subscribes to the
+# legacy channel for one release so a pre-update API process publishing
+# an invalidation during a rolling update is still heard.
+RULES_INVALIDATE_CHANNEL = rules_invalidate_channel()
+_INVALIDATE_CHANNELS = (RULES_INVALIDATE_CHANNEL, LEGACY_RULES_INVALIDATE_CHANNEL)
 
 def _centroid(b):
     return ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0)
@@ -1524,7 +1532,7 @@ class RuleEngine:
         client = aioredis.from_url(settings.redis_url, decode_responses=True)
         pubsub = client.pubsub()
         try:
-            await pubsub.subscribe(RULES_INVALIDATE_CHANNEL)
+            await pubsub.subscribe(*_INVALIDATE_CHANNELS)
             logger.info("Listening for rule invalidations on %s", RULES_INVALIDATE_CHANNEL)
             while self._invalidate_stop is not None and not self._invalidate_stop.is_set():
                 try:
@@ -1544,7 +1552,7 @@ class RuleEngine:
                 self._last_load = 0.0
         finally:
             try:
-                await pubsub.unsubscribe(RULES_INVALIDATE_CHANNEL)
+                await pubsub.unsubscribe(*_INVALIDATE_CHANNELS)
                 await pubsub.close()
                 await client.aclose()
             except Exception:

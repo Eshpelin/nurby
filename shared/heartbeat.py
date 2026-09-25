@@ -18,6 +18,7 @@ import logging
 
 from shared.clock import stamp_now
 from shared.config import settings
+from shared.redis_keys import LEGACY_HEARTBEAT_PREFIX, heartbeat_key
 
 logger = logging.getLogger("nurby.heartbeat")
 
@@ -31,7 +32,16 @@ TTL_SECONDS = 35
 
 
 def _key(service: str) -> str:
-    return f"nurby:heartbeat:{service}"
+    return heartbeat_key(service)
+
+
+def _read_keys(service: str) -> tuple[str, str]:
+    """Namespaced key first, legacy key as a one-release fallback (#291).
+
+    A just-updated stack reads workers' first beats only after the new
+    write lands; without the fallback the doctor would flap to "down"
+    for up to one TTL after every update."""
+    return (heartbeat_key(service), f"{LEGACY_HEARTBEAT_PREFIX}{service}")
 
 
 async def beat_forever(service: str) -> None:
@@ -63,8 +73,12 @@ async def last_beat(service: str) -> str | None:
     import redis.asyncio as aioredis
 
     client = aioredis.from_url(settings.redis_url, decode_responses=True)
+    primary, legacy = _read_keys(service)
     try:
-        return await client.get(_key(service))
+        value = await client.get(primary)
+        if value is None:
+            value = await client.get(legacy)
+        return value
     finally:
         await client.aclose()
 
