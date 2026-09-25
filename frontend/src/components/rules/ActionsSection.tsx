@@ -12,6 +12,8 @@ import {
 } from "./types";
 import { ActionCard } from "./actions/ActionCard";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useAuth } from "@/lib/auth";
 import {
   DndContext,
   PointerSensor,
@@ -46,6 +48,23 @@ export function ActionsSection(props: ActionsSectionProps) {
   const { telegramChannels, telegramChannelsLoading, devices, providers, cameras, formActions, setFormActions, cardErrors } =
     props;
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
+  const { authFetch } = useAuth();
+  const [pairedPhones, setPairedPhones] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch("/api/push/devices");
+        if (!res.ok) return;
+        const devices: unknown = await res.json();
+        if (!cancelled && Array.isArray(devices)) setPairedPhones(devices.length);
+      } catch {
+        // Delivery status is advisory; rule editing must remain available.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authFetch]);
 
   // Stable per-card ids for drag. Kept in lockstep with formActions so a
   // reorder animates correctly. Length changes (add/delete/hydrate) are
@@ -103,6 +122,15 @@ export function ActionsSection(props: ActionsSectionProps) {
     setIds((prev) => arrayMove(prev, from, to));
   };
 
+  const pairedTelegram = telegramChannels.filter(
+    (channel) => channel.enabled && channel.pairing_status === "paired",
+  ).length;
+  const destinations = [
+    "In-app bell",
+    ...(pairedPhones > 0 ? [`${pairedPhones} paired phone${pairedPhones === 1 ? "" : "s"}`] : []),
+    ...(pairedTelegram > 0 ? [`${pairedTelegram} Telegram channel${pairedTelegram === 1 ? "" : "s"}`] : []),
+  ];
+
   return (
     <fieldset className="border border-border rounded-md p-3 space-y-2">
       <legend className="text-xs font-medium text-muted-foreground px-1">
@@ -111,6 +139,13 @@ export function ActionsSection(props: ActionsSectionProps) {
       <p className="text-[11px] text-muted-foreground px-1 -mt-1 mb-1">
         Actions run top to bottom. Drag the handle to reorder.
       </p>
+      <div className={`rounded-md border px-3 py-2 text-xs ${destinations.length === 1 ? "border-yellow-500/35 bg-yellow-500/5" : "border-border bg-muted/20"}`}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground">This alert reaches: <span className="text-foreground">{destinations.join(", ")}</span></span>
+          {destinations.length === 1 && <Link href="/settings#notifications" className="shrink-0 text-accent hover:underline">Add a phone</Link>}
+        </div>
+        {destinations.length === 1 && <p className="mt-1 text-[11px] text-muted-foreground">In-app alerts work while Nurby is open. Add a phone or Telegram channel to receive alerts when you are away.</p>}
+      </div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {formActions.map((draft, i) => (
