@@ -10,6 +10,7 @@ import { ActivityFilterBar } from "@/components/activity/ActivityFilterBar";
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { timeAgo, formatDateTime } from "@/lib/time";
 import { EventNotesPanel } from "@/components/rules/EventNotesPanel";
@@ -32,6 +33,7 @@ type RangeValue = (typeof RANGES)[number]["value"];
 
 export default function EventsPage() {
   const { authFetch } = useAuth();
+  const searchParams = useSearchParams();
   const [events, setEvents] = useState<EventEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -108,6 +110,14 @@ export default function EventsPage() {
   useEffect(() => {
     fetchEvents(0);
   }, [fetchEvents]);
+
+  useEffect(() => {
+    const alertId = searchParams.get("alert");
+    if (!alertId || loading) return;
+    if (events.some((event) => event.id === alertId)) {
+      setExpandedId(alertId);
+    }
+  }, [events, loading, searchParams]);
 
   useEffect(() => {
     (async () => {

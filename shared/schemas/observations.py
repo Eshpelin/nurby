@@ -42,6 +42,7 @@ class NotificationResponse(BaseModel):
     severity: str
     rule_id: uuid.UUID | None
     camera_id: uuid.UUID | None
+    camera_name: str | None = None
     observation_id: uuid.UUID | None
     event_id: uuid.UUID | None = None
     read: bool

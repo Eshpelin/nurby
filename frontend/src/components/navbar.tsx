@@ -70,7 +70,7 @@ function getInitials(name: string | null | undefined): string {
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, authFetch} = useAuth();
+  const { user, logout, authFetch, token } = useAuth();
   const role = user?.role ?? "viewer";
   const isGuardian = role === "guardian";
 
@@ -348,6 +348,7 @@ export function Navbar() {
               notifications={notifications}
               onMarkRead={handleMarkRead}
               onMarkAllRead={handleMarkAllRead}
+              token={token}
             />
           </div>
 

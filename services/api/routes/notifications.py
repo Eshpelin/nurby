@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.auth import get_current_user
 from shared.camera_access import allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
-from shared.models import Notification, User
+from shared.models import Camera, Notification, User
 from shared.schemas import NotificationResponse
 
 router = APIRouter()
@@ -21,11 +21,19 @@ async def list_notifications(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     allowed = await allowed_camera_ids(_current_user, db)
-    query = apply_camera_filter(select(Notification), allowed, Notification.camera_id).order_by(Notification.created_at.desc()).limit(limit).offset(offset)
+    query = apply_camera_filter(
+        select(Notification, Camera.name.label("camera_name"))
+        .outerjoin(Camera, Camera.id == Notification.camera_id),
+        allowed,
+        Notification.camera_id,
+    ).order_by(Notification.created_at.desc()).limit(limit).offset(offset)
     if unread_only:
         query = query.where(Notification.read == False)  # noqa: E712
     result = await db.execute(query)
-    return result.scalars().all()
+    return [
+        {**notification.__dict__, "camera_name": camera_name}
+        for notification, camera_name in result.all()
+    ]
 
 
 @router.get("/count")

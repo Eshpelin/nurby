@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { useWebSocket } from "@/lib/ws";
 import { useToast, useConfirm } from "@/lib/feedback";
 import {
   cameraLookup,
@@ -25,6 +26,7 @@ const LAST_FIRED_CACHE_MS = 30_000;
 
 export default function RulesPage() {
   const { authFetch } = useAuth();
+  const { subscribe } = useWebSocket();
   const toast = useToast();
   const confirm = useConfirm();
   const router = useRouter();
@@ -46,6 +48,15 @@ export default function RulesPage() {
   const [lastFiredByRule, setLastFiredByRule] = useState<Record<string, string | null>>({});
   const lastFiredFetchedAt = useRef<number>(0);
   const [healthByRule, setHealthByRule] = useState<Record<string, RuleHealth>>({});
+
+  useEffect(() => {
+    return subscribe("event_fired", (message) => {
+      const ruleId = typeof message.rule_id === "string" ? message.rule_id : null;
+      const timestamp = typeof message.timestamp === "string" ? message.timestamp : new Date().toISOString();
+      if (!ruleId) return;
+      setLastFiredByRule((current) => ({ ...current, [ruleId]: timestamp }));
+    });
+  }, [subscribe]);
 
   const fetchRules = useCallback(async () => {
     try {

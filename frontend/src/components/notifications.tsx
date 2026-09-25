@@ -9,7 +9,9 @@ export interface NotificationItem {
   severity: string;
   rule_id: string | null;
   camera_id: string | null;
+  camera_name?: string | null;
   observation_id: string | null;
+  event_id?: string | null;
   read: boolean;
   created_at: string;
   delivered_at?: string | null;
@@ -22,6 +24,7 @@ interface NotificationsDropdownProps {
   notifications: NotificationItem[];
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
+  token?: string | null;
 }
 
 
@@ -37,6 +40,7 @@ export function NotificationsDropdown({
   notifications,
   onMarkRead,
   onMarkAllRead,
+  token,
 }: NotificationsDropdownProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -89,9 +93,23 @@ export function NotificationsDropdown({
               />
               <div className="flex-1 min-w-0">
                 <p className="text-sm leading-snug break-words">{n.message}</p>
+                {n.camera_name && <p className="text-xs text-muted-foreground mt-0.5">{n.camera_name}</p>}
+                {n.event_id && token && n.observation_id && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`/api/observations/${n.observation_id}/thumbnail?token=${encodeURIComponent(token)}`}
+                    alt="Alert snapshot"
+                    className="mt-2 h-12 w-20 rounded border border-border object-cover"
+                  />
+                )}
                 <span className="text-xs text-muted-foreground">
                   {n.updated_at ? `Updated ${timeAgo(n.updated_at)}` : timeAgo(n.created_at)}
                 </span>
+                {n.event_id && (
+                  <a href={`/events?alert=${encodeURIComponent(n.event_id)}`} onClick={onClose} className="block mt-1 text-xs text-accent hover:underline">
+                    Open alert
+                  </a>
+                )}
               </div>
               {!n.read && (
                 <button
