@@ -116,7 +116,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
     if (res.ok) setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, unread: false, status: "resolved" } : candidate));
   };
 
-  const decideRelationship = async (item: ReviewItem, decision: "confirm" | "reject" | "defer") => {
+  const decideRelationship = async (item: ReviewItem, decision: "confirm" | "reject" | "defer" | "ambiguous") => {
     if (item.source_type !== "association") return;
     setDecisionBusy(item.id);
     try {
@@ -310,6 +310,14 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                       className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
                       Not now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void decideRelationship(item, "ambiguous")}
+                      disabled={decisionBusy === item.id}
+                      className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    >
+                      Insufficient evidence
                     </button>
                     <button
                       type="button"
