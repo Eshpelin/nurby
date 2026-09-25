@@ -44,6 +44,8 @@ class User(Base):
     # The app drops a new user straight in via /auth/bootstrap, then nags
     # them to claim the account (set email + password) which clears this.
     is_provisional: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Hash of the browser-bound install secret issued on first bootstrap.
+    bootstrap_secret_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # The invite key this user redeemed to create their account, if any. Lets

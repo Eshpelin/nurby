@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     backup_include_recordings: bool = False
     jwt_secret: str = _DEFAULT_JWT_SECRET
     jwt_expiry_hours: int = 24
+    # Explicitly insecure compatibility escape hatch for headless installs.
+    allow_open_admin: bool = False
     cors_origins: str = ""  # comma-separated additional origins
 
     # Starred-person recap

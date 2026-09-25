@@ -35,6 +35,18 @@ That is it. The `release` workflow then:
 
 ## How users consume releases
 
+### Bootstrap security
+
+The first browser that calls `/api/auth/bootstrap` receives an HttpOnly,
+SameSite-Strict install cookie. While the provisional owner is unclaimed,
+later bootstrap attempts must present that cookie; a different browser or
+device cannot obtain another admin token. Claim the account before moving to
+another device.
+
+Headless/kiosk deployments that intentionally need open bootstrap may set
+`NURBY_ALLOW_OPEN_ADMIN=1`. This is insecure on a reachable LAN or
+internet-facing deployment and should remain disabled by default.
+
 End users do not need to build anything. With the published images they
 pull and run:
 

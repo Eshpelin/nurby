@@ -1,7 +1,8 @@
+import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -99,7 +100,11 @@ async def initial_admin_setup(body: AdminSetup, db: AsyncSession = Depends(get_d
 
 
 @router.post("/bootstrap", response_model=TokenResponse, status_code=201)
-async def bootstrap(db: AsyncSession = Depends(get_db)):
+async def bootstrap(
+    request: Request = None,
+    response: Response = None,
+    db: AsyncSession = Depends(get_db),
+):
     """Drop a brand-new install straight in.
 
     On first run (no users) this auto-creates a provisional owner account
@@ -107,11 +112,9 @@ async def bootstrap(db: AsyncSession = Depends(get_db)):
     wall. The account is flagged ``is_provisional`` until the user claims
     it (sets a real email + password) via ``/auth/claim``.
 
-    Re-adoptable while unclaimed. if the only account is an unclaimed
-    provisional owner, a fresh visitor (no token. cleared cookies, new
-    browser) gets a session for that same owner instead of being locked
-    out. Once the account is claimed (real credentials), this returns 409
-    and the caller falls back to the login screen.
+    Re-adoption while unclaimed is limited to the installing browser by an
+    HttpOnly cookie. Once the account is claimed (real credentials), this
+    returns 409 and the caller falls back to the login screen.
     """
     # Serialize concurrent first-run requests. Without this, two tabs or a
     # double-fired client effect could both pass the count check and create
@@ -126,10 +129,21 @@ async def bootstrap(db: AsyncSession = Depends(get_db)):
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Setup already completed. An account exists.",
             )
-        # Only an unclaimed provisional owner exists. re-adopt it so a
-        # visitor who lost their token can still get into their own
-        # not-yet-secured install rather than being stranded at /login.
+        # Only an unclaimed provisional owner exists. Re-adoption is bound to
+        # the browser that created the install. OPEN_ADMIN is an explicit,
+        # documented escape hatch for headless/kiosk deployments.
         owner = min(users, key=lambda u: u.created_at)
+        install_secret = request.cookies.get("nurby_install_secret") if request is not None else None
+        expected = getattr(owner, "bootstrap_secret_hash", None)
+        valid_cookie = bool(
+            install_secret and expected
+            and secrets.compare_digest(hashlib.sha256(install_secret.encode()).hexdigest(), expected)
+        )
+        if not valid_cookie and not settings.allow_open_admin:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This Nurby is being set up on another device. Use the installing browser or claim the account.",
+            )
         token = create_access_token(owner.id)
         return TokenResponse(
             access_token=token, user=UserResponse.model_validate(owner)
@@ -138,6 +152,7 @@ async def bootstrap(db: AsyncSession = Depends(get_db)):
     # Random, unusable-by-design credentials. The user never sees these.
     # they exist only so the row is valid until the account is claimed.
     placeholder_email = f"owner+{secrets.token_hex(6)}@nurby.local"
+    install_secret = secrets.token_urlsafe(32)
     user = User(
         email=placeholder_email,
         display_name="Owner",
@@ -146,12 +161,18 @@ async def bootstrap(db: AsyncSession = Depends(get_db)):
         camera_access_mode="all",
         is_active=True,
         is_provisional=True,
+        bootstrap_secret_hash=hashlib.sha256(install_secret.encode()).hexdigest(),
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
 
     token = create_access_token(user.id)
+    if response is not None:
+        response.set_cookie(
+            "nurby_install_secret", install_secret,
+            httponly=True, secure=False, samesite="strict", max_age=60 * 60 * 24 * 30,
+        )
     return TokenResponse(access_token=token, user=UserResponse.model_validate(user))
 
 

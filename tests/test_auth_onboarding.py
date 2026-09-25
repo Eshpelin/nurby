@@ -17,11 +17,14 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+import hashlib
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
+from starlette.responses import Response
 
 from services.api.routes import auth as auth_routes
 from services.api.routes import cameras as camera_routes
@@ -30,6 +33,11 @@ from shared.schemas import AccountClaim, AdminSetup
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def _http(cookie: str | None = None):
+    headers = [] if cookie is None else [(b"cookie", f"nurby_install_secret={cookie}".encode())]
+    return Request({"type": "http", "headers": headers, "scheme": "http", "server": ("localhost", 4848)})
 
 
 class _FakeUser:
@@ -78,13 +86,15 @@ def test_bootstrap_creates_provisional_owner_on_fresh_install():
 
     db.refresh.side_effect = _refresh
 
-    token = _run(auth_routes.bootstrap(db=db))
+    response = Response()
+    token = _run(auth_routes.bootstrap(request=_http(), response=response, db=db))
 
     assert token.access_token
     assert token.user.role == "admin"
     assert token.user.is_provisional is True
     # A real, unique placeholder email was assigned.
     assert token.user.email.endswith("@nurby.local")
+    assert "nurby_install_secret=" in response.headers["set-cookie"]
     db.add.assert_called_once()
     db.commit.assert_awaited()
 
@@ -106,6 +116,8 @@ def test_bootstrap_readopts_unclaimed_provisional_owner():
     # A visitor who lost their token re-adopts the existing unclaimed owner
     # instead of being stranded. No new user is created.
     owner = _FakeUser(provisional=True)
+    secret = "install-secret"
+    owner.bootstrap_secret_hash = hashlib.sha256(secret.encode()).hexdigest()
     db = AsyncMock()
     db.add = MagicMock()
     db.execute.side_effect = [
@@ -113,10 +125,21 @@ def test_bootstrap_readopts_unclaimed_provisional_owner():
         _exec_result(all=[owner]),    # only an unclaimed provisional owner
     ]
 
-    token = _run(auth_routes.bootstrap(db=db))
+    token = _run(auth_routes.bootstrap(request=_http(secret), db=db))
     assert token.user.id == owner.id
     assert token.user.is_provisional is True
     db.add.assert_not_called()
+
+
+def test_bootstrap_rejects_unbound_browser_for_unclaimed_owner():
+    owner = _FakeUser(provisional=True)
+    owner.bootstrap_secret_hash = hashlib.sha256(b"install-secret").hexdigest()
+    db = AsyncMock()
+    db.execute.side_effect = [_exec_result(), _exec_result(all=[owner])]
+
+    with pytest.raises(HTTPException) as ei:
+        _run(auth_routes.bootstrap(request=_http(), db=db))
+    assert ei.value.status_code == 409
 
 
 # ── claim ────────────────────────────────────────────────────────────
