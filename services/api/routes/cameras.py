@@ -424,6 +424,24 @@ async def camera_action_timeline(
     return {"items": items, "count": len(items), "hours": hours}
 
 
+def _activity_detection_flags(person_detections: dict | None, object_detections: dict | None) -> tuple[bool, bool]:
+    """Return (has_person, has_non_person_object) for an activity bucket."""
+    person_detections = person_detections or {}
+    object_detections = object_detections or {}
+    faces = person_detections.get("faces", []) or []
+    bodies = person_detections.get("bodies", []) or []
+    tracks = person_detections.get("tracks", []) or []
+    objects = object_detections.get("objects", []) or []
+    has_person = bool(faces or bodies or tracks or any(
+        str(obj.get("label", "")).lower() == "person" for obj in objects if isinstance(obj, dict)
+    ))
+    has_non_person_object = any(
+        str(obj.get("label", "")).lower() not in {"person", "license_plate"}
+        for obj in objects if isinstance(obj, dict)
+    )
+    return has_person, has_non_person_object
+
+
 @router.get("/{camera_id}/activity-strip")
 async def camera_activity_strip(
     camera_id: uuid.UUID,
@@ -462,28 +480,37 @@ async def camera_activity_strip(
             ts = ts.replace(tzinfo=timezone.utc)
         return min(buckets - 1, max(0, int((ts - start).total_seconds() / bucket_s)))
 
+    # Only fetch the JSON fields needed for the strip.  Loading full
+    # Observation entities here also loads embeddings and other large payloads
+    # for a small visual summary.
     obs_rows = (
         await db.execute(
-            select(Observation)
+            select(Observation.started_at, Observation.person_detections, Observation.object_detections)
             .where(Observation.camera_id == camera_id)
             .where(Observation.started_at >= start)
             .order_by(Observation.started_at.asc())
         )
-    ).scalars().all()
+    ).all()
 
     person_counts = [0] * buckets
+    object_counts = [0] * buckets
     bucket_pids: list[set[str]] = [set() for _ in range(buckets)]
     person_seen: dict[str, dict] = {}
-    for o in obs_rows:
-        started = o.started_at
+    for started, person_detections, object_detections in obs_rows:
         if started.tzinfo is None:
             started = started.replace(tzinfo=timezone.utc)
         idx = _idx(started)
-        faces = (o.person_detections or {}).get("faces", []) or []
-        # A person channel means "a human was here", not "an observation
-        # existed" -- an observation can be a parcel or a car.
-        if faces:
+        person_detections = person_detections or {}
+        object_detections = object_detections or {}
+        faces = person_detections.get("faces", []) or []
+        has_person, has_non_person_object = _activity_detection_flags(person_detections, object_detections)
+        # A person channel means "a human was here", not "a face was
+        # recognised".  The object channel is the useful movement fallback
+        # when motion-series storage is disabled on a default install.
+        if has_person:
             person_counts[idx] += 1
+        if has_non_person_object:
+            object_counts[idx] += 1
         for f in faces:
             pid = f.get("person_id")
             if not pid:
@@ -509,6 +536,12 @@ async def camera_activity_strip(
     for bucket_ts, score in motion_rows:
         i = _idx(bucket_ts)
         motion_peaks[i] = max(motion_peaks[i], float(score or 0.0))
+
+    # MotionSample is opt-in and off by default.  Keep the API's existing
+    # `motion` contract, but use detected non-person objects as the fallback
+    # movement signal when there is no motion series in this window.
+    if not motion_rows:
+        motion_peaks = [float(count) for count in object_counts]
 
     peak = max(person_counts) or 1
     motion_peak = max(motion_peaks) or 1.0
