@@ -66,7 +66,7 @@ async def maybe_emit_recurrence_notification(
     already_notified = (
         await db.execute(
             select(Notification.id)
-            .where(Notification.message.startswith(marker))
+            .where(Notification.dedupe_key == marker)
             .limit(1)
         )
     ).scalar_one_or_none() is not None
@@ -77,10 +77,11 @@ async def maybe_emit_recurrence_notification(
     db.add(
         Notification(
             message=(
-                f"{marker} Same unknown {subject} has appeared on "
+                f"The same unknown {subject} has appeared on "
                 f"{len(days)} separate days. Review the linked recurrence "
                 "evidence before assigning an identity."
             ),
+            dedupe_key=marker,
             severity="warning",
             camera_id=camera_id,
             created_at=now,

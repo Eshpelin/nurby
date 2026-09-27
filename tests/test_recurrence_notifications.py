@@ -21,3 +21,10 @@ def test_recurrence_marker_is_stable_and_scoped_to_cluster():
     marker = recurrence_notification_marker("face", cluster_id)
     assert marker == f"recurring_unknown:face:{cluster_id}"
     assert marker != recurrence_notification_marker("body", cluster_id)
+
+
+def test_recurrence_marker_is_metadata_not_user_facing_copy():
+    cluster_id = uuid4()
+    marker = recurrence_notification_marker("face", cluster_id)
+    message = "The same unknown person has appeared on 3 separate days."
+    assert marker not in message

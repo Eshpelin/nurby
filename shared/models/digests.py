@@ -67,6 +67,9 @@ class Notification(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     message: Mapped[str] = mapped_column(Text, nullable=False)
+    # Optional producer-owned idempotency key. Kept separate from the
+    # user-facing message so deduplication metadata never leaks into alerts.
+    dedupe_key: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     severity: Mapped[str] = mapped_column(String(16), default="info")
     rule_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     camera_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
