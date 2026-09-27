@@ -175,6 +175,28 @@ async def test_deploy_already_installed_registers_synchronously():
 
 
 @pytest.mark.asyncio
+async def test_deploy_does_not_register_a_different_variant_as_installed():
+    async def fake_pull(base_url, model, job):
+        return True, "ok"
+
+    with patch.object(od, "_find_ollama_binary", return_value=None), \
+         patch.object(
+             od, "_detect_running",
+             new=AsyncMock(return_value=("http://fake:11434", ["gemma3:12b"])),
+         ), \
+         patch.object(od, "_pull_via_http", new=fake_pull), \
+         patch.object(od, "_register_provider", new=AsyncMock(return_value="ready")), \
+         patch.object(od, "_get_system_ram_gb", return_value=64.0), \
+         patch.object(od, "_get_disk_free_gb", return_value=500.0):
+        result = await od.deploy_model(od.DeployRequest(model="gemma3:4b"), make_user())
+        assert result.stage == "pulling"
+        assert result.already_installed is False
+        await od._current_job.task
+
+    assert od._current_job.snapshot().stage == "done"
+
+
+@pytest.mark.asyncio
 async def test_deploy_conflict_on_different_model():
     job = od.DeployJob("gemma3:12b")
     job.stage = "pulling"

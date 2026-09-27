@@ -778,18 +778,18 @@ async def deploy_model(
     # pull. Probe whichever URL this deploy will actually use.
     _seed_unsupported_families_from_version(await _probe_version(provider_url))
 
-    # Cheap path: model already present. Register synchronously so callers
-    # that don't poll (old settings panel behavior) still work.
-    if _model_installed(model_name, installed):
+    # Cheap path: the exact requested tag is already present. A family-level
+    # prefix match is not safe here: gemma3:12b cannot serve a provider that
+    # declares gemma3:4b, even though Ollama can reuse most layers during the
+    # subsequent pull.
+    if _installed_exact(model_name, installed):
         message = await _register_provider(model_name, provider_url)
-        exact = _installed_exact(model_name, installed)
         return DeployStatus(
             stage="done",
-            message=message if exact
-            else f"{message} (note: {model_name} was not present; the registered model may need a pull)",
+            message=message,
             model=model_name,
             progress=100.0,
-            already_installed=exact,
+            already_installed=True,
         )
 
     failure = _preflight(model_name)
