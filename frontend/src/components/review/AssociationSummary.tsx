@@ -114,8 +114,8 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
               <span className={`text-[10px] ${item.status === "established" ? "text-emerald-400" : "text-amber-300"}`}>
                 {item.user_confirmed ? "confirmed" : item.status === "candidate" ? "suggested" : item.status}
               </span>
-              {item.status === "candidate" && (
-                <Link href="/events" className="text-[10px] text-accent hover:underline">Review</Link>
+              {!item.user_confirmed && item.status !== "archived" && (
+                <Link href="/events" className="text-[10px] text-accent hover:underline">Review suggestion</Link>
               )}
               {item.user_confirmed && item.status === "established" && (
                 <button type="button" onClick={() => void changeDecision(item, "revoke")} className="text-[10px] text-muted-foreground hover:text-foreground">
