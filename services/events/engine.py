@@ -44,13 +44,13 @@ from shared.database import async_session
 from shared.default_rules import (
     DEFAULT_RULE_NAMES,
     default_rule_kwargs,
-    refresh_default_rule_messages,
+    refreshed_default_rule_messages,
 )
+from shared.models import Recording, Rule, RuleEvaluation
 from shared.redis_keys import (
     LEGACY_RULES_INVALIDATE_CHANNEL,
     rules_invalidate_channel,
 )
-from shared.models import Recording, Rule, RuleEvaluation
 
 # Redis pubsub channel that backend routes publish to whenever a rule
 # is created, updated, or deleted. The perception process listens and
@@ -265,7 +265,10 @@ class RuleEngine:
                 if last_fired and (now - last_fired) < rule.cooldown_seconds:
                     await self._record_evaluation(
                         rule, observation_data, "suppressed", "cooldown",
-                        {"cooldown_seconds": rule.cooldown_seconds, "remaining_seconds": max(0, rule.cooldown_seconds - (now - last_fired))},
+                        {
+                            "cooldown_seconds": rule.cooldown_seconds,
+                            "remaining_seconds": max(0, rule.cooldown_seconds - (now - last_fired)),
+                        },
                     )
                     continue
 
@@ -421,7 +424,12 @@ class RuleEngine:
                     if rule is None:
                         db.add(Rule(**default_rule_kwargs(name)))
                         dirty = True
-                    elif refresh_default_rule_messages(rule.name, rule.actions):
+                        continue
+                    # Assign back (see rules.py): in-place JSON mutation is
+                    # invisible to SQLAlchemy change tracking.
+                    rewritten = refreshed_default_rule_messages(rule.name, rule.actions)
+                    if rewritten is not None:
+                        rule.actions = rewritten
                         dirty = True
                 if dirty:
                     await db.commit()

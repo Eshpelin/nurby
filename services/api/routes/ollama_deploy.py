@@ -7,7 +7,9 @@ anything manually.
 
 import asyncio
 import logging
+import os
 import platform
+import re
 import shutil
 
 import httpx
@@ -40,7 +42,6 @@ def _find_ollama_binary() -> str | None:
     on_path = shutil.which("ollama")
     if on_path:
         return on_path
-    import os
     for path in _OLLAMA_FALLBACK_PATHS:
         if os.path.isfile(path) and os.access(path, os.X_OK):
             return path
@@ -126,7 +127,7 @@ def _parse_bytes_progress(text: str) -> tuple[int, int] | None:
     """(completed, total) bytes from an 'ollama pull' progress fragment
     like '1.2 GB/3.3 GB'. None when the fragment carries no byte pair.
     Pure, for tests."""
-    match = _re.search(
+    match = re.search(
         r"(\d+(?:\.\d+)?)\s*([KMGT]?B)\s*/\s*(\d+(?:\.\d+)?)\s*([KMGT]?B)",
         text,
     )
@@ -245,7 +246,7 @@ def _parse_version(version: str | None) -> tuple[int, ...] | None:
     """'0.18.4' -> (0, 18, 4); None when absent or unparseable."""
     if not version:
         return None
-    match = _re.match(r"\s*v?(\d+(?:\.\d+){0,3})", version)
+    match = re.match(r"\s*v?(\d+(?:\.\d+){0,3})", version)
     if not match:
         return None
     return tuple(int(part) for part in match.group(1).split("."))
@@ -313,20 +314,22 @@ def _recommend_model(ram_gb: float | None, installed: list[str] | None = None) -
             if _installed_exact(model["name"], installed):
                 return model["name"], True
         return "gemma3:4b", False
+    if not candidates:
+        # Every family is unsupported (a pathologically old Ollama): stop
+        # honestly with the historical default rather than min() on an
+        # empty list.
+        return "gemma3:4b", "gemma3:4b" in installed
     fit = [m for m in candidates if ram_gb >= m["ram_gb"] * 1.5]
     if not fit:
         # Nothing fits with headroom: the smallest model, installed first.
-        smallest = min(candidates, key=lambda m: m["ram_gb"]) if candidates else None
-        if smallest and _installed_exact(smallest["name"], installed):
+        smallest = min(candidates, key=lambda m: m["ram_gb"])
+        if _installed_exact(smallest["name"], installed):
             return smallest["name"], True
         return "gemma3:1b", "gemma3:1b" in installed
     for model in fit:  # catalog order is curated best-first
         if _installed_exact(model["name"], installed):
             return model["name"], True
     return fit[0]["name"], False
-
-
-import os
 
 
 def _candidate_urls() -> list[str]:
@@ -424,9 +427,7 @@ class DeployJob:
 
 _current_job: DeployJob | None = None
 
-import re as _re
-
-_PERCENT_RE = _re.compile(r"(\d{1,3})%")
+_PERCENT_RE = re.compile(r"(\d{1,3})%")
 
 
 async def _pull_via_http(base_url: str, model: str, job: DeployJob) -> tuple[bool, str]:
@@ -511,7 +512,7 @@ async def _pull_via_cli(ollama_path: str, model: str, job: DeployJob) -> tuple[b
     return True, "ok"
 
 
-_ANSI_RE = _re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][A-Za-z0-9]")
+_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][A-Za-z0-9]")
 
 
 def _extract_cli_error(raw: bytes) -> str:
@@ -784,7 +785,8 @@ async def deploy_model(
         exact = _installed_exact(model_name, installed)
         return DeployStatus(
             stage="done",
-            message=message if exact else f"{message} (note: {model_name} was not present; the registered model may need a pull)",
+            message=message if exact
+            else f"{message} (note: {model_name} was not present; the registered model may need a pull)",
             model=model_name,
             progress=100.0,
             already_installed=exact,

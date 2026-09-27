@@ -16,6 +16,9 @@ interface OnboardingMetrics {
   synthetic_only_count: number;
   median_seconds_to_first_useful: number | null;
   verified_by_goal: Record<string, number>;
+  // First-run wizard funnel counters (#293). Optional: the field is
+  // absent on responses from before the funnel existed.
+  funnel?: Record<string, number>;
 }
 
 function pct(rate: number): string {
@@ -64,16 +67,36 @@ export function OnboardingMetricsCard() {
     </div>
   );
 
+  const funnel = data.funnel ?? {};
+  const funnelRow: Array<[string, number]> = [
+    ["Wizard shown", funnel.wizard_shown ?? 0],
+    ["Chose magic", funnel.magic_clicked ?? 0],
+    ["Chose manual", funnel.manual_clicked ?? 0],
+    ["Completed", funnel.wizard_completed ?? 0],
+  ];
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {stat("With a goal", String(data.users_with_preferences))}
-      {stat("Configured", String(data.configured_count))}
-      {stat("Verified", String(data.verified_count))}
-      {stat("Verified rate", pct(data.verified_rate))}
-      {stat("Median to first useful", minutes(data.median_seconds_to_first_useful))}
-      {stat("Abandoned (7d+)", String(data.abandoned_count))}
-      {stat("Synthetic-only", String(data.synthetic_only_count))}
-      {stat("Paused", String(data.paused_count))}
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {stat("With a goal", String(data.users_with_preferences))}
+        {stat("Configured", String(data.configured_count))}
+        {stat("Verified", String(data.verified_count))}
+        {stat("Verified rate", pct(data.verified_rate))}
+        {stat("Median to first useful", minutes(data.median_seconds_to_first_useful))}
+        {stat("Abandoned (7d+)", String(data.abandoned_count))}
+        {stat("Synthetic-only", String(data.synthetic_only_count))}
+        {stat("Paused", String(data.paused_count))}
+      </div>
+      {data.funnel !== undefined && (
+        <div>
+          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
+            First-run wizard funnel
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {funnelRow.map(([label, value]) => stat(label, String(value)))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
