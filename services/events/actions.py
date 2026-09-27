@@ -1048,6 +1048,7 @@ async def _execute_vlm_call(action, observation_data, rule, event_id, ctx):
         observation_data.get("camera_id"),
         estimated_cost_cents=estimated_cost,
         estimated_tokens=estimated_in + estimated_out,
+        rule_id=str(getattr(rule, "id", "")) if rule is not None else None,
     )
     if not budget.allowed:
         err = f"Perception budget reached: {budget.reason}"

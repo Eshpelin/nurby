@@ -50,6 +50,19 @@ def test_perception_budget_blocks_the_call_that_would_cross_limit():
     assert "cost budget" in result.reason
 
 
+def test_rule_budget_uses_the_same_hard_block_boundary():
+    result = perception_budget_decision(
+        used_cost_cents=99,
+        used_tokens=0,
+        estimated_cost_cents=2,
+        estimated_tokens=1,
+        cost_limit_cents=100,
+        token_limit=0,
+    )
+    assert result.allowed is False
+    assert result.stage == "blocked"
+
+
 def test_perception_budget_zero_limits_are_disabled():
     result = perception_budget_decision(
         used_cost_cents=999, used_tokens=999, estimated_cost_cents=5,

@@ -159,6 +159,10 @@ DEFAULTS: dict[str, Any] = {
     # would cross a limit is blocked before the provider request starts.
     "perception_daily_cost_budget_cents": 0,
     "perception_daily_token_budget": 0,
+    # Optional per-rule daily perception budgets. Zero disables rule-level
+    # enforcement; camera-level limits still apply independently.
+    "perception_daily_cost_budget_cents_per_rule": 0,
+    "perception_daily_token_budget_per_rule": 0,
     "perception_budget_warn_threshold_pct": 80,
     # ── VLM backlog (Redis-backed per-camera buffer) ─────────────────
     # Per-camera capacity of the VLM job backlog. 50 covers a typical

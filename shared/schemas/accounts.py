@@ -68,6 +68,11 @@ class SystemSettingsResponse(BaseModel):
     setup_checklist_dismissed: bool = False
     vlm_enrichment_enabled: bool = True
     vlm_enrichment_budget_minutes_per_hour: int = 20
+    perception_daily_cost_budget_cents: int = 0
+    perception_daily_token_budget: int = 0
+    perception_daily_cost_budget_cents_per_rule: int = 0
+    perception_daily_token_budget_per_rule: int = 0
+    perception_budget_warn_threshold_pct: int = 80
     vehicle_appearance_match_min_similarity: float = 0.90
     guardian_enabled: bool = True
     guardian_free_delay_seconds: int = 1800
@@ -124,6 +129,11 @@ class SystemSettingsUpdate(BaseModel):
     setup_checklist_dismissed: bool | None = None
     vlm_enrichment_enabled: bool | None = None
     vlm_enrichment_budget_minutes_per_hour: int | None = Field(default=None, ge=0, le=600)
+    perception_daily_cost_budget_cents: int | None = Field(default=None, ge=0, le=10_000_000)
+    perception_daily_token_budget: int | None = Field(default=None, ge=0, le=100_000_000)
+    perception_daily_cost_budget_cents_per_rule: int | None = Field(default=None, ge=0, le=10_000_000)
+    perception_daily_token_budget_per_rule: int | None = Field(default=None, ge=0, le=100_000_000)
+    perception_budget_warn_threshold_pct: int | None = Field(default=None, ge=1, le=100)
     vehicle_appearance_match_min_similarity: float | None = Field(default=None, ge=0.5, le=1.0)
     guardian_enabled: bool | None = None
     guardian_free_delay_seconds: int | None = Field(default=None, ge=0, le=24 * 3600)

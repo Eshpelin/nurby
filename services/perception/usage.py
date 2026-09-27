@@ -85,16 +85,23 @@ def combine_perception_usage(
 
 async def check_perception_budget(
     camera_id: str | None, *, estimated_cost_cents: int, estimated_tokens: int,
+    rule_id: str | None = None,
 ) -> PerceptionBudgetDecision:
-    """Read today's camera ledger and decide whether one call may start."""
+    """Read today's camera and optional rule ledgers before one call starts."""
     from shared.app_settings import get_setting
     from shared.database import async_session
     from shared.models import Observation, ObservationVlmPass, PerceptionVlmUsage
 
     cost_limit = int(await get_setting("perception_daily_cost_budget_cents") or 0)
     token_limit = int(await get_setting("perception_daily_token_budget") or 0)
+    rule_cost_limit = int(await get_setting("perception_daily_cost_budget_cents_per_rule") or 0)
+    rule_token_limit = int(await get_setting("perception_daily_token_budget_per_rule") or 0)
     warn_pct = int(await get_setting("perception_budget_warn_threshold_pct") or 80)
-    if not camera_id or (cost_limit <= 0 and token_limit <= 0):
+    if not camera_id or (
+        cost_limit <= 0 and token_limit <= 0 and (
+            not rule_id or (rule_cost_limit <= 0 and rule_token_limit <= 0)
+        )
+    ):
         return perception_budget_decision(
             used_cost_cents=0, used_tokens=0,
             estimated_cost_cents=estimated_cost_cents, estimated_tokens=estimated_tokens,
@@ -134,12 +141,50 @@ async def check_perception_budget(
         estimated_cost_cents=estimated_cost_cents, estimated_tokens=estimated_tokens,
         cost_limit_cents=cost_limit, token_limit=token_limit, warn_threshold_pct=warn_pct,
     )
+    if rule_id and (rule_cost_limit > 0 or rule_token_limit > 0):
+        try:
+            rule_uuid = uuid.UUID(str(rule_id))
+        except (TypeError, ValueError, AttributeError):
+            rule_uuid = None
+        if rule_uuid is not None:
+            async with async_session() as db:
+                rule_row = (await db.execute(
+                    select(
+                        func.coalesce(func.sum(PerceptionVlmUsage.cost_cents), 0),
+                        func.coalesce(func.sum(PerceptionVlmUsage.tokens_in + PerceptionVlmUsage.tokens_out), 0),
+                    ).where(
+                        PerceptionVlmUsage.rule_id == rule_uuid,
+                        PerceptionVlmUsage.created_at >= start,
+                    )
+                )).one()
+            rule_decision = perception_budget_decision(
+                used_cost_cents=rule_row[0], used_tokens=rule_row[1],
+                estimated_cost_cents=estimated_cost_cents,
+                estimated_tokens=estimated_tokens,
+                cost_limit_cents=rule_cost_limit,
+                token_limit=rule_token_limit,
+                warn_threshold_pct=warn_pct,
+            )
+            if rule_decision.stage in {"warn", "blocked"}:
+                await _emit_budget_notification(camera_uuid, rule_decision, rule_uuid)
+            if not rule_decision.allowed:
+                return PerceptionBudgetDecision(
+                    False,
+                    "blocked",
+                    f"Rule {rule_uuid} budget reached: {rule_decision.reason}",
+                    rule_decision.projected_cost_cents,
+                    rule_decision.projected_tokens,
+                )
     if decision.stage in {"warn", "blocked"}:
         await _emit_budget_notification(camera_uuid, decision)
     return decision
 
 
-async def _emit_budget_notification(camera_id: uuid.UUID, decision: PerceptionBudgetDecision) -> None:
+async def _emit_budget_notification(
+    camera_id: uuid.UUID,
+    decision: PerceptionBudgetDecision,
+    rule_id: uuid.UUID | None = None,
+) -> None:
     """Create one durable in-app budget notice per camera/stage/day.
 
     This is deliberately best-effort: a notification write must never turn a
@@ -151,12 +196,18 @@ async def _emit_budget_notification(camera_id: uuid.UUID, decision: PerceptionBu
 
     now = datetime.now(timezone.utc)
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    marker = "Camera AI budget warning:" if decision.stage == "warn" else "Camera AI budget reached:"
+    marker = (
+        "Rule AI budget warning:" if decision.stage == "warn" and rule_id else
+        "Rule AI budget reached:" if rule_id else
+        "Camera AI budget warning:" if decision.stage == "warn" else
+        "Camera AI budget reached:"
+    )
     try:
         async with async_session() as db:
             exists = await db.scalar(
                 select(Notification.id).where(
                     Notification.camera_id == camera_id,
+                    Notification.rule_id == rule_id,
                     Notification.created_at >= start,
                     Notification.message.startswith(marker),
                 ).limit(1)
@@ -166,6 +217,7 @@ async def _emit_budget_notification(camera_id: uuid.UUID, decision: PerceptionBu
             notification = Notification(
                 message=f"{marker} {decision.reason}",
                 severity="warning",
+                rule_id=rule_id,
                 camera_id=camera_id,
             )
             db.add(notification)

@@ -30,19 +30,59 @@ function dollars(cents: number) {
 }
 
 export function CostUsageCard() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const [report, setReport] = useState<UsageReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [budget, setBudget] = useState({ cameraCents: 0, ruleCents: 0, cameraTokens: 0, ruleTokens: 0 });
+  const [budgetSaving, setBudgetSaving] = useState(false);
+  const [budgetSaved, setBudgetSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    authFetch("/api/agent/usage/report?days=7")
-      .then(async (response) => response.ok ? await response.json() as UsageReport : null)
-      .then((value) => { if (!cancelled) setReport(value); })
+    Promise.all([
+      authFetch("/api/agent/usage/report?days=7"),
+      authFetch("/api/system/settings"),
+    ])
+      .then(async ([reportResponse, settingsResponse]) => {
+        const nextReport = reportResponse.ok ? await reportResponse.json() as UsageReport : null;
+        if (!cancelled) setReport(nextReport);
+        if (settingsResponse.ok) {
+          const settings = await settingsResponse.json();
+          if (!cancelled) setBudget({
+            cameraCents: Number(settings.perception_daily_cost_budget_cents || 0),
+            ruleCents: Number(settings.perception_daily_cost_budget_cents_per_rule || 0),
+            cameraTokens: Number(settings.perception_daily_token_budget || 0),
+            ruleTokens: Number(settings.perception_daily_token_budget_per_rule || 0),
+          });
+        }
+      })
       .catch(() => { if (!cancelled) setReport(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [authFetch]);
+
+  const saveBudget = async () => {
+    if (user?.role !== "admin" || budgetSaving) return;
+    setBudgetSaving(true);
+    try {
+      const response = await authFetch("/api/system/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          perception_daily_cost_budget_cents: Math.max(0, budget.cameraCents),
+          perception_daily_cost_budget_cents_per_rule: Math.max(0, budget.ruleCents),
+          perception_daily_token_budget: Math.max(0, budget.cameraTokens),
+          perception_daily_token_budget_per_rule: Math.max(0, budget.ruleTokens),
+        }),
+      });
+      if (response.ok) {
+        setBudgetSaved(true);
+        window.setTimeout(() => setBudgetSaved(false), 1800);
+      }
+    } finally {
+      setBudgetSaving(false);
+    }
+  };
 
   return (
     <div className="rounded-lg border border-border bg-card">
@@ -94,6 +134,34 @@ export function CostUsageCard() {
                   <div key={row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} calls</span></div>
                 ))}
               </div>
+            </div>
+          )}
+          {user?.role === "admin" && (
+            <div className="border-t border-border pt-3 space-y-2">
+              <div className="text-xs font-medium">Perception guardrails</div>
+              <p className="text-[11px] text-muted-foreground">Set daily limits in cents and tokens. Zero disables that limit; rule limits prevent one alert rule from consuming the whole camera budget.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ["cameraCents", "Camera cents/day"],
+                  ["ruleCents", "Rule cents/day"],
+                  ["cameraTokens", "Camera tokens/day"],
+                  ["ruleTokens", "Rule tokens/day"],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="text-[11px] text-muted-foreground">
+                    {label}
+                    <input
+                      type="number"
+                      min={0}
+                      value={budget[key]}
+                      onChange={(event) => setBudget((current) => ({ ...current, [key]: Number(event.target.value) || 0 }))}
+                      className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                    />
+                  </label>
+                ))}
+              </div>
+              <button type="button" onClick={saveBudget} disabled={budgetSaving} className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50">
+                {budgetSaved ? "Saved" : budgetSaving ? "Saving." : "Save guardrails"}
+              </button>
             </div>
           )}
           <p className="text-[11px] text-muted-foreground">{report.pricing_note} {report.attribution_note}</p>
