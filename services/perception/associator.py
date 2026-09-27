@@ -148,6 +148,34 @@ def evidence_balance(supporting: int, contradictory: int) -> tuple[float | None,
     return score, explanation
 
 
+def evidence_policy(
+    supporting: int,
+    contradictory: int,
+    *,
+    status: str,
+    source: str,
+    user_confirmed: bool,
+) -> dict[str, object]:
+    """Describe how an association score must be interpreted by clients.
+
+    The stored score is deliberately an evidence balance, not a probability.
+    Keeping these semantics beside the projection prevents a UI from showing
+    a percentage that users could reasonably mistake for model certainty.
+    """
+    score, _ = evidence_balance(supporting, contradictory)
+    return {
+        "score": score,
+        "score_kind": "support_balance",
+        "score_is_calibrated_probability": False,
+        "promotion_basis": "distinct_local_calendar_days",
+        "human_review_required": (
+            source == "learned" and not user_confirmed and status != "rejected"
+        ),
+        "supporting_evidence_count": max(0, int(supporting or 0)),
+        "contradictory_evidence_count": max(0, int(contradictory or 0)),
+    }
+
+
 def contradiction_provenance(
     edge: EntityAssociation,
     journey: Journey,

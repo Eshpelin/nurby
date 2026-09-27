@@ -16,14 +16,15 @@ from services.perception import associator as assoc_mod
 from services.perception.associator import (
     ASSOCIABLE_SUBJECT_KINDS,
     bump,
-    fold,
+    cooccurrence_metrics,
     evidence_balance,
+    evidence_policy,
+    fold,
     journey_camera_ids,
+    journeys_cooccur,
     local_buckets,
     next_status,
     should_archive_association,
-    journeys_cooccur,
-    cooccurrence_metrics,
     vehicle_visit_timing,
     vehicles_in,
 )
@@ -169,6 +170,28 @@ def test_evidence_balance_is_explicitly_not_a_probability():
     score, explanation = evidence_balance(3, 1)
     assert score == 0.75
     assert "not a calibrated probability" in explanation
+
+
+def test_evidence_policy_exposes_safe_score_semantics_and_review_requirement():
+    policy = evidence_policy(3, 1, status="candidate", source="learned", user_confirmed=False)
+    assert policy == {
+        "score": 0.75,
+        "score_kind": "support_balance",
+        "score_is_calibrated_probability": False,
+        "promotion_basis": "distinct_local_calendar_days",
+        "human_review_required": True,
+        "supporting_evidence_count": 3,
+        "contradictory_evidence_count": 1,
+    }
+
+
+def test_declared_and_rejected_associations_do_not_claim_human_review_is_required():
+    assert not evidence_policy(1, 0, status="established", source="declared", user_confirmed=False)[
+        "human_review_required"
+    ]
+    assert not evidence_policy(1, 0, status="rejected", source="learned", user_confirmed=False)[
+        "human_review_required"
+    ]
 
 
 def test_ambiguous_claim_requires_review_before_repromotion():

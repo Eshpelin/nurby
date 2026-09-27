@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.perception.associator import evidence_policy
 from shared.auth import get_current_user
 from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.database import get_db
@@ -493,6 +494,13 @@ async def list_review_items(
                     "first_seen_at": association.first_seen_at,
                     "last_seen_at": association.last_seen_at,
                     "camera_histogram": association.camera_histogram or {},
+                    "evidence_policy": evidence_policy(
+                        getattr(association, "supporting_evidence_count", association.evidence_count),
+                        getattr(association, "contradictory_evidence_count", 0),
+                        status=association.status,
+                        source=association.source,
+                        user_confirmed=association.user_confirmed,
+                    ),
                 },
                 provenance={"source": association.source, "relation": association.relation},
             ))
@@ -582,6 +590,13 @@ async def list_entity_associations(
             "contradictory_evidence_count": getattr(row, "contradictory_evidence_count", 0),
             "confidence_score": row.confidence_score,
             "decision_explanation": row.decision_explanation,
+            "evidence_policy": evidence_policy(
+                getattr(row, "supporting_evidence_count", row.evidence_count),
+                getattr(row, "contradictory_evidence_count", 0),
+                status=row.status,
+                source=row.source,
+                user_confirmed=row.user_confirmed,
+            ),
             "distinct_days": row.distinct_days,
             "first_seen_at": row.first_seen_at,
             "last_seen_at": row.last_seen_at,
@@ -844,6 +859,13 @@ async def get_relationship_suggestion(
         "contradictory_evidence_count": getattr(association, "contradictory_evidence_count", 0),
         "confidence_score": association.confidence_score,
         "decision_explanation": association.decision_explanation,
+        "evidence_policy": evidence_policy(
+            getattr(association, "supporting_evidence_count", association.evidence_count),
+            getattr(association, "contradictory_evidence_count", 0),
+            status=association.status,
+            source=association.source,
+            user_confirmed=association.user_confirmed,
+        ),
         "distinct_days": association.distinct_days,
         "first_seen_at": association.first_seen_at,
         "last_seen_at": association.last_seen_at,
