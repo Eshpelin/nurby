@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supportedLocales, translate, type Locale } from "@/lib/i18n";
+import { setDisplayLocale } from "@/lib/time";
 
 export function LocaleSelector() {
   const { user, authFetch } = useAuth();
@@ -10,8 +11,15 @@ export function LocaleSelector() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  useEffect(() => {
+    setDisplayLocale((user?.locale as Locale) || "en");
+    if (typeof document !== "undefined") document.documentElement.lang = (user?.locale as Locale) || "en";
+  }, [user?.locale]);
+
   const change = async (next: Locale) => {
     setLocale(next);
+    setDisplayLocale(next);
+    if (typeof document !== "undefined") document.documentElement.lang = next;
     setSaving(true);
     setSaved(false);
     try {

@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { setDisplayTimezone } from "@/lib/time";
+import { setDisplayLocale, setDisplayTimezone } from "@/lib/time";
 
 export interface User {
   id: string;
@@ -119,6 +119,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     tokenRef.current = token;
   }, [token]);
+
+  useEffect(() => {
+    const next = user?.locale || "en";
+    setDisplayLocale(next);
+    if (typeof document !== "undefined") document.documentElement.lang = next;
+  }, [user?.locale]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem(TOKEN_KEY);

@@ -14,6 +14,57 @@ export type TimeAgoOptions = {
   seconds?: boolean;
 };
 
+const LOCALE_STORAGE_KEY = "nurby.locale";
+
+let displayLocale: string | undefined = (() => {
+  if (typeof window === "undefined") return undefined;
+  try {
+    return window.localStorage.getItem(LOCALE_STORAGE_KEY) || undefined;
+  } catch {
+    return undefined;
+  }
+})();
+
+/** Set the locale used by shared date/number formatting helpers. */
+export function setDisplayLocale(locale: string | null | undefined): void {
+  if (!locale || locale === displayLocale) return;
+  displayLocale = locale;
+  try {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  } catch {
+    /* private mode: in-memory only */
+  }
+}
+
+export function getDisplayLocale(): string | undefined {
+  return displayLocale;
+}
+
+function locale(): string | undefined {
+  return displayLocale;
+}
+
+/** Locale-aware number formatting for counts, sizes, and token totals. */
+export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
+  return new Intl.NumberFormat(locale(), options).format(value);
+}
+
+/**
+ * Format a count with caller-provided translated singular/plural labels.
+ * Intl.PluralRules chooses the grammatical form; it never translates the
+ * labels itself, so callers keep control of the product vocabulary.
+ */
+export function formatCount(
+  count: number,
+  one: string,
+  other: string,
+  localeOverride?: string,
+): string {
+  const active = localeOverride || locale();
+  const category = new Intl.PluralRules(active).select(count);
+  return `${new Intl.NumberFormat(active).format(count)} ${category === "one" ? one : other}`;
+}
+
 export function timeAgo(
   iso: string | null | undefined,
   opts: TimeAgoOptions = {}
@@ -105,14 +156,14 @@ export function formatWith(
 ): string {
   const d = _date(iso);
   if (!d) return _raw(iso);
-  return d.toLocaleString([], tzOpts(options));
+  return d.toLocaleString(locale(), tzOpts(options));
 }
 
 /** Clock only, e.g. "2:30 PM". */
 export function formatTime(iso: TimeInput): string {
   const d = _date(iso);
   if (!d) return _raw(iso);
-  return d.toLocaleTimeString([], tzOpts({ hour: "numeric", minute: "2-digit" }));
+  return d.toLocaleTimeString(locale(), tzOpts({ hour: "numeric", minute: "2-digit" }));
 }
 
 /** Calendar date, e.g. "Jun 3, 2026". Omits the year when it is the
@@ -125,7 +176,7 @@ export function formatDate(iso: TimeInput): string {
   const yearIn = (x: Date) =>
     x.toLocaleDateString("en-US", tzOpts({ year: "numeric" }));
   const sameYear = yearIn(d) === yearIn(new Date());
-  return d.toLocaleDateString([], tzOpts({
+  return d.toLocaleDateString(locale(), tzOpts({
     month: "short",
     day: "numeric",
     ...(sameYear ? {} : { year: "numeric" }),
