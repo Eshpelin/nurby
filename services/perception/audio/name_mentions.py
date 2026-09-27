@@ -115,9 +115,21 @@ async def _nearby_subjects(
     ).scalars().all() if person_ids else []
     names = {str(person.id): (person.nickname or person.display_name) for person in people}
 
+    return _visual_subjects(rows, names)
+
+
+def _visual_subjects(rows, names: dict[str, str]) -> list[dict[str, object]]:
+    """Collect nearby face/person/body anchors without choosing a winner.
+
+    A transcript may overlap several subjects.  Returning every distinct
+    anchor keeps the resulting name hypotheses explicitly ambiguous instead
+    of silently assigning the spoken name to whichever detection was visited
+    first.  ``rows`` are already restricted to the transcript's camera.
+    """
     subjects: dict[tuple[str, str], dict[str, object]] = {}
     for observation in rows:
-        for face in ((observation.person_detections or {}).get("faces") or []):
+        detections = observation.person_detections or {}
+        for face in detections.get("faces") or []:
             person_id = face.get("person_id")
             cluster_id = face.get("cluster_id")
             if person_id and str(person_id) in names:
@@ -126,6 +138,21 @@ async def _nearby_subjects(
                 key = ("cluster", str(cluster_id))
             else:
                 continue
+            subject = subjects.setdefault(key, {
+                "kind": key[0],
+                "key": key[1],
+                "observation_ids": [],
+            })
+            if str(observation.id) not in subject["observation_ids"]:
+                subject["observation_ids"].append(str(observation.id))
+        # Body-only detections are valid visual anchors when no face was
+        # available.  They use the same anonymous cluster kind as face
+        # clusters so existing association/review contracts remain stable.
+        for body in detections.get("bodies") or []:
+            body_cluster_id = body.get("body_cluster_id")
+            if not body_cluster_id:
+                continue
+            key = ("cluster", str(body_cluster_id))
             subject = subjects.setdefault(key, {
                 "kind": key[0],
                 "key": key[1],

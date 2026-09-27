@@ -1,6 +1,12 @@
-"""Conservative transcript name-mention parsing (#255)."""
+"""Conservative transcript name-mention parsing (#255/#261)."""
 
-from services.perception.audio.name_mentions import extract_name_mentions, timing_for_span
+from types import SimpleNamespace
+
+from services.perception.audio.name_mentions import (
+    _visual_subjects,
+    extract_name_mentions,
+    timing_for_span,
+)
 
 
 def test_direct_address_is_a_candidate():
@@ -44,3 +50,29 @@ def test_timing_for_span_returns_only_overlapping_words():
     result = timing_for_span(words, text, int(mention["span_start"]), int(mention["span_end"]))
 
     assert [item["word"] for item in result] == ["Hey", "Simon"]
+
+
+def test_visual_subjects_include_body_only_clusters_without_picking_a_winner():
+    rows = [
+        SimpleNamespace(
+            id="obs-1",
+            person_detections={
+                "faces": [{"cluster_id": "face-1"}],
+                "bodies": [{"body_cluster_id": "body-1"}, {"body_cluster_id": "body-2"}],
+            },
+        ),
+        SimpleNamespace(
+            id="obs-2",
+            person_detections={"bodies": [{"body_cluster_id": "body-1"}]},
+        ),
+    ]
+
+    subjects = _visual_subjects(rows, {})
+
+    assert {(item["kind"], item["key"]) for item in subjects} == {
+        ("cluster", "face-1"),
+        ("cluster", "body-1"),
+        ("cluster", "body-2"),
+    }
+    body_one = next(item for item in subjects if item["key"] == "body-1")
+    assert body_one["observation_ids"] == ["obs-1", "obs-2"]
