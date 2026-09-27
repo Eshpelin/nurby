@@ -67,12 +67,6 @@ export default function MqttSection() {
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (!enabled) return;
-    const timer = window.setInterval(refreshStatus, 15000);
-    return () => window.clearInterval(timer);
-  }, [enabled, refreshStatus]);
-
   const patch = useCallback(
     async (body: Record<string, unknown>) => {
       setSaving(true);
@@ -101,6 +95,12 @@ export default function MqttSection() {
       /* ignore */
     }
   }, [authFetch]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const timer = window.setInterval(refreshStatus, 15000);
+    return () => window.clearInterval(timer);
+  }, [enabled, refreshStatus]);
 
   const toggle = async () => {
     const next = !enabled;
