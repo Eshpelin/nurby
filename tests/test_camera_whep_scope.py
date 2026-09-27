@@ -99,3 +99,15 @@ def test_whep_forwards_only_an_authorized_camera(monkeypatch):
 
     assert response.status_code == 201
     assert response.content == b"answer"
+
+
+def test_hls_rejects_foreign_camera_before_relay(monkeypatch):
+    db = _DB()
+    relay = AsyncMock()
+    monkeypatch.setattr(cameras.httpx, "AsyncClient", relay)
+
+    with _client(db) as client:
+        response = client.get(f"/cameras/{db.foreign_camera}/hls/index.m3u8")
+
+    assert response.status_code == 404
+    relay.assert_not_awaited()

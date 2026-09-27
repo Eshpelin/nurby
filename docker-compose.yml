@@ -38,11 +38,11 @@ services:
     image: bluenviron/mediamtx:latest
     restart: unless-stopped
     ports:
-      - "8554:8554"       # RTSP
-      - "8889:8889"       # WebRTC HTTP (WHIP/WHEP)
+      - "127.0.0.1:8554:8554"       # RTSP (local development/ingestion only)
+      - "127.0.0.1:8889:8889"       # WebRTC HTTP (API proxy is the client path)
       - "8189:8189/udp"   # WebRTC ICE media
-      - "8888:8888"       # HLS
-      - "9997:9997"       # API
+      - "127.0.0.1:8888:8888"       # HLS (API proxy is the client path)
+      - "127.0.0.1:9997:9997"       # MediaMTX API (local diagnostics only)
     environment:
       # Advertise 127.0.0.1 as an extra ICE host candidate so the host
       # browser can reach WebRTC media without needing the docker bridge
@@ -70,6 +70,7 @@ services:
       NURBY_INSTANCE_ID: ${COMPOSE_PROJECT_NAME:-nurby}
       MEDIAMTX_API_URL: http://mediamtx:9997
       MEDIAMTX_HTTP_URL: http://mediamtx:8889
+      MEDIAMTX_HLS_URL: http://mediamtx:8888
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
       AUDIO_STORAGE_PATH: /data/audio

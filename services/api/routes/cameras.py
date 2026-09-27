@@ -6,7 +6,7 @@ import platform
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import cv2
 import httpx
@@ -343,6 +343,41 @@ async def proxy_whep(
     if relay.headers.get("content-type"):
         headers["content-type"] = relay.headers["content-type"]
     return Response(content=relay.content, status_code=relay.status_code, headers=headers)
+
+
+@router.get("/{camera_id}/hls/{resource:path}")
+async def proxy_hls(
+    camera_id: uuid.UUID,
+    resource: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Proxy HLS playlists/segments through the same camera ACL as WHEP."""
+    allowed = await allowed_camera_ids(current_user, db)
+    if allowed is not ALL and camera_id not in allowed:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    camera = await db.get(Camera, camera_id)
+    if camera is None:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    from services.ingestion.mediamtx_mux import mux_slug
+
+    slug = mux_slug(camera.id, camera.stream_type, camera.stream_url, camera.webcam_device)
+    if not slug or not resource or ".." in resource.split("/"):
+        raise HTTPException(status_code=404, detail="HLS resource not found")
+    relay_url = (
+        f"{settings.mediamtx_hls_url.rstrip('/')}/"
+        f"{quote(slug, safe='')}/{quote(resource.lstrip('/'), safe='/')}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            relay = await client.get(relay_url)
+    except httpx.HTTPError as exc:
+        logger.warning("HLS relay unavailable for camera %s: %s", camera_id, exc)
+        raise HTTPException(status_code=503, detail="Live relay unavailable") from exc
+    if relay.status_code >= 400:
+        raise HTTPException(status_code=503, detail="Live relay rejected the resource")
+    content_type = relay.headers.get("content-type", "application/octet-stream")
+    return Response(content=relay.content, status_code=relay.status_code, media_type=content_type.split(";", 1)[0])
 
 
 @router.get("/personas")

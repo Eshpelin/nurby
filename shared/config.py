@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     # API-side WHEP proxy target. Browser clients never need direct access to
     # the MediaMTX HTTP port; Docker overrides this to http://mediamtx:8889.
     mediamtx_http_url: str = "http://localhost:8889"
+    mediamtx_hls_url: str = "http://localhost:8888"
     mediamtx_rtsp_url: str = "rtsp://localhost:8554"  # target for webcam bridge publishes
     # Webcam bridge. spawns ffmpeg against local camera devices. Runs on the
     # host that physically owns the camera. Must be disabled inside the

@@ -50,10 +50,8 @@ class _CameraLiveViewState extends ConsumerState<CameraLiveView> {
 
   String? _hlsUrl() {
     final base = ref.read(serverConfigProvider).baseUrl;
-    final name = _streamName;
-    if (base == null || name == null) return null;
-    final uri = Uri.parse(base);
-    return '${uri.scheme}://${uri.host}:8888/$name/index.m3u8';
+    if (base == null) return null;
+    return '$base/api/cameras/${widget.camera.id}/hls/index.m3u8';
   }
 
   @override
