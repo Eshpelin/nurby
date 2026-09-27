@@ -263,6 +263,7 @@ def test_set_speaker_records_manual_source_and_audit(monkeypatch):
     audits = [a for a in db.added if type(a).__name__ == "AudioAuditLog"]
     assert len(audits) == 1
     assert audits[0].field == "transcript_speaker"
+    assert audits[0].transcript_id == tx.id
     assert audits[0].new_value == str(person.id)
     assert db.committed is True
 
@@ -293,6 +294,7 @@ def test_clear_speaker_returns_to_unattributed(monkeypatch):
     assert len(audits) == 1
     assert audits[0].old_value == str(person.id)
     assert audits[0].new_value is None
+    assert audits[0].transcript_id == tx.id
 
 
 def test_set_speaker_unknown_person_is_404(monkeypatch):

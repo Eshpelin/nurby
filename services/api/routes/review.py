@@ -24,6 +24,7 @@ from shared.database import get_db
 from shared.models import (
     AssociationEvidence,
     AssociationReviewEvent,
+    AudioAuditLog,
     BodyCluster,
     BodyClusterSample,
     Camera,
@@ -849,6 +850,36 @@ async def get_relationship_suggestion(
                 else None
             ),
         })
+    transcript_ids = {
+        uuid.UUID(str(item["metadata"]["transcript_id"]))
+        for item in evidence
+        if item.get("metadata", {}).get("transcript_id")
+    }
+    transcript_audits: dict[uuid.UUID, list[dict]] = {}
+    if transcript_ids:
+        audit_rows = (
+            await db.execute(
+                select(AudioAuditLog)
+                .where(AudioAuditLog.transcript_id.in_(transcript_ids))
+                .order_by(AudioAuditLog.created_at.desc())
+            )
+        ).scalars().all()
+        for audit in audit_rows:
+            transcript_audits.setdefault(audit.transcript_id, []).append({
+                "id": str(audit.id),
+                "field": audit.field,
+                "old_value": audit.old_value,
+                "new_value": audit.new_value,
+                "created_at": audit.created_at,
+            })
+    for item in evidence:
+        transcript_id = item.get("metadata", {}).get("transcript_id")
+        if transcript_id:
+            try:
+                item["transcript_audits"] = transcript_audits.get(uuid.UUID(str(transcript_id)), [])
+            except (TypeError, ValueError):
+                item["transcript_audits"] = []
+
     review_events = (
         await db.execute(
             select(AssociationReviewEvent)

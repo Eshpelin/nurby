@@ -239,6 +239,7 @@ async def get_transcript(
 async def update_transcript(
     transcript_id: uuid.UUID,
     body: TranscriptUpdate,
+    request: Request,
     _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -250,6 +251,18 @@ async def update_transcript(
         # Snapshot the original on the first edit only.
         t.original_text = t.text
         t.text_edited = True
+    if t.text != body.text:
+        db.add(
+            AudioAuditLog(
+                transcript_id=t.id,
+                camera_id=t.camera_id,
+                user_id=_user.id,
+                field="transcript_text",
+                old_value=t.text,
+                new_value=body.text,
+                ip=request.client.host if request.client else None,
+            )
+        )
     t.text = body.text
     await db.commit()
     await db.refresh(t)
@@ -302,6 +315,7 @@ async def set_transcript_speaker(
             t.speaker_confidence = None
         db.add(
             AudioAuditLog(
+                transcript_id=t.id,
                 camera_id=t.camera_id,
                 user_id=_user.id,
                 field="transcript_speaker",

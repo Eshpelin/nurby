@@ -47,6 +47,13 @@ type RelationshipDetail = {
     metadata: Record<string, unknown>;
     source_status: "available" | "source_changed" | "source_expired";
     source_url: string | null;
+    transcript_audits?: {
+      id: string;
+      field: string;
+      old_value: string | null;
+      new_value: string | null;
+      created_at: string;
+    }[];
   }[];
 };
 
@@ -324,6 +331,15 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                               {evidence.source_status === "source_changed" && (
                                 <span className="ml-2 italic">Transcript edited; re-check this hypothesis</span>
                               )}
+                              {evidence.transcript_audits?.length ? (
+                                <div className="mt-1 text-[10px] text-amber-200">
+                                  {evidence.transcript_audits.map((audit) => (
+                                    <div key={audit.id}>
+                                      Correction logged: {audit.field === "transcript_speaker" ? "speaker attribution" : "transcript text"} · {new Date(audit.created_at).toLocaleString()}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
                               {evidence.source_status === "source_expired" && (
                                 <span className="ml-2 italic">Source no longer retained</span>
                               )}
