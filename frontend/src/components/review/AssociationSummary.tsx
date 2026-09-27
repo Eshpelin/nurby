@@ -140,6 +140,12 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
                       </span>
                       {` · ${new Date(evidence.observed_at).toLocaleString()}`}
                       {evidence.explanation ? ` — ${evidence.explanation}` : ""}
+                      {typeof evidence.metadata.visit_timing === "object" && evidence.metadata.visit_timing !== null &&
+                        typeof (evidence.metadata.visit_timing as { relation_hint?: unknown }).relation_hint === "string" && (
+                          <span className="ml-2 text-foreground/80">
+                            Observed timing: {(evidence.metadata.visit_timing as { relation_hint: string }).relation_hint.replaceAll("_", " ")}
+                          </span>
+                        )}
                       {evidence.source_url && (
                         <a href={evidence.source_url} target="_blank" rel="noreferrer" className="ml-2 text-accent hover:underline">
                           {evidence.metadata.transcript_id ? "Open transcript" : evidence.metadata.transcript_id === undefined && evidence.source_url.includes("journeys") ? "Open journey" : "Open source"}
