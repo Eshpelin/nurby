@@ -208,6 +208,7 @@ def test_vlm_anthropic_caption_excludes_thinking():
 
     out = _run(client._call_anthropic("b64img", "describe", provider, "sys", 1024))
     assert out == "Two people walking toward the gate."
+    assert client.last_usage == {"tokens_in": 50, "tokens_out": 400}
     assert "reason" not in out and "count the people" not in out
     # The opt-in thinking param was wired into the request body.
     assert sink["body"]["thinking"] == {"type": "adaptive"}
@@ -224,6 +225,7 @@ def test_vlm_anthropic_default_has_no_thinking_param():
 
     out = _run(client._call_anthropic("b64img", "describe", provider, "sys", 1024))
     assert out == "Quiet scene."
+    assert client.last_usage == {"tokens_in": 10, "tokens_out": 5}
     # Default behavior unchanged: no thinking field in the request.
     assert "thinking" not in sink["body"]
 

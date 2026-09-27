@@ -207,6 +207,9 @@ class ObservationVlmPass(Base):
     tokens_in: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     tokens_out: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cost_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # False when the provider returned native usage counters; true when the
+    # ledger used the conservative prompt/response-size estimator.
+    estimated: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Structured extraction. objects, colors, text/plates read, counts,
     # time-of-day cues. Drives search and rules in later phases.

@@ -78,6 +78,7 @@ async def get_vlm_passes(
             "description": p.description,
             "attributes": p.attributes,
             "confidence": p.confidence,
+            "estimated": p.estimated,
             "authoritative": p.authoritative,
             "superseded": p.superseded,
             "created_at": p.created_at.isoformat() if p.created_at else None,
@@ -137,6 +138,7 @@ async def get_prompt_provenance(
                 "lens": p.lens,
                 "model": p.model,
                 "authoritative": p.authoritative,
+                "estimated": p.estimated,
                 **_prompt_entry(p.prompt_key, p.prompt_version, p.prompt_text),
             }
             for p in passes

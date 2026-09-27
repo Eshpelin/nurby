@@ -27,6 +27,7 @@ from sqlalchemy import select
 
 from services.perception.vlm import VLMClient
 from services.perception.usage import estimate_vlm_usage
+from services.agent.budget import estimate_cost
 from services.search.embeddings import generate_embedding, get_embedding_provider
 from shared.config import settings
 from shared.database import async_session
@@ -631,6 +632,7 @@ class VLMQueue:
                         frame=job.frame, provider=job.provider,
                         prompt=prompt,
                         usage_prompt=job.extra_context,
+                        native_usage=self._vlm.last_usage,
                     )
                     logger.info(
                         "VLM for camera %s completed in %.1fs. %s",
@@ -864,6 +866,7 @@ class VLMQueue:
         vlm_late: bool = False, vlm_enqueued_at: datetime | None = None,
         frame: np.ndarray | None = None, provider: Provider | None = None,
         prompt=None, usage_prompt: str | None = None,
+        native_usage: dict[str, int] | None = None,
     ):
         """Update observation record with VLM description and regenerate embedding."""
         try:
@@ -907,12 +910,27 @@ class VLMQueue:
                         )
                     )
                     if existing_live_pass is None:
-                        tokens_in, tokens_out, cost_cents = estimate_vlm_usage(
-                            provider,
-                            system_prompt=getattr(prompt, "text", None),
-                            user_prompt=usage_prompt,
-                            output_text=description,
+                        has_native_usage = bool(
+                            native_usage
+                            and int(native_usage.get("tokens_in", 0)) > 0
+                            and int(native_usage.get("tokens_out", 0)) >= 0
                         )
+                        if has_native_usage:
+                            tokens_in = int(native_usage["tokens_in"])
+                            tokens_out = int(native_usage["tokens_out"])
+                            cost_cents = estimate_cost(
+                                getattr(provider, "kind", None),
+                                getattr(provider, "default_model", None),
+                                tokens_in,
+                                tokens_out,
+                            )
+                        else:
+                            tokens_in, tokens_out, cost_cents = estimate_vlm_usage(
+                                provider,
+                                system_prompt=getattr(prompt, "text", None),
+                                user_prompt=usage_prompt,
+                                output_text=description,
+                            )
                         db.add(ObservationVlmPass(
                             observation_id=obs.id,
                             pass_no=1,
@@ -925,6 +943,7 @@ class VLMQueue:
                             tokens_in=tokens_in,
                             tokens_out=tokens_out,
                             cost_cents=cost_cents,
+                            estimated=not has_native_usage,
                             description=description,
                             authoritative=True,
                         ))

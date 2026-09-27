@@ -101,6 +101,10 @@ async def get_active_provider() -> Provider | None:
 class VLMClient:
     def __init__(self):
         self._http = None
+        # The most recent provider response's native token usage. Callers
+        # consume this immediately after describe(); providers that omit it
+        # leave the field as None and retain conservative estimation.
+        self.last_usage: dict[str, int] | None = None
 
     async def _get_http(self) -> httpx.AsyncClient:
         if self._http is None:
@@ -134,6 +138,7 @@ class VLMClient:
             pixels.
         """
         try:
+            self.last_usage = None
             prompt = system_prompt or SYSTEM_PROMPT
 
             # Encode frame as base64 JPEG
@@ -314,7 +319,14 @@ class VLMClient:
                 json=payload,
             )
             response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
+            data = response.json()
+            usage = data.get("usage") or {}
+            if usage:
+                self.last_usage = {
+                    "tokens_in": int(usage.get("prompt_tokens") or 0),
+                    "tokens_out": int(usage.get("completion_tokens") or 0),
+                }
+            return data["choices"][0]["message"]["content"]
 
         return await call_with_retry(
             _do,
@@ -368,10 +380,17 @@ class VLMClient:
                 json=body,
             )
             response.raise_for_status()
+            data = response.json()
+            usage = data.get("usage") or {}
+            if usage:
+                self.last_usage = {
+                    "tokens_in": int(usage.get("input_tokens") or 0),
+                    "tokens_out": int(usage.get("output_tokens") or 0),
+                }
             # Join only visible text blocks. When thinking is enabled the
             # response leads with a thinking block; indexing content[0]
             # would surface reasoning (or crash on a non-text block).
-            return anthropic_visible_text(response.json().get("content"))
+            return anthropic_visible_text(data.get("content"))
 
         return await call_with_retry(
             _do,
@@ -414,7 +433,14 @@ class VLMClient:
                 json=payload,
             )
             response.raise_for_status()
-            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+            data = response.json()
+            usage = data.get("usageMetadata") or {}
+            if usage:
+                self.last_usage = {
+                    "tokens_in": int(usage.get("promptTokenCount") or 0),
+                    "tokens_out": int(usage.get("candidatesTokenCount") or 0),
+                }
+            return data["candidates"][0]["content"]["parts"][0]["text"]
 
         return await call_with_retry(
             _do,
@@ -446,7 +472,13 @@ class VLMClient:
                 timeout=60.0,
             )
             response.raise_for_status()
-            return response.json().get("response", "")
+            data = response.json()
+            if "prompt_eval_count" in data or "eval_count" in data:
+                self.last_usage = {
+                    "tokens_in": int(data.get("prompt_eval_count") or 0),
+                    "tokens_out": int(data.get("eval_count") or 0),
+                }
+            return data.get("response", "")
 
         return await call_with_retry(
             _do,
