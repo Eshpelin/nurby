@@ -69,6 +69,17 @@ def _habits(samples=50, labels=("person",), busy=(8, 18), faces=("Mom",)):
             "busy_hours": list(busy), "faces": list(faces)}
 
 
+def test_learned_associations_require_visible_camera_evidence():
+    cam_a, cam_b = uuid.uuid4(), uuid.uuid4()
+    visible = SimpleNamespace(camera_histogram={str(cam_a): 3})
+    hidden = SimpleNamespace(camera_histogram={str(cam_b): 3})
+    legacy = SimpleNamespace(camera_histogram=None)
+
+    assert hc.association_visible_in_camera_scope(visible, {cam_a})
+    assert not hc.association_visible_in_camera_scope(hidden, {cam_a})
+    assert not hc.association_visible_in_camera_scope(legacy, {cam_a})
+
+
 def test_no_cameras_means_no_block():
     assert hc.format_household_context([], [{"name": "Mom"}], []) is None
 

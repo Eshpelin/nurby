@@ -154,6 +154,13 @@ async def get_associations(
     the pattern is.
     """
     db = ctx["db"]
+    allowed = await _common.accessible_camera_ids(ctx["user"], db)
+    if not allowed:
+        return {
+            "associations": [],
+            "count": 0,
+            "note": "No camera evidence is available in the current access scope.",
+        }
     q = select(EntityAssociation)
     if subject:
         q = q.where(EntityAssociation.subject_key.ilike(subject))
@@ -166,9 +173,16 @@ async def get_associations(
     q = q.order_by(
         EntityAssociation.distinct_days.desc(),
         EntityAssociation.evidence_count.desc(),
-    ).limit(50)
+    ).limit(1000)
 
     rows = (await db.execute(q)).scalars().all()
+    # Filter before applying the agent result cap; otherwise hidden rows can
+    # crowd the first page and make visible patterns disappear.
+    allowed_ids = {str(camera_id) for camera_id in allowed}
+    rows = [
+        row for row in rows
+        if bool(allowed_ids.intersection(str(camera_id) for camera_id in (row.camera_histogram or {})))
+    ][:50]
     out = []
     for r in rows:
         hours = sorted(
@@ -938,5 +952,4 @@ async def _rel_transitions(
 
 
 # ── Tool 3f. summarize_window (map-reduce long-window summary) ────────
-
 

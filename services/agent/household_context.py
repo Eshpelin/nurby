@@ -51,6 +51,18 @@ MIN_SAMPLES_FOR_HABITS = 20
 _cache: dict[tuple, tuple[float, str | None]] = {}
 
 
+def association_visible_in_camera_scope(association, allowed_camera_ids) -> bool:
+    """Return whether a learned association has visible camera evidence.
+
+    Learned patterns without a camera histogram are legacy/unknown-provenance
+    rows and are intentionally withheld from scoped agent context rather than
+    treating missing scope data as permission.
+    """
+    allowed = {str(camera_id) for camera_id in (allowed_camera_ids or ())}
+    cameras = {str(camera_id) for camera_id in (association.camera_histogram or {})}
+    return bool(allowed.intersection(cameras))
+
+
 # ── pure shaping ─────────────────────────────────────────────────────
 
 
@@ -285,13 +297,18 @@ async def build_household_context(db, allowed_camera_ids) -> str | None:
     # Established habits. Learned only: a declared authorization is policy
     # and belongs in an answer about permissions, not in a block describing
     # what usually happens.
-    pattern_rows = (await db.execute(
+    pattern_candidates = (await db.execute(
         select(EntityAssociation)
         .where(EntityAssociation.status == "established")
         .where(EntityAssociation.source == "learned")
         .order_by(EntityAssociation.distinct_days.desc())
-        .limit(MAX_PATTERNS)
+        # Scope from the camera histogram before applying the public cap.
+        .limit(MAX_PATTERNS * 10)
     )).scalars().all()
+    pattern_rows = [
+        association for association in pattern_candidates
+        if association_visible_in_camera_scope(association, allowed)
+    ][:MAX_PATTERNS]
     patterns = [
         {
             "subject": a.subject_key,
