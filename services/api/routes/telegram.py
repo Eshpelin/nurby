@@ -10,7 +10,7 @@ Security notes.
       Fernet-encrypted via :mod:`shared.crypto` before persistence and
       are never returned in responses.
     - Pairing nonces are 16 random bytes (hex), stored in Redis with a
-      5 minute TTL keyed by ``nurby:tg_pair:<nonce>`` and consumed by
+      5 minute TTL keyed by the namespaced ``tg_pair:<nonce>`` key and consumed by
       :mod:`services.notify.telegram_poller`.
     - ``GET /channels/{id}`` and ``GET /channels`` filter strictly by
       ``current_user.id`` so users cannot enumerate other users' bots.

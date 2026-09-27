@@ -53,11 +53,9 @@ from shared.models import (
     TelegramDialog,
     User,
 )
+from shared.redis_keys import telegram_offset_key, telegram_pair_key
 
 logger = logging.getLogger("nurby.notify.telegram_poller")
-
-_OFFSET_KEY_PREFIX = "nurby:tg_offset:"
-_PAIR_KEY_PREFIX = "nurby:tg_pair:"
 
 # Phase 3. per-channel asyncio.Lock so concurrent webhook deliveries
 # serialize chat-state mutations within a single channel without
@@ -108,11 +106,11 @@ _NOTE_MAX_CHARS = 4096
 
 
 def offset_key(channel_id) -> str:
-    return f"{_OFFSET_KEY_PREFIX}{channel_id}"
+    return telegram_offset_key(str(channel_id))
 
 
 def pair_key(nonce: str) -> str:
-    return f"{_PAIR_KEY_PREFIX}{nonce}"
+    return telegram_pair_key(nonce)
 
 
 class TelegramPollerManager:

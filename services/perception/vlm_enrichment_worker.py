@@ -220,7 +220,8 @@ class EnrichmentManager:
         Fails closed so enrichment never competes with live work."""
         try:
             r = await self._get_redis()
-            for k in await r.keys("nurby:vlm_pending:*"):
+            from shared.redis_keys import vlm_pending_prefix
+            for k in await r.keys(f"{vlm_pending_prefix()}*"):
                 if int(await r.llen(k) or 0) > 0:
                     return False
             return True

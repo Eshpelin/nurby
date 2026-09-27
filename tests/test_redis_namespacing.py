@@ -51,6 +51,14 @@ def test_shared_names_embed_the_namespace(monkeypatch):
     assert rk.heartbeat_key("ingestion") == "qa-1:heartbeat:ingestion"
     assert rk.health_key("vlm") == "qa-1:health:vlm"
     assert rk.camera_status_stream_key() == "qa-1:camera_status"
+    assert rk.motion_stream_key() == "qa-1:motion"
+    assert rk.audio_stream_key() == "qa-1:audio"
+    assert rk.live_motion_stream_key() == "qa-1:live_motion"
+    assert rk.vlm_pending_key("cam-1") == "qa-1:vlm_pending:cam-1"
+    assert rk.vlm_pending_prefix() == "qa-1:vlm_pending:"
+    assert rk.vlm_frame_key("job-1") == "qa-1:vlm_frame:job-1"
+    assert rk.telegram_offset_key("channel-1") == "qa-1:tg_offset:channel-1"
+    assert rk.telegram_pair_key("nonce-1") == "qa-1:tg_pair:nonce-1"
 
 
 def test_module_constants_recompute_with_environment(monkeypatch):

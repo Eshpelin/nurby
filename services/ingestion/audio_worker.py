@@ -25,6 +25,7 @@ from shared.app_settings import get_setting
 from shared.config import settings
 from shared.database import async_session
 from shared.models import AudioDetection
+from shared.redis_keys import audio_stream_key
 
 # Shared engine. caches rules, avoids per-event DB reload.
 _rule_engine: Optional["RuleEngine"] = None
@@ -42,7 +43,7 @@ AUDIO_COOLDOWN = 8.0  # seconds between emissions of the same label
 RECONNECT_DELAY = 5
 RECONNECT_MAX_DELAY = 300  # backoff cap, mirrors the video StreamWorker
 CONNECTED_MIN_SECONDS = 30  # a call shorter than this never really opened
-REDIS_STREAM_KEY = "nurby:audio"
+REDIS_STREAM_KEY = audio_stream_key()
 REDIS_STREAM_MAXLEN = 500
 
 

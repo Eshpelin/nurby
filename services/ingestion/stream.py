@@ -25,6 +25,7 @@ from shared.database import async_session
 from shared.models import Camera, CameraStatusLog, Event, Recording
 from shared.netpolicy import stream_target_rejection
 from shared.paths import safe_getsize
+from shared.redis_keys import motion_stream_key
 
 logger = logging.getLogger("nurby.ingestion.stream")
 
@@ -79,7 +80,7 @@ def _frame_features(frame: "np.ndarray") -> tuple[int, float]:
 # Post-capture (post-roll) is per-camera and configurable via
 # Camera.recording_clip_post; on_motion/on_object hold the recording open that
 # many seconds past the last trigger. See _should_record / _check_and_update_trigger.
-REDIS_STREAM_KEY = "nurby:motion"  # Redis stream for motion keyframes
+REDIS_STREAM_KEY = motion_stream_key()  # Redis stream for motion keyframes
 REDIS_STREAM_MAXLEN = 1000  # Max entries in stream
 # Camera availability edges live in shared/ so the perception watcher can name
 # the same stream without importing this (OpenCV-heavy) module, which its image

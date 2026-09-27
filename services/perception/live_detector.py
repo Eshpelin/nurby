@@ -20,10 +20,11 @@ import redis.asyncio as aioredis
 
 from services.perception.detector import ObjectDetector
 from shared.config import settings
+from shared.redis_keys import live_motion_stream_key
 
 logger = logging.getLogger("nurby.perception.live_detector")
 
-LIVE_STREAM_KEY = "nurby:live_motion"
+LIVE_STREAM_KEY = live_motion_stream_key()
 LIVE_GROUP = "live_det"
 LIVE_CONSUMER = f"worker-{os.getpid()}"
 LIVE_CACHE_PREFIX = "nurby:live_det:"

@@ -32,10 +32,11 @@ from services.search.embeddings import generate_embedding, get_embedding_provide
 from shared.config import settings
 from shared.database import async_session
 from shared.models import Camera, Observation, Provider, Transcript
+from shared.redis_keys import motion_stream_key
 
 logger = logging.getLogger("nurby.perception.pipeline")
 
-REDIS_STREAM_KEY = "nurby:motion"
+REDIS_STREAM_KEY = motion_stream_key()
 CONSUMER_GROUP = "perception"
 CONSUMER_NAME = f"worker-{os.getpid()}"
 BLOCK_MS = 5000  # Block for 5 seconds waiting for new messages

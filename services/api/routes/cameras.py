@@ -42,6 +42,7 @@ from shared.camera_secrets import seal, unseal
 from shared.config import settings
 from shared.database import get_db
 from shared.models import Camera, CameraStatusLog, User
+from shared.redis_keys import live_motion_stream_key, motion_stream_key
 from shared.schemas import (
     CameraCreate,
     CameraReorderItem,
@@ -1414,7 +1415,7 @@ async def update_camera(
 #
 # Latest frame is cached in Redis under a small per-camera key so the
 # dashboard can read it back as a preview. Every frame is also pushed onto
-# the same nurby:motion Redis stream the ingestion service uses, so the
+# the same instance-namespaced motion Redis stream the ingestion service uses, so the
 # perception pipeline (VLM, YOLO, rules) treats webcam frames identically
 # to any other source.
 
@@ -1438,12 +1439,12 @@ def _webcam_motion_cooldown(camera: Camera) -> int:
         return WEBCAM_MOTION_COOLDOWN_DEFAULT_S
     return max(int(round(interval)), 2)
 
-MOTION_STREAM_KEY = "nurby:motion"
+MOTION_STREAM_KEY = motion_stream_key()
 MOTION_STREAM_MAXLEN = 1000
 
 # Fast lane for live detection overlay. Every frame goes here. YOLO-only
 # consumer runs inline and caches detections for the dashboard overlay.
-LIVE_MOTION_STREAM_KEY = "nurby:live_motion"
+LIVE_MOTION_STREAM_KEY = live_motion_stream_key()
 LIVE_MOTION_STREAM_MAXLEN = 50
 LIVE_DET_CACHE_PREFIX = "nurby:live_det:"
 

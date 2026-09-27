@@ -87,6 +87,38 @@ def health_key(component: str) -> str:
     return namespaced(f"health:{component}")
 
 
+def motion_stream_key() -> str:
+    return namespaced("motion")
+
+
+def audio_stream_key() -> str:
+    return namespaced("audio")
+
+
+def live_motion_stream_key() -> str:
+    return namespaced("live_motion")
+
+
+def vlm_pending_prefix() -> str:
+    return namespaced("vlm_pending:")
+
+
+def vlm_pending_key(camera_id: str) -> str:
+    return f"{vlm_pending_prefix()}{camera_id}"
+
+
+def vlm_frame_key(job_id: str) -> str:
+    return namespaced(f"vlm_frame:{job_id}")
+
+
+def telegram_offset_key(channel_id: str) -> str:
+    return namespaced(f"tg_offset:{channel_id}")
+
+
+def telegram_pair_key(nonce: str) -> str:
+    return namespaced(f"tg_pair:{nonce}")
+
+
 # Import-time constants for the producers/consumers that import a name
 # rather than call a builder. The namespace comes from the process
 # environment, which is fixed for the life of the process, so evaluating

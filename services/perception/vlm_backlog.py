@@ -9,8 +9,8 @@ Wire format.
 
   Key                                            Value                       Notes
   ─────────────────────────────────────────────  ──────────────────────────  ────────────────────────────
-  ``nurby:vlm_pending:<camera_id>``              Redis LIST of metadata json LPUSH new, RPOP oldest first.
-  ``nurby:vlm_frame:<job_id>``                   JPEG bytes                  Per-job blob, TTL 1800s.
+  ``<instance>:vlm_pending:<camera_id>``         Redis LIST of metadata json LPUSH new, RPOP oldest first.
+  ``<instance>:vlm_frame:<job_id>``              JPEG bytes                  Per-job blob, TTL 1800s.
 
 The list is the queue. Metadata sits in the list itself, so the worker
 can deserialize without a separate fetch. The frame blob lives on its
@@ -41,6 +41,8 @@ import cv2
 import numpy as np
 import redis.asyncio as aioredis
 
+from shared.redis_keys import vlm_frame_key, vlm_pending_key
+
 logger = logging.getLogger("nurby.perception.vlm_backlog")
 
 
@@ -50,10 +52,6 @@ logger = logging.getLogger("nurby.perception.vlm_backlog")
 DEFAULT_BACKLOG_CAPACITY = 50
 DEFAULT_FRAME_TTL_SECONDS = 1800  # 30 min
 JPEG_QUALITY = 85
-
-PENDING_KEY = "nurby:vlm_pending"
-FRAME_KEY = "nurby:vlm_frame"
-
 
 @dataclass
 class BacklogEnvelope:
@@ -108,10 +106,10 @@ class VLMBacklog:
         # before :normal so urgent frames (unknown face, rule-trigger
         # match, first-of-burst) skip ahead of routine motion.
         suffix = ":high" if priority == "high" else ""
-        return f"{PENDING_KEY}:{camera_id}{suffix}"
+        return f"{vlm_pending_key(camera_id)}{suffix}"
 
     def frame_key(self, job_id: str) -> str:
-        return f"{FRAME_KEY}:{job_id}"
+        return vlm_frame_key(job_id)
 
     async def enqueue(
         self,
@@ -283,6 +281,4 @@ __all__ = [
     "BacklogEnvelope",
     "DEFAULT_BACKLOG_CAPACITY",
     "DEFAULT_FRAME_TTL_SECONDS",
-    "PENDING_KEY",
-    "FRAME_KEY",
 ]
