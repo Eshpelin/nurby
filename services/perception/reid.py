@@ -495,6 +495,16 @@ class BodyReID:
                     bbox=det.get("bbox"),
                 )
                 db.add(sample)
+                from services.perception.recurrence_notifications import (
+                    maybe_emit_recurrence_notification,
+                )
+                await maybe_emit_recurrence_notification(
+                    db,
+                    cluster_kind="body",
+                    cluster_id=cluster.id,
+                    sample_model=BodyClusterSample,
+                    camera_id=uuid.UUID(camera_id),
+                )
                 await db.commit()
         except Exception:
             logger.exception("Failed to append body sample to cluster %s", cluster_id)

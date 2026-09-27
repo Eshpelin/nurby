@@ -427,6 +427,18 @@ class FaceRecognizer:
                 if cluster.sighting_count <= 5 and thumbnail_path:
                     cluster.sample_thumbnail_path = thumbnail_path
 
+                from services.perception.recurrence_notifications import (
+                    maybe_emit_recurrence_notification,
+                )
+                await maybe_emit_recurrence_notification(
+                    db,
+                    cluster_kind="face",
+                    cluster_id=cluster.id,
+                    sample_model=FaceClusterSample,
+                    camera_id=uuid.UUID(camera_id),
+                    now=now,
+                )
+
                 await db.commit()
         except Exception:
             logger.exception("Failed to add to cluster %s", cluster_id)
