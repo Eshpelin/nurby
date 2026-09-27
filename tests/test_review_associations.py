@@ -2,6 +2,8 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from services.api.routes.review import _scoped_evidence
+from services.api.routes.review import _association_visible
+from shared.camera_access import ALL
 
 
 def _evidence(*, cameras, observations=None):
@@ -48,3 +50,11 @@ def test_scoped_evidence_hides_episode_with_no_allowed_camera():
     row = _evidence(cameras=["camera-b"])
 
     assert _scoped_evidence(row, {"camera-a"}) is None
+
+
+def test_association_visibility_is_camera_scoped_before_queue_pagination():
+    row = SimpleNamespace(camera_histogram={"camera-a": 2, "camera-b": 1})
+
+    assert _association_visible(row, {"camera-a"}) is True
+    assert _association_visible(row, {"camera-c"}) is False
+    assert _association_visible(row, ALL) is True

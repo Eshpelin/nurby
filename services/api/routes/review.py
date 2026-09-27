@@ -448,7 +448,11 @@ async def list_review_items(
                 select(EntityAssociation)
                 .where(EntityAssociation.status.in_(["candidate", "ambiguous", "deferred"]))
                 .order_by(EntityAssociation.last_seen_at.desc())
-                .limit(100)
+                # Camera visibility is enforced below from the association's
+                # evidence histogram. Fetch the bounded review window before
+                # applying the ACL so hidden-camera rows cannot consume the
+                # visible queue's entire page.
+                .limit(1000)
             )
         ).scalars().all()
         for association in association_rows:
