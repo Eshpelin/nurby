@@ -65,6 +65,9 @@ DEFAULTS: dict[str, Any] = {
     "fact_stale_days": 45,
     "associations_enabled": True,
     "association_min_distinct_days": 3,
+    # Unknown-subject recurrence escalation. Shared by the notification
+    # producer and Review Center so the attention threshold stays consistent.
+    "unknown_recurrence_threshold_days": 3,
     # Household-wide daily AI digest.
     "daily_digest_enabled": True,
     "daily_digest_hour": 7,  # 0-23 local time

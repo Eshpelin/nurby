@@ -18,6 +18,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.associator import evidence_policy
+from shared.app_settings import get_setting
 from shared.auth import get_current_user
 from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.database import get_db
@@ -370,6 +371,12 @@ async def list_review_items(
             ))
 
     if "identity_suggestion" in requested:
+        try:
+            recurrence_threshold_days = max(1, min(30, int(await get_setting(
+                "unknown_recurrence_threshold_days", 3
+            ))))
+        except (TypeError, ValueError):
+            recurrence_threshold_days = 3
         face_query = apply_camera_filter(
             select(FaceCluster)
             .where(FaceCluster.status == "pending")
@@ -387,7 +394,7 @@ async def list_review_items(
             visible_count = recurrence.get("sample_count")
             if visible_count is None:
                 visible_count = cluster.sighting_count if allowed is ALL else 0
-            recurring = int(recurrence.get("distinct_days") or 0) >= 3
+            recurring = int(recurrence.get("distinct_days") or 0) >= recurrence_threshold_days
             items.append(_item(
                 source_type="face_cluster",
                 source_id=cluster.id,
@@ -431,7 +438,7 @@ async def list_review_items(
             visible_count = recurrence.get("sample_count")
             if visible_count is None:
                 visible_count = cluster.sighting_count if allowed is ALL else 0
-            recurring = int(recurrence.get("distinct_days") or 0) >= 3
+            recurring = int(recurrence.get("distinct_days") or 0) >= recurrence_threshold_days
             items.append(_item(
                 source_type="body_cluster",
                 source_id=cluster.id,

@@ -14,6 +14,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.app_settings import get_setting
 from shared.models import BodyClusterSample, Camera, FaceClusterSample, Notification
 
 RECURRENCE_THRESHOLD_DAYS = 3
@@ -23,9 +24,13 @@ def recurrence_notification_marker(cluster_kind: str, cluster_id: UUID) -> str:
     return f"recurring_unknown:{cluster_kind}:{cluster_id}"
 
 
-def should_notify_recurrence(distinct_days: int, already_notified: bool) -> bool:
+def should_notify_recurrence(
+    distinct_days: int,
+    already_notified: bool,
+    threshold_days: int = RECURRENCE_THRESHOLD_DAYS,
+) -> bool:
     """Return true only on the first threshold crossing."""
-    return distinct_days >= RECURRENCE_THRESHOLD_DAYS and not already_notified
+    return distinct_days >= max(1, threshold_days) and not already_notified
 
 
 async def maybe_emit_recurrence_notification(
@@ -45,6 +50,12 @@ async def maybe_emit_recurrence_notification(
     helper easy to test and lets callers remain best-effort.
     """
     now = now or datetime.now(timezone.utc)
+    try:
+        threshold_days = max(1, min(30, int(await get_setting(
+            "unknown_recurrence_threshold_days", RECURRENCE_THRESHOLD_DAYS
+        ))))
+    except (TypeError, ValueError):
+        threshold_days = RECURRENCE_THRESHOLD_DAYS
     if camera_id is not None:
         camera = await db.get(Camera, camera_id)
         if camera is not None and not camera.relationship_notifications_enabled:
@@ -74,7 +85,7 @@ async def maybe_emit_recurrence_notification(
             .limit(1)
         )
     ).scalar_one_or_none() is not None
-    if not should_notify_recurrence(len(days), already_notified):
+    if not should_notify_recurrence(len(days), already_notified, threshold_days):
         return False
 
     subject = "person" if cluster_kind == "face" else "appearance"

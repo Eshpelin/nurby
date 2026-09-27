@@ -12,6 +12,12 @@ def test_recurrence_notification_waits_for_distinct_day_threshold():
     assert should_notify_recurrence(RECURRENCE_THRESHOLD_DAYS, False)
 
 
+def test_recurrence_threshold_can_be_tuned_without_changing_default():
+    assert not should_notify_recurrence(2, False, threshold_days=3)
+    assert should_notify_recurrence(2, False, threshold_days=2)
+    assert should_notify_recurrence(1, False, threshold_days=0)
+
+
 def test_recurrence_notification_is_one_shot():
     assert not should_notify_recurrence(RECURRENCE_THRESHOLD_DAYS + 4, True)
 
