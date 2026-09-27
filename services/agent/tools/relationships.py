@@ -22,6 +22,7 @@ from services.agent.tools._common import (
     _thumbnail_url,
 )
 from shared.models import (
+    AssociationEvidence,
     EntityAssociation,
     Journey,
     Observation,
@@ -59,6 +60,60 @@ _RELATIONS = (
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I
 )
+
+
+def _scoped_association_metrics(
+    association: Any,
+    evidence_rows: list[Any],
+    allowed_ids: set[str],
+) -> dict[str, Any]:
+    """Project learned counts without leaking hidden-camera aggregates.
+
+    Older associations may have only aggregate counters and no evidence
+    ledger. Those rows stay visible when their camera histogram intersects the
+    caller's scope, but the old totals are marked unknown rather than reused
+    as if they were camera-scoped facts.
+    """
+    visible = [
+        row for row in evidence_rows
+        if not ({str(camera_id) for camera_id in (row.camera_ids or [])} - allowed_ids)
+        or bool({str(camera_id) for camera_id in (row.camera_ids or [])} & allowed_ids)
+    ]
+    # An evidence row spanning allowed and hidden cameras is not safe to count
+    # as a complete episode; it can expose hidden-camera timing/counters.
+    visible = [
+        row for row in visible
+        if {str(camera_id) for camera_id in (row.camera_ids or [])} <= allowed_ids
+    ]
+    if not evidence_rows:
+        return {
+            "times_seen": 0,
+            "distinct_days": 0,
+            "usual_hours": [],
+            "supporting_evidence_count": 0,
+            "contradictory_evidence_count": 0,
+            "evidence_count_known": False,
+            "evidence_scope": "legacy_aggregate_unavailable",
+        }
+    days = {
+        row.observed_at.date().isoformat()
+        for row in visible
+        if getattr(row, "observed_at", None) is not None
+    }
+    hours = sorted({
+        row.observed_at.hour
+        for row in visible
+        if getattr(row, "observed_at", None) is not None
+    })
+    return {
+        "times_seen": len(visible),
+        "distinct_days": len(days),
+        "usual_hours": hours,
+        "supporting_evidence_count": sum(row.role == "supporting" for row in visible),
+        "contradictory_evidence_count": sum(row.role == "contradictory" for row in visible),
+        "evidence_count_known": True,
+        "evidence_scope": "camera_scoped",
+    }
 
 
 _QUERY_RELATIONSHIPS_SCHEMA = {
@@ -183,10 +238,20 @@ async def get_associations(
         row for row in rows
         if bool(allowed_ids.intersection(str(camera_id) for camera_id in (row.camera_histogram or {})))
     ][:50]
+    evidence_by_association: dict[str, list[Any]] = {str(row.id): [] for row in rows}
+    if rows:
+        evidence_rows = (
+            await db.execute(
+                select(AssociationEvidence)
+                .where(AssociationEvidence.association_id.in_([row.id for row in rows]))
+            )
+        ).scalars().all()
+        for evidence in evidence_rows:
+            evidence_by_association.setdefault(str(evidence.association_id), []).append(evidence)
     out = []
     for r in rows:
-        hours = sorted(
-            (int(h) for h, c in (r.hour_histogram or {}).items() if int(c) > 0)
+        scoped = _scoped_association_metrics(
+            r, evidence_by_association.get(str(r.id), []), allowed_ids
         )
         out.append({
             "association_id": str(r.id),
@@ -200,9 +265,13 @@ async def get_associations(
             # as a pattern.
             "source": r.source,
             "status": r.status,
-            "times_seen": int(r.evidence_count or 0),
-            "distinct_days": int(r.distinct_days or 0),
-            "usual_hours": hours,
+            "times_seen": scoped["times_seen"],
+            "distinct_days": scoped["distinct_days"],
+            "usual_hours": scoped["usual_hours"],
+            "supporting_evidence_count": scoped["supporting_evidence_count"],
+            "contradictory_evidence_count": scoped["contradictory_evidence_count"],
+            "evidence_count_known": scoped["evidence_count_known"],
+            "evidence_scope": scoped["evidence_scope"],
             "first_seen": r.first_seen_at.isoformat() if r.first_seen_at else None,
             "last_seen": r.last_seen_at.isoformat() if r.last_seen_at else None,
         })
@@ -952,4 +1021,3 @@ async def _rel_transitions(
 
 
 # ── Tool 3f. summarize_window (map-reduce long-window summary) ────────
-

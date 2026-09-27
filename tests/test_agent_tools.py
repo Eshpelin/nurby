@@ -26,6 +26,7 @@ from services.agent.tools import (
     all_tools_for_provider,
     analyze_clip,
     analyze_frame,
+    get_associations,
     get_camera_layout,
     get_events,
     get_household_snapshot,
@@ -667,6 +668,42 @@ def test_registry_lookup():
         "test_camera_connection",
         "run_doctor",
     }
+
+
+def test_scoped_association_metrics_do_not_use_hidden_camera_counts():
+    from services.agent.tools.relationships import _scoped_association_metrics
+
+    visible = SimpleNamespace(
+        camera_ids=["camera-a"],
+        observed_at=datetime(2026, 9, 27, 8, tzinfo=timezone.utc),
+        role="supporting",
+    )
+    hidden = SimpleNamespace(
+        camera_ids=["camera-b"],
+        observed_at=datetime(2026, 9, 28, 9, tzinfo=timezone.utc),
+        role="supporting",
+    )
+
+    metrics = _scoped_association_metrics(
+        SimpleNamespace(evidence_count=99), [visible, hidden], {"camera-a"}
+    )
+
+    assert metrics["times_seen"] == 1
+    assert metrics["distinct_days"] == 1
+    assert metrics["usual_hours"] == [8]
+    assert metrics["evidence_scope"] == "camera_scoped"
+
+
+def test_scoped_association_metrics_marks_legacy_aggregates_unknown():
+    from services.agent.tools.relationships import _scoped_association_metrics
+
+    metrics = _scoped_association_metrics(
+        SimpleNamespace(evidence_count=12), [], {"camera-a"}
+    )
+
+    assert metrics["times_seen"] == 0
+    assert metrics["evidence_count_known"] is False
+    assert metrics["evidence_scope"] == "legacy_aggregate_unavailable"
 
 
 # ── query_relationships ─────────────────────────────────────────────
