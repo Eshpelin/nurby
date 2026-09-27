@@ -17,7 +17,7 @@ from shared.default_rules import (
     CAMERA_HEALTH_RULE_NAME,
     CAMERA_RECOVERY_RULE_NAME,
     default_rule_kwargs,
-    refresh_default_rule_messages,
+    refreshed_default_rule_messages,
 )
 from shared.models import Observation, Rule, RuleEvaluation, User
 from shared.schemas import (
@@ -64,7 +64,13 @@ async def _ensure_default_camera_health_rule(db: AsyncSession) -> None:
         if rule is None:
             db.add(Rule(**default_rule_kwargs(name)))
             dirty = True
-        elif refresh_default_rule_messages(rule.name, rule.actions):
+            continue
+        # Assign the (possibly rewritten) list back: an in-place mutation
+        # would not mark the plain JSON column dirty and the commit would
+        # silently persist nothing.
+        rewritten = refreshed_default_rule_messages(rule.name, rule.actions)
+        if rewritten is not None:
+            rule.actions = rewritten
             dirty = True
     if not dirty:
         return

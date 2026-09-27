@@ -29,14 +29,11 @@ import uuid
 import aiomqtt
 from sqlalchemy import select
 
+from services.integrations.mqtt import discovery, handlers
+from services.integrations.mqtt.config import MqttConfig, load_config
 from shared.database import async_session
 from shared.models import Camera
-from shared.mqtt_bus import (
-    LEGACY_MQTT_BUS_CHANNEL,
-    MQTT_BUS_CHANNEL,
-    bus_redis,
-    decode_bus_message,
-)
+from shared.mqtt_bus import MQTT_BUS_CHANNEL, bus_redis, decode_bus_message
 from shared.mqtt_topics import (
     camera_slug,
     camera_state_topic,
@@ -44,8 +41,7 @@ from shared.mqtt_topics import (
     stats_topic,
     status_topic,
 )
-from services.integrations.mqtt import discovery, handlers
-from services.integrations.mqtt.config import MqttConfig, load_config
+from shared.redis_keys import LEGACY_MQTT_BUS_CHANNEL
 
 logger = logging.getLogger(__name__)
 

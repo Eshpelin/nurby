@@ -47,3 +47,32 @@ describe("OnboardingMetricsCard", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/Could not load/);
   });
 });
+
+describe("OnboardingMetricsCard funnel (#293)", () => {
+  afterEach(cleanup);
+  beforeEach(() => vi.resetAllMocks());
+
+  it("renders the wizard funnel counters when present", async () => {
+    mocks.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...metrics,
+        funnel: { wizard_shown: 9, magic_clicked: 6, manual_clicked: 3, wizard_completed: 4 },
+      }),
+    });
+    render(<OnboardingMetricsCard />);
+    expect(await screen.findByText("First-run wizard funnel")).toBeInTheDocument();
+    expect(screen.getByText("Wizard shown")).toBeInTheDocument();
+    expect(screen.getByText("9")).toBeInTheDocument();
+    expect(screen.getByText("Chose magic")).toBeInTheDocument();
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+  });
+
+  it("omits the funnel section for responses without one", async () => {
+    mocks.fetch.mockResolvedValue({ ok: true, json: async () => metrics });
+    render(<OnboardingMetricsCard />);
+    await screen.findByText("With a goal");
+    expect(screen.queryByText("First-run wizard funnel")).toBeNull();
+  });
+});

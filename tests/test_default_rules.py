@@ -10,9 +10,9 @@ from shared.default_rules import (
     CAMERA_HEALTH_RECOVERED_MESSAGE,
     CAMERA_HEALTH_RULE_NAME,
     CAMERA_RECOVERY_RULE_NAME,
-    DEFAULT_RULES,
     DEFAULT_RULE_NAMES,
-    refresh_default_rule_messages,
+    DEFAULT_RULES,
+    refreshed_default_rule_messages,
 )
 
 
@@ -29,38 +29,40 @@ def test_default_rule_specs_are_consistent():
     assert CAMERA_HEALTH_RECOVERED_MESSAGE.startswith("Camera health recovered")
 
 
-def test_backfill_rewrites_legacy_messages_in_place():
+def test_backfill_returns_rewritten_list():
     actions = [{"type": "notify", "message": "{camera_name} camera health degraded: {reason}"}]
-    assert refresh_default_rule_messages(CAMERA_HEALTH_RULE_NAME, actions) is True
-    assert actions[0]["message"] == CAMERA_HEALTH_DEGRADED_MESSAGE
+    rewritten = refreshed_default_rule_messages(CAMERA_HEALTH_RULE_NAME, actions)
+    assert rewritten == [{"type": "notify", "message": CAMERA_HEALTH_DEGRADED_MESSAGE}]
+    # The input list is not mutated: the caller must assign the result back
+    # to the ORM attribute, which is what makes the plain JSON column dirty.
+    assert actions[0]["message"] == "{camera_name} camera health degraded: {reason}"
 
     recovered = [{"type": "notify", "message": "{camera_name} camera health recovered"}]
-    assert refresh_default_rule_messages(CAMERA_RECOVERY_RULE_NAME, recovered) is True
-    assert recovered[0]["message"] == CAMERA_HEALTH_RECOVERED_MESSAGE
+    assert refreshed_default_rule_messages(CAMERA_RECOVERY_RULE_NAME, recovered) == [
+        {"type": "notify", "message": CAMERA_HEALTH_RECOVERED_MESSAGE}
+    ]
 
 
 def test_backfill_is_idempotent():
     actions = [{"type": "notify", "message": CAMERA_HEALTH_DEGRADED_MESSAGE}]
-    assert refresh_default_rule_messages(CAMERA_HEALTH_RULE_NAME, actions) is False
-    assert actions[0]["message"] == CAMERA_HEALTH_DEGRADED_MESSAGE
+    assert refreshed_default_rule_messages(CAMERA_HEALTH_RULE_NAME, actions) is None
 
 
 def test_backfill_never_touches_user_rules_or_other_actions():
     user_rule = [{"type": "notify", "message": "{camera_name} camera health degraded: {reason}"}]
-    assert refresh_default_rule_messages("My own rule", user_rule) is False
+    assert refreshed_default_rule_messages("My own rule", user_rule) is None
     assert user_rule[0]["message"] == "{camera_name} camera health degraded: {reason}"
 
     non_notify = [{"type": "email", "message": "{camera_name} camera health recovered"}]
-    assert refresh_default_rule_messages(CAMERA_HEALTH_RULE_NAME, non_notify) is False
+    assert refreshed_default_rule_messages(CAMERA_HEALTH_RULE_NAME, non_notify) is None
 
-    assert refresh_default_rule_messages(CAMERA_HEALTH_RULE_NAME, None) is False
-    assert refresh_default_rule_messages(CAMERA_HEALTH_RULE_NAME, "not-a-list") is False
+    assert refreshed_default_rule_messages(CAMERA_HEALTH_RULE_NAME, None) is None
+    assert refreshed_default_rule_messages(CAMERA_HEALTH_RULE_NAME, "not-a-list") is None
 
 
 def test_install_sites_use_the_shared_module():
     """Both lazy install paths must come from shared/default_rules so the
     templates cannot drift apart again."""
-    import ast
     from pathlib import Path
 
     for path in (

@@ -287,9 +287,10 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
           )}
           {step === "magic" && (
             <MagicStep
-              onDone={() => {
-                finishWizard();
-              }}
+              onDone={finishWizard}
+              browserTz={browserTz}
+              tzAccepted={tzAccepted}
+              onTzAccepted={setTzAccepted}
               onFallback={() => setStep("camera")}
               onCloudFallback={() => {
                 setCloudMode(true);
@@ -521,10 +522,16 @@ function MagicStep({
   onDone,
   onFallback,
   onCloudFallback,
+  browserTz,
+  tzAccepted,
+  onTzAccepted,
 }: {
   onDone: () => void;
   onFallback: () => void;
   onCloudFallback: () => void;
+  browserTz: string;
+  tzAccepted: boolean;
+  onTzAccepted: (v: boolean) => void;
 }) {
   const { authFetch } = useAuth();
   const [phase, setPhase] = useState<MagicPhase>("camera");
@@ -879,6 +886,22 @@ function MagicStep({
               </div>
             )}
           </div>
+          {browserTz && (
+            <label className="flex items-start gap-2.5 rounded-md border border-border bg-card/40 px-3 py-2 cursor-pointer hover:border-accent/40 transition-colors text-left">
+              <input
+                type="checkbox"
+                checked={tzAccepted}
+                onChange={(e) => onTzAccepted(e.target.checked)}
+                className="mt-0.5 accent-green-500"
+              />
+              <span>
+                <span className="block text-xs font-medium">Use {browserTz} as the Nurby timezone</span>
+                <span className="block text-[11px] text-muted-foreground leading-tight">
+                  Detected from this browser, so recaps and schedules run in your local time. Change later in Settings.
+                </span>
+              </span>
+            </label>
+          )}
           <div className="flex items-center gap-2">
             <button
               type="button"

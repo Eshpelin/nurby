@@ -60,22 +60,32 @@ def default_rule_kwargs(name: str) -> dict:
     }
 
 
-def refresh_default_rule_messages(name: str, actions: object) -> bool:
-    """Rewrite a legacy system-rule message to the current template, in
-    place. Returns True when something changed (the caller persists).
+def refreshed_default_rule_messages(name: str, actions: object) -> list | None:
+    """Return a new actions list with legacy system-rule messages rewritten
+    to the current template, or None when nothing needs to change.
+
+    The caller must ASSIGN the returned list back to the ORM attribute.
+    The first cut of this helper mutated the list in place and returned a
+    bool — invisible to SQLAlchemy, whose plain JSON columns have no
+    change tracking, so the backfill silently never persisted. Assignment
+    is what marks the column dirty.
 
     Only the known system rules are touched; a user rule with the same
     wording by coincidence is left alone because the name has to match a
     system rule exactly.
     """
     if name not in DEFAULT_RULES or not isinstance(actions, list):
-        return False
+        return None
     changed = False
+    new_actions = []
     for action in actions:
-        if not isinstance(action, dict) or action.get("type") != "notify":
-            continue
-        message = action.get("message")
-        if message in _LEGACY_MESSAGES:
-            action["message"] = _LEGACY_MESSAGES[message]
+        if (
+            isinstance(action, dict)
+            and action.get("type") == "notify"
+            and action.get("message") in _LEGACY_MESSAGES
+        ):
+            new_actions.append({**action, "message": _LEGACY_MESSAGES[action["message"]]})
             changed = True
-    return changed
+        else:
+            new_actions.append(action)
+    return new_actions if changed else None

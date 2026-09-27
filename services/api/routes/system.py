@@ -8,8 +8,8 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.perception.vlm_queue import get_vlm_stats
 from services.ingestion.retention import low_disk_threshold
+from services.perception.vlm_queue import get_vlm_stats
 from shared import heartbeat
 from shared.auth import get_current_user, require_admin
 from shared.config import settings
@@ -345,7 +345,10 @@ async def get_system_timezone(_current_user: User = Depends(get_current_user)):
 
 
 @router.get("/system/health")
-async def get_health(_current_user: User = Depends(get_current_user)):
+async def get_health(
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Lightweight host-level CPU / RAM / disk / GPU snapshot for the
     footer.
 
