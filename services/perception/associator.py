@@ -502,6 +502,12 @@ async def record_pairing(
             .where(EntityAssociation.object_key == object_key)
             .where(EntityAssociation.relation == relation)
             .where(EntityAssociation.source == "learned")
+            # The fold below mutates counters, histograms, and lifecycle
+            # status. Serialize existing-edge updates so replayed/finalizer
+            # passes cannot silently lose evidence or overwrite a newer
+            # transition. The unique constraint still protects first-create
+            # races at commit time.
+            .with_for_update()
             .limit(1)
         )
     ).scalars().first()
