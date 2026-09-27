@@ -36,6 +36,7 @@ from sqlalchemy import select
 
 from services.perception.prompt_registry import PromptRef, resolve, version_for
 from services.perception.usage import check_perception_budget, estimate_vlm_usage
+from services.agent.budget import estimate_cost
 from shared.app_settings import get_setting
 from shared.database import async_session
 from shared.ffmpeg_safe import (
@@ -416,9 +417,15 @@ class EnrichmentManager:
             system_prompt=prompt.text, extra_context=extra_context,
             max_tokens=160,
         )
+        native_usage = getattr(self._vlm, "last_usage", None)
         text = (text or "").strip()
         attrs = build_attributes(text, detections) if lens == "attributes" else None
-        await self._append_pass(obs_id, lens, provider, text or None, attrs, prompt)
+        if native_usage:
+            await self._append_pass(
+                obs_id, lens, provider, text or None, attrs, prompt, native_usage
+            )
+        else:
+            await self._append_pass(obs_id, lens, provider, text or None, attrs, prompt)
         logger.info("enriched %s lens=%s. %s", obs_id, lens, (text or "")[:70])
         return True
 
@@ -464,6 +471,8 @@ class EnrichmentManager:
             system_prompt=prompt.text,
             extra_context=f"Observations:\n{body}", max_tokens=160,
         )
+        summary_native_usage = getattr(self._vlm, "last_usage", None)
+        original_summary = (summary or "").strip()
         summary = (summary or "").strip()
         if not summary:
             return False
@@ -477,6 +486,10 @@ class EnrichmentManager:
             summary, verdict = await self._repair_summary(
                 summary, body, verdict, frame, detections, provider
             )
+            if summary != original_summary:
+                # Repair and verification are separate calls and may use a
+                # different provider; estimate this mixed pass conservatively.
+                summary_native_usage = None
             if summary is None:
                 fallback = pick_fallback_pass(passes)
                 if fallback is None:
@@ -498,7 +511,17 @@ class EnrichmentManager:
         embedding = await self._embed(summary)
         attrs = build_attributes(summary, detections)
         attrs["verify"] = verdict
-        await self._write_summary(obs_id, summary, attrs, embedding, provider, prompt)
+        if summary_native_usage:
+            await self._write_summary(
+                obs_id, summary, attrs, embedding, provider, prompt, summary_native_usage
+            )
+        else:
+            # Keep the narrow internal hook compatible with callers/tests that
+            # provide the legacy six-argument writer; no native usage means
+            # the writer will use its estimator as before.
+            await self._write_summary(
+                obs_id, summary, attrs, embedding, provider, prompt
+            )
         logger.info("summarized %s [%s]. %s", obs_id, verdict.get("status"), summary[:70])
         return True
 
@@ -580,19 +603,35 @@ class EnrichmentManager:
     # ---- immutable writes -------------------------------------------
 
     async def _append_pass(self, obs_id, lens, provider, description, attributes,
-                           prompt: PromptRef | None = None):
+                           prompt: PromptRef | None = None,
+                           native_usage: dict[str, int] | None = None):
         """Append one immutable pass. never touches the observation caption."""
         async with async_session() as db:
             obs = await db.get(Observation, obs_id)
             if obs is None:
                 return
             new_no = (obs.enrich_pass_count or 0) + 1
-            tokens_in, tokens_out, cost_cents = estimate_vlm_usage(
-                provider,
-                system_prompt=prompt.text if prompt else LENS_PROMPTS.get(lens),
-                user_prompt=None,
-                output_text=description,
+            has_native_usage = bool(
+                native_usage
+                and int(native_usage.get("tokens_in", 0)) > 0
+                and int(native_usage.get("tokens_out", 0)) >= 0
             )
+            if has_native_usage:
+                tokens_in = int(native_usage["tokens_in"])
+                tokens_out = int(native_usage["tokens_out"])
+                cost_cents = estimate_cost(
+                    getattr(provider, "kind", None),
+                    getattr(provider, "default_model", None),
+                    tokens_in,
+                    tokens_out,
+                )
+            else:
+                tokens_in, tokens_out, cost_cents = estimate_vlm_usage(
+                    provider,
+                    system_prompt=prompt.text if prompt else LENS_PROMPTS.get(lens),
+                    user_prompt=None,
+                    output_text=description,
+                )
             db.add(ObservationVlmPass(
                 observation_id=obs_id, pass_no=new_no, lens=lens,
                 prompt_key=prompt.key if prompt else lens,
@@ -603,6 +642,7 @@ class EnrichmentManager:
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
                 cost_cents=cost_cents,
+                estimated=not has_native_usage,
                 description=description, attributes=attributes,
                 authoritative=False,
             ))
@@ -611,7 +651,8 @@ class EnrichmentManager:
             await db.commit()
 
     async def _write_summary(self, obs_id, summary, attributes, embedding, provider,
-                             prompt: PromptRef | None = None):
+                             prompt: PromptRef | None = None,
+                             native_usage: dict[str, int] | None = None):
         """Append an immutable summary pass AND repoint the fields the rest of
         the app uses (vlm_description + search embedding) at it. Raw passes are
         never modified. only the derived summary view moves forward."""
@@ -628,12 +669,27 @@ class EnrichmentManager:
                 .where(ObservationVlmPass.authoritative.is_(True))
             )).scalars().all():
                 p.authoritative = False
-            tokens_in, tokens_out, cost_cents = estimate_vlm_usage(
-                provider,
-                system_prompt=prompt.text if prompt else LENS_PROMPTS["summary"],
-                user_prompt=None,
-                output_text=summary,
+            has_native_usage = bool(
+                native_usage
+                and int(native_usage.get("tokens_in", 0)) > 0
+                and int(native_usage.get("tokens_out", 0)) >= 0
             )
+            if has_native_usage:
+                tokens_in = int(native_usage["tokens_in"])
+                tokens_out = int(native_usage["tokens_out"])
+                cost_cents = estimate_cost(
+                    getattr(provider, "kind", None),
+                    getattr(provider, "default_model", None),
+                    tokens_in,
+                    tokens_out,
+                )
+            else:
+                tokens_in, tokens_out, cost_cents = estimate_vlm_usage(
+                    provider,
+                    system_prompt=prompt.text if prompt else LENS_PROMPTS["summary"],
+                    user_prompt=None,
+                    output_text=summary,
+                )
             db.add(ObservationVlmPass(
                 observation_id=obs_id, pass_no=new_no, lens="summary",
                 prompt_key=prompt.key if prompt else "summary",
@@ -644,6 +700,7 @@ class EnrichmentManager:
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
                 cost_cents=cost_cents,
+                estimated=not has_native_usage,
                 description=summary, attributes=attributes, authoritative=True,
             ))
             obs.enrich_pass_count = new_no
