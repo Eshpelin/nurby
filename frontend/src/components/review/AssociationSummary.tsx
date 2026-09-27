@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { formatDateTime } from "@/lib/time";
 
 type Association = {
   id: string;
@@ -138,8 +139,15 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
                       <span className={evidence.role === "contradictory" ? "text-amber-300" : "text-emerald-300"}>
                         {evidence.role === "contradictory" ? "Conflict" : "Support"}
                       </span>
-                      {` · ${new Date(evidence.observed_at).toLocaleString()}`}
+                      {` · ${formatDateTime(evidence.observed_at)}`}
                       {evidence.explanation ? ` — ${evidence.explanation}` : ""}
+                      {Array.isArray(evidence.metadata.plate_reads) && evidence.metadata.plate_reads.length > 0 && (
+                        <span className="ml-2 text-foreground/80">
+                          Plate reads: {(evidence.metadata.plate_reads as { text?: string; confidence?: number | null }[])
+                            .map((read) => `${read.text || "unknown"}${typeof read.confidence === "number" ? ` (${Math.round(read.confidence * 100)}%)` : ""}`)
+                            .join(", ")}
+                        </span>
+                      )}
                       {token && evidence.observation_ids.length > 0 && (
                         <div className="mt-1 flex gap-1.5" aria-label="Evidence thumbnails">
                           {evidence.observation_ids.slice(0, 3).map((observationId) => {

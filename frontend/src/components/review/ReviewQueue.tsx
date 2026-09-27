@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { timeAgo } from "@/lib/time";
+import { formatDateTime, timeAgo } from "@/lib/time";
 
 type ReviewItem = {
   id: string;
@@ -346,8 +346,24 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                               {evidence.role === "contradictory" ? "Conflict" : "Support"}
                             </span>
                             <div className="min-w-0 flex-1">
-                              <span className="text-foreground">{new Date(evidence.observed_at).toLocaleString()}</span>
+                              <span className="text-foreground">{formatDateTime(evidence.observed_at)}</span>
                               {evidence.explanation ? ` — ${evidence.explanation}` : ""}
+                              {Array.isArray(evidence.metadata.plate_reads) && evidence.metadata.plate_reads.length > 0 && (
+                                <span className="ml-2 text-foreground/80">
+                                  Plate reads: {(evidence.metadata.plate_reads as { text?: string; confidence?: number | null }[])
+                                    .map((read) => `${read.text || "unknown"}${typeof read.confidence === "number" ? ` (${Math.round(read.confidence * 100)}%)` : ""}`)
+                                    .join(", ")}
+                                </span>
+                              )}
+                              {typeof evidence.metadata.identity_kind === "string" && (
+                                <span className="ml-2 text-foreground/80">Source: {evidence.metadata.identity_kind}</span>
+                              )}
+                              {typeof evidence.metadata.visit_timing === "object" && evidence.metadata.visit_timing !== null &&
+                                typeof (evidence.metadata.visit_timing as { relation_hint?: unknown }).relation_hint === "string" && (
+                                  <span className="ml-2 text-foreground/80">
+                                    Timing: {(evidence.metadata.visit_timing as { relation_hint: string }).relation_hint.replaceAll("_", " ")}
+                                  </span>
+                                )}
                               {token && evidence.observation_ids.length > 0 && (
                                 <div className="mt-1 flex gap-1.5" aria-label="Evidence thumbnails">
                                   {evidence.observation_ids.slice(0, 3).map((observationId) => {
@@ -384,7 +400,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                                 <div className="mt-1 text-[10px] text-amber-200">
                                   {evidence.transcript_audits.map((audit) => (
                                     <div key={audit.id}>
-                                      Correction logged: {audit.field === "transcript_speaker" ? "speaker attribution" : "transcript text"} · {new Date(audit.created_at).toLocaleString()}
+                                      Correction logged: {audit.field === "transcript_speaker" ? "speaker attribution" : "transcript text"} · {formatDateTime(audit.created_at)}
                                     </div>
                                   ))}
                                 </div>
@@ -400,7 +416,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                             <div className="mb-1 uppercase tracking-wide">Decision history</div>
                             {relationshipDetails[item.id].review_events?.slice(0, 5).map((event) => (
                               <div key={event.id}>
-                                {new Date(event.created_at).toLocaleString()} · {event.action} · {event.old_status} → {event.new_status}
+                                {formatDateTime(event.created_at)} · {event.action} · {event.old_status} → {event.new_status}
                                 {event.note ? ` — ${event.note}` : ""}
                                 {event.decision_metadata?.link_type
                                   ? ` · ${event.decision_metadata.link_type.replaceAll("_", " ")} reconciliation recorded`
@@ -429,38 +445,40 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                 {item.source_type === "association" && (
                   <>
                     {item.kind === "identity_suggestion" && item.provenance.relation === "possibly_named" && (
-                      <select
-                        aria-label={`Link ${item.title} to a person`}
-                        value={linkedPerson[item.id] || ""}
-                        onChange={(event) => {
-                          setLinkedPerson((current) => ({ ...current, [item.id]: event.target.value }));
-                          setLinkedCluster((current) => ({ ...current, [item.id]: "" }));
-                        }}
-                        className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
-                      >
-                        <option value="">Confirm name for this visual</option>
-                        {persons.map((person) => (
-                          <option key={person.id} value={person.id}>
-                            Link to {person.nickname || person.display_name}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        aria-label={`Link ${item.title} to an unknown visual cluster`}
-                        value={linkedCluster[item.id] || ""}
-                        onChange={(event) => {
-                          setLinkedCluster((current) => ({ ...current, [item.id]: event.target.value }));
-                          setLinkedPerson((current) => ({ ...current, [item.id]: "" }));
-                        }}
-                        className="max-w-44 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
-                      >
-                        <option value="">Keep current visual</option>
-                        {clusters.map((cluster) => (
-                          <option key={`${cluster.kind}:${cluster.id}`} value={`${cluster.kind}:${cluster.id}`}>
-                            Link to {cluster.label} ({cluster.kind})
-                          </option>
-                        ))}
-                      </select>
+                      <>
+                        <select
+                          aria-label={`Link ${item.title} to a person`}
+                          value={linkedPerson[item.id] || ""}
+                          onChange={(event) => {
+                            setLinkedPerson((current) => ({ ...current, [item.id]: event.target.value }));
+                            setLinkedCluster((current) => ({ ...current, [item.id]: "" }));
+                          }}
+                          className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
+                        >
+                          <option value="">Confirm name for this visual</option>
+                          {persons.map((person) => (
+                            <option key={person.id} value={person.id}>
+                              Link to {person.nickname || person.display_name}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          aria-label={`Link ${item.title} to an unknown visual cluster`}
+                          value={linkedCluster[item.id] || ""}
+                          onChange={(event) => {
+                            setLinkedCluster((current) => ({ ...current, [item.id]: event.target.value }));
+                            setLinkedPerson((current) => ({ ...current, [item.id]: "" }));
+                          }}
+                          className="max-w-44 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
+                        >
+                          <option value="">Keep current visual</option>
+                          {clusters.map((cluster) => (
+                            <option key={`${cluster.kind}:${cluster.id}`} value={`${cluster.kind}:${cluster.id}`}>
+                              Link to {cluster.label} ({cluster.kind})
+                            </option>
+                          ))}
+                        </select>
+                      </>
                     )}
                     {item.kind === "relationship_suggestion" && ["co_present_with", "arrives_with", "accompanies"].includes(String(item.provenance.relation)) && (
                       <>
