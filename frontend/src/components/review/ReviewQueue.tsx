@@ -291,6 +291,14 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                               : ""}
                           </p>
                         )}
+                        {Boolean(item.evidence.evidence_policy && typeof item.evidence.evidence_policy === "object") && (
+                          <p className="text-[10px] text-muted-foreground">
+                            Decision guidance: {String((item.evidence.evidence_policy as { confidence_band?: string }).confidence_band ?? "review").replaceAll("_", " ")}
+                            {String((item.evidence.evidence_policy as { decision_recommendation?: string }).decision_recommendation ?? "").replaceAll("_", " ")
+                              ? ` · ${String((item.evidence.evidence_policy as { decision_recommendation?: string }).decision_recommendation).replaceAll("_", " ")}`
+                              : ""}
+                          </p>
+                        )}
                         {relationshipDetails[item.id].evidence.slice(0, 5).map((evidence) => (
                           <div key={evidence.id} className="flex items-start gap-2 text-[10px] text-muted-foreground">
                             <span className={evidence.role === "contradictory" ? "text-amber-300" : "text-emerald-300"}>

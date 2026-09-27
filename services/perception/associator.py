@@ -168,10 +168,26 @@ def evidence_policy(
     a percentage that users could reasonably mistake for model certainty.
     """
     score, _ = evidence_balance(supporting, contradictory)
+    total = max(0, int(supporting or 0)) + max(0, int(contradictory or 0))
+    if total < 3:
+        confidence_band = "insufficient"
+        decision_recommendation = "collect_more_evidence"
+    elif contradictory >= supporting:
+        confidence_band = "conflicted"
+        decision_recommendation = "review_conflict"
+    elif score is not None and score >= 0.8 and supporting >= 3:
+        confidence_band = "strong_support"
+        decision_recommendation = "review_before_confirming"
+    else:
+        confidence_band = "supporting"
+        decision_recommendation = "review_before_confirming"
     return {
         "score": score,
         "score_kind": "support_balance",
         "score_is_calibrated_probability": False,
+        "confidence_band": confidence_band,
+        "decision_recommendation": decision_recommendation,
+        "minimum_evidence_count": 3,
         "promotion_basis": "distinct_local_calendar_days",
         "human_review_required": (
             source == "learned" and not user_confirmed and status != "rejected"

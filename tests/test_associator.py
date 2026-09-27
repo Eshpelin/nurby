@@ -20,6 +20,7 @@ from services.perception.associator import (
     cooccurrence_metrics,
     evidence_balance,
     evidence_policy,
+    evidence_policy,
     fold,
     journey_camera_ids,
     journeys_cooccur,
@@ -178,12 +179,29 @@ def test_evidence_balance_is_explicitly_not_a_probability():
     assert "not a calibrated probability" in explanation
 
 
+def test_evidence_policy_has_deterministic_reviewer_guidance():
+    insufficient = evidence_policy(2, 0, status="candidate", source="learned", user_confirmed=False)
+    assert insufficient["confidence_band"] == "insufficient"
+    assert insufficient["decision_recommendation"] == "collect_more_evidence"
+
+    conflicted = evidence_policy(3, 3, status="ambiguous", source="learned", user_confirmed=False)
+    assert conflicted["confidence_band"] == "conflicted"
+    assert conflicted["decision_recommendation"] == "review_conflict"
+
+    strong = evidence_policy(4, 0, status="established", source="learned", user_confirmed=False)
+    assert strong["confidence_band"] == "strong_support"
+    assert strong["decision_recommendation"] == "review_before_confirming"
+
+
 def test_evidence_policy_exposes_safe_score_semantics_and_review_requirement():
     policy = evidence_policy(3, 1, status="candidate", source="learned", user_confirmed=False)
     assert policy == {
         "score": 0.75,
         "score_kind": "support_balance",
         "score_is_calibrated_probability": False,
+        "confidence_band": "supporting",
+        "decision_recommendation": "review_before_confirming",
+        "minimum_evidence_count": 3,
         "promotion_basis": "distinct_local_calendar_days",
         "human_review_required": True,
         "supporting_evidence_count": 3,
