@@ -138,6 +138,19 @@ fail through a single forwarded TCP port unless the ICE story is solved:
   IP as an additional host candidate; enable ICE-TCP
   (`webrtcLocalTCPAddress`) so media can fall back to TCP through the ingress
   host when UDP `8189` is not forwarded.
+
+### ICE transport exposure
+
+The Compose default binds MediaMTX's ICE UDP port `8189` to loopback, just
+like the RTSP, HLS, WHEP HTTP, and MediaMTX API ports. This prevents a LAN
+client from bypassing Nurby's camera ACL by speaking directly to the relay.
+
+An operator who has deliberately configured a protected remote WebRTC/TURN
+topology may override this with `NURBY_WEBRTC_UDP_BIND` and
+`NURBY_WEBRTC_ADDITIONAL_HOSTS` in `.env`. Those values are deployment
+security settings, not ordinary camera settings; expose the port only behind
+the chosen network boundary and validate the resulting ICE candidates before
+enabling remote access.
 - **Hard fallback: HLS through the ingress.** Works through any HTTPS path,
   including tunnels and CGNAT, at the cost of a few seconds latency. The
   mobile player tries WHEP first with a fast (≈3 s) connection deadline, then

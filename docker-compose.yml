@@ -40,14 +40,17 @@ services:
     ports:
       - "127.0.0.1:8554:8554"       # RTSP (local development/ingestion only)
       - "127.0.0.1:8889:8889"       # WebRTC HTTP (API proxy is the client path)
-      - "8189:8189/udp"   # WebRTC ICE media
+      # Keep ICE media private by default. Remote deployments must explicitly
+      # choose a reachable, authenticated WebRTC/TURN topology rather than
+      # accidentally exposing a camera transport port to the LAN.
+      - "${NURBY_WEBRTC_UDP_BIND:-127.0.0.1}:8189:8189/udp"
       - "127.0.0.1:8888:8888"       # HLS (API proxy is the client path)
       - "127.0.0.1:9997:9997"       # MediaMTX API (local diagnostics only)
     environment:
       # Advertise 127.0.0.1 as an extra ICE host candidate so the host
       # browser can reach WebRTC media without needing the docker bridge
       # IP to be routable.
-      MTX_WEBRTCADDITIONALHOSTS: "127.0.0.1"
+      MTX_WEBRTCADDITIONALHOSTS: "${NURBY_WEBRTC_ADDITIONAL_HOSTS:-127.0.0.1}"
     volumes:
       - ./config/mediamtx.yml:/mediamtx.yml
 
