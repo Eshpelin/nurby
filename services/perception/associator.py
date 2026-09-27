@@ -36,6 +36,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import estop
@@ -552,7 +553,7 @@ async def record_pairing(
             return existing
 
     if existing is None:
-        existing = EntityAssociation(
+        candidate = EntityAssociation(
             subject_kind=subject_kind,
             subject_key=subject_key,
             object_kind=object_kind,
@@ -564,15 +565,54 @@ async def record_pairing(
             evidence_count=0,
             distinct_days=0,
         )
-        db.add(existing)
+        # The unique edge key protects first creation, but a duplicate-key
+        # error would otherwise abort the caller's whole transaction. Keep
+        # the race inside a savepoint, then reuse the row created by the
+        # winning worker. This makes finalizer retries safe without asking
+        # every caller to implement its own retry loop.
+        try:
+            async with db.begin_nested():
+                db.add(candidate)
+                await db.flush()
+            existing = candidate
+        except IntegrityError:
+            existing = (
+                await db.execute(
+                    select(EntityAssociation)
+                    .where(EntityAssociation.subject_kind == subject_kind)
+                    .where(EntityAssociation.subject_key == subject_key)
+                    .where(EntityAssociation.object_kind == object_kind)
+                    .where(EntityAssociation.object_key == object_key)
+                    .where(EntityAssociation.relation == relation)
+                    .where(EntityAssociation.source == "learned")
+                    .with_for_update()
+                    .limit(1)
+                )
+            ).scalars().first()
+            if existing is None:
+                # The conflict was not the association's unique key (for
+                # example, a schema or foreign-key failure); preserve the
+                # original error instead of hiding it as a retry.
+                raise
+
+            if episode_key:
+                prior_evidence = (
+                    await db.execute(
+                        select(AssociationEvidence.id)
+                        .where(AssociationEvidence.association_id == existing.id)
+                        .where(AssociationEvidence.episode_key == episode_key)
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+                if prior_evidence:
+                    return existing
     elif object_label and existing.object_label != object_label:
         existing.object_label = object_label
 
     if not fold(existing, when, tz_name, min_days, camera_id=camera_id):
         return None
     if episode_key:
-        await db.flush()
-        db.add(AssociationEvidence(
+        evidence = AssociationEvidence(
             association_id=existing.id,
             episode_key=episode_key,
             evidence_kind=evidence_kind,
@@ -587,7 +627,26 @@ async def record_pairing(
                 "vehicle_label": object_label,
                 **(evidence_metadata or {}),
             },
-        ))
+        )
+        try:
+            async with db.begin_nested():
+                db.add(evidence)
+                await db.flush()
+        except IntegrityError:
+            # Another worker may have committed this exact episode after our
+            # initial lookup. The unique ledger key makes that replay a
+            # successful no-op rather than a failed journey finalization.
+            prior_evidence = (
+                await db.execute(
+                    select(AssociationEvidence.id)
+                    .where(AssociationEvidence.association_id == existing.id)
+                    .where(AssociationEvidence.episode_key == episode_key)
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if prior_evidence:
+                return existing
+            raise
     return existing
 
 
