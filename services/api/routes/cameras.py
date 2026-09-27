@@ -6,7 +6,7 @@ import platform
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlparse, urlsplit
 
 import cv2
 import httpx
@@ -342,7 +342,69 @@ async def proxy_whep(
     headers = {}
     if relay.headers.get("content-type"):
         headers["content-type"] = relay.headers["content-type"]
+    location = relay.headers.get("location")
+    if location:
+        session_id = urlsplit(location).path.rstrip("/").rsplit("/", 1)[-1]
+        if session_id and session_id not in {slug, "whep"} and "/" not in session_id:
+            headers["location"] = f"/api/cameras/{camera_id}/whep/{quote(session_id, safe='') }"
     return Response(content=relay.content, status_code=relay.status_code, headers=headers)
+
+
+async def _proxy_whep_session(
+    camera_id: uuid.UUID,
+    session_id: str,
+    request: Request,
+    method: str,
+    current_user: User,
+    db: AsyncSession,
+):
+    allowed = await allowed_camera_ids(current_user, db)
+    if allowed is not ALL and camera_id not in allowed:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    camera = await db.get(Camera, camera_id)
+    if camera is None:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    from services.ingestion.mediamtx_mux import mux_slug
+
+    slug = mux_slug(camera.id, camera.stream_type, camera.stream_url, camera.webcam_device)
+    if not slug or not session_id or "/" in session_id or ".." in session_id:
+        raise HTTPException(status_code=404, detail="WHEP session not found")
+    relay_url = f"{settings.mediamtx_http_url.rstrip('/')}/{quote(slug, safe='')}/whep/{quote(session_id, safe='')}"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            relay = await client.request(
+                method,
+                relay_url,
+                content=await request.body() if method == "PATCH" else None,
+                headers={"Content-Type": "application/trickle-ice-sdpfrag"} if method == "PATCH" else None,
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="Live relay unavailable") from exc
+    if relay.status_code >= 400:
+        raise HTTPException(status_code=503, detail="Live relay rejected the session request")
+    return Response(status_code=relay.status_code, content=relay.content)
+
+
+@router.patch("/{camera_id}/whep/{session_id}")
+async def patch_whep_session(
+    camera_id: uuid.UUID,
+    session_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _proxy_whep_session(camera_id, session_id, request, "PATCH", current_user, db)
+
+
+@router.delete("/{camera_id}/whep/{session_id}")
+async def delete_whep_session(
+    camera_id: uuid.UUID,
+    session_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _proxy_whep_session(camera_id, session_id, request, "DELETE", current_user, db)
 
 
 @router.get("/{camera_id}/hls/{resource:path}")

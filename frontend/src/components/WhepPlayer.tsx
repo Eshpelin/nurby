@@ -12,6 +12,7 @@ export function WhepPlayer({ cameraId, onFailed }: { cameraId: string; onFailed?
   useEffect(() => {
     let disposed = false;
     let peer: RTCPeerConnection | null = null;
+    let sessionUrl: string | null = null;
 
     const fail = () => {
       if (disposed) return;
@@ -55,6 +56,7 @@ export function WhepPlayer({ cameraId, onFailed }: { cameraId: string; onFailed?
           body: local.sdp,
         });
         if (!response.ok) throw new Error(`WHEP ${response.status}`);
+        sessionUrl = response.headers.get("location");
         const answer = await response.text();
         await peer.setRemoteDescription({ type: "answer", sdp: answer });
       } catch {
@@ -67,6 +69,9 @@ export function WhepPlayer({ cameraId, onFailed }: { cameraId: string; onFailed?
       disposed = true;
       if (videoRef.current) videoRef.current.srcObject = null;
       peer?.close();
+      if (sessionUrl) {
+        void authFetch(sessionUrl, { method: "DELETE" }).catch(() => undefined);
+      }
     };
   }, [authFetch, cameraId, onFailed]);
 

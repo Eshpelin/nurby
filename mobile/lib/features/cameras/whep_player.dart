@@ -24,6 +24,7 @@ class _WhepPlayerState extends State<WhepPlayer> {
   RTCPeerConnection? _pc;
   bool _connected = false;
   bool _failed = false;
+  String? _sessionUrl;
 
   @override
   void initState() {
@@ -80,6 +81,7 @@ class _WhepPlayerState extends State<WhepPlayer> {
           receiveTimeout: const Duration(seconds: 10),
         ),
       );
+      _sessionUrl = res.headers.value('location');
       await pc.setRemoteDescription(RTCSessionDescription(res.data, 'answer'));
     } catch (_) {
       _fail();
@@ -110,6 +112,10 @@ class _WhepPlayerState extends State<WhepPlayer> {
 
   @override
   void dispose() {
+    final session = _sessionUrl;
+    if (session != null && widget.api != null) {
+      unawaited(widget.api!.dio.delete(session).then<void>((_) {}, onError: (_, __) {}));
+    }
     _pc?.close();
     _renderer.srcObject = null;
     _renderer.dispose();

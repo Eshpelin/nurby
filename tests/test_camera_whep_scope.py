@@ -79,7 +79,10 @@ def test_whep_forwards_only_an_authorized_camera(monkeypatch):
     class _RelayResponse:
         status_code = 201
         content = b"answer"
-        headers = {"content-type": "application/sdp"}
+        headers = {
+            "content-type": "application/sdp",
+            "location": f"http://mediamtx:8889/cam-{db.allowed_camera}/whep/session-1",
+        }
 
     class _RelayClient:
         async def __aenter__(self):
@@ -93,12 +96,22 @@ def test_whep_forwards_only_an_authorized_camera(monkeypatch):
             assert kwargs["content"] == b"offer"
             return _RelayResponse()
 
+        async def request(self, method, url, **kwargs):
+            assert method == "DELETE"
+            assert url.endswith(f"/cam-{db.allowed_camera}/whep/session-1")
+            return type("Response", (), {"status_code": 204, "content": b"", "headers": {}})()
+
     monkeypatch.setattr(cameras.httpx, "AsyncClient", lambda **kwargs: _RelayClient())
     with _client(db) as client:
         response = client.post(f"/cameras/{db.allowed_camera}/whep", content=b"offer")
 
     assert response.status_code == 201
     assert response.content == b"answer"
+    assert response.headers["location"] == f"/api/cameras/{db.allowed_camera}/whep/session-1"
+
+    with _client(db) as client:
+        closed = client.delete(response.headers["location"].replace("/api", "", 1))
+    assert closed.status_code == 204
 
 
 def test_hls_rejects_foreign_camera_before_relay(monkeypatch):
