@@ -45,7 +45,7 @@ type AssociationSummaryProps = {
 };
 
 export function AssociationSummary({ objectKind, objectKey, subjectKind, subjectKey }: AssociationSummaryProps) {
-  const { authFetch } = useAuth();
+  const { authFetch, token } = useAuth();
   const [items, setItems] = useState<Association[] | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<string, EvidenceDetail>>({});
@@ -140,6 +140,19 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
                       </span>
                       {` · ${new Date(evidence.observed_at).toLocaleString()}`}
                       {evidence.explanation ? ` — ${evidence.explanation}` : ""}
+                      {token && evidence.observation_ids.length > 0 && (
+                        <div className="mt-1 flex gap-1.5" aria-label="Evidence thumbnails">
+                          {evidence.observation_ids.slice(0, 3).map((observationId) => {
+                            const thumbnail = `/api/observations/${observationId}/thumbnail?token=${encodeURIComponent(token)}`;
+                            return (
+                              <a key={observationId} href={thumbnail} target="_blank" rel="noreferrer" title="Open evidence frame">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={thumbnail} alt="Evidence frame" className="h-12 w-16 rounded border border-border object-cover" />
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
                       {typeof evidence.metadata.visit_timing === "object" && evidence.metadata.visit_timing !== null &&
                         typeof (evidence.metadata.visit_timing as { relation_hint?: unknown }).relation_hint === "string" && (
                           <span className="ml-2 text-foreground/80">

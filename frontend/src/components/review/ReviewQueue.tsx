@@ -261,6 +261,19 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                             <div className="min-w-0 flex-1">
                               <span className="text-foreground">{new Date(evidence.observed_at).toLocaleString()}</span>
                               {evidence.explanation ? ` — ${evidence.explanation}` : ""}
+                              {token && evidence.observation_ids.length > 0 && (
+                                <div className="mt-1 flex gap-1.5" aria-label="Evidence thumbnails">
+                                  {evidence.observation_ids.slice(0, 3).map((observationId) => {
+                                    const thumbnail = `/api/observations/${observationId}/thumbnail?token=${encodeURIComponent(token)}`;
+                                    return (
+                                      <a key={observationId} href={thumbnail} target="_blank" rel="noreferrer" title="Open evidence frame">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={thumbnail} alt="Evidence frame" className="h-12 w-16 rounded border border-border object-cover" />
+                                      </a>
+                                    );
+                                  })}
+                                </div>
+                              )}
                               {evidence.observation_ids.slice(0, 2).map((observationId) => (
                                 <a
                                   key={observationId}
