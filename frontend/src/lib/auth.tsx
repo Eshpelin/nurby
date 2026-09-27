@@ -16,6 +16,7 @@ export interface User {
   id: string;
   email: string;
   display_name: string;
+  locale?: string;
   role: string;
   is_active: boolean;
   // Auto-created first-run owner that has not set real credentials yet.

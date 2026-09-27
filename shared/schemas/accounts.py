@@ -191,6 +191,7 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     display_name: str | None
+    locale: str = "en"
     role: str
     camera_access_mode: Literal["all", "selected", "none"] = "none"
     is_active: bool
@@ -200,7 +201,16 @@ class UserResponse(BaseModel):
     created_at: datetime
     last_login_at: datetime | None
 
+    @field_validator("locale", mode="before")
+    @classmethod
+    def _default_locale(cls, value):
+        return value or "en"
+
     model_config = {"from_attributes": True}
+
+
+class LocaleUpdate(BaseModel):
+    locale: Literal["en", "es"]
 
 
 # Pragmatic email shape check. Not full RFC 5322, just enough to stop a

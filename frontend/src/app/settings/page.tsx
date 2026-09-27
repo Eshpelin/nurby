@@ -22,6 +22,7 @@ import { timezoneOptions } from "@/lib/timezones";
 import { rememberPreferredAgentModel } from "@/lib/agent-model-preference";
 import { CostUsageCard } from "@/components/CostUsageCard";
 import { ExpectedActivityCard } from "@/components/ExpectedActivityCard";
+import { LocaleSelector } from "@/components/settings/LocaleSelector";
 
 import InviteKeysModal from "./InviteKeysModal";
 import type {
@@ -622,6 +623,8 @@ export default function SettingsPage() {
           Most settings save immediately. Forms with a Save button show a confirmation when they are applied.
         </p>
       </div>
+
+      <LocaleSelector />
 
       <div className="mb-6 rounded-lg border border-border bg-card">
         <div className="px-4 py-3 border-b border-border">

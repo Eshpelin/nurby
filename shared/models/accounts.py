@@ -34,6 +34,7 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    locale: Mapped[str] = mapped_column(String(16), default="en", server_default="en", nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="viewer")  # admin, viewer, guardian
     camera_access_mode: Mapped[str] = mapped_column(String(16), default="none", server_default="none", nullable=False)
