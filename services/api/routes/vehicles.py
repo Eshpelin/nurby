@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.associator import evidence_balance
-from shared.auth import get_current_user, require_query_token
+from shared.auth import get_current_user, require_admin, require_query_token
 from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.config import settings
 from shared.database import get_db
@@ -72,6 +72,45 @@ class VehicleUpdate(BaseModel):
     model: str | None = None
     color: str | None = None
     is_starred: bool | None = None
+
+
+class VehicleMerge(BaseModel):
+    """Explicit operator reconciliation of two auto-created vehicle rows."""
+
+    source_id: uuid.UUID
+    note: str | None = None
+
+
+def _rewrite_vehicle_detection_ids(value, source_id: str, target_id: str, target_key: str):
+    """Rewrite only persisted vehicle identity fields in observation JSON.
+
+    Detection metadata and timestamps are deliberately left untouched. This
+    makes a merge reversible at the evidence level and avoids changing what
+    the detector originally saw.
+    """
+    if not isinstance(value, dict):
+        return value
+    vehicles = value.get("vehicles")
+    if not isinstance(vehicles, list):
+        return value
+    rewritten = dict(value)
+    rewritten["vehicles"] = [
+        {
+            **entry,
+            "vehicle_id": target_id if str(entry.get("vehicle_id")) == source_id else entry.get("vehicle_id"),
+            "identity_key": target_key if str(entry.get("vehicle_id")) == source_id else entry.get("identity_key"),
+        }
+        for entry in vehicles
+        if isinstance(entry, dict)
+    ]
+    return rewritten
+
+
+def _merge_histogram(left: dict | None, right: dict | None) -> dict:
+    merged = {str(k): int(v or 0) for k, v in (left or {}).items()}
+    for key, value in (right or {}).items():
+        merged[str(key)] = merged.get(str(key), 0) + int(value or 0)
+    return merged
 
 
 def _plate_correction_metadata(vehicle_id: uuid.UUID, old_plate: str | None, new_plate: str | None) -> dict:
@@ -309,6 +348,107 @@ async def update_vehicle(
     await db.commit()
     await db.refresh(v)
     return v
+
+
+@router.post("/{target_id}/merge", response_model=VehicleResponse)
+async def merge_vehicle(
+    target_id: uuid.UUID,
+    body: VehicleMerge,
+    _current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Merge a duplicate vehicle identity without discarding its evidence.
+
+    This is intentionally an explicit admin action. It rewrites historical
+    observation references to the surviving vehicle, folds duplicate learned
+    association evidence into the survivor, and records the original source
+    association in the evidence metadata. It never infers ownership.
+    """
+    if body.source_id == target_id:
+        raise HTTPException(status_code=400, detail="Cannot merge a vehicle into itself")
+    target = await db.get(Vehicle, target_id)
+    source = await db.get(Vehicle, body.source_id)
+    if target is None or source is None:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    source_id = str(body.source_id)
+    target_id_text = str(target_id)
+    observations = (
+        await db.execute(select(Observation).where(Observation.vehicle_detections.is_not(None)))
+    ).scalars().all()
+    rewritten_count = 0
+    for observation in observations:
+        detections = observation.vehicle_detections or {}
+        rewritten = _rewrite_vehicle_detection_ids(
+            detections, source_id, target_id_text, target.identity_key
+        )
+        if rewritten != detections:
+            observation.vehicle_detections = rewritten
+            rewritten_count += 1
+
+    source_edges = (
+        await db.execute(
+            select(EntityAssociation)
+            .where(EntityAssociation.object_kind == "vehicle")
+            .where(EntityAssociation.object_key == source_id)
+        )
+    ).scalars().all()
+    for source_edge in source_edges:
+        target_edge = (
+            await db.execute(
+                select(EntityAssociation)
+                .where(EntityAssociation.subject_kind == source_edge.subject_kind)
+                .where(EntityAssociation.subject_key == source_edge.subject_key)
+                .where(EntityAssociation.object_kind == "vehicle")
+                .where(EntityAssociation.object_key == target_id_text)
+                .where(EntityAssociation.relation == source_edge.relation)
+                .where(EntityAssociation.source == source_edge.source)
+            )
+        ).scalar_one_or_none()
+        if target_edge is None:
+            source_edge.object_key = target_id_text
+            source_edge.object_label = target.display_name
+            continue
+
+        evidence = (
+            await db.execute(
+                select(AssociationEvidence).where(AssociationEvidence.association_id == source_edge.id)
+            )
+        ).scalars().all()
+        for row in evidence:
+            row.association_id = target_edge.id
+            row.episode_key = f"merge:{source_id}:{row.episode_key}"[:255]
+            metadata = dict(row.evidence_metadata or {})
+            metadata["reconciled_from_vehicle_id"] = source_id
+            row.evidence_metadata = metadata
+        events = (
+            await db.execute(
+                select(AssociationReviewEvent).where(AssociationReviewEvent.association_id == source_edge.id)
+            )
+        ).scalars().all()
+        for event in events:
+            event.association_id = target_edge.id
+        target_edge.evidence_count += source_edge.evidence_count
+        target_edge.supporting_evidence_count += source_edge.supporting_evidence_count
+        target_edge.contradictory_evidence_count += source_edge.contradictory_evidence_count
+        target_edge.distinct_days = max(target_edge.distinct_days, source_edge.distinct_days)
+        target_edge.hour_histogram = _merge_histogram(target_edge.hour_histogram, source_edge.hour_histogram)
+        target_edge.dow_histogram = _merge_histogram(target_edge.dow_histogram, source_edge.dow_histogram)
+        target_edge.camera_histogram = _merge_histogram(target_edge.camera_histogram, source_edge.camera_histogram)
+        target_edge.first_seen_at = min(filter(None, (target_edge.first_seen_at, source_edge.first_seen_at)), default=None)
+        target_edge.last_seen_at = max(filter(None, (target_edge.last_seen_at, source_edge.last_seen_at)), default=None)
+        await db.delete(source_edge)
+
+    target.sighting_count = (target.sighting_count or 0) + (source.sighting_count or 0)
+    target.first_seen_at = min(filter(None, (target.first_seen_at, source.first_seen_at)), default=None)
+    target.last_seen_at = max(filter(None, (target.last_seen_at, source.last_seen_at)), default=None)
+    if not target.photo_path and source.photo_path:
+        target.photo_path = source.photo_path
+    target.is_provisional = target.is_provisional and source.is_provisional
+    await db.delete(source)
+    await db.commit()
+    await db.refresh(target)
+    return target
 
 
 @router.delete("/{vehicle_id}", status_code=204)

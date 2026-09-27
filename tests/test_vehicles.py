@@ -62,6 +62,36 @@ def test_plate_correction_metadata_preserves_historical_evidence():
     }
 
 
+def test_vehicle_merge_rewrites_identity_without_changing_detection_metadata():
+    from services.api.routes.vehicles import _rewrite_vehicle_detection_ids
+
+    payload = {
+        "vehicles": [
+            {
+                "vehicle_id": "source",
+                "identity_key": "OLD123",
+                "plate_text": "OLD123",
+                "confidence": 0.81,
+                "bbox": [1, 2, 3, 4],
+            },
+            {"vehicle_id": "other", "identity_key": "OTHER"},
+        ],
+        "count": 2,
+    }
+
+    rewritten = _rewrite_vehicle_detection_ids(payload, "source", "target", "NEW456")
+
+    assert rewritten["vehicles"][0] == {
+        "vehicle_id": "target",
+        "identity_key": "NEW456",
+        "plate_text": "OLD123",
+        "confidence": 0.81,
+        "bbox": [1, 2, 3, 4],
+    }
+    assert rewritten["vehicles"][1] == payload["vehicles"][1]
+    assert payload["vehicles"][0]["vehicle_id"] == "source"
+
+
 # ── identify_vehicles ────────────────────────────────────────────────
 
 def _exec_none():
