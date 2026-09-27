@@ -32,6 +32,7 @@ from shared.models.audio import (  # noqa: F401
     AudioAuditLog,
     AudioCapture,
     AudioDetection,
+    VoiceprintSampleReview,
     Conversation,
     SpeechEvent,
     Summary,

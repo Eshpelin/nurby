@@ -57,6 +57,7 @@ from services.api.routes import (
     users,
     vehicles,
     voice,
+    voiceprints,
     webhook_subscriptions,
 )
 from services.api.ws import router as ws_router
@@ -322,6 +323,7 @@ app.include_router(doctor.router, prefix="/api", tags=["doctor"])
 app.include_router(coverage.router, prefix="/api", tags=["coverage"])
 app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
 app.include_router(voice.router, prefix="/api/voice", tags=["voice"])
+app.include_router(voiceprints.router, prefix="/api/voiceprints", tags=["voiceprints"])
 app.include_router(detection_models.router, prefix="/api/detection-models", tags=["detection-models"])
 app.include_router(recordings.router, prefix="/api/recordings", tags=["recordings"])
 app.include_router(shares.router, prefix="/api/shares", tags=["shares"])
