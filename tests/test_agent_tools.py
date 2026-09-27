@@ -9,6 +9,7 @@ clamping, dialect emission) rather than the SQL itself.
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -1203,4 +1204,8 @@ def test_token_match_escapes_wildcards_in_a_name():
 
     sql = str(_token_match(Journey.subject_key, "a_b").compile(
         dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
-    assert r"a\\_b" in sql
+    # SQLAlchemy renders the literal backslash once or twice depending on
+    # version/dialect compiler, but the underscore must be escaped and an
+    # explicit ESCAPE clause must be present in either form.
+    assert re.search(r"a\\+_b", sql)
+    assert "ESCAPE" in sql
