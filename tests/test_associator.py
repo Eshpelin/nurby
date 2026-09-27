@@ -342,6 +342,19 @@ def test_vehicle_visit_timing_preserves_unknown_timing_as_co_presence():
     assert result["relation_hint"] == "co_present"
 
 
+def test_vehicle_timing_relations_are_explicit_and_reviewable():
+    assert assoc_mod.vehicle_visit_timing(
+        {"first_seen_at": _at(1, 8), "last_seen_at": _at(1, 8, 40)},
+        _at(1, 8),
+        _at(1, 9),
+    )["relation_hint"] == "arrives_with"
+    assert assoc_mod.vehicle_visit_timing(
+        {"first_seen_at": _at(1, 8, 40), "last_seen_at": _at(1, 9)},
+        _at(1, 8),
+        _at(1, 9),
+    )["relation_hint"] == "leaves_with"
+
+
 def test_journey_camera_ids_dedupes_and_skips_junk():
     import uuid as _uuid
 

@@ -684,6 +684,7 @@ async def process_journey(
                 label = vehicle.nickname or vehicle.display_name or label
         except (ValueError, AttributeError, TypeError):
             vehicle = None
+        timing = vehicle_visit_timing(seen, start, end)
         edge = await record_pairing(
             db,
             subject_kind=journey.subject_kind,
@@ -704,13 +705,45 @@ async def process_journey(
                 "identity_kind": seen.get("identity_kind"),
                 "plate_text": seen.get("plate_text"),
                 "plate_reads": seen.get("plate_reads") or [],
-                "visit_timing": vehicle_visit_timing(seen, start, end),
+                "visit_timing": timing,
             },
             evidence_kind="vehicle_pairing",
             evidence_explanation="The subject and vehicle were observed in the same finalized visit episode.",
         )
         if edge is not None:
             touched += 1
+        relation_hint = timing.get("relation_hint")
+        if relation_hint in {"arrives_with", "leaves_with", "arrives_and_leaves_with"}:
+            relation_edge = await record_pairing(
+                db,
+                subject_kind=journey.subject_kind,
+                subject_key=journey.subject_key,
+                object_kind="vehicle",
+                object_key=vehicle_id,
+                object_label=label,
+                relation=str(relation_hint),
+                when=start,
+                tz_name=tz_name,
+                min_days=min_days,
+                camera_id=seen.get("camera_id"),
+                episode_key=f"{journey.id}:timing:{relation_hint}",
+                journey_id=journey.id,
+                observation_ids=seen.get("observation_ids") or [],
+                camera_ids=seen.get("camera_ids") or [str(camera_id) for camera_id in cameras],
+                evidence_metadata={
+                    "identity_kind": seen.get("identity_kind"),
+                    "plate_text": seen.get("plate_text"),
+                    "plate_reads": seen.get("plate_reads") or [],
+                    "visit_timing": timing,
+                },
+                evidence_kind="vehicle_timing_relation",
+                evidence_explanation=(
+                    "The subject and vehicle were observed entering or leaving together "
+                    "in a finalized visit episode."
+                ),
+            )
+            if relation_edge is not None:
+                touched += 1
     return touched
 
 

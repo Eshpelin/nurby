@@ -305,7 +305,8 @@ class EntityAssociation(Base):
     object_kind: Mapped[str] = mapped_column(String(16), nullable=False)
     object_key: Mapped[str] = mapped_column(String(255), nullable=False)
     object_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # uses | accompanies | arrives_with | authorized_for
+    # uses | accompanies | arrives_with | leaves_with |
+    # arrives_and_leaves_with | authorized_for
     relation: Mapped[str] = mapped_column(String(32), nullable=False, default="uses")
     # learned (inferred from co-presence) | declared (asserted by an admin)
     source: Mapped[str] = mapped_column(String(16), nullable=False, default="learned")
