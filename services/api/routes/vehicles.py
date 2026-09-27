@@ -17,11 +17,20 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.perception.associator import evidence_balance
 from shared.auth import get_current_user, require_query_token
 from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
 from shared.config import settings
 from shared.database import get_db
-from shared.models import Camera, Observation, User, Vehicle
+from shared.models import (
+    AssociationEvidence,
+    AssociationReviewEvent,
+    Camera,
+    EntityAssociation,
+    Observation,
+    User,
+    Vehicle,
+)
 from shared.paths import resolve_inside
 
 router = APIRouter()
@@ -63,6 +72,17 @@ class VehicleUpdate(BaseModel):
     model: str | None = None
     color: str | None = None
     is_starred: bool | None = None
+
+
+def _plate_correction_metadata(vehicle_id: uuid.UUID, old_plate: str | None, new_plate: str | None) -> dict:
+    """Describe a human plate correction without rewriting old observations."""
+    return {
+        "policy": "human_plate_correction",
+        "vehicle_id": str(vehicle_id),
+        "previous_plate": old_plate,
+        "corrected_plate": new_plate,
+        "historical_evidence_preserved": True,
+    }
 
 
 def _vehicle_ids_in(obs: Observation) -> set[str]:
@@ -232,18 +252,60 @@ async def get_vehicle(
 async def update_vehicle(
     vehicle_id: uuid.UUID,
     body: VehicleUpdate,
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     v = await db.get(Vehicle, vehicle_id)
     if v is None:
         raise HTTPException(status_code=404, detail="Vehicle not found")
     data = body.model_dump(exclude_unset=True)
+    old_plate = v.license_plate
+    plate_changed = "license_plate" in data and data["license_plate"] != old_plate
     for field, value in data.items():
         setattr(v, field, value)
     # A human edited it. no longer a provisional auto-guess.
     if any(k in data for k in ("display_name", "make", "model", "license_plate")):
         v.is_provisional = False
+    if plate_changed:
+        now = _now()
+        associations = (
+            await db.execute(
+                select(EntityAssociation)
+                .where(EntityAssociation.object_kind == "vehicle")
+                .where(EntityAssociation.object_key == str(vehicle_id))
+                .where(EntityAssociation.source == "learned")
+                .where(EntityAssociation.status != "rejected")
+            )
+        ).scalars().all()
+        for association in associations:
+            db.add(AssociationEvidence(
+                association_id=association.id,
+                episode_key=f"plate-correction:{vehicle_id}:{now.isoformat()}",
+                evidence_kind="vehicle_plate_correction",
+                role="contradictory",
+                observed_at=now,
+                camera_ids=list((association.camera_histogram or {}).keys()),
+                explanation="A human corrected the vehicle plate; historical reads remain unchanged and the learned association needs review.",
+                evidence_metadata=_plate_correction_metadata(vehicle_id, old_plate, data["license_plate"]),
+            ))
+            association.contradictory_evidence_count = int(
+                getattr(association, "contradictory_evidence_count", 0) or 0
+            ) + 1
+            association.confidence_score, association.decision_explanation = evidence_balance(
+                int(getattr(association, "supporting_evidence_count", association.evidence_count) or 0),
+                association.contradictory_evidence_count,
+            )
+            old_status = association.status
+            if not association.user_confirmed and association.status == "established":
+                association.status = "ambiguous"
+            db.add(AssociationReviewEvent(
+                association_id=association.id,
+                reviewer_user_id=current_user.id,
+                action="contradiction",
+                old_status=old_status,
+                new_status=association.status,
+                note="Vehicle plate corrected by a user; review the learned association evidence.",
+            ))
     await db.commit()
     await db.refresh(v)
     return v

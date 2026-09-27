@@ -47,6 +47,21 @@ def test_parse_attributes():
     assert make2 is None
 
 
+def test_plate_correction_metadata_preserves_historical_evidence():
+    from services.api.routes.vehicles import _plate_correction_metadata
+
+    vehicle_id = uuid.uuid4()
+    metadata = _plate_correction_metadata(vehicle_id, "OLD123", "NEW456")
+
+    assert metadata == {
+        "policy": "human_plate_correction",
+        "vehicle_id": str(vehicle_id),
+        "previous_plate": "OLD123",
+        "corrected_plate": "NEW456",
+        "historical_evidence_preserved": True,
+    }
+
+
 # ── identify_vehicles ────────────────────────────────────────────────
 
 def _exec_none():
