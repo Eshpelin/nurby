@@ -34,6 +34,7 @@ from shared.models import (
     FaceClusterSample,
     Incident,
     Notification,
+    Observation,
     Person,
     Transcript,
     User,
@@ -113,6 +114,14 @@ def _scoped_evidence(row: AssociationEvidence, allowed_ids: set[str] | None) -> 
         "fully_visible": fully_visible,
         "transcript_id": transcript_id if fully_visible else None,
     }
+
+
+def _reconcile_observation_sources(scoped: dict, existing_ids: set[str]) -> dict:
+    """Remove stale frame references and report whether any source remains."""
+    original = [str(value) for value in (scoped.get("observation_ids") or [])]
+    scoped["observation_ids"] = [value for value in original if value in existing_ids]
+    scoped["observation_sources_available"] = bool(scoped["observation_ids"])
+    return scoped
 
 
 def _review_visible(camera_id):
@@ -879,11 +888,29 @@ async def get_relationship_suggestion(
             .order_by(AssociationEvidence.observed_at.desc())
         )
     ).scalars().all()
+    observation_ids: set[uuid.UUID] = set()
+    for row in rows:
+        for value in row.observation_ids or []:
+            try:
+                observation_ids.add(uuid.UUID(str(value)))
+            except (TypeError, ValueError):
+                continue
+    existing_observation_ids: set[str] = set()
+    if observation_ids:
+        existing_observation_ids = {
+            str(value)
+            for value in (
+                await db.execute(
+                    select(Observation.id).where(Observation.id.in_(observation_ids))
+                )
+            ).scalars().all()
+        }
     evidence = []
     for row in rows:
         scoped = _scoped_evidence(row, allowed_ids)
         if scoped is None:
             continue
+        scoped = _reconcile_observation_sources(scoped, existing_observation_ids)
         transcript_id = scoped["transcript_id"]
         transcript_exists = True
         transcript_edited = False
@@ -901,7 +928,11 @@ async def get_relationship_suggestion(
         elif transcript_id and transcript_edited:
             source_status = "source_changed"
         else:
-            source_status = "available" if row.observation_ids or row.journey_id or transcript_id else "source_expired"
+            source_status = (
+                "available"
+                if scoped["observation_sources_available"] or row.journey_id or transcript_id
+                else "source_expired"
+            )
         evidence.append({
             **scoped,
             "source_status": source_status,

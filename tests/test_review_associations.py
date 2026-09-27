@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from services.api.routes.review import _scoped_evidence
 from services.api.routes.review import _association_visible
+from services.api.routes.review import _reconcile_observation_sources
 from shared.camera_access import ALL
 
 
@@ -58,3 +59,25 @@ def test_association_visibility_is_camera_scoped_before_queue_pagination():
     assert _association_visible(row, {"camera-a"}) is True
     assert _association_visible(row, {"camera-c"}) is False
     assert _association_visible(row, ALL) is True
+
+
+def test_deleted_observation_sources_are_removed_from_review_evidence():
+    row = _evidence(cameras=["camera-a"], observations=["keep", "deleted"])
+
+    result = _reconcile_observation_sources(
+        _scoped_evidence(row, {"camera-a"}), {"keep"}
+    )
+
+    assert result["observation_ids"] == ["keep"]
+    assert result["observation_sources_available"] is True
+
+
+def test_review_evidence_marks_all_deleted_observation_sources_unavailable():
+    row = _evidence(cameras=["camera-a"], observations=["deleted"])
+
+    result = _reconcile_observation_sources(
+        _scoped_evidence(row, {"camera-a"}), set()
+    )
+
+    assert result["observation_ids"] == []
+    assert result["observation_sources_available"] is False
