@@ -20,8 +20,8 @@ import json
 import logging
 
 from shared.clock import stamp_now
-from shared.redis_keys import LEGACY_HEALTH_PREFIX, health_key
 from shared.config import settings
+from shared.redis_keys import LEGACY_HEALTH_PREFIX, health_key
 
 logger = logging.getLogger("nurby.component_health")
 

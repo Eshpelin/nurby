@@ -18,7 +18,7 @@ import json
 import logging
 
 from shared.config import settings
-from shared.redis_keys import LEGACY_MQTT_BUS_CHANNEL, mqtt_bus_channel
+from shared.redis_keys import mqtt_bus_channel
 
 logger = logging.getLogger(__name__)
 
