@@ -15,7 +15,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.search.query import _call_text_llm
 from shared.camera_access import ALL, AllowedCameras
-from shared.models import Camera, FaceCluster, FaceClusterSample, Observation, Person
+from shared.models import (
+    BodyCluster,
+    BodyClusterSample,
+    Camera,
+    FaceCluster,
+    FaceClusterSample,
+    Observation,
+    Person,
+)
 
 logger = logging.getLogger("nurby.search.digest")
 
@@ -321,22 +329,53 @@ async def generate_digest(
     # instead of raw statistics. Clusters are linked via face_cluster_samples
     # captured inside [start, now].
     unknown_highlights: list[str] = []
+    recurring_highlights: list[str] = []
     try:
         # Cluster descriptions and last-seen values are global across cameras.
         # Omit this enrichment for scoped viewers rather than leaking another feed.
+        face_query = (
+            select(FaceCluster, FaceClusterSample.captured_at, FaceClusterSample.camera_id)
+            .join(FaceClusterSample, FaceClusterSample.cluster_id == FaceCluster.id)
+            .where(FaceClusterSample.captured_at >= start)
+            .where(FaceClusterSample.captured_at <= now)
+            .where(FaceCluster.status == "pending")
+            .where(FaceCluster.person_id.is_(None))
+        )
+        body_query = (
+            select(BodyCluster, BodyClusterSample.captured_at, BodyClusterSample.camera_id)
+            .join(BodyClusterSample, BodyClusterSample.cluster_id == BodyCluster.id)
+            .where(BodyClusterSample.captured_at >= start)
+            .where(BodyClusterSample.captured_at <= now)
+            .where(BodyCluster.status == "pending")
+            .where(BodyCluster.person_id.is_(None))
+        )
         if allowed is not ALL:
-            seen_clusters = []
-        else:
-            sample_rows = await db.execute(
-                select(FaceCluster)
-                .join(FaceClusterSample, FaceClusterSample.cluster_id == FaceCluster.id)
-                .where(FaceClusterSample.captured_at >= start)
-                .where(FaceClusterSample.captured_at <= now)
-                .where(FaceCluster.status == "pending")
-                .where(FaceCluster.person_id.is_(None))
-                .distinct()
-            )
-            seen_clusters = sample_rows.scalars().all()
+            face_query = face_query.where(FaceClusterSample.camera_id.in_(allowed))
+            body_query = body_query.where(BodyClusterSample.camera_id.in_(allowed))
+        face_rows = (await db.execute(face_query)).all()
+        body_rows = (await db.execute(body_query)).all()
+        seen_clusters = {}
+        for cluster, captured_at, camera_id in face_rows + body_rows:
+            key = str(cluster.id)
+            entry = seen_clusters.setdefault(key, {"cluster": cluster, "days": set()})
+            if captured_at:
+                value = captured_at.replace(tzinfo=timezone.utc) if captured_at.tzinfo is None else captured_at
+                entry["days"].add(value.astimezone(timezone.utc).date())
+        for entry in seen_clusters.values():
+            cluster = entry["cluster"]
+            if period == "7d" and len(entry["days"]) >= 3:
+                label = (
+                    f"Unknown {cluster.auto_label_number}"
+                    if getattr(cluster, "auto_label_number", None)
+                    else "Unknown appearance"
+                )
+                recurring_highlights.append(
+                    f"Recurring pattern: {label} seen on {len(entry['days'])} days"
+                )
+
+        # Keep the existing appearance hints as a separate, lower-priority
+        # digest detail. The recurring line is the weekly pattern signal.
+        seen_clusters = [entry["cluster"] for entry in seen_clusters.values()]
         for cluster in seen_clusters:
             last = cluster.last_seen_at
             when = _format_timestamp(last) if last else ""
@@ -369,6 +408,8 @@ async def generate_digest(
             f"{name} seen around {first}" if first == last
             else f"{name} here from {first} to {last}"
         )
+    for line in recurring_highlights:
+        highlights.append(line)
     for line in unknown_highlights:
         highlights.append(line)
     highlights = highlights[:4]
