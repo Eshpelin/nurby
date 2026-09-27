@@ -23,6 +23,7 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.resetAllMocks();
   try { localStorage.removeItem("nurby-onboarding-dismissed"); } catch { /* jsdom quirk */ }
+  try { sessionStorage.removeItem("nurby-funnel-shown-session"); } catch { /* jsdom quirk */ }
 });
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
@@ -57,6 +58,23 @@ describe("OnboardingWizard step order (#293)", () => {
       ([url, init]) => url === "/api/auth/onboarding/funnel" && (init as RequestInit).method === "POST",
     );
     const shown = funnelCalls.filter(([, init]) => String((init as RequestInit).body).includes("wizard_shown"));
+    expect(shown).toHaveLength(1);
+  });
+
+  it("does not recount wizard_shown when the wizard remounts in one session", async () => {
+    mocks.fetch.mockImplementation((url: string) =>
+      url.includes("/api/providers") ? Promise.resolve(ok([])) : Promise.resolve(ok({})),
+    );
+    const first = renderWizard();
+    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith(
+      "/api/auth/onboarding/funnel",
+      expect.objectContaining({ method: "POST" }),
+    ));
+    first.unmount();
+    renderWizard();
+    const shown = mocks.fetch.mock.calls.filter(
+      ([url, init]) => url === "/api/auth/onboarding/funnel" && String((init as RequestInit).body).includes("wizard_shown"),
+    );
     expect(shown).toHaveLength(1);
   });
 

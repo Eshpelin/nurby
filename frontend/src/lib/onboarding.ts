@@ -70,6 +70,7 @@ export function goalsForPlace(place: Place): Goal[] {
 export type FunnelEvent = "wizard_shown" | "magic_clicked" | "manual_clicked" | "wizard_completed";
 
 const DISMISS_KEY = "nurby-onboarding-dismissed";
+const FUNNEL_SHOWN_SESSION_KEY = "nurby-funnel-shown-session";
 
 export function localOnboardingDismissed(): boolean {
   try {
@@ -114,6 +115,18 @@ export function shouldAutoOpenOnboarding(gate: AutoOpenGate): boolean {
  * the aggregate only feeds the admin metrics card.
  */
 export function recordFunnelEvent(authFetch: (p: string, init?: RequestInit) => Promise<Response>, event: FunnelEvent): void {
+  if (event === "wizard_shown") {
+    try {
+      // Mounts can repeat because of reloads, route transitions, or React
+      // StrictMode. Count one wizard exposure per browser session instead of
+      // turning those implementation details into funnel users.
+      if (sessionStorage.getItem(FUNNEL_SHOWN_SESSION_KEY) === "1") return;
+      sessionStorage.setItem(FUNNEL_SHOWN_SESSION_KEY, "1");
+    } catch {
+      // Private browsing can deny sessionStorage; retain fire-and-forget
+      // behavior and let the server counter remain best-effort there.
+    }
+  }
   authFetch("/api/auth/onboarding/funnel", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
