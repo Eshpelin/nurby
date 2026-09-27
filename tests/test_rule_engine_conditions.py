@@ -40,6 +40,20 @@ def test_camera_id_single(monkeypatch):
     assert rec.call_count == 1
 
 
+def test_camera_reference_survives_display_name_change(monkeypatch):
+    """Rules target the camera UUID; renaming its display label is harmless."""
+    camera_id = str(uuid.uuid4())
+    rule = FakeRule(
+        name="front-door",
+        trigger_pattern={"type": "any"},
+        conditions={"camera_id": camera_id},
+    )
+    eng, rec = install_engine(monkeypatch, [rule])
+    asyncio.run(eng.evaluate({"camera_id": camera_id, "camera_name": "Front Door"}))
+    asyncio.run(eng.evaluate({"camera_id": camera_id, "camera_name": "Entryway"}))
+    assert rec.call_count == 2
+
+
 # ── min_confidence ────────────────────────────────────────────────
 
 def test_min_confidence_filter(monkeypatch):
