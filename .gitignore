@@ -94,3 +94,6 @@ testing/FINDINGS.md
 dev/feeds/
 # Recordings/thumbnails/audio written by the ux-army harness stack.
 dev/uxtest-data/
+
+# Planning scratch files written by AI coding tools (not project docs).
+.zcode/

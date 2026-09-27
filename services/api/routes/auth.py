@@ -3,9 +3,8 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from pydantic import BaseModel
-
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,13 +20,6 @@ from shared.activation import (
     compute_activation,
     starter_key_for_goal,
 )
-from shared.daily_workflow import Capabilities, DailyWorkflow, daily_workflow
-from shared.onboarding_metrics import (
-    MilestoneRow,
-    OnboardingMetrics,
-    PreferenceRow,
-    compute_metrics,
-)
 from shared.auth import (
     MOBILE_PAIR_TTL_SECONDS,
     create_access_token,
@@ -38,22 +30,29 @@ from shared.auth import (
     require_admin,
     verify_password,
 )
-from shared.config import settings
 from shared.camera_secrets import seal, unseal
+from shared.config import settings
+from shared.daily_workflow import Capabilities, DailyWorkflow, daily_workflow
 from shared.database import get_db
 from shared.models import ActivationMilestone, Event, InviteKey, Recording, Rule, User, UserCameraAccess
 from shared.onboarding import ExperiencePreferences, ExperienceResponse, experience_response
+from shared.onboarding_metrics import (
+    MilestoneRow,
+    OnboardingMetrics,
+    PreferenceRow,
+    compute_metrics,
+)
 from shared.rule_starters import starter_rule
 from shared.schemas import (
     AccountClaim,
     AdminSetup,
     PairClaim,
     PairStartResponse,
+    SetupCodeAdoption,
     TokenResponse,
     UserCreate,
     UserLogin,
     UserResponse,
-    SetupCodeAdoption,
 )
 
 router = APIRouter()
@@ -639,12 +638,18 @@ async def _account_capabilities(db: AsyncSession, user: User) -> Capabilities:
     from shared.email import resolve_smtp
     from shared.models import (
         ActivationMilestone as _AM,
+    )
+    from shared.models import (
         Camera as _Camera,
+    )
+    from shared.models import (
         Provider,
         PushDevice,
-        Rule as _Rule,
         TelegramChannel,
         WebhookSubscription,
+    )
+    from shared.models import (
+        Rule as _Rule,
     )
 
     cameras = (await db.execute(select(_Camera.stream_type, _Camera.stream_url))).all()

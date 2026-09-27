@@ -90,10 +90,6 @@ const ENTITY_BADGES: Record<string, string> = {
   camera: "border-teal-500/40 text-teal-300",
 };
 
-function hhmm(minutes: number) {
-  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-}
-
 function filterParams(filter: FilterKey): string {
   switch (filter) {
     case "review":
