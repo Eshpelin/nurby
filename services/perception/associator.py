@@ -845,6 +845,23 @@ async def process_cooccurrences(
         shared_cameras = cameras.intersection(other_cameras)
         if not journeys_cooccur(journey, other, gap):
             continue
+        # Keep the review card actionable: attach a small, time-bounded set
+        # of frames from the cameras the two journeys actually shared. This
+        # is intentionally not a broad journey rescan; the shared-camera
+        # intersection is the same privacy boundary used by the hypothesis.
+        evidence_start = min(start, other_start)
+        evidence_end = max(end, other_end)
+        evidence_rows = (
+            await db.execute(
+                select(Observation.id)
+                .where(Observation.camera_id.in_(shared_cameras))
+                .where(Observation.started_at >= evidence_start)
+                .where(Observation.started_at <= evidence_end)
+                .order_by(Observation.started_at.asc())
+                .limit(12)
+            )
+        ).scalars().all()
+        evidence_observation_ids = [str(observation_id) for observation_id in evidence_rows]
         left, right = sorted(
             [(journey.subject_kind, journey.subject_key, journey),
              (other.subject_kind, other.subject_key, other)]
@@ -864,11 +881,13 @@ async def process_cooccurrences(
             camera_id=str(next(iter(shared_cameras))),
             episode_key=episode_key,
             journey_id=journey.id,
+            observation_ids=evidence_observation_ids,
             camera_ids=[str(camera_id) for camera_id in shared_cameras],
             evidence_metadata={
                 "other_journey_id": str(other.id),
                 "other_subject_kind": other.subject_kind,
                 "other_subject_key": other.subject_key,
+                "evidence_observation_count": len(evidence_observation_ids),
                 **cooccurrence_metrics(journey, other),
             },
             evidence_kind="cooccurrence",
