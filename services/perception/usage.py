@@ -129,11 +129,64 @@ async def check_perception_budget(
     used_cost_cents, used_tokens = combine_perception_usage(
         ledger_row[0], ledger_row[1], pass_row[0], pass_row[1],
     )
-    return perception_budget_decision(
+    decision = perception_budget_decision(
         used_cost_cents=used_cost_cents, used_tokens=used_tokens,
         estimated_cost_cents=estimated_cost_cents, estimated_tokens=estimated_tokens,
         cost_limit_cents=cost_limit, token_limit=token_limit, warn_threshold_pct=warn_pct,
     )
+    if decision.stage in {"warn", "blocked"}:
+        await _emit_budget_notification(camera_uuid, decision)
+    return decision
+
+
+async def _emit_budget_notification(camera_id: uuid.UUID, decision: PerceptionBudgetDecision) -> None:
+    """Create one durable in-app budget notice per camera/stage/day.
+
+    This is deliberately best-effort: a notification write must never turn a
+    budget decision into a failed perception call.  The stage is part of the
+    dedupe key so a user sees both the early warning and the later block once.
+    """
+    from shared.database import async_session
+    from shared.models import Notification
+
+    now = datetime.now(timezone.utc)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    marker = "Camera AI budget warning:" if decision.stage == "warn" else "Camera AI budget reached:"
+    try:
+        async with async_session() as db:
+            exists = await db.scalar(
+                select(Notification.id).where(
+                    Notification.camera_id == camera_id,
+                    Notification.created_at >= start,
+                    Notification.message.startswith(marker),
+                ).limit(1)
+            )
+            if exists:
+                return
+            notification = Notification(
+                message=f"{marker} {decision.reason}",
+                severity="warning",
+                camera_id=camera_id,
+            )
+            db.add(notification)
+            await db.commit()
+            await db.refresh(notification)
+            notification_id = str(notification.id)
+        try:
+            from services.api.ws import broadcast
+            await broadcast({
+                "type": "notification",
+                "id": notification_id,
+                "camera_id": str(camera_id),
+                "message": notification.message,
+                "severity": "warning",
+            })
+        except Exception:
+            # The persisted row remains available after a reconnect.
+            pass
+    except Exception:
+        # Budget enforcement is more important than its observability path.
+        return
 
 
 def estimate_vlm_usage(

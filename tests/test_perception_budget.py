@@ -1,6 +1,19 @@
 from services.perception.usage import combine_perception_usage, perception_budget_decision
 
 
+def test_budget_notice_markers_are_stage_specific():
+    warning = perception_budget_decision(
+        used_cost_cents=15, used_tokens=0, estimated_cost_cents=1,
+        estimated_tokens=1, cost_limit_cents=20, token_limit=0,
+    )
+    blocked = perception_budget_decision(
+        used_cost_cents=19, used_tokens=0, estimated_cost_cents=2,
+        estimated_tokens=1, cost_limit_cents=20, token_limit=0,
+    )
+    assert warning.stage == "warn"
+    assert blocked.stage == "blocked"
+
+
 def test_perception_budget_combines_rule_and_enrichment_ledgers():
     assert combine_perception_usage(7, 100, 5, 40) == (12, 140)
 
