@@ -248,6 +248,55 @@ async def test_unrepairable_with_no_usable_raw_pass_writes_no_caption(monkeypatc
     # But the attempt is recorded so the observation stops looking stale.
     assert len(appends) == 1
     assert appends[0]["lens"] == "summary"
+
+
+@pytest.mark.asyncio
+async def test_enrichment_yields_before_provider_when_camera_budget_blocks(monkeypatch):
+    import services.perception.vlm as vlm_mod
+    import services.perception.vlm_enrichment_worker as worker_mod
+
+    provider = SimpleNamespace(kind="openai", default_model="vision-model")
+
+    async def _provider():
+        return provider
+
+    monkeypatch.setattr(vlm_mod, "get_active_provider", _provider)
+
+    async def _settings(*args, **kwargs):
+        return 1
+
+    async def _candidate(**kwargs):
+        return ("obs-1", "camera-1", None, "thumb.jpg", [], None, None)
+
+    async def _passes(_obs_id):
+        return []
+
+    async def _record(_seconds):
+        return None
+
+    touched = []
+    async def _touch(obs_id):
+        touched.append(obs_id)
+
+    async def _blocked(*args, **kwargs):
+        return SimpleNamespace(allowed=False, reason="camera budget reached")
+
+    manager = EnrichmentManager()
+    manager._next_candidate = _candidate
+    manager._passes_for = _passes
+    manager._has_recording = lambda *args: _async_false()
+    manager._touch = _touch
+    manager._record_usage = _record
+    monkeypatch.setattr(worker_mod, "get_setting", _settings)
+    monkeypatch.setattr(worker_mod, "check_perception_budget", _blocked)
+
+    assert await manager._enrich_one() is True
+    assert touched == ["obs-1"]
+    assert manager._vlm is None
+
+
+async def _async_false():
+    return False
     assert appends[0]["description"] is None
     assert appends[0]["attributes"]["verify"]["repair"] == "failed"
 

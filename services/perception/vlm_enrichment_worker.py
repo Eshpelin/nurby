@@ -35,7 +35,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from services.perception.prompt_registry import PromptRef, resolve, version_for
-from services.perception.usage import estimate_vlm_usage
+from services.perception.usage import check_perception_budget, estimate_vlm_usage
 from shared.app_settings import get_setting
 from shared.database import async_session
 from shared.ffmpeg_safe import (
@@ -338,6 +338,28 @@ class EnrichmentManager:
         lens = next_lens(existing_lenses, has_rec, summary_stale)
         if lens is None:
             await self._touch(obs_id)
+            return True
+
+        # Enrichment is the lowest-priority perception workload. It must
+        # yield before contacting the provider when the shared camera budget
+        # is exhausted; otherwise idle work can continue spending after a
+        # rule/analyzer call has already tripped the same guardrail.
+        estimated_in, estimated_out, estimated_cost = estimate_vlm_usage(
+            provider,
+            system_prompt="",
+            user_prompt=f"idle enrichment lens: {lens}",
+            output_text=None,
+            model=getattr(provider, "default_model", None),
+            image_tokens=765,
+        )
+        budget = await check_perception_budget(
+            str(camera_id),
+            estimated_cost_cents=estimated_cost,
+            estimated_tokens=estimated_in + estimated_out,
+        )
+        if not budget.allowed:
+            await self._touch(obs_id)
+            logger.info("skipping enrichment lens=%s for %s: %s", lens, obs_id, budget.reason)
             return True
 
         if self._vlm is None:
