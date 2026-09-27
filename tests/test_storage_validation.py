@@ -4,7 +4,6 @@ Calls the route helpers directly — no broker, no DB."""
 
 from types import SimpleNamespace
 
-import pytest
 
 from services.api.routes.system import validate_storage_dir
 

@@ -21,7 +21,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, get_media_user
-from shared.config import settings
 from shared.camera_access import allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
 from shared.models import Conversation, Person, Transcript, User

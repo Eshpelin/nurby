@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.associator import record_pairing
-from shared.models import EntityAssociation, Observation, Person, Transcript
+from shared.models import Observation, Person, Transcript
 
 _NAME = r"([A-Za-z][A-Za-z'-]{1,30})"
 _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (

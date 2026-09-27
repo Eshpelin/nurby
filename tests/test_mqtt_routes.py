@@ -1,8 +1,6 @@
 """Tests for the MQTT status/test API routes (services/api/routes/mqtt.py)."""
 
-import contextlib
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import aiomqtt
 import pytest

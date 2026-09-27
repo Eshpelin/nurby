@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.expected_activity import ExpectedWindow, evaluate_window
 from shared.database import async_session
-from shared.models import ExpectedActivity, Notification, Observation, Person
+from shared.models import ExpectedActivity, Notification, Observation
 
 logger = logging.getLogger("nurby.perception.expected_activity")
 

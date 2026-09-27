@@ -17,8 +17,6 @@ import pytest
 from sqlalchemy.dialects import postgresql
 
 from services.agent.tools import setup_tools as st
-from services.api.routes import household as hh
-from shared.fact_schedule import schedule_active
 
 
 def _run(coro):

@@ -41,7 +41,7 @@ jobs:
             "pydantic>=2.0" pydantic-settings "pgvector>=0.3" \
             "asyncpg>=0.30" numpy opencv-python-headless redis \
             "python-jose[cryptography]" "passlib[bcrypt]" alembic \
-            jsonschema psutil aiosmtplib python-multipart pillow
+            jsonschema psutil aiosmtplib aiomqtt python-multipart pillow
 
       - name: Run test suite
         run: python -m pytest -q

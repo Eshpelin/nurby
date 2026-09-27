@@ -11,7 +11,6 @@ import ast
 import os
 import re
 
-import pytest
 
 VERSIONS_DIR = os.path.join(os.path.dirname(__file__), "..", "alembic", "versions")
 

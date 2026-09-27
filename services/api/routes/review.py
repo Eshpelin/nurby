@@ -808,7 +808,6 @@ async def get_relationship_suggestion(
         scoped = _scoped_evidence(row, allowed_ids)
         if scoped is None:
             continue
-        metadata = scoped["metadata"]
         transcript_id = scoped["transcript_id"]
         transcript_exists = True
         transcript_edited = False

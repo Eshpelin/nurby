@@ -32,7 +32,7 @@ from services.agent.driver import AgentDriver
 from services.perception.usage import perception_budget_decision
 from shared.app_settings import get_setting
 from shared.auth import decode_access_token, get_current_user
-from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
+from shared.camera_access import ALL, allowed_camera_ids
 from shared.database import async_session, get_db
 from shared.models import (
     AgentDailyUsage,

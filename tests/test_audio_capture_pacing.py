@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 
-from services.perception.audio.capture import AudioCapture
 from services.perception.audio.router import CameraAudioRouter
 
 

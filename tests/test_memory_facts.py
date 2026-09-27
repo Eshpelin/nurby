@@ -141,7 +141,6 @@ def test_list_facts_shapes_source_and_enabled():
 # ── #185: lifecycle, schedules, suppression, evidence ──────────────────
 
 from sqlalchemy.dialects import postgresql  # noqa: E402
-from shared.fact_schedule import schedule_summary  # noqa: E402
 
 
 class _AwareDB(_FactsDB):
@@ -262,7 +261,7 @@ def test_create_camera_attach_out_of_scope_404():
 def test_decision_accept_promotes_candidate():
     f = _fact(status="candidate", source="agent")
     db = _AwareDB(one=f)
-    out = _run(hh.decide_fact(f.id, hh.FactDecision(decision="accept"), _user(**_ADMIN), db))
+    _run(hh.decide_fact(f.id, hh.FactDecision(decision="accept"), _user(**_ADMIN), db))
     assert f.status == "established" and f.established_at is not None
 
 
