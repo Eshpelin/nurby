@@ -495,6 +495,10 @@ async def list_review_items(
                 camera_id=None,
                 unread=association.status != "archived",
                 evidence={
+                    "visual_candidate": {
+                        "kind": association.subject_kind,
+                        "id": association.subject_key,
+                    } if association_kind == "identity_suggestion" else None,
                     "evidence_count": association.evidence_count,
                     "supporting_evidence_count": getattr(association, "supporting_evidence_count", association.evidence_count),
                     "contradictory_evidence_count": getattr(association, "contradictory_evidence_count", 0),

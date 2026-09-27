@@ -63,6 +63,11 @@ type RecurrenceEvidence = {
   samples?: { id: string; captured_at: string; camera_id: string; thumbnail_path: string | null }[];
 };
 
+type VisualCandidate = {
+  kind?: string;
+  id?: string;
+};
+
 type ReviewQueueProps = {
   onOpenEvent?: (eventId: string) => void;
 };
@@ -216,6 +221,22 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                   {item.camera_name && <span className="text-[10px] text-muted-foreground">{item.camera_name}</span>}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.summary}</p>
+                {item.kind === "identity_suggestion" && (() => {
+                  const candidate = item.evidence.visual_candidate as VisualCandidate | undefined;
+                  if (!candidate?.kind) return null;
+                  const label = candidate.kind === "person"
+                    ? "recognized person"
+                    : candidate.kind === "face_cluster"
+                      ? "unknown face cluster"
+                      : candidate.kind === "body_cluster"
+                        ? "unknown body cluster"
+                        : "visual subject";
+                  return (
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      Visual candidate: <span className="text-foreground">{label}</span>
+                    </p>
+                  );
+                })()}
                 {typeof item.evidence.peak_observation_id === "string" && token && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -346,7 +367,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                         onChange={(event) => setLinkedPerson((current) => ({ ...current, [item.id]: event.target.value }))}
                         className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
                       >
-                        <option value="">Confirm name only</option>
+                        <option value="">Confirm name for this visual</option>
                         {persons.map((person) => (
                           <option key={person.id} value={person.id}>
                             Link to {person.nickname || person.display_name}
