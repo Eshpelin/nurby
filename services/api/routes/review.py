@@ -24,10 +24,12 @@ from shared.models import (
     AssociationEvidence,
     AssociationReviewEvent,
     BodyCluster,
+    BodyClusterSample,
     Camera,
     EntityAssociation,
     Event,
     FaceCluster,
+    FaceClusterSample,
     Incident,
     Notification,
     Person,
@@ -109,6 +111,51 @@ def _review_visible(camera_id):
 
 def _as_utc(value: datetime | None) -> datetime:
     return value or datetime.now(timezone.utc)
+
+
+def _summarize_cluster_samples(rows) -> dict[str, dict]:
+    """Build a privacy-safe recurrence summary from already scoped samples.
+
+    Distinct days are the escalation signal; raw frame count is deliberately
+    not used because one visit can produce many samples. Callers must apply
+    camera ACLs before passing rows here.
+    """
+    grouped: dict[str, list] = {}
+    for row in rows:
+        key = str(row.cluster_id)
+        grouped.setdefault(key, []).append(row)
+    summaries: dict[str, dict] = {}
+    for key, samples in grouped.items():
+        ordered = sorted(samples, key=lambda row: _as_utc(row.captured_at))
+        days = sorted({_as_utc(row.captured_at).date().isoformat() for row in ordered})
+        summaries[key] = {
+            "sample_count": len(ordered),
+            "distinct_days": len(days),
+            "days": days,
+            "camera_ids": sorted({str(row.camera_id) for row in ordered if row.camera_id}),
+            "first_seen_at": _as_utc(ordered[0].captured_at) if ordered else None,
+            "last_seen_at": _as_utc(ordered[-1].captured_at) if ordered else None,
+            "samples": [
+                {
+                    "id": str(row.id),
+                    "captured_at": _as_utc(row.captured_at),
+                    "camera_id": str(row.camera_id),
+                    "thumbnail_path": row.thumbnail_path,
+                }
+                for row in ordered[-6:]
+            ],
+        }
+    return summaries
+
+
+async def _cluster_sample_summaries(db: AsyncSession, sample_model, cluster_ids, allowed):
+    if not cluster_ids or allowed is not ALL and not allowed:
+        return {}
+    query = select(sample_model).where(sample_model.cluster_id.in_(cluster_ids))
+    if allowed is not ALL:
+        query = query.where(sample_model.camera_id.in_(allowed))
+    rows = (await db.execute(query.order_by(sample_model.captured_at.asc()).limit(2000))).scalars().all()
+    return _summarize_cluster_samples(rows)
 
 
 def _incident_review_reason(
@@ -308,16 +355,26 @@ async def list_review_items(
             allowed,
             FaceCluster.first_camera_id,
         )
-        for cluster in (await db.execute(face_query.limit(100))).scalars().all():
+        face_clusters = (await db.execute(face_query.limit(100))).scalars().all()
+        face_recurrence = await _cluster_sample_summaries(
+            db, FaceClusterSample, [cluster.id for cluster in face_clusters], allowed
+        )
+        for cluster in face_clusters:
+            recurrence = face_recurrence.get(str(cluster.id), {})
+            recurrence = {**recurrence, "cluster_kind": "face", "cluster_id": str(cluster.id)}
+            visible_count = recurrence.get("sample_count")
+            if visible_count is None:
+                visible_count = cluster.sighting_count if allowed is ALL else 0
+            recurring = int(recurrence.get("distinct_days") or 0) >= 3
             items.append(_item(
                 source_type="face_cluster",
                 source_id=cluster.id,
                 kind="identity_suggestion",
                 status="open",
-                priority="normal",
-                title="Unknown person needs review",
+                priority="high" if recurring else "normal",
+                title="Recurring unknown person needs review" if recurring else "Unknown person needs review",
                 summary=(
-                    f"{cluster.sighting_count} sightings of "
+                    f"Seen across {recurrence.get('distinct_days', 0)} days ({visible_count} samples): "
                     f"{cluster.auto_label_number and f'Unknown {cluster.auto_label_number}' or 'the same unknown person'}"
                 ),
                 created_at=cluster.first_seen_at,
@@ -326,10 +383,11 @@ async def list_review_items(
                 unread=True,
                 evidence={
                     "sample_thumbnail_path": cluster.sample_thumbnail_path,
-                    "sighting_count": cluster.sighting_count,
+                    "sighting_count": visible_count,
                     "first_seen_at": cluster.first_seen_at,
                     "last_seen_at": cluster.last_seen_at,
                     "appearance_description": cluster.appearance_description,
+                    "recurrence": recurrence,
                 },
                 provenance={"source": "face_cluster", "cluster_status": cluster.status},
             ))
@@ -341,25 +399,39 @@ async def list_review_items(
             allowed,
             BodyCluster.first_camera_id,
         )
-        for cluster in (await db.execute(body_query.limit(100))).scalars().all():
+        body_clusters = (await db.execute(body_query.limit(100))).scalars().all()
+        body_recurrence = await _cluster_sample_summaries(
+            db, BodyClusterSample, [cluster.id for cluster in body_clusters], allowed
+        )
+        for cluster in body_clusters:
+            recurrence = body_recurrence.get(str(cluster.id), {})
+            recurrence = {**recurrence, "cluster_kind": "body", "cluster_id": str(cluster.id)}
+            visible_count = recurrence.get("sample_count")
+            if visible_count is None:
+                visible_count = cluster.sighting_count if allowed is ALL else 0
+            recurring = int(recurrence.get("distinct_days") or 0) >= 3
             items.append(_item(
                 source_type="body_cluster",
                 source_id=cluster.id,
                 kind="identity_suggestion",
                 status="open",
-                priority="normal",
-                title="Unknown appearance needs review",
-                summary=f"{cluster.sighting_count} sightings of a recurring body appearance",
+                priority="high" if recurring else "normal",
+                title="Recurring unknown appearance needs review" if recurring else "Unknown appearance needs review",
+                summary=(
+                    f"Seen across {recurrence.get('distinct_days', 0)} days ({visible_count} samples)"
+                    " of a recurring body appearance"
+                ),
                 created_at=cluster.first_seen_at,
                 updated_at=cluster.last_seen_at,
                 camera_id=cluster.first_camera_id,
                 unread=True,
                 evidence={
                     "sample_thumbnail_path": cluster.sample_thumbnail_path,
-                    "sighting_count": cluster.sighting_count,
+                    "sighting_count": visible_count,
                     "first_seen_at": cluster.first_seen_at,
                     "last_seen_at": cluster.last_seen_at,
                     "appearance_description": cluster.appearance_description,
+                    "recurrence": recurrence,
                 },
                 provenance={"source": "body_cluster", "cluster_status": cluster.status},
             ))

@@ -56,6 +56,13 @@ type PersonOption = {
   nickname?: string | null;
 };
 
+type RecurrenceEvidence = {
+  cluster_kind?: "face" | "body";
+  cluster_id?: string;
+  distinct_days?: number;
+  samples?: { id: string; captured_at: string; camera_id: string; thumbnail_path: string | null }[];
+};
+
 type ReviewQueueProps = {
   onOpenEvent?: (eventId: string) => void;
 };
@@ -199,6 +206,27 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                     className="mt-2 h-16 w-24 rounded border border-border object-cover"
                   />
                 )}
+                {item.kind === "identity_suggestion" && token && (() => {
+                  const recurrence = item.evidence.recurrence as RecurrenceEvidence | undefined;
+                  if (!recurrence?.samples?.length || !recurrence.cluster_id || !recurrence.cluster_kind) return null;
+                  const prefix = recurrence.cluster_kind === "face" ? "/api/persons" : "/api/body-clusters";
+                  return (
+                    <div className="mt-2 flex items-center gap-1.5" aria-label="Recurring sample evidence">
+                      {recurrence.samples.map((sample) => (
+                        <a
+                          key={sample.id}
+                          href={`${prefix}/suggestions/${recurrence.cluster_id}/samples/${sample.id}/thumbnail?token=${encodeURIComponent(token)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={new Date(sample.captured_at).toLocaleString()}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={`${prefix}/suggestions/${recurrence.cluster_id}/samples/${sample.id}/thumbnail?token=${encodeURIComponent(token)}`} alt="Recurring sample" className="h-10 w-10 rounded border border-border object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <span className="mt-1 block text-[10px] text-muted-foreground">{timeAgo(item.updated_at)}</span>
                 {item.source_type === "association" && expandedEvidence === item.id && (
                   <div className="mt-2 rounded border border-border/70 bg-background/50 p-2">
