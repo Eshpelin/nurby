@@ -28,6 +28,7 @@ export function ExpectedActivityCard() {
   const [items, setItems] = useState<Expectation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [personId, setPersonId] = useState("");
@@ -59,15 +60,40 @@ export function ExpectedActivityCard() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const create = async () => {
+  const resetForm = () => {
+    setEditingId(null);
+    setName("");
+    setPersonId("");
+    setCameraIds([]);
+    setWeekdays([0, 1, 2, 3, 4]);
+    setStartTime("08:00");
+    setEndTime("18:00");
+    setGraceMinutes("30");
+  };
+
+  const edit = (item: Expectation) => {
+    setEditingId(item.id);
+    setName(item.name);
+    setPersonId(item.subject_person_id || "");
+    setCameraIds(item.camera_ids || []);
+    setWeekdays(item.weekdays || []);
+    setStartTime(item.start_time);
+    setEndTime(item.end_time);
+    setGraceMinutes(String(item.grace_minutes ?? 30));
+    setError(null);
+  };
+
+  const save = async () => {
     if (!name.trim() || !personId || weekdays.length === 0) {
       setError("Choose a person, name this expectation, and select at least one day.");
       return;
     }
     setSaving(true);
     try {
-      const response = await authFetch("/api/expected-activity", {
-        method: "POST",
+      const response = await authFetch(
+        editingId ? `/api/expected-activity/${editingId}` : "/api/expected-activity",
+        {
+        method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
@@ -85,7 +111,7 @@ export function ExpectedActivityCard() {
         const body = await response.json().catch(() => null);
         throw new Error(typeof body?.detail === "string" ? body.detail : `Could not save expectation (${response.status})`);
       }
-      setName("");
+      resetForm();
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save expectation");
@@ -143,13 +169,17 @@ export function ExpectedActivityCard() {
             })}
           </div>
         </div>
-        <button type="button" disabled={saving || loading} onClick={() => void create()} className="rounded border border-accent px-3 py-1.5 text-xs text-accent hover:bg-accent/10 disabled:opacity-50">{saving ? "Saving…" : "Add expectation"}</button>
+        <button type="button" disabled={saving || loading} onClick={() => void save()} className="rounded border border-accent px-3 py-1.5 text-xs text-accent hover:bg-accent/10 disabled:opacity-50">{saving ? "Saving…" : editingId ? "Save changes" : "Add expectation"}</button>
+        {editingId && <button type="button" disabled={saving} onClick={resetForm} className="rounded border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50">Cancel</button>}
       </div>
       {loading ? <p className="mt-3 text-xs text-muted-foreground">Loading expectations…</p> : items.length > 0 && (
         <div className="mt-4 space-y-2 border-t border-border pt-3">
           {items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 rounded border border-border/70 px-2.5 py-2 text-xs">
             <div className="min-w-0"><div className="truncate font-medium">{item.name}</div><div className="text-[11px] text-muted-foreground">{personLabel(item.subject_person_id, item.subject_key)} · {item.start_time}–{item.end_time} · {item.enabled ? "enabled" : "paused"}</div></div>
-            <button type="button" onClick={() => void remove(item.id)} className="shrink-0 text-[11px] text-muted-foreground hover:text-red-300">Remove</button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button type="button" onClick={() => edit(item)} className="text-[11px] text-muted-foreground hover:text-foreground">Edit</button>
+              <button type="button" onClick={() => void remove(item.id)} className="text-[11px] text-muted-foreground hover:text-red-300">Remove</button>
+            </div>
           </div>)}
         </div>
       )}
