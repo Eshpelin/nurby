@@ -35,6 +35,11 @@ type RelationshipDetail = {
     old_status: string;
     new_status: string;
     note: string | null;
+    decision_metadata?: {
+      link_type?: string | null;
+      before?: Record<string, string>;
+      after?: Record<string, string>;
+    };
     created_at: string;
   }[];
   evidence: {
@@ -361,6 +366,9 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                               <div key={event.id}>
                                 {new Date(event.created_at).toLocaleString()} · {event.action} · {event.old_status} → {event.new_status}
                                 {event.note ? ` — ${event.note}` : ""}
+                                {event.decision_metadata?.link_type
+                                  ? ` · ${event.decision_metadata.link_type.replaceAll("_", " ")} reconciliation recorded`
+                                  : ""}
                               </div>
                             ))}
                           </div>

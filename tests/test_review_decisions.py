@@ -57,3 +57,20 @@ def test_cooccurrence_decision_can_link_each_endpoint_independently():
     )
     assert body.link_subject_person_id == subject_id
     assert body.link_object_person_id == object_id
+
+
+def test_review_event_supports_structured_reconciliation_metadata():
+    from shared.models import AssociationReviewEvent
+
+    event = AssociationReviewEvent(
+        association_id=uuid4(),
+        action="confirm",
+        old_status="candidate",
+        new_status="established",
+        decision_metadata={
+            "link_type": "cooccurrence_endpoints",
+            "before": {"subject_kind": "face_cluster", "subject_key": "cluster-1"},
+            "after": {"subject_kind": "person", "subject_key": str(uuid4())},
+        },
+    )
+    assert event.decision_metadata["link_type"] == "cooccurrence_endpoints"

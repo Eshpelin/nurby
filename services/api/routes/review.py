@@ -741,6 +741,12 @@ async def decide_relationship_suggestion(
         }
 
     old_status = association.status
+    old_endpoint = {
+        "subject_kind": association.subject_kind,
+        "subject_key": association.subject_key,
+        "object_kind": association.object_kind,
+        "object_key": association.object_key,
+    }
     association.status = {
         "confirm": "established",
         "reject": "rejected",
@@ -783,6 +789,23 @@ async def decide_relationship_suggestion(
         old_status=old_status,
         new_status=association.status,
         note=association.review_note,
+        decision_metadata={
+            "link_type": (
+                "spoken_name" if body.link_person_id is not None
+                else "cooccurrence_endpoints" if linked_subject is not None or linked_object is not None
+                else None
+            ),
+            "before": old_endpoint,
+            "after": {
+                "subject_kind": association.subject_kind,
+                "subject_key": association.subject_key,
+                "object_kind": association.object_kind,
+                "object_key": association.object_key,
+            },
+            "linked_person_id": str(body.link_person_id) if body.link_person_id else None,
+            "linked_subject_person_id": str(body.link_subject_person_id) if body.link_subject_person_id else None,
+            "linked_object_person_id": str(body.link_object_person_id) if body.link_object_person_id else None,
+        },
     ))
     await db.commit()
     return {
@@ -921,6 +944,7 @@ async def get_relationship_suggestion(
                 "old_status": event.old_status,
                 "new_status": event.new_status,
                 "note": event.note,
+                "decision_metadata": event.decision_metadata or {},
                 "reviewer_user_id": str(event.reviewer_user_id) if event.reviewer_user_id else None,
                 "created_at": event.created_at,
             }
