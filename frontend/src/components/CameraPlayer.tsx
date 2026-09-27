@@ -23,8 +23,8 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useWebcamPublisher } from "@/lib/webcam-publisher";
 import { RetryCountdown } from "@/components/RetryCountdown";
-import { extractStreamName, WEBRTC_URL } from "@/app/dashboard-helpers";
 import { useAuth } from "@/lib/auth";
+import { WhepPlayer } from "@/components/WhepPlayer";
 
 // Structural: the dashboard wall passes its rich Camera type, the camera
 // workspace its settings-page type — both carry these fields.
@@ -80,13 +80,6 @@ export function CameraPlayer({
     }
   }, [localStream]);
 
-  const streamName =
-    camera.stream_type === "rtsp" || camera.stream_type === "hls"
-      ? `cam-${camera.id}`
-      : camera.stream_type === "webcam" || camera.stream_type === "usb"
-        ? `webcam-${camera.id}`
-        : extractStreamName(camera.stream_url);
-  const iframeSrc = `${WEBRTC_URL}/${streamName}/`;
   const fitClass = objectFit === "contain" ? "object-contain" : "object-cover";
 
   if (camera.audio_only) {
@@ -142,14 +135,7 @@ export function CameraPlayer({
   }
 
   if (camera.status !== "offline") {
-    return (
-      <iframe
-        src={iframeSrc}
-        className="absolute inset-0 w-full h-full border-0 pointer-events-none"
-        allow="autoplay; encrypted-media"
-        sandbox="allow-scripts allow-same-origin"
-      />
-    );
+    return <WhepPlayer cameraId={camera.id} />;
   }
 
   // Offline. For file cameras this reads oddly on its own — the browser is

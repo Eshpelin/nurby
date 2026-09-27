@@ -4,7 +4,9 @@ import { CameraPlayer } from "@/components/CameraPlayer";
 import type { CameraPlayerCamera } from "@/components/CameraPlayer";
 
 const mocks = vi.hoisted(() => ({ token: "test-token" as string | null }));
-vi.mock("@/lib/auth", () => ({ useAuth: () => ({ token: mocks.token }) }));
+vi.mock("@/lib/auth", () => ({
+  useAuth: () => ({ token: mocks.token, authFetch: vi.fn(async () => new Response("", { status: 503 })) }),
+}));
 vi.mock("@/lib/webcam-publisher", () => ({
   useWebcamPublisher: () => ({ publishers: [], resumeIntent: () => {} }),
 }));
@@ -22,12 +24,10 @@ function camera(overrides: Partial<CameraPlayerCamera> = {}): CameraPlayerCamera
 }
 
 describe("CameraPlayer", () => {
-  it("renders the WebRTC iframe for a live rtsp camera", () => {
+  it("uses the API-scoped WHEP player for a live rtsp camera", async () => {
     render(<CameraPlayer camera={camera()} />);
-    const frame = screen.getByTitle || screen.queryByTitle;
-    const iframe = document.querySelector("iframe");
-    expect(iframe).not.toBeNull();
-    expect(iframe?.src).toContain("cam-cam-1");
+    expect(await screen.findByText("Live camera unavailable.")).toBeInTheDocument();
+    expect(document.querySelector("iframe")).toBeNull();
   });
 
   it("plays a remote file camera directly in a video element", () => {

@@ -69,6 +69,7 @@ services:
       # Per-install namespace for shared Redis keys/channels (#291).
       NURBY_INSTANCE_ID: ${COMPOSE_PROJECT_NAME:-nurby}
       MEDIAMTX_API_URL: http://mediamtx:9997
+      MEDIAMTX_HTTP_URL: http://mediamtx:8889
       RECORDINGS_PATH: /data/recordings
       THUMBNAILS_PATH: /data/thumbnails
       AUDIO_STORAGE_PATH: /data/audio

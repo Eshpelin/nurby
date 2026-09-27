@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://nurby:nurby_dev@localhost:5433/nurby"
     redis_url: str = "redis://localhost:6379/0"
     mediamtx_api_url: str = "http://localhost:9997"
+    # API-side WHEP proxy target. Browser clients never need direct access to
+    # the MediaMTX HTTP port; Docker overrides this to http://mediamtx:8889.
+    mediamtx_http_url: str = "http://localhost:8889"
     mediamtx_rtsp_url: str = "rtsp://localhost:8554"  # target for webcam bridge publishes
     # Webcam bridge. spawns ffmpeg against local camera devices. Runs on the
     # host that physically owns the camera. Must be disabled inside the

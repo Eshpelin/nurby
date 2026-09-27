@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { extractStreamName, WEBRTC_URL, type Camera } from "./types";
+import type { Camera } from "./types";
+import { WhepPlayer } from "@/components/WhepPlayer";
 
 export function GeometryEditor({
   camera,
@@ -86,19 +87,11 @@ export function GeometryEditor({
     }
   };
 
-  const streamName = camera.stream_url ? extractStreamName(camera.stream_url) : "";
-  const iframeSrc = streamName ? `${WEBRTC_URL}/${streamName}/` : "";
-
   return (
     <div className="space-y-2">
       <div ref={wrapRef} className="relative w-full bg-black rounded-md overflow-hidden border border-border" style={{ height: size.h }}>
-        {iframeSrc && camera.status !== "offline" ? (
-          <iframe
-            src={iframeSrc}
-            className="absolute inset-0 w-full h-full border-0 pointer-events-none"
-            allow="autoplay; encrypted-media"
-            sandbox="allow-scripts allow-same-origin"
-          />
+        {camera.status !== "offline" ? (
+          <WhepPlayer cameraId={camera.id} />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
             {camera.status === "offline" ? "Camera offline" : "No preview"}

@@ -40,13 +40,20 @@ class _CameraLiveViewState extends ConsumerState<CameraLiveView> {
     return idx >= 0 ? trimmed.substring(idx + 1) : trimmed;
   }
 
-  /// MediaMTX lives on the server host; WebRTC on :8889, HLS on :8888.
-  String? _mediamtxUrl(int port, String suffix) {
+  /// WebRTC signaling is camera-scoped by the API; MediaMTX is not exposed
+  /// as an authorization surface to mobile clients.
+  String? _whepUrl() {
+    final base = ref.read(serverConfigProvider).baseUrl;
+    if (base == null) return null;
+    return '$base/api/cameras/${widget.camera.id}/whep';
+  }
+
+  String? _hlsUrl() {
     final base = ref.read(serverConfigProvider).baseUrl;
     final name = _streamName;
     if (base == null || name == null) return null;
     final uri = Uri.parse(base);
-    return '${uri.scheme}://${uri.host}:$port/$name$suffix';
+    return '${uri.scheme}://${uri.host}:8888/$name/index.m3u8';
   }
 
   @override
@@ -77,16 +84,17 @@ class _CameraLiveViewState extends ConsumerState<CameraLiveView> {
 
   Widget _rtspView() {
     if (!_webrtcFailed) {
-      final whep = _mediamtxUrl(8889, '/whep');
+      final whep = _whepUrl();
       if (whep != null) {
         return WhepPlayer(
           key: ValueKey(whep),
           whepUrl: whep,
+          api: ref.read(apiClientProvider),
           onFailed: () => setState(() => _webrtcFailed = true),
         );
       }
     }
-    final hls = _mediamtxUrl(8888, '/index.m3u8');
+    final hls = _hlsUrl();
     if (hls != null) return _FileVideoView(url: hls, live: true);
     return _FramePollView(cameraId: widget.camera.id);
   }

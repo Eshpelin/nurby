@@ -9,9 +9,10 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import cv2
+import httpx
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -296,6 +297,52 @@ async def preview_local_file(
     if not os.path.isfile(source):
         raise HTTPException(status_code=404, detail="Local fixture not found")
     return FileResponse(source, media_type="video/mp4", filename=os.path.basename(source))
+
+
+@router.post("/{camera_id}/whep")
+async def proxy_whep(
+    camera_id: uuid.UUID,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Proxy WHEP signaling through Nurby's camera ACL.
+
+    MediaMTX is an internal transport service, not an authorization layer.
+    Keeping the SDP exchange here means a browser cannot request an arbitrary
+    relay path by bypassing the API camera scope.
+    """
+    allowed = await allowed_camera_ids(current_user, db)
+    if allowed is not ALL and camera_id not in allowed:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    camera = await db.get(Camera, camera_id)
+    if camera is None:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    from services.ingestion.mediamtx_mux import mux_slug
+
+    slug = mux_slug(camera.id, camera.stream_type, camera.stream_url, camera.webcam_device)
+    if not slug:
+        raise HTTPException(status_code=409, detail="Camera does not have a live relay")
+    body = await request.body()
+    if not body or len(body) > 256 * 1024:
+        raise HTTPException(status_code=400, detail="Invalid SDP offer")
+    relay_url = f"{settings.mediamtx_http_url.rstrip('/')}/{slug}/whep"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            relay = await client.post(
+                relay_url,
+                content=body,
+                headers={"Content-Type": "application/sdp", "Accept": "application/sdp"},
+            )
+    except httpx.HTTPError as exc:
+        logger.warning("WHEP relay unavailable for camera %s: %s", camera_id, exc)
+        raise HTTPException(status_code=503, detail="Live relay unavailable") from exc
+    if relay.status_code >= 400:
+        raise HTTPException(status_code=503, detail="Live relay rejected the camera session")
+    headers = {}
+    if relay.headers.get("content-type"):
+        headers["content-type"] = relay.headers["content-type"]
+    return Response(content=relay.content, status_code=relay.status_code, headers=headers)
 
 
 @router.get("/personas")

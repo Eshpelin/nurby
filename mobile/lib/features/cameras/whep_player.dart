@@ -4,12 +4,15 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+import '../../core/api_client.dart';
+
 /// WHEP (WebRTC-HTTP Egress Protocol) player for MediaMTX streams.
 /// POSTs an SDP offer to {whepUrl} and renders the returned track.
 class WhepPlayer extends StatefulWidget {
-  const WhepPlayer({super.key, required this.whepUrl, this.onFailed});
+  const WhepPlayer({super.key, required this.whepUrl, this.api, this.onFailed});
 
   final String whepUrl;
+  final ApiClient? api;
   final VoidCallback? onFailed;
 
   @override
@@ -67,7 +70,7 @@ class _WhepPlayerState extends State<WhepPlayer> {
       await _waitIceGathering(pc);
       final local = await pc.getLocalDescription();
 
-      final res = await Dio().post<String>(
+      final res = await (widget.api?.dio ?? Dio()).post<String>(
         widget.whepUrl,
         data: local!.sdp,
         options: Options(
