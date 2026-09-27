@@ -21,6 +21,7 @@ import { ProviderFields } from "@/components/ProviderFields";
 import { timezoneOptions } from "@/lib/timezones";
 import { rememberPreferredAgentModel } from "@/lib/agent-model-preference";
 import { CostUsageCard } from "@/components/CostUsageCard";
+import { ExpectedActivityCard } from "@/components/ExpectedActivityCard";
 
 import InviteKeysModal from "./InviteKeysModal";
 import type {
@@ -650,6 +651,7 @@ export default function SettingsPage() {
         <div className="flex flex-wrap gap-2 px-4 py-3">
           <Link href="/rules" className={pillClass}>Alert rules</Link>
           <Link href="/reports" className={pillClass}>Scheduled questions</Link>
+          <Link href="/settings#expected-activity" className={pillClass}>Expected activity</Link>
         </div>
       </div>
       <div className="mb-6 rounded-lg border border-border bg-card">
@@ -702,6 +704,8 @@ export default function SettingsPage() {
 
         {/* Anonymous share links audit/revoke */}
         <ShareLinksCard />
+
+        <ExpectedActivityCard />
 
         {/* AI Providers card */}
         <CostUsageCard />
