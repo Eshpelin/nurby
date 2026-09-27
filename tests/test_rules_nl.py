@@ -35,6 +35,36 @@ def test_system_prompt_contains_vocabulary_and_entities():
     assert "ONLY a JSON object" in prompt
 
 
+def test_ambiguous_person_name_requires_explicit_id_mention():
+    warnings = nl.ambiguous_entity_warnings(
+        "alert me when Alex arrives",
+        cameras=[],
+        persons=[("p1", "Alex"), ("p2", "Alex")],
+    )
+    assert len(warnings) == 1
+    assert "matches 2 records" in warnings[0]
+    assert "choose the correct person" in warnings[0]
+
+
+def test_explicit_mention_resolves_duplicate_name_warning():
+    assert nl.ambiguous_entity_warnings(
+        "alert me when @Alex arrives",
+        cameras=[],
+        persons=[("p1", "Alex"), ("p2", "Alex")],
+        mentions=[{"kind": "person", "id": "p2", "name": "Alex"}],
+    ) == []
+
+
+def test_ambiguous_camera_warning_is_case_insensitive_and_word_bounded():
+    warnings = nl.ambiguous_entity_warnings(
+        "watch front door camera",
+        cameras=[("c1", "Front Door"), ("c2", "front door")],
+        persons=[],
+    )
+    assert len(warnings) == 1
+    assert "camera" in warnings[0]
+
+
 def test_system_prompt_maps_generic_person_to_object_detection():
     prompt = nl.build_system_prompt(
         build_schema(),

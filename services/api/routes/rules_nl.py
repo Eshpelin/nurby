@@ -54,6 +54,40 @@ def _compact_fields(fields: list[dict]) -> str:
     return ", ".join(parts)
 
 
+def ambiguous_entity_warnings(
+    prompt: str,
+    cameras: list[tuple[str, str]],
+    persons: list[tuple[str, str]],
+    mentions: list[dict] | None = None,
+) -> list[str]:
+    """Warn when free text cannot uniquely identify a person or camera.
+
+    Explicit mentions carry a stable UUID, so they are the safe escape hatch
+    for duplicate display labels.  The draft remains usable; the warning is
+    shown beside it so the user can replace an ambiguous name before saving.
+    """
+    prompt_lower = prompt.casefold()
+    verified = {
+        (str(m.get("kind")), str(m.get("name", "")).casefold())
+        for m in (mentions or [])
+    }
+    warnings: list[str] = []
+    for kind, entities in (("person", persons), ("camera", cameras)):
+        by_name: dict[str, list[str]] = {}
+        for entity_id, name in entities:
+            by_name.setdefault(name.casefold(), []).append(str(entity_id))
+        for normalized, ids in by_name.items():
+            if len(ids) < 2 or (kind, normalized) in verified:
+                continue
+            if re.search(rf"(?<!\w){re.escape(normalized)}(?!\w)", prompt_lower):
+                label = next(name for _, name in entities if name.casefold() == normalized)
+                warnings.append(
+                    f'The {kind} name "{label}" matches {len(ids)} records. '
+                    f"Use @{label} and choose the correct {kind} before saving."
+                )
+    return warnings
+
+
 def build_system_prompt(
     schema: dict,
     cameras: list[tuple[str, str]],
@@ -477,6 +511,7 @@ async def translate_rule(
     warnings = await _stale_rule_refs(
         db, candidate.get("trigger_pattern"), candidate.get("conditions"), candidate.get("actions")
     )
+    warnings.extend(ambiguous_entity_warnings(prompt, cameras, persons, verified_mentions))
     return {"rule": candidate, "notes": notes, "warnings": warnings}
 
 
