@@ -90,11 +90,12 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
   const [linkedPerson, setLinkedPerson] = useState<Record<string, string>>({});
   const [linkedSubject, setLinkedSubject] = useState<Record<string, string>>({});
   const [linkedObject, setLinkedObject] = useState<Record<string, string>>({});
+  const [showArchived, setShowArchived] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authFetch("/api/review?limit=25");
+      const res = await authFetch(`/api/review?limit=25${showArchived ? "&include_archived=true" : ""}`);
       if (!res.ok) throw new Error(`Review queue failed (${res.status})`);
       const body: { items: ReviewItem[] } = await res.json();
       // Alerts remain in the detailed history below. The queue currently
@@ -107,7 +108,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
     } finally {
       setLoading(false);
     }
-  }, [authFetch]);
+  }, [authFetch, showArchived]);
 
   useEffect(() => {
     void load();
@@ -125,7 +126,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
     if (res.ok) setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, unread: false, status: "resolved" } : candidate));
   };
 
-  const decideRelationship = async (item: ReviewItem, decision: "confirm" | "reject" | "defer" | "ambiguous") => {
+  const decideRelationship = async (item: ReviewItem, decision: "confirm" | "reject" | "defer" | "ambiguous" | "restore") => {
     if (item.source_type !== "association") return;
     setDecisionBusy(item.id);
     try {
@@ -185,6 +186,15 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
         </div>
         <div className="flex items-center gap-3">
           <a href="/settings#privacy-controls" className="text-xs text-muted-foreground hover:text-foreground">Privacy controls</a>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(event) => setShowArchived(event.target.checked)}
+              className="accent-accent"
+            />
+            Show archived
+          </label>
           <button type="button" onClick={() => void load()} className="text-xs text-muted-foreground hover:text-foreground">Refresh</button>
         </div>
       </div>
@@ -382,14 +392,25 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                     >
                       {expandedEvidence === item.id ? "Hide evidence" : "Evidence"}
                     </button>
-                    <button
+                    {item.status === "archived" && (
+                      <button
+                        type="button"
+                        onClick={() => void decideRelationship(item, "restore")}
+                        disabled={decisionBusy === item.id}
+                        className="text-[11px] text-accent hover:underline disabled:opacity-50"
+                      >
+                        Restore for review
+                      </button>
+                    )}
+                    {item.status !== "archived" && <button
                       type="button"
                       onClick={() => void decideRelationship(item, "defer")}
                       disabled={decisionBusy === item.id}
                       className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
                       Not now
-                    </button>
+                    </button>}
+                    {item.status !== "archived" && <>
                     <button
                       type="button"
                       onClick={() => void decideRelationship(item, "ambiguous")}
@@ -414,6 +435,7 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                     >
                       Confirm
                     </button>
+                    </>}
                   </>
                 )}
               </div>

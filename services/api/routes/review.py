@@ -230,6 +230,7 @@ async def _camera_names(db: AsyncSession, camera_ids: Iterable[uuid.UUID]) -> di
 async def list_review_items(
     kind: str | None = Query(default=None),
     unread_only: bool = Query(default=False),
+    include_archived: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -443,10 +444,13 @@ async def list_review_items(
             ))
 
     if "relationship_suggestion" in requested or "identity_suggestion" in requested:
+        association_statuses = ["candidate", "ambiguous", "deferred"]
+        if include_archived:
+            association_statuses.append("archived")
         association_rows = (
             await db.execute(
                 select(EntityAssociation)
-                .where(EntityAssociation.status.in_(["candidate", "ambiguous", "deferred"]))
+                .where(EntityAssociation.status.in_(association_statuses))
                 .order_by(EntityAssociation.last_seen_at.desc())
                 # Camera visibility is enforced below from the association's
                 # evidence histogram. Fetch the bounded review window before
@@ -475,7 +479,9 @@ async def list_review_items(
                 kind=association_kind,
                 status=association.status,
                 priority="normal",
-                title=("Possible name from audio" if association_kind == "identity_suggestion"
+                title=("Archived name hypothesis" if association.status == "archived" and association_kind == "identity_suggestion"
+                       else "Archived relationship hypothesis" if association.status == "archived"
+                       else "Possible name from audio" if association_kind == "identity_suggestion"
                        else "Conflicting relationship needs review" if association.status == "ambiguous"
                        else "Possible relationship needs review"),
                 summary=(
@@ -487,7 +493,7 @@ async def list_review_items(
                 created_at=association.created_at,
                 updated_at=association.last_seen_at or association.created_at,
                 camera_id=None,
-                unread=True,
+                unread=association.status != "archived",
                 evidence={
                     "evidence_count": association.evidence_count,
                     "supporting_evidence_count": getattr(association, "supporting_evidence_count", association.evidence_count),
