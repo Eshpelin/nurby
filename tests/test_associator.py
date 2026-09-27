@@ -15,6 +15,7 @@ import pytest
 from services.perception import associator as assoc_mod
 from services.perception.associator import (
     ASSOCIABLE_SUBJECT_KINDS,
+    COOCCURRENCE_SUBJECT_KINDS,
     bump,
     cooccurrence_metrics,
     evidence_balance,
@@ -70,6 +71,11 @@ def test_many_sightings_in_one_day_are_one_day():
     assert e.evidence_count == 20
     assert e.distinct_days == 1
     assert e.status == "candidate"
+
+
+def test_body_clusters_are_cooccurrence_endpoints_but_not_vehicle_habit_subjects():
+    assert "body" not in ASSOCIABLE_SUBJECT_KINDS
+    assert "body" in COOCCURRENCE_SUBJECT_KINDS
 
 
 def test_promotion_needs_days():

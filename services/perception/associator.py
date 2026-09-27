@@ -60,11 +60,16 @@ DEFAULT_MIN_DISTINCT_DAYS = 3
 DEFAULT_ASSOCIATION_STALE_DAYS = 45
 COOCCURRENCE_GAP = timedelta(seconds=90)
 
-# Subject kinds worth associating. A body-cluster subject is appearance
-# derived and does not survive a change of clothes, so it cannot carry a
-# habit across days and is excluded on purpose: the whole value of an
-# association is that it spans days.
+# Subject kinds worth associating with vehicles. Body-cluster subjects are
+# intentionally excluded here because appearance-only vehicle habits should
+# not be promoted through a change of clothes.
 ASSOCIABLE_SUBJECT_KINDS = {"person", "cluster"}
+
+# Co-occurrence is a weaker, reviewable hypothesis than a vehicle habit. Body
+# clusters are valid endpoints here so an unnamed person/body pair can be
+# shown to a reviewer without pretending that the appearance is a durable
+# identity or that the pair has a social relationship.
+COOCCURRENCE_SUBJECT_KINDS = {"person", "cluster", "body"}
 
 # Statuses that no longer accept evidence.
 TERMINAL_STATUSES = {"rejected"}
@@ -574,7 +579,7 @@ async def process_journey(
     db: AsyncSession, journey: Journey, *, tz_name: str, min_days: int
 ) -> int:
     """Fold one finalized journey into associations. Returns edges touched."""
-    if journey.subject_kind not in ASSOCIABLE_SUBJECT_KINDS:
+    if journey.subject_kind not in COOCCURRENCE_SUBJECT_KINDS:
         return 0
     start, end = journey_window(journey)
     if not (start and end):
@@ -717,7 +722,7 @@ async def process_cooccurrences(
             select(Journey)
             .where(Journey.id != journey.id)
             .where(Journey.finalized.is_(True))
-            .where(Journey.subject_kind.in_(ASSOCIABLE_SUBJECT_KINDS))
+            .where(Journey.subject_kind.in_(COOCCURRENCE_SUBJECT_KINDS))
             .where(Journey.subject_key != journey.subject_key)
             .where(Journey.started_at <= end + gap)
             .where(Journey.last_seen_at >= start - gap)
