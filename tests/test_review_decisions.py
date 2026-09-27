@@ -48,6 +48,15 @@ def test_spoken_name_decision_can_carry_an_explicit_person_link():
     assert body.link_person_id == person_id
 
 
+def test_spoken_name_decision_can_carry_an_explicit_visual_cluster_link():
+    cluster_id = uuid4()
+    body = RelationshipDecisionBody(
+        decision="confirm", link_cluster_id=cluster_id, link_cluster_kind="body"
+    )
+    assert body.link_cluster_id == cluster_id
+    assert body.link_cluster_kind == "body"
+
+
 def test_cooccurrence_decision_can_link_each_endpoint_independently():
     subject_id, object_id = uuid4(), uuid4()
     body = RelationshipDecisionBody(

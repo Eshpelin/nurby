@@ -68,6 +68,13 @@ type PersonOption = {
   nickname?: string | null;
 };
 
+type ClusterOption = {
+  id: string;
+  kind: "face" | "body";
+  label: string;
+  sighting_count?: number;
+};
+
 type RecurrenceEvidence = {
   cluster_kind?: "face" | "body";
   cluster_id?: string;
@@ -104,7 +111,9 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
   const [relationshipDetails, setRelationshipDetails] = useState<Record<string, RelationshipDetail>>({});
   const [evidenceLoading, setEvidenceLoading] = useState<string | null>(null);
   const [persons, setPersons] = useState<PersonOption[]>([]);
+  const [clusters, setClusters] = useState<ClusterOption[]>([]);
   const [linkedPerson, setLinkedPerson] = useState<Record<string, string>>({});
+  const [linkedCluster, setLinkedCluster] = useState<Record<string, string>>({});
   const [linkedSubject, setLinkedSubject] = useState<Record<string, string>>({});
   const [linkedObject, setLinkedObject] = useState<Record<string, string>>({});
   const [showArchived, setShowArchived] = useState(false);
@@ -135,6 +144,27 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
     void authFetch("/api/persons").then(async (res) => {
       if (res.ok) setPersons(await res.json());
     }).catch(() => undefined);
+    void Promise.all([
+      authFetch("/api/persons/suggestions?min_sightings=1"),
+      authFetch("/api/body-clusters/suggestions?min_sightings=1"),
+    ]).then(async ([faceRes, bodyRes]) => {
+      const face = faceRes.ok ? await faceRes.json() : [];
+      const body = bodyRes.ok ? await bodyRes.json() : [];
+      setClusters([
+        ...(Array.isArray(face) ? face.map((cluster: { id: string; auto_label?: string; sighting_count?: number }) => ({
+          id: cluster.id,
+          kind: "face" as const,
+          label: cluster.auto_label || "Unknown face",
+          sighting_count: cluster.sighting_count,
+        })) : []),
+        ...(Array.isArray(body) ? body.map((cluster: { id: string; auto_label?: string; sighting_count?: number }) => ({
+          id: cluster.id,
+          kind: "body" as const,
+          label: cluster.auto_label || "Unknown body",
+          sighting_count: cluster.sighting_count,
+        })) : []),
+      ]);
+    }).catch(() => undefined);
   }, [authFetch]);
 
   const markNotificationRead = async (item: ReviewItem) => {
@@ -154,6 +184,12 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
             decision,
             ...(decision === "confirm" && linkedPerson[item.id]
               ? { link_person_id: linkedPerson[item.id] }
+              : {}),
+            ...(decision === "confirm" && linkedCluster[item.id]
+              ? {
+                  link_cluster_id: linkedCluster[item.id].split(":")[1],
+                  link_cluster_kind: linkedCluster[item.id].split(":")[0],
+                }
               : {}),
             ...(decision === "confirm" && linkedSubject[item.id]
               ? { link_subject_person_id: linkedSubject[item.id] }
@@ -396,13 +432,32 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                       <select
                         aria-label={`Link ${item.title} to a person`}
                         value={linkedPerson[item.id] || ""}
-                        onChange={(event) => setLinkedPerson((current) => ({ ...current, [item.id]: event.target.value }))}
+                        onChange={(event) => {
+                          setLinkedPerson((current) => ({ ...current, [item.id]: event.target.value }));
+                          setLinkedCluster((current) => ({ ...current, [item.id]: "" }));
+                        }}
                         className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
                       >
                         <option value="">Confirm name for this visual</option>
                         {persons.map((person) => (
                           <option key={person.id} value={person.id}>
                             Link to {person.nickname || person.display_name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label={`Link ${item.title} to an unknown visual cluster`}
+                        value={linkedCluster[item.id] || ""}
+                        onChange={(event) => {
+                          setLinkedCluster((current) => ({ ...current, [item.id]: event.target.value }));
+                          setLinkedPerson((current) => ({ ...current, [item.id]: "" }));
+                        }}
+                        className="max-w-44 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
+                      >
+                        <option value="">Keep current visual</option>
+                        {clusters.map((cluster) => (
+                          <option key={`${cluster.kind}:${cluster.id}`} value={`${cluster.kind}:${cluster.id}`}>
+                            Link to {cluster.label} ({cluster.kind})
                           </option>
                         ))}
                       </select>

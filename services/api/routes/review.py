@@ -55,6 +55,11 @@ class RelationshipDecisionBody(BaseModel):
     # Only a confirmed audio-name hypothesis may be explicitly linked to an
     # existing person.  This is a review action, never an automatic rename.
     link_person_id: uuid.UUID | None = None
+    # A reviewer may instead attach a spoken-name hypothesis to an existing
+    # anonymous visual cluster. This preserves the cluster as the identity
+    # anchor and still never renames a Person or enrolls a voiceprint.
+    link_cluster_id: uuid.UUID | None = None
+    link_cluster_kind: Literal["face", "body"] | None = None
     # Co-occurrence hypotheses can be reconciled one side at a time.  These
     # replace only the association endpoint; immutable evidence keeps the
     # anonymous cluster ids that were known at capture time.
@@ -674,6 +679,12 @@ async def decide_relationship_suggestion(
         raise HTTPException(status_code=404, detail="Relationship suggestion not found")
 
     if body.link_person_id is not None and (
+        body.link_cluster_id is not None
+        or body.link_subject_person_id is not None
+        or body.link_object_person_id is not None
+    ):
+        raise HTTPException(status_code=422, detail="Use one relationship linking form at a time")
+    if body.link_cluster_id is not None and (
         body.link_subject_person_id is not None or body.link_object_person_id is not None
     ):
         raise HTTPException(status_code=422, detail="Use one relationship linking form at a time")
@@ -689,6 +700,21 @@ async def decide_relationship_suggestion(
         linked_person = await db.get(Person, body.link_person_id)
         if linked_person is None:
             raise HTTPException(status_code=404, detail="Person not found")
+    linked_cluster = None
+    if body.link_cluster_id is not None:
+        if body.decision != "confirm" or association.relation != "possibly_named":
+            raise HTTPException(
+                status_code=422,
+                detail="A cluster link is only valid when confirming a spoken-name hypothesis.",
+            )
+        if body.link_cluster_kind is None:
+            raise HTTPException(status_code=422, detail="A visual cluster kind is required")
+        if body.link_cluster_kind == "face":
+            linked_cluster = await db.get(FaceCluster, body.link_cluster_id)
+        else:
+            linked_cluster = await db.get(BodyCluster, body.link_cluster_id)
+        if linked_cluster is None:
+            raise HTTPException(status_code=404, detail="Visual cluster not found")
     if body.link_subject_person_id is not None or body.link_object_person_id is not None:
         if body.decision != "confirm" or association.relation not in {
             "co_present_with", "arrives_with", "accompanies"
@@ -721,6 +747,9 @@ async def decide_relationship_suggestion(
         allowed_ids = {str(camera_id) for camera_id in allowed}
         if not any(str(camera_id) in allowed_ids for camera_id in (association.camera_histogram or {})):
             raise HTTPException(status_code=404, detail="Relationship suggestion not found")
+        if linked_cluster is not None and linked_cluster.first_camera_id is not None:
+            if str(linked_cluster.first_camera_id) not in allowed_ids:
+                raise HTTPException(status_code=404, detail="Visual cluster not found")
 
     already_applied = (
         body.decision == "confirm" and association.status == "established" and association.user_confirmed
@@ -769,6 +798,12 @@ async def decide_relationship_suggestion(
         association.object_label = linked_person.nickname or linked_person.display_name
         if not association.review_note:
             association.review_note = "Linked spoken-name hypothesis to this person after review."
+    elif linked_cluster is not None:
+        association.subject_kind = "cluster"
+        association.subject_key = str(linked_cluster.id)
+        association.review_note = (
+            f"Linked spoken-name hypothesis to the existing {body.link_cluster_kind} cluster after review."
+        )
     elif linked_subject is not None or linked_object is not None:
         if linked_subject is not None:
             association.subject_kind = "person"
@@ -792,6 +827,7 @@ async def decide_relationship_suggestion(
         decision_metadata={
             "link_type": (
                 "spoken_name" if body.link_person_id is not None
+                else "spoken_name_cluster" if linked_cluster is not None
                 else "cooccurrence_endpoints" if linked_subject is not None or linked_object is not None
                 else None
             ),
@@ -803,6 +839,8 @@ async def decide_relationship_suggestion(
                 "object_key": association.object_key,
             },
             "linked_person_id": str(body.link_person_id) if body.link_person_id else None,
+            "linked_cluster_id": str(body.link_cluster_id) if body.link_cluster_id else None,
+            "linked_cluster_kind": body.link_cluster_kind,
             "linked_subject_person_id": str(body.link_subject_person_id) if body.link_subject_person_id else None,
             "linked_object_person_id": str(body.link_object_person_id) if body.link_object_person_id else None,
         },
