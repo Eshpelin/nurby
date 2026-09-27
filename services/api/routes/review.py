@@ -53,6 +53,11 @@ class RelationshipDecisionBody(BaseModel):
     # Only a confirmed audio-name hypothesis may be explicitly linked to an
     # existing person.  This is a review action, never an automatic rename.
     link_person_id: uuid.UUID | None = None
+    # Co-occurrence hypotheses can be reconciled one side at a time.  These
+    # replace only the association endpoint; immutable evidence keeps the
+    # anonymous cluster ids that were known at capture time.
+    link_subject_person_id: uuid.UUID | None = None
+    link_object_person_id: uuid.UUID | None = None
 
 
 def _association_visible(association: EntityAssociation, allowed) -> bool:
@@ -638,6 +643,13 @@ async def decide_relationship_suggestion(
     if not valid_status:
         raise HTTPException(status_code=404, detail="Relationship suggestion not found")
 
+    if body.link_person_id is not None and (
+        body.link_subject_person_id is not None or body.link_object_person_id is not None
+    ):
+        raise HTTPException(status_code=422, detail="Use one relationship linking form at a time")
+
+    linked_subject = None
+    linked_object = None
     if body.link_person_id is not None:
         if body.decision != "confirm" or association.relation != "possibly_named":
             raise HTTPException(
@@ -647,6 +659,32 @@ async def decide_relationship_suggestion(
         linked_person = await db.get(Person, body.link_person_id)
         if linked_person is None:
             raise HTTPException(status_code=404, detail="Person not found")
+    if body.link_subject_person_id is not None or body.link_object_person_id is not None:
+        if body.decision != "confirm" or association.relation not in {
+            "co_present_with", "arrives_with", "accompanies"
+        }:
+            raise HTTPException(
+                status_code=422,
+                detail="Subject links are only valid when confirming a co-occurrence hypothesis",
+            )
+        if association.subject_kind not in {"person", "face_cluster", "body_cluster"} or association.object_kind not in {
+            "person", "face_cluster", "body_cluster"
+        }:
+            raise HTTPException(status_code=422, detail="Only person or anonymous-subject endpoints can be linked")
+        if (
+            body.link_subject_person_id is not None
+            and body.link_object_person_id is not None
+            and body.link_subject_person_id == body.link_object_person_id
+        ):
+            raise HTTPException(status_code=422, detail="A co-occurrence needs two distinct people")
+        if body.link_subject_person_id is not None:
+            linked_subject = await db.get(Person, body.link_subject_person_id)
+            if linked_subject is None:
+                raise HTTPException(status_code=404, detail="Subject person not found")
+        if body.link_object_person_id is not None:
+            linked_object = await db.get(Person, body.link_object_person_id)
+            if linked_object is None:
+                raise HTTPException(status_code=404, detail="Companion person not found")
 
     allowed = await allowed_camera_ids(current_user, db)
     if allowed is not ALL:
@@ -695,6 +733,19 @@ async def decide_relationship_suggestion(
         association.object_label = linked_person.nickname or linked_person.display_name
         if not association.review_note:
             association.review_note = "Linked spoken-name hypothesis to this person after review."
+    elif linked_subject is not None or linked_object is not None:
+        if linked_subject is not None:
+            association.subject_kind = "person"
+            association.subject_key = str(linked_subject.id)
+        if linked_object is not None:
+            association.object_kind = "person"
+            association.object_key = str(linked_object.id)
+            association.object_label = linked_object.nickname or linked_object.display_name
+        association.review_note = (
+            f"Linked co-occurrence endpoints after review: "
+            f"{linked_subject.nickname or linked_subject.display_name if linked_subject else 'anonymous subject'} "
+            f"and {linked_object.nickname or linked_object.display_name if linked_object else 'anonymous companion'}."
+        )
     db.add(AssociationReviewEvent(
         association_id=association.id,
         reviewer_user_id=current_user.id,

@@ -46,3 +46,14 @@ def test_spoken_name_decision_can_carry_an_explicit_person_link():
     person_id = uuid4()
     body = RelationshipDecisionBody(decision="confirm", link_person_id=person_id)
     assert body.link_person_id == person_id
+
+
+def test_cooccurrence_decision_can_link_each_endpoint_independently():
+    subject_id, object_id = uuid4(), uuid4()
+    body = RelationshipDecisionBody(
+        decision="confirm",
+        link_subject_person_id=subject_id,
+        link_object_person_id=object_id,
+    )
+    assert body.link_subject_person_id == subject_id
+    assert body.link_object_person_id == object_id

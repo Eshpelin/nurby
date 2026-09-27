@@ -88,6 +88,8 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
   const [evidenceLoading, setEvidenceLoading] = useState<string | null>(null);
   const [persons, setPersons] = useState<PersonOption[]>([]);
   const [linkedPerson, setLinkedPerson] = useState<Record<string, string>>({});
+  const [linkedSubject, setLinkedSubject] = useState<Record<string, string>>({});
+  const [linkedObject, setLinkedObject] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,11 +132,17 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
       const res = await authFetch(`/api/review/relationship-suggestions/${item.source_id}/decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          decision,
-          ...(decision === "confirm" && linkedPerson[item.id]
-            ? { link_person_id: linkedPerson[item.id] }
-            : {}),
+          body: JSON.stringify({
+            decision,
+            ...(decision === "confirm" && linkedPerson[item.id]
+              ? { link_person_id: linkedPerson[item.id] }
+              : {}),
+            ...(decision === "confirm" && linkedSubject[item.id]
+              ? { link_subject_person_id: linkedSubject[item.id] }
+              : {}),
+            ...(decision === "confirm" && linkedObject[item.id]
+              ? { link_object_person_id: linkedObject[item.id] }
+              : {}),
         }),
       });
       if (!res.ok) throw new Error(`Could not ${decision} relationship (${res.status})`);
@@ -322,6 +330,36 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
                           </option>
                         ))}
                       </select>
+                    )}
+                    {item.kind === "relationship_suggestion" && ["co_present_with", "arrives_with", "accompanies"].includes(String(item.provenance.relation)) && (
+                      <>
+                        <select
+                          aria-label={`Link subject of ${item.title} to a person`}
+                          value={linkedSubject[item.id] || ""}
+                          onChange={(event) => setLinkedSubject((current) => ({ ...current, [item.id]: event.target.value }))}
+                          className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
+                        >
+                          <option value="">Subject stays anonymous</option>
+                          {persons.map((person) => (
+                            <option key={person.id} value={person.id}>
+                              Subject: {person.nickname || person.display_name}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          aria-label={`Link companion of ${item.title} to a person`}
+                          value={linkedObject[item.id] || ""}
+                          onChange={(event) => setLinkedObject((current) => ({ ...current, [item.id]: event.target.value }))}
+                          className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
+                        >
+                          <option value="">Companion stays anonymous</option>
+                          {persons.map((person) => (
+                            <option key={person.id} value={person.id}>
+                              Companion: {person.nickname || person.display_name}
+                            </option>
+                          ))}
+                        </select>
+                      </>
                     )}
                     <button
                       type="button"
