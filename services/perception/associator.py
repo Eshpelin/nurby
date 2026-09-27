@@ -45,6 +45,7 @@ from shared.database import async_session
 from shared.models import (
     AssociationEvidence,
     AssociationReviewEvent,
+    Camera,
     EntityAssociation,
     Journey,
     Observation,
@@ -662,6 +663,15 @@ async def process_journey(
     cameras = journey_camera_ids(journey)
     if not cameras:
         return 0
+    inference_cameras = (
+        await db.execute(
+            select(Camera.id)
+            .where(Camera.id.in_(cameras))
+            .where(Camera.relationship_inference_enabled.is_(True))
+        )
+    ).scalars().all()
+    if not inference_cameras:
+        return 0
 
     rows = (
         await db.execute(
@@ -843,6 +853,16 @@ async def process_cooccurrences(
             continue
         other_cameras = set(journey_camera_ids(other))
         shared_cameras = cameras.intersection(other_cameras)
+        enabled_rows = (
+            await db.execute(
+                select(Camera.id)
+                .where(Camera.id.in_(shared_cameras))
+                .where(Camera.relationship_inference_enabled.is_(True))
+            )
+        ).scalars().all() if shared_cameras else []
+        shared_cameras = shared_cameras.intersection(set(enabled_rows))
+        if not shared_cameras:
+            continue
         if not journeys_cooccur(journey, other, gap):
             continue
         # Keep the review card actionable: attach a small, time-bounded set

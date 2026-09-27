@@ -152,6 +152,10 @@ class Camera(Base):
     # target; only the review surfaces drop it. Distinct from the
     # dashboard camera-wall hide, which is a per-browser layout choice.
     exclude_from_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Privacy controls for inferred identity/relationship suggestions. Source
+    # detectors remain independently controlled by their own settings.
+    relationship_inference_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    relationship_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Content-health detection (#212): flag a frozen/obscured/tampered view
     # that keeps the stream "online" while coverage is silently gone. Master
     # switch off by default; each detection path pre-armed so enabling the

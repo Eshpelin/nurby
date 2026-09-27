@@ -27,6 +27,7 @@ import { RecapsSection } from "@/components/camera/settings/RecapsSection";
 import { SummarizationSection } from "@/components/camera/settings/SummarizationSection";
 import { AudioConversationsSection } from "@/components/camera/settings/AudioConversationsSection";
 import { IncidentTrackingSection } from "@/components/camera/settings/IncidentTrackingSection";
+import { RelationshipPrivacySection } from "@/components/camera/settings/RelationshipPrivacySection";
 import { SmartTrackSection } from "@/components/camera/settings/SmartTrackSection";
 import { YoloWorldPromptsSection } from "@/components/camera/settings/YoloWorldPromptsSection";
 import { TimezoneSection } from "@/components/camera/settings/TimezoneSection";
@@ -123,6 +124,8 @@ export default function CameraConfigPage() {
   const [conversationMinMessages, setConversationMinMessages] = useState(2);
   const [incidentTrackingEnabled, setIncidentTrackingEnabled] = useState(true);
   const [incidentIdleSeconds, setIncidentIdleSeconds] = useState(600);
+  const [relationshipInferenceEnabled, setRelationshipInferenceEnabled] = useState(true);
+  const [relationshipNotificationsEnabled, setRelationshipNotificationsEnabled] = useState(true);
   const [privacyZoneTargets, setPrivacyZoneTargets] = useState<string[]>([]);
   const [privacyZoneBlurStrength, setPrivacyZoneBlurStrength] = useState(55);
   const [yoloWorldPrompts, setYoloWorldPrompts] = useState<string[]>([]);
@@ -234,6 +237,8 @@ export default function CameraConfigPage() {
       setConversationMinMessages(cam.conversation_min_messages_for_summary ?? 2);
       setIncidentTrackingEnabled(cam.incident_tracking_enabled ?? true);
       setIncidentIdleSeconds(cam.incident_idle_seconds ?? 600);
+      setRelationshipInferenceEnabled(cam.relationship_inference_enabled ?? true);
+      setRelationshipNotificationsEnabled(cam.relationship_notifications_enabled ?? true);
       setPrivacyZoneTargets(cam.privacy_zone_targets ?? []);
       setPrivacyZoneBlurStrength(cam.privacy_zone_blur_strength ?? 55);
       setYoloWorldPrompts((cam as Camera & { yolo_world_prompts?: string[] | null }).yolo_world_prompts ?? []);
@@ -413,6 +418,8 @@ export default function CameraConfigPage() {
         conversation_min_messages_for_summary: conversationMinMessages,
         incident_tracking_enabled: incidentTrackingEnabled,
         incident_idle_seconds: incidentIdleSeconds,
+        relationship_inference_enabled: relationshipInferenceEnabled,
+        relationship_notifications_enabled: relationshipNotificationsEnabled,
         privacy_zone_targets: privacyZoneTargets.length > 0 ? privacyZoneTargets : null,
         privacy_zone_blur_strength: privacyZoneBlurStrength,
         yolo_world_prompts: yoloWorldPrompts.length > 0 ? yoloWorldPrompts : null,
@@ -872,6 +879,13 @@ export default function CameraConfigPage() {
           incidentTrackingEnabled={incidentTrackingEnabled}
           setIncidentIdleSeconds={setIncidentIdleSeconds}
           setIncidentTrackingEnabled={setIncidentTrackingEnabled}
+        />
+
+        <RelationshipPrivacySection
+          inferenceEnabled={relationshipInferenceEnabled}
+          notificationsEnabled={relationshipNotificationsEnabled}
+          setInferenceEnabled={setRelationshipInferenceEnabled}
+          setNotificationsEnabled={setRelationshipNotificationsEnabled}
         />
 
         {/* ── Smart Track (PTZ auto-follow) ── */}

@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.associator import record_pairing
-from shared.models import Observation, Person, Transcript
+from shared.models import Camera, Observation, Person, Transcript
 
 _NAME = r"([A-Za-z][A-Za-z'-]{1,30})"
 _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -166,6 +166,9 @@ def _visual_subjects(rows, names: dict[str, str]) -> list[dict[str, object]]:
 async def process_transcript_name_mentions(db: AsyncSession, transcript: Transcript) -> int:
     """Persist candidate name associations for one retained transcript."""
     if transcript.filtered:
+        return 0
+    camera = await db.get(Camera, transcript.camera_id)
+    if camera is not None and not camera.relationship_inference_enabled:
         return 0
     mentions = extract_name_mentions(transcript.text)
     if not mentions:

@@ -18,6 +18,8 @@ interface Camera {
   recording_clip_post: number;
   audio_capture_enabled?: boolean;
   audio_transcribe_enabled?: boolean;
+  relationship_inference_enabled?: boolean;
+  relationship_notifications_enabled?: boolean;
   vlm_provider_id: string | null;
   vlm_prompt: string | null;
   vlm_interval: number;

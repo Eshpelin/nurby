@@ -14,7 +14,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models import BodyClusterSample, FaceClusterSample, Notification
+from shared.models import BodyClusterSample, Camera, FaceClusterSample, Notification
 
 RECURRENCE_THRESHOLD_DAYS = 3
 
@@ -45,6 +45,10 @@ async def maybe_emit_recurrence_notification(
     helper easy to test and lets callers remain best-effort.
     """
     now = now or datetime.now(timezone.utc)
+    if camera_id is not None:
+        camera = await db.get(Camera, camera_id)
+        if camera is not None and not camera.relationship_notifications_enabled:
+            return False
     await db.flush()
     rows = (
         await db.execute(
