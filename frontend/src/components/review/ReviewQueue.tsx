@@ -395,19 +395,19 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                     ) : relationshipDetails[item.id]?.evidence.length || relationshipDetails[item.id]?.review_events?.length ? (
                       <div className="space-y-1.5">
                         <p className="text-[10px] text-muted-foreground">
-                          {relationshipDetails[item.id].distinct_days} independent visits · source episodes below
+                          {t("review.independent_visits", { count: relationshipDetails[item.id].distinct_days })} · {t("review.source_episodes_below")}
                         </p>
                         {relationshipDetails[item.id].decision_explanation && (
                           <p className="text-[10px] text-muted-foreground">
                             {relationshipDetails[item.id].decision_explanation}
                             {typeof relationshipDetails[item.id].confidence_score === "number"
-                              ? ` Balance ${Math.round(Number(relationshipDetails[item.id].confidence_score) * 100)}%`
+                              ? ` ${t("review.balance", { percent: Math.round(Number(relationshipDetails[item.id].confidence_score) * 100) })}`
                               : ""}
                           </p>
                         )}
                         {Boolean(item.evidence.evidence_policy && typeof item.evidence.evidence_policy === "object") && (
                           <p className="text-[10px] text-muted-foreground">
-                            Decision guidance: {String((item.evidence.evidence_policy as { confidence_band?: string }).confidence_band ?? "review").replaceAll("_", " ")}
+                            {t("review.decision_guidance")}: {String((item.evidence.evidence_policy as { confidence_band?: string }).confidence_band ?? "review").replaceAll("_", " ")}
                             {String((item.evidence.evidence_policy as { decision_recommendation?: string }).decision_recommendation ?? "").replaceAll("_", " ")
                               ? ` · ${String((item.evidence.evidence_policy as { decision_recommendation?: string }).decision_recommendation).replaceAll("_", " ")}`
                               : ""}
@@ -416,20 +416,20 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                         {relationshipDetails[item.id].evidence.slice(0, 5).map((evidence) => (
                           <div key={evidence.id} className="flex items-start gap-2 text-[10px] text-muted-foreground">
                             <span className={evidence.role === "contradictory" ? "text-amber-300" : "text-emerald-300"}>
-                              {evidence.role === "contradictory" ? "Conflict" : "Support"}
+                              {evidence.role === "contradictory" ? t("review.conflict") : t("review.support")}
                             </span>
                             <div className="min-w-0 flex-1">
                               <span className="text-foreground">{formatDateTime(evidence.observed_at)}</span>
                               {evidence.explanation ? ` — ${evidence.explanation}` : ""}
                               {Array.isArray(evidence.metadata.plate_reads) && evidence.metadata.plate_reads.length > 0 && (
                                 <span className="ml-2 text-foreground/80">
-                                  Plate reads: {(evidence.metadata.plate_reads as { text?: string; confidence?: number | null }[])
+                                  {t("review.plate_reads")}: {(evidence.metadata.plate_reads as { text?: string; confidence?: number | null }[])
                                     .map((read) => `${read.text || "unknown"}${typeof read.confidence === "number" ? ` (${Math.round(read.confidence * 100)}%)` : ""}`)
                                     .join(", ")}
                                 </span>
                               )}
                               {typeof evidence.metadata.identity_kind === "string" && (
-                                <span className="ml-2 text-foreground/80">Source: {evidence.metadata.identity_kind}</span>
+                                <span className="ml-2 text-foreground/80">{t("review.source")}: {evidence.metadata.identity_kind}</span>
                               )}
                               {evidence.transcript_excerpt && (
                                 <div className="mt-1 rounded border border-border/60 bg-background/60 p-1.5 text-foreground/90">
@@ -449,17 +449,17 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                               {typeof evidence.metadata.visit_timing === "object" && evidence.metadata.visit_timing !== null &&
                                 typeof (evidence.metadata.visit_timing as { relation_hint?: unknown }).relation_hint === "string" && (
                                   <span className="ml-2 text-foreground/80">
-                                    Timing: {(evidence.metadata.visit_timing as { relation_hint: string }).relation_hint.replaceAll("_", " ")}
+                                    {t("review.timing")}: {(evidence.metadata.visit_timing as { relation_hint: string }).relation_hint.replaceAll("_", " ")}
                                   </span>
                                 )}
                               {token && evidence.observation_ids.length > 0 && (
-                                <div className="mt-1 flex gap-1.5" aria-label="Evidence thumbnails">
+                                <div className="mt-1 flex gap-1.5" aria-label={t("review.evidence_thumbnails")}>
                                   {evidence.observation_ids.slice(0, 3).map((observationId) => {
                                     const thumbnail = `/api/observations/${observationId}/thumbnail?token=${encodeURIComponent(token)}`;
                                     return (
-                                      <a key={observationId} href={thumbnail} target="_blank" rel="noreferrer" title="Open evidence frame">
+                                      <a key={observationId} href={thumbnail} target="_blank" rel="noreferrer" title={t("review.open_evidence_frame")}>
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={thumbnail} alt="Evidence frame" className="h-12 w-16 rounded border border-border object-cover" />
+                                        <img src={thumbnail} alt={t("review.evidence_frame")} className="h-12 w-16 rounded border border-border object-cover" />
                                       </a>
                                     );
                                   })}
@@ -488,7 +488,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                                 <div className="mt-1 text-[10px] text-amber-200">
                                   {evidence.transcript_audits.map((audit) => (
                                     <div key={audit.id}>
-                                      Correction logged: {audit.field === "transcript_speaker" ? "speaker attribution" : "transcript text"} · {formatDateTime(audit.created_at)}
+                                      {t("review.correction_logged")}: {audit.field === "transcript_speaker" ? t("review.speaker_attribution") : t("review.transcript_text")} · {formatDateTime(audit.created_at)}
                                     </div>
                                   ))}
                                 </div>
