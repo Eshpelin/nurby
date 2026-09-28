@@ -81,3 +81,8 @@ def test_require_admin_rejects_non_admin_with_403():
 def test_require_admin_allows_admin():
     user = _FakeUser("admin")
     assert _run(require_admin(current_user=user)) is user
+
+
+def test_zone_list_requires_authenticated_user():
+    deps = _direct_dependencies("list_zones")
+    assert "get_current_user" in deps

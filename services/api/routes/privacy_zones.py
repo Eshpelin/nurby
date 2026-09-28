@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.privacy import SUPPORTED_TARGETS
 from shared.auth import get_current_user, require_admin
+from shared.camera_access import require_camera_in_scope
 from shared.database import get_db
 from shared.models import PrivacyZone, User
 
@@ -48,6 +49,7 @@ async def list_zones(
     _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await require_camera_in_scope(_user, db, camera_id, detail="camera not found")
     rows = (
         await db.execute(
             select(PrivacyZone).where(PrivacyZone.camera_id == camera_id)
@@ -83,6 +85,7 @@ async def patch_zone(
     z = await db.get(PrivacyZone, zone_id)
     if z is None:
         raise HTTPException(status_code=404, detail="zone not found")
+    await require_camera_in_scope(_user, db, z.camera_id, detail="zone not found")
     updates = body.model_dump(exclude_unset=True)
     # Manual edits flip source to manual so the auto refresh stops
     # overwriting them.
@@ -113,5 +116,6 @@ async def delete_zone(
     z = await db.get(PrivacyZone, zone_id)
     if z is None:
         raise HTTPException(status_code=404, detail="zone not found")
+    await require_camera_in_scope(_user, db, z.camera_id, detail="zone not found")
     await db.delete(z)
     await db.commit()
