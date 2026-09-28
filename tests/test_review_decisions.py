@@ -9,6 +9,7 @@ def test_relationship_decision_schema_supports_reversible_confirmed_lifecycle():
     assert RelationshipDecisionBody(decision="revoke").decision == "revoke"
     assert RelationshipDecisionBody(decision="restore").decision == "restore"
     assert RelationshipDecisionBody(decision="ambiguous").decision == "ambiguous"
+    assert RelationshipDecisionBody(decision="archive").decision == "archive"
 
 
 def test_relationship_decision_payload_does_not_require_a_note():
@@ -26,12 +27,13 @@ def test_decision_names_have_stable_idempotent_terminal_pairs():
     pairs = {
         "confirm": ("established", True),
         "reject": ("rejected", False),
-        "defer": ("deferred", False),
-        "ambiguous": ("ambiguous", False),
-        "revoke": ("archived", False),
+            "defer": ("deferred", False),
+            "ambiguous": ("ambiguous", False),
+            "archive": ("archived", False),
+            "revoke": ("archived", False),
         "restore": ("candidate", False),
     }
-    assert set(pairs) == {"confirm", "reject", "defer", "ambiguous", "revoke", "restore"}
+    assert set(pairs) == {"confirm", "reject", "defer", "ambiguous", "archive", "revoke", "restore"}
 
 
 def test_decision_payload_can_carry_review_timestamp_for_stale_tab_detection():

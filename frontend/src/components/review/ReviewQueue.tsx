@@ -206,7 +206,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
     if (res.ok) setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, unread: false, status: "resolved" } : candidate));
   };
 
-  const decideRelationship = async (item: ReviewItem, decision: "confirm" | "reject" | "defer" | "ambiguous" | "restore") => {
+  const decideRelationship = async (item: ReviewItem, decision: "confirm" | "reject" | "defer" | "ambiguous" | "archive" | "restore") => {
     if (item.source_type !== "association") return;
     setDecisionBusy(item.id);
     try {
@@ -609,6 +609,14 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                       className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
                       {t("review.not_now")}
+                    </button>}
+                    {item.status !== "archived" && !item.provenance.user_confirmed && <button
+                      type="button"
+                      onClick={() => void decideRelationship(item, "archive")}
+                      disabled={decisionBusy === item.id}
+                      className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    >
+                      {t("review.archive")}
                     </button>}
                     {item.status !== "archived" && <>
                     <button

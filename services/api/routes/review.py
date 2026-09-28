@@ -48,7 +48,7 @@ _KINDS = {"incident", "alert", "notification", "identity_suggestion", "relations
 
 
 class RelationshipDecisionBody(BaseModel):
-    decision: Literal["confirm", "reject", "defer", "ambiguous", "revoke", "restore"]
+    decision: Literal["confirm", "reject", "defer", "ambiguous", "archive", "revoke", "restore"]
     note: str | None = Field(default=None, max_length=1000)
     # Clients may send the review timestamp they saw.  This prevents an old
     # open tab from overwriting a newer review while preserving retry-safe
@@ -572,7 +572,11 @@ async def list_review_items(
                         user_confirmed=association.user_confirmed,
                     ),
                 },
-                provenance={"source": association.source, "relation": association.relation},
+                provenance={
+                    "source": association.source,
+                    "relation": association.relation,
+                    "user_confirmed": association.user_confirmed,
+                },
             ))
 
     if unread_only:
@@ -725,7 +729,8 @@ async def decide_relationship_suggestion(
 ):
     """Apply an audited review decision without exposing hidden evidence.
 
-    Revoke is reversible: it archives a confirmed relationship while keeping
+    Archive removes an unconfirmed hypothesis from the active review queue;
+    revoke is reversible: it archives a confirmed relationship while keeping
     its evidence and decision history. Restore returns it to candidate review
     rather than silently re-confirming it. Reject remains terminal for learned
     inference and cannot be undone by this endpoint.
@@ -757,6 +762,7 @@ async def decide_relationship_suggestion(
             or body.decision == "reject" and association.status == "rejected"
             or body.decision == "defer" and association.status == "deferred"
             or body.decision == "ambiguous" and association.status == "ambiguous"
+            or body.decision == "archive" and association.status in {"candidate", "ambiguous", "deferred", "established"} and not association.user_confirmed
             or body.decision == "revoke" and association.status == "established"
             or body.decision == "restore" and association.status == "archived"
             or body.decision == "revoke" and association.status == "archived" and association.archived_at is not None
@@ -844,6 +850,7 @@ async def decide_relationship_suggestion(
         or body.decision == "reject" and association.status == "rejected"
         or body.decision == "defer" and association.status == "deferred"
         or body.decision == "ambiguous" and association.status == "ambiguous"
+        or body.decision == "archive" and association.status == "archived"
         or body.decision == "revoke" and association.status == "archived" and association.archived_at is not None
         or body.decision == "restore" and association.status == "candidate" and association.archived_at is None
     )
@@ -869,11 +876,12 @@ async def decide_relationship_suggestion(
         "reject": "rejected",
         "defer": "deferred",
         "ambiguous": "ambiguous",
+        "archive": "archived",
         "revoke": "archived",
         "restore": "candidate",
     }[body.decision]
     association.user_confirmed = body.decision == "confirm"
-    if body.decision == "revoke":
+    if body.decision in {"archive", "revoke"}:
         association.archived_at = datetime.now(timezone.utc)
     elif body.decision == "restore":
         association.archived_at = None
