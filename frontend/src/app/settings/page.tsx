@@ -107,6 +107,7 @@ export default function SettingsPage() {
   const [classSearch, setClassSearch] = useState<string>("");
   const [journeyIdleSeconds, setJourneyIdleSeconds] = useState<number>(300);
   const [unknownRecurrenceThresholdDays, setUnknownRecurrenceThresholdDays] = useState<number>(3);
+  const [bodyDecayDays, setBodyDecayDays] = useState<number>(14);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [extraSaved, setExtraSaved] = useState(false);
   const [setupCode, setSetupCode] = useState<string | null>(null);
@@ -311,6 +312,7 @@ export default function SettingsPage() {
         if (typeof data.nudity_blur_min_score === "number") setNudityMinScore(data.nudity_blur_min_score);
         if (typeof data.journey_idle_seconds === "number") setJourneyIdleSeconds(data.journey_idle_seconds);
         if (typeof data.unknown_recurrence_threshold_days === "number") setUnknownRecurrenceThresholdDays(data.unknown_recurrence_threshold_days);
+        if (typeof data.body_reid_tentative_decay_days === "number") setBodyDecayDays(data.body_reid_tentative_decay_days);
         if (typeof data.daily_digest_enabled === "boolean") setDailyDigestEnabled(data.daily_digest_enabled);
         if (typeof data.daily_digest_hour === "number") setDailyDigestHour(data.daily_digest_hour);
         if (typeof data.daily_digest_provider_id === "string") setDailyDigestProviderId(data.daily_digest_provider_id);
@@ -1339,6 +1341,34 @@ export default function SettingsPage() {
             />
             <span className="font-mono text-xs text-muted-foreground w-16 text-right">
               {unknownRecurrenceThresholdDays} {unknownRecurrenceThresholdDays === 1 ? "day" : "days"}
+            </span>
+          </div>
+        </div>
+
+        {/* Tentative body-cluster decay */}
+        <div className="rounded-lg border border-border bg-card px-4 py-3.5">
+          <div className="text-sm font-medium mb-1">Unconfirmed body appearance retention</div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Automatically stop tracking a tentative body cluster after it has
+            not been seen for this many days. Set to 0 to keep it until you
+            review or dismiss it. Confirmed or person-linked clusters are not
+            affected.
+          </p>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={0}
+              max={365}
+              step={1}
+              value={bodyDecayDays}
+              onChange={(e) => setBodyDecayDays(Number(e.target.value))}
+              onMouseUp={() => saveExtra({ body_reid_tentative_decay_days: bodyDecayDays })}
+              onTouchEnd={() => saveExtra({ body_reid_tentative_decay_days: bodyDecayDays })}
+              className="flex-1 accent-accent"
+              aria-label="Unconfirmed body appearance retention in days"
+            />
+            <span className="font-mono text-xs text-muted-foreground w-16 text-right">
+              {bodyDecayDays === 0 ? "Never" : `${bodyDecayDays} days`}
             </span>
           </div>
         </div>
