@@ -92,6 +92,8 @@ type ReviewQueueProps = {
   focusId?: string | null;
 };
 
+type ReviewFilter = "all" | "incident" | "alert" | "camera_health" | "notification" | "suggestions";
+
 const KIND_LABEL: Record<ReviewItem["kind"], string> = {
   incident: "Incident",
   alert: "Alert",
@@ -118,17 +120,24 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
   const [linkedSubject, setLinkedSubject] = useState<Record<string, string>>({});
   const [linkedObject, setLinkedObject] = useState<Record<string, string>>({});
   const [showArchived, setShowArchived] = useState(false);
+  const [filter, setFilter] = useState<ReviewFilter>("all");
+  const [unreadOnly, setUnreadOnly] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authFetch(`/api/review?limit=25${showArchived ? "&include_archived=true" : ""}`);
+      const params = new URLSearchParams({ limit: "25" });
+      if (showArchived) params.set("include_archived", "true");
+      if (unreadOnly) params.set("unread_only", "true");
+      if (filter === "suggestions") {
+        params.set("kind", "identity_suggestion,relationship_suggestion");
+      } else if (filter !== "all") {
+        params.set("kind", filter);
+      }
+      const res = await authFetch(`/api/review?${params.toString()}`);
       if (!res.ok) throw new Error(`Review queue failed (${res.status})`);
       const body: { items: ReviewItem[] } = await res.json();
-      // Alerts remain in the detailed history below. The queue currently
-      // foregrounds the other reviewable sources so the same alert is not
-      // rendered twice while the adapter is being rolled out.
-      const visible = body.items.filter((item) => item.kind !== "alert");
+      const visible = body.items;
       if (focusId) {
         const focused = visible.find((item) => item.id === focusId || item.source_id === focusId);
         setItems(focused ? [focused, ...visible.filter((item) => item.id !== focused.id)] : visible);
@@ -141,7 +150,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
     } finally {
       setLoading(false);
     }
-  }, [authFetch, focusId, showArchived]);
+  }, [authFetch, filter, focusId, showArchived, unreadOnly]);
 
   useEffect(() => {
     void load();
@@ -246,6 +255,31 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
         </div>
         <div className="flex items-center gap-3">
           <a href="/settings#privacy-controls" className="text-xs text-muted-foreground hover:text-foreground">Privacy controls</a>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="sr-only">Review type</span>
+            <select
+              aria-label="Review type"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value as ReviewFilter)}
+              className="rounded border border-border bg-background px-1.5 py-1 text-xs"
+            >
+              <option value="all">All</option>
+              <option value="incident">Incidents</option>
+              <option value="alert">Alerts</option>
+              <option value="camera_health">Camera health</option>
+              <option value="notification">Notifications</option>
+              <option value="suggestions">Suggestions</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={unreadOnly}
+              onChange={(event) => setUnreadOnly(event.target.checked)}
+              className="accent-accent"
+            />
+            Unread
+          </label>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <input
               type="checkbox"
