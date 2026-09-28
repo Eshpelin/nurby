@@ -20,6 +20,14 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def test_incident_observation_detail_query_is_camera_scoped():
+    camera_id = uuid.uuid4()
+    statement = inc._incident_observations_query([uuid.uuid4()], camera_id)
+    sql = str(statement).lower()
+    assert "observations.camera_id" in sql
+    assert "observations.id" in sql
+
+
 def _incident(camera_id=None):
     now = datetime(2026, 6, 11, 12, 0, tzinfo=timezone.utc)
     return SimpleNamespace(

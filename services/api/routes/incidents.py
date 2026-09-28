@@ -83,6 +83,16 @@ def _serialize_obs(o: Observation) -> dict[str, Any]:
     }
 
 
+def _incident_observations_query(observation_ids: list[uuid.UUID], camera_id: uuid.UUID):
+    """Build the detail/reinterpretation observation query with camera scope."""
+    return (
+        select(Observation)
+        .where(Observation.id.in_(observation_ids))
+        .where(Observation.camera_id == camera_id)
+        .order_by(Observation.started_at.asc())
+    )
+
+
 @router.get("")
 async def list_incidents(
     camera_id: uuid.UUID | None = Query(default=None),
@@ -151,9 +161,7 @@ async def get_incident(
         obs_rows = list(
             (
                 await db.execute(
-                    select(Observation)
-                    .where(Observation.id.in_(parsed))
-                    .order_by(Observation.started_at.asc())
+                    _incident_observations_query(parsed, row.camera_id)
                 )
             ).scalars().all()
         )
@@ -166,7 +174,10 @@ async def get_incident(
     # this incident fired, the related cross-camera sightings, and the exact
     # clip, so an incident is inspected in one place.
     allowed = await allowed_camera_ids(current_user, db)
-    payload["alerts"] = await _incident_alerts(db, parsed)
+    # Derive alerts only from observations that passed the incident camera
+    # boundary.  This protects the detail response even if a legacy incident
+    # row contains a stale or cross-camera observation id.
+    payload["alerts"] = await _incident_alerts(db, [observation.id for observation in obs_rows])
     payload["related_sightings"] = await _related_sightings(db, row, allowed)
     payload["exact_clip"] = await _exact_clip(db, row)
     # Connect the (already permission- and retention-scoped) evidence export
@@ -499,9 +510,7 @@ async def reinterpret_incident(
         obs_rows = list(
             (
                 await db.execute(
-                    select(Observation)
-                    .where(Observation.id.in_(parsed))
-                    .order_by(Observation.started_at.asc())
+                    _incident_observations_query(parsed, row.camera_id)
                 )
             ).scalars().all()
         )
