@@ -30,6 +30,7 @@ type EvidenceDetail = {
     id: string;
     observed_at: string;
     role: string;
+    score: number | null;
     explanation: string | null;
     observation_ids: string[];
     metadata: Record<string, unknown>;
@@ -140,6 +141,11 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
                         {evidence.role === "contradictory" ? "Conflict" : "Support"}
                       </span>
                       {` · ${formatDateTime(evidence.observed_at)}`}
+                      {typeof evidence.score === "number" && (
+                        <span className="ml-2 text-foreground/80" title="Source score; not a calibrated probability">
+                          Source score: {Math.round(evidence.score * 100)}%
+                        </span>
+                      )}
                       {evidence.explanation ? ` — ${evidence.explanation}` : ""}
                       {Array.isArray(evidence.metadata.plate_reads) && evidence.metadata.plate_reads.length > 0 && (
                         <span className="ml-2 text-foreground/80">
