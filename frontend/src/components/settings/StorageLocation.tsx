@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { Locale, translate } from "@/lib/i18n";
 import { ArchiveCard } from "@/components/settings/ArchiveCard";
 
 interface StorageLocationInfo {
@@ -101,6 +102,8 @@ export function StorageLocationForm({
   showCurrent?: boolean;
 }) {
   const { authFetch, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const isAdmin = user?.role === "admin";
   const { overview: status, reload: refreshStatus } = useStorageOverview(isAdmin);
   const [path, setPath] = useState("");
@@ -199,11 +202,10 @@ export function StorageLocationForm({
           htmlFor="storage-recordings-dir"
           className="text-sm font-medium text-foreground"
         >
-          Where should recordings be stored?
+          {t("settings.storage_where_store")}
         </label>
         <p className="text-xs text-muted-foreground mt-0.5">
-          New recordings, clips, and their caches land here. Existing files
-          stay in the previous location — pick this before adding cameras.
+          {t("settings.storage_location_detail")}
         </p>
       </div>
 
@@ -225,42 +227,39 @@ export function StorageLocationForm({
           onClick={() => validate()}
           className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 whitespace-nowrap"
         >
-          {checking ? "Checking…" : "Check"}
+          {checking ? t("settings.storage_checking") : t("settings.storage_check")}
         </button>
       </div>
 
       {showCurrent && recordings && (
         <p className="text-[11px] text-muted-foreground">
-          Current: <code className="bg-background px-1 rounded">{recordings.path}</code>
+          {t("settings.storage_current")} <code className="bg-background px-1 rounded">{recordings.path}</code>
           {" · "}
-          {recordings.writable ? "writable" : "not writable"}
+          {recordings.writable ? t("settings.storage_writable") : t("settings.storage_not_writable")}
           {recordings.free_bytes !== null ? ` · ${formatBytes(recordings.free_bytes)}` : ""}
-          {isCustom ? " · custom location" : ""}
+          {isCustom ? ` · ${t("settings.storage_custom")}` : ""}
         </p>
       )}
 
       {dirty && recordings && path.trim() !== recordings.path && (
         <p className="text-[11px] text-amber-300">
-          Heads-up: recordings already written stay in the previous location
-          and won&apos;t play until moved. New recordings use the new
-          location immediately.{" "}
+          {t("settings.storage_heads_up")} {" "}
           <a
             href="https://github.com/Eshpelin/nurby/blob/main/docs/operations/storage-location.md"
             target="_blank"
             rel="noreferrer"
             className="underline"
           >
-            Migration notes
+            {t("settings.storage_migration_notes")}
           </a>
         </p>
       )}
 
       {status?.docker && (
         <p className="text-[11px] text-amber-300">
-          Nurby is running in Docker: enter a path inside the container (the
-          default maps to your host volume). To use another host drive, set{" "}
+          {t("settings.storage_docker_help")} {" "}
           <code className="bg-background px-1 rounded">NURBY_RECORDINGS_VOLUME</code>{" "}
-          in <code className="bg-background px-1 rounded">.env</code> — see{" "}
+          {t("settings.storage_in_env")} <code className="bg-background px-1 rounded">.env</code> — {t("settings.storage_see")} {" "}
           <code className="bg-background px-1 rounded">docs/operations/storage-location.md</code>.
         </p>
       )}
@@ -277,7 +276,7 @@ export function StorageLocationForm({
       )}
       {saved && (
         <p className="text-[11px] text-emerald-400">
-          Saved — new recordings will use this location.
+          {t("settings.storage_saved")}
         </p>
       )}
 
@@ -288,7 +287,7 @@ export function StorageLocationForm({
           onClick={saveInput}
           className="px-3 py-1.5 text-xs rounded-md bg-accent text-black font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
         >
-          {saving ? "Saving…" : "Use this location"}
+          {saving ? t("settings.storage_saving") : t("settings.storage_use_location")}
         </button>
         {isCustom && (
           <button
@@ -297,7 +296,7 @@ export function StorageLocationForm({
             onClick={resetToDefault}
             className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
           >
-            Reset to default
+            {t("settings.storage_reset")}
           </button>
         )}
       </div>
@@ -307,8 +306,9 @@ export function StorageLocationForm({
 
 // ── Full overview (embeds the form) ──────────────────────────────────
 
-function CopyableEnvBlock({ docker }: { docker: boolean }) {
+function CopyableEnvBlock({ docker, locale }: { docker: boolean; locale: Locale }) {
   const [copied, setCopied] = useState(false);
+  const t = (key: string) => translate(locale, key);
   const text = [
     "# .env — store media on another host drive (Docker)",
     "NURBY_RECORDINGS_VOLUME=D:/Nurby/recordings",
@@ -319,9 +319,7 @@ function CopyableEnvBlock({ docker }: { docker: boolean }) {
   return (
     <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 space-y-1.5">
       <p className="text-[11px] text-amber-300">
-        Nurby is running in Docker. Paths above are container paths — they map
-        to host drives through compose volumes. Changing the UI field picks a
-        container path; to use a different host drive, put this in your{" "}
+        {t("settings.storage_docker_help")} {" "}
         <code className="bg-background px-1 rounded">.env</code> and restart:
       </p>
       <pre className="text-[10px] font-mono bg-background rounded p-2 overflow-x-auto">
@@ -340,7 +338,7 @@ function CopyableEnvBlock({ docker }: { docker: boolean }) {
         }}
         className="text-[11px] text-accent hover:underline"
       >
-        {copied ? "Copied" : "Copy .env block"}
+        {copied ? t("settings.storage_copied") : t("settings.storage_copy_env")}
       </button>
     </div>
   );
@@ -348,6 +346,8 @@ function CopyableEnvBlock({ docker }: { docker: boolean }) {
 
 export function StorageOverviewBlock() {
   const { user, authFetch } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const { overview: status } = useStorageOverview(user?.role === "admin");
   const [profiles, setProfiles] = useState<StorageProfileSummary[]>([]);
 
@@ -389,10 +389,10 @@ export function StorageOverviewBlock() {
                       ? "bg-green-500"
                       : "bg-red-500"
                 }`}
-                title={!loc.exists ? "Missing" : loc.writable ? "Writable" : "Not writable"}
+                title={!loc.exists ? t("settings.storage_not_writable") : loc.writable ? t("settings.storage_writable") : t("settings.storage_not_writable")}
               />
               <span className="text-muted-foreground w-20 flex-shrink-0">
-                {LOCATION_LABELS[loc.key] ?? loc.key}
+                {loc.key === "recordings" ? t("settings.storage_recordings_label") : LOCATION_LABELS[loc.key] ?? loc.key}
               </span>
               <code className="bg-background px-1 rounded truncate">{loc.path}</code>
             </div>
@@ -409,30 +409,30 @@ export function StorageOverviewBlock() {
           </div>
         ))}
         {!status && (
-          <p className="text-xs text-muted-foreground">Loading locations…</p>
+          <p className="text-xs text-muted-foreground">{t("settings.storage_loading_locations")}</p>
         )}
       </div>
 
       {profiles.some((p) => p.kind === "ftp") && (
         <div className="space-y-1.5">
-          <div className="text-xs font-medium">FTP locations</div>
+          <div className="text-xs font-medium">{t("settings.storage_ftp_locations")}</div>
           {profiles.filter((p) => p.kind === "ftp").map((profile) => (
             <div key={profile.id} className="flex items-center justify-between gap-3 text-xs">
               <span className="text-muted-foreground truncate">{profile.name}</span>
               <span className="text-[11px] text-muted-foreground flex-shrink-0">
                 {profile.stats?.uploaded_bytes
-                  ? `${formatBytesStored(profile.stats.uploaded_bytes)} stored`
+                  ? `${formatBytesStored(profile.stats.uploaded_bytes)} ${t("settings.storage_stored")}`
                   : "0 bytes stored"}
               </span>
             </div>
           ))}
           <p className="text-[11px] text-muted-foreground">
-            Usage reflects recordings confirmed uploaded to each FTP server; FTP capacity is not queried.
+            {t("settings.storage_ftp_help")}
           </p>
         </div>
       )}
 
-      <CopyableEnvBlock docker={Boolean(status?.docker)} />
+      <CopyableEnvBlock docker={Boolean(status?.docker)} locale={locale} />
 
       <div className="border-t border-border pt-3">
         <StorageLocationForm showCurrent={false} />
@@ -443,11 +443,7 @@ export function StorageOverviewBlock() {
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        How long footage stays on this machine is set per camera (Retention
-        in each camera&apos;s settings), and a camera can record to its own
-        folder, FTP server or S3 bucket (Recordings location in camera
-        settings). Recordings already written stay where they are when
-        locations change.
+        {t("settings.storage_retention_help")}
       </p>
     </div>
   );
@@ -464,6 +460,7 @@ export function StorageLowSpaceBanner() {
   // collapsed by default, so low disk / unwritable roots must surface on
   // the monitoring view. Admin-only; quiet 60s poll.
   const { user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
   const { overview } = useStorageOverview(user?.role === "admin", 60_000);
 
   if (user?.role !== "admin" || !overview?.low_space) return null;
@@ -492,19 +489,20 @@ export function StorageLocationCard() {
   // note instead of an endless loading state. Usage bars in the parent card
   // remain visible to everyone (GET /api/storage is not admin-only).
   const { user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
   if (user?.role !== "admin") {
     return (
       <p className="text-xs text-muted-foreground">
-        Only admins can change the storage location.
+        {translate(locale, "settings.storage_admin_only")}
       </p>
     );
   }
   return (
     <div className="space-y-3">
       <div>
-        <div className="text-sm font-medium mb-1">Recordings location</div>
+        <div className="text-sm font-medium mb-1">{translate(locale, "settings.storage_recordings_location")}</div>
         <p className="text-xs text-muted-foreground">
-          The drives and folders Nurby writes media to.
+          {translate(locale, "settings.storage_location_help")}
         </p>
       </div>
       <StorageOverviewBlock />
