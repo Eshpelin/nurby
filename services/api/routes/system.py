@@ -12,6 +12,7 @@ from services.ingestion.retention import low_disk_threshold
 from services.perception.vlm_queue import get_vlm_stats
 from shared import heartbeat
 from shared.auth import get_current_user, require_admin
+from shared.camera_access import ALL, allowed_camera_ids
 from shared.config import settings
 from shared.database import get_db
 from shared.email import send_email
@@ -137,12 +138,21 @@ async def get_alert_latency(
 async def get_system_status(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     from services.api.main import START_TIME
 
-    total = await db.scalar(select(func.count()).select_from(Camera))
+    allowed = await allowed_camera_ids(_current_user, db)
+    camera_filter = Camera.id.in_(allowed) if allowed is not ALL else None
+    total_query = select(func.count()).select_from(Camera)
+    online_query = select(func.count()).select_from(Camera).where(Camera.status != "offline")
+    recording_query = select(func.count()).select_from(Camera).where(Camera.status == "recording")
+    if camera_filter is not None:
+        total_query = total_query.where(camera_filter)
+        online_query = online_query.where(camera_filter)
+        recording_query = recording_query.where(camera_filter)
+    total = await db.scalar(total_query)
     online = await db.scalar(
-        select(func.count()).select_from(Camera).where(Camera.status != "offline")
+        online_query
     )
     recording = await db.scalar(
-        select(func.count()).select_from(Camera).where(Camera.status == "recording")
+        recording_query
     )
 
     return SystemStatus(
@@ -155,7 +165,7 @@ async def get_system_status(_current_user: User = Depends(get_current_user), db:
 
 
 @router.get("/storage", response_model=StorageResponse)
-async def get_storage_stats(_current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_storage_stats(_current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     cameras_result = await db.execute(select(Camera))
     cameras = cameras_result.scalars().all()
 
