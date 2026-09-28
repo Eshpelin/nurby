@@ -74,14 +74,15 @@ export function timeAgo(
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return iso;
   const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
-  if (s < 60) return opts.seconds ? `${s}s ago` : "just now";
+  const relative = new Intl.RelativeTimeFormat(locale(), { numeric: "always", style: "short" });
+  if (s < 60) return opts.seconds ? relative.format(-s, "second") : (locale()?.toLowerCase().startsWith("es") ? "ahora mismo" : "just now");
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return relative.format(-m, "minute");
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return relative.format(-h, "hour");
   const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
-  return `${Math.floor(d / 30)}mo ago`;
+  if (d < 30) return relative.format(-d, "day");
+  return relative.format(-Math.floor(d / 30), "month");
 }
 
 // ── Installation timezone ────────────────────────────────────────────
