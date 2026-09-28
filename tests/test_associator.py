@@ -262,6 +262,23 @@ def test_bump_ignores_out_of_range_slots():
     assert bump(None, 0, 24) == {"0": 1}
 
 
+def test_ledger_backed_fold_deduplicates_out_of_order_local_days():
+    assoc = SimpleNamespace(
+        status="candidate", evidence_count=0, supporting_evidence_count=0,
+        last_day=None, distinct_days=0, hour_histogram={}, dow_histogram={},
+        camera_histogram={}, first_seen_at=None, last_seen_at=None,
+        user_confirmed=False, confidence_score=None, decision_explanation=None,
+        archived_at=None,
+    )
+    days: set[str] = set()
+    fold(assoc, _at(2, 8), "UTC", 3, evidence_day_keys=days)
+    fold(assoc, _at(1, 8), "UTC", 3, evidence_day_keys=days)
+    fold(assoc, _at(2, 9), "UTC", 3, evidence_day_keys=days)
+
+    assert assoc.distinct_days == 2
+    assert days == {"2026-08-01", "2026-08-02"}
+
+
 def test_vehicles_in_ignores_unidentified_detections():
     """A box around something car-shaped is not an identity."""
     rows = [

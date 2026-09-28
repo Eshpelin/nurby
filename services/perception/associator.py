@@ -269,6 +269,7 @@ def fold(
     tz_name: str,
     min_days: int,
     camera_id: str | None = None,
+    evidence_day_keys: set[str] | None = None,
 ) -> bool:
     """Fold one co-presence event into an edge, in place.
 
@@ -286,8 +287,15 @@ def fold(
 
     assoc.evidence_count = int(assoc.evidence_count or 0) + 1
     assoc.supporting_evidence_count = int(getattr(assoc, "supporting_evidence_count", 0) or 0) + 1
-    if assoc.last_day != day_key:
-        assoc.distinct_days = int(assoc.distinct_days or 0) + 1
+    if evidence_day_keys is None:
+        # Legacy aggregate rows have no individual ledger to reconcile. Keep
+        # the historical incremental behavior rather than fabricating days.
+        if assoc.last_day != day_key:
+            assoc.distinct_days = int(assoc.distinct_days or 0) + 1
+            assoc.last_day = day_key
+    else:
+        evidence_day_keys.add(day_key)
+        assoc.distinct_days = len(evidence_day_keys)
         assoc.last_day = day_key
     assoc.hour_histogram = bump(assoc.hour_histogram, hour, 24)
     assoc.dow_histogram = bump(assoc.dow_histogram, weekday, 7)
@@ -615,7 +623,23 @@ async def record_pairing(
     elif object_label and existing.object_label != object_label:
         existing.object_label = object_label
 
-    if not fold(existing, when, tz_name, min_days, camera_id=camera_id):
+    evidence_day_keys: set[str] | None = None
+    if existing.provenance and existing.provenance.get("individual_evidence_available"):
+        prior_days = (
+            await db.execute(
+                select(AssociationEvidence.observed_at)
+                .where(AssociationEvidence.association_id == existing.id)
+            )
+        ).scalars().all()
+        evidence_day_keys = {
+            local_buckets(observed_at, tz_name)[0]
+            for observed_at in prior_days
+            if observed_at is not None
+        }
+    if not fold(
+        existing, when, tz_name, min_days, camera_id=camera_id,
+        evidence_day_keys=evidence_day_keys,
+    ):
         return None
     if episode_key:
         evidence = AssociationEvidence(
