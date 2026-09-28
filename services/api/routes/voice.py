@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.voice import presets as presets_mod
 from shared.auth import require_admin
+from shared.camera_access import allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
 from shared.models import (
     Camera,
@@ -138,7 +139,9 @@ def interleave_transcript(heard, said) -> list[dict]:
     return turns
 
 
-async def _load(camera_id: uuid.UUID, db: AsyncSession):
+async def _load(camera_id: uuid.UUID, db: AsyncSession, user: User | None = None):
+    if user is not None:
+        await require_camera_in_scope(user, db, camera_id, detail="Camera not found")
     camera = await db.get(Camera, camera_id)
     if camera is None:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -181,7 +184,7 @@ async def get_camera_voice(
     user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    camera, capability = await _load(camera_id, db)
+    camera, capability = await _load(camera_id, db, user)
     return _camera_view(camera, capability)
 
 
@@ -198,7 +201,7 @@ async def patch_camera_voice(
     offer "Deterrent, but quieter" in one request without having to
     resolve the preset itself.
     """
-    camera, capability = await _load(camera_id, db)
+    camera, capability = await _load(camera_id, db, user)
     changes = body.model_dump(exclude_unset=True)
 
     preset_key = changes.pop("preset", None)
@@ -232,7 +235,7 @@ async def test_speak(
     """
     from services.voice.speaker import speak
 
-    camera, _ = await _load(camera_id, db)
+    camera, _ = await _load(camera_id, db, user)
     outcome = await speak(db, camera, TEST_PHRASE, trigger="manual")
     await db.commit()
     return {
@@ -260,13 +263,12 @@ async def list_speech_events(
     one that never fired.
     """
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
-    query = (
-        select(SpeechEvent)
-        .where(SpeechEvent.created_at >= since)
-        .order_by(SpeechEvent.created_at.desc())
-        .limit(limit)
-    )
+    allowed = await allowed_camera_ids(user, db)
+    query = apply_camera_filter(
+        select(SpeechEvent), allowed, SpeechEvent.camera_id
+    ).where(SpeechEvent.created_at >= since).order_by(SpeechEvent.created_at.desc()).limit(limit)
     if camera_id is not None:
+        await require_camera_in_scope(user, db, camera_id, detail="Camera not found")
         query = query.where(SpeechEvent.camera_id == camera_id)
 
     rows = (await db.execute(query)).scalars().all()
@@ -322,8 +324,12 @@ async def list_sessions(
     db: AsyncSession = Depends(get_db),
 ):
     """Spoken exchanges, newest first."""
-    query = select(VoiceSession).order_by(VoiceSession.started_at.desc()).limit(limit)
+    allowed = await allowed_camera_ids(user, db)
+    query = apply_camera_filter(
+        select(VoiceSession), allowed, VoiceSession.camera_id
+    ).order_by(VoiceSession.started_at.desc()).limit(limit)
     if camera_id is not None:
+        await require_camera_in_scope(user, db, camera_id, detail="Camera not found")
         query = query.where(VoiceSession.camera_id == camera_id)
     if active:
         query = query.where(VoiceSession.ended_at.is_(None))
@@ -349,6 +355,7 @@ async def take_over(
     row = await db.get(VoiceSession, session_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Session not found")
+    await require_camera_in_scope(user, db, row.camera_id, detail="Session not found")
     if row.ended_at is not None:
         # Not an error. Someone tapping the push after the visitor left
         # should be told plainly, not shown a failure.
@@ -396,6 +403,7 @@ async def say_as_human(
     row = await db.get(VoiceSession, session_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Session not found")
+    await require_camera_in_scope(user, db, row.camera_id, detail="Session not found")
     camera = await db.get(Camera, row.camera_id)
     if camera is None:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -441,6 +449,7 @@ async def get_session(
     row = await db.get(VoiceSession, session_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Session not found")
+    await require_camera_in_scope(user, db, row.camera_id, detail="Session not found")
 
     said = (
         await db.execute(

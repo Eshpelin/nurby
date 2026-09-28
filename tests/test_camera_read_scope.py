@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from services.api.routes import audio, conversations, digests, notifications, search, summaries, timeline, transcripts
+from services.api.routes import audio, conversations, digests, notifications, search, summaries, timeline, transcripts, voice
 from services.search import query, scan
 from shared import auth
 from shared.database import get_db
@@ -72,7 +72,7 @@ def http():
     for name, module in (
         ("audio", audio), ("conversations", conversations), ("digests", digests),
         ("notifications", notifications), ("search", search), ("summaries", summaries),
-        ("timeline", timeline), ("transcripts", transcripts),
+        ("timeline", timeline), ("transcripts", transcripts), ("voice", voice),
     ):
         app.include_router(module.router, prefix=f"/{name}")
 
@@ -80,6 +80,10 @@ def http():
         yield db
 
     app.dependency_overrides[get_db] = session
+    # Voice endpoints are admin-only in production; bypass only that role
+    # dependency here so the shared selected-camera scope fixture can inspect
+    # their SQL without changing the semantics of the other route tests.
+    app.dependency_overrides[auth.require_admin] = lambda: db.user
     # Exercise the real JWT and active-user dependencies for every HTTP call.
     with TestClient(app) as client:
         client.headers["Authorization"] = f"Bearer {auth.create_access_token(db.user.id)}"
@@ -99,6 +103,8 @@ def http():
     ("/search/digests/latest", ["digest_entries"]),
     ("/notifications", ["notifications"]),
     ("/notifications/count", ["notifications"]),
+    ("/voice/events", ["speech_events"]),
+    ("/voice/sessions", ["voice_sessions"]),
 ])
 def test_list_queries_scope_before_pagination(http, path, tables):
     client, db = http
