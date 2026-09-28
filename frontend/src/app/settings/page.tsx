@@ -45,7 +45,7 @@ const pillClass = "px-3 py-1.5 rounded-md border border-border text-sm hover:bg-
 
 export default function SettingsPage() {
   const { user, authFetch, token } = useAuth();
-  const t = (key: string) => translate(user?.locale, key);
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [showProviderModal, setShowProviderModal] = useState(false);
@@ -1347,12 +1347,9 @@ export default function SettingsPage() {
 
         {/* Tentative body-cluster decay */}
         <div className="rounded-lg border border-border bg-card px-4 py-3.5">
-          <div className="text-sm font-medium mb-1">Unconfirmed body appearance retention</div>
+          <div className="text-sm font-medium mb-1">{t("settings.body_decay_title")}</div>
           <p className="text-xs text-muted-foreground mb-3">
-            Automatically stop tracking a tentative body cluster after it has
-            not been seen for this many days. Set to 0 to keep it until you
-            review or dismiss it. Confirmed or person-linked clusters are not
-            affected.
+            {t("settings.body_decay_help")}
           </p>
           <div className="flex items-center gap-3">
             <input
@@ -1365,10 +1362,10 @@ export default function SettingsPage() {
               onMouseUp={() => saveExtra({ body_reid_tentative_decay_days: bodyDecayDays })}
               onTouchEnd={() => saveExtra({ body_reid_tentative_decay_days: bodyDecayDays })}
               className="flex-1 accent-accent"
-              aria-label="Unconfirmed body appearance retention in days"
+              aria-label={t("settings.body_decay_aria")}
             />
             <span className="font-mono text-xs text-muted-foreground w-16 text-right">
-              {bodyDecayDays === 0 ? "Never" : `${bodyDecayDays} days`}
+              {bodyDecayDays === 0 ? t("settings.body_decay_never") : t("settings.body_decay_days", { count: bodyDecayDays })}
             </span>
           </div>
         </div>
