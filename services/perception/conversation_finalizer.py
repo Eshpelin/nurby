@@ -164,7 +164,7 @@ class ConversationFinalizer:
         ):
             provider = await self._resolve_provider(cam)
             if provider is not None:
-                raw = await self._call_summary(provider, tx_rows)
+                raw = await self._call_summary(provider, tx_rows, camera_id=str(cam.id))
                 summary_text, cleaned_text = self._parse_summary_response(raw)
                 if summary_text:
                     await self._patch_summary(
@@ -257,7 +257,7 @@ class ConversationFinalizer:
         return await get_active_provider()
 
     async def _call_summary(
-        self, provider: Provider, tx_rows: list[Transcript]
+        self, provider: Provider, tx_rows: list[Transcript], camera_id: str | None = None
     ) -> str | None:
         # Render each transcript line as its own section so older lines
         # drop first when the input token cap is tight. Speaker tag is
@@ -295,6 +295,7 @@ class ConversationFinalizer:
             system_prompt=CONVERSATION_SYSTEM_PROMPT,
             user_prompt=prompt,
             max_tokens=output_cap,
+            camera_id=camera_id,
         )
 
     @staticmethod

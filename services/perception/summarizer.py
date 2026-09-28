@@ -302,6 +302,7 @@ class CameraSummarizer:
             system_prompt=SUMMARY_SYSTEM_PROMPT,
             user_prompt=prompt,
             max_tokens=output_cap,
+            camera_id=str(cam.id),
         )
         if not text:
             logger.warning(

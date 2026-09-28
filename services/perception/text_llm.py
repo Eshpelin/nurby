@@ -129,10 +129,29 @@ async def call_text(
         logger.warning("unknown provider kind for text call: %s", kind)
         return None
 
-    return await call_with_retry(
+    result = await call_with_retry(
         _do,
         provider_name=provider.name,
         provider_kind=kind,
         op="text",
         camera_id=camera_id,
     )
+    if camera_id:
+        # Text-only camera summaries are still VLM work and must share the
+        # same per-camera budget/report as image captions.
+        try:
+            from services.perception.usage import record_vlm_usage
+
+            await record_vlm_usage(
+                provider,
+                workload="camera_text_summary",
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                output_text=result,
+                camera_id=camera_id,
+                model=getattr(provider, "default_model", None),
+                succeeded=result is not None,
+            )
+        except Exception:
+            logger.debug("camera text usage recording failed", exc_info=True)
+    return result
