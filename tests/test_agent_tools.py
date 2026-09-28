@@ -674,9 +674,14 @@ def test_scoped_association_metrics_do_not_use_hidden_camera_counts():
     from services.agent.tools.relationships import _scoped_association_metrics
 
     visible = SimpleNamespace(
+        id=uuid.uuid4(),
+        evidence_kind="plate",
         camera_ids=["camera-a"],
         observed_at=datetime(2026, 9, 27, 8, tzinfo=timezone.utc),
         role="supporting",
+        observation_ids=[uuid.uuid4()],
+        journey_id=None,
+        evidence_metadata={},
     )
     hidden = SimpleNamespace(
         camera_ids=["camera-b"],
@@ -692,6 +697,8 @@ def test_scoped_association_metrics_do_not_use_hidden_camera_counts():
     assert metrics["distinct_days"] == 1
     assert metrics["usual_hours"] == [8]
     assert metrics["evidence_scope"] == "camera_scoped"
+    assert metrics["evidence_refs"][0]["evidence_kind"] == "plate"
+    assert metrics["evidence_refs"][0]["camera_ids"] == ["camera-a"]
 
 
 def test_scoped_association_metrics_marks_legacy_aggregates_unknown():
@@ -704,6 +711,7 @@ def test_scoped_association_metrics_marks_legacy_aggregates_unknown():
     assert metrics["times_seen"] == 0
     assert metrics["evidence_count_known"] is False
     assert metrics["evidence_scope"] == "legacy_aggregate_unavailable"
+    assert metrics["evidence_refs"] == []
 
 
 # ── query_relationships ─────────────────────────────────────────────

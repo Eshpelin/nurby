@@ -85,6 +85,19 @@ def _scoped_association_metrics(
         row for row in visible
         if {str(camera_id) for camera_id in (row.camera_ids or [])} <= allowed_ids
     ]
+    evidence_refs = [
+        {
+            "episode_id": str(row.id) if getattr(row, "id", None) else None,
+            "evidence_kind": getattr(row, "evidence_kind", None),
+            "role": getattr(row, "role", None),
+            "observed_at": row.observed_at.isoformat() if getattr(row, "observed_at", None) else None,
+            "camera_ids": sorted(str(camera_id) for camera_id in (row.camera_ids or [])),
+            "observation_ids": [str(value) for value in (getattr(row, "observation_ids", None) or [])],
+            "journey_id": str(row.journey_id) if getattr(row, "journey_id", None) else None,
+            "transcript_id": (getattr(row, "evidence_metadata", None) or {}).get("transcript_id"),
+        }
+        for row in visible[:20]
+    ]
     if not evidence_rows:
         return {
             "times_seen": 0,
@@ -95,6 +108,7 @@ def _scoped_association_metrics(
             "evidence_count_known": False,
             "provenance": getattr(association, "provenance", None),
             "evidence_scope": "legacy_aggregate_unavailable",
+            "evidence_refs": [],
         }
     days = {
         row.observed_at.date().isoformat()
@@ -115,6 +129,7 @@ def _scoped_association_metrics(
         "evidence_count_known": True,
         "provenance": getattr(association, "provenance", None),
         "evidence_scope": "camera_scoped",
+        "evidence_refs": evidence_refs,
     }
 
 
@@ -275,6 +290,7 @@ async def get_associations(
             "evidence_count_known": scoped["evidence_count_known"],
             "provenance": scoped.get("provenance"),
             "evidence_scope": scoped["evidence_scope"],
+            "evidence_refs": scoped["evidence_refs"],
             "first_seen": r.first_seen_at.isoformat() if r.first_seen_at else None,
             "last_seen": r.last_seen_at.isoformat() if r.last_seen_at else None,
         })
