@@ -53,6 +53,13 @@ def test_scoped_evidence_hides_episode_with_no_allowed_camera():
     assert _scoped_evidence(row, {"camera-a"}) is None
 
 
+def test_scoped_evidence_hides_episode_without_camera_provenance():
+    row = _evidence(cameras=[])
+
+    assert _scoped_evidence(row, {"camera-a"}) is None
+    assert _scoped_evidence(row, None) is not None
+
+
 def test_association_visibility_is_camera_scoped_before_queue_pagination():
     row = SimpleNamespace(camera_histogram={"camera-a": 2, "camera-b": 1})
 

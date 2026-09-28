@@ -90,6 +90,11 @@ def _scoped_evidence(row: AssociationEvidence, allowed_ids: set[str] | None) -> 
     """
     cameras = {str(camera_id) for camera_id in (row.camera_ids or [])}
     if allowed_ids is not None:
+        # Missing provenance cannot be safely attributed to a camera-scoped
+        # caller. Keep it out of the scoped review surface rather than
+        # treating an empty set as implicitly visible.
+        if not cameras:
+            return None
         visible_cameras = cameras.intersection(allowed_ids)
         if cameras and not visible_cameras:
             return None
