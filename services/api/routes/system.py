@@ -220,9 +220,17 @@ async def get_storage_stats(_current_user: User = Depends(require_admin), db: As
 
 
 @router.get("/vlm-stats")
-async def get_vlm_queue_stats(_current_user: User = Depends(get_current_user)):
+async def get_vlm_queue_stats(
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get VLM processing stats per camera. Latency, queue depth, errors."""
-    return get_vlm_stats()
+    stats = get_vlm_stats()
+    allowed = await allowed_camera_ids(_current_user, db)
+    if allowed is ALL:
+        return stats
+    allowed_ids = {str(camera_id) for camera_id in allowed}
+    return {camera_id: value for camera_id, value in stats.items() if str(camera_id) in allowed_ids}
 
 
 @router.get("/system/pipeline-summary")
@@ -245,9 +253,19 @@ async def get_pipeline_summary(
     from services.perception.vlm_queue import read_published_stats
 
     stats = await read_published_stats() or get_vlm_stats()
+    allowed = await allowed_camera_ids(_current_user, db)
+    if allowed is not ALL:
+        allowed_ids = {str(camera_id) for camera_id in allowed}
+        stats = {
+            camera_id: value for camera_id, value in stats.items()
+            if str(camera_id) in allowed_ids
+        }
 
     # Map ids -> names so the page/table need no second round-trip.
-    cam_rows = (await db.execute(select(Camera.id, Camera.name))).all()
+    camera_query = select(Camera.id, Camera.name)
+    if allowed is not ALL:
+        camera_query = camera_query.where(Camera.id.in_(allowed))
+    cam_rows = (await db.execute(camera_query)).all()
     names = {str(cid): name for cid, name in cam_rows}
 
     cameras = []
