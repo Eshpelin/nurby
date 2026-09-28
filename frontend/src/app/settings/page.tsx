@@ -726,15 +726,15 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${activeProvider ? "bg-green-500" : "bg-yellow-500"}`} />
               <div>
-                <div className="text-sm font-medium">AI models</div>
+                <div className="text-sm font-medium">{t("settings.ai_models")}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  {loading ? "Loading." : activeProvider
+                  {loading ? t("settings.loading") : activeProvider
                     ? activeProvider.name.includes(`(${activeProvider.default_model})`)
                       // Providers created by the wizard embed the model in
                       // their name; don't render "(gemma3:4b) (gemma3:4b)".
                       ? activeProvider.name
                       : `${activeProvider.name} (${activeProvider.default_model || "default"})`
-                    : "No provider configured"}
+                    : t("settings.no_provider")}
                 </div>
               </div>
             </div>
@@ -749,7 +749,7 @@ export default function SettingsPage() {
           {showProviders && (
             <div className="px-4 pb-4 border-t border-border pt-3 space-y-3">
               <p className="text-xs text-muted-foreground">
-                Providers are optional; detection/recording/alerts work without one.
+                {t("settings.provider_optional")}
               </p>
               {/* Configured providers */}
               {providers.length > 0 && (
@@ -769,15 +769,15 @@ export default function SettingsPage() {
                         <div className="flex gap-1">
                           <button onClick={() => handleTest(p)} disabled={testingId === p.id}
                             className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors disabled:opacity-50">
-                            {testingId === p.id ? "Testing." : "Test"}
+                            {testingId === p.id ? t("settings.testing") : t("settings.test")}
                           </button>
                           <button onClick={() => openEdit(p)}
                             className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors">
-                            Edit
+                            {t("settings.edit")}
                           </button>
                           <button onClick={() => handleDelete(p.id)}
                             className="px-2 py-1 text-xs rounded border border-red-800 text-red-400 hover:bg-red-900/30 transition-colors">
-                            Del
+                            {t("settings.delete")}
                           </button>
                         </div>
                       </div>
@@ -808,7 +808,7 @@ export default function SettingsPage() {
 
               <button onClick={() => openCreate()}
                 className="w-full px-3 py-2 text-sm rounded-md border border-dashed border-border hover:border-accent/50 hover:bg-accent/5 transition-colors text-muted-foreground hover:text-foreground">
-                + Add cloud provider
+                {t("settings.add_cloud_provider")}
               </button>
             </div>
           )}
