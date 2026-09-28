@@ -173,7 +173,7 @@ async def ask(
 
     from services.api.routes.mentions import verify_mentions
 
-    verified_mentions = await verify_mentions(db, body.mentions)
+    verified_mentions = await verify_mentions(db, body.mentions, current_user)
 
     run = await runs_mod.create_run(
         user_id=current_user.id,

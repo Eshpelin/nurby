@@ -148,7 +148,7 @@ async def draft_rule(ctx: dict, *, description: str) -> dict:
     try:
         from services.api.routes.rules_nl import translate_rule
 
-        out = await translate_rule(db, description)
+        out = await translate_rule(db, description, user=user)
     except Exception as exc:  # HTTPException (no provider / unparseable) or other
         detail = getattr(exc, "detail", None) or str(exc)
         return {

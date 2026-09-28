@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from integrations.devices import get_preset
 from shared.auth import get_current_user
+from shared.camera_access import ALL, allowed_camera_ids
 from shared.database import get_db
 from shared.models import Camera, Device, Person, TelegramChannel, User
 from shared.schemas import MentionRef
@@ -25,7 +26,11 @@ async def list_mentionables(
     _current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     out: list[dict] = []
-    for cam_id, name in (await db.execute(select(Camera.id, Camera.name))).all():
+    allowed = await allowed_camera_ids(_current_user, db)
+    camera_query = select(Camera.id, Camera.name)
+    if allowed is not ALL:
+        camera_query = camera_query.where(Camera.id.in_(allowed))
+    for cam_id, name in (await db.execute(camera_query)).all():
         out.append({"kind": "camera", "id": str(cam_id), "name": name, "hint": None})
     for pid, name, nickname in (
         await db.execute(select(Person.id, Person.display_name, Person.nickname))
@@ -63,7 +68,9 @@ _MODEL_BY_KIND = {
 }
 
 
-async def verify_mentions(db: AsyncSession, mentions: list[MentionRef]) -> list[dict]:
+async def verify_mentions(
+    db: AsyncSession, mentions: list[MentionRef], user: User | None = None
+) -> list[dict]:
     """Drop mention rows whose kind+id match no existing row, so a stale
     client cache can never inject ghost UUIDs into a prompt. Returns
     plain dicts ready for prompt building / persistence."""
@@ -76,7 +83,12 @@ async def verify_mentions(db: AsyncSession, mentions: list[MentionRef]) -> list[
     for kind, refs in by_kind.items():
         model = _MODEL_BY_KIND[kind]
         ids: set[uuid.UUID] = {m.id for m in refs}
-        rows = await db.execute(select(model.id).where(model.id.in_(ids)))
+        query = select(model.id).where(model.id.in_(ids))
+        if kind == "camera" and user is not None:
+            allowed = await allowed_camera_ids(user, db)
+            if allowed is not ALL:
+                query = query.where(model.id.in_(allowed))
+        rows = await db.execute(query)
         existing = {r[0] for r in rows.all()}
         for m in refs:
             if m.id in existing:

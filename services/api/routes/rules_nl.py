@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
+from shared.camera_access import ALL, allowed_camera_ids
 from shared.database import get_db
 from shared.models import Camera, Device, Person, Provider, TelegramChannel, User
 from shared.schemas import MentionRef, RuleCreate
@@ -412,6 +413,7 @@ async def translate_rule(
     *,
     provider_id: uuid.UUID | None = None,
     mentions: list | None = None,
+    user: User | None = None,
 ) -> dict:
     """Translate a plain-language description into a validated RuleCreate dict.
 
@@ -429,9 +431,12 @@ async def translate_rule(
     if not model:
         raise HTTPException(status_code=409, detail="The provider has no default model set.")
 
-    cameras = [
-        (str(i), n) for i, n in (await db.execute(select(Camera.id, Camera.name))).all()
-    ]
+    camera_query = select(Camera.id, Camera.name)
+    if user is not None:
+        allowed = await allowed_camera_ids(user, db)
+        if allowed is not ALL:
+            camera_query = camera_query.where(Camera.id.in_(allowed))
+    cameras = [(str(i), n) for i, n in (await db.execute(camera_query)).all()]
     persons = [
         (str(i), n)
         for i, n in (await db.execute(select(Person.id, Person.display_name))).all()
@@ -455,7 +460,7 @@ async def translate_rule(
 
     from services.api.routes.mentions import verify_mentions
 
-    verified_mentions = await verify_mentions(db, mentions or [])
+    verified_mentions = await verify_mentions(db, mentions or [], user)
 
     system_prompt = build_system_prompt(
         build_schema(), cameras, persons, channels, devices, verified_mentions
@@ -522,6 +527,7 @@ async def generate_rule(
     db: AsyncSession = Depends(get_db),
 ):
     out = await translate_rule(
-        db, body.prompt, provider_id=body.provider_id, mentions=body.mentions
+        db, body.prompt, provider_id=body.provider_id, mentions=body.mentions,
+        user=_current_user,
     )
     return GenerateRuleResponse(**out)
