@@ -423,19 +423,21 @@ async def usage_report(
     perception_today = {"cost_cents": 0, "tokens": 0}
     today = datetime.now(timezone.utc).date()
 
-    def add(bucket: dict, *, cost: int, tokens_in: int, tokens_out: int) -> None:
+    def add(bucket: dict, *, cost: int, tokens_in: int, tokens_out: int, estimated: bool = True) -> None:
         bucket["cost_cents"] = bucket.get("cost_cents", 0) + cost
         bucket["tokens_in"] = bucket.get("tokens_in", 0) + tokens_in
         bucket["tokens_out"] = bucket.get("tokens_out", 0) + tokens_out
         bucket["calls"] = bucket.get("calls", 0) + 1
+        bucket["estimated_calls"] = bucket.get("estimated_calls", 0) + (1 if estimated else 0)
+        bucket["native_usage_calls"] = bucket.get("native_usage_calls", 0) + (0 if estimated else 1)
 
-    def add_call(*, camera: str, provider: str, workload: str, at: datetime, cost: int, tokens_in: int, tokens_out: int) -> None:
-        add(totals, cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
-        add(by_camera.setdefault(camera, {"name": camera}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
-        add(by_provider.setdefault(provider, {"name": provider}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
-        add(by_workload.setdefault(workload, {"name": workload}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
+    def add_call(*, camera: str, provider: str, workload: str, at: datetime, cost: int, tokens_in: int, tokens_out: int, estimated: bool = True) -> None:
+        add(totals, cost=cost, tokens_in=tokens_in, tokens_out=tokens_out, estimated=estimated)
+        add(by_camera.setdefault(camera, {"name": camera}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out, estimated=estimated)
+        add(by_provider.setdefault(provider, {"name": provider}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out, estimated=estimated)
+        add(by_workload.setdefault(workload, {"name": workload}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out, estimated=estimated)
         day = at.date().isoformat()
-        add(by_day.setdefault(day, {"date": day}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out)
+        add(by_day.setdefault(day, {"date": day}), cost=cost, tokens_in=tokens_in, tokens_out=tokens_out, estimated=estimated)
         if at.date() == today and workload != "Ask Nurby":
             perception_today["cost_cents"] += cost
             perception_today["tokens"] += tokens_in + tokens_out
@@ -481,6 +483,7 @@ async def usage_report(
             cost=int(vlm_pass.cost_cents or 0),
             tokens_in=int(vlm_pass.tokens_in or 0),
             tokens_out=int(vlm_pass.tokens_out or 0),
+            estimated=bool(vlm_pass.estimated),
         )
 
     for usage, camera, rule, provider in (await db.execute(rule_usage_stmt)).all():
@@ -492,6 +495,7 @@ async def usage_report(
             cost=int(usage.cost_cents or 0),
             tokens_in=int(usage.tokens_in or 0),
             tokens_out=int(usage.tokens_out or 0),
+            estimated=bool(usage.estimated),
         )
         rule_name = rule.name if rule is not None else "Deleted rule"
         add(
@@ -514,7 +518,9 @@ async def usage_report(
     )
     return {
         "days": days,
-        "estimated": True,
+        "estimated": bool(totals.get("estimated_calls", 0)),
+        "estimated_calls": totals.get("estimated_calls", 0),
+        "native_usage_calls": totals.get("native_usage_calls", 0),
         "pricing_note": "Costs are estimates from the configured model pricing table; local providers are estimated at $0.",
         "totals": totals,
         "by_camera": sorted(by_camera.values(), key=lambda row: row["cost_cents"], reverse=True),

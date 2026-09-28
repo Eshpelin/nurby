@@ -10,6 +10,8 @@ type UsageReport = {
   estimated: boolean;
   pricing_note: string;
   totals: SpendRow;
+  estimated_calls: number;
+  native_usage_calls: number;
   by_camera: SpendRow[];
   by_provider: SpendRow[];
   by_workload: SpendRow[];
@@ -108,6 +110,9 @@ export function CostUsageCard() {
             <div><div className="text-muted-foreground">{t("cost.input_tokens")}</div><div className="font-medium">{report.totals.tokens_in.toLocaleString()}</div></div>
             <div><div className="text-muted-foreground">{t("cost.output_tokens")}</div><div className="font-medium">{report.totals.tokens_out.toLocaleString()}</div></div>
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            {t("cost.usage_quality", { estimated: report.estimated_calls, native: report.native_usage_calls })}
+          </p>
           {report.by_camera.length > 0 && (
             <div>
               <div className="text-xs font-medium mb-1">{t("cost.by_camera_workload")}</div>
