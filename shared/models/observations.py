@@ -103,6 +103,35 @@ class Observation(Base):
     last_enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class PackageLifecycleRecord(Base):
+    """Durable camera-local package lifecycle candidate.
+
+    A delivery spans many frames and must survive observation retention and
+    detector flapping. ``tracking_key`` leaves room for a future multi-package
+    tracker while the first implementation uses one candidate per camera.
+    """
+
+    __tablename__ = "package_lifecycle_records"
+    __table_args__ = (
+        UniqueConstraint("camera_id", "tracking_key", name="uq_package_lifecycle_camera_key"),
+        Index("ix_package_lifecycle_camera_state", "camera_id", "state"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    camera_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    tracking_key: Mapped[str] = mapped_column(String(128), nullable=False, default="camera-default")
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="delivered")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_present_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    absent_checks: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    gone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    removal_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    remover_person_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    last_observation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class ObservationAction(Base):
     """Structured per-person action for one observation frame.
 

@@ -91,6 +91,7 @@ from shared.models.observations import (  # noqa: F401
     Observation,
     ObservationAction,
     ObservationIncident,
+    PackageLifecycleRecord,
     ObservationVlmPass,
     PersonActionSegment,
 )
@@ -156,6 +157,7 @@ __all__ = [
     "Observation",
     "ObservationAction",
     "ObservationIncident",
+    "PackageLifecycleRecord",
     "ObservationVlmPass",
     "Person",
     "PersonActionSegment",

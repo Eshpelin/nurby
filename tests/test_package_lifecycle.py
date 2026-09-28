@@ -10,9 +10,18 @@ from services.perception.package_lifecycle import (
     RemovalKind,
     advance,
 )
+from services.perception.package_lifecycle_store import _known_person_id, _package_present
 
 
 BASE = datetime(2026, 9, 28, 10, 0, tzinfo=timezone.utc)
+
+
+def test_observation_payload_helpers_are_conservative():
+    assert _package_present({"objects": [{"label": "package"}]}) is True
+    assert _package_present({"objects": [{"label": "person"}]}) is False
+    person_id = uuid4()
+    assert _known_person_id({"faces": [{"person_id": str(person_id)}]}) == person_id
+    assert _known_person_id({"faces": [{"person_id": "not-a-uuid"}]}) is None
 
 
 def test_delivery_becomes_waiting_and_resets_noise():

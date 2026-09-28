@@ -1353,6 +1353,24 @@ class PerceptionPipeline:
                 )
                 db.add(obs)
                 await db.flush()
+                # Package lifecycle is best-effort and camera-local. It is
+                # fed after the observation has an id so the review surface
+                # can link every transition back to its source frame.
+                try:
+                    from services.perception.package_lifecycle_store import (
+                        apply_package_observation,
+                    )
+
+                    await apply_package_observation(
+                        db,
+                        camera_id=camera_id,
+                        observation_id=obs.id,
+                        observed_at=timestamp,
+                        object_detections=object_detections,
+                        person_detections=person_detections,
+                    )
+                except Exception:
+                    logger.exception("package lifecycle update failed obs=%s", obs.id)
                 # Link the observation to an open incident on this
                 # camera matching its signature, or open a new one.
                 # Done in the same session so observation.incident_id
