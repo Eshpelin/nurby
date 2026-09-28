@@ -1033,9 +1033,18 @@ async def get_relationship_suggestion(
             .order_by(AssociationEvidence.observed_at.desc())
         )
     ).scalars().all()
-    observation_ids: set[uuid.UUID] = set()
+    # Redact mixed/foreign-camera episodes before collecting source ids. The
+    # source lookup below must never query observations that the caller cannot
+    # see, even though their ids are stored on the association ledger.
+    visible_rows: list[tuple[AssociationEvidence, dict]] = []
     for row in rows:
-        for value in row.observation_ids or []:
+        scoped = _scoped_evidence(row, allowed_ids)
+        if scoped is not None:
+            visible_rows.append((row, scoped))
+
+    observation_ids: set[uuid.UUID] = set()
+    for _, scoped in visible_rows:
+        for value in scoped["observation_ids"]:
             try:
                 observation_ids.add(uuid.UUID(str(value)))
             except (TypeError, ValueError):
@@ -1051,10 +1060,7 @@ async def get_relationship_suggestion(
             ).scalars().all()
         }
     evidence = []
-    for row in rows:
-        scoped = _scoped_evidence(row, allowed_ids)
-        if scoped is None:
-            continue
+    for row, scoped in visible_rows:
         scoped = _reconcile_observation_sources(scoped, existing_observation_ids)
         transcript_id = scoped["transcript_id"]
         transcript = None
