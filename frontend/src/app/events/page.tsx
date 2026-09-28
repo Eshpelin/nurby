@@ -18,6 +18,7 @@ import { EventFeedbackPanel } from "@/components/events/EventFeedback";
 import { EventEvidence } from "@/components/EventEvidence";
 import { ShareDialog } from "@/components/ShareDialog";
 import { ReviewQueue } from "@/components/review/ReviewQueue";
+import { translate } from "@/lib/i18n";
 import type { Camera, EventEntry, Rule } from "@/components/rules/types";
 
 const PAGE_SIZE = 50;
@@ -33,6 +34,7 @@ type RangeValue = (typeof RANGES)[number]["value"];
 
 export default function EventsPage() {
   const { authFetch, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const searchParams = useSearchParams();
   const [events, setEvents] = useState<EventEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -294,7 +296,7 @@ export default function EventsPage() {
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Review</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("events.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             One place for incidents, notifications, and alerts across all cameras.
           </p>
@@ -305,14 +307,14 @@ export default function EventsPage() {
           className="px-3 py-1.5 text-sm rounded-md border border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground transition-colors"
           title="Download the current view (all matching rows, not just the page) as CSV"
         >
-          Export CSV
+          {t("events.export_csv")}
         </button>
         <button
           type="button"
           onClick={() => { setSelectedIds(new Set(events.map((e) => e.id))); setSelectAllMatching(false); }}
           disabled={events.length === 0}
           className="px-3 py-1.5 text-sm rounded-md border border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-        >Select page</button>
+        >{t("events.select_page")}</button>
       </div>
       <ReviewQueue
         onOpenEvent={(eventId) => setExpandedId(eventId)}
@@ -322,9 +324,9 @@ export default function EventsPage() {
 
       <div className="flex items-center gap-1 mb-3">
         {([
-          { v: "alert", l: "Alerts" },
-          { v: "detection", l: "Detections" },
-          { v: "", l: "Everything" },
+          { v: "alert", l: t("events.alerts") },
+          { v: "detection", l: t("events.detections") },
+          { v: "", l: t("events.everything") },
         ] as const).map((t) => (
           <button
             key={t.v}
@@ -340,7 +342,7 @@ export default function EventsPage() {
           </button>
         ))}
         <span className="ml-2 text-[11px] text-muted-foreground">
-          Alerts are the push-worthy tier; detections are kept for review.
+          {t("events.tier_help")}
         </span>
       </div>
 
@@ -351,21 +353,21 @@ export default function EventsPage() {
           ))}
         </select>
         <select value={cameraFilter} onChange={(e) => setCameraFilter(e.target.value)} className={selectClass} aria-label="Camera filter">
-          <option value="">All cameras</option>
+          <option value="">{t("events.all_cameras")}</option>
           {cameras.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
         <select value={ruleFilter} onChange={(e) => setRuleFilter(e.target.value)} className={selectClass} aria-label="Rule filter">
-          <option value="">All rules</option>
+          <option value="">{t("events.all_rules")}</option>
           {rules.map((r) => (
             <option key={r.id} value={r.id}>{r.name}</option>
           ))}
         </select>
         <select value={ackedFilter} onChange={(e) => setAckedFilter(e.target.value as "" | "false" | "true")} className={selectClass} aria-label="Review state filter">
-          <option value="">Reviewed + unreviewed</option>
-          <option value="false">Unreviewed only</option>
-          <option value="true">Reviewed only</option>
+          <option value="">{t("events.reviewed_and_unreviewed")}</option>
+          <option value="false">{t("events.unreviewed_only")}</option>
+          <option value="true">{t("events.reviewed_only")}</option>
         </select>
       </div>
 
@@ -392,11 +394,11 @@ export default function EventsPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted-foreground py-12 text-center">Loading alerts.</p>
+        <p className="text-sm text-muted-foreground py-12 text-center">{t("events.loading")}</p>
       ) : events.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border py-12 text-center">
           <p className="text-sm text-muted-foreground">
-            No alerts match these filters. When a rule fires, it lands here.
+            {t("events.empty")}
           </p>
         </div>
       ) : (
@@ -447,7 +449,7 @@ export default function EventsPage() {
                   )}
                   {acked && (
                     <span className="px-1.5 py-0.5 text-[10px] rounded bg-green-500/15 text-green-400 border border-green-500/30">
-                      ✓ Reviewed{ev.acked_via ? ` (${ev.acked_via})` : ""}
+                      ✓ {t("events.reviewed")}{ev.acked_via ? ` (${ev.acked_via})` : ""}
                     </span>
                   )}
                   {muted && (
@@ -524,7 +526,7 @@ export default function EventsPage() {
               disabled={loadingMore}
               className="w-full px-3 py-2 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors disabled:opacity-50"
             >
-              {loadingMore ? "Loading." : "Load more"}
+              {loadingMore ? t("events.loading") : t("events.load_more")}
             </button>
           )}
         </div>
