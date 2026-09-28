@@ -180,6 +180,35 @@ async def _cluster_sample_summaries(db: AsyncSession, sample_model, cluster_ids,
     return _summarize_cluster_samples(rows)
 
 
+async def _notification_recurrence_evidence(
+    db: AsyncSession,
+    notification: Notification,
+    allowed,
+) -> dict | None:
+    """Resolve a recurrence notification's linked samples without widening ACLs.
+
+    The dedupe key is private bookkeeping, but it gives the single Review
+    Center a stable pointer back to the cluster that caused the notification.
+    Invalid or stale markers are intentionally treated as ordinary
+    notifications rather than surfaced to the caller.
+    """
+    marker = getattr(notification, "dedupe_key", None)
+    if not isinstance(marker, str) or not marker.startswith("recurring_unknown:"):
+        return None
+    parts = marker.split(":")
+    if len(parts) != 3 or parts[1] not in {"face", "body"}:
+        return None
+    try:
+        cluster_id = uuid.UUID(parts[2])
+    except (TypeError, ValueError):
+        return None
+    sample_model = FaceClusterSample if parts[1] == "face" else BodyClusterSample
+    summary = (await _cluster_sample_summaries(db, sample_model, [cluster_id], allowed)).get(str(cluster_id))
+    if not summary:
+        return {"cluster_kind": parts[1], "cluster_id": str(cluster_id), "sample_count": 0, "distinct_days": 0, "samples": []}
+    return {**summary, "cluster_kind": parts[1], "cluster_id": str(cluster_id)}
+
+
 def _incident_review_reason(
     incident: Incident,
     fired_incident_ids: set[str],
@@ -354,6 +383,7 @@ async def list_review_items(
         )
         notifications = (await db.execute(query.limit(250))).scalars().all()
         for notification in notifications:
+            recurrence = await _notification_recurrence_evidence(db, notification, allowed)
             items.append(_item(
                 source_type="notification",
                 source_id=notification.id,
@@ -366,7 +396,10 @@ async def list_review_items(
                 updated_at=notification.created_at,
                 camera_id=notification.camera_id,
                 unread=not notification.read,
-                evidence={"observation_id": notification.observation_id},
+                evidence={
+                    "observation_id": notification.observation_id,
+                    **({"recurrence": recurrence} if recurrence is not None else {}),
+                },
                 provenance={"source": "notification", "rule_id": notification.rule_id},
             ))
 

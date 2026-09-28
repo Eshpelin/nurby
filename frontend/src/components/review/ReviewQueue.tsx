@@ -334,12 +334,13 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                     className="mt-2 h-16 w-24 rounded border border-border object-cover"
                   />
                 )}
-                {item.kind === "identity_suggestion" && token && (() => {
+                {item.evidence.recurrence && token && (() => {
                   const recurrence = item.evidence.recurrence as RecurrenceEvidence | undefined;
                   if (!recurrence?.samples?.length || !recurrence.cluster_id || !recurrence.cluster_kind) return null;
                   const prefix = recurrence.cluster_kind === "face" ? "/api/persons" : "/api/body-clusters";
                   return (
                     <div className="mt-2 flex items-center gap-1.5" aria-label="Recurring sample evidence">
+                      <span className="mr-1 text-[10px] text-muted-foreground">Linked appearances:</span>
                       {recurrence.samples.map((sample) => (
                         <a
                           key={sample.id}
