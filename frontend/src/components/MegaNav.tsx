@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
+import { getDisplayLocale } from "@/lib/time";
 
 /* ────────────────────────────────────────────────────────────────────────
    Mega navigation. Ten flat links collapse into four grouped triggers, each
@@ -15,6 +17,19 @@ import { useAuth } from "@/lib/auth";
 
 type LinkDef = { label: string; href: string; hint: string };
 type MenuDef = { id: string; label: string; links: LinkDef[] };
+
+const NAV_KEYS: Record<string, string> = {
+  Home: "nav.home", Cameras: "nav.cameras", Settings: "nav.settings",
+  Activity: "nav.activity", Ask: "nav.ask", People: "nav.people",
+  Everything: "nav.everything", Alerts: "nav.alerts", Incidents: "nav.incidents",
+  Journeys: "nav.journeys", Conversations: "nav.conversations", Recordings: "nav.recordings",
+  Memory: "nav.memory", "Scheduled questions": "nav.scheduled_questions", Vehicles: "nav.vehicles",
+};
+
+function navLabel(value: string, locale: string | undefined): string {
+  const key = NAV_KEYS[value];
+  return key ? translate(locale, key) : value;
+}
 
 const MENUS: MenuDef[] = [
   // The five places (docs/ia-rollout.md). Each is the question it
@@ -195,9 +210,16 @@ export function useNavData(): NavData {
 
 export function MegaNav() {
   const pathname = usePathname();
+  const [locale, setLocale] = useState<string | undefined>(() => getDisplayLocale());
   const {
     cams, alertCount, recentAlerts, latestRec, people, vehicles, facesToName, rules, ensureData, tq,
   } = useNavData();
+
+  useEffect(() => {
+    const onLocaleChange = (event: Event) => setLocale((event as CustomEvent<string>).detail || "en");
+    window.addEventListener("nurby-locale-change", onLocaleChange);
+    return () => window.removeEventListener("nurby-locale-change", onLocaleChange);
+  }, []);
 
   const [active, setActive] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<{ left: number; center: number }>({ left: 0, center: 0 });
@@ -277,7 +299,7 @@ export function MegaNav() {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {l.label}
+            {navLabel(l.label, locale)}
           </Link>
         ))}
 
@@ -298,7 +320,7 @@ export function MegaNav() {
                 on || routeActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
               } ${on ? "bg-muted" : ""}`}
             >
-              {m.label}
+              {navLabel(m.label, locale)}
               {showAlertBadge && (
                 <span className="min-w-[15px] h-[15px] px-1 flex items-center justify-center rounded-full bg-danger/90 text-white text-[9px] font-bold leading-none">
                   {alertCount! > 99 ? "99+" : alertCount}
@@ -631,7 +653,14 @@ function PanelFor({ id, nav, onNavigate }: { id: string; nav: NavData; onNavigat
 export function MegaNavMobile({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const nav = useNavData();
+  const [locale, setLocale] = useState<string | undefined>(() => getDisplayLocale());
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onLocaleChange = (event: Event) => setLocale((event as CustomEvent<string>).detail || "en");
+    window.addEventListener("nurby-locale-change", onLocaleChange);
+    return () => window.removeEventListener("nurby-locale-change", onLocaleChange);
+  }, []);
 
   useEffect(() => { if (!open) setExpanded(null); }, [open]);
 
@@ -655,7 +684,7 @@ export function MegaNavMobile({ open, onClose }: { open: boolean; onClose: () =>
             pathname === "/" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          Dashboard
+          {navLabel("Home", locale)}
         </Link>
 
         {MENUS.map((m) => {
@@ -671,7 +700,7 @@ export function MegaNavMobile({ open, onClose }: { open: boolean; onClose: () =>
                   isOpen ? "bg-muted" : "hover:bg-muted/60"
                 }`}
               >
-                <span className={routeActive || isOpen ? "text-foreground" : "text-muted-foreground"}>{m.label}</span>
+                <span className={routeActive || isOpen ? "text-foreground" : "text-muted-foreground"}>{navLabel(m.label, locale)}</span>
                 {showBadge && (
                   <span className="min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-danger/90 text-white text-[9px] font-bold leading-none">
                     {nav.alertCount! > 99 ? "99+" : nav.alertCount}
@@ -703,7 +732,7 @@ export function MegaNavMobile({ open, onClose }: { open: boolean; onClose: () =>
               pathname.startsWith(l.href) ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {l.label}
+            {navLabel(l.label, locale)}
           </Link>
         ))}
 

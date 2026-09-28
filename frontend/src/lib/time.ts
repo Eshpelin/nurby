@@ -31,6 +31,7 @@ export function setDisplayLocale(locale: string | null | undefined): void {
   displayLocale = locale;
   try {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    window.dispatchEvent(new CustomEvent("nurby-locale-change", { detail: locale }));
   } catch {
     /* private mode: in-memory only */
   }
