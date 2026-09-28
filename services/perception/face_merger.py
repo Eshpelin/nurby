@@ -36,7 +36,7 @@ from sqlalchemy import select, update
 from services.perception.faces import MAX_CLUSTER_SAMPLES, _renorm
 from shared.app_settings import get_setting
 from shared.database import async_session
-from shared.models import FaceCluster, FaceClusterSample, FaceEmbedding, Person
+from shared.models import FaceCluster, FaceClusterSample, FaceEmbedding, Notification, Person
 
 logger = logging.getLogger("nurby.perception.face_merger")
 
@@ -211,6 +211,18 @@ class FaceClusterMerger:
         )
         absorbed = [c for c in clusters.values() if c.id != survivor.id]
         absorbed_ids = [c.id for c in absorbed]
+
+        # Recurrence notifications are keyed by cluster id. Samples move to
+        # the survivor below, so move the private dedupe markers as well or a
+        # later sample could emit a duplicate warning for the same pattern.
+        survivor_marker = f"recurring_unknown:face:{survivor.id}"
+        absorbed_markers = [f"recurring_unknown:face:{cluster_id}" for cluster_id in absorbed_ids]
+        if absorbed_markers:
+            notifications = (await db.execute(
+                select(Notification).where(Notification.dedupe_key.in_(absorbed_markers))
+            )).scalars().all()
+            for notification in notifications:
+                notification.dedupe_key = survivor_marker
 
         # Move every absorbed sample onto the survivor.
         await db.execute(
