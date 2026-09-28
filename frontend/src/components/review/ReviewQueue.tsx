@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { formatDateTime, timeAgo } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 type ReviewItem = {
   id: string;
@@ -94,18 +95,19 @@ type ReviewQueueProps = {
 
 type ReviewFilter = "all" | "incident" | "alert" | "camera_health" | "notification" | "suggestions";
 
-const KIND_LABEL: Record<ReviewItem["kind"], string> = {
-  incident: "Incident",
-  alert: "Alert",
-  notification: "Notification",
-  camera_health: "Camera health",
-  identity_suggestion: "Identity suggestion",
-  relationship_suggestion: "Relationship suggestion",
-  privacy_review: "Privacy review",
+const KIND_LABEL_KEY: Record<ReviewItem["kind"], string> = {
+  incident: "review.incidents",
+  alert: "review.alerts",
+  notification: "review.notifications",
+  camera_health: "review.camera_health",
+  identity_suggestion: "review.suggestions",
+  relationship_suggestion: "review.suggestions",
+  privacy_review: "review.privacy_controls",
 };
 
 export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -250,25 +252,25 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
     <section className="mb-5 rounded-lg border border-border bg-card/50" aria-labelledby="review-queue-heading">
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div>
-          <h2 id="review-queue-heading" className="text-sm font-medium">Review queue</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Incidents, notifications, and system suggestions in one place.</p>
+          <h2 id="review-queue-heading" className="text-sm font-medium">{t("review.queue")}</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">{t("review.queue_help")}</p>
         </div>
         <div className="flex items-center gap-3">
-          <a href="/settings#privacy-controls" className="text-xs text-muted-foreground hover:text-foreground">Privacy controls</a>
+          <a href="/settings#privacy-controls" className="text-xs text-muted-foreground hover:text-foreground">{t("review.privacy_controls")}</a>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="sr-only">Review type</span>
+            <span className="sr-only">{t("review.type")}</span>
             <select
-              aria-label="Review type"
+              aria-label={t("review.type")}
               value={filter}
               onChange={(event) => setFilter(event.target.value as ReviewFilter)}
               className="rounded border border-border bg-background px-1.5 py-1 text-xs"
             >
-              <option value="all">All</option>
-              <option value="incident">Incidents</option>
-              <option value="alert">Alerts</option>
-              <option value="camera_health">Camera health</option>
-              <option value="notification">Notifications</option>
-              <option value="suggestions">Suggestions</option>
+              <option value="all">{t("review.all")}</option>
+              <option value="incident">{t("review.incidents")}</option>
+              <option value="alert">{t("review.alerts")}</option>
+              <option value="camera_health">{t("review.camera_health")}</option>
+              <option value="notification">{t("review.notifications")}</option>
+              <option value="suggestions">{t("review.suggestions")}</option>
             </select>
           </label>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -278,7 +280,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
               onChange={(event) => setUnreadOnly(event.target.checked)}
               className="accent-accent"
             />
-            Unread
+            {t("review.unread")}
           </label>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <input
@@ -287,9 +289,9 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
               onChange={(event) => setShowArchived(event.target.checked)}
               className="accent-accent"
             />
-            Show archived
+            {t("review.show_archived")}
           </label>
-          <button type="button" onClick={() => void load()} className="text-xs text-muted-foreground hover:text-foreground">Refresh</button>
+          <button type="button" onClick={() => void load()} className="text-xs text-muted-foreground hover:text-foreground">{t("review.refresh")}</button>
         </div>
       </div>
       {loading ? (
@@ -306,7 +308,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium">{item.title}</span>
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{KIND_LABEL[item.kind]}</span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{t(KIND_LABEL_KEY[item.kind])}</span>
                   {item.camera_name && <span className="text-[10px] text-muted-foreground">{item.camera_name}</span>}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.summary}</p>
@@ -334,23 +336,23 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                     className="mt-2 h-16 w-24 rounded border border-border object-cover"
                   />
                 )}
-                {item.evidence.recurrence && token && (() => {
+                {Boolean(item.evidence.recurrence) && Boolean(token) && (() => {
                   const recurrence = item.evidence.recurrence as RecurrenceEvidence | undefined;
                   if (!recurrence?.samples?.length || !recurrence.cluster_id || !recurrence.cluster_kind) return null;
                   const prefix = recurrence.cluster_kind === "face" ? "/api/persons" : "/api/body-clusters";
                   return (
                     <div className="mt-2 flex items-center gap-1.5" aria-label="Recurring sample evidence">
-                      <span className="mr-1 text-[10px] text-muted-foreground">Linked appearances:</span>
+                      <span className="mr-1 text-[10px] text-muted-foreground">{t("review.linked_appearances")}</span>
                       {recurrence.samples.map((sample) => (
                         <a
                           key={sample.id}
-                          href={`${prefix}/suggestions/${recurrence.cluster_id}/samples/${sample.id}/thumbnail?token=${encodeURIComponent(token)}`}
+                          href={`${prefix}/suggestions/${recurrence.cluster_id}/samples/${sample.id}/thumbnail?token=${encodeURIComponent(token || "")}`}
                           target="_blank"
                           rel="noreferrer"
                           title={new Date(sample.captured_at).toLocaleString()}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={`${prefix}/suggestions/${recurrence.cluster_id}/samples/${sample.id}/thumbnail?token=${encodeURIComponent(token)}`} alt="Recurring sample" className="h-10 w-10 rounded border border-border object-cover" />
+                          <img src={`${prefix}/suggestions/${recurrence.cluster_id}/samples/${sample.id}/thumbnail?token=${encodeURIComponent(token || "")}`} alt="Recurring sample" className="h-10 w-10 rounded border border-border object-cover" />
                         </a>
                       ))}
                     </div>
