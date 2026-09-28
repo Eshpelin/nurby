@@ -15,7 +15,7 @@ from services.perception.package_lifecycle import (
     RemovalKind,
     advance,
 )
-from shared.models import PackageLifecycleRecord
+from shared.models import Notification, PackageLifecycleRecord
 
 
 DEFAULT_TRACKING_KEY = "camera-default"
@@ -70,6 +70,8 @@ async def apply_package_check(
             .with_for_update()
         )
     ).scalar_one_or_none()
+    is_new = row is None
+    previous_state = row.state if row is not None else None
     if row is None:
         row = PackageLifecycleRecord(
             camera_id=camera_id,
@@ -101,7 +103,53 @@ async def apply_package_check(
         "remover_person_id": str(evidence.remover_person_id) if evidence.remover_person_id else None,
     }
     row.updated_at = datetime.now(timezone.utc)
+    await _emit_transition_notification(
+        db,
+        row=row,
+        previous_state=previous_state,
+        is_new=is_new,
+        evidence=evidence,
+    )
     return row
+
+
+async def _emit_transition_notification(
+    db: AsyncSession,
+    *,
+    row: PackageLifecycleRecord,
+    previous_state: str | None,
+    is_new: bool,
+    evidence: PackageEvidence,
+) -> None:
+    """Write one household notification per delivery/removal transition."""
+    if is_new and evidence.present:
+        dedupe_key = f"package_lifecycle:{row.id}:delivered"
+        message = "A package was detected at the camera."
+        severity = "info"
+    elif previous_state != PackageState.GONE.value and row.state == PackageState.GONE.value:
+        dedupe_key = f"package_lifecycle:{row.id}:gone"
+        if row.removal_kind == "picked_up_by_person":
+            message = "A package appears to have been picked up by a recognized person."
+            severity = "info"
+        else:
+            message = "A package is no longer visible and no recognized pickup was observed."
+            severity = "warning"
+    else:
+        return
+    exists = (
+        await db.execute(
+            select(Notification.id).where(Notification.dedupe_key == dedupe_key).limit(1)
+        )
+    ).scalar_one_or_none()
+    if exists is None:
+        db.add(Notification(
+            message=message,
+            dedupe_key=dedupe_key,
+            severity=severity,
+            camera_id=row.camera_id,
+            observation_id=evidence.observation_id,
+            created_at=evidence.observed_at,
+        ))
 
 
 async def apply_package_observation(

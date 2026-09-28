@@ -73,7 +73,13 @@ def advance(
     if evidence.present:
         return replace(
             lifecycle,
-            state=PackageState.WAITING,
+            # The first positive check is the delivery transition. A later
+            # positive check means the delivered package is still waiting.
+            state=(
+                PackageState.WAITING
+                if lifecycle.last_present_at is not None
+                else PackageState.DELIVERED
+            ),
             last_present_at=evidence.observed_at,
             absent_checks=0,
             last_observation_id=evidence.observation_id,
@@ -106,4 +112,3 @@ def advance(
         remover_person_id=evidence.remover_person_id,
         last_observation_id=evidence.observation_id,
     )
-

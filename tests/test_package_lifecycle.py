@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,6 +12,7 @@ from services.perception.package_lifecycle import (
     advance,
 )
 from services.perception.package_lifecycle_store import _known_person_id, _package_present
+from services.perception.package_lifecycle_store import apply_package_check
 
 
 BASE = datetime(2026, 9, 28, 10, 0, tzinfo=timezone.utc)
@@ -68,3 +70,67 @@ def test_gone_state_is_terminal_and_does_not_reappear():
 def test_naive_timestamps_are_rejected():
     with pytest.raises(ValueError, match="timezone-aware"):
         advance(PackageLifecycle(), PackageEvidence(datetime(2026, 9, 28), present=True))
+
+
+class _Result:
+    def __init__(self, value):
+        self.value = value
+
+    def scalar_one_or_none(self):
+        return self.value
+
+
+class _Db:
+    def __init__(self, *results):
+        self.results = list(results)
+        self.added = []
+
+    async def execute(self, _statement):
+        return _Result(self.results.pop(0))
+
+    async def flush(self):
+        for row in self.added:
+            if getattr(row, "id", None) is None:
+                row.id = uuid4()
+
+    def add(self, row):
+        self.added.append(row)
+
+
+@pytest.mark.asyncio
+async def test_first_package_emits_one_info_notification():
+    db = _Db(None, None)
+    camera_id = uuid4()
+    observation_id = uuid4()
+    row = await apply_package_check(
+        db,
+        camera_id=camera_id,
+        evidence=PackageEvidence(BASE, present=True, observation_id=observation_id),
+    )
+    notifications = [item for item in db.added if item.__class__.__name__ == "Notification"]
+    assert row.state == PackageState.DELIVERED.value
+    assert len(notifications) == 1
+    assert notifications[0].severity == "info"
+    assert notifications[0].observation_id == observation_id
+
+
+@pytest.mark.asyncio
+async def test_unobserved_removal_emits_warning_once():
+    row = SimpleNamespace(
+        id=uuid4(), camera_id=uuid4(), tracking_key="camera-default",
+        state=PackageState.WAITING.value, started_at=BASE,
+        last_present_at=BASE, absent_checks=1, gone_at=None,
+        removal_kind=None, remover_person_id=None, last_observation_id=None,
+        evidence=None, updated_at=BASE,
+    )
+    db = _Db(row, None)
+    next_row = await apply_package_check(
+        db,
+        camera_id=row.camera_id,
+        evidence=PackageEvidence(BASE + timedelta(minutes=4), present=False),
+    )
+    notifications = [item for item in db.added if item.__class__.__name__ == "Notification"]
+    assert next_row.state == PackageState.GONE.value
+    assert next_row.removal_kind == RemovalKind.REMOVED_UNOBSERVED.value
+    assert len(notifications) == 1
+    assert notifications[0].severity == "warning"
