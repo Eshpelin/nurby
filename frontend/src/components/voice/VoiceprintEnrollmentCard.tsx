@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 
 type Clip = {
   transcript_id: string;
@@ -28,7 +29,9 @@ type Clip = {
 type VoiceprintEnrollmentCardProps = { personId: string };
 
 export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardProps) {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = useCallback((key: string, values?: Record<string, string | number>) => translate(locale, key, values), [locale]);
   const [clips, setClips] = useState<Clip[]>([]);
   const [includeRejected, setIncludeRejected] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -84,20 +87,20 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
   const rejected = clips.filter((clip) => clip.review_status === "rejected");
 
   return (
-    <section className="mb-4 rounded-md border border-border bg-card/40 p-3" aria-label="Voiceprint enrollment">
+    <section className="mb-4 rounded-md border border-border bg-card/40 p-3" aria-label={t("voiceprint.title")}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Voiceprint enrollment</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("voiceprint.title")}</div>
           <p className="mt-1 text-xs text-muted-foreground">
-            No recording or uploaded sample is required. Review existing clips that were attributed to this person by camera evidence.
+            {t("voiceprint.help")}
           </p>
         </div>
-        <button type="button" onClick={() => void load()} className="text-[10px] text-muted-foreground hover:text-foreground">Refresh</button>
+        <button type="button" onClick={() => void load()} className="text-[10px] text-muted-foreground hover:text-foreground">{t("voiceprint.refresh")}</button>
       </div>
       {trainingMessage && <p className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 p-2 text-[10px] text-amber-200">{trainingMessage}</p>}
-      {loading ? <p className="py-3 text-xs text-muted-foreground">Finding eligible clips…</p> : error ? <p className="py-3 text-xs text-red-400">{error}</p> : (
+      {loading ? <p className="py-3 text-xs text-muted-foreground">{t("voiceprint.finding")}</p> : error ? <p className="py-3 text-xs text-red-400">{error}</p> : (
         <>
-          {candidates.length === 0 && confirmed.length === 0 && <p className="py-3 text-xs text-muted-foreground">No eligible attributed audio clips are available.</p>}
+          {candidates.length === 0 && confirmed.length === 0 && <p className="py-3 text-xs text-muted-foreground">{t("voiceprint.no_clips")}</p>}
           <div className="mt-2 space-y-2">
             {candidates.map((clip) => (
               <div key={clip.transcript_id} className="rounded border border-border/70 p-2">
@@ -114,18 +117,18 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
                     className="mt-1 accent-accent"
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[11px] font-medium">{clip.camera_name ?? "Camera"} · {new Date(clip.started_at).toLocaleString()}</div>
-                    <div className="text-[10px] text-muted-foreground">{clip.duration_seconds}s · {Math.round((clip.speaker_confidence ?? 0) * 100)}% visual attribution</div>
+                    <div className="text-[11px] font-medium">{clip.camera_name ?? t("voiceprint.camera")} · {new Date(clip.started_at).toLocaleString()}</div>
+                    <div className="text-[10px] text-muted-foreground">{clip.duration_seconds}s · {Math.round((clip.speaker_confidence ?? 0) * 100)}% {t("voiceprint.visual_attribution")}</div>
                     <div className="mt-1 text-[10px] text-muted-foreground">{clip.attribution_reason}</div>
                     <div className="mt-1 text-[10px] text-muted-foreground">
-                      Quality: {clip.quality?.eligible ? "eligible" : `not eligible (${clip.quality?.reasons.join(", ") || "needs review"})`} · source {clip.attribution_model_version ?? "video-correlated-v1"}
+                      {t("voiceprint.quality")}: {clip.quality?.eligible ? t("voiceprint.eligible") : t("voiceprint.not_eligible", { reasons: clip.quality?.reasons.join(", ") || "needs review" })} · {t("voiceprint.source", { version: clip.attribution_model_version ?? "video-correlated-v1" })}
                     </div>
                     {clip.transcript && <div className="mt-1 text-xs text-foreground/90">“{clip.transcript}”</div>}
                     {clip.audio_available && clip.audio_url && (
                       <audio className="mt-1 h-7 w-full" controls preload="none" src={`${clip.audio_url}${token ? `?token=${encodeURIComponent(token)}` : ""}`} />
                     )}
                   </div>
-                  <button type="button" onClick={() => void decide([clip.transcript_id], "reject")} disabled={busy} className="text-[10px] text-muted-foreground hover:text-foreground">Not this person</button>
+                  <button type="button" onClick={() => void decide([clip.transcript_id], "reject")} disabled={busy} className="text-[10px] text-muted-foreground hover:text-foreground">{t("voiceprint.not_person")}</button>
                 </div>
               </div>
             ))}
@@ -134,24 +137,24 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="accent-accent" />
-                I consent to using the selected clips to derive this person’s voiceprint.
+                {t("voiceprint.consent")}
               </label>
-              <button type="button" onClick={() => void decide([...selected], "confirm")} disabled={busy || selected.size === 0 || !consent} className="rounded border border-accent px-2 py-1 text-[10px] text-accent disabled:opacity-50">Confirm selected clips</button>
+              <button type="button" onClick={() => void decide([...selected], "confirm")} disabled={busy || selected.size === 0 || !consent} className="rounded border border-accent px-2 py-1 text-[10px] text-accent disabled:opacity-50">{t("voiceprint.confirm")}</button>
             </div>
           )}
           {confirmed.length > 0 && (
             <div className="mt-3 border-t border-border/60 pt-2">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Confirmed source clips ({confirmed.length})</div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("voiceprint.confirmed", { count: confirmed.length })}</div>
               <div className="mt-1 space-y-1">
-                {confirmed.map((clip) => <div key={clip.transcript_id} className="flex items-center justify-between text-[10px] text-muted-foreground"><span>{new Date(clip.started_at).toLocaleString()} · {clip.camera_name ?? "Camera"}</span><button type="button" onClick={() => void decide([clip.transcript_id], "remove")} disabled={busy} className="text-muted-foreground hover:text-foreground">Remove from set</button></div>)}
+                {confirmed.map((clip) => <div key={clip.transcript_id} className="flex items-center justify-between text-[10px] text-muted-foreground"><span>{new Date(clip.started_at).toLocaleString()} · {clip.camera_name ?? t("voiceprint.camera")}</span><button type="button" onClick={() => void decide([clip.transcript_id], "remove")} disabled={busy} className="text-muted-foreground hover:text-foreground">{t("voiceprint.remove")}</button></div>)}
               </div>
             </div>
           )}
           <label className="mt-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
             <input type="checkbox" checked={includeRejected} onChange={(event) => setIncludeRejected(event.target.checked)} className="accent-accent" />
-            Show previously rejected clips so I can deliberately reopen them.
+            {t("voiceprint.show_rejected")}
           </label>
-          {includeRejected && rejected.map((clip) => <div key={clip.transcript_id} className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground"><span>{new Date(clip.started_at).toLocaleString()} · Rejected</span><button type="button" onClick={() => void decide([clip.transcript_id], "reopen")} disabled={busy} className="text-accent hover:underline">Reopen</button></div>)}
+          {includeRejected && rejected.map((clip) => <div key={clip.transcript_id} className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground"><span>{new Date(clip.started_at).toLocaleString()} · Rejected</span><button type="button" onClick={() => void decide([clip.transcript_id], "reopen")} disabled={busy} className="text-accent hover:underline">{t("voiceprint.reopen")}</button></div>)}
         </>
       )}
     </section>
