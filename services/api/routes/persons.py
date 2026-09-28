@@ -82,6 +82,13 @@ async def _person_has_scoped_sighting(person_id: uuid.UUID, user: User, db: Asyn
     return row is not None
 
 
+async def _require_cluster_in_scope(cluster: FaceCluster, user: User, db: AsyncSession) -> None:
+    """Hide a face cluster that was first observed on an unauthorized camera."""
+    allowed = await allowed_camera_ids(user, db)
+    if allowed is not ALL and cluster.first_camera_id not in allowed:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+
 @router.get("", response_model=list[PersonResponse])
 async def list_persons(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     allowed = await allowed_camera_ids(current_user, db)
@@ -233,6 +240,7 @@ async def name_cluster(
     cluster = await db.get(FaceCluster, cluster_id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
+    await _require_cluster_in_scope(cluster, _current_user, db)
     if cluster.status != "pending":
         raise HTTPException(status_code=400, detail="Cluster already processed")
 
@@ -298,7 +306,8 @@ async def name_cluster(
     # would show zero history ("no recent sightings") even though they were
     # just seen. Re-attribute those faces to the person.
     backfilled = await _backfill_cluster_observations(
-        db, cluster_id, person.id, person.display_name
+        db, cluster_id, person.id, person.display_name,
+        allowed=await allowed_camera_ids(_current_user, db),
     )
 
     await db.commit()
@@ -314,7 +323,8 @@ async def name_cluster(
 
 
 async def _backfill_cluster_observations(
-    db: AsyncSession, cluster_id: uuid.UUID, person_id: uuid.UUID, person_name: str
+    db: AsyncSession, cluster_id: uuid.UUID, person_id: uuid.UUID, person_name: str,
+    *, allowed: AllowedCameras = ALL,
 ) -> int:
     """Attribute a cluster's pre-naming observations to a person.
 
@@ -323,12 +333,12 @@ async def _backfill_cluster_observations(
     person_name on those face entries. Returns the number updated.
     """
     cid = str(cluster_id)
-    result = await db.execute(
-        select(Observation).where(
-            Observation.person_detections.isnot(None),
-            Observation.person_detections.cast(Text).like(f"%{cid}%"),
-        )
+    stmt = select(Observation).where(
+        Observation.person_detections.isnot(None),
+        Observation.person_detections.cast(Text).like(f"%{cid}%"),
     )
+    stmt = apply_camera_filter(stmt, allowed, Observation.camera_id)
+    result = await db.execute(stmt)
     updated = 0
     for obs in result.scalars().all():
         pd = obs.person_detections or {}
@@ -353,6 +363,7 @@ async def ignore_cluster(
     cluster = await db.get(FaceCluster, cluster_id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
+    await _require_cluster_in_scope(cluster, _current_user, db)
     cluster.status = "ignored"
     await db.commit()
     return {"status": "ok"}
@@ -1266,6 +1277,9 @@ async def set_photo_from_observation(
         raise HTTPException(status_code=404, detail="Person not found")
     obs = await db.get(Observation, body.observation_id)
     if not obs or not obs.thumbnail_path:
+        raise HTTPException(status_code=404, detail="Observation thumbnail not found")
+    allowed = await allowed_camera_ids(_current_user, db)
+    if allowed is not ALL and obs.camera_id not in allowed:
         raise HTTPException(status_code=404, detail="Observation thumbnail not found")
 
     pid = str(person_id)

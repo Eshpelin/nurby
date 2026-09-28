@@ -13,11 +13,11 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
-from services.api.routes import journeys, persons, vehicles
+from services.api.routes import body_clusters, journeys, persons, vehicles
 from shared import auth
 from shared.database import get_db
 from shared.models import User
@@ -190,3 +190,16 @@ def test_no_access_user_sees_no_identity_rows(http):
     assert scoped, db.statements
     for sql in scoped:
         assert f"camera_id in ('{db.camera}')" not in sql, sql
+
+
+@pytest.mark.asyncio
+async def test_identity_cluster_mutations_reject_foreign_first_camera():
+    db = IdentityDB()
+    face = SimpleNamespace(first_camera_id=db.foreign_camera)
+    body = SimpleNamespace(first_camera_id=db.foreign_camera)
+    with pytest.raises(HTTPException) as face_error:
+        await persons._require_cluster_in_scope(face, db.user, db)
+    with pytest.raises(HTTPException) as body_error:
+        await body_clusters._require_body_cluster_in_scope(body, db.user, db)
+    assert face_error.value.status_code == 404
+    assert body_error.value.status_code == 404

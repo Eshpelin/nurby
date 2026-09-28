@@ -32,6 +32,12 @@ from shared.paths import resolve_inside
 router = APIRouter()
 
 
+async def _require_body_cluster_in_scope(cluster: BodyCluster, user: User, db: AsyncSession) -> None:
+    allowed = await allowed_camera_ids(user, db)
+    if allowed is not ALL and cluster.first_camera_id not in allowed:
+        raise HTTPException(status_code=404, detail="Body cluster not found")
+
+
 class NameBodyClusterBody(BaseModel):
     display_name: str
     relationship: str | None = None
@@ -163,6 +169,7 @@ async def link_body_cluster(
     cluster = await db.get(BodyCluster, cluster_id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Body cluster not found")
+    await _require_body_cluster_in_scope(cluster, _current_user, db)
     person = await db.get(Person, body.person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -189,6 +196,7 @@ async def name_body_cluster(
     cluster = await db.get(BodyCluster, cluster_id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Body cluster not found")
+    await _require_body_cluster_in_scope(cluster, _current_user, db)
     if cluster.status != "pending":
         raise HTTPException(status_code=400, detail="Cluster already processed")
 
@@ -224,6 +232,7 @@ async def ignore_body_cluster(
     cluster = await db.get(BodyCluster, cluster_id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Body cluster not found")
+    await _require_body_cluster_in_scope(cluster, _current_user, db)
     cluster.status = "ignored"
     await db.commit()
     return {"ok": True}
