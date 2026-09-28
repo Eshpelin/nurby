@@ -567,7 +567,12 @@ async def list_entity_associations(
     object_kind: str | None = Query(default=None),
     object_key: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    relation: str | None = Query(default=None),
+    source: str | None = Query(default=None),
     camera_id: uuid.UUID | None = Query(default=None),
+    from_at: datetime | None = Query(default=None, description="Only hypotheses last seen at or after this time"),
+    to_at: datetime | None = Query(default=None, description="Only hypotheses first seen at or before this time"),
+    include_archived: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -579,10 +584,16 @@ async def list_entity_associations(
     exists so People, Vehicles, and future cluster views can show context
     without duplicating inference or lifecycle rules.
     """
-    if not any((subject_key, object_key)):
-        raise HTTPException(status_code=422, detail="subject_key or object_key is required")
+    # A camera-scoped review surface may list all visible hypotheses. Entity
+    # detail views continue to require one endpoint key so an accidental broad
+    # request cannot become the default UI query.
+    if not any((subject_key, object_key, camera_id)):
+        raise HTTPException(status_code=422, detail="subject_key, object_key, or camera_id is required")
     allowed = await allowed_camera_ids(current_user, db)
-    query = select(EntityAssociation).where(EntityAssociation.status != "rejected")
+    query = select(EntityAssociation)
+    if not include_archived and status != "archived":
+        query = query.where(EntityAssociation.status != "archived")
+    query = query.where(EntityAssociation.status != "rejected")
     if subject_kind and subject_key and not object_key:
         query = query.where(or_(
             and_(EntityAssociation.subject_kind == subject_kind, EntityAssociation.subject_key == subject_key),
@@ -599,6 +610,14 @@ async def list_entity_associations(
         query = query.where(EntityAssociation.object_key == object_key)
     if status:
         query = query.where(EntityAssociation.status == status)
+    if relation:
+        query = query.where(EntityAssociation.relation == relation)
+    if source:
+        query = query.where(EntityAssociation.source == source)
+    if from_at:
+        query = query.where(EntityAssociation.last_seen_at >= from_at)
+    if to_at:
+        query = query.where(EntityAssociation.first_seen_at <= to_at)
     # Scope before applying offset/limit.  The histogram is an aggregate of
     # visible source cameras, so a restricted caller must never page through
     # hidden rows and infer their existence from a short page.
