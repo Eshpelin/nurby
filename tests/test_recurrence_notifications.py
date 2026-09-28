@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from services.perception.recurrence_notifications import (
     RECURRENCE_THRESHOLD_DAYS,
+    reconcile_recurrence_notifications,
     recurrence_notification_marker,
     should_notify_recurrence,
 )
@@ -34,3 +35,28 @@ def test_recurrence_marker_is_metadata_not_user_facing_copy():
     marker = recurrence_notification_marker("face", cluster_id)
     message = "The same unknown person has appeared on 3 separate days."
     assert marker not in message
+
+
+def test_merge_recurrence_alerts_keeps_one_active_canonical_alert():
+    class Notification:
+        def __init__(self, created_at, identifier):
+            self.created_at = created_at
+            self.id = identifier
+            self.dedupe_key = "old-marker"
+            self.read = False
+
+    first = Notification(1, "first")
+    second = Notification(2, "second")
+    canonical = reconcile_recurrence_notifications(
+        [second, first], "recurring_unknown:face:survivor"
+    )
+
+    assert canonical is first
+    assert first.dedupe_key == "recurring_unknown:face:survivor"
+    assert not first.read
+    assert second.dedupe_key is None
+    assert second.read
+
+
+def test_merge_recurrence_alerts_is_safe_when_no_alert_exists():
+    assert reconcile_recurrence_notifications([], "survivor") is None

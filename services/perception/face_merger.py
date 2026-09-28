@@ -37,6 +37,7 @@ from services.perception.faces import MAX_CLUSTER_SAMPLES, _renorm
 from shared.app_settings import get_setting
 from shared.database import async_session
 from shared.models import FaceCluster, FaceClusterSample, FaceEmbedding, Notification, Person
+from services.perception.recurrence_notifications import reconcile_recurrence_notifications
 
 logger = logging.getLogger("nurby.perception.face_merger")
 
@@ -221,8 +222,7 @@ class FaceClusterMerger:
             notifications = (await db.execute(
                 select(Notification).where(Notification.dedupe_key.in_(absorbed_markers))
             )).scalars().all()
-            for notification in notifications:
-                notification.dedupe_key = survivor_marker
+            reconcile_recurrence_notifications(notifications, survivor_marker)
 
         # Move every absorbed sample onto the survivor.
         await db.execute(

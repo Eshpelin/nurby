@@ -20,6 +20,29 @@ from shared.models import BodyClusterSample, Camera, FaceClusterSample, Notifica
 RECURRENCE_THRESHOLD_DAYS = 3
 
 
+def reconcile_recurrence_notifications(notifications, survivor_marker: str):
+    """Re-key a merged cluster's alerts without creating a second active item.
+
+    A merge can bring together two clusters that each crossed the recurrence
+    threshold before the system learned they were the same subject. Keep the
+    oldest alert as the canonical active alert. Older duplicate rows remain
+    in history, but are detached from recurrence evidence and marked read so
+    the merge cannot produce duplicate work in the review queue.
+    """
+    ordered = sorted(
+        notifications,
+        key=lambda item: (item.created_at is None, item.created_at, str(item.id)),
+    )
+    if not ordered:
+        return None
+    canonical = ordered[0]
+    canonical.dedupe_key = survivor_marker
+    for duplicate in ordered[1:]:
+        duplicate.dedupe_key = None
+        duplicate.read = True
+    return canonical
+
+
 def recurrence_notification_marker(cluster_kind: str, cluster_id: UUID) -> str:
     return f"recurring_unknown:{cluster_kind}:{cluster_id}"
 
