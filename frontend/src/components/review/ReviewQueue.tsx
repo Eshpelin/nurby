@@ -119,7 +119,10 @@ const KIND_LABEL_KEY: Record<ReviewItem["kind"], string> = {
 
 export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
   const { authFetch, token, user } = useAuth();
-  const t = useCallback((key: string) => translate(user?.locale, key), [user?.locale]);
+  const t = useCallback(
+    (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values),
+    [user?.locale],
+  );
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -328,15 +331,15 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                   const candidate = item.evidence.visual_candidate as VisualCandidate | undefined;
                   if (!candidate?.kind) return null;
                   const label = candidate.kind === "person"
-                    ? "recognized person"
+                    ? t("review.recognized_person")
                     : candidate.kind === "face_cluster"
-                      ? "unknown face cluster"
+                      ? t("review.unknown_face_cluster")
                       : candidate.kind === "body_cluster"
-                        ? "unknown body cluster"
-                        : "visual subject";
+                        ? t("review.unknown_body_cluster")
+                        : t("review.visual_subject");
                   return (
                     <p className="mt-1 text-[10px] text-muted-foreground">
-                      Visual candidate: <span className="text-foreground">{label}</span>
+                      {t("review.visual_candidate")} <span className="text-foreground">{label}</span>
                     </p>
                   );
                 })()}
@@ -518,7 +521,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                     {item.kind === "identity_suggestion" && item.provenance.relation === "possibly_named" && (
                       <>
                         <select
-                          aria-label={`Link ${item.title} to a person`}
+                          aria-label={t("review.link_name_person", { title: item.title })}
                           value={linkedPerson[item.id] || ""}
                           onChange={(event) => {
                             setLinkedPerson((current) => ({ ...current, [item.id]: event.target.value }));
@@ -526,15 +529,15 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                           }}
                           className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
                         >
-                          <option value="">Confirm name for this visual</option>
+                          <option value="">{t("review.confirm_name_visual")}</option>
                           {persons.map((person) => (
                             <option key={person.id} value={person.id}>
-                              Link to {person.nickname || person.display_name}
+                              {t("review.link_to", { label: person.nickname || person.display_name, kind: "person" })}
                             </option>
                           ))}
                         </select>
                         <select
-                          aria-label={`Link ${item.title} to an unknown visual cluster`}
+                          aria-label={t("review.link_cluster", { title: item.title })}
                           value={linkedCluster[item.id] || ""}
                           onChange={(event) => {
                             setLinkedCluster((current) => ({ ...current, [item.id]: event.target.value }));
@@ -542,10 +545,10 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                           }}
                           className="max-w-44 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
                         >
-                          <option value="">Keep current visual</option>
+                          <option value="">{t("review.keep_current_visual")}</option>
                           {clusters.map((cluster) => (
                             <option key={`${cluster.kind}:${cluster.id}`} value={`${cluster.kind}:${cluster.id}`}>
-                              Link to {cluster.label} ({cluster.kind})
+                              {t("review.link_to", { label: cluster.label, kind: cluster.kind })}
                             </option>
                           ))}
                         </select>
@@ -559,10 +562,10 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                           onChange={(event) => setLinkedSubject((current) => ({ ...current, [item.id]: event.target.value }))}
                           className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
                         >
-                          <option value="">Subject stays anonymous</option>
+                          <option value="">{t("review.subject_anonymous")}</option>
                           {persons.map((person) => (
                             <option key={person.id} value={person.id}>
-                              Subject: {person.nickname || person.display_name}
+                              {t("review.subject_person", { label: person.nickname || person.display_name })}
                             </option>
                           ))}
                         </select>
@@ -572,10 +575,10 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                           onChange={(event) => setLinkedObject((current) => ({ ...current, [item.id]: event.target.value }))}
                           className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
                         >
-                          <option value="">Companion stays anonymous</option>
+                          <option value="">{t("review.companion_anonymous")}</option>
                           {persons.map((person) => (
                             <option key={person.id} value={person.id}>
-                              Companion: {person.nickname || person.display_name}
+                              {t("review.companion_person", { label: person.nickname || person.display_name })}
                             </option>
                           ))}
                         </select>
