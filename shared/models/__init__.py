@@ -185,4 +185,5 @@ __all__ = [
     "VlmFrameAnalysis",
     "VoiceSession",
     "WebhookSubscription",
+    "VoiceprintSampleReview",
 ]
