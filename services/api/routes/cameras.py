@@ -42,7 +42,7 @@ from shared.camera_access import (
 from shared.camera_secrets import seal, unseal
 from shared.config import settings
 from shared.database import get_db
-from shared.models import Camera, CameraStatusLog, User
+from shared.models import Camera, CameraStatusLog, PackageLifecycleRecord, User
 from shared.redis_keys import live_motion_stream_key, motion_stream_key
 from shared.schemas import (
     CameraCreate,
@@ -592,6 +592,51 @@ async def camera_action_timeline(
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     items = await camera_segments(db, camera_id, since=since, action=action, limit=limit)
     return {"items": items, "count": len(items), "hours": hours}
+
+
+@router.get("/{camera_id}/package-lifecycle")
+async def camera_package_lifecycle(
+    camera_id: uuid.UUID,
+    limit: int = Query(default=10, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return camera-scoped package delivery lifecycle evidence.
+
+    This is intentionally a camera detail surface, while notifications remain
+    household-wide in the existing inbox. The ACL is checked before querying
+    lifecycle rows so a restricted user cannot infer package activity from an
+    otherwise empty camera page.
+    """
+    await _require_camera_in_scope(camera_id, current_user, db)
+    rows = (
+        await db.execute(
+            select(PackageLifecycleRecord)
+            .where(PackageLifecycleRecord.camera_id == camera_id)
+            .order_by(PackageLifecycleRecord.started_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "state": row.state,
+                "tracking_key": row.tracking_key,
+                "started_at": row.started_at,
+                "last_present_at": row.last_present_at,
+                "absent_checks": row.absent_checks,
+                "gone_at": row.gone_at,
+                "removal_kind": row.removal_kind,
+                "remover_person_id": row.remover_person_id,
+                "last_observation_id": row.last_observation_id,
+                "evidence": row.evidence,
+                "updated_at": row.updated_at,
+            }
+            for row in rows
+        ],
+        "count": len(rows),
+    }
 
 
 def _activity_detection_flags(person_detections: dict | None, object_detections: dict | None) -> tuple[bool, bool]:

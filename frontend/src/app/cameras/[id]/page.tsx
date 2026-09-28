@@ -35,6 +35,7 @@ import { RetentionSection } from "@/components/camera/settings/RetentionSection"
 import { StorageSection } from "@/components/camera/settings/StorageSection";
 import { DangerZoneSection } from "@/components/camera/settings/DangerZoneSection";
 import { SaveBar } from "@/components/camera/settings/SaveBar";
+import { PackageLifecycleCard } from "@/components/camera/PackageLifecycleCard";
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -656,6 +657,10 @@ export default function CameraConfigPage() {
           timeline, which stays empty until action recognition is enabled. */}
       <div className="mb-4">
         <ActivityStrip cameraId={cameraId} cameraName={camera.name} />
+      </div>
+
+      <div className="mb-6">
+        <PackageLifecycleCard cameraId={cameraId} authFetch={authFetch} />
       </div>
 
       {/* Resolution + FPS info bar */}
