@@ -276,8 +276,17 @@ async def record_vlm_usage(
     model: str | None = None,
     image_tokens: int = LOW_DETAIL_IMAGE_TOKENS,
     succeeded: bool = True,
+    actual_tokens_in: int | None = None,
+    actual_tokens_out: int | None = None,
+    actual_cost_cents: int | None = None,
 ) -> None:
-    """Persist one best-effort usage row without affecting perception."""
+    """Persist one best-effort usage row without affecting perception.
+
+    Callers with provider-native usage counters should pass them so the ledger
+    does not replace measured token counts with estimates. Cost remains the
+    provider pricing estimate already used by the analyzer unless a caller
+    supplies a native cost value.
+    """
     import uuid
 
     from shared.database import async_session
@@ -292,6 +301,15 @@ async def record_vlm_usage(
             model=model,
             image_tokens=image_tokens,
         )
+        native_usage = (
+            actual_tokens_in is not None
+            and actual_tokens_out is not None
+            and actual_cost_cents is not None
+        )
+        if native_usage:
+            tokens_in = max(0, int(actual_tokens_in))
+            tokens_out = max(0, int(actual_tokens_out))
+            cost_cents = max(0, int(actual_cost_cents))
         def parse(value: str | None):
             try:
                 return uuid.UUID(str(value)) if value else None
@@ -310,6 +328,7 @@ async def record_vlm_usage(
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
                 cost_cents=cost_cents,
+                estimated=not native_usage,
                 succeeded=succeeded,
             ))
             await db.commit()

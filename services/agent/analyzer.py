@@ -1387,6 +1387,9 @@ async def analyze_frame_target(
             camera_id=str(obs.camera_id),
             model=model,
             image_tokens=765 * len(redacted),
+            actual_tokens_in=tokens_in,
+            actual_tokens_out=tokens_out,
+            actual_cost_cents=cost_cents,
         )
 
         # Persist thumbnails + audit row.
@@ -1619,6 +1622,21 @@ async def analyze_clip_target(
             cost_tokens_out=tokens_out,
             cost_cents=cost_cents,
             thumbnail_path=thumb_path,
+        )
+        from services.perception.usage import record_vlm_usage
+
+        await record_vlm_usage(
+            provider,
+            workload="agent_analyzer",
+            system_prompt=prompt.text,
+            user_prompt=question,
+            output_text=json.dumps(answer, separators=(",", ":")),
+            camera_id=str(camera_id),
+            model=model,
+            image_tokens=765 * len(redacted),
+            actual_tokens_in=tokens_in,
+            actual_tokens_out=tokens_out,
+            actual_cost_cents=cost_cents,
         )
         await _record_vlm_call(
             ctx,
