@@ -1133,11 +1133,11 @@ export default function SettingsPage() {
           const invitedCount = inviteKeys.reduce((n, ik) => n + ik.redemptions.length, 0);
           const summary =
             inviteKeys.length === 0
-              ? "No invite keys created"
+              ? t("settings.invite_keys_empty")
               : [
-                  `${activeCount} active key${activeCount !== 1 ? "s" : ""}`,
+                  t(activeCount === 1 ? "settings.invite_keys_active" : "settings.invite_keys_active_plural", { count: activeCount }),
                   invitedCount > 0
-                    ? `${invitedCount} ${invitedCount === 1 ? "person" : "people"} invited`
+                    ? t(invitedCount === 1 ? "settings.invite_keys_person" : "settings.invite_keys_people", { count: invitedCount })
                     : null,
                 ]
                   .filter(Boolean)
@@ -1147,13 +1147,13 @@ export default function SettingsPage() {
               <div className="flex items-center gap-3">
                 <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${activeCount > 0 ? "bg-green-500" : "bg-muted-foreground/40"}`} />
                 <div>
-                  <div className="text-sm font-medium">Invite Keys</div>
+                  <div className="text-sm font-medium">{t("settings.invite_keys")}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">{summary}</div>
                 </div>
               </div>
               <button onClick={() => setShowInviteModal(true)}
                 className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors">
-                Manage
+                {t("settings.manage")}
               </button>
             </div>
           );
