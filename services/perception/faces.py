@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 import numpy as np
 from sqlalchemy import select
 
+from services.agent.budget import estimate_cost
+from services.perception.usage import record_vlm_usage
 from shared.database import async_session
 from shared.models import FaceEmbedding, Person
 
@@ -527,17 +529,44 @@ class FaceRecognizer:
                 system_prompt=system_prompt,
                 max_tokens=40,
             )
+            native_usage = client.last_usage
+            actual_in = actual_out = actual_cost = None
+            if isinstance(native_usage, dict):
+                try:
+                    actual_in = int(native_usage.get("tokens_in", 0))
+                    actual_out = int(native_usage.get("tokens_out", 0))
+                    actual_cost = estimate_cost(
+                        getattr(provider, "kind", None),
+                        getattr(provider, "default_model", None),
+                        actual_in,
+                        actual_out,
+                    )
+                except (TypeError, ValueError):
+                    actual_in = actual_out = actual_cost = None
 
             async with async_session() as db:
                 cluster = await db.get(FaceCluster, cluster_id)
                 if not cluster:
                     return
+                camera_id = cluster.first_camera_id
                 if desc:
                     cluster.appearance_description = desc.strip().strip('"').strip(".")
                     cluster.appearance_description_status = "done"
                 else:
                     cluster.appearance_description_status = "failed"
                 await db.commit()
+            await record_vlm_usage(
+                provider,
+                workload="face_appearance_description",
+                system_prompt=system_prompt,
+                user_prompt=None,
+                output_text=desc,
+                camera_id=str(camera_id) if camera_id else None,
+                model=getattr(provider, "default_model", None),
+                actual_tokens_in=actual_in,
+                actual_tokens_out=actual_out,
+                actual_cost_cents=actual_cost,
+            )
         except Exception:
             logger.exception("Failed to generate appearance description for cluster %s", cluster_id)
 

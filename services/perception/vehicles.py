@@ -29,6 +29,8 @@ import logging
 import numpy as np
 from sqlalchemy import select
 
+from services.agent.budget import estimate_cost
+from services.perception.usage import record_vlm_usage
 from shared.database import async_session
 from shared.models import Vehicle
 
@@ -293,7 +295,7 @@ _DESC_SEMAPHORE = asyncio.Semaphore(2)
 _desc_tasks: set = set()
 
 
-def schedule_descriptions(jobs: list, frame: np.ndarray) -> None:
+def schedule_descriptions(jobs: list, frame: np.ndarray, camera_id=None) -> None:
     """Fire-and-forget VLM descriptions for new vehicles. crops now (the
     frame may be reused), describes in the background so the keyframe path
     is never blocked. Concurrency is bounded by a semaphore."""
@@ -302,16 +304,18 @@ def schedule_descriptions(jobs: list, frame: np.ndarray) -> None:
         if crop is None or crop.size == 0:
             continue
         try:
-            task = asyncio.create_task(_describe_vehicle_guarded(vehicle_id, crop))
+            task = asyncio.create_task(
+                _describe_vehicle_guarded(vehicle_id, crop, camera_id)
+            )
             _desc_tasks.add(task)
             task.add_done_callback(_desc_tasks.discard)
         except RuntimeError:
             pass  # no running loop (sync context). skip description
 
 
-async def _describe_vehicle_guarded(vehicle_id, crop: np.ndarray) -> None:
+async def _describe_vehicle_guarded(vehicle_id, crop: np.ndarray, camera_id=None) -> None:
     async with _DESC_SEMAPHORE:
-        await _describe_vehicle(vehicle_id, crop)
+        await _describe_vehicle(vehicle_id, crop, camera_id)
 
 
 def _crop(frame: np.ndarray, bbox: list) -> np.ndarray | None:
@@ -327,7 +331,7 @@ def _crop(frame: np.ndarray, bbox: list) -> np.ndarray | None:
         return None
 
 
-async def _describe_vehicle(vehicle_id, crop: np.ndarray) -> None:
+async def _describe_vehicle(vehicle_id, crop: np.ndarray, camera_id=None) -> None:
     """Generate and store a one-line VLM description for a vehicle crop."""
     try:
         from services.perception.vlm import VLMClient, get_active_provider
@@ -338,6 +342,32 @@ async def _describe_vehicle(vehicle_id, crop: np.ndarray) -> None:
         client = VLMClient()
         desc = await client.describe(
             crop, [], provider, system_prompt=_VEHICLE_SYSTEM_PROMPT
+        )
+        native_usage = client.last_usage
+        actual_in = actual_out = actual_cost = None
+        if isinstance(native_usage, dict):
+            try:
+                actual_in = int(native_usage.get("tokens_in", 0))
+                actual_out = int(native_usage.get("tokens_out", 0))
+                actual_cost = estimate_cost(
+                    getattr(provider, "kind", None),
+                    getattr(provider, "default_model", None),
+                    actual_in,
+                    actual_out,
+                )
+            except (TypeError, ValueError):
+                actual_in = actual_out = actual_cost = None
+        await record_vlm_usage(
+            provider,
+            workload="vehicle_description",
+            system_prompt=_VEHICLE_SYSTEM_PROMPT,
+            user_prompt=None,
+            output_text=desc,
+            camera_id=str(camera_id) if camera_id else None,
+            model=getattr(provider, "default_model", None),
+            actual_tokens_in=actual_in,
+            actual_tokens_out=actual_out,
+            actual_cost_cents=actual_cost,
         )
         desc = (desc or "").strip()
         if not desc:

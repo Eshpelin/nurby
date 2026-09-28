@@ -575,7 +575,7 @@ class PerceptionPipeline:
                     )
                     await vdb.commit()
                 if vehicle_jobs:
-                    schedule_descriptions(vehicle_jobs, frame)
+                    schedule_descriptions(vehicle_jobs, frame, camera_id=camera_id)
             except Exception:
                 logger.exception("Vehicle identification failed for camera %s", camera_id)
 

@@ -19,7 +19,9 @@ import cv2
 import numpy as np
 from sqlalchemy import update
 
+from services.agent.budget import estimate_cost
 from services.ingestion.video_writer import create_segment_writer
+from services.perception.usage import record_vlm_usage
 from shared.config import settings
 from shared.database import async_session
 from shared.models import Camera, CameraStatusLog, Event, Recording
@@ -1216,21 +1218,49 @@ class StreamWorker:
         context = format_baseline_context(
             baseline, {"labels": {}, "known_faces": [], "unknown_faces": 0}
         )
-        text = await VLMClient().describe(
+        system_prompt = (
+            "You are checking a security camera's composition, not ordinary activity. "
+            "Return JSON only: {\"expected_scene\":true/false,"
+            "\"confidence\":0..1,\"reason\":\"short explanation\"}. "
+            "Ignore temporary people, vehicles, lighting, and weather changes. "
+            "Set false only for a sustained-looking re-aim, wall, obstruction, or"
+            " composition that clearly contradicts the normal baseline."
+        )
+        client = VLMClient()
+        text = await client.describe(
             frame,
             [],
             provider,
-            system_prompt=(
-                "You are checking a security camera's composition, not ordinary activity. "
-                "Return JSON only: {\"expected_scene\":true/false,"
-                "\"confidence\":0..1,\"reason\":\"short explanation\"}. "
-                "Ignore temporary people, vehicles, lighting, and weather changes. "
-                "Set false only for a sustained-looking re-aim, wall, obstruction, or"
-                " composition that clearly contradicts the normal baseline."
-            ),
+            system_prompt=system_prompt,
             max_tokens=120,
             extra_context=context,
             camera_id=str(self.camera_id),
+        )
+        native_usage = client.last_usage
+        actual_in = actual_out = actual_cost = None
+        if isinstance(native_usage, dict):
+            try:
+                actual_in = int(native_usage.get("tokens_in", 0))
+                actual_out = int(native_usage.get("tokens_out", 0))
+                actual_cost = estimate_cost(
+                    getattr(provider, "kind", None),
+                    getattr(provider, "default_model", None),
+                    actual_in,
+                    actual_out,
+                )
+            except (TypeError, ValueError):
+                actual_in = actual_out = actual_cost = None
+        await record_vlm_usage(
+            provider,
+            workload="content_health",
+            system_prompt=system_prompt,
+            user_prompt=context,
+            output_text=text,
+            camera_id=str(self.camera_id),
+            model=getattr(provider, "default_model", None),
+            actual_tokens_in=actual_in,
+            actual_tokens_out=actual_out,
+            actual_cost_cents=actual_cost,
         )
         parsed = parse_scene_health_response(text)
         if parsed is None:
