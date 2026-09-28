@@ -11,6 +11,13 @@ type Lifecycle = {
   removal_kind: "picked_up_by_person" | "removed_unobserved" | null;
   absent_checks: number;
   last_observation_id: string | null;
+  evidence: {
+    present?: boolean;
+    confidence?: number | null;
+    observation_id?: string | null;
+    remover_person_id?: string | null;
+  } | null;
+  updated_at: string | null;
 };
 
 type Props = { cameraId: string; authFetch: (url: string, init?: RequestInit) => Promise<Response> };
@@ -26,6 +33,7 @@ export function PackageLifecycleCard({ cameraId, authFetch }: Props) {
   const [items, setItems] = useState<Lifecycle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -44,6 +52,13 @@ export function PackageLifecycleCard({ cameraId, authFetch }: Props) {
   useEffect(() => { void load(); }, [load]);
 
   const current = items[0];
+  const evidenceObservationId = (item: Lifecycle) =>
+    item.last_observation_id || item.evidence?.observation_id || null;
+  const evidenceLabel = (item: Lifecycle) => {
+    if (item.state !== "gone") return item.last_present_at ? "Last presence frame" : "Delivery frame";
+    if (item.removal_kind === "picked_up_by_person") return "Pickup evidence frame";
+    return "Removal evidence frame";
+  };
   return (
     <section className="rounded-lg border border-border bg-card px-4 py-3.5">
       <div className="flex items-start justify-between gap-4">
@@ -71,7 +86,56 @@ export function PackageLifecycleCard({ cameraId, authFetch }: Props) {
         <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
           <div><span className="block text-[11px] uppercase tracking-wide">Started</span>{new Date(current.started_at).toLocaleString()}</div>
           <div><span className="block text-[11px] uppercase tracking-wide">Last seen</span>{current.last_present_at ? new Date(current.last_present_at).toLocaleString() : "—"}</div>
-          <div><span className="block text-[11px] uppercase tracking-wide">Evidence</span>{current.last_observation_id ? "Linked camera frame" : "Pending"}</div>
+          <div>
+            <span className="block text-[11px] uppercase tracking-wide">Evidence</span>
+            {evidenceObservationId(current) ? (
+              <a
+                className="text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+                href={`/api/observations/${evidenceObservationId(current)}/thumbnail`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {evidenceLabel(current)}
+              </a>
+            ) : "Pending"}
+          </div>
+        </div>
+      )}
+      {items.length > 1 && !loading && !error && (
+        <div className="mt-4 border-t border-border pt-3">
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
+            onClick={() => setShowHistory((open) => !open)}
+            aria-expanded={showHistory}
+          >
+            {showHistory ? "Hide previous deliveries" : `Show previous deliveries (${items.length - 1})`}
+          </button>
+          {showHistory && (
+            <ol className="mt-3 space-y-2">
+              {items.slice(1).map((item) => {
+                const observationId = evidenceObservationId(item);
+                return (
+                  <li key={item.id} className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-xs">
+                    <div>
+                      <div className="text-foreground">{stateCopy(item)}</div>
+                      <div className="text-muted-foreground">{new Date(item.started_at).toLocaleString()}</div>
+                    </div>
+                    {observationId && (
+                      <a
+                        className="shrink-0 text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
+                        href={`/api/observations/${observationId}/thumbnail`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View evidence
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
         </div>
       )}
     </section>
