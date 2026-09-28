@@ -7,6 +7,7 @@ import pytest
 from services.api.routes.voiceprints import (
     MIN_VIDEO_CONFIDENCE,
     VoiceprintSampleDecision,
+    _clip_response,
     _eligible_clip,
 )
 
@@ -50,3 +51,24 @@ def test_voiceprint_sample_review_keeps_consent_separate_from_attribution():
     )
     assert review.decision == "confirmed"
     assert review.consent_given is True
+
+
+def test_candidate_response_exposes_quality_without_biometric_artifacts():
+    transcript = _transcript()
+    transcript.id = uuid4()
+    transcript.camera_id = uuid4()
+    transcript.text = "hello"
+    capture = SimpleNamespace(id=uuid4(), file_path="missing.wav")
+    camera = SimpleNamespace(name="Front door")
+    response = _clip_response(transcript, capture, camera, None)
+
+    assert response["quality"] == {
+        "eligible": False,
+        "duration_ok": True,
+        "audio_retained": False,
+        "visual_attribution_ok": True,
+        "reasons": ["audio_not_retained"],
+    }
+    assert response["attribution_model_version"] == "video-correlated-v1"
+    assert "voiceprint" not in response
+    assert "embedding" not in response

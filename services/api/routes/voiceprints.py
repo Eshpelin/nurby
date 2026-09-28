@@ -58,6 +58,15 @@ def _clip_response(
         and resolve_inside(capture.file_path, settings.audio_storage_path)
         and os.path.exists(resolve_inside(capture.file_path, settings.audio_storage_path))
     )
+    quality_reasons = []
+    if duration < MIN_CLIP_SECONDS:
+        quality_reasons.append("too_short")
+    if not audio_available:
+        quality_reasons.append("audio_not_retained")
+    if float(transcript.speaker_confidence or 0.0) < MIN_VIDEO_CONFIDENCE:
+        quality_reasons.append("weak_visual_attribution")
+    if transcript.filtered:
+        quality_reasons.append("filtered_transcript")
     return {
         "transcript_id": str(transcript.id),
         "audio_capture_id": str(capture.id) if capture else None,
@@ -75,6 +84,14 @@ def _clip_response(
         "review_status": review.decision if review else "candidate",
         "consent_given": bool(review and review.consent_given),
         "reviewed_at": review.reviewed_at if review else None,
+        "quality": {
+            "eligible": not quality_reasons,
+            "duration_ok": duration >= MIN_CLIP_SECONDS,
+            "audio_retained": audio_available,
+            "visual_attribution_ok": float(transcript.speaker_confidence or 0.0) >= MIN_VIDEO_CONFIDENCE,
+            "reasons": quality_reasons,
+        },
+        "attribution_model_version": "video-correlated-v1",
     }
 
 
@@ -121,6 +138,7 @@ async def list_voiceprint_candidates(
         "requires_manual_sample": False,
         "consent_required_before_training": True,
         "training_available": False,
+        "training_ready": False,
         "training_message": "Confirm eligible clips and biometric consent; voiceprint training is not available yet.",
         "candidates": candidates,
     }

@@ -15,6 +15,14 @@ type Clip = {
   audio_available: boolean;
   review_status: "candidate" | "confirmed" | "rejected" | "removed";
   consent_given: boolean;
+  quality?: {
+    eligible: boolean;
+    duration_ok: boolean;
+    audio_retained: boolean;
+    visual_attribution_ok: boolean;
+    reasons: string[];
+  };
+  attribution_model_version?: string;
 };
 
 type VoiceprintEnrollmentCardProps = { personId: string };
@@ -109,6 +117,9 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
                     <div className="text-[11px] font-medium">{clip.camera_name ?? "Camera"} · {new Date(clip.started_at).toLocaleString()}</div>
                     <div className="text-[10px] text-muted-foreground">{clip.duration_seconds}s · {Math.round((clip.speaker_confidence ?? 0) * 100)}% visual attribution</div>
                     <div className="mt-1 text-[10px] text-muted-foreground">{clip.attribution_reason}</div>
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      Quality: {clip.quality?.eligible ? "eligible" : `not eligible (${clip.quality?.reasons.join(", ") || "needs review"})`} · source {clip.attribution_model_version ?? "video-correlated-v1"}
+                    </div>
                     {clip.transcript && <div className="mt-1 text-xs text-foreground/90">“{clip.transcript}”</div>}
                     {clip.audio_available && clip.audio_url && (
                       <audio className="mt-1 h-7 w-full" controls preload="none" src={`${clip.audio_url}${token ? `?token=${encodeURIComponent(token)}` : ""}`} />
