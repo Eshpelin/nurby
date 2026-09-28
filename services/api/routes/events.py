@@ -30,6 +30,17 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _event_in_scope(event: Event, allowed: AllowedCameras) -> bool:
+    """Return whether an event may be mutated by a caller.
+
+    Batch acknowledgement is a write path, so it must apply the same
+    fail-closed camera policy as event reads. Events without a camera are not
+    visible in restricted camera feeds and therefore cannot be acknowledged by
+    a restricted user through an id-only request.
+    """
+    return allowed is ALL or (event.camera_id is not None and event.camera_id in allowed)
+
+
 def _not_review_excluded(camera_id_col):
     """Filter clause keeping only rows whose camera is not hidden from the
     review/alerts feed. Rows with a null camera_id (no source camera) are
@@ -363,11 +374,12 @@ async def batch_ack(
     the single ack endpoint)."""
     if len(event_ids) > 500:
         raise HTTPException(status_code=400, detail="At most 500 events per call")
+    allowed = await allowed_camera_ids(current_user, db)
     now = datetime.now(timezone.utc)
     acked = 0
     for eid in event_ids:
         event = await db.get(Event, eid)
-        if event is None or event.acked_at is not None:
+        if event is None or not _event_in_scope(event, allowed) or event.acked_at is not None:
             continue
         event.acked_at = now
         event.acked_by_user_id = current_user.id
