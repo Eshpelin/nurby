@@ -134,3 +134,26 @@ async def test_unobserved_removal_emits_warning_once():
     assert next_row.removal_kind == RemovalKind.REMOVED_UNOBSERVED.value
     assert len(notifications) == 1
     assert notifications[0].severity == "warning"
+
+
+@pytest.mark.asyncio
+async def test_removal_retains_before_and_after_observation_evidence():
+    first = uuid4()
+    second = uuid4()
+    row = SimpleNamespace(
+        id=uuid4(), camera_id=uuid4(), tracking_key="camera-default",
+        state=PackageState.WAITING.value, started_at=BASE,
+        last_present_at=BASE, absent_checks=1, gone_at=None,
+        removal_kind=None, remover_person_id=None, last_observation_id=first,
+        evidence={"present": True, "observation_id": str(first)}, updated_at=BASE,
+    )
+    db = _Db(row, None)
+    next_row = await apply_package_check(
+        db,
+        camera_id=row.camera_id,
+        evidence=PackageEvidence(BASE + timedelta(minutes=4), present=False, observation_id=second),
+    )
+
+    assert next_row.state == PackageState.GONE.value
+    assert next_row.evidence["last_present_observation_id"] == str(first)
+    assert next_row.evidence["observation_id"] == str(second)

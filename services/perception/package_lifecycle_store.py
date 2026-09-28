@@ -96,11 +96,22 @@ async def apply_package_check(
     row.removal_kind = next_state.removal_kind.value if next_state.removal_kind else None
     row.remover_person_id = next_state.remover_person_id
     row.last_observation_id = next_state.last_observation_id
+    prior_present_observation_id = None
+    if isinstance(row.evidence, dict):
+        prior_present_observation_id = row.evidence.get("last_present_observation_id")
+        if not prior_present_observation_id and row.evidence.get("present"):
+            prior_present_observation_id = row.evidence.get("observation_id")
+    last_present_observation_id = (
+        str(evidence.observation_id)
+        if evidence.present and evidence.observation_id
+        else prior_present_observation_id
+    )
     row.evidence = {
         "present": evidence.present,
         "confidence": evidence.confidence,
         "observation_id": str(evidence.observation_id) if evidence.observation_id else None,
         "remover_person_id": str(evidence.remover_person_id) if evidence.remover_person_id else None,
+        "last_present_observation_id": last_present_observation_id,
     }
     row.updated_at = datetime.now(timezone.utc)
     await _emit_transition_notification(

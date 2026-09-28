@@ -16,6 +16,7 @@ type Lifecycle = {
     confidence?: number | null;
     observation_id?: string | null;
     remover_person_id?: string | null;
+    last_present_observation_id?: string | null;
   } | null;
   updated_at: string | null;
 };
@@ -65,6 +66,14 @@ export function PackageLifecycleCard({ cameraId, token, authFetch }: Props) {
     if (item.removal_kind === "picked_up_by_person") return "Pickup evidence frame";
     return "Removal evidence frame";
   };
+  const evidenceLinks = (item: Lifecycle) => {
+    const currentId = evidenceObservationId(item);
+    const beforeId = item.state === "gone" ? item.evidence?.last_present_observation_id : null;
+    const links: { id: string; label: string }[] = [];
+    if (beforeId && beforeId !== currentId) links.push({ id: beforeId, label: "Before disappearance" });
+    if (currentId) links.push({ id: currentId, label: evidenceLabel(item) });
+    return links;
+  };
   return (
     <section className="rounded-lg border border-border bg-card px-4 py-3.5">
       <div className="flex items-start justify-between gap-4">
@@ -94,15 +103,20 @@ export function PackageLifecycleCard({ cameraId, token, authFetch }: Props) {
           <div><span className="block text-[11px] uppercase tracking-wide">Last seen</span>{current.last_present_at ? new Date(current.last_present_at).toLocaleString() : "—"}</div>
           <div>
             <span className="block text-[11px] uppercase tracking-wide">Evidence</span>
-            {evidenceObservationId(current) ? (
-              <a
-                className="text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
-                href={evidenceHref(evidenceObservationId(current)!)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {evidenceLabel(current)}
-              </a>
+            {evidenceLinks(current).length ? (
+              <span className="flex flex-col items-start gap-1">
+                {evidenceLinks(current).map((link) => (
+                  <a
+                    key={link.id}
+                    className="text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+                    href={evidenceHref(link.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </span>
             ) : "Pending"}
           </div>
         </div>
