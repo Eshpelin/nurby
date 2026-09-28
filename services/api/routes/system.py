@@ -646,6 +646,7 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     "webhook_block_private_networks",
     "detect_classes",
     "audio_events",
+    "unknown_recurrence_threshold_days",
     "body_reid_tentative_decay_days",
     "cluster_naming_min_sightings",
     "public_base_url",

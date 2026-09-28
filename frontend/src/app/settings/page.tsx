@@ -104,6 +104,7 @@ export default function SettingsPage() {
   const [detectSaving, setDetectSaving] = useState<boolean>(false);
   const [classSearch, setClassSearch] = useState<string>("");
   const [journeyIdleSeconds, setJourneyIdleSeconds] = useState<number>(300);
+  const [unknownRecurrenceThresholdDays, setUnknownRecurrenceThresholdDays] = useState<number>(3);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [extraSaved, setExtraSaved] = useState(false);
   const [setupCode, setSetupCode] = useState<string | null>(null);
@@ -307,6 +308,7 @@ export default function SettingsPage() {
         if (typeof data.nudity_blur === "boolean") setNudityBlur(data.nudity_blur);
         if (typeof data.nudity_blur_min_score === "number") setNudityMinScore(data.nudity_blur_min_score);
         if (typeof data.journey_idle_seconds === "number") setJourneyIdleSeconds(data.journey_idle_seconds);
+        if (typeof data.unknown_recurrence_threshold_days === "number") setUnknownRecurrenceThresholdDays(data.unknown_recurrence_threshold_days);
         if (typeof data.daily_digest_enabled === "boolean") setDailyDigestEnabled(data.daily_digest_enabled);
         if (typeof data.daily_digest_hour === "number") setDailyDigestHour(data.daily_digest_hour);
         if (typeof data.daily_digest_provider_id === "string") setDailyDigestProviderId(data.daily_digest_provider_id);
@@ -1308,6 +1310,33 @@ export default function SettingsPage() {
             />
             <span className="font-mono text-xs text-muted-foreground w-16 text-right">
               {Math.round(journeyIdleSeconds / 60)} min
+            </span>
+          </div>
+        </div>
+
+        {/* Unknown-subject recurrence */}
+        <div className="rounded-lg border border-border bg-card px-4 py-3.5">
+          <div className="text-sm font-medium mb-1">Recurring unknown subjects</div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Add a review suggestion when the same unknown face or body cluster
+            appears on this many different days. Nurby never assigns a name
+            automatically; the evidence stays in the Review Center.
+          </p>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={1}
+              max={30}
+              step={1}
+              value={unknownRecurrenceThresholdDays}
+              onChange={(e) => setUnknownRecurrenceThresholdDays(Number(e.target.value))}
+              onMouseUp={() => saveExtra({ unknown_recurrence_threshold_days: unknownRecurrenceThresholdDays })}
+              onTouchEnd={() => saveExtra({ unknown_recurrence_threshold_days: unknownRecurrenceThresholdDays })}
+              className="flex-1 accent-accent"
+              aria-label="Recurring unknown subject threshold in days"
+            />
+            <span className="font-mono text-xs text-muted-foreground w-16 text-right">
+              {unknownRecurrenceThresholdDays} {unknownRecurrenceThresholdDays === 1 ? "day" : "days"}
             </span>
           </div>
         </div>

@@ -60,6 +60,7 @@ class SystemSettingsResponse(BaseModel):
     nudity_blur: bool = True
     detect_classes: list[str] | None = None
     audio_events: bool = True
+    unknown_recurrence_threshold_days: int = 3
     body_reid_tentative_decay_days: int = 14
     cluster_naming_min_sightings: int = 3
     public_base_url: str | None = None
@@ -121,6 +122,7 @@ class SystemSettingsUpdate(BaseModel):
     nudity_blur: bool | None = None
     detect_classes: list[str] | None = None
     audio_events: bool | None = None
+    unknown_recurrence_threshold_days: int | None = Field(default=None, ge=1, le=30)
     body_reid_tentative_decay_days: int | None = Field(default=None, ge=0, le=3650)
     cluster_naming_min_sightings: int | None = Field(default=None, ge=0, le=1000)
     public_base_url: str | None = None
