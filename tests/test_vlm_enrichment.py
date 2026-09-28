@@ -19,6 +19,36 @@ from services.perception.vlm_enrichment_worker import (
     pick_fallback_pass,
 )
 
+
+@pytest.mark.asyncio
+async def test_auxiliary_usage_preserves_native_tokens(monkeypatch):
+    import services.perception.vlm_enrichment_worker as worker
+
+    calls = []
+
+    async def _record(provider, **kwargs):
+        calls.append((provider, kwargs))
+
+    monkeypatch.setattr(worker, "record_vlm_usage", _record)
+    provider = SimpleNamespace(kind="ollama", default_model="gemma3:4b")
+    manager = EnrichmentManager()
+
+    await manager._record_auxiliary_usage(
+        provider,
+        "enrichment_verify",
+        "camera-1",
+        "verify prompt",
+        "summary context",
+        "OK",
+        {"tokens_in": 50, "tokens_out": 5},
+    )
+
+    assert calls[0][1]["workload"] == "enrichment_verify"
+    assert calls[0][1]["camera_id"] == "camera-1"
+    assert calls[0][1]["actual_tokens_in"] == 50
+    assert calls[0][1]["actual_tokens_out"] == 5
+    assert calls[0][1]["actual_cost_cents"] is not None
+
 # ---- lens sequencing ----------------------------------------------------
 
 def test_first_lens_is_attributes():

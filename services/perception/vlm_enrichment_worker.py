@@ -35,7 +35,11 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from services.perception.prompt_registry import PromptRef, resolve, version_for
-from services.perception.usage import check_perception_budget, estimate_vlm_usage
+from services.perception.usage import (
+    check_perception_budget,
+    estimate_vlm_usage,
+    record_vlm_usage,
+)
 from services.agent.budget import estimate_cost
 from shared.app_settings import get_setting
 from shared.database import async_session
@@ -370,7 +374,9 @@ class EnrichmentManager:
         t0 = time.monotonic()
         try:
             if lens == "summary":
-                ok = await self._run_summary(obs_id, thumb, detections, passes, provider)
+                ok = await self._run_summary(
+                    obs_id, thumb, detections, passes, provider, camera_id
+                )
             else:
                 ok = await self._run_raw_lens(lens, obs_id, camera_id, ts, thumb,
                                               detections, provider,
@@ -455,7 +461,8 @@ class EnrichmentManager:
                 db, camera_id, ts, objects_blob, persons_blob, exclude_id=obs_id
             )
 
-    async def _run_summary(self, obs_id, thumb, detections, passes, provider) -> bool:
+    async def _run_summary(self, obs_id, thumb, detections, passes, provider,
+                           camera_id=None) -> bool:
         frame = _load_frame(thumb)
         if frame is None:
             return False
@@ -476,7 +483,7 @@ class EnrichmentManager:
         summary = (summary or "").strip()
         if not summary:
             return False
-        verdict = await self._verify(summary, body, provider)
+        verdict = await self._verify(summary, body, provider, camera_id)
 
         # A summary the model itself just called unsupported must not become
         # the caption or the search embedding. Try one targeted repair, then
@@ -484,7 +491,7 @@ class EnrichmentManager:
         # unsupported the way a synthesis can.
         if verdict.get("status") == "unsupported":
             summary, verdict = await self._repair_summary(
-                summary, body, verdict, frame, detections, provider
+                summary, body, verdict, frame, detections, provider, camera_id
             )
             if summary != original_summary:
                 # Repair and verification are separate calls and may use a
@@ -526,7 +533,7 @@ class EnrichmentManager:
         return True
 
     async def _repair_summary(self, summary, body, verdict, frame, detections,
-                              provider) -> tuple[str | None, dict]:
+                              provider, camera_id=None) -> tuple[str | None, dict]:
         """One repair round for a summary that failed verification.
 
         Returns ``(text, verdict)`` when the rewrite passes (or at least stops
@@ -549,6 +556,11 @@ class EnrichmentManager:
             ),
             max_tokens=160,
         )
+        await self._record_auxiliary_usage(
+            repair_provider, "enrichment_repair", camera_id,
+            repair_prompt.text, body, rewritten,
+            getattr(self._vlm, "last_usage", None),
+        )
         rewritten = (rewritten or "").strip()
         escalated = getattr(stronger, "name", None)
         # The summary pass stamps the summary prompt; the repair prompt that
@@ -558,12 +570,13 @@ class EnrichmentManager:
             return None, dict(verdict, repair="failed", escalated_to=escalated, **stamp)
         # Verify on the same model that wrote the repair, so the check is not
         # the weaker model grading the stronger one's work.
-        recheck = await self._verify(rewritten, body, repair_provider)
+        recheck = await self._verify(rewritten, body, repair_provider, camera_id)
         if recheck.get("status") == "unsupported":
             return None, dict(recheck, repair="failed", escalated_to=escalated, **stamp)
         return rewritten, dict(recheck, repair="ok", escalated_to=escalated, **stamp)
 
-    async def _verify(self, summary: str, body: str, provider) -> dict:
+    async def _verify(self, summary: str, body: str, provider,
+                      camera_id=None) -> dict:
         """Cheap anti-hallucination check. ask the model whether the summary
         is supported by the source passes. Best-effort. on any error or an
         unavailable text path, mark 'unchecked' rather than blocking."""
@@ -578,6 +591,11 @@ class EnrichmentManager:
                 extra_context=f"SUMMARY:\n{summary}\n\nOBSERVATIONS:\n{body}",
                 max_tokens=60,
             )
+            await self._record_auxiliary_usage(
+                provider, "enrichment_verify", camera_id, prompt.text,
+                f"SUMMARY:\n{summary}\n\nOBSERVATIONS:\n{body}", out,
+                getattr(self._vlm, "last_usage", None),
+            )
             out = (out or "").strip()
             stamp = {"verify_prompt_version": prompt.version}
             if out.upper().startswith("OK"):
@@ -587,6 +605,38 @@ class EnrichmentManager:
             return {"status": "unclear", "note": out[:200], **stamp}
         except Exception:
             return {"status": "unchecked"}
+
+    async def _record_auxiliary_usage(
+        self, provider, workload: str, camera_id, system_prompt: str | None,
+        user_prompt: str | None, output_text: str | None, native_usage,
+    ) -> None:
+        """Account calls that do not create an ObservationVlmPass row."""
+        actual_in = actual_out = actual_cost = None
+        if isinstance(native_usage, dict):
+            try:
+                actual_in = int(native_usage.get("tokens_in", 0))
+                actual_out = int(native_usage.get("tokens_out", 0))
+                actual_cost = estimate_cost(
+                    getattr(provider, "kind", None),
+                    getattr(provider, "default_model", None),
+                    actual_in,
+                    actual_out,
+                )
+            except (TypeError, ValueError):
+                actual_in = actual_out = actual_cost = None
+        await record_vlm_usage(
+            provider,
+            workload=workload,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            output_text=output_text,
+            camera_id=str(camera_id) if camera_id else None,
+            model=getattr(provider, "default_model", None),
+            image_tokens=765,
+            actual_tokens_in=actual_in,
+            actual_tokens_out=actual_out,
+            actual_cost_cents=actual_cost,
+        )
 
     async def _embed(self, text: str):
         try:
