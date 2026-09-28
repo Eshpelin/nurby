@@ -987,9 +987,9 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-muted-foreground/40" />
               <div>
-                <div className="text-sm font-medium">System doctor</div>
+                <div className="text-sm font-medium">{t("settings.system_doctor")}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  Diagnose cameras, AI providers, and services in one pass
+                  {t("settings.system_doctor_help")}
                 </div>
               </div>
             </div>
@@ -1027,19 +1027,23 @@ export default function SettingsPage() {
               }`} />
               <div>
                 <div className="text-sm font-medium flex items-center gap-2">
-                  Storage
+                  {t("settings.storage_title")}
                   {storageWarningCount > 0 && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-normal">
-                      {storageWarningCount} warning{storageWarningCount !== 1 ? "s" : ""}
+                      {t(storageWarningCount === 1 ? "settings.storage_warning" : "settings.storage_warnings", { count: storageWarningCount })}
                     </span>
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  {storageLoading ? "Loading." : storage
+                  {storageLoading ? t("settings.storage_loading") : storage
                     ? storage.cameras.length > 0
-                      ? `${formatBytes(storage.total_recording_bytes)} used across ${storage.cameras.length} camera${storage.cameras.length !== 1 ? "s" : ""}`
-                      : "No cameras configured yet"
-                    : "Could not connect to storage API"}
+                      ? t("settings.storage_used_across", {
+                          bytes: formatBytes(storage.total_recording_bytes),
+                          count: storage.cameras.length,
+                          cameraWord: t(storage.cameras.length === 1 ? "settings.storage_camera" : "settings.storage_cameras"),
+                        })
+                      : t("settings.storage_no_cameras")
+                    : t("settings.storage_api_error")}
                 </div>
               </div>
             </div>
@@ -1060,7 +1064,7 @@ export default function SettingsPage() {
               {storage ? (
                 <div className="space-y-2">
                   {storage.cameras.length === 0 ? (
-                    <div className="text-sm text-muted-foreground py-3 text-center">No cameras configured yet.</div>
+                    <div className="text-sm text-muted-foreground py-3 text-center">{t("settings.storage_no_cameras_detail")}</div>
                   ) : storage.cameras.map((cam) => {
                     const pct = usagePercent(cam);
                     const barWidth = cam.recording_bytes > 0 ? Math.max((cam.recording_bytes / maxRecordingBytes) * 100, 2) : 0;
@@ -1077,11 +1081,11 @@ export default function SettingsPage() {
                           <div className={`h-full rounded-full transition-all ${barColor(pct)}`} style={{ width: `${barWidth}%` }} />
                         </div>
                         <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-                          <span>{cam.recording_count} recording{cam.recording_count !== 1 ? "s" : ""}</span>
-                          <span>{cam.observation_count} observation{cam.observation_count !== 1 ? "s" : ""}</span>
+                          <span>{cam.recording_count} {t(cam.recording_count === 1 ? "settings.storage_recording" : "settings.storage_recordings")}</span>
+                          <span>{cam.observation_count} {t(cam.observation_count === 1 ? "settings.storage_observation" : "settings.storage_observations")}</span>
                           {pct !== null && (
                             <span className={pct >= 80 ? "text-red-400" : pct >= 50 ? "text-yellow-400" : "text-green-400"}>
-                              {pct.toFixed(0)}% of limit
+                              {t("settings.storage_limit_percent", { percent: pct.toFixed(0) })}
                             </span>
                           )}
                         </div>
@@ -1090,7 +1094,7 @@ export default function SettingsPage() {
                   })}
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground py-3 text-center">Could not connect to storage API. Check that the server is running.</div>
+                <div className="text-sm text-muted-foreground py-3 text-center">{t("settings.storage_api_error_detail")}</div>
               )}
             </div>
           )}
