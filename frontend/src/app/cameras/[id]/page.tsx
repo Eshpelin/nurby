@@ -44,7 +44,7 @@ import Link from "next/link";
 
 
 export default function CameraConfigPage() {
-  const { authFetch, loading: authLoading } = useAuth();
+  const { authFetch, token, loading: authLoading } = useAuth();
   const params = useParams();
   const router = useRouter();
   const cameraId = params.id as string;
@@ -660,7 +660,7 @@ export default function CameraConfigPage() {
       </div>
 
       <div className="mb-6">
-        <PackageLifecycleCard cameraId={cameraId} authFetch={authFetch} />
+        <PackageLifecycleCard cameraId={cameraId} token={token} authFetch={authFetch} />
       </div>
 
       {/* Resolution + FPS info bar */}

@@ -20,7 +20,11 @@ type Lifecycle = {
   updated_at: string | null;
 };
 
-type Props = { cameraId: string; authFetch: (url: string, init?: RequestInit) => Promise<Response> };
+type Props = {
+  cameraId: string;
+  token: string | null;
+  authFetch: (url: string, init?: RequestInit) => Promise<Response>;
+};
 
 function stateCopy(item: Lifecycle) {
   if (item.state === "delivered") return "Delivered";
@@ -29,7 +33,7 @@ function stateCopy(item: Lifecycle) {
   return "No longer visible";
 }
 
-export function PackageLifecycleCard({ cameraId, authFetch }: Props) {
+export function PackageLifecycleCard({ cameraId, token, authFetch }: Props) {
   const [items, setItems] = useState<Lifecycle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +58,8 @@ export function PackageLifecycleCard({ cameraId, authFetch }: Props) {
   const current = items[0];
   const evidenceObservationId = (item: Lifecycle) =>
     item.last_observation_id || item.evidence?.observation_id || null;
+  const evidenceHref = (observationId: string) =>
+    `/api/observations/${observationId}/thumbnail${token ? `?token=${encodeURIComponent(token)}` : ""}`;
   const evidenceLabel = (item: Lifecycle) => {
     if (item.state !== "gone") return item.last_present_at ? "Last presence frame" : "Delivery frame";
     if (item.removal_kind === "picked_up_by_person") return "Pickup evidence frame";
@@ -91,7 +97,7 @@ export function PackageLifecycleCard({ cameraId, authFetch }: Props) {
             {evidenceObservationId(current) ? (
               <a
                 className="text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
-                href={`/api/observations/${evidenceObservationId(current)}/thumbnail`}
+                href={evidenceHref(evidenceObservationId(current)!)}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -124,7 +130,7 @@ export function PackageLifecycleCard({ cameraId, authFetch }: Props) {
                     {observationId && (
                       <a
                         className="shrink-0 text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
-                        href={`/api/observations/${observationId}/thumbnail`}
+                        href={evidenceHref(observationId)}
                         target="_blank"
                         rel="noreferrer"
                       >
