@@ -4,6 +4,8 @@
 // originals, including their original indentation.
 
 import Link from "next/link";
+import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface SaveBarProps {
   error: string | null;
@@ -16,6 +18,10 @@ export function SaveBar({
   saved,
   saving,
 }: SaveBarProps) {
+  const { user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string) => translate(locale, key);
+
   return (
       <div className="sticky bottom-0 mt-6 -mx-6 px-6 py-3 bg-background/80 backdrop-blur-sm border-t border-border flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs">
@@ -36,15 +42,15 @@ export function SaveBar({
                   strokeDasharray="40 60"
                 />
               </svg>
-              <span className="text-muted-foreground">Saving.</span>
+              <span className="text-muted-foreground">{t("camera_settings.saving")}</span>
             </>
           )}
           {!error && !saving && saved && (
-            <span className="text-accent">All changes saved</span>
+            <span className="text-accent">{t("camera_settings.saved")}</span>
           )}
           {!error && !saving && !saved && (
             <span className="text-muted-foreground/70">
-              Changes save automatically
+              {t("camera_settings.auto_save")}
             </span>
           )}
         </div>
@@ -52,7 +58,7 @@ export function SaveBar({
           href="/cameras"
           className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
         >
-          Back to cameras
+          {t("camera_settings.back_to_cameras")}
         </Link>
       </div>
   );
