@@ -1068,9 +1068,20 @@ async def get_relationship_suggestion(
         transcript_edited = False
         if transcript_id:
             try:
-                transcript = await db.scalar(
-                    select(Transcript).where(Transcript.id == uuid.UUID(str(transcript_id)))
+                transcript_query = select(Transcript).where(
+                    Transcript.id == uuid.UUID(str(transcript_id))
                 )
+                # Evidence metadata is immutable but may outlive a source
+                # correction or an older producer bug. Re-check the
+                # transcript's own camera ACL here instead of trusting the
+                # association's copied camera_ids as the sole boundary.
+                if allowed_ids is not None:
+                    transcript_query = transcript_query.where(
+                        Transcript.camera_id.in_(
+                            [uuid.UUID(camera_id) for camera_id in allowed_ids]
+                        )
+                    )
+                transcript = await db.scalar(transcript_query)
                 transcript_exists = transcript is not None
                 transcript_edited = bool(transcript and transcript.text_edited)
             except (TypeError, ValueError):
