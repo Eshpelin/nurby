@@ -1196,22 +1196,22 @@ export default function SettingsPage() {
             <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${nudityBlur ? "bg-amber-500" : "bg-muted-foreground/40"}`} />
             <div>
               <div className="text-sm font-medium flex items-center gap-2">
-                Nudity Blur
-                <span className="text-[10px] font-normal uppercase tracking-wider text-amber-500/80 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.5">safety</span>
+                {t("settings.nudity_blur")}
+                <span className="text-[10px] font-normal uppercase tracking-wider text-amber-500/80 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.5">{t("settings.safety")}</span>
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
                 {nudityLoading
-                  ? "Loading."
+                  ? t("settings.nudity_blur_loading")
                   : nudityBlur
-                    ? "Automatically blur exposed body parts in every recording when the detector is confident."
-                    : "Disabled. Recordings will not be scanned for nudity."}
+                    ? t("settings.nudity_blur_enabled")
+                    : t("settings.nudity_blur_disabled")}
               </div>
             </div>
           </div>
           <button
             disabled={nudityLoading || nuditySaving}
             onClick={() => saveNudityBlur(!nudityBlur)}
-            aria-label={nudityBlur ? "Disable nudity blur" : "Enable nudity blur"}
+            aria-label={nudityBlur ? t("settings.nudity_blur_disable") : t("settings.nudity_blur_enable")}
             className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${nudityBlur ? "bg-amber-500" : "bg-muted"} ${nuditySaving ? "opacity-50" : ""}`}
           >
             <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${nudityBlur ? "left-[1.375rem]" : "left-0.5"}`} />
@@ -1220,16 +1220,16 @@ export default function SettingsPage() {
 
         {/* Objects to detect (global allowlist) */}
         <div className="rounded-lg border border-border bg-card px-4 py-3.5">
-          <div className="text-sm font-medium mb-1">Objects to detect</div>
+          <div className="text-sm font-medium mb-1">{t("settings.objects_to_detect")}</div>
           <p className="text-xs text-muted-foreground mb-3">
             {detectClasses.length === 0
-              ? "Detecting everything the models can. Pick specific classes to ignore all others — nothing else gets a box, an event, or a rule, on any camera."
-              : `Only these ${detectClasses.length} class${detectClasses.length === 1 ? "" : "es"} are detected on every camera. Everything else is ignored.`}
+              ? t("settings.objects_all_help")
+              : t(detectClasses.length === 1 ? "settings.objects_selected_help" : "settings.objects_selected_help_plural", { count: detectClasses.length })}
           </p>
           <input
             value={classSearch}
             onChange={(e) => setClassSearch(e.target.value)}
-            placeholder="Filter classes…"
+            placeholder={t("settings.objects_filter_placeholder")}
             className="w-full mb-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto scrollbar-thin">
@@ -1256,7 +1256,7 @@ export default function SettingsPage() {
               })}
             {availableClasses.length === 0 && detectClasses.length === 0 && (
               <span className="text-[11px] text-muted-foreground">
-                Loading the detector&apos;s class list…
+                {t("settings.objects_loading")}
               </span>
             )}
           </div>
@@ -1266,7 +1266,7 @@ export default function SettingsPage() {
               disabled={detectSaving}
               className="mt-2 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
-              Detect everything again
+              {t("settings.objects_reset")}
             </button>
           )}
         </div>
