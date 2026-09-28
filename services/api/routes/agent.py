@@ -394,6 +394,12 @@ async def usage_report(
     )
     allowed = await allowed_camera_ids(current_user, db)
     if allowed is not ALL:
+        # AgentVlmCall includes both Ask Nurby calls and camera-analysis
+        # calls. Keep the user's own unbound Ask calls, but never let a
+        # restricted user aggregate a camera-bound call outside their scope.
+        vlm_stmt = vlm_stmt.where(
+            Observation.camera_id.is_(None) | Observation.camera_id.in_(allowed)
+        )
         pass_stmt = pass_stmt.where(Observation.camera_id.in_(allowed))
 
     rule_usage_stmt = (
