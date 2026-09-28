@@ -36,6 +36,24 @@ def test_name_mention_preserves_exact_span_offsets():
     mention = extract_name_mentions("Hey Simon, can you come?")[0]
     assert mention["span"] == "Hey Simon"
     assert (mention["span_start"], mention["span_end"]) == ("0", "9")
+    assert mention["name_span"] == "Simon"
+    assert (mention["name_span_start"], mention["name_span_end"]) == ("4", "9")
+
+
+def test_name_timing_can_be_scoped_to_the_name_without_context_words():
+    text = "Hey Simon, can you come?"
+    mention = extract_name_mentions(text)[0]
+    words = [
+        {"word": "Hey", "start": 0.0, "end": 0.2},
+        {"word": "Simon", "start": 0.2, "end": 0.6},
+        {"word": "can", "start": 0.7, "end": 0.8},
+    ]
+
+    result = timing_for_span(
+        words, text, int(mention["name_span_start"]), int(mention["name_span_end"])
+    )
+
+    assert [item["word"] for item in result] == ["Simon"]
 
 
 def test_timing_for_span_returns_only_overlapping_words():

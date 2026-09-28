@@ -57,6 +57,13 @@ def extract_name_mentions(text: str) -> list[dict[str, str]]:
                 "span": match.group(0),
                 "span_start": str(match.start()),
                 "span_end": str(match.end()),
+                # Keep the contextual phrase for explainability, but use the
+                # captured name span when attaching word-level timing. This
+                # prevents "Hey" or "tell" from being presented as evidence
+                # for the name itself.
+                "name_span": match.group(1),
+                "name_span_start": str(match.start(1)),
+                "name_span_end": str(match.end(1)),
             })
     return found
 
@@ -197,18 +204,24 @@ async def process_transcript_name_mentions(db: AsyncSession, transcript: Transcr
                 camera_ids=[str(transcript.camera_id)],
                 evidence_metadata={
                     "transcript_id": str(transcript.id),
+                    "audio_capture_id": str(transcript.audio_capture_id) if transcript.audio_capture_id else None,
                     "mention_kind": mention["kind"],
-                    "name_span": mention["span"],
+                    "mention_span": mention["span"],
+                    "name_span": mention["name_span"],
                     "span_start": int(mention["span_start"]),
                     "span_end": int(mention["span_end"]),
+                    "name_span_start": int(mention["name_span_start"]),
+                    "name_span_end": int(mention["name_span_end"]),
                     "word_timing": timing_for_span(
                         transcript.words,
                         transcript.text,
-                        int(mention["span_start"]),
-                        int(mention["span_end"]),
+                        int(mention["name_span_start"]),
+                        int(mention["name_span_end"]),
                     ),
                     "segment_started_at": transcript.started_at.isoformat(),
                     "segment_ended_at": transcript.ended_at.isoformat(),
+                    "transcript_confidence": transcript.confidence,
+                    "no_speech_probability": transcript.no_speech_prob,
                     "provider": transcript.provider,
                     "model": transcript.model,
                     "parser_version": "name-context-v1",
