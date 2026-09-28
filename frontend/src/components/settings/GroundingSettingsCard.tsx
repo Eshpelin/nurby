@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface GroundingHealth {
   enabled: boolean;
@@ -26,6 +27,8 @@ const IS_MAC =
 export function GroundingSettingsCard() {
   const { authFetch, user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
 
   const [enabled, setEnabled] = useState(false);
   const [backend, setBackend] = useState<"local" | "remote">("local");
@@ -97,19 +100,16 @@ export function GroundingSettingsCard() {
     <div className="rounded-lg border border-border bg-card px-4 py-3.5 space-y-3">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-sm font-medium mb-1">FindAnything (visual search)</div>
+          <div className="text-sm font-medium mb-1">{t("grounding.title")}</div>
           <p className="text-xs text-muted-foreground">
-            Describe any object in plain language and Nurby points at it in your
-            footage, beyond the fixed detector classes. Uses the LocateAnything
-            model, which runs on an NVIDIA GPU or Apple Silicon. Downloads
-            ~6&nbsp;GB on first use. no account or token needed.
+            {t("grounding.help")}
           </p>
         </div>
         <button
           type="button"
           disabled={!isAdmin || saving}
           onClick={toggle}
-          aria-label={enabled ? "Disable FindAnything" : "Enable FindAnything"}
+          aria-label={enabled ? t("grounding.disable") : t("grounding.enable")}
           className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${enabled ? "bg-accent" : "bg-muted"} ${saving || !isAdmin ? "opacity-50" : ""}`}
         >
           <span
@@ -121,7 +121,7 @@ export function GroundingSettingsCard() {
       {enabled && (
         <div className="space-y-2 border-t border-border pt-3">
           <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground w-20">Backend</label>
+            <label className="text-xs text-muted-foreground w-20">{t("grounding.backend")}</label>
             <select
               value={backend}
               disabled={!isAdmin}
@@ -132,8 +132,8 @@ export function GroundingSettingsCard() {
               }}
               className="text-xs bg-background border border-border rounded px-2 py-1"
             >
-              <option value="local">Local GPU (recommended)</option>
-              <option value="remote">Remote endpoint</option>
+              <option value="local">{t("grounding.local")}</option>
+              <option value="remote">{t("grounding.remote")}</option>
             </select>
           </div>
 
@@ -148,16 +148,16 @@ export function GroundingSettingsCard() {
                 className="w-full text-xs font-mono bg-background border border-border rounded px-2 py-1"
               />
               <p className="text-[10px] text-amber-300">
-                Remote sends frames off your machine. Prefer a local GPU for privacy.
+                {t("grounding.remote_privacy")}
               </p>
             </div>
           )}
 
           {health && (
             <p className="text-[11px] text-muted-foreground">
-              Status: {health.status ?? (health.model_loaded ? "ready" : "cold")}
-              {health.device ? ` · running on ${health.device.toUpperCase()}` : ""}
-              {health.downloading ? ` · downloading model ${health.download_pct ?? 0}%` : ""}
+              {t("grounding.status", { status: health.status ?? (health.model_loaded ? "ready" : "cold") })}
+              {health.device ? ` · ${t("grounding.running_on", { device: health.device.toUpperCase() })}` : ""}
+              {health.downloading ? ` · ${t("grounding.downloading", { percent: health.download_pct ?? 0 })}` : ""}
               {health.error ? ` · ${health.error}` : ""}
             </p>
           )}
@@ -171,14 +171,14 @@ export function GroundingSettingsCard() {
               !!health && health.status !== "unreachable" && health.status !== "misconfigured";
             const mac = (
               <li>
-                <span className="text-foreground">Apple Silicon (Mac):</span> run it on your host —{" "}
+                <span className="text-foreground">{t("grounding.mac")}</span> {" "}
                 <code className="bg-background px-1 rounded">python -m services.grounding.server</code>.
-                Docker can&apos;t use the Mac GPU (Metal), so it must run outside the container.
+                {" "}{t("grounding.mac_help")}
               </li>
             );
             const linux = (
               <li>
-                <span className="text-foreground">Linux + NVIDIA GPU:</span>{" "}
+                <span className="text-foreground">{t("grounding.nvidia")}</span>{" "}
                 <code className="bg-background px-1 rounded">docker compose --profile grounding up -d grounding</code>.
               </li>
             );
@@ -187,26 +187,21 @@ export function GroundingSettingsCard() {
                 className={`text-[11px] rounded px-2 py-1.5 space-y-1 border ${reachable ? "text-muted-foreground border-border bg-muted/40" : "text-amber-300 border-amber-500/30 bg-amber-500/10"}`}
               >
                 <div>
-                  {reachable
-                    ? "Grounding service connected. Where it runs:"
-                    : "Grounding service not reachable yet. Start it where it can use a GPU:"}
+                  {reachable ? t("grounding.connected") : t("grounding.unreachable")}
                 </div>
                 <ul className="list-disc pl-4 space-y-1">
                   {IS_MAC ? <>{mac}{linux}</> : <>{linux}{mac}</>}
-                  <li>
-                    <span className="text-foreground">No GPU:</span> switch Backend to{" "}
-                    <em>Remote endpoint</em> above (frames leave your machine), or expect slow CPU.
-                  </li>
+                  <li>{t("grounding.no_gpu")}</li>
                 </ul>
                 <div className="text-[10px] opacity-80">
-                  ~6&nbsp;GB downloads automatically on first scan. no account or token needed.
+                  {t("grounding.download_help")}
                 </div>
               </div>
             );
           })()}
 
           {!isAdmin && (
-            <p className="text-[10px] text-muted-foreground">Only an admin can change these.</p>
+            <p className="text-[10px] text-muted-foreground">{t("grounding.admin_only")}</p>
           )}
         </div>
       )}
