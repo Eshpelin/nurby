@@ -1707,19 +1707,17 @@ export default function SettingsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowSmtpModal(false)} />
           <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-semibold mb-1">Email alerts</h2>
+            <h2 className="text-lg font-semibold mb-1">{t("settings.email_alerts")}</h2>
             <p className="text-xs text-muted-foreground mb-4">
-              Where Nurby sends alert and report emails from. Pick your
-              provider, paste the password, save, then send yourself a test.
-              No restart needed.
+              {t("settings.email_help")}
             </p>
 
             {smtpLoading ? (
-              <div className="text-sm text-muted-foreground py-6 text-center">Loading.</div>
+              <div className="text-sm text-muted-foreground py-6 text-center">{t("settings.email_loading")}</div>
             ) : (
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1.5">Quick setup</label>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1.5">{t("settings.email_quick_setup")}</label>
                   <div className="grid grid-cols-4 gap-1.5">
                     {SMTP_PRESETS.map((p) => (
                       <button key={p.label} type="button" onClick={() => applySmtpPreset(p)}
@@ -1738,14 +1736,14 @@ export default function SettingsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">SMTP host</label>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">{t("settings.email_host")}</label>
                     <input type="text" value={smtpConfig.host}
                       onChange={(e) => setSmtpConfig((prev) => ({ ...prev, host: e.target.value }))}
                       className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
                       placeholder="smtp.example.com" />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Port</label>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">{t("settings.email_port")}</label>
                     <input type="text" value={smtpConfig.port}
                       onChange={(e) => setSmtpConfig((prev) => ({ ...prev, port: e.target.value }))}
                       className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
@@ -1754,35 +1752,35 @@ export default function SettingsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Username</label>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">{t("settings.email_username")}</label>
                     <input type="text" value={smtpConfig.user}
                       onChange={(e) => setSmtpConfig((prev) => ({ ...prev, user: e.target.value }))}
                       className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
                       placeholder="you@example.com" />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Password</label>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">{t("settings.email_password")}</label>
                     <input type="password" value={smtpPasswordInput}
                       onChange={(e) => setSmtpPasswordInput(e.target.value)}
                       className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
-                      placeholder={smtpConfig.password ? "unchanged" : "app password"} />
+                      placeholder={smtpConfig.password ? t("settings.email_unchanged") : t("settings.email_app_password")} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">From address</label>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">{t("settings.email_from")}</label>
                     <input type="text" value={smtpConfig.from}
                       onChange={(e) => setSmtpConfig((prev) => ({ ...prev, from: e.target.value }))}
                       className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
-                      placeholder="defaults to username" />
+                      placeholder={t("settings.email_defaults_username")} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">TLS</label>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">{t("settings.email_tls")}</label>
                     <button type="button"
                       onClick={() => setSmtpConfig((prev) => ({ ...prev, tls: !prev.tls }))}
                       className="flex items-center gap-2 px-3 py-2 rounded-md border border-border text-sm hover:bg-muted/40 transition-colors">
                       <span className={`w-2 h-2 rounded-full ${smtpConfig.tls ? "bg-green-500" : "bg-yellow-500"}`} />
-                      {smtpConfig.tls ? "Enabled (recommended)" : "Disabled"}
+                      {smtpConfig.tls ? t("settings.email_tls_enabled") : t("settings.email_tls_disabled")}
                     </button>
                   </div>
                 </div>
@@ -1802,7 +1800,7 @@ export default function SettingsPage() {
                         disabled={smtpSaving}
                         className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40 disabled:opacity-50"
                       >
-                        Remove
+                        {t("settings.email_remove")}
                       </button>
                     )}
                   </div>
@@ -1815,14 +1813,14 @@ export default function SettingsPage() {
 
                 {/* Test */}
                 <div className="pt-3 border-t border-border">
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Send test email</label>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">{t("settings.email_send_test")}</label>
                   <div className="flex gap-2">
                     <input type="email" value={smtpTestEmail} onChange={(e) => setSmtpTestEmail(e.target.value)}
                       className="flex-1 px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
                       placeholder="test@example.com" />
                     <button onClick={handleSmtpTest} disabled={smtpTesting || !smtpTestEmail.trim()}
                       className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50">
-                      {smtpTesting ? "Sending." : "Test"}
+                      {smtpTesting ? t("settings.email_sending") : t("settings.test")}
                     </button>
                   </div>
                   {smtpTestResult && (
@@ -1836,7 +1834,7 @@ export default function SettingsPage() {
 
             <div className="flex justify-end mt-5">
               <button onClick={() => setShowSmtpModal(false)}
-                className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">Close</button>
+                className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">{t("settings.email_close")}</button>
             </div>
           </div>
         </div>
