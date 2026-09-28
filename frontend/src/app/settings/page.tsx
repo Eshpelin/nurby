@@ -622,7 +622,7 @@ export default function SettingsPage() {
   return (
     <div className="px-6 py-6 max-w-3xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("nav.settings")}</h1>
         <p className="text-xs text-muted-foreground mt-1">
           Most settings save immediately. Forms with a Save button show a confirmation when they are applied.
         </p>
@@ -632,17 +632,17 @@ export default function SettingsPage() {
 
       <div className="mb-6 rounded-lg border border-border bg-card">
         <div className="px-4 py-3 border-b border-border">
-          <h2 className="text-sm font-medium">Configure Nurby</h2>
+          <h2 className="text-sm font-medium">{t("settings.configure")}</h2>
           <p className="text-xs text-muted-foreground">
-            Jump directly to the part of Nurby you want to change.
+            {t("settings.configure_help")}
           </p>
         </div>
         <div className="grid gap-2 px-4 py-3 sm:grid-cols-2">
-          <Link href="/settings#providers" className={pillClass}>AI models and providers</Link>
-          <Link href="/cameras" className={pillClass}>Cameras and capture</Link>
-          <Link href="/settings#storage" className={pillClass}>Storage and retention</Link>
-          <Link href="/settings#notifications" className={pillClass}>Notifications and integrations</Link>
-          {user?.role === "admin" && <Link href="/settings/access" className={pillClass}>Camera access</Link>}
+          <Link href="/settings#providers" className={pillClass}>{t("settings.models")}</Link>
+          <Link href="/cameras" className={pillClass}>{t("settings.cameras")}</Link>
+          <Link href="/settings#storage" className={pillClass}>{t("settings.storage")}</Link>
+          <Link href="/settings#notifications" className={pillClass}>{t("settings.notifications")}</Link>
+          {user?.role === "admin" && <Link href="/settings/access" className={pillClass}>{t("settings.camera_access")}</Link>}
         </div>
       </div>
 
@@ -663,23 +663,23 @@ export default function SettingsPage() {
       </div>
       <div className="mb-6 rounded-lg border border-border bg-card">
         <div className="px-4 py-3 border-b border-border">
-          <h2 className="text-sm font-medium">Sharing</h2>
-          <p className="text-xs text-muted-foreground">Who outside the household can see, and what they can see.</p>
+          <h2 className="text-sm font-medium">{t("settings.sharing")}</h2>
+          <p className="text-xs text-muted-foreground">{t("settings.sharing_help")}</p>
         </div>
         <div className="flex flex-wrap gap-2 px-4 py-3">
-          <Link href="/guardian/admin" className={pillClass}>Guardians</Link>
-          <Link href="/settings#shares" className={pillClass}>Share links</Link>
+          <Link href="/guardian/admin" className={pillClass}>{t("settings.guardians")}</Link>
+          <Link href="/settings#shares" className={pillClass}>{t("settings.share_links")}</Link>
         </div>
       </div>
       {user?.role === "admin" && (
         <div id="admin" className="mb-6 rounded-lg border border-border bg-card">
           <div className="px-4 py-3 border-b border-border">
-            <h2 className="text-sm font-medium">Admin</h2>
+            <h2 className="text-sm font-medium">{t("settings.admin")}</h2>
           </div>
           <div className="flex flex-wrap gap-2 px-4 py-3">
-            <Link href="/settings/access" className={pillClass}>Who sees which cameras</Link>
-            <Link href="/pipeline?direct=1" className={pillClass}>AI backlog</Link>
-            <Link href="/ask/admin" className={pillClass}>Everyone&apos;s questions</Link>
+            <Link href="/settings/access" className={pillClass}>{t("settings.camera_visibility")}</Link>
+            <Link href="/pipeline?direct=1" className={pillClass}>{t("settings.ai_backlog")}</Link>
+            <Link href="/ask/admin" className={pillClass}>{t("settings.all_questions")}</Link>
           </div>
         </div>
       )}
