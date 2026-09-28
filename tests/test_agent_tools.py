@@ -714,6 +714,28 @@ def test_scoped_association_metrics_marks_legacy_aggregates_unknown():
     assert metrics["evidence_refs"] == []
 
 
+def test_scoped_association_metrics_withholds_evidence_without_camera_provenance():
+    from services.agent.tools.relationships import _scoped_association_metrics
+
+    unscoped = SimpleNamespace(
+        id=uuid.uuid4(),
+        evidence_kind="spoken_name",
+        camera_ids=[],
+        observed_at=datetime(2026, 9, 27, 8, tzinfo=timezone.utc),
+        role="supporting",
+        observation_ids=[uuid.uuid4()],
+        journey_id=None,
+        evidence_metadata={"transcript_id": str(uuid.uuid4())},
+    )
+
+    metrics = _scoped_association_metrics(
+        SimpleNamespace(evidence_count=1), [unscoped], {"camera-a"}
+    )
+
+    assert metrics["times_seen"] == 0
+    assert metrics["evidence_refs"] == []
+
+
 # ── query_relationships ─────────────────────────────────────────────
 
 

@@ -74,16 +74,13 @@ def _scoped_association_metrics(
     caller's scope, but the old totals are marked unknown rather than reused
     as if they were camera-scoped facts.
     """
+    # An evidence row with missing camera provenance, or one spanning allowed
+    # and hidden cameras, is not safe to count as a complete episode. Fail
+    # closed rather than letting an empty camera set look like "in scope".
     visible = [
         row for row in evidence_rows
-        if not ({str(camera_id) for camera_id in (row.camera_ids or [])} - allowed_ids)
-        or bool({str(camera_id) for camera_id in (row.camera_ids or [])} & allowed_ids)
-    ]
-    # An evidence row spanning allowed and hidden cameras is not safe to count
-    # as a complete episode; it can expose hidden-camera timing/counters.
-    visible = [
-        row for row in visible
-        if {str(camera_id) for camera_id in (row.camera_ids or [])} <= allowed_ids
+        if (camera_ids := {str(camera_id) for camera_id in (row.camera_ids or [])})
+        and camera_ids <= allowed_ids
     ]
     evidence_refs = [
         {
