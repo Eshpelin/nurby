@@ -173,6 +173,15 @@ def test_stale_unconfirmed_association_archives_deterministically():
     assert not should_archive_association(edge, _at(1, 8) + timedelta(days=45), stale_days=45)
 
 
+def test_stale_policy_treats_naive_clock_as_utc():
+    edge = _edge(status="established", last_seen_at=_at(1, 8))
+    assert should_archive_association(
+        edge,
+        datetime(2026, 9, 17, 8, 1),
+        stale_days=45,
+    )
+
+
 def test_confirmed_association_is_immune_to_automatic_decay():
     edge = _edge(status="established", user_confirmed=True, last_seen_at=_at(1, 8))
     assert not should_archive_association(edge, _at(1, 8) + timedelta(days=400), stale_days=45)

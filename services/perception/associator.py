@@ -251,6 +251,10 @@ def should_archive_association(
     last = association.last_seen_at
     if last.tzinfo is None:
         last = last.replace(tzinfo=timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    else:
+        now = now.astimezone(timezone.utc)
     return now - last > timedelta(days=max(0, stale_days))
 
 
