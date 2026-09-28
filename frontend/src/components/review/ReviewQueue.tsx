@@ -107,7 +107,7 @@ const KIND_LABEL_KEY: Record<ReviewItem["kind"], string> = {
 
 export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
   const { authFetch, token, user } = useAuth();
-  const t = (key: string) => translate(user?.locale, key);
+  const t = useCallback((key: string) => translate(user?.locale, key), [user?.locale]);
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -148,11 +148,11 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
       }
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Review queue unavailable");
+      setError(err instanceof Error ? err.message : t("review.unavailable"));
     } finally {
       setLoading(false);
     }
-  }, [authFetch, filter, focusId, showArchived, unreadOnly]);
+  }, [authFetch, filter, focusId, showArchived, unreadOnly, t]);
 
   useEffect(() => {
     void load();
@@ -241,7 +241,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
       const detail: RelationshipDetail = await res.json();
       setRelationshipDetails((current) => ({ ...current, [item.id]: detail }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Evidence unavailable");
+      setError(err instanceof Error ? err.message : t("review.unavailable"));
       setExpandedEvidence(null);
     } finally {
       setEvidenceLoading(null);
@@ -295,11 +295,11 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
         </div>
       </div>
       {loading ? (
-        <p className="px-4 py-5 text-xs text-muted-foreground">Loading review items…</p>
+        <p className="px-4 py-5 text-xs text-muted-foreground">{t("review.loading")}</p>
       ) : error ? (
         <p className="px-4 py-5 text-xs text-red-400">{error}</p>
       ) : items.length === 0 ? (
-        <p className="px-4 py-5 text-xs text-muted-foreground">Nothing else needs review right now.</p>
+        <p className="px-4 py-5 text-xs text-muted-foreground">{t("review.empty")}</p>
       ) : (
         <ul className="divide-y divide-border">
           {items.map((item) => (
@@ -362,7 +362,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                 {item.source_type === "association" && expandedEvidence === item.id && (
                   <div className="mt-2 rounded border border-border/70 bg-background/50 p-2">
                     {evidenceLoading === item.id ? (
-                      <p className="text-[10px] text-muted-foreground">Loading supporting episodes…</p>
+                      <p className="text-[10px] text-muted-foreground">{t("review.loading_evidence")}</p>
                     ) : relationshipDetails[item.id]?.evidence.length || relationshipDetails[item.id]?.review_events?.length ? (
                       <div className="space-y-1.5">
                         <p className="text-[10px] text-muted-foreground">
@@ -429,16 +429,16 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                                   rel="noreferrer"
                                   className="ml-2 text-accent hover:underline"
                                 >
-                                  Open frame
+                                  {t("review.open_frame")}
                                 </a>
                               ))}
                               {typeof evidence.source_url === "string" && (
                                 <a href={evidence.source_url} target="_blank" rel="noreferrer" className="ml-2 text-accent hover:underline">
-                                  {evidence.metadata.transcript_id ? "Open transcript" : "Open journey"}
+                                  {evidence.metadata.transcript_id ? t("review.open_transcript") : t("review.open_journey")}
                                 </a>
                               )}
                               {evidence.source_status === "source_changed" && (
-                                <span className="ml-2 italic">Transcript edited; re-check this hypothesis</span>
+                                <span className="ml-2 italic">{t("review.source_changed")}</span>
                               )}
                               {evidence.transcript_audits?.length ? (
                                 <div className="mt-1 text-[10px] text-amber-200">
@@ -450,14 +450,14 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                                 </div>
                               ) : null}
                               {evidence.source_status === "source_expired" && (
-                                <span className="ml-2 italic">Source no longer retained</span>
+                                <span className="ml-2 italic">{t("review.source_expired")}</span>
                               )}
                             </div>
                           </div>
                         ))}
                         {relationshipDetails[item.id].review_events?.length ? (
                           <div className="border-t border-border/60 pt-1.5 text-[10px] text-muted-foreground">
-                            <div className="mb-1 uppercase tracking-wide">Decision history</div>
+                            <div className="mb-1 uppercase tracking-wide">{t("review.decision_history")}</div>
                             {relationshipDetails[item.id].review_events?.slice(0, 5).map((event) => (
                               <div key={event.id}>
                                 {formatDateTime(event.created_at)} · {event.action} · {event.old_status} → {event.new_status}
@@ -471,20 +471,20 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                         ) : null}
                       </div>
                     ) : (
-                      <p className="text-[10px] text-muted-foreground">No visible evidence episodes remain.</p>
+                      <p className="text-[10px] text-muted-foreground">{t("review.no_evidence")}</p>
                     )}
                   </div>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {item.source_type === "event" && onOpenEvent && (
-                  <button type="button" onClick={() => onOpenEvent(item.source_id)} className="text-[11px] text-accent hover:underline">Open</button>
+                  <button type="button" onClick={() => onOpenEvent(item.source_id)} className="text-[11px] text-accent hover:underline">{t("review.open")}</button>
                 )}
                 {item.kind === "notification" && item.unread && (
-                  <button type="button" onClick={() => void markNotificationRead(item)} className="text-[11px] text-muted-foreground hover:text-foreground">Mark read</button>
+                  <button type="button" onClick={() => void markNotificationRead(item)} className="text-[11px] text-muted-foreground hover:text-foreground">{t("review.mark_read")}</button>
                 )}
                 {item.kind === "identity_suggestion" && (
-                  <a href="/people" className="text-[11px] text-accent hover:underline">Review in People</a>
+                  <a href="/people" className="text-[11px] text-accent hover:underline">{t("review.people")}</a>
                 )}
                 {item.source_type === "association" && (
                   <>
@@ -560,7 +560,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                       disabled={evidenceLoading === item.id}
                       className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
-                      {expandedEvidence === item.id ? "Hide evidence" : "Evidence"}
+                      {expandedEvidence === item.id ? t("review.hide_evidence") : t("review.evidence")}
                     </button>
                     {item.status === "archived" && (
                       <button
@@ -569,7 +569,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                         disabled={decisionBusy === item.id}
                         className="text-[11px] text-accent hover:underline disabled:opacity-50"
                       >
-                        Restore for review
+                        {t("review.restore")}
                       </button>
                     )}
                     {item.status !== "archived" && <button
@@ -578,7 +578,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                       disabled={decisionBusy === item.id}
                       className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
-                      Not now
+                      {t("review.not_now")}
                     </button>}
                     {item.status !== "archived" && <>
                     <button
@@ -587,7 +587,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                       disabled={decisionBusy === item.id}
                       className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
-                      Insufficient evidence
+                      {t("review.insufficient")}
                     </button>
                     <button
                       type="button"
@@ -595,7 +595,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                       disabled={decisionBusy === item.id}
                       className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
-                      Not related
+                      {t("review.not_related")}
                     </button>
                     <button
                       type="button"
@@ -603,7 +603,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                       disabled={decisionBusy === item.id}
                       className="text-[11px] text-accent hover:underline disabled:opacity-50"
                     >
-                      Confirm
+                      {t("review.confirm")}
                     </button>
                     </>}
                   </>
