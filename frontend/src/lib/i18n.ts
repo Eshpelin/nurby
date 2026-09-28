@@ -58,6 +58,11 @@ export const catalogs: Record<Locale, Record<string, string>> = {
     "events.empty": "No alerts match these filters. When a rule fires, it lands here.",
     "events.load_more": "Load more",
     "events.reviewed": "Reviewed",
+    "settings.alerts": "Alerts",
+    "settings.alerts_help": "What should I be told about?",
+    "settings.alert_rules": "Alert rules",
+    "settings.scheduled_questions": "Scheduled questions",
+    "settings.expected_activity": "Expected activity",
   },
   es: {
     "settings.language": "Idioma",
@@ -114,6 +119,11 @@ export const catalogs: Record<Locale, Record<string, string>> = {
     "events.empty": "Ninguna alerta coincide con estos filtros. Cuando se activa una regla, aparece aquí.",
     "events.load_more": "Cargar más",
     "events.reviewed": "Revisada",
+    "settings.alerts": "Alertas",
+    "settings.alerts_help": "¿Sobre qué debería recibir avisos?",
+    "settings.alert_rules": "Reglas de alerta",
+    "settings.scheduled_questions": "Preguntas programadas",
+    "settings.expected_activity": "Actividad esperada",
   },
 };
 

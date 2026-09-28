@@ -39,11 +39,13 @@ import {
   retentionLabel,
   usagePercent,
 } from "./settings-helpers";
+import { translate } from "@/lib/i18n";
 
 const pillClass = "px-3 py-1.5 rounded-md border border-border text-sm hover:bg-muted transition-colors";
 
 export default function SettingsPage() {
   const { user, authFetch, token } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [showProviderModal, setShowProviderModal] = useState(false);
@@ -650,13 +652,13 @@ export default function SettingsPage() {
           the fix. */}
       <div className="mb-6 rounded-lg border border-border bg-card">
         <div className="px-4 py-3 border-b border-border">
-          <h2 className="text-sm font-medium">Alerts</h2>
-          <p className="text-xs text-muted-foreground">What should I be told about?</p>
+          <h2 className="text-sm font-medium">{t("settings.alerts")}</h2>
+          <p className="text-xs text-muted-foreground">{t("settings.alerts_help")}</p>
         </div>
         <div className="flex flex-wrap gap-2 px-4 py-3">
-          <Link href="/rules" className={pillClass}>Alert rules</Link>
-          <Link href="/reports" className={pillClass}>Scheduled questions</Link>
-          <Link href="/settings#expected-activity" className={pillClass}>Expected activity</Link>
+          <Link href="/rules" className={pillClass}>{t("settings.alert_rules")}</Link>
+          <Link href="/reports" className={pillClass}>{t("settings.scheduled_questions")}</Link>
+          <Link href="/settings#expected-activity" className={pillClass}>{t("settings.expected_activity")}</Link>
         </div>
       </div>
       <div className="mb-6 rounded-lg border border-border bg-card">
