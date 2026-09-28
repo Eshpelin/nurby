@@ -1361,14 +1361,15 @@ class PerceptionPipeline:
                         apply_package_observation,
                     )
 
-                    await apply_package_observation(
-                        db,
-                        camera_id=camera_id,
-                        observation_id=obs.id,
-                        observed_at=timestamp,
-                        object_detections=object_detections,
-                        person_detections=person_detections,
-                    )
+                    if getattr(camera, "package_tracking_enabled", True):
+                        await apply_package_observation(
+                            db,
+                            camera_id=camera_id,
+                            observation_id=obs.id,
+                            observed_at=timestamp,
+                            object_detections=object_detections,
+                            person_detections=person_detections,
+                        )
                 except Exception:
                     logger.exception("package lifecycle update failed obs=%s", obs.id)
                 # Link the observation to an open incident on this

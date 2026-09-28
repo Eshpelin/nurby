@@ -156,6 +156,10 @@ class Camera(Base):
     # detectors remain independently controlled by their own settings.
     relationship_inference_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     relationship_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Package lifecycle is an explicit per-camera subscription. Existing
+    # cameras stay enabled by default; turning it off stops new lifecycle
+    # records without deleting prior delivery history.
+    package_tracking_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Content-health detection (#212): flag a frozen/obscured/tampered view
     # that keeps the stream "online" while coverage is silently gone. Master
     # switch off by default; each detection path pre-armed so enabling the

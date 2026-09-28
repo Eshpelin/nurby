@@ -127,6 +127,7 @@ export default function CameraConfigPage() {
   const [incidentIdleSeconds, setIncidentIdleSeconds] = useState(600);
   const [relationshipInferenceEnabled, setRelationshipInferenceEnabled] = useState(true);
   const [relationshipNotificationsEnabled, setRelationshipNotificationsEnabled] = useState(true);
+  const [packageTrackingEnabled, setPackageTrackingEnabled] = useState(true);
   const [privacyZoneTargets, setPrivacyZoneTargets] = useState<string[]>([]);
   const [privacyZoneBlurStrength, setPrivacyZoneBlurStrength] = useState(55);
   const [yoloWorldPrompts, setYoloWorldPrompts] = useState<string[]>([]);
@@ -240,6 +241,7 @@ export default function CameraConfigPage() {
       setIncidentIdleSeconds(cam.incident_idle_seconds ?? 600);
       setRelationshipInferenceEnabled(cam.relationship_inference_enabled ?? true);
       setRelationshipNotificationsEnabled(cam.relationship_notifications_enabled ?? true);
+      setPackageTrackingEnabled(cam.package_tracking_enabled ?? true);
       setPrivacyZoneTargets(cam.privacy_zone_targets ?? []);
       setPrivacyZoneBlurStrength(cam.privacy_zone_blur_strength ?? 55);
       setYoloWorldPrompts((cam as Camera & { yolo_world_prompts?: string[] | null }).yolo_world_prompts ?? []);
@@ -421,6 +423,7 @@ export default function CameraConfigPage() {
         incident_idle_seconds: incidentIdleSeconds,
         relationship_inference_enabled: relationshipInferenceEnabled,
         relationship_notifications_enabled: relationshipNotificationsEnabled,
+        package_tracking_enabled: packageTrackingEnabled,
         privacy_zone_targets: privacyZoneTargets.length > 0 ? privacyZoneTargets : null,
         privacy_zone_blur_strength: privacyZoneBlurStrength,
         yolo_world_prompts: yoloWorldPrompts.length > 0 ? yoloWorldPrompts : null,
@@ -885,6 +888,26 @@ export default function CameraConfigPage() {
           setIncidentIdleSeconds={setIncidentIdleSeconds}
           setIncidentTrackingEnabled={setIncidentTrackingEnabled}
         />
+
+        <section className="rounded-lg border border-border bg-card px-4 py-3.5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-medium">Package tracking</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Track delivery, waiting, and removal evidence on this camera. Existing package history is preserved when disabled.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={packageTrackingEnabled}
+              onClick={() => setPackageTrackingEnabled((enabled) => !enabled)}
+              className={`rounded-full border px-3 py-1 text-xs ${packageTrackingEnabled ? "border-emerald-500/50 text-emerald-400" : "border-border text-muted-foreground"}`}
+            >
+              {packageTrackingEnabled ? "Enabled" : "Disabled"}
+            </button>
+          </div>
+        </section>
 
         <RelationshipPrivacySection
           inferenceEnabled={relationshipInferenceEnabled}
