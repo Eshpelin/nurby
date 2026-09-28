@@ -396,8 +396,21 @@ async def merge_vehicle(
     """
     if body.source_id == target_id:
         raise HTTPException(status_code=400, detail="Cannot merge a vehicle into itself")
-    target = await db.get(Vehicle, target_id)
-    source = await db.get(Vehicle, body.source_id)
+    # Lock both identities in a deterministic order before reading or
+    # rewriting observations and learned edges. Without this, two concurrent
+    # merge requests can each observe the other as a live source and lose
+    # evidence while consolidating the same relationship graph.
+    locked_vehicles = (
+        await db.execute(
+            select(Vehicle)
+            .where(Vehicle.id.in_([target_id, body.source_id]))
+            .order_by(Vehicle.id)
+            .with_for_update()
+        )
+    ).scalars().all()
+    vehicles_by_id = {vehicle.id: vehicle for vehicle in locked_vehicles}
+    target = vehicles_by_id.get(target_id)
+    source = vehicles_by_id.get(body.source_id)
     if target is None or source is None:
         raise HTTPException(status_code=404, detail="Vehicle not found")
 
@@ -406,7 +419,11 @@ async def merge_vehicle(
     source_id = str(body.source_id)
     target_id_text = str(target_id)
     observations = (
-        await db.execute(select(Observation).where(Observation.vehicle_detections.is_not(None)))
+        await db.execute(
+            select(Observation)
+            .where(Observation.vehicle_detections.is_not(None))
+            .with_for_update()
+        )
     ).scalars().all()
     impacted_observations = []
     for observation in observations:
@@ -425,6 +442,7 @@ async def merge_vehicle(
             select(EntityAssociation)
             .where(EntityAssociation.object_kind == "vehicle")
             .where(EntityAssociation.object_key.in_([source_id, target_id_text]))
+            .with_for_update()
         )
     ).scalars().all()
     for edge in all_vehicle_edges:
