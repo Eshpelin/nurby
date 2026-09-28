@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from services.api.routes import audio, conversations, digests, notifications, search, summaries, timeline, transcripts, voice
+from services.api.routes import audio, conversations, digests, notifications, review, search, summaries, timeline, transcripts, voice
 from services.search import query, scan
 from shared import auth
 from shared.database import get_db
@@ -73,6 +73,7 @@ def http():
         ("audio", audio), ("conversations", conversations), ("digests", digests),
         ("notifications", notifications), ("search", search), ("summaries", summaries),
         ("timeline", timeline), ("transcripts", transcripts), ("voice", voice),
+        ("review", review),
     ):
         app.include_router(module.router, prefix=f"/{name}")
 
@@ -118,6 +119,19 @@ def test_list_queries_scope_before_pagination(http, path, tables):
             assert predicate in sql
             if " limit " in sql:
                 assert sql.index(predicate) < sql.index(" limit ")
+
+
+def test_association_review_scopes_histogram_before_candidate_window(http):
+    client, db = http
+    response = client.get(f"/review/associations?camera_id={db.camera}")
+    assert response.status_code == 200, response.text
+    association_sql = [
+        statement for statement in db.statements if "from entity_associations" in statement
+    ]
+    assert association_sql
+    sql = association_sql[-1]
+    assert "camera_histogram ?" in sql
+    assert sql.index("camera_histogram ?") < sql.index(" limit ")
     assert not any("from household_mode_changes" in s for s in db.statements)
 
 

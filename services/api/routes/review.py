@@ -590,6 +590,8 @@ async def list_entity_associations(
     if not any((subject_key, object_key, camera_id)):
         raise HTTPException(status_code=422, detail="subject_key, object_key, or camera_id is required")
     allowed = await allowed_camera_ids(current_user, db)
+    if allowed is not ALL and not allowed:
+        return []
     query = select(EntityAssociation)
     if not include_archived and status != "archived":
         query = query.where(EntityAssociation.status != "archived")
@@ -618,6 +620,22 @@ async def list_entity_associations(
         query = query.where(EntityAssociation.last_seen_at >= from_at)
     if to_at:
         query = query.where(EntityAssociation.first_seen_at <= to_at)
+    # Apply the ACL in SQL before the bounded candidate window. The Python
+    # projection below remains necessary for legacy/null histograms and for
+    # mixed-camera evidence redaction, but it must not be the first filter or
+    # hidden rows could consume the 1,000-row window and starve visible ones.
+    if allowed is not ALL:
+        visible_camera_keys = [
+            EntityAssociation.camera_histogram.op("?")(str(camera_key))
+            for camera_key in allowed
+        ]
+        query = query.where(or_(*visible_camera_keys))
+    if camera_id is not None:
+        if allowed is not ALL and camera_id not in allowed:
+            return []
+        query = query.where(
+            EntityAssociation.camera_histogram.op("?")(str(camera_id))
+        )
     # Scope before applying offset/limit.  The histogram is an aggregate of
     # visible source cameras, so a restricted caller must never page through
     # hidden rows and infer their existence from a short page.
