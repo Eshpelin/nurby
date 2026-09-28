@@ -509,7 +509,20 @@ async def list_review_items(
         association_rows = (
             await db.execute(
                 select(EntityAssociation)
-                .where(EntityAssociation.status.in_(association_statuses))
+                .where(
+                    or_(
+                        EntityAssociation.status.in_(association_statuses),
+                        # Repeated evidence may promote a learned edge to
+                        # established before a person reviews it. It still
+                        # belongs in the queue while the promotion is only
+                        # machine-derived; confirmed household assertions
+                        # remain profile facts rather than pending work.
+                        and_(
+                            EntityAssociation.status == "established",
+                            EntityAssociation.user_confirmed.is_(False),
+                        ),
+                    )
+                )
                 .order_by(EntityAssociation.last_seen_at.desc())
                 # Camera visibility is enforced below from the association's
                 # evidence histogram. Fetch the bounded review window before
