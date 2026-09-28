@@ -331,8 +331,16 @@ async def get_household_facts(
     distinction when answering.
     """
     from shared.models import HouseholdFact
+    from services.agent.household_context import fact_visible_in_camera_scope
 
     db = ctx["db"]
+    allowed = await _common.accessible_camera_ids(ctx["user"], db)
+    if not allowed:
+        return {
+            "facts": [],
+            "count": 0,
+            "note": "No camera evidence is available in the current access scope.",
+        }
     q = select(HouseholdFact)
     if include_candidates:
         q = q.where(HouseholdFact.status.in_(("established", "candidate")))
@@ -363,6 +371,23 @@ async def get_household_facts(
         HouseholdFact.created_at.desc(),
     ).limit(50)
     rows = (await db.execute(q)).scalars().all()
+
+    association_ids = {
+        str(ref.get("id"))
+        for fact in rows
+        for ref in (getattr(fact, "evidence_refs", None) or [])
+        if isinstance(ref, dict) and ref.get("kind") == "association" and ref.get("id")
+    }
+    associations_by_id = {}
+    if association_ids:
+        associations = (await db.execute(
+            select(EntityAssociation).where(EntityAssociation.id.in_(association_ids))
+        )).scalars().all()
+        associations_by_id = {str(association.id): association for association in associations}
+    rows = [
+        row for row in rows
+        if fact_visible_in_camera_scope(row, associations_by_id, allowed)
+    ][:50]
 
     out = []
     for f in rows:

@@ -63,6 +63,41 @@ def association_visible_in_camera_scope(association, allowed_camera_ids) -> bool
     return bool(allowed.intersection(cameras))
 
 
+def fact_visible_in_camera_scope(fact, associations_by_id, allowed_camera_ids) -> bool:
+    """Keep scoped agent output from carrying hidden observation-derived facts.
+
+    User-authored household notes are intentional shared knowledge. Learned
+    facts, however, inherit the camera scope of the association that produced
+    them. Missing provenance is withheld rather than treated as public.
+    Camera-attached facts follow the same direct camera boundary.
+    """
+    allowed = {str(camera_id) for camera_id in (allowed_camera_ids or ())}
+    if getattr(fact, "entity_kind", None) == "camera":
+        return str(getattr(fact, "entity_key", "")) in allowed
+    if getattr(fact, "source", None) == "user":
+        return True
+    refs = getattr(fact, "evidence_refs", None) or []
+    association_ids = [
+        str(ref.get("id")) for ref in refs
+        if isinstance(ref, dict) and ref.get("kind") == "association" and ref.get("id")
+    ]
+    if not association_ids:
+        return False
+    return any(
+        bool(
+            (cameras := {
+                str(camera_id)
+                for camera_id in (
+                    associations_by_id[association_id].camera_histogram or {}
+                )
+            })
+            and cameras <= allowed
+        )
+        for association_id in association_ids
+        if association_id in associations_by_id
+    )
+
+
 # ── pure shaping ─────────────────────────────────────────────────────
 
 
@@ -335,8 +370,23 @@ async def build_household_context(db, allowed_camera_ids) -> str | None:
         select(HouseholdFact)
         .where(HouseholdFact.status == "established")
         .order_by(HouseholdFact.pinned.desc(), HouseholdFact.evidence_count.desc())
-        .limit(MAX_FACTS * 2)
+        .limit(MAX_FACTS * 10)
     )).scalars().all()
+
+    association_ids = {
+        str(ref.get("id"))
+        for fact in fact_rows
+        for ref in (getattr(fact, "evidence_refs", None) or [])
+        if isinstance(ref, dict) and ref.get("kind") == "association" and ref.get("id")
+    }
+    associations_by_id = {}
+    if association_ids:
+        associations = (await db.execute(
+            select(EntityAssociation).where(
+                EntityAssociation.id.in_(association_ids)
+            )
+        )).scalars().all()
+        associations_by_id = {str(association.id): association for association in associations}
 
     def _fact_dict(f) -> dict:
         entity_label = None
@@ -357,8 +407,15 @@ async def build_household_context(db, allowed_camera_ids) -> str | None:
 
     # Two groups, household notes first; each capped so a handful of
     # pinned notes cannot crowd the block.
-    facts = [_fact_dict(f) for f in fact_rows if f.source == "user"][:MAX_FACTS] + \
-            [_fact_dict(f) for f in fact_rows if f.source != "user"][:MAX_FACTS]
+    facts = [
+        _fact_dict(f) for f in fact_rows
+        if f.source == "user"
+        and fact_visible_in_camera_scope(f, associations_by_id, allowed)
+    ][:MAX_FACTS] + [
+        _fact_dict(f) for f in fact_rows
+        if f.source != "user"
+        and fact_visible_in_camera_scope(f, associations_by_id, allowed)
+    ][:MAX_FACTS]
 
     return format_household_context(cameras, people, vehicles, patterns, facts)
 

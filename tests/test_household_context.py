@@ -80,6 +80,29 @@ def test_learned_associations_require_visible_camera_evidence():
     assert not hc.association_visible_in_camera_scope(legacy, {cam_a})
 
 
+def test_facts_inherit_association_camera_scope():
+    cam_a, cam_b = uuid.uuid4(), uuid.uuid4()
+    visible_edge = SimpleNamespace(camera_histogram={str(cam_a): 3})
+    hidden_edge = SimpleNamespace(camera_histogram={str(cam_b): 3})
+    mixed_edge = SimpleNamespace(camera_histogram={str(cam_a): 3, str(cam_b): 2})
+    visible = SimpleNamespace(
+        source="agent", entity_kind="person", entity_key="p",
+        evidence_refs=[{"kind": "association", "id": "visible"}],
+    )
+    hidden = SimpleNamespace(
+        source="agent", entity_kind="person", entity_key="p",
+        evidence_refs=[{"kind": "association", "id": "hidden"}],
+    )
+    user_note = SimpleNamespace(source="user", entity_kind="household", entity_key=None)
+
+    assert hc.fact_visible_in_camera_scope(visible, {"visible": visible_edge}, {cam_a})
+    assert not hc.fact_visible_in_camera_scope(hidden, {"hidden": hidden_edge}, {cam_a})
+    assert not hc.fact_visible_in_camera_scope(
+        visible, {"visible": mixed_edge}, {cam_a}
+    )
+    assert hc.fact_visible_in_camera_scope(user_note, {}, {cam_a})
+
+
 def test_no_cameras_means_no_block():
     assert hc.format_household_context([], [{"name": "Mom"}], []) is None
 
