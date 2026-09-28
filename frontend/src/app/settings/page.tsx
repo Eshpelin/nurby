@@ -1107,17 +1107,17 @@ export default function SettingsPage() {
               smtpLoading ? "bg-muted-foreground/40" : smtpConfigured ? "bg-green-500" : "bg-muted-foreground/40"
             }`} />
             <div>
-              <div className="text-sm font-medium">Email</div>
+              <div className="text-sm font-medium">{t("settings.email")}</div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                {smtpLoading ? "Loading." : smtpConfigured
-                  ? `Configured (${smtpConfig.host})`
-                  : "SMTP is not configured"}
+                {smtpLoading ? t("settings.email_loading") : smtpConfigured
+                  ? t("settings.email_configured", { host: smtpConfig.host })
+                  : t("settings.email_not_configured")}
               </div>
             </div>
           </div>
           <button onClick={() => setShowSmtpModal(true)}
             className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors">
-            {smtpConfigured ? "View" : "Configure"}
+            {smtpConfigured ? t("settings.email_view") : t("settings.email_configure")}
           </button>
         </div>
 
