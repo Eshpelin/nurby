@@ -61,6 +61,12 @@ export function PackageLifecycleCard({ cameraId, token, authFetch }: Props) {
     item.last_observation_id || item.evidence?.observation_id || null;
   const evidenceHref = (observationId: string) =>
     `/api/observations/${observationId}/thumbnail${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+  const recordingsHref = (item: Lifecycle) => {
+    const start = new Date(item.started_at).getTime() - 2 * 60 * 1000;
+    const endSource = item.gone_at || item.last_present_at || item.updated_at || item.started_at;
+    const end = new Date(endSource).getTime() + 2 * 60 * 1000;
+    return `/recordings?camera_id=${encodeURIComponent(cameraId)}&from=${encodeURIComponent(new Date(start).toISOString())}&to=${encodeURIComponent(new Date(end).toISOString())}`;
+  };
   const evidenceLabel = (item: Lifecycle) => {
     if (item.state !== "gone") return item.last_present_at ? "Last presence frame" : "Delivery frame";
     if (item.removal_kind === "picked_up_by_person") return "Pickup evidence frame";
@@ -118,6 +124,12 @@ export function PackageLifecycleCard({ cameraId, token, authFetch }: Props) {
                 ))}
               </span>
             ) : "Pending"}
+            <a
+              className="mt-1 inline-block text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
+              href={recordingsHref(current)}
+            >
+              Open recording context
+            </a>
           </div>
         </div>
       )}
@@ -142,14 +154,22 @@ export function PackageLifecycleCard({ cameraId, token, authFetch }: Props) {
                       <div className="text-muted-foreground">{new Date(item.started_at).toLocaleString()}</div>
                     </div>
                     {observationId && (
-                      <a
-                        className="shrink-0 text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
-                        href={evidenceHref(observationId)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        View evidence
-                      </a>
+                      <span className="flex shrink-0 flex-col items-end gap-1">
+                        <a
+                          className="text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
+                          href={evidenceHref(observationId)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View evidence
+                        </a>
+                        <a
+                          className="text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
+                          href={recordingsHref(item)}
+                        >
+                          Open recording context
+                        </a>
+                      </span>
                     )}
                   </li>
                 );
