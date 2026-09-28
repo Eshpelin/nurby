@@ -136,6 +136,8 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
   const [linkedCluster, setLinkedCluster] = useState<Record<string, string>>({});
   const [linkedSubject, setLinkedSubject] = useState<Record<string, string>>({});
   const [linkedObject, setLinkedObject] = useState<Record<string, string>>({});
+  const [linkedSubjectCluster, setLinkedSubjectCluster] = useState<Record<string, string>>({});
+  const [linkedObjectCluster, setLinkedObjectCluster] = useState<Record<string, string>>({});
   const [showArchived, setShowArchived] = useState(false);
   const [filter, setFilter] = useState<ReviewFilter>("all");
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -229,6 +231,18 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
               : {}),
             ...(decision === "confirm" && linkedObject[item.id]
               ? { link_object_person_id: linkedObject[item.id] }
+              : {}),
+            ...(decision === "confirm" && linkedSubjectCluster[item.id]
+              ? {
+                  link_subject_cluster_id: linkedSubjectCluster[item.id].split(":")[1],
+                  link_subject_cluster_kind: linkedSubjectCluster[item.id].split(":")[0],
+                }
+              : {}),
+            ...(decision === "confirm" && linkedObjectCluster[item.id]
+              ? {
+                  link_object_cluster_id: linkedObjectCluster[item.id].split(":")[1],
+                  link_object_cluster_kind: linkedObjectCluster[item.id].split(":")[0],
+                }
               : {}),
         }),
       });
@@ -559,7 +573,10 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                         <select
                           aria-label={`Link subject of ${item.title} to a person`}
                           value={linkedSubject[item.id] || ""}
-                          onChange={(event) => setLinkedSubject((current) => ({ ...current, [item.id]: event.target.value }))}
+                          onChange={(event) => {
+                            setLinkedSubject((current) => ({ ...current, [item.id]: event.target.value }));
+                            setLinkedSubjectCluster((current) => ({ ...current, [item.id]: "" }));
+                          }}
                           className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
                         >
                           <option value="">{t("review.subject_anonymous")}</option>
@@ -570,9 +587,24 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                           ))}
                         </select>
                         <select
+                          aria-label={`Link subject of ${item.title} to an unknown visual cluster`}
+                          value={linkedSubjectCluster[item.id] || ""}
+                          onChange={(event) => {
+                            setLinkedSubjectCluster((current) => ({ ...current, [item.id]: event.target.value }));
+                            setLinkedSubject((current) => ({ ...current, [item.id]: "" }));
+                          }}
+                          className="max-w-44 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
+                        >
+                          <option value="">{t("review.subject_cluster_anonymous")}</option>
+                          {clusters.map((cluster) => <option key={`subject-${cluster.kind}:${cluster.id}`} value={`${cluster.kind}:${cluster.id}`}>{t("review.link_subject_cluster", { label: cluster.label, kind: cluster.kind })}</option>)}
+                        </select>
+                        <select
                           aria-label={`Link companion of ${item.title} to a person`}
                           value={linkedObject[item.id] || ""}
-                          onChange={(event) => setLinkedObject((current) => ({ ...current, [item.id]: event.target.value }))}
+                          onChange={(event) => {
+                            setLinkedObject((current) => ({ ...current, [item.id]: event.target.value }));
+                            setLinkedObjectCluster((current) => ({ ...current, [item.id]: "" }));
+                          }}
                           className="max-w-36 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
                         >
                           <option value="">{t("review.companion_anonymous")}</option>
@@ -581,6 +613,18 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                               {t("review.companion_person", { label: person.nickname || person.display_name })}
                             </option>
                           ))}
+                        </select>
+                        <select
+                          aria-label={`Link companion of ${item.title} to an unknown visual cluster`}
+                          value={linkedObjectCluster[item.id] || ""}
+                          onChange={(event) => {
+                            setLinkedObjectCluster((current) => ({ ...current, [item.id]: event.target.value }));
+                            setLinkedObject((current) => ({ ...current, [item.id]: "" }));
+                          }}
+                          className="max-w-44 rounded border border-border bg-background px-1.5 py-1 text-[11px]"
+                        >
+                          <option value="">{t("review.companion_cluster_anonymous")}</option>
+                          {clusters.map((cluster) => <option key={`object-${cluster.kind}:${cluster.id}`} value={`${cluster.kind}:${cluster.id}`}>{t("review.link_companion_cluster", { label: cluster.label, kind: cluster.kind })}</option>)}
                         </select>
                       </>
                     )}

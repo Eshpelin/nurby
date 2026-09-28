@@ -70,6 +70,19 @@ def test_cooccurrence_decision_can_link_each_endpoint_independently():
     assert body.link_object_person_id == object_id
 
 
+def test_cooccurrence_decision_can_link_anonymous_cluster_endpoints():
+    subject_id, object_id = uuid4(), uuid4()
+    body = RelationshipDecisionBody(
+        decision="confirm",
+        link_subject_cluster_id=subject_id,
+        link_subject_cluster_kind="face",
+        link_object_cluster_id=object_id,
+        link_object_cluster_kind="body",
+    )
+    assert body.link_subject_cluster_kind == "face"
+    assert body.link_object_cluster_kind == "body"
+
+
 def test_review_event_supports_structured_reconciliation_metadata():
     from shared.models import AssociationReviewEvent
 

@@ -156,6 +156,10 @@ export const catalogs: Record<Locale, Record<string, string>> = {
     "review.companion_anonymous": "Companion stays anonymous",
     "review.subject_person": "Subject: {label}",
     "review.companion_person": "Companion: {label}",
+    "review.subject_cluster_anonymous": "Subject stays an anonymous cluster",
+    "review.companion_cluster_anonymous": "Companion stays an anonymous cluster",
+    "review.link_subject_cluster": "Link subject to {label} ({kind})",
+    "review.link_companion_cluster": "Link companion to {label} ({kind})",
   },
   es: {
     "settings.language": "Idioma",
@@ -310,6 +314,10 @@ export const catalogs: Record<Locale, Record<string, string>> = {
     "review.companion_anonymous": "El acompañante permanece anónimo",
     "review.subject_person": "Sujeto: {label}",
     "review.companion_person": "Acompañante: {label}",
+    "review.subject_cluster_anonymous": "El sujeto permanece como grupo anónimo",
+    "review.companion_cluster_anonymous": "El acompañante permanece como grupo anónimo",
+    "review.link_subject_cluster": "Vincular sujeto a {label} ({kind})",
+    "review.link_companion_cluster": "Vincular acompañante a {label} ({kind})",
   },
 };
 

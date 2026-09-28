@@ -67,6 +67,10 @@ class RelationshipDecisionBody(BaseModel):
     # anonymous cluster ids that were known at capture time.
     link_subject_person_id: uuid.UUID | None = None
     link_object_person_id: uuid.UUID | None = None
+    link_subject_cluster_id: uuid.UUID | None = None
+    link_subject_cluster_kind: Literal["face", "body"] | None = None
+    link_object_cluster_id: uuid.UUID | None = None
+    link_object_cluster_kind: Literal["face", "body"] | None = None
 
 
 def _association_visible(association: EntityAssociation, allowed) -> bool:
@@ -776,10 +780,13 @@ async def decide_relationship_suggestion(
         body.link_cluster_id is not None
         or body.link_subject_person_id is not None
         or body.link_object_person_id is not None
+        or body.link_subject_cluster_id is not None
+        or body.link_object_cluster_id is not None
     ):
         raise HTTPException(status_code=422, detail="Use one relationship linking form at a time")
     if body.link_cluster_id is not None and (
         body.link_subject_person_id is not None or body.link_object_person_id is not None
+        or body.link_subject_cluster_id is not None or body.link_object_cluster_id is not None
     ):
         raise HTTPException(status_code=422, detail="Use one relationship linking form at a time")
 
@@ -809,7 +816,10 @@ async def decide_relationship_suggestion(
             linked_cluster = await db.get(BodyCluster, body.link_cluster_id)
         if linked_cluster is None:
             raise HTTPException(status_code=404, detail="Visual cluster not found")
-    if body.link_subject_person_id is not None or body.link_object_person_id is not None:
+    if (
+        body.link_subject_person_id is not None or body.link_object_person_id is not None
+        or body.link_subject_cluster_id is not None or body.link_object_cluster_id is not None
+    ):
         if body.decision != "confirm" or association.relation not in {
             "co_present_with", "arrives_with", "accompanies"
         }:
@@ -835,6 +845,35 @@ async def decide_relationship_suggestion(
             linked_object = await db.get(Person, body.link_object_person_id)
             if linked_object is None:
                 raise HTTPException(status_code=404, detail="Companion person not found")
+        if body.link_subject_cluster_id is not None:
+            if body.link_subject_cluster_kind is None:
+                raise HTTPException(status_code=422, detail="A subject cluster kind is required")
+            linked_subject_cluster = await db.get(
+                FaceCluster if body.link_subject_cluster_kind == "face" else BodyCluster,
+                body.link_subject_cluster_id,
+            )
+            if linked_subject_cluster is None:
+                raise HTTPException(status_code=404, detail="Subject visual cluster not found")
+        else:
+            linked_subject_cluster = None
+        if body.link_object_cluster_id is not None:
+            if body.link_object_cluster_kind is None:
+                raise HTTPException(status_code=422, detail="A companion cluster kind is required")
+            linked_object_cluster = await db.get(
+                FaceCluster if body.link_object_cluster_kind == "face" else BodyCluster,
+                body.link_object_cluster_id,
+            )
+            if linked_object_cluster is None:
+                raise HTTPException(status_code=404, detail="Companion visual cluster not found")
+        else:
+            linked_object_cluster = None
+        if (
+            body.link_subject_person_id is not None and body.link_subject_cluster_id is not None
+            or body.link_object_person_id is not None and body.link_object_cluster_id is not None
+        ):
+            raise HTTPException(status_code=422, detail="Choose a person or cluster for each endpoint")
+        if linked_subject_cluster is not None and linked_object_cluster is not None and linked_subject_cluster.id == linked_object_cluster.id:
+            raise HTTPException(status_code=422, detail="A co-occurrence needs two distinct endpoints")
 
     allowed = await allowed_camera_ids(current_user, db)
     if allowed is not ALL:
@@ -844,6 +883,10 @@ async def decide_relationship_suggestion(
         if linked_cluster is not None and linked_cluster.first_camera_id is not None:
             if str(linked_cluster.first_camera_id) not in allowed_ids:
                 raise HTTPException(status_code=404, detail="Visual cluster not found")
+        for linked_visual_cluster in (locals().get("linked_subject_cluster"), locals().get("linked_object_cluster")):
+            if linked_visual_cluster is not None and linked_visual_cluster.first_camera_id is not None:
+                if str(linked_visual_cluster.first_camera_id) not in allowed_ids:
+                    raise HTTPException(status_code=404, detail="Visual cluster not found")
 
     already_applied = (
         body.decision == "confirm" and association.status == "established" and association.user_confirmed
@@ -913,6 +956,17 @@ async def decide_relationship_suggestion(
             f"{linked_subject.nickname or linked_subject.display_name if linked_subject else 'anonymous subject'} "
             f"and {linked_object.nickname or linked_object.display_name if linked_object else 'anonymous companion'}."
         )
+    if locals().get("linked_subject_cluster") is not None or locals().get("linked_object_cluster") is not None:
+        linked_subject_cluster = locals().get("linked_subject_cluster")
+        linked_object_cluster = locals().get("linked_object_cluster")
+        if linked_subject_cluster is not None:
+            association.subject_kind = f"{body.link_subject_cluster_kind}_cluster"
+            association.subject_key = str(linked_subject_cluster.id)
+        if linked_object_cluster is not None:
+            association.object_kind = f"{body.link_object_cluster_kind}_cluster"
+            association.object_key = str(linked_object_cluster.id)
+            association.object_label = None
+        association.review_note = "Linked co-occurrence endpoints to anonymous visual clusters after review."
     db.add(AssociationReviewEvent(
         association_id=association.id,
         reviewer_user_id=current_user.id,
@@ -924,7 +978,7 @@ async def decide_relationship_suggestion(
             "link_type": (
                 "spoken_name" if body.link_person_id is not None
                 else "spoken_name_cluster" if linked_cluster is not None
-                else "cooccurrence_endpoints" if linked_subject is not None or linked_object is not None
+                else "cooccurrence_endpoints" if linked_subject is not None or linked_object is not None or locals().get("linked_subject_cluster") is not None or locals().get("linked_object_cluster") is not None
                 else None
             ),
             "before": old_endpoint,
@@ -939,6 +993,10 @@ async def decide_relationship_suggestion(
             "linked_cluster_kind": body.link_cluster_kind,
             "linked_subject_person_id": str(body.link_subject_person_id) if body.link_subject_person_id else None,
             "linked_object_person_id": str(body.link_object_person_id) if body.link_object_person_id else None,
+            "linked_subject_cluster_id": str(body.link_subject_cluster_id) if body.link_subject_cluster_id else None,
+            "linked_subject_cluster_kind": body.link_subject_cluster_kind,
+            "linked_object_cluster_id": str(body.link_object_cluster_id) if body.link_object_cluster_id else None,
+            "linked_object_cluster_kind": body.link_object_cluster_kind,
         },
     ))
     await db.commit()
