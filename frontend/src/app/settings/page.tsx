@@ -1172,13 +1172,13 @@ export default function SettingsPage() {
                 <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${enabledCount > 0 ? "bg-amber-500" : "bg-muted-foreground/40"}`} />
                 <div>
                   <div className="text-sm font-medium flex items-center gap-2">
-                    Privacy Blur
-                    <span className="text-[10px] font-normal uppercase tracking-wider text-amber-500/80 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.5">safety</span>
+                    {t("settings.privacy_blur")}
+                    <span className="text-[10px] font-normal uppercase tracking-wider text-amber-500/80 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.5">{t("settings.safety")}</span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {enabledCount > 0
-                      ? `Blurring ${enabledCount} protected ${enabledCount === 1 ? "person" : "people"} on all recordings.`
-                      : "Hide specific faces and bodies from saved footage."}
+                      ? t(enabledCount === 1 ? "settings.privacy_blur_count" : "settings.privacy_blur_count_plural", { count: enabledCount })
+                      : t("settings.privacy_blur_help")}
                   </div>
                 </div>
               </div>
@@ -1508,7 +1508,7 @@ export default function SettingsPage() {
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowBlurModal(false)} />
           <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between mb-1">
-              <h2 className="text-lg font-semibold">Privacy Blur</h2>
+              <h2 className="text-lg font-semibold">{t("settings.privacy_blur")}</h2>
               <button onClick={() => setShowBlurModal(false)} className="text-muted-foreground hover:text-foreground text-lg leading-none">×</button>
             </div>
             <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
@@ -1516,11 +1516,11 @@ export default function SettingsPage() {
             </p>
 
             {blurLoading ? (
-              <div className="text-xs text-muted-foreground py-6 text-center">Loading people.</div>
+              <div className="text-xs text-muted-foreground py-6 text-center">{t("settings.privacy_blur_loading")}</div>
             ) : blurPersons.length === 0 ? (
               <div className="rounded-md border border-dashed border-border p-6 text-center">
-                <div className="text-sm font-medium mb-1">No people yet</div>
-                <div className="text-xs text-muted-foreground">Add someone on the People page and upload a reference photo, then come back here to protect them.</div>
+                <div className="text-sm font-medium mb-1">{t("settings.privacy_blur_no_people")}</div>
+                <div className="text-xs text-muted-foreground">{t("settings.privacy_blur_no_people_help")}</div>
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -1543,7 +1543,7 @@ export default function SettingsPage() {
                       onClick={() => togglePersonBlur(p.id, !p.privacy_blur)}
                       disabled={blurSavingId === p.id}
                       className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${p.privacy_blur ? "bg-amber-500" : "bg-muted"} ${blurSavingId === p.id ? "opacity-50" : ""}`}
-                      title={p.privacy_blur ? "Blur enabled" : "Blur disabled"}
+                      title={p.privacy_blur ? t("settings.privacy_blur_enabled") : t("settings.privacy_blur_disabled")}
                     >
                       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${p.privacy_blur ? "left-[1.375rem]" : "left-0.5"}`} />
                     </button>
@@ -1553,7 +1553,7 @@ export default function SettingsPage() {
             )}
 
             <div className="mt-5 pt-4 border-t border-border text-[11px] text-muted-foreground leading-relaxed">
-              <strong className="text-foreground">How it works.</strong> After a recording finishes, Nurby scans sampled frames for protected faces. Any match triggers a heavy Gaussian blur over the head and upper torso for the full window around that frame. The original unblurred clip is replaced, not kept alongside.
+              <strong className="text-foreground">{t("settings.privacy_blur_how")}</strong> {t("settings.privacy_blur_explanation")}
             </div>
 
             <div className="mt-4 flex justify-end">
