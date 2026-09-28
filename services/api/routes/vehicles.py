@@ -142,6 +142,26 @@ def _vehicle_ids_in(obs: Observation) -> set[str]:
     return out
 
 
+async def _vehicle_in_scope(
+    vehicle: Vehicle, user: User, db: AsyncSession, allowed=None,
+) -> bool:
+    """Authorize identity operations using visible evidence, not only first sighting."""
+    allowed = await allowed_camera_ids(user, db) if allowed is None else allowed
+    if allowed is ALL or vehicle.first_camera_id in allowed:
+        return True
+    visible_obs = (
+        await db.execute(
+            apply_camera_filter(
+                select(Observation).where(Observation.vehicle_detections.is_not(None)),
+                allowed,
+                Observation.camera_id,
+            )
+        )
+    ).scalars().all()
+    target = str(vehicle.id)
+    return any(target in _vehicle_ids_in(observation) for observation in visible_obs)
+
+
 @router.get("", response_model=list[VehicleResponse])
 async def list_vehicles(
     current_user: User = Depends(get_current_user),
@@ -290,7 +310,7 @@ async def get_vehicle(
     db: AsyncSession = Depends(get_db),
 ):
     v = await db.get(Vehicle, vehicle_id)
-    if v is None:
+    if v is None or not await _vehicle_in_scope(v, _current_user, db):
         raise HTTPException(status_code=404, detail="Vehicle not found")
     return v
 
@@ -304,6 +324,8 @@ async def update_vehicle(
 ):
     v = await db.get(Vehicle, vehicle_id)
     if v is None:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    if not await _vehicle_in_scope(v, current_user, db):
         raise HTTPException(status_code=404, detail="Vehicle not found")
     data = body.model_dump(exclude_unset=True)
     old_plate = v.license_plate
@@ -486,9 +508,10 @@ async def delete_vehicle(
     db: AsyncSession = Depends(get_db),
 ):
     v = await db.get(Vehicle, vehicle_id)
-    if v is not None:
-        await db.delete(v)
-        await db.commit()
+    if v is None or not await _vehicle_in_scope(v, _current_user, db):
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    await db.delete(v)
+    await db.commit()
     return None
 
 

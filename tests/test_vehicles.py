@@ -102,6 +102,36 @@ def test_vehicle_merge_scope_requires_every_affected_camera():
     assert _camera_set_is_scoped([], set()) is True
 
 
+def test_vehicle_scope_follows_visible_later_observation(monkeypatch):
+    from services.api.routes.vehicles import _vehicle_in_scope
+
+    visible = uuid.uuid4()
+    vehicle_id = uuid.uuid4()
+    vehicle = MagicMock(id=vehicle_id, first_camera_id=uuid.uuid4())
+    observation = MagicMock(
+        camera_id=visible,
+        vehicle_detections={"vehicles": [{"vehicle_id": str(vehicle_id)}]},
+    )
+
+    class Result:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [observation]
+
+    class DB:
+        async def execute(self, _stmt):
+            return Result()
+
+    async def allowed(_user, _db):
+        return {visible}
+
+    monkeypatch.setattr("services.api.routes.vehicles.allowed_camera_ids", allowed)
+    user = MagicMock(role="viewer", camera_access_mode="selected")
+    assert _run(_vehicle_in_scope(vehicle, user, DB())) is True
+
+
 # ── identify_vehicles ────────────────────────────────────────────────
 
 def _exec_none():
