@@ -7,6 +7,7 @@ import { GOALS, goalsForPlace, type Experience, type ExperiencePreferences, type
 import { DETECTION_GOALS, milestoneForGoal, type ActivationList, type ActivationView } from "@/lib/activation";
 import { DailyPriorities } from "@/components/DailyPriorities";
 import { Coachmark } from "@/components/Coachmark";
+import { translate } from "@/lib/i18n";
 
 interface Props {
   cameraCount: number;
@@ -31,7 +32,9 @@ const primary = "rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white h
 const DEFAULT_DRAFT: ExperiencePreferences = { version: 1, place: "home", goal: "entrance", focus: "daily" };
 
 export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClose, onChanged }: Props) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const locale = user?.locale || "en";
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const [experience, setExperience] = useState<Experience | null>(null);
   const [activation, setActivation] = useState<ActivationList | null>(null);
   const [loading, setLoading] = useState(true);
@@ -181,8 +184,8 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
 
         <header className="border-b border-border px-5 py-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold tracking-tight">Set up Nurby</h2>
-            <button onClick={onClose} aria-label="Close" className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
+            <h2 className="text-base font-semibold tracking-tight">{t("wizard.title")}</h2>
+            <button onClick={onClose} aria-label={t("wizard.close")} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
           </div>
           {showStepper && (
             <div className="mt-3">
@@ -192,7 +195,7 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
                 ))}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                Step {activeIndex + 1} of {DETECTION_STEPS.length} · {DETECTION_STEPS[activeIndex]?.label}
+                {t("wizard.step", { step: activeIndex + 1, total: DETECTION_STEPS.length })} · {DETECTION_STEPS[activeIndex]?.label}
               </p>
             </div>
           )}
@@ -200,7 +203,7 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
           {loading ? (
-            <p role="status" className="text-sm text-muted-foreground">Loading your setup…</p>
+            <p role="status" className="text-sm text-muted-foreground">{t("wizard.loading")}</p>
           ) : (
             <>
               {error && <p role="alert" className="mb-4 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
@@ -217,7 +220,7 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
                     disabled={busy}
                     className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
                   >
-                    {skipTarget[step] ? "Skip this step for now" : "Do this later"}
+                    {skipTarget[step] ? t("wizard.skip") : t("wizard.later")}
                   </button>
                 </div>
               )}
@@ -234,24 +237,24 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
     const selected = GOALS[draft.goal];
     return (
       <div>
-        <h3 className="text-lg font-semibold tracking-tight">What should Nurby watch for first?</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Pick one goal. You can add more later. Choosing a goal changes nothing on its own.</p>
+        <h3 className="text-lg font-semibold tracking-tight">{t("wizard.goal_title")}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{t("wizard.goal_help")}</p>
 
         <fieldset disabled={busy} className="mt-5">
-          <legend className="mb-2 text-sm font-medium">Where are you using Nurby?</legend>
+          <legend className="mb-2 text-sm font-medium">{t("wizard.place")}</legend>
           <div className="grid grid-cols-2 gap-2">
             {(["home", "business"] as const).map((place) => (
               <button key={place} aria-pressed={draft.place === place}
                 className={`${btn} ${draft.place === place ? "border-accent bg-accent/10" : ""}`}
                 onClick={() => changePlace(place)}>
-                {place === "home" ? "Home" : "Small business"}
+                {place === "home" ? t("wizard.home") : t("wizard.business")}
               </button>
             ))}
           </div>
         </fieldset>
 
         <fieldset disabled={busy} className="mt-5">
-          <legend className="mb-2 text-sm font-medium">Goal</legend>
+          <legend className="mb-2 text-sm font-medium">{t("wizard.goal")}</legend>
           <div className="space-y-2">
             {goalsForPlace(draft.place ?? "home").map((goal: Goal) => (
               <button key={goal} aria-pressed={draft.goal === goal}
@@ -264,7 +267,7 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
           </div>
         </fieldset>
 
-        <label className="mt-5 block text-sm font-medium" htmlFor="wiz-place-label">Name this place (optional)</label>
+        <label className="mt-5 block text-sm font-medium" htmlFor="wiz-place-label">{t("wizard.place_name")}</label>
         <input id="wiz-place-label" type="text" maxLength={80} disabled={busy}
           placeholder={draft.place === "business" ? "e.g. Front shop" : "e.g. Home"}
           className="mt-2 w-full rounded-lg border border-border bg-background p-2 text-sm"
@@ -273,7 +276,7 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
         <div className="mt-6 flex items-center gap-2">
           <button className={primary} disabled={busy}
             onClick={() => saveGoal({ ...draft, place: DETECTION_GOALS.has(draft.goal) ? draft.place : null }, DETECTION_GOALS.has(draft.goal) ? "rule" : "done")}>
-            {busy ? "Saving…" : "Continue"}
+            {busy ? "Saving…" : t("wizard.continue")}
           </button>
           <button className={btn} disabled={busy}
             onClick={() => saveGoal({ version: 1, place: null, goal: "explore", focus: "daily" }, "done")}>
@@ -291,12 +294,12 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
     const goal = prefs?.goal;
     return (
       <div>
-        <h3 className="text-lg font-semibold tracking-tight">Set up the rule</h3>
+        <h3 className="text-lg font-semibold tracking-tight">{t("wizard.rule_title")}</h3>
         {configured ? (
           <>
             <p className="mt-1 text-sm text-muted-foreground">Your rule is enabled and pointed at a camera. Next, prove it works with a real event.</p>
             <p className="mt-4 flex items-center gap-2 text-sm"><span className="text-accent">✓</span> Rule configured</p>
-            <StepNav onBack={() => goto("goal")} primaryLabel="Next: test it" onPrimary={() => goto("test")} />
+            <StepNav onBack={() => goto("goal")} backLabel={t("wizard.back")} primaryLabel="Next: test it" onPrimary={() => goto("test")} />
           </>
         ) : !draftId ? (
           <>
@@ -313,9 +316,9 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
             )}
             <div className="mt-5 flex items-center gap-2">
               <button className={primary} disabled={busy} onClick={() => call("/api/auth/me/activation/draft-rule", { goal }, "Could not create the draft rule.")}>
-                {busy ? "Creating…" : "Create the draft rule"}
+                {busy ? t("wizard.creating") : t("wizard.create")}
               </button>
-              <button className={btn} disabled={busy} onClick={() => goto("goal")}>Back</button>
+              <button className={btn} disabled={busy} onClick={() => goto("goal")}>{t("wizard.back")}</button>
             </div>
           </>
         ) : (
@@ -347,7 +350,7 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
     const synthetic = view?.steps.find((s) => s.key === "tested")?.synthetic;
     return (
       <div>
-        <h3 className="text-lg font-semibold tracking-tight">Trigger a real event</h3>
+        <h3 className="text-lg font-semibold tracking-tight">{t("wizard.test_title")}</h3>
         <p className="mt-1 text-sm text-muted-foreground">Walk in front of the camera. The alert should reach you within a few seconds. A saved rule alone doesn&apos;t prove this works.</p>
         <div className="mt-5 rounded-lg border border-border bg-muted/20 p-4 text-sm">
           {tested ? (
@@ -359,7 +362,7 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
           )}
         </div>
         {tested && synthetic && <p className="mt-3 text-xs text-amber-600">That was the demo camera, so it counts as a practice run. Trigger a real camera to verify.</p>}
-        <StepNav onBack={() => goto("rule")} primaryLabel="Next: confirm the clip" onPrimary={() => goto("confirm")} primaryDisabled={!tested} extra={
+        <StepNav onBack={() => goto("rule")} backLabel={t("wizard.back")} primaryLabel="Next: confirm the clip" onPrimary={() => goto("confirm")} primaryDisabled={!tested} extra={
           <button className={btn} disabled={busy} onClick={() => load()}>Check again</button>
         } />
       </div>
@@ -369,7 +372,7 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
   function renderConfirm() {
     return (
       <div>
-        <h3 className="text-lg font-semibold tracking-tight">Confirm the clip</h3>
+        <h3 className="text-lg font-semibold tracking-tight">{t("wizard.confirm_title")}</h3>
         <p className="mt-1 text-sm text-muted-foreground">Open the alert&apos;s clip and check it shows what you needed to see. Then confirm it below.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Link href="/timeline" className={btn}>Open the alert clip</Link>
@@ -428,14 +431,14 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
   }
 }
 
-function StepNav({ onBack, onPrimary, primaryLabel, primaryDisabled, extra }: {
-  onBack: () => void; onPrimary: () => void; primaryLabel: string; primaryDisabled?: boolean; extra?: React.ReactNode;
+function StepNav({ onBack, onPrimary, primaryLabel, backLabel, primaryDisabled, extra }: {
+  onBack: () => void; onPrimary: () => void; primaryLabel: string; backLabel: string; primaryDisabled?: boolean; extra?: React.ReactNode;
 }) {
   return (
     <div className="mt-6 flex items-center gap-2">
       <button className={primary} disabled={primaryDisabled} onClick={onPrimary}>{primaryLabel}</button>
       {extra}
-      <button className={btn} onClick={onBack}>Back</button>
+      <button className={btn} onClick={onBack}>{backLabel}</button>
     </div>
   );
 }
