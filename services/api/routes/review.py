@@ -991,6 +991,7 @@ async def get_relationship_suggestion(
             continue
         scoped = _reconcile_observation_sources(scoped, existing_observation_ids)
         transcript_id = scoped["transcript_id"]
+        transcript = None
         transcript_exists = True
         transcript_edited = False
         if transcript_id:
@@ -1012,9 +1013,26 @@ async def get_relationship_suggestion(
                 if scoped["observation_sources_available"] or row.journey_id or transcript_id
                 else "source_expired"
             )
+        transcript_excerpt = None
+        if transcript_exists and transcript is not None and scoped["fully_visible"]:
+            transcript_excerpt = {
+                "text": (transcript.text or "")[:600],
+                "truncated": len(transcript.text or "") > 600,
+                "started_at": transcript.started_at,
+                "ended_at": transcript.ended_at,
+                "provider": transcript.provider,
+                "model": transcript.model,
+                "confidence": transcript.confidence,
+                "speaker_source": transcript.speaker_source,
+                "speaker_confidence": transcript.speaker_confidence,
+                "mention_span": scoped["metadata"].get("mention_span"),
+                "name_span": scoped["metadata"].get("name_span"),
+                "word_timing": scoped["metadata"].get("word_timing"),
+            }
         evidence.append({
             **scoped,
             "source_status": source_status,
+            "transcript_excerpt": transcript_excerpt,
             "source_url": (
                 f"/api/transcripts/{transcript_id}" if transcript_id and transcript_exists
                 else f"/api/journeys/{row.journey_id}" if row.journey_id and scoped["fully_visible"]

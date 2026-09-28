@@ -53,6 +53,18 @@ type RelationshipDetail = {
     metadata: Record<string, unknown>;
     source_status: "available" | "source_changed" | "source_expired";
     source_url: string | null;
+    transcript_excerpt?: {
+      text: string;
+      truncated: boolean;
+      provider: string;
+      model: string;
+      confidence: number | null;
+      speaker_source: string | null;
+      speaker_confidence: number | null;
+      mention_span: string | null;
+      name_span: string | null;
+      word_timing: unknown;
+    } | null;
     transcript_audits?: {
       id: string;
       field: string;
@@ -401,6 +413,21 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                               )}
                               {typeof evidence.metadata.identity_kind === "string" && (
                                 <span className="ml-2 text-foreground/80">Source: {evidence.metadata.identity_kind}</span>
+                              )}
+                              {evidence.transcript_excerpt && (
+                                <div className="mt-1 rounded border border-border/60 bg-background/60 p-1.5 text-foreground/90">
+                                  <div className="mb-0.5 uppercase tracking-wide text-muted-foreground">{t("review.transcript_evidence")}</div>
+                                  <div>{evidence.transcript_excerpt.text}{evidence.transcript_excerpt.truncated ? "…" : ""}</div>
+                                  {evidence.transcript_excerpt.name_span && (
+                                    <div className="mt-0.5 text-muted-foreground">{t("review.mentioned_name")} {evidence.transcript_excerpt.name_span}</div>
+                                  )}
+                                  <div className="mt-0.5 text-muted-foreground">
+                                    {evidence.transcript_excerpt.provider} / {evidence.transcript_excerpt.model}
+                                    {typeof evidence.transcript_excerpt.confidence === "number"
+                                      ? ` · ${Math.round(evidence.transcript_excerpt.confidence * 100)}% ${t("review.transcript_confidence")}`
+                                      : ""}
+                                  </div>
+                                </div>
                               )}
                               {typeof evidence.metadata.visit_timing === "object" && evidence.metadata.visit_timing !== null &&
                                 typeof (evidence.metadata.visit_timing as { relation_hint?: unknown }).relation_hint === "string" && (

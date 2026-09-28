@@ -113,6 +113,9 @@ export const catalogs: Record<Locale, Record<string, string>> = {
     "review.decision_history": "Decision history",
     "review.source_changed": "Transcript edited; re-check this hypothesis",
     "review.source_expired": "Source no longer retained",
+    "review.transcript_evidence": "Transcript evidence",
+    "review.mentioned_name": "Mentioned name:",
+    "review.transcript_confidence": "transcript confidence",
   },
   es: {
     "settings.language": "Idioma",
@@ -224,6 +227,9 @@ export const catalogs: Record<Locale, Record<string, string>> = {
     "review.decision_history": "Historial de decisiones",
     "review.source_changed": "Transcripción editada; vuelve a revisar esta hipótesis",
     "review.source_expired": "La fuente ya no se conserva",
+    "review.transcript_evidence": "Evidencia de transcripción",
+    "review.mentioned_name": "Nombre mencionado:",
+    "review.transcript_confidence": "confianza de transcripción",
   },
 };
 
