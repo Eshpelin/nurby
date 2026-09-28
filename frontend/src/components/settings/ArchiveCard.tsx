@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 import {
   AddLocationForm,
   STORAGE_CLASSES,
@@ -49,18 +50,24 @@ function size(bytes: number): string {
   return `${Math.round(bytes / 1024 ** 2)} MB`;
 }
 
-function lifetime(days: number): string {
-  return ARCHIVE_LIFETIMES.find((l) => l.days === days)?.label.toLowerCase() ?? `${days} days`;
+function lifetime(days: number, t: (key: string, values?: Record<string, string | number>) => string): string {
+  const labels: Record<number, string> = {
+    0: t("archive.forever"), 90: "90 days", 180: t("archive.months"), 365: t("archive.year"),
+    730: t("archive.years", { count: 2 }), 1095: t("archive.years", { count: 3 }),
+  };
+  return labels[days] ?? t("archive.days", { count: days });
 }
 
-function localWindow(c: ArchiveCamera): string {
-  if (c.retention_mode === "time") return `${c.retention_days} days`;
+function localWindow(c: ArchiveCamera, t: (key: string, values?: Record<string, string | number>) => string): string {
+  if (c.retention_mode === "time") return t("archive.days", { count: c.retention_days });
   if (c.retention_mode === "size") return `up to ${c.retention_gb} GB`;
-  return "forever";
+  return t("archive.forever").toLowerCase();
 }
 
 export function ArchiveCard() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const [settings, setSettings] = useState<ArchiveSettings | null>(null);
   const [profiles, setProfiles] = useState<StorageProfile[]>([]);
   const [target, setTarget] = useState<string>("");
@@ -116,7 +123,7 @@ export function ArchiveCard() {
       });
       const d = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(d?.detail || "Could not save the archive settings.");
+        setError(d?.detail || t("archive.load_error"));
         return;
       }
       await load();
@@ -140,7 +147,7 @@ export function ArchiveCard() {
           }),
         ),
       );
-      if (results.some((r) => !r.ok)) setError("Some cameras could not be updated.");
+      if (results.some((r) => !r.ok)) setError(t("archive.some_cameras_failed"));
       await load();
     } finally {
       setApplying(false);
@@ -148,10 +155,10 @@ export function ArchiveCard() {
   };
 
   if (failed) {
-    return <p className="text-xs text-muted-foreground">Could not load archive settings.</p>;
+    return <p className="text-xs text-muted-foreground">{t("archive.load_error")}</p>;
   }
   if (!settings) {
-    return <p className="text-xs text-muted-foreground">Loading archive settings.</p>;
+    return <p className="text-xs text-muted-foreground">{t("archive.loading")}</p>;
   }
 
   const dirty = target !== (settings.profile_id ?? "") || days !== settings.retention_days;
@@ -165,26 +172,24 @@ export function ArchiveCard() {
   return (
     <div className="space-y-3">
       <div>
-        <div className="text-sm font-medium">Archive older recordings</div>
+        <div className="text-sm font-medium">{t("archive.title")}</div>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Keep recent footage on this machine and move older footage to a cloud bucket or
-          FTP server instead of deleting it.
+          {t("archive.help")}
         </p>
       </div>
 
       {settings.broken && (
         <div className="rounded-md px-3 py-2 text-xs bg-red-500/10 border border-red-500/20 text-red-400">
-          The archive destination is missing or disabled, so old recordings are being deleted
-          instead of archived. Pick a destination below.
+          {t("archive.broken")}
         </div>
       )}
 
       <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
         <label className="text-[11px] text-muted-foreground space-y-1">
-          <span>Move old recordings to</span>
+          <span>{t("archive.move_to")}</span>
           <select
             value={adding ? "__add" : target}
-            aria-label="Archive destination"
+            aria-label={t("archive.destination")}
             onChange={(e) => {
               if (e.target.value === "__add") {
                 setAdding(true);
@@ -195,26 +200,26 @@ export function ArchiveCard() {
             }}
             className="w-full text-xs bg-background border border-border rounded px-2 py-1.5 text-foreground"
           >
-            <option value="">Nowhere. Delete them when they age out</option>
+            <option value="">{t("archive.nowhere")}</option>
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} ({locationLabel(p)})
               </option>
             ))}
-            <option value="__add">+ Add an S3 bucket or FTP server</option>
+            <option value="__add">{t("archive.add_location")}</option>
           </select>
         </label>
         <label className="text-[11px] text-muted-foreground space-y-1">
-          <span>Keep in the archive</span>
+          <span>{t("archive.keep")}</span>
           <select
             value={days}
-            aria-label="Keep in the archive"
+            aria-label={t("archive.keep")}
             disabled={!target}
             onChange={(e) => setDays(Number(e.target.value))}
             className="w-full sm:w-32 text-xs bg-background border border-border rounded px-2 py-1.5 text-foreground disabled:opacity-50"
           >
             {ARCHIVE_LIFETIMES.map((l) => (
-              <option key={l.days} value={l.days}>{l.label}</option>
+              <option key={l.days} value={l.days}>{l.days === 0 ? t("archive.forever") : l.days === 180 ? t("archive.months") : l.days === 365 ? t("archive.year") : l.days === 730 ? t("archive.years", { count: 2 }) : l.days === 1095 ? t("archive.years", { count: 3 }) : `${l.days} days`}</option>
             ))}
           </select>
         </label>
@@ -241,7 +246,7 @@ export function ArchiveCard() {
             onClick={() => save(target, target ? days : 0)}
             className="px-3 py-1.5 text-xs rounded-md bg-accent text-black font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
           >
-            {saving ? "Saving." : target ? `Archive to ${chosen?.name ?? "this location"}` : "Turn off archiving"}
+            {saving ? t("archive.saving") : target ? t("archive.to", { name: chosen?.name ?? "this location" }) : t("archive.turn_off")}
           </button>
           <button
             type="button"
@@ -251,7 +256,7 @@ export function ArchiveCard() {
             }}
             className="text-[11px] text-muted-foreground hover:text-foreground"
           >
-            Cancel
+            {t("archive.cancel")}
           </button>
         </div>
       )}
@@ -260,25 +265,23 @@ export function ArchiveCard() {
       {settings.active && !dirty && (
         <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2 text-xs">
           <p className="text-foreground/90">
-            Recordings stay on this machine for each camera&apos;s retention period, then move to{" "}
-            <span className="font-medium">{settings.profile_name}</span>
-            {klass ? ` (${klass.label})` : ""} and are{" "}
-            {settings.retention_days ? `deleted after ${lifetime(settings.retention_days)}` : "kept forever"}.
+            {t("archive.keep_recent", {
+              profile: settings.profile_name ?? "",
+              storage_class: klass ? ` (${klass.label})` : "",
+              expiry: settings.retention_days ? t("archive.deleted_after", { lifetime: lifetime(settings.retention_days, t) }) : t("archive.kept_forever"),
+            })}
           </p>
           {needsRestore && (
             <p className="text-[11px] text-amber-300">
-              {klass?.label} needs a restore before playback. Opening an archived recording
-              requests one, and it plays a few hours later.
+              {t("archive.restore", { storage_class: klass?.label ?? "Archive" })}
             </p>
           )}
           <p className="text-[11px] text-muted-foreground">
-            {stats.uploaded} archived{stats.uploaded ? ` (${size(stats.uploaded_bytes)})` : ""}
-            {stats.pending ? ` · ${stats.pending} moving now` : ""}
+            {t("archive.stats", { uploaded: stats.uploaded, size: stats.uploaded ? ` (${size(stats.uploaded_bytes)})` : "", pending: stats.pending ? ` · ${stats.pending} moving now` : "" })}
           </p>
           {stats.failed > 0 && (
             <p className="text-[11px] text-red-400">
-              {stats.failed} failed to upload and are still only on this machine. They are
-              kept, not deleted. Check the destination with Test connection.
+              {t("archive.failed", { count: stats.failed })}
             </p>
           )}
           {archiving.length > 0 && (
@@ -288,15 +291,18 @@ export function ArchiveCard() {
                   <Link href={`/cameras/${c.id}`} className="hover:text-foreground">
                     {c.name}
                   </Link>
-                  : {localWindow(c)} here, then archived
+                  : {t("archive.camera_archived", { name: c.name, window: localWindow(c, t) })}
                 </li>
               ))}
             </ul>
           )}
           {keepsForever.length > 0 && (
             <p className="text-[11px] text-amber-300">
-              {keepsForever.length === 1 ? "1 camera keeps" : `${keepsForever.length} cameras keep`} everything
-              on this machine, so nothing from {keepsForever.length === 1 ? "it" : "them"} is archived:{" "}
+              {t("archive.keep_everything", {
+                count: keepsForever.length,
+                camera_word: keepsForever.length === 1 ? t("archive.camera") : t("archive.cameras"),
+                pronoun: keepsForever.length === 1 ? t("archive.it") : t("archive.them"),
+              })}{" "}
               {keepsForever.map((c, i) => (
                 <span key={c.id}>
                   {i > 0 ? ", " : ""}
@@ -310,18 +316,18 @@ export function ArchiveCard() {
           )}
           {keepsForever.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 text-[11px]">
-              <span className="text-muted-foreground">Keep</span>
+              <span className="text-muted-foreground">{t("archive.keep_on_machine")}</span>
               <select
                 value={localDays}
-                aria-label="Days to keep on this machine"
+                aria-label={t("archive.days", { count: localDays })}
                 onChange={(e) => setLocalDays(Number(e.target.value))}
                 className="text-xs bg-background border border-border rounded px-2 py-1"
               >
                 {[7, 14, 30, 60, 90].map((d) => (
-                  <option key={d} value={d}>{d} days</option>
+                  <option key={d} value={d}>{t("archive.days", { count: d })}</option>
                 ))}
               </select>
-              <span className="text-muted-foreground">on this machine, then archive</span>
+              <span className="text-muted-foreground">{t("archive.on_machine_then")}</span>
               <button
                 type="button"
                 disabled={applying}
@@ -329,8 +335,8 @@ export function ArchiveCard() {
                 className="px-2.5 py-1 rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
               >
                 {applying
-                  ? "Applying."
-                  : `Apply to ${keepsForever.length === 1 ? "this camera" : `these ${keepsForever.length} cameras`}`}
+                  ? t("archive.saving")
+                  : keepsForever.length === 1 ? t("archive.apply_one") : t("archive.apply_many", { count: keepsForever.length })}
               </button>
             </div>
           )}
