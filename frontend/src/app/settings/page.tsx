@@ -1282,7 +1282,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {extraSaved && <span className="text-[11px] text-green-400">Saved</span>}
+              {extraSaved && <span className="text-[11px] text-green-400">{t("settings.saved")}</span>}
               <svg
                 width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                 className={`text-muted-foreground transition-transform ${showAdvancedSettings ? "rotate-180" : ""}`}
@@ -1294,11 +1294,9 @@ export default function SettingsPage() {
           {showAdvancedSettings && <div className="px-4 pb-4 border-t border-border pt-3 space-y-3">
         {/* Cross-camera journey idle */}
         <div className="rounded-lg border border-border bg-card px-4 py-3.5">
-          <div className="text-sm font-medium mb-2">Journey idle window</div>
-          <p className="text-xs text-muted-foreground mb-3">
-            How long a subject can stay off-camera before a cross-camera
-            journey closes. Bigger properties want a longer window so a
-            walk between cameras doesn&apos;t end the trip prematurely.
+              <div className="text-sm font-medium mb-2">{t("settings.journey_idle_title")}</div>
+              <p className="text-xs text-muted-foreground mb-3">
+            {t("settings.journey_idle_help")}
           </p>
           <div className="flex items-center gap-3">
             <input
@@ -1313,18 +1311,16 @@ export default function SettingsPage() {
               className="flex-1 accent-accent"
             />
             <span className="font-mono text-xs text-muted-foreground w-16 text-right">
-              {Math.round(journeyIdleSeconds / 60)} min
+              {t("settings.minutes", { count: Math.round(journeyIdleSeconds / 60) })}
             </span>
           </div>
         </div>
 
         {/* Unknown-subject recurrence */}
         <div className="rounded-lg border border-border bg-card px-4 py-3.5">
-          <div className="text-sm font-medium mb-1">Recurring unknown subjects</div>
+          <div className="text-sm font-medium mb-1">{t("settings.unknown_recurrence_title")}</div>
           <p className="text-xs text-muted-foreground mb-3">
-            Add a review suggestion when the same unknown face or body cluster
-            appears on this many different days. Nurby never assigns a name
-            automatically; the evidence stays in the Review Center.
+            {t("settings.unknown_recurrence_help")}
           </p>
           <div className="flex items-center gap-3">
             <input
@@ -1337,10 +1333,10 @@ export default function SettingsPage() {
               onMouseUp={() => saveExtra({ unknown_recurrence_threshold_days: unknownRecurrenceThresholdDays })}
               onTouchEnd={() => saveExtra({ unknown_recurrence_threshold_days: unknownRecurrenceThresholdDays })}
               className="flex-1 accent-accent"
-              aria-label="Recurring unknown subject threshold in days"
+              aria-label={t("settings.unknown_recurrence_aria")}
             />
             <span className="font-mono text-xs text-muted-foreground w-16 text-right">
-              {unknownRecurrenceThresholdDays} {unknownRecurrenceThresholdDays === 1 ? "day" : "days"}
+              {t("settings.days", { count: unknownRecurrenceThresholdDays })}
             </span>
           </div>
         </div>
@@ -1373,12 +1369,9 @@ export default function SettingsPage() {
         {/* Idle AI enrichment */}
         <div className="rounded-lg border border-border bg-card px-4 py-3.5 flex items-start justify-between gap-4">
           <div>
-            <div className="text-sm font-medium mb-1">Idle AI enrichment</div>
+            <div className="text-sm font-medium mb-1">{t("settings.idle_enrichment_title")}</div>
             <p className="text-xs text-muted-foreground">
-              When the live feed is quiet, use the spare AI capacity to take a
-              second look at recent frames and write a richer summary. Every
-              pass is kept as immutable history. runs at lowest priority and
-              never competes with live analysis.
+              {t("settings.idle_enrichment_help")}
             </p>
           </div>
           <button
@@ -1390,7 +1383,7 @@ export default function SettingsPage() {
               try { await saveExtra({ vlm_enrichment_enabled: next }); }
               finally { setEnrichSaving(false); }
             }}
-            aria-label={enrichEnabled ? "Disable idle enrichment" : "Enable idle enrichment"}
+            aria-label={enrichEnabled ? t("settings.idle_enrichment_disable") : t("settings.idle_enrichment_enable")}
             className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${enrichEnabled ? "bg-accent" : "bg-muted"} ${enrichSaving ? "opacity-50" : ""}`}
           >
             <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${enrichEnabled ? "left-[1.375rem]" : "left-0.5"}`} />
