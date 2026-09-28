@@ -155,6 +155,19 @@ def evidence_balance(supporting: int, contradictory: int) -> tuple[float | None,
     return score, explanation
 
 
+def strongest_plate_confidence(plate_reads: list[dict] | None) -> float | None:
+    """Return the strongest source plate score without treating it as calibrated."""
+    scores: list[float] = []
+    for read in plate_reads or []:
+        try:
+            score = float(read.get("confidence"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if 0.0 <= score <= 1.0:
+            scores.append(score)
+    return max(scores) if scores else None
+
+
 def evidence_policy(
     supporting: int,
     contradictory: int,
@@ -519,6 +532,7 @@ async def record_pairing(
     observation_ids: list[str] | None = None,
     camera_ids: list[str] | None = None,
     evidence_metadata: dict | None = None,
+    evidence_score: float | None = None,
     evidence_kind: str = "association",
     evidence_explanation: str = "The subjects were observed in the same finalized visit episode.",
 ) -> EntityAssociation | None:
@@ -655,6 +669,7 @@ async def record_pairing(
             observation_ids=observation_ids or [],
             camera_ids=camera_ids or ([camera_id] if camera_id else []),
             observed_at=when,
+            score=evidence_score,
             explanation=evidence_explanation,
             evidence_metadata={
                 "vehicle_id": object_key,
@@ -809,6 +824,7 @@ async def process_journey(
                 "plate_reads": seen.get("plate_reads") or [],
                 "visit_timing": timing,
             },
+            evidence_score=strongest_plate_confidence(seen.get("plate_reads")),
             evidence_kind="vehicle_pairing",
             evidence_explanation="The subject and vehicle were observed in the same finalized visit episode.",
         )
@@ -838,6 +854,7 @@ async def process_journey(
                     "plate_reads": seen.get("plate_reads") or [],
                     "visit_timing": timing,
                 },
+                evidence_score=strongest_plate_confidence(seen.get("plate_reads")),
                 evidence_kind="vehicle_timing_relation",
                 evidence_explanation=(
                     "The subject and vehicle were observed entering or leaving together "

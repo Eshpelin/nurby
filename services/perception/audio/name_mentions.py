@@ -226,6 +226,7 @@ async def process_transcript_name_mentions(db: AsyncSession, transcript: Transcr
                     "model": transcript.model,
                     "parser_version": "name-context-v1",
                 },
+                evidence_score=transcript.confidence,
                 evidence_kind="audio_name_mention",
                 evidence_explanation="A transcript near this visual subject contained a context-supported name mention.",
             )

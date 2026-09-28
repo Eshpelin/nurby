@@ -20,13 +20,13 @@ from services.perception.associator import (
     cooccurrence_metrics,
     evidence_balance,
     evidence_policy,
-    evidence_policy,
     fold,
     journey_camera_ids,
     journeys_cooccur,
     local_buckets,
     next_status,
     should_archive_association,
+    strongest_plate_confidence,
     vehicle_visit_timing,
     vehicles_in,
 )
@@ -338,6 +338,18 @@ def test_vehicles_in_preserves_each_plate_read_as_evidence_metadata():
         "observation_id": observation_id,
         "camera_id": "camera-a",
     }]
+
+
+@pytest.mark.parametrize(
+    ("reads", "expected"),
+    [
+        ([{"confidence": 0.61}, {"confidence": 0.91}], 0.91),
+        ([{"confidence": None}, {"confidence": "unknown"}], None),
+        ([{"confidence": 1.2}, {"confidence": -0.1}], None),
+    ],
+)
+def test_strongest_plate_confidence_preserves_only_real_source_scores(reads, expected):
+    assert strongest_plate_confidence(reads) == expected
 
 
 def test_contradiction_provenance_explains_expected_edge_and_visit_window():
