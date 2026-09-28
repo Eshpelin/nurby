@@ -641,24 +641,12 @@ async def record_pairing(
     elif object_label and existing.object_label != object_label:
         existing.object_label = object_label
 
-    evidence_day_keys: set[str] | None = None
-    if existing.provenance and existing.provenance.get("individual_evidence_available"):
-        prior_days = (
-            await db.execute(
-                select(AssociationEvidence.observed_at)
-                .where(AssociationEvidence.association_id == existing.id)
-            )
-        ).scalars().all()
-        evidence_day_keys = {
-            local_buckets(observed_at, tz_name)[0]
-            for observed_at in prior_days
-            if observed_at is not None
-        }
-    if not fold(
-        existing, when, tz_name, min_days, camera_id=camera_id,
-        evidence_day_keys=evidence_day_keys,
-    ):
+    if existing.status in TERMINAL_STATUSES:
         return None
+
+    # Claim the immutable episode ledger before folding aggregate counters.
+    # If another worker wins the unique episode race, return without changing
+    # evidence_count/distinct_days/histograms for the replayed episode.
     if episode_key:
         evidence = AssociationEvidence(
             association_id=existing.id,
@@ -696,6 +684,25 @@ async def record_pairing(
             if prior_evidence:
                 return existing
             raise
+
+    evidence_day_keys: set[str] | None = None
+    if existing.provenance and existing.provenance.get("individual_evidence_available"):
+        prior_days = (
+            await db.execute(
+                select(AssociationEvidence.observed_at)
+                .where(AssociationEvidence.association_id == existing.id)
+            )
+        ).scalars().all()
+        evidence_day_keys = {
+            local_buckets(observed_at, tz_name)[0]
+            for observed_at in prior_days
+            if observed_at is not None
+        }
+    if not fold(
+        existing, when, tz_name, min_days, camera_id=camera_id,
+        evidence_day_keys=evidence_day_keys,
+    ):
+        return None
     return existing
 
 

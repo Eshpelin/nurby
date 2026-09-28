@@ -83,3 +83,69 @@ async def test_first_create_race_reuses_existing_episode_without_aborting_transa
     # The losing worker's transient candidate stayed inside the savepoint;
     # it did not leak a second row into the caller's transaction.
     assert len(db.added) == 1
+
+
+class _DuplicateEpisodeRaceDb:
+    """An existing edge loses the unique evidence-ledger race."""
+
+    def __init__(self, existing):
+        self.existing = existing
+        self.calls = 0
+        self.added = []
+
+    async def execute(self, statement):
+        self.calls += 1
+        if self.calls == 1:
+            return _Result(self.existing)
+        if self.calls == 2:
+            return _Result(None)
+        return _Result("evidence-1")
+
+    def begin_nested(self):
+        return _Savepoint()
+
+    def add(self, value):
+        self.added.append(value)
+
+    async def flush(self):
+        raise IntegrityError("duplicate evidence", None, Exception())
+
+
+@pytest.mark.asyncio
+async def test_duplicate_episode_race_does_not_increment_aggregate_counters():
+    existing = SimpleNamespace(
+        id="edge-1",
+        status="candidate",
+        object_label="Car",
+        provenance={"individual_evidence_available": True},
+        evidence_count=0,
+        supporting_evidence_count=0,
+        distinct_days=0,
+        last_day=None,
+        hour_histogram={},
+        dow_histogram={},
+        camera_histogram={},
+        first_seen_at=None,
+        last_seen_at=None,
+    )
+    db = _DuplicateEpisodeRaceDb(existing)
+
+    result = await record_pairing(
+        db,
+        subject_kind="person",
+        subject_key="person-1",
+        object_kind="vehicle",
+        object_key="vehicle-1",
+        object_label="Car",
+        relation="uses",
+        when=datetime(2026, 9, 27, 10, tzinfo=timezone.utc),
+        tz_name="UTC",
+        min_days=3,
+        camera_id="camera-a",
+        episode_key="journey-1",
+    )
+
+    assert result is existing
+    assert existing.evidence_count == 0
+    assert existing.supporting_evidence_count == 0
+    assert existing.distinct_days == 0
