@@ -110,6 +110,11 @@ export function NotificationsDropdown({
                     Open alert
                   </a>
                 )}
+                {!n.event_id && (
+                  <a href={`/events?review=${encodeURIComponent(n.id)}`} onClick={onClose} className="block mt-1 text-xs text-accent hover:underline">
+                    Open in Review Center
+                  </a>
+                )}
               </div>
               {!n.read && (
                 <button

@@ -89,6 +89,7 @@ type VisualCandidate = {
 
 type ReviewQueueProps = {
   onOpenEvent?: (eventId: string) => void;
+  focusId?: string | null;
 };
 
 const KIND_LABEL: Record<ReviewItem["kind"], string> = {
@@ -101,7 +102,7 @@ const KIND_LABEL: Record<ReviewItem["kind"], string> = {
   privacy_review: "Privacy review",
 };
 
-export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
+export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
   const { authFetch, token } = useAuth();
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,14 +128,20 @@ export function ReviewQueue({ onOpenEvent }: ReviewQueueProps) {
       // Alerts remain in the detailed history below. The queue currently
       // foregrounds the other reviewable sources so the same alert is not
       // rendered twice while the adapter is being rolled out.
-      setItems(body.items.filter((item) => item.kind !== "alert"));
+      const visible = body.items.filter((item) => item.kind !== "alert");
+      if (focusId) {
+        const focused = visible.find((item) => item.id === focusId || item.source_id === focusId);
+        setItems(focused ? [focused, ...visible.filter((item) => item.id !== focused.id)] : visible);
+      } else {
+        setItems(visible);
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Review queue unavailable");
     } finally {
       setLoading(false);
     }
-  }, [authFetch, showArchived]);
+  }, [authFetch, focusId, showArchived]);
 
   useEffect(() => {
     void load();

@@ -314,7 +314,10 @@ export default function EventsPage() {
           className="px-3 py-1.5 text-sm rounded-md border border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
         >Select page</button>
       </div>
-      <ReviewQueue onOpenEvent={(eventId) => setExpandedId(eventId)} />
+      <ReviewQueue
+        onOpenEvent={(eventId) => setExpandedId(eventId)}
+        focusId={searchParams.get("review")}
+      />
         <div className="mb-4"><ActivityFilterBar /></div>
 
       <div className="flex items-center gap-1 mb-3">
