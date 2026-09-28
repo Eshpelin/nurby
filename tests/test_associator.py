@@ -79,6 +79,18 @@ def test_body_clusters_are_cooccurrence_endpoints_but_not_vehicle_habit_subjects
     assert "body" in COOCCURRENCE_SUBJECT_KINDS
 
 
+@pytest.mark.asyncio
+async def test_body_journey_can_enter_cooccurrence_path():
+    j = SimpleNamespace(
+        subject_kind="body", subject_key="body-1",
+        started_at=None, last_seen_at=None, ended_at=None, segments=[],
+    )
+
+    # A body journey is accepted by the co-occurrence gate; the missing
+    # finalized time window then safely yields no edge.
+    assert await assoc_mod.process_cooccurrences(None, j) == 0
+
+
 def test_promotion_needs_days():
     e = _edge()
     fold(e, _at(1, 8), "UTC", min_days=3)

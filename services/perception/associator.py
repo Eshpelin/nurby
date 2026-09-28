@@ -832,7 +832,9 @@ async def process_cooccurrences(
     camera and overlap (or arrive within ``gap`` seconds); mere presence in a
     broad camera view at unrelated times is not enough.
     """
-    if journey.subject_kind not in ASSOCIABLE_SUBJECT_KINDS:
+    # Co-occurrence accepts anonymous body clusters as endpoints. The
+    # vehicle-habit path remains restricted to ASSOCIABLE_SUBJECT_KINDS.
+    if journey.subject_kind not in COOCCURRENCE_SUBJECT_KINDS:
         return 0
     start, end = journey_window(journey)
     if not (start and end):
