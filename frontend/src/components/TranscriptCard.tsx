@@ -44,6 +44,17 @@ const PersonIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+function speakerSourceLabel(source: string | null | undefined): string | null {
+  switch (source) {
+    case "video": return "Video attributed";
+    case "voice": return "Voiceprint hypothesis";
+    case "fused": return "Video + voice";
+    case "manual": return "Set manually";
+    case "ambiguous": return "Ambiguous speaker";
+    default: return null;
+  }
+}
+
 /**
  * Timeline card for a transcript event. Italic text, mic icon, optional
  * inline audio player when raw audio is on disk. Stays visually distinct
@@ -54,6 +65,7 @@ export function TranscriptCard(props: TranscriptCardProps) {
   const { token } = useAuth();
   const [showPlayer, setShowPlayer] = useState(false);
   const t = new Date(startedAt);
+  const sourceLabel = speakerSourceLabel(speakerSource);
 
   const audioUrl = audioCaptureId && token
     ? `/api/audio/${audioCaptureId}?token=${encodeURIComponent(token)}`
@@ -72,10 +84,21 @@ export function TranscriptCard(props: TranscriptCardProps) {
         {speakerName ? (
           <span
             className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-300"
-            title={speakerSource === "manual" ? "Speaker set by a household member" : "Attributed from who was on camera"}
+            title={speakerSource === "manual"
+              ? "Speaker set by a household member"
+              : speakerSource === "voice"
+              ? "Speaker matched by an opt-in voiceprint hypothesis"
+              : speakerSource === "fused"
+              ? "Speaker matched from video and voice evidence"
+              : "Attributed from who was on camera"}
           >
             <PersonIcon className="w-3 h-3" />
             {speakerName}
+          </span>
+        ) : null}
+        {sourceLabel && (!speakerName || speakerSource === "ambiguous") ? (
+          <span className="ml-auto rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300" title="Speaker attribution is evidence, not proof of identity">
+            {sourceLabel}
           </span>
         ) : null}
       </div>
