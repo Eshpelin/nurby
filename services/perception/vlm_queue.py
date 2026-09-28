@@ -26,7 +26,7 @@ import numpy as np
 from sqlalchemy import select
 
 from services.perception.vlm import VLMClient
-from services.perception.usage import estimate_vlm_usage
+from services.perception.usage import estimate_vlm_usage, record_vlm_usage
 from services.agent.budget import estimate_cost
 from services.search.embeddings import generate_embedding, get_embedding_provider
 from shared.config import settings
@@ -786,6 +786,11 @@ class VLMQueue:
                 refined_text=refined,
                 refiner_provider_name=provider.name,
                 detections=job.detections,
+                provider=provider,
+                camera_id=camera_id,
+                system_prompt=prompt.text,
+                user_prompt=merged_context,
+                native_usage=self._vlm.last_usage,
             )
             logger.info(
                 "refiner for camera %s completed in %.1fs. %s",
@@ -826,11 +831,42 @@ class VLMQueue:
         refined_text: str,
         refiner_provider_name: str,
         detections: list[dict],
+        provider: Provider | None = None,
+        camera_id: uuid.UUID | str | None = None,
+        system_prompt: str | None = None,
+        user_prompt: str | None = None,
+        native_usage: dict[str, int] | None = None,
     ) -> None:
         """Move primary's text into ``primary_vlm_description`` and put
         the refined text on the live ``vlm_description`` column.
         Regenerate the embedding because the description changed.
         """
+        if provider is not None:
+            actual_in = actual_out = actual_cost = None
+            if isinstance(native_usage, dict):
+                try:
+                    actual_in = int(native_usage.get("tokens_in", 0))
+                    actual_out = int(native_usage.get("tokens_out", 0))
+                    actual_cost = estimate_cost(
+                        getattr(provider, "kind", None),
+                        getattr(provider, "default_model", None),
+                        actual_in,
+                        actual_out,
+                    )
+                except (TypeError, ValueError):
+                    actual_in = actual_out = actual_cost = None
+            await record_vlm_usage(
+                provider,
+                workload="refiner",
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                output_text=refined_text,
+                camera_id=str(camera_id) if camera_id else None,
+                model=getattr(provider, "default_model", None),
+                actual_tokens_in=actual_in,
+                actual_tokens_out=actual_out,
+                actual_cost_cents=actual_cost,
+            )
         try:
             async with async_session() as db:
                 obs = await db.get(Observation, observation_id)
