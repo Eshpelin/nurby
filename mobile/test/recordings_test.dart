@@ -11,18 +11,27 @@ void main() {
       // mediaUrl replaces the query string when it adds the token. If
       // start and end were baked into the path they would be dropped and
       // the server would 422 on a missing required param.
-      final u = Uri.parse(repo.clipUrl('r1',
-          start: const Duration(seconds: 5), end: const Duration(seconds: 65)));
+      final u = Uri.parse(
+        repo.clipUrl(
+          'r1',
+          start: const Duration(seconds: 5),
+          end: const Duration(seconds: 65),
+        ),
+      );
       expect(u.path, '/api/recordings/r1/clip');
       expect(u.queryParameters['start'], '5');
       expect(u.queryParameters['end'], '65');
     });
 
     test('thumbnail and download point at their endpoints', () {
-      expect(Uri.parse(repo.thumbnailUrl('r1')).path,
-          '/api/recordings/r1/thumbnail');
-      expect(Uri.parse(repo.downloadUrl('r1')).path,
-          '/api/recordings/r1/download');
+      expect(
+        Uri.parse(repo.thumbnailUrl('r1')).path,
+        '/api/recordings/r1/thumbnail',
+      );
+      expect(
+        Uri.parse(repo.downloadUrl('r1')).path,
+        '/api/recordings/r1/download',
+      );
     });
 
     test('bulk bundle URL carries selected recording ids', () {
@@ -31,16 +40,21 @@ void main() {
       expect(u.queryParametersAll['recording_id'], ['r1', 'r2']);
     });
 
-    test('evidence bundle uses the evidence endpoint and preserves filters', () {
-      final u = Uri.parse(repo.bundleUrl(
-        ids: const ['r1'],
-        evidence: true,
-        filters: const {'camera_id': 'c1'},
-      ));
-      expect(u.path, '/api/recordings/evidence-bundle');
-      expect(u.queryParametersAll['recording_id'], ['r1']);
-      expect(u.queryParameters['camera_id'], 'c1');
-    });
+    test(
+      'evidence bundle uses the evidence endpoint and preserves filters',
+      () {
+        final u = Uri.parse(
+          repo.bundleUrl(
+            ids: const ['r1'],
+            evidence: true,
+            filters: const {'camera_id': 'c1'},
+          ),
+        );
+        expect(u.path, '/api/recordings/evidence-bundle');
+        expect(u.queryParametersAll['recording_id'], ['r1']);
+        expect(u.queryParameters['camera_id'], 'c1');
+      },
+    );
 
     test('bulk preview and delete responses preserve safety details', () {
       final preview = BulkPreview.fromJson({
@@ -76,6 +90,29 @@ void main() {
       });
       expect(result.failed, 1);
       expect(result.failedIds, ['e3']);
+    });
+  });
+
+  group('EventRepository urls', () {
+    final api = ApiClient(baseUrl: 'http://h');
+    final repo = EventRepository(api);
+
+    test('event export carries selected ids as repeated query parameters', () {
+      final u = Uri.parse(repo.exportUrl(ids: const ['e1', 'e2']));
+
+      expect(u.path, '/api/events/export.csv');
+      expect(u.queryParametersAll['event_id'], ['e1', 'e2']);
+      expect(u.queryParameters.containsKey('camera_id'), isFalse);
+    });
+
+    test('event export preserves filter-wide selection without ids', () {
+      final u = Uri.parse(
+        repo.exportUrl(filters: const {'camera_id': 'c1', 'acked': 'false'}),
+      );
+
+      expect(u.queryParametersAll['event_id'], isNull);
+      expect(u.queryParameters['camera_id'], 'c1');
+      expect(u.queryParameters['acked'], 'false');
     });
   });
 
