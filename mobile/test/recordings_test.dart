@@ -31,6 +31,17 @@ void main() {
       expect(u.queryParametersAll['recording_id'], ['r1', 'r2']);
     });
 
+    test('evidence bundle uses the evidence endpoint and preserves filters', () {
+      final u = Uri.parse(repo.bundleUrl(
+        ids: const ['r1'],
+        evidence: true,
+        filters: const {'camera_id': 'c1'},
+      ));
+      expect(u.path, '/api/recordings/evidence-bundle');
+      expect(u.queryParametersAll['recording_id'], ['r1']);
+      expect(u.queryParameters['camera_id'], 'c1');
+    });
+
     test('bulk preview and delete responses preserve safety details', () {
       final preview = BulkPreview.fromJson({
         'resource': 'recordings',

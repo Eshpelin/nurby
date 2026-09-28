@@ -391,16 +391,31 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
             TextButton(onPressed: _selectPage, child: const Text('Select page')),
             if (_hasMore && !_allMatching)
               TextButton(onPressed: _selectAllMatching, child: const Text('All matching')),
-            IconButton(
-              tooltip: 'Download originals',
-              onPressed: (_selectedIds.isEmpty && !_allMatching) ? null : () => _download(
-                    ref.read(recordingRepoProvider).bundleUrl(
-                      ids: _selectedIds.toList(),
-                      filters: _allMatching
-                          ? _selectionFilters().map((k, v) => MapEntry(k, '$v'))
-                          : null,
-                    )),
+            PopupMenuButton<bool>(
+              tooltip: 'Download selected recordings',
+              enabled: _selectedIds.isNotEmpty || _allMatching,
               icon: const Icon(Icons.download_outlined),
+              onSelected: _downloadBundle,
+              itemBuilder: (ctx) => const [
+                PopupMenuItem<bool>(
+                  value: false,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.video_file_outlined),
+                    title: Text('Original files'),
+                    subtitle: Text('Download the selected recordings'),
+                  ),
+                ),
+                PopupMenuItem<bool>(
+                  value: true,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.fact_check_outlined),
+                    title: Text('Evidence bundle'),
+                    subtitle: Text('Files with timestamps and evidence data'),
+                  ),
+                ),
+              ],
             ),
             IconButton(
               tooltip: 'Delete selected',
@@ -478,6 +493,17 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
   /// Hand the URL to the OS. Where the file ends up is the platform's
   /// business: on iOS that is Files, on Android the Downloads folder.
   /// The app deliberately does not try to own that.
+  Future<void> _downloadBundle(bool evidence) async {
+    final url = ref.read(recordingRepoProvider).bundleUrl(
+          ids: _selectedIds.toList(),
+          evidence: evidence,
+          filters: _allMatching
+              ? _selectionFilters().map((k, v) => MapEntry(k, '$v'))
+              : null,
+        );
+    await _download(url);
+  }
+
   Future<void> _download(String url) async {
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
