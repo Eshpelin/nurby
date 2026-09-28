@@ -40,6 +40,14 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _camera_set_is_scoped(camera_ids, allowed) -> bool:
+    """Return whether every affected camera is visible to the caller."""
+    if allowed is ALL:
+        return True
+    visible = {str(camera_id) for camera_id in (allowed or set())}
+    return {str(camera_id) for camera_id in camera_ids if camera_id} <= visible
+
+
 class VehicleResponse(BaseModel):
     id: uuid.UUID
     identity_key: str
@@ -371,13 +379,39 @@ async def merge_vehicle(
     if target is None or source is None:
         raise HTTPException(status_code=404, detail="Vehicle not found")
 
+    allowed = await allowed_camera_ids(_current_user, db)
+
     source_id = str(body.source_id)
     target_id_text = str(target_id)
     observations = (
         await db.execute(select(Observation).where(Observation.vehicle_detections.is_not(None)))
     ).scalars().all()
-    rewritten_count = 0
+    impacted_observations = []
     for observation in observations:
+        rewritten = _rewrite_vehicle_detection_ids(
+            observation.vehicle_detections or {}, source_id, target_id_text, target.identity_key
+        )
+        if rewritten != (observation.vehicle_detections or {}):
+            impacted_observations.append(observation)
+
+    # Merging rewrites historical observations and association evidence. A
+    # selected-camera administrator must not mutate rows whose provenance is
+    # outside their grant, even though the operation itself is admin-only.
+    impacted_camera_ids = {observation.camera_id for observation in impacted_observations}
+    all_vehicle_edges = (
+        await db.execute(
+            select(EntityAssociation)
+            .where(EntityAssociation.object_kind == "vehicle")
+            .where(EntityAssociation.object_key.in_([source_id, target_id_text]))
+        )
+    ).scalars().all()
+    for edge in all_vehicle_edges:
+        impacted_camera_ids.update((edge.camera_histogram or {}).keys())
+    if not _camera_set_is_scoped(impacted_camera_ids, allowed):
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    rewritten_count = 0
+    for observation in impacted_observations:
         detections = observation.vehicle_detections or {}
         rewritten = _rewrite_vehicle_detection_ids(
             detections, source_id, target_id_text, target.identity_key
@@ -386,13 +420,7 @@ async def merge_vehicle(
             observation.vehicle_detections = rewritten
             rewritten_count += 1
 
-    source_edges = (
-        await db.execute(
-            select(EntityAssociation)
-            .where(EntityAssociation.object_kind == "vehicle")
-            .where(EntityAssociation.object_key == source_id)
-        )
-    ).scalars().all()
+    source_edges = [edge for edge in all_vehicle_edges if edge.object_key == source_id]
     for source_edge in source_edges:
         target_edge = (
             await db.execute(

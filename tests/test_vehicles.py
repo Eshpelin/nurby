@@ -92,6 +92,16 @@ def test_vehicle_merge_rewrites_identity_without_changing_detection_metadata():
     assert payload["vehicles"][0]["vehicle_id"] == "source"
 
 
+def test_vehicle_merge_scope_requires_every_affected_camera():
+    from services.api.routes.vehicles import _camera_set_is_scoped
+    from shared.camera_access import ALL
+
+    assert _camera_set_is_scoped(["camera-a"], {"camera-a"}) is True
+    assert _camera_set_is_scoped(["camera-a", "camera-b"], {"camera-a"}) is False
+    assert _camera_set_is_scoped(["camera-a", "camera-b"], ALL) is True
+    assert _camera_set_is_scoped([], set()) is True
+
+
 # ── identify_vehicles ────────────────────────────────────────────────
 
 def _exec_none():
