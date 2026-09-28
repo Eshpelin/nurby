@@ -260,6 +260,11 @@ export default function VehiclesPage() {
                   <button onClick={() => remove(v.id)} className="mt-3 text-[11px] text-red-400 hover:text-red-300">
                     Delete this vehicle
                   </button>
+                  <MergeVehicleControl
+                    source={v}
+                    targets={vehicles.filter((candidate) => candidate.id !== v.id)}
+                    onMerged={() => { setExpanded(null); fetchAll(); }}
+                  />
                 </div>
               )}
             </div>
@@ -270,6 +275,96 @@ export default function VehiclesPage() {
       {editing && (
         <EditModal vehicle={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); fetchAll(); }} />
       )}
+    </div>
+  );
+}
+
+function MergeVehicleControl({
+  source,
+  targets,
+  onMerged,
+}: {
+  source: Vehicle;
+  targets: Vehicle[];
+  onMerged: () => void;
+}) {
+  const { authFetch } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [targetId, setTargetId] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  if (targets.length === 0) return null;
+
+  const merge = async () => {
+    if (!targetId) return;
+    const target = targets.find((item) => item.id === targetId);
+    if (!target) return;
+    const ok = await confirm({
+      title: "Merge these vehicle identities?",
+      body: `Historical sightings and association evidence for ${source.nickname || source.display_name} will be moved to ${target.nickname || target.display_name}. Captured plate/OCR metadata is preserved. This does not claim ownership or authorization.`,
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const response = await authFetch(`/api/vehicles/${targetId}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_id: source.id, note: note.trim() || null }),
+      });
+      if (!response.ok) {
+        throw new Error(response.status === 403 ? "Only an admin can merge vehicle identities." : "Merge failed");
+      }
+      toast.success("Vehicle identities merged; evidence preserved");
+      onMerged();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not merge vehicle identities.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-md border border-border/70 bg-card/50 p-2">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Duplicate identity</div>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        Use this when two auto-created vehicles are the same car. The target identity survives.
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <select
+          value={targetId}
+          onChange={(event) => setTargetId(event.target.value)}
+          disabled={busy}
+          aria-label={`Merge ${source.display_name} into vehicle`}
+          className="min-w-44 rounded border border-border bg-background px-2 py-1 text-[11px]"
+        >
+          <option value="">Select surviving vehicle…</option>
+          {targets.map((target) => (
+            <option key={target.id} value={target.id}>
+              {target.nickname || target.display_name}{target.license_plate ? ` · ${target.license_plate}` : ""}
+            </option>
+          ))}
+        </select>
+        <input
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          disabled={busy}
+          maxLength={500}
+          placeholder="Optional reason"
+          aria-label="Vehicle merge reason"
+          className="min-w-44 flex-1 rounded border border-border bg-background px-2 py-1 text-[11px]"
+        />
+        <button
+          type="button"
+          onClick={() => void merge()}
+          disabled={!targetId || busy}
+          className="rounded border border-amber-500/40 px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
+        >
+          {busy ? "Merging…" : "Merge duplicate"}
+        </button>
+      </div>
     </div>
   );
 }
