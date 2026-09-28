@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 interface MqttStatus {
   enabled: boolean;
@@ -23,6 +24,7 @@ interface MqttStatus {
 export default function MqttSection() {
   const { authFetch, user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
 
   const [enabled, setEnabled] = useState(false);
   const [host, setHost] = useState("");
@@ -146,29 +148,27 @@ export default function MqttSection() {
   if (loading) return null;
 
   const statusLine = status?.connected
-    ? `Connected${status.announced_entities ? ` · ${status.announced_entities} HA entities announced` : ""}`
+    ? `${t("settings.mqtt_connected")}${status.announced_entities ? t("settings.mqtt_entities", { count: status.announced_entities }) : ""}`
     : status?.last_error
-      ? `Not connected · ${status.last_error}`
+      ? t("settings.mqtt_not_connected", { error: status.last_error })
       : enabled
-        ? "Connecting…"
+        ? t("settings.mqtt_connecting")
         : null;
 
   return (
     <div className="rounded-lg border border-border bg-card px-4 py-3.5 space-y-3">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-sm font-medium mb-1">MQTT / Home Assistant</div>
+          <div className="text-sm font-medium mb-1">{t("settings.mqtt_title")}</div>
           <p className="text-xs text-muted-foreground">
-            Publish cameras, events, and snapshots to an MQTT broker. Home
-            Assistant discovers Nurby automatically — motion sensors,
-            detections, camera tiles, and control switches, no YAML.
+            {t("settings.mqtt_help")}
           </p>
         </div>
         <button
           type="button"
           disabled={!isAdmin || saving}
           onClick={toggle}
-          aria-label={enabled ? "Disable MQTT" : "Enable MQTT"}
+          aria-label={enabled ? t("settings.mqtt_disable") : t("settings.mqtt_enable")}
           className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${enabled ? "bg-accent" : "bg-muted"} ${saving || !isAdmin ? "opacity-50" : ""}`}
         >
           <span
@@ -180,7 +180,7 @@ export default function MqttSection() {
       {enabled && (
         <div className="space-y-2 border-t border-border pt-3">
           <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground w-20">Broker host</label>
+            <label className="text-xs text-muted-foreground w-20">{t("settings.mqtt_host")}</label>
             <input
               value={host}
               disabled={!isAdmin}
@@ -190,7 +190,7 @@ export default function MqttSection() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground w-20">Topic prefix</label>
+            <label className="text-xs text-muted-foreground w-20">{t("settings.mqtt_topic_prefix")}</label>
             <input
               value={topicPrefix}
               disabled={!isAdmin}
@@ -201,11 +201,11 @@ export default function MqttSection() {
           </div>
           {topicPrefix.trim() !== savedTopicPrefix && (
             <p className="text-[11px] text-amber-300">
-              Changing this prefix leaves retained MQTT topics under “{savedTopicPrefix}/” on the broker. Clean those topics up separately if you no longer need them.
+              {t("settings.mqtt_prefix_warning", { prefix: savedTopicPrefix })}
             </p>
           )}
           <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground w-20">Port</label>
+            <label className="text-xs text-muted-foreground w-20">{t("settings.mqtt_port")}</label>
             <input
               value={port}
               disabled={!isAdmin}
@@ -223,7 +223,7 @@ export default function MqttSection() {
             </label>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground w-20">Username</label>
+            <label className="text-xs text-muted-foreground w-20">{t("settings.mqtt_username")}</label>
             <input
               value={username}
               disabled={!isAdmin}
@@ -232,13 +232,13 @@ export default function MqttSection() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground w-20">Password</label>
+            <label className="text-xs text-muted-foreground w-20">{t("settings.mqtt_password")}</label>
             <input
               type="password"
               value={password}
               disabled={!isAdmin}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={status ? "•••••••• (saved)" : "optional"}
+              placeholder={status ? t("settings.mqtt_saved_password") : t("settings.mqtt_optional")}
               className="flex-1 text-xs font-mono bg-background border border-border rounded px-2 py-1"
             />
           </div>
@@ -249,7 +249,7 @@ export default function MqttSection() {
               disabled={!isAdmin}
               onChange={(e) => setDiscovery(e.target.checked)}
             />
-            Announce devices to Home Assistant (discovery)
+            {t("settings.mqtt_discovery")}
           </label>
 
           <div className="flex items-center gap-2 pt-1">
@@ -259,7 +259,7 @@ export default function MqttSection() {
               onClick={save}
               className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
             >
-              {saving ? "Saving…" : "Save"}
+              {saving ? t("settings.mqtt_saving") : t("settings.mqtt_save")}
             </button>
             <button
               type="button"
@@ -267,7 +267,7 @@ export default function MqttSection() {
               onClick={test}
               className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
             >
-              Test connection
+              {t("settings.mqtt_test")}
             </button>
           </div>
 
@@ -286,16 +286,16 @@ export default function MqttSection() {
           )}
           {!host.trim() && (
             <p className="text-[11px] text-muted-foreground">
-              No broker yet?{" "}
+              {t("settings.mqtt_no_broker")} {" "}
               <code className="bg-background px-1 rounded">
                 docker compose --profile mqtt up -d
               </code>{" "}
-              starts a bundled Mosquitto; use host{" "}
+              {t("settings.mqtt_broker_help")} {" "}
               <code className="bg-background px-1 rounded">mosquitto</code>.
             </p>
           )}
           {!isAdmin && (
-            <p className="text-[10px] text-muted-foreground">Only an admin can change these.</p>
+            <p className="text-[10px] text-muted-foreground">{t("settings.mqtt_admin_only")}</p>
           )}
         </div>
       )}
