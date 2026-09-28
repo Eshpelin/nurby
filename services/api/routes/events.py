@@ -705,6 +705,7 @@ async def create_event_note(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    await require_camera_in_scope(current_user, db, event.camera_id)
     text = (body.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Note text cannot be empty")
@@ -736,6 +737,10 @@ async def delete_event_note(
     note = await db.get(EventNote, note_id)
     if note is None or note.event_id != event_id:
         raise HTTPException(status_code=404, detail="Note not found")
+    event = await db.get(Event, event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    await require_camera_in_scope(current_user, db, event.camera_id)
     is_admin = (getattr(current_user, "role", "") or "").lower() == "admin"
     if note.author_user_id != current_user.id and not is_admin:
         raise HTTPException(status_code=403, detail="Only the author or an admin can delete this note")
@@ -752,6 +757,7 @@ async def acknowledge_event(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    await require_camera_in_scope(_current_user, db, event.camera_id)
     event.acknowledged_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(event)
@@ -778,6 +784,7 @@ async def ack_event(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    await require_camera_in_scope(current_user, db, event.camera_id)
     if event.acked_at is None:
         now = datetime.now(timezone.utc)
         event.acked_at = now
@@ -805,6 +812,7 @@ async def mute_event(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    await require_camera_in_scope(_current_user, db, event.camera_id)
     event.muted_until = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
     await db.commit()
     await db.refresh(event)

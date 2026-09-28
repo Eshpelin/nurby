@@ -33,9 +33,14 @@ def _user(role="viewer"):
     return SimpleNamespace(id=uuid.uuid4(), role=role, is_active=True)
 
 
+async def _allow_event_scope(*_args, **_kwargs):
+    return None
+
+
 def _event(**kw):
     defaults = dict(
         id=uuid.uuid4(),
+        camera_id=uuid.uuid4(),
         rule_id=uuid.uuid4(),
         acked_at=None,
         acked_by_user_id=None,
@@ -56,7 +61,8 @@ def _rule(**kw):
 # ── ack ───────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_ack_sets_triad_and_legacy_mirror():
+async def test_ack_sets_triad_and_legacy_mirror(monkeypatch):
+    monkeypatch.setattr(ev, "require_camera_in_scope", _allow_event_scope)
     user = _user()
     event = _event()
     db = FakeDB([event])
@@ -68,7 +74,8 @@ async def test_ack_sets_triad_and_legacy_mirror():
 
 
 @pytest.mark.asyncio
-async def test_ack_idempotent_preserves_first_acker():
+async def test_ack_idempotent_preserves_first_acker(monkeypatch):
+    monkeypatch.setattr(ev, "require_camera_in_scope", _allow_event_scope)
     first = _user()
     event = _event(
         acked_at=datetime.now(timezone.utc) - timedelta(minutes=5),
@@ -92,7 +99,8 @@ async def test_ack_404():
 # ── mute ──────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_mute_sets_muted_until():
+async def test_mute_sets_muted_until(monkeypatch):
+    monkeypatch.setattr(ev, "require_camera_in_scope", _allow_event_scope)
     event = _event()
     db = FakeDB([event])
     before = datetime.now(timezone.utc)
