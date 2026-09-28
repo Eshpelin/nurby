@@ -399,7 +399,7 @@ function PanelLinks({ links, onNavigate }: { links: LinkDef[]; onNavigate: () =>
           style={{ animationDelay: `${60 + i * 45}ms` }}
         >
           <span>
-            <span className="block text-sm text-foreground">{l.label}</span>
+            <span className="block text-sm text-foreground">{navLabel(l.label, getDisplayLocale())}</span>
             <span className="block text-[11px] text-muted-foreground">{l.hint}</span>
           </span>
           <span className="text-muted-foreground opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all">→</span>
