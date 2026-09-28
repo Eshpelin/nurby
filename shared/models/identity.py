@@ -319,6 +319,9 @@ class EntityAssociation(Base):
     contradictory_evidence_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     decision_explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Explicit provenance contract. Legacy rows are marked as aggregate-only
+    # rather than being presented as if their individual episodes existed.
+    provenance: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     distinct_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Last local calendar date folded in, as YYYY-MM-DD in household time.
     # Guards distinct_days against a second sighting the same day counting

@@ -565,6 +565,11 @@ async def record_pairing(
             status="candidate",
             evidence_count=0,
             distinct_days=0,
+            provenance={
+                "kind": "episode_ledger",
+                "version": 1,
+                "individual_evidence_available": True,
+            },
         )
         # The unique edge key protects first creation, but a duplicate-key
         # error would otherwise abort the caller's whole transaction. Keep

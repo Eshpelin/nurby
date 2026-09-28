@@ -526,6 +526,7 @@ async def list_review_items(
                     "contradictory_evidence_count": getattr(association, "contradictory_evidence_count", 0),
                     "confidence_score": association.confidence_score,
                     "decision_explanation": association.decision_explanation,
+                    "provenance": association.provenance,
                     "distinct_days": association.distinct_days,
                     "first_seen_at": association.first_seen_at,
                     "last_seen_at": association.last_seen_at,
@@ -626,6 +627,7 @@ async def list_entity_associations(
             "contradictory_evidence_count": getattr(row, "contradictory_evidence_count", 0),
             "confidence_score": row.confidence_score,
             "decision_explanation": row.decision_explanation,
+            "provenance": row.provenance,
             "evidence_policy": evidence_policy(
                 getattr(row, "supporting_evidence_count", row.evidence_count),
                 getattr(row, "contradictory_evidence_count", 0),
@@ -1002,6 +1004,7 @@ async def get_relationship_suggestion(
         "contradictory_evidence_count": getattr(association, "contradictory_evidence_count", 0),
         "confidence_score": association.confidence_score,
         "decision_explanation": association.decision_explanation,
+        "provenance": association.provenance,
         "evidence_policy": evidence_policy(
             getattr(association, "supporting_evidence_count", association.evidence_count),
             getattr(association, "contradictory_evidence_count", 0),

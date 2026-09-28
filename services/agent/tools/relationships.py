@@ -93,6 +93,7 @@ def _scoped_association_metrics(
             "supporting_evidence_count": 0,
             "contradictory_evidence_count": 0,
             "evidence_count_known": False,
+            "provenance": getattr(association, "provenance", None),
             "evidence_scope": "legacy_aggregate_unavailable",
         }
     days = {
@@ -112,6 +113,7 @@ def _scoped_association_metrics(
         "supporting_evidence_count": sum(row.role == "supporting" for row in visible),
         "contradictory_evidence_count": sum(row.role == "contradictory" for row in visible),
         "evidence_count_known": True,
+        "provenance": getattr(association, "provenance", None),
         "evidence_scope": "camera_scoped",
     }
 
@@ -271,6 +273,7 @@ async def get_associations(
             "supporting_evidence_count": scoped["supporting_evidence_count"],
             "contradictory_evidence_count": scoped["contradictory_evidence_count"],
             "evidence_count_known": scoped["evidence_count_known"],
+            "provenance": scoped.get("provenance"),
             "evidence_scope": scoped["evidence_scope"],
             "first_seen": r.first_seen_at.isoformat() if r.first_seen_at else None,
             "last_seen": r.last_seen_at.isoformat() if r.last_seen_at else None,
