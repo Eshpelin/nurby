@@ -128,6 +128,7 @@ export default function CameraConfigPage() {
   const [relationshipInferenceEnabled, setRelationshipInferenceEnabled] = useState(true);
   const [relationshipNotificationsEnabled, setRelationshipNotificationsEnabled] = useState(true);
   const [packageTrackingEnabled, setPackageTrackingEnabled] = useState(true);
+  const [packagePickupPolicy, setPackagePickupPolicy] = useState<"recognized_person" | "resident_only">("recognized_person");
   const [privacyZoneTargets, setPrivacyZoneTargets] = useState<string[]>([]);
   const [privacyZoneBlurStrength, setPrivacyZoneBlurStrength] = useState(55);
   const [yoloWorldPrompts, setYoloWorldPrompts] = useState<string[]>([]);
@@ -242,6 +243,7 @@ export default function CameraConfigPage() {
       setRelationshipInferenceEnabled(cam.relationship_inference_enabled ?? true);
       setRelationshipNotificationsEnabled(cam.relationship_notifications_enabled ?? true);
       setPackageTrackingEnabled(cam.package_tracking_enabled ?? true);
+      setPackagePickupPolicy(cam.package_pickup_policy ?? "recognized_person");
       setPrivacyZoneTargets(cam.privacy_zone_targets ?? []);
       setPrivacyZoneBlurStrength(cam.privacy_zone_blur_strength ?? 55);
       setYoloWorldPrompts((cam as Camera & { yolo_world_prompts?: string[] | null }).yolo_world_prompts ?? []);
@@ -424,6 +426,7 @@ export default function CameraConfigPage() {
         relationship_inference_enabled: relationshipInferenceEnabled,
         relationship_notifications_enabled: relationshipNotificationsEnabled,
         package_tracking_enabled: packageTrackingEnabled,
+        package_pickup_policy: packagePickupPolicy,
         privacy_zone_targets: privacyZoneTargets.length > 0 ? privacyZoneTargets : null,
         privacy_zone_blur_strength: privacyZoneBlurStrength,
         yolo_world_prompts: yoloWorldPrompts.length > 0 ? yoloWorldPrompts : null,
@@ -907,6 +910,18 @@ export default function CameraConfigPage() {
               {packageTrackingEnabled ? "Enabled" : "Disabled"}
             </button>
           </div>
+          <label className="mt-3 block text-xs text-muted-foreground">
+            Confirm pickup when the package disappears with
+            <select
+              value={packagePickupPolicy}
+              onChange={(event) => setPackagePickupPolicy(event.target.value as "recognized_person" | "resident_only")}
+              className="ml-1 rounded border border-border bg-background px-2 py-1 text-foreground"
+            >
+              <option value="recognized_person">any recognized person</option>
+              <option value="resident_only">a household member</option>
+            </select>
+            . Otherwise Nurby keeps it as an unexplained disappearance.
+          </label>
         </section>
 
         <RelationshipPrivacySection

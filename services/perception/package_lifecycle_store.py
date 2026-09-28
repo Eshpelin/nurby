@@ -15,7 +15,7 @@ from services.perception.package_lifecycle import (
     RemovalKind,
     advance,
 )
-from shared.models import Notification, PackageLifecycleRecord
+from shared.models import Notification, PackageLifecycleRecord, Person
 
 
 DEFAULT_TRACKING_KEY = "camera-default"
@@ -160,6 +160,7 @@ async def apply_package_observation(
     observed_at: datetime,
     object_detections: dict | None,
     person_detections: dict | None,
+    pickup_policy: str = "recognized_person",
 ) -> PackageLifecycleRecord | None:
     """Feed an observation into the active camera-local delivery candidate.
 
@@ -182,6 +183,15 @@ async def apply_package_observation(
     tracking_key = DEFAULT_TRACKING_KEY
     if rows and rows[0].state == PackageState.GONE.value and present:
         tracking_key = f"delivery-{observation_id}"
+    remover_person_id = None if present else _known_person_id(person_detections)
+    if not present and pickup_policy == "resident_only" and remover_person_id is not None:
+        resident = await db.scalar(
+            select(Person.id)
+            .where(Person.id == remover_person_id)
+            .where(Person.is_household_member.is_(True))
+        )
+        if resident is None:
+            remover_person_id = None
     return await apply_package_check(
         db,
         camera_id=camera_id,
@@ -190,6 +200,6 @@ async def apply_package_observation(
             observed_at=observed_at,
             present=present,
             observation_id=observation_id,
-            remover_person_id=None if present else _known_person_id(person_detections),
+            remover_person_id=remover_person_id,
         ),
     )

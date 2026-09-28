@@ -1369,6 +1369,7 @@ class PerceptionPipeline:
                             observed_at=timestamp,
                             object_detections=object_detections,
                             person_detections=person_detections,
+                            pickup_policy=getattr(camera, "package_pickup_policy", "recognized_person"),
                         )
                 except Exception:
                     logger.exception("package lifecycle update failed obs=%s", obs.id)

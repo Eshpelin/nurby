@@ -160,6 +160,9 @@ class Camera(Base):
     # cameras stay enabled by default; turning it off stops new lifecycle
     # records without deleting prior delivery history.
     package_tracking_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # recognized_person preserves the historical behavior; resident_only
+    # requires the matched Person to be marked as a household member.
+    package_pickup_policy: Mapped[str] = mapped_column(String(32), default="recognized_person", nullable=False)
     # Content-health detection (#212): flag a frozen/obscured/tampered view
     # that keeps the stream "online" while coverage is silently gone. Master
     # switch off by default; each detection path pre-armed so enabling the

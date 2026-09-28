@@ -21,6 +21,7 @@ interface Camera {
   relationship_inference_enabled?: boolean;
   relationship_notifications_enabled?: boolean;
   package_tracking_enabled?: boolean;
+  package_pickup_policy?: "recognized_person" | "resident_only";
   vlm_provider_id: string | null;
   vlm_prompt: string | null;
   vlm_interval: number;
