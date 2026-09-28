@@ -252,7 +252,11 @@ def test_patch_route_uses_require_admin():
     from shared.auth import require_admin
 
     router = cam_routes.router
-    patch_routes = [r for r in router.routes if "PATCH" in getattr(r, "methods", set())]
+    patch_routes = [
+        r for r in router.routes
+        if "PATCH" in getattr(r, "methods", set())
+        and getattr(r.endpoint, "__name__", "") == "update_camera"
+    ]
     assert patch_routes, "No PATCH route found on cameras router"
     patch_route = patch_routes[0]
 
