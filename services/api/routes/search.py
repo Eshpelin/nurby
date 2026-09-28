@@ -66,6 +66,8 @@ async def search(
 ):
     """Search observations with structured filters and text matching."""
     allowed = await allowed_camera_ids(_current_user, db)
+    if camera_id is not None:
+        await require_camera_in_scope(_current_user, db, camera_id, detail="Camera not found")
     results = await search_observations(
         db,
         allowed=allowed,
@@ -100,6 +102,8 @@ async def search_union(
     UI is responsible for ranking / interleaving by recency or distance.
     """
     allowed = await allowed_camera_ids(_current_user, db)
+    if camera_id is not None:
+        await require_camera_in_scope(_current_user, db, camera_id, detail="Camera not found")
     selected = {k.strip() for k in kinds.split(",") if k.strip()}
     results: list[dict] = []
     if "observations" in selected:
@@ -197,6 +201,7 @@ async def list_digests(
     stmt = apply_camera_filter(select(DigestEntry), allowed, DigestEntry.camera_id).order_by(DigestEntry.generated_at.desc())
 
     if camera_id is not None:
+        await require_camera_in_scope(_current_user, db, camera_id, detail="Camera not found")
         stmt = stmt.where(DigestEntry.camera_id == camera_id)
 
     stmt = stmt.offset(offset).limit(limit)
@@ -214,6 +219,7 @@ async def get_latest_digest(
     stmt = apply_camera_filter(select(DigestEntry), allowed, DigestEntry.camera_id).order_by(DigestEntry.generated_at.desc()).limit(1)
 
     if camera_id is not None:
+        await require_camera_in_scope(_current_user, db, camera_id, detail="Camera not found")
         stmt = stmt.where(DigestEntry.camera_id == camera_id)
 
     result = await db.execute(stmt)

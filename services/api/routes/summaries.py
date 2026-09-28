@@ -55,6 +55,8 @@ async def list_summaries(
     db: AsyncSession = Depends(get_db),
 ):
     allowed = await allowed_camera_ids(_user, db)
+    if camera_id is not None:
+        await require_camera_in_scope(_user, db, camera_id, detail="Camera not found")
     q = apply_camera_filter(select(Summary), allowed, Summary.camera_id).order_by(Summary.started_at.desc())
     if camera_id:
         q = q.where(Summary.camera_id == camera_id)

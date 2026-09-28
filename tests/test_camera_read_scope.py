@@ -121,6 +121,19 @@ def test_list_queries_scope_before_pagination(http, path, tables):
                 assert sql.index(predicate) < sql.index(" limit ")
 
 
+@pytest.mark.parametrize("path", [
+    "/search", "/search/union", "/timeline", "/summaries",
+    "/search/digests", "/search/digests/latest",
+])
+def test_foreign_camera_filter_is_rejected_before_read_query(http, path):
+    client, db = http
+    response = client.get(path, params={"camera_id": str(db.foreign_camera)})
+    assert response.status_code == 404, response.text
+    assert not any("from observations" in s or "from transcripts" in s or
+                   "from summaries" in s or "from digest_entries" in s
+                   for s in db.statements)
+
+
 def test_association_review_scopes_histogram_before_candidate_window(http):
     client, db = http
     response = client.get(f"/review/associations?camera_id={db.camera}")

@@ -21,7 +21,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
-from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter
+from shared.camera_access import ALL, allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
 from shared.models import Camera, HouseholdModeChange, Observation, Transcript, User
 
@@ -67,6 +67,8 @@ async def get_timeline(
     db: AsyncSession = Depends(get_db),
 ):
     allowed = await allowed_camera_ids(_user, db)
+    if camera_id is not None:
+        await require_camera_in_scope(_user, db, camera_id, detail="Camera not found")
     obs_q = apply_camera_filter(select(Observation), allowed, Observation.camera_id).order_by(Observation.started_at.desc())
     tx_q = select(Transcript).where(Transcript.filtered.is_(False)).order_by(
         Transcript.started_at.desc()
