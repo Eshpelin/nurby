@@ -8,12 +8,14 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { formatWith } from "@/lib/time";
-  process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
+import { translate } from "@/lib/i18n";
 import type { Camera, PersonActivityItem } from "@/app/dashboard-types";
 import { formatTime } from "@/app/dashboard-helpers";
 
 export function PersonActivityModal({ personId, personName, onClose, mode = "person" }: { personId: string; personName: string; onClose: () => void; mode?: "person" | "cluster" }) {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) =>
+    translate(user?.locale, key, values);
   const [items, setItems] = useState<PersonActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [cameraMap, setCameraMap] = useState<Record<string, string>>({});
@@ -79,32 +81,32 @@ export function PersonActivityModal({ personId, personName, onClose, mode = "per
             </div>
             <div className="min-w-0">
               <h2 className="text-base font-semibold truncate">{personName}</h2>
-              <div className="text-[11px] text-muted-foreground">Activity in the last 24 hours</div>
+              <div className="text-[11px] text-muted-foreground">{t("activity.last_24_hours")}</div>
             </div>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">&times;</button>
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">Loading activity.</div>
+          <div className="p-8 text-center text-sm text-muted-foreground">{t("activity.loading")}</div>
         ) : sessions.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-sm text-muted-foreground">No sightings of {personName} in the last 24 hours.</p>
+            <p className="text-sm text-muted-foreground">{t("activity.no_sightings", { name: personName })}</p>
           </div>
         ) : (
           <div className="overflow-y-auto scrollbar-thin">
             {/* Stats strip */}
             <div className="grid grid-cols-3 gap-2 px-5 py-3 border-b border-border bg-card/30">
               <div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Visits</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("activity.visits")}</div>
                 <div className="text-sm font-semibold">{sessions.length}</div>
               </div>
               <div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Events</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("activity.events")}</div>
                 <div className="text-sm font-semibold">{totalEvents}</div>
               </div>
               <div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Cameras</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("activity.cameras")}</div>
                 <div className="text-sm font-semibold">{totalCams}</div>
               </div>
             </div>
@@ -115,7 +117,7 @@ export function PersonActivityModal({ personId, personName, onClose, mode = "per
                 const start = new Date(s.start);
                 const end = new Date(s.end);
                 const durMin = Math.max(1, Math.round((end.getTime() - start.getTime()) / 60000));
-                const camNames = Array.from(s.cameras).map((id) => cameraMap[id] || "Unknown");
+                const camNames = Array.from(s.cameras).map((id) => cameraMap[id] || t("activity.unknown_camera"));
                 return (
                   <div key={i} className="rounded-lg border border-border bg-card/50 overflow-hidden">
                     <div className="px-3 py-2 border-b border-border/50 flex items-center justify-between gap-2">
@@ -129,7 +131,9 @@ export function PersonActivityModal({ personId, personName, onClose, mode = "per
                           {durMin} min \u00b7 {camNames.join(", ")}
                         </div>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">{s.items.length} event{s.items.length > 1 ? "s" : ""}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {s.items.length} {t(s.items.length === 1 ? "activity.event_one" : "activity.event_other")}
+                      </span>
                     </div>
                     <div className="divide-y divide-border/50">
                       {s.items.slice().reverse().map((it) => (
@@ -143,14 +147,14 @@ export function PersonActivityModal({ personId, personName, onClose, mode = "per
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <p className="text-xs leading-snug line-clamp-2">
-                                {it.vlm_description || "Motion detected"}
+                                {it.vlm_description || t("activity.motion_detected")}
                               </p>
                               <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0">
                                 {formatTime(it.started_at)}
                               </span>
                             </div>
                             <div className="flex flex-wrap gap-1 mt-1">
-                              <span className="px-1 py-0.5 text-[9px] rounded bg-muted/50 text-muted-foreground">{it.camera_name || cameraMap[it.camera_id] || "Unknown"}</span>
+                              <span className="px-1 py-0.5 text-[9px] rounded bg-muted/50 text-muted-foreground">{it.camera_name || cameraMap[it.camera_id] || t("activity.unknown_camera")}</span>
                               {(it.object_detections?.objects || []).slice(0, 3).map((d, di) => (
                                 <span key={di} className="px-1 py-0.5 text-[9px] rounded bg-blue-900/30 text-blue-300 border border-blue-800/40">{d.label}</span>
                               ))}
@@ -169,5 +173,3 @@ export function PersonActivityModal({ personId, personName, onClose, mode = "per
     </div>
   );
 }
-
-

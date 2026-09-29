@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 interface Turn {
   at: string | null;
@@ -31,22 +33,13 @@ export interface LiveConversationCardProps {
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-// Why a line was held back, in words a household would use.
-const REASON_TEXT: Record<string, string> = {
-  absence: "would have said nobody is home",
-  schedule: "would have given away a schedule",
-  access: "would have discussed keys or locks",
-  identity: "would have named someone",
-  impersonation: "would have implied a person was here",
-  never_say: "matched a phrase you blocked",
-  too_long: "was too long to say",
-  empty: "was empty",
-};
-
 export function LiveConversationCard({
   cameraNames = {},
   pollMs = 3000,
 }: LiveConversationCardProps) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) =>
+    translate(user?.locale, key, values);
   const [session, setSession] = useState<Session | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -115,8 +108,8 @@ export function LiveConversationCard({
       const body = await resp.json();
       setNote(
         body.took_over
-          ? "You have the conversation. The camera has stopped answering."
-          : `Already ended: ${body.reason ?? "unknown"}.`,
+          ? t("voice.took_over")
+          : t("voice.already_ended", { reason: body.reason ?? "unknown" }),
       );
       await poll();
     } finally {
@@ -137,7 +130,7 @@ export function LiveConversationCard({
       setNote(
         body.spoken
           ? null
-          : `Not played: ${body.reason ?? "unknown"}${body.detail ? ` (${body.detail})` : ""}`,
+          : `${t("voice.not_played", { reason: body.reason ?? "unknown" })}${body.detail ? ` (${body.detail})` : ""}`,
       );
       if (body.spoken) setDraft("");
       await poll();
@@ -160,7 +153,7 @@ export function LiveConversationCard({
             <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
           </span>
           <h2 className="text-sm font-medium text-amber-200">
-            Someone is at {cameraName}
+            {t("voice.someone_at", { camera: cameraName })}
           </h2>
         </div>
         {!session.handed_off && (
@@ -169,14 +162,14 @@ export function LiveConversationCard({
             disabled={busy}
             className="px-2.5 py-1 text-xs rounded-md border border-amber-500/50 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 disabled:opacity-50"
           >
-            Take over
+            {t("voice.take_over")}
           </button>
         )}
       </div>
 
       <div className="max-h-52 overflow-y-auto rounded-md border border-border bg-background/60 p-2 mb-3">
         {(session.transcript ?? []).length === 0 ? (
-          <p className="text-xs text-muted-foreground">Listening.</p>
+          <p className="text-xs text-muted-foreground">{t("voice.listening")}</p>
         ) : (
           <ul className="space-y-1.5">
             {(session.transcript ?? []).map((turn, i) => (
@@ -188,12 +181,12 @@ export function LiveConversationCard({
                       : "text-emerald-300/90"
                   }
                 >
-                  {turn.speaker === "visitor" ? "Visitor" : "Camera"}:
+                  {turn.speaker === "visitor" ? t("voice.visitor") : t("voice.camera")}:
                 </span>{" "}
                 <span className="text-foreground">{turn.text}</span>
                 {turn.status === "suppressed" && (
                   <span className="ml-1 text-[11px] text-amber-300/80">
-                    (held back)
+                    {t("voice.held_back")}
                   </span>
                 )}
               </li>
@@ -216,7 +209,7 @@ export function LiveConversationCard({
             if (e.key === "Enter") say();
           }}
           maxLength={240}
-          placeholder="Say something to them."
+          placeholder={t("voice.say_placeholder")}
           className="flex-1 px-3 py-1.5 rounded-md bg-background border border-border text-xs text-foreground"
         />
         <button
@@ -224,7 +217,7 @@ export function LiveConversationCard({
           disabled={busy || !draft.trim()}
           className="px-3 py-1.5 text-xs rounded-md bg-emerald-600/20 text-emerald-300 border border-emerald-600/40 hover:bg-emerald-600/30 disabled:opacity-50"
         >
-          Speak
+          {t("voice.speak")}
         </button>
       </div>
 
@@ -232,12 +225,17 @@ export function LiveConversationCard({
 
       {session.refusals.length > 0 && (
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Held back {session.refusals.length}{" "}
-          {session.refusals.length === 1 ? "reply" : "replies"}:{" "}
-          {session.refusals
-            .map((r) => REASON_TEXT[r.reason] ?? r.reason)
-            .join(", ")}
-          .
+          {t(
+            session.refusals.length === 1
+              ? "voice.held_back_replies_one"
+              : "voice.held_back_replies_other",
+            {
+              count: session.refusals.length,
+              reasons: session.refusals
+                .map((r) => t(`voice.reason.${r.reason}`))
+                .join(", "),
+            },
+          )}
         </p>
       )}
     </section>
