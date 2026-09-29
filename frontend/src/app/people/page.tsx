@@ -371,7 +371,7 @@ export default function PeoplePage() {
 
   const handleSubmit = async () => {
     if (!formName.trim()) {
-      setFormError("Name is required");
+      setFormError(t("people.name_required"));
       return;
     }
     setSubmitting(true);
@@ -400,7 +400,7 @@ export default function PeoplePage() {
 
       if (!res.ok) {
         const errBody = await res.json().catch(() => null);
-        setFormError(extractApiError(errBody, "Failed to save"));
+        setFormError(extractApiError(errBody, t("people.save_failed")));
         return;
       }
 
@@ -415,16 +415,16 @@ export default function PeoplePage() {
         });
         const faceBody = await faceRes.json().catch(() => null);
         if (!faceRes.ok) {
-          toast.error("Person saved, but the photo upload failed.");
+          toast.error(t("people.photo_upload_failed"));
         } else if (faceBody?.status === "photo_saved") {
           // Photo stored but no usable face found: tell the user
           // instead of silently never matching.
           toast.info(
             faceBody.message ||
-              "Photo saved but no face detected. Try a clearer photo."
+              t("people.photo_no_face")
           );
         } else {
-          toast.success("Face photo saved. Nurby will now recognize them.");
+          toast.success(t("people.photo_saved"));
         }
       }
 
@@ -432,7 +432,7 @@ export default function PeoplePage() {
       fetchPersons();
       fetchSummaries();
     } catch {
-      setFormError("Network error");
+      setFormError(t("people.network_error"));
     } finally {
       setSubmitting(false);
     }
@@ -441,8 +441,8 @@ export default function PeoplePage() {
   const handleDelete = async (id: string) => {
     const person = persons.find((p) => p.id === id);
     const ok = await confirm({
-      title: `Delete ${person?.display_name ? `"${person.display_name}"` : "this person"}?`,
-      body: "Their profile and sighting history will be removed. Faces may re-cluster as a new unknown person later. This cannot be undone.",
+      title: t("people.delete_title", { name: person?.display_name ? `"${person.display_name}"` : "this person" }),
+      body: t("people.delete_body"),
       danger: true,
     });
     if (!ok) return;
@@ -460,16 +460,16 @@ export default function PeoplePage() {
                   typeof (ref as PersonReference).name === "string",
               )
             : [];
-          setBlockedDelete({ personId: id, personName: person?.display_name || "this person", references });
+          setBlockedDelete({ personId: id, personName: person?.display_name || t("people.unknown_person"), references });
           return;
         }
         throw new Error();
       }
       fetchPersons();
       fetchSummaries();
-      toast.success("Person deleted");
+      toast.success(t("people.deleted"));
     } catch {
-      toast.error("Could not delete this person.");
+      toast.error(t("people.delete_failed"));
     }
   };
 
@@ -477,7 +477,7 @@ export default function PeoplePage() {
     const key = `${reference.kind}:${reference.id}`;
     const targetId = referenceTargetIds[key];
     if (action === "reassign" && !targetId) {
-      toast.error("Choose a replacement person first.");
+      toast.error(t("people.choose_replacement"));
       return;
     }
     setResolvingReference(key);
@@ -491,9 +491,9 @@ export default function PeoplePage() {
         ...current,
         references: current.references.filter((item) => `${item.kind}:${item.id}` !== key),
       });
-      toast.success(action === "reassign" ? "Reference reassigned." : "Reference disabled.");
+      toast.success(action === "reassign" ? t("people.reference_reassigned") : t("people.reference_disabled"));
     } catch {
-      toast.error("Could not resolve this reference. Refresh and try again.");
+      toast.error(t("people.resolve_failed"));
     } finally {
       setResolvingReference(null);
     }
@@ -511,14 +511,17 @@ export default function PeoplePage() {
       });
       if (!res.ok) throw new Error();
       toast.success(
-        `Merged "${mergePerson.display_name}" into "${target?.display_name ?? "the selected person"}".`
+        t("people.merged", {
+          source: mergePerson.display_name,
+          target: target?.display_name ?? t("people.select_person"),
+        })
       );
       setMergePerson(null);
       setMergeTargetId("");
       fetchPersons();
       fetchSummaries();
     } catch {
-      toast.error("Could not merge these people.");
+      toast.error(t("people.merge_failed"));
     } finally {
       setMerging(false);
     }
@@ -551,11 +554,11 @@ export default function PeoplePage() {
         },
       );
       if (!res.ok) throw new Error();
-      toast.success("Photo updated.");
+      toast.success(t("people.photo_updated"));
       setPhotoPickerPerson(null);
       fetchPersons();
     } catch {
-      toast.error("Could not set the photo.");
+      toast.error(t("people.photo_update_failed"));
     } finally {
       setSettingPhoto(false);
     }
@@ -597,10 +600,10 @@ export default function PeoplePage() {
           setNameMergeConfirm({ clusterId, existingName: detail.existing_name || name });
           return;
         }
-        toast.error(typeof detail === "string" ? detail : "That name is already taken.");
+        toast.error(typeof detail === "string" ? detail : t("people.name_taken"));
       }
     } catch {
-      toast.error("Could not name this person.");
+      toast.error(t("people.name_failed"));
     } finally {
       setNamingSubmitting(null);
     }
