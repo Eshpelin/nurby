@@ -15,11 +15,13 @@ import '../models/models.dart';
 import '../models/household_mode.dart';
 
 /// Overridden in main() after SharedPreferences loads.
-final sharedPrefsProvider =
-    Provider<SharedPreferences>((ref) => throw UnimplementedError());
+final sharedPrefsProvider = Provider<SharedPreferences>(
+  (ref) => throw UnimplementedError(),
+);
 
-final serverConfigProvider =
-    Provider<ServerConfig>((ref) => ServerConfig(ref.watch(sharedPrefsProvider)));
+final serverConfigProvider = Provider<ServerConfig>(
+  (ref) => ServerConfig(ref.watch(sharedPrefsProvider)),
+);
 
 /// App-level auth phase driving the router.
 enum AuthPhase { noServer, checking, loggedOut, needsSetup, loggedIn }
@@ -61,7 +63,8 @@ class AuthController extends Notifier<AppAuthState> {
       }
       final needsSetup = await AuthRepository(api).needsSetup();
       state = AppAuthState(
-          needsSetup ? AuthPhase.needsSetup : AuthPhase.loggedOut);
+        needsSetup ? AuthPhase.needsSetup : AuthPhase.loggedOut,
+      );
     } catch (_) {
       // Token invalid or server unreachable; fall back to login.
       await api.clearToken();
@@ -81,16 +84,22 @@ class AuthController extends Notifier<AppAuthState> {
   }
 
   Future<void> setup(String email, String displayName, String password) async {
-    final (token, user) =
-        await AuthRepository(api).setup(email, displayName, password);
+    final (token, user) = await AuthRepository(
+      api,
+    ).setup(email, displayName, password);
     await api.setToken(token);
     state = AppAuthState(AuthPhase.loggedIn, user: user);
   }
 
   Future<void> register(
-      String email, String displayName, String password, String invite) async {
-    final (token, user) =
-        await AuthRepository(api).register(email, displayName, password, invite);
+    String email,
+    String displayName,
+    String password,
+    String invite,
+  ) async {
+    final (token, user) = await AuthRepository(
+      api,
+    ).register(email, displayName, password, invite);
     await api.setToken(token);
     state = AppAuthState(AuthPhase.loggedIn, user: user);
   }
@@ -99,20 +108,26 @@ class AuthController extends Notifier<AppAuthState> {
   /// one-time login code, so one scan replaces typing an address and a
   /// password. Sets state directly instead of invalidating so the claim
   /// happens exactly once, with errors surfacing to the scan screen.
-  Future<void> pairWithQr(String url, String code) async {
+  Future<void> pairWithQr(List<String> urls, String code) async {
     final config = ref.read(serverConfigProvider);
-    await config.setBaseUrl(url);
-    _initApi(config.baseUrl!);
-    try {
-      final (token, user) = await AuthRepository(api).pairClaim(code);
-      await api.setToken(token);
-      state = AppAuthState(AuthPhase.loggedIn, user: user);
-    } catch (_) {
-      // Leave the saved server URL (it may well be right) but drop back
-      // to the login screen rather than a broken checking state.
-      state = const AppAuthState(AuthPhase.loggedOut);
-      rethrow;
+    Object? lastError;
+    for (final url in urls) {
+      try {
+        await config.setBaseUrl(url);
+        _initApi(config.baseUrl!);
+        final (token, user) = await AuthRepository(api).pairClaim(code);
+        await api.setToken(token);
+        state = AppAuthState(AuthPhase.loggedIn, user: user);
+        return;
+      } catch (error) {
+        // A LAN URL commonly fails when the phone is on cellular. Try the
+        // next advertised endpoint before showing a pairing error. The code
+        // remains single-use because only a successful claim consumes it.
+        lastError = error;
+      }
     }
+    state = const AppAuthState(AuthPhase.loggedOut);
+    throw lastError ?? StateError('No pairing server URL was provided');
   }
 
   Future<void> logout() async {
@@ -137,7 +152,8 @@ class AuthController extends Notifier<AppAuthState> {
 }
 
 final authProvider = NotifierProvider<AuthController, AppAuthState>(
-    AuthController.new);
+  AuthController.new,
+);
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   ref.watch(authProvider); // rebuild when auth/server changes
@@ -148,28 +164,30 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 
 /// Raw connectivity transitions from the OS.
 final connectivityProvider = StreamProvider<List<ConnectivityResult>>(
-    (ref) => Connectivity().onConnectivityChanged);
+  (ref) => Connectivity().onConnectivityChanged,
+);
 
 /// True when the device reports no network path at all. Before the first
 /// connectivity event arrives we assume online (optimistic default).
 final isOfflineProvider = Provider<bool>((ref) {
   final results = ref.watch(connectivityProvider).value;
   if (results == null) return false;
-  return results.isEmpty ||
-      results.every((r) => r == ConnectivityResult.none);
+  return results.isEmpty || results.every((r) => r == ConnectivityResult.none);
 });
 
 /// Queue of offline mutations, persisted in SharedPreferences.
-final outboxProvider =
-    Provider<MutationOutbox>((ref) => MutationOutbox(ref.watch(sharedPrefsProvider)));
+final outboxProvider = Provider<MutationOutbox>(
+  (ref) => MutationOutbox(ref.watch(sharedPrefsProvider)),
+);
 
 /// Drains the outbox when connectivity returns or the app resumes.
 /// Watched from NurbyApp so it lives as long as the app.
 final outboxDrainProvider = Provider<void>((ref) {
   Future<void> drainIfLoggedIn() async {
     if (ref.read(authProvider).phase != AuthPhase.loggedIn) return;
-    final replayed =
-        await ref.read(outboxProvider).drain(ref.read(apiClientProvider));
+    final replayed = await ref
+        .read(outboxProvider)
+        .drain(ref.read(apiClientProvider));
     if (replayed > 0) {
       // Queued acks/read-marks just landed: refresh badges and lists.
       ref.invalidate(unreviewedCountProvider);
@@ -189,69 +207,98 @@ final outboxDrainProvider = Provider<void>((ref) {
 });
 
 // ---- Repositories ----
-final cameraRepoProvider =
-    Provider((ref) => CameraRepository(ref.watch(apiClientProvider)));
-final observationRepoProvider =
-    Provider((ref) => ObservationRepository(ref.watch(apiClientProvider)));
-final timelineRepoProvider =
-    Provider((ref) => TimelineRepository(ref.watch(apiClientProvider)));
-final eventRepoProvider = Provider((ref) => EventRepository(
+final cameraRepoProvider = Provider(
+  (ref) => CameraRepository(ref.watch(apiClientProvider)),
+);
+final observationRepoProvider = Provider(
+  (ref) => ObservationRepository(ref.watch(apiClientProvider)),
+);
+final timelineRepoProvider = Provider(
+  (ref) => TimelineRepository(ref.watch(apiClientProvider)),
+);
+final eventRepoProvider = Provider(
+  (ref) => EventRepository(
     ref.watch(apiClientProvider),
-    outbox: ref.watch(outboxProvider)));
-final ruleRepoProvider =
-    Provider((ref) => RuleRepository(ref.watch(apiClientProvider)));
-final householdRepoProvider =
-    Provider((ref) => HouseholdRepository(ref.watch(apiClientProvider)));
+    outbox: ref.watch(outboxProvider),
+  ),
+);
+final ruleRepoProvider = Provider(
+  (ref) => RuleRepository(ref.watch(apiClientProvider)),
+);
+final householdRepoProvider = Provider(
+  (ref) => HouseholdRepository(ref.watch(apiClientProvider)),
+);
 
 /// Current household mode (#184). Invalidated after a change so the Home
 /// card, the rules list and anything else reading it move together.
 final householdModeProvider = FutureProvider<HouseholdModeState>(
-    (ref) => ref.watch(householdRepoProvider).mode());
+  (ref) => ref.watch(householdRepoProvider).mode(),
+);
 
-final personRepoProvider =
-    Provider((ref) => PersonRepository(ref.watch(apiClientProvider)));
-final searchRepoProvider =
-    Provider((ref) => SearchRepository(ref.watch(apiClientProvider)));
-final recordingRepoProvider =
-    Provider((ref) => RecordingRepository(ref.watch(apiClientProvider)));
-final shareRepoProvider =
-    Provider((ref) => ShareRepository(ref.watch(apiClientProvider)));
-final notificationRepoProvider = Provider((ref) => NotificationRepository(
+final personRepoProvider = Provider(
+  (ref) => PersonRepository(ref.watch(apiClientProvider)),
+);
+final searchRepoProvider = Provider(
+  (ref) => SearchRepository(ref.watch(apiClientProvider)),
+);
+final recordingRepoProvider = Provider(
+  (ref) => RecordingRepository(ref.watch(apiClientProvider)),
+);
+final shareRepoProvider = Provider(
+  (ref) => ShareRepository(ref.watch(apiClientProvider)),
+);
+final notificationRepoProvider = Provider(
+  (ref) => NotificationRepository(
     ref.watch(apiClientProvider),
-    outbox: ref.watch(outboxProvider)));
+    outbox: ref.watch(outboxProvider),
+  ),
+);
 final transcriptRepoProvider = Provider<TranscriptRepository>(
-    (ref) => TranscriptRepository(ref.watch(apiClientProvider)));
+  (ref) => TranscriptRepository(ref.watch(apiClientProvider)),
+);
 
 final bodyClusterRepoProvider = Provider<BodyClusterRepository>(
-    (ref) => BodyClusterRepository(ref.watch(apiClientProvider)));
+  (ref) => BodyClusterRepository(ref.watch(apiClientProvider)),
+);
 
-final reportRepoProvider =
-    Provider<ReportRepository>((ref) => ReportRepository(ref.watch(apiClientProvider)));
+final reportRepoProvider = Provider<ReportRepository>(
+  (ref) => ReportRepository(ref.watch(apiClientProvider)),
+);
 
 final guardianRepoProvider = Provider<GuardianRepository>(
-    (ref) => GuardianRepository(ref.watch(apiClientProvider)));
+  (ref) => GuardianRepository(ref.watch(apiClientProvider)),
+);
 
 final privacyZoneRepoProvider = Provider<PrivacyZoneRepository>(
-    (ref) => PrivacyZoneRepository(ref.watch(apiClientProvider)));
+  (ref) => PrivacyZoneRepository(ref.watch(apiClientProvider)),
+);
 
-final ptzRepoProvider =
-    Provider<PtzRepository>((ref) => PtzRepository(ref.watch(apiClientProvider)));
+final ptzRepoProvider = Provider<PtzRepository>(
+  (ref) => PtzRepository(ref.watch(apiClientProvider)),
+);
 
-final followRepoProvider =
-    Provider<FollowRepository>((ref) => FollowRepository(ref.watch(apiClientProvider)));
+final followRepoProvider = Provider<FollowRepository>(
+  (ref) => FollowRepository(ref.watch(apiClientProvider)),
+);
 
-final incidentRepoProvider =
-    Provider((ref) => IncidentRepository(ref.watch(apiClientProvider)));
-final journeyRepoProvider =
-    Provider((ref) => JourneyRepository(ref.watch(apiClientProvider)));
-final conversationRepoProvider =
-    Provider((ref) => ConversationRepository(ref.watch(apiClientProvider)));
-final digestRepoProvider =
-    Provider((ref) => DigestRepository(ref.watch(apiClientProvider)));
-final voiceRepoProvider =
-    Provider((ref) => VoiceRepository(ref.watch(apiClientProvider)));
-final systemRepoProvider =
-    Provider((ref) => SystemRepository(ref.watch(apiClientProvider)));
+final incidentRepoProvider = Provider(
+  (ref) => IncidentRepository(ref.watch(apiClientProvider)),
+);
+final journeyRepoProvider = Provider(
+  (ref) => JourneyRepository(ref.watch(apiClientProvider)),
+);
+final conversationRepoProvider = Provider(
+  (ref) => ConversationRepository(ref.watch(apiClientProvider)),
+);
+final digestRepoProvider = Provider(
+  (ref) => DigestRepository(ref.watch(apiClientProvider)),
+);
+final voiceRepoProvider = Provider(
+  (ref) => VoiceRepository(ref.watch(apiClientProvider)),
+);
+final systemRepoProvider = Provider(
+  (ref) => SystemRepository(ref.watch(apiClientProvider)),
+);
 
 // ---- Live websocket ----
 final wsClientProvider = Provider<NurbyWsClient?>((ref) {
@@ -281,34 +328,41 @@ final wsStatusProvider = StreamProvider<WsStatus>((ref) {
 final camerasProvider = FutureProvider<List<Camera>>((ref) async {
   final repo = ref.watch(cameraRepoProvider);
   // Refresh every 10s like the web dashboard.
-  final timer = Timer.periodic(const Duration(seconds: 10),
-      (_) => ref.invalidateSelf());
+  final timer = Timer.periodic(
+    const Duration(seconds: 10),
+    (_) => ref.invalidateSelf(),
+  );
   ref.onDispose(timer.cancel);
   return repo.list();
 });
 
 final unreviewedCountProvider = FutureProvider<int>((ref) async {
-  ref.watch(wsMessagesProvider.select((m) {
-    final type = m.value?['type'];
-    return type == 'event' || type == 'event_fired' || type == 'notification';
-  }));
+  ref.watch(
+    wsMessagesProvider.select((m) {
+      final type = m.value?['type'];
+      return type == 'event' || type == 'event_fired' || type == 'notification';
+    }),
+  );
   return ref.watch(eventRepoProvider).unreviewedCount();
 });
 
 final unreadNotificationsProvider = FutureProvider<int>((ref) async {
-  ref.watch(wsMessagesProvider.select(
-      (m) => m.value?['type'] == 'notification'));
+  ref.watch(
+    wsMessagesProvider.select((m) => m.value?['type'] == 'notification'),
+  );
   return ref.watch(notificationRepoProvider).unreadCount();
 });
 
 // ---- Push notifications ----
 
 /// Overridden in main() with the initialized instance.
-final notificationServiceProvider =
-    Provider<NotificationService>((ref) => NotificationService());
+final notificationServiceProvider = Provider<NotificationService>(
+  (ref) => NotificationService(),
+);
 
-final pushManagerProvider =
-    Provider<PushManager>((ref) => PushManager(ref.watch(notificationServiceProvider)));
+final pushManagerProvider = Provider<PushManager>(
+  (ref) => PushManager(ref.watch(notificationServiceProvider)),
+);
 
 /// Tracks whether the app is foregrounded so the WS bridge only fires local
 /// notifications when the user is not looking at the app.
@@ -329,7 +383,8 @@ class AppLifecycleNotifier extends Notifier<AppLifecycleState>
 
 final appLifecycleProvider =
     NotifierProvider<AppLifecycleNotifier, AppLifecycleState>(
-        AppLifecycleNotifier.new);
+      AppLifecycleNotifier.new,
+    );
 
 /// While the socket is still alive but the app is backgrounded (paused,
 /// inactive, app switcher), surface alert-ish WS messages as local

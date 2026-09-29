@@ -36,11 +36,19 @@ class _QrPairScreenState extends ConsumerState<QrPairScreen> {
     final raw = capture.barcodes.firstOrNull?.rawValue;
     if (raw == null) return;
 
-    final String url;
+    final List<String> urls;
     final String code;
     try {
       final payload = jsonDecode(raw) as Map<String, dynamic>;
-      url = payload['url'] as String;
+      final advertised = payload['urls'];
+      urls =
+          advertised is List
+              ? advertised
+                  .whereType<String>()
+                  .where((u) => u.trim().isNotEmpty)
+                  .toList()
+              : [payload['url'] as String];
+      if (urls.isEmpty) throw const FormatException('missing server URL');
       code = payload['code'] as String;
     } catch (_) {
       setState(() => _error = 'Not a Nurby pairing code');
@@ -52,7 +60,7 @@ class _QrPairScreenState extends ConsumerState<QrPairScreen> {
       _error = null;
     });
     try {
-      await ref.read(authProvider.notifier).pairWithQr(url, code);
+      await ref.read(authProvider.notifier).pairWithQr(urls, code);
       // Router redirect takes over once the auth phase flips to loggedIn;
       // pop so the scanner is not left on the back stack.
       if (mounted) Navigator.of(context).maybePop();
@@ -60,7 +68,8 @@ class _QrPairScreenState extends ConsumerState<QrPairScreen> {
       if (mounted) {
         setState(() {
           _claiming = false;
-          _error = 'Pairing failed. The code may have expired; '
+          _error =
+              'Pairing failed. The code may have expired; '
               'generate a new one and try again.';
         });
       }
@@ -105,14 +114,18 @@ class _QrPairScreenState extends ConsumerState<QrPairScreen> {
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.black54,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(_error!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: NurbyColors.danger)),
+                    child: Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: NurbyColors.danger),
+                    ),
                   ),
                 ],
               ],

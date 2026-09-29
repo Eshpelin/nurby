@@ -32,6 +32,10 @@ function guessServerUrl(fromApi: string | null): string {
   return window.location.origin;
 }
 
+function uniqueServerUrls(primary: string, fallback: string): string[] {
+  return [...new Set([primary, fallback].map((url) => url.replace(/\/+$/, "")).filter(Boolean))];
+}
+
 /** Settings card that pairs the mobile app by QR code: fetches a
  * short-lived single-use code from /api/auth/pair/start and renders it
  * with the server URL. Scanning it logs the phone in as this user. */
@@ -81,7 +85,14 @@ export function PairMobileCard() {
   const expired = pair !== null && secondsLeft === 0;
   const payload =
     pair && serverUrl
-      ? JSON.stringify({ v: 1, url: serverUrl.replace(/\/+$/, ""), code: pair.code })
+      ? JSON.stringify({
+          v: 1,
+          url: serverUrl.replace(/\/+$/, ""),
+          // Keep `url` for older mobile builds, while newer builds can try
+          // the LAN address first and the configured public address second.
+          urls: uniqueServerUrls(guessServerUrl(null), serverUrl),
+          code: pair.code,
+        })
       : null;
 
   return (
