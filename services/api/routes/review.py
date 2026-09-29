@@ -214,11 +214,32 @@ def _evidence_availability(evidence: list[dict]) -> str:
     statuses = [str(item.get("source_status")) for item in evidence]
     if not statuses:
         return "none"
+    if all(status == "sensitive_restricted" for status in statuses):
+        return "restricted"
     if all(status == "source_expired" for status in statuses):
         return "expired"
-    if any(status in {"source_expired", "source_changed"} for status in statuses):
+    if any(status in {"source_expired", "source_changed", "sensitive_restricted"} for status in statuses):
         return "partial"
     return "available"
+
+
+def _restrict_sensitive_evidence(scoped: dict) -> dict:
+    """Remove transcript/audio/plate payloads for non-admin reviewers.
+
+    Camera ACL answers *where* evidence came from; this separate role gate
+    answers *how sensitive* the evidence is. Keep the episode and its neutral
+    timing/explanation visible, but make the restricted state explicit so the
+    UI never mistakes missing sensitive material for an empty source.
+    """
+    metadata = dict(scoped.get("metadata") or {})
+    for key in ("transcript_id", "plate_reads", "audio_path", "raw_audio_url"):
+        metadata.pop(key, None)
+    return {
+        **scoped,
+        "metadata": metadata,
+        "transcript_id": None,
+        "sensitive_evidence_restricted": True,
+    }
 
 
 def _review_visible(camera_id):
@@ -1128,6 +1149,7 @@ async def get_relationship_suggestion(
             raise HTTPException(status_code=404, detail="Relationship suggestion not found")
         allowed = {camera_id}
     allowed_ids = {str(camera_id) for camera_id in allowed} if allowed is not ALL else None
+    sensitive_allowed = (getattr(current_user, "role", "") or "").lower() == "admin"
     association_cameras = {str(camera_id) for camera_id in (association.camera_histogram or {})}
     if allowed_ids is not None and not association_cameras.intersection(allowed_ids):
         raise HTTPException(status_code=404, detail="Relationship suggestion not found")
@@ -1146,6 +1168,8 @@ async def get_relationship_suggestion(
     for row in rows:
         scoped = _scoped_evidence(row, allowed_ids)
         if scoped is not None:
+            if not sensitive_allowed:
+                scoped = _restrict_sensitive_evidence(scoped)
             visible_rows.append((row, scoped))
 
     observation_ids: set[uuid.UUID] = set()
@@ -1170,7 +1194,7 @@ async def get_relationship_suggestion(
         transcript = None
         transcript_exists = True
         transcript_edited = False
-        if transcript_id:
+        if transcript_id and sensitive_allowed:
             try:
                 transcript_query = select(Transcript).where(
                     Transcript.id == uuid.UUID(str(transcript_id))
@@ -1190,7 +1214,9 @@ async def get_relationship_suggestion(
                 transcript_edited = bool(transcript and transcript.text_edited)
             except (TypeError, ValueError):
                 transcript_exists = False
-        if transcript_id and not transcript_exists:
+        if not sensitive_allowed and scoped.get("sensitive_evidence_restricted"):
+            source_status = "sensitive_restricted"
+        elif transcript_id and not transcript_exists:
             source_status = "source_expired"
         elif transcript_id and transcript_edited:
             source_status = "source_changed"
@@ -1294,6 +1320,7 @@ async def get_relationship_suggestion(
         "last_seen_at": association.last_seen_at,
         "archived_at": association.archived_at,
         "evidence_availability": evidence_availability,
+        "sensitive_evidence_restricted": not sensitive_allowed,
         "review_events": [
             {
                 "id": str(event.id),

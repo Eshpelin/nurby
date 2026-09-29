@@ -26,7 +26,8 @@ type ReviewItem = {
 type RelationshipDetail = {
   evidence_count: number;
   distinct_days: number;
-  evidence_availability?: "available" | "partial" | "expired" | "none";
+  evidence_availability?: "available" | "partial" | "expired" | "none" | "restricted";
+  sensitive_evidence_restricted?: boolean;
   supporting_evidence_count?: number;
   contradictory_evidence_count?: number;
   confidence_score?: number | null;
@@ -429,6 +430,8 @@ export function ReviewQueue({ onOpenEvent, focusId, cameraId }: ReviewQueueProps
                               ? t("review.evidence_none")
                               : relationshipDetails[item.id].evidence_availability === "expired"
                               ? t("review.evidence_expired")
+                              : relationshipDetails[item.id].evidence_availability === "restricted"
+                              ? t("review.evidence_restricted")
                               : t("review.evidence_partial")}
                           </p>
                         )}

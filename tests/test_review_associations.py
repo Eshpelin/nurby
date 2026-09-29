@@ -4,7 +4,7 @@ from uuid import uuid4
 from services.api.routes.review import _scoped_evidence
 from services.api.routes.review import _association_visible
 from services.api.routes.review import _scoped_camera_histogram
-from services.api.routes.review import _evidence_availability, _supporting_evidence_count
+from services.api.routes.review import _evidence_availability, _restrict_sensitive_evidence, _supporting_evidence_count
 from services.api.routes.review import _scoped_observation_source_query
 from sqlalchemy.dialects import postgresql
 
@@ -14,6 +14,24 @@ def test_evidence_availability_distinguishes_expired_and_partial_sources():
     assert _evidence_availability([{"source_status": "source_expired"}]) == "expired"
     assert _evidence_availability([{"source_status": "available"}, {"source_status": "source_changed"}]) == "partial"
     assert _evidence_availability([{"source_status": "available"}]) == "available"
+
+
+def test_sensitive_review_evidence_is_redacted_without_hiding_the_episode():
+    scoped = {
+        "metadata": {
+            "transcript_id": str(uuid4()),
+            "plate_reads": [{"text": "ABC123"}],
+            "visit_timing": {"relation_hint": "arrives_with"},
+        },
+        "transcript_id": str(uuid4()),
+        "observation_ids": [str(uuid4())],
+    }
+    restricted = _restrict_sensitive_evidence(scoped)
+    assert restricted["sensitive_evidence_restricted"] is True
+    assert "transcript_id" not in restricted["metadata"]
+    assert "plate_reads" not in restricted["metadata"]
+    assert restricted["observation_ids"] == scoped["observation_ids"]
+    assert _evidence_availability([{"source_status": "sensitive_restricted"}]) == "restricted"
 from services.api.routes.review import _reconcile_observation_sources
 from services.api.routes.review import _visible_cluster_camera_id
 from shared.camera_access import ALL
