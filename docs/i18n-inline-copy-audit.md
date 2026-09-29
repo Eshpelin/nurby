@@ -23,42 +23,29 @@ UI copy.
   controls, plate-list and parking controls, and geometry-trigger camera,
   drawing, subject, threshold, direction, and wrong-way guidance.
 
-## Remaining user-facing surfaces
+## Current audit status
 
-These contain inline labels, loading states, empty states, or actions that
-should move to the shared English/Spanish catalog in follow-up slices:
+The following product surfaces have now been audited and their user-facing
+copy is catalog-driven, including loading, empty, error, action, and relevant
+accessibility labels:
 
-- `frontend/src/app/page.tsx`: dashboard filters, recap/AI states,
-  live/search-result labels, event-card labels, and first-camera/no-results
-  guidance are catalog-driven for the audited surface. Re-open only when a
-  new dashboard surface is added.
-- `frontend/src/app/people/page.tsx`: some activity-card and reference-detail
-  copy remains; person and unknown-cluster suggestion cards, forms, merge,
-  photo, consent, deletion-reference, and primary row actions are
-  catalog-driven.
-- `frontend/src/app/cameras/[id]/page.tsx` and its camera settings panels are
-  catalog-driven for the audited product copy. Re-open this entry only when a
-  new camera-facing surface is added.
-- `frontend/src/components/rules/TriggerSection.tsx` and related editors:
-  association controls remain to be audited; the trigger-specific audio,
-  speech, plate, parking, and geometry slices are catalog-driven above.
-- `frontend/src/app/recordings/page.tsx` and `frontend/src/app/events/page.tsx`:
-  bulk-action result states, remaining recording-card metadata, and some
-  pagination/result copy remain; filters, download/share, trim/reset, and
-  review-control labels are catalog-driven.
-- `frontend/src/app/pipeline/page.tsx`, Ask/admin, and run detail pages:
-  operational table headings, status labels, errors, and loading/empty states
-  are catalog-driven. Ask Nurby’s main page, provider fallback, history rail,
-  and empty state are now catalog-driven. ChatComposer, model/cost controls,
-  deep-scan warnings and actions, and onboarding modal copy are also
-  catalog-driven. AgentResponseCard status, trace, citation, completion,
-  inspector, and safety labels are catalog-driven; model-generated answers,
-  tool names, and evidence text remain intentional data/technical exceptions.
-- `frontend/src/components/IncidentCard.tsx`, `PersonActivityModal.tsx`,
-  `ZoneEditorCanvas.tsx`, `PTZControlPanel.tsx`, and `LiveConversationCard.tsx`:
-  activity, camera-control, and live-audio copy.
-- `frontend/src/components/SecureAccountModal.tsx`, error boundary, and
-  onboarding/first-use surfaces.
+- dashboard, people, cameras, recordings, events, and camera settings;
+- rule editors and trigger controls, including association, audio, speech,
+  plate, parking, and geometry rules;
+- pipeline, Ask Nurby, agent responses, onboarding, account/security, and
+  error-boundary surfaces;
+- activity, follow/journey, recap, live voice, incidents, and identity-review
+  components.
+
+The recordings audit was completed in commits `80bcf0c` and `0dc1984`, which
+moved card metadata, evidence chips, storage status, pagination, accessibility
+labels, and workflow error states into the catalog.
+
+Remaining work is limited to a final repository-wide review for newly added
+copy and any newly discovered literal labels. Model-generated answers,
+camera/person/vehicle names, transcripts, provider names, server-provided
+rule text, URLs, protocol labels, and other evidence/data values remain
+intentional exceptions described below.
 
 ## Intentionally not catalog-driven
 
