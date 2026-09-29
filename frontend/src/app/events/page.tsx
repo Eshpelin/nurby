@@ -314,14 +314,14 @@ export default function EventsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("events.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            One place for incidents, notifications, and alerts across all cameras.
+            {t("events.subtitle")}
           </p>
         </div>
         <button
           type="button"
           onClick={downloadCsv}
           className="px-3 py-1.5 text-sm rounded-md border border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground transition-colors"
-          title="Download the current view (all matching rows, not just the page) as CSV"
+          title={t("events.export_title")}
         >
           {t("events.export_csv")}
         </button>
@@ -363,24 +363,24 @@ export default function EventsPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <select value={range} onChange={(e) => setRange(e.target.value as RangeValue)} className={selectClass} aria-label="Time range">
+        <select value={range} onChange={(e) => setRange(e.target.value as RangeValue)} className={selectClass} aria-label={t("events.time_range")}>
           {RANGES.map((r) => (
             <option key={r.value} value={r.value}>{r.label}</option>
           ))}
         </select>
-        <select value={cameraFilter} onChange={(e) => setCameraFilter(e.target.value)} className={selectClass} aria-label="Camera filter">
+        <select value={cameraFilter} onChange={(e) => setCameraFilter(e.target.value)} className={selectClass} aria-label={t("events.camera_filter")}>
           <option value="">{t("events.all_cameras")}</option>
           {cameras.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
-        <select value={ruleFilter} onChange={(e) => setRuleFilter(e.target.value)} className={selectClass} aria-label="Rule filter">
+        <select value={ruleFilter} onChange={(e) => setRuleFilter(e.target.value)} className={selectClass} aria-label={t("events.rule_filter")}>
           <option value="">{t("events.all_rules")}</option>
           {rules.map((r) => (
             <option key={r.id} value={r.id}>{r.name}</option>
           ))}
         </select>
-        <select value={ackedFilter} onChange={(e) => setAckedFilter(e.target.value as "" | "false" | "true")} className={selectClass} aria-label="Review state filter">
+        <select value={ackedFilter} onChange={(e) => setAckedFilter(e.target.value as "" | "false" | "true")} className={selectClass} aria-label={t("events.review_state_filter")}>
           <option value="">{t("events.reviewed_and_unreviewed")}</option>
           <option value="false">{t("events.unreviewed_only")}</option>
           <option value="true">{t("events.reviewed_only")}</option>
@@ -500,7 +500,7 @@ export default function EventsPage() {
                           type="button"
                           onClick={() => mute(ev.id)}
                           className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors"
-                          title="Silence re-sends of this alert for 10 minutes"
+                          title={t("events.snooze_title")}
                         >
                           🔕 Mute 10m
                         </button>
@@ -509,7 +509,7 @@ export default function EventsPage() {
                         type="button"
                         onClick={() => setShareEvent(ev)}
                         className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors"
-                        title="Create an anonymous link anyone can open until it expires"
+                          title={t("events.share_title")}
                       >
                         🔗 Share
                       </button>
@@ -527,7 +527,7 @@ export default function EventsPage() {
                         eventId={ev.id}
                       />
                     ) : (
-                      <p className="text-[11px] text-muted-foreground">No payload recorded.</p>
+                      <p className="text-[11px] text-muted-foreground">{t("events.no_payload")}</p>
                     )}
                     <EventFeedbackPanel eventId={ev.id} />
                     <EventNotesPanel eventId={ev.id} />

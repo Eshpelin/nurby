@@ -43,7 +43,9 @@ should move to the shared English/Spanish catalog in follow-up slices:
   association controls remain to be audited; the trigger-specific audio,
   speech, plate, parking, and geometry slices are catalog-driven above.
 - `frontend/src/app/recordings/page.tsx` and `frontend/src/app/events/page.tsx`:
-  bulk actions, trim/reset controls, pagination, and result states.
+  bulk-action result states, remaining recording-card metadata, and some
+  pagination/result copy remain; filters, download/share, trim/reset, and
+  review-control labels are catalog-driven.
 - `frontend/src/app/pipeline/page.tsx`, Ask/admin, and run detail pages:
   operational table headings and loading/empty states.
 - `frontend/src/components/IncidentCard.tsx`, `PersonActivityModal.tsx`,

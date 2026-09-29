@@ -666,7 +666,7 @@ export default function RecordingsPage() {
             onChange={(e) => { setPersonFilter(e.target.value); setPage(0); }}
             className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
             disabled={persons.length === 0}
-            title="Only show clips where this person was seen"
+            title={t("recordings.person_filter_title")}
           >
             <option value="">{t("recordings.anyone")}</option>
             {persons.map((p) => (
@@ -681,7 +681,7 @@ export default function RecordingsPage() {
             onChange={(e) => { setVehicleFilter(e.target.value); setPage(0); }}
             className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
             disabled={vehicles.length === 0}
-            title="Only show clips where this vehicle was seen"
+            title={t("recordings.vehicle_filter_title")}
           >
             <option value="">{t("recordings.any_vehicle")}</option>
             {vehicles.map((v) => (
@@ -695,7 +695,7 @@ export default function RecordingsPage() {
             value={locationFilter}
             onChange={(e) => { setLocationFilter(e.target.value); setPage(0); }}
             className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
-            title="Where the recordings are stored"
+            title={t("recordings.location_filter_title")}
           >
             <option value="">{t("recordings.all_locations")}</option>
             <option value="local">{t("recordings.local_only")}</option>
@@ -725,15 +725,15 @@ export default function RecordingsPage() {
 
           <div className="flex items-center gap-1">
             {[
-              { label: "Last night", hours: 14 },
-              { label: "24h", hours: 24 },
-              { label: "7d", hours: 168 },
+              { key: "last_night", hours: 14 },
+              { key: "twenty_four_hours", hours: 24 },
+              { key: "seven_days", hours: 168 },
             ].map((p) => (
               <button
-                key={p.label}
+                key={p.key}
                 onClick={() => applyPreset(p.hours)}
                 className="px-2 py-1.5 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              >{p.label}</button>
+              >{t(`recordings.preset.${p.key}`)}</button>
             ))}
           </div>
         </div>
@@ -765,7 +765,7 @@ export default function RecordingsPage() {
           <button
             onClick={downloadRange}
             disabled={recordings.length === 0}
-            title="Download every clip matching these filters as a single zip"
+            title={t("recordings.download_range_title")}
             className="px-3 py-2 text-xs rounded-md border border-accent bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40"
           >
             {t("recordings.download_range")}
@@ -1004,14 +1004,14 @@ export default function RecordingsPage() {
                       </span>
                     )}
                     {rec.remote_state === "pending" && (
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300" title="Waiting to upload to FTP">
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300" title={t("recordings.pending_upload_title")}>
                         Uploading
                       </span>
                     )}
                     {rec.remote_state === "failed" && (
                       <span
                         className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400"
-                        title="FTP upload failed — only the local copy exists. Check Settings → Storage."
+                        title={t("recordings.upload_failed_title")}
                       >
                         Upload failed
                       </span>
@@ -1077,7 +1077,7 @@ export default function RecordingsPage() {
                   setConfirmDeleteId(null);
                   setDeleteError(null);
                 }}
-                aria-label="Close"
+                aria-label={t("common.close")}
                 className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1137,14 +1137,14 @@ export default function RecordingsPage() {
                     onClick={() => seekToDetection(-1)}
                     disabled={seekTargets.length === 0}
                     className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
-                    title="Jump to the previous detection"
+                  title={t("recordings.previous_detection")}
                   >◀ Prev</button>
                   <button
                     onClick={() => seekToDetection(1)}
                     disabled={seekTargets.length === 0}
                     className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
-                    title="Jump to the next detection"
-                  >Next ▶</button>
+                  title={t("recordings.next_detection")}
+                  >{t("recordings.next")} ▶</button>
                   <span className="text-[11px] text-muted-foreground">
                     {seekTargets.length > 0
                       ? `${seekTargets.length} ${objectFilters[0] || "detection"} moment${seekTargets.length === 1 ? "" : "s"}`
@@ -1166,7 +1166,7 @@ export default function RecordingsPage() {
 
               {/* Clip trim: mark in/out from the playhead, download just that span. */}
               <div className="flex items-center gap-2 flex-wrap rounded-md border border-border-subtle bg-background/40 px-3 py-2">
-                <span className="text-[11px] font-medium text-muted-foreground mr-1">Trim clip</span>
+                <span className="text-[11px] font-medium text-muted-foreground mr-1">{t("recordings.trim_clip")}</span>
                 <button
                   onClick={() => {
                     const t = videoRef.current?.currentTime ?? 0;
@@ -1174,7 +1174,7 @@ export default function RecordingsPage() {
                     if (clipEnd != null && clipEnd <= t) setClipEnd(null);
                   }}
                   className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  title="Set clip start to the current playhead"
+                  title={t("recordings.set_clip_start")}
                 >Set start{clipStart != null ? ` · ${formatClock(clipStart)}` : ""}</button>
                 <button
                   onClick={() => {
@@ -1183,7 +1183,7 @@ export default function RecordingsPage() {
                     if (clipStart != null && clipStart >= t) setClipStart(null);
                   }}
                   className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  title="Set clip end to the current playhead"
+                  title={t("recordings.set_clip_end")}
                 >Set end{clipEnd != null ? ` · ${formatClock(clipEnd)}` : ""}</button>
                 {clipStart != null && clipEnd != null && clipEnd > clipStart && (
                   <span className="text-[11px] text-muted-foreground">
@@ -1195,7 +1195,7 @@ export default function RecordingsPage() {
                   <button
                     onClick={() => { setClipStart(null); setClipEnd(null); }}
                     className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  >Reset</button>
+                  >{t("recordings.reset")}</button>
                 )}
                 <a
                   href={
@@ -1213,7 +1213,7 @@ export default function RecordingsPage() {
                       ? "border-accent bg-accent/10 text-accent hover:bg-accent/20"
                       : "border-border text-muted-foreground opacity-40 cursor-not-allowed"
                   }`}
-                  title="Download only the selected span as its own mp4"
+                  title={t("recordings.download_trimmed_title")}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1263,7 +1263,7 @@ export default function RecordingsPage() {
                     </a>
                     <button
                       onClick={() => setShareRec(expandedRec)}
-                      title="Create an anonymous link anyone can open until it expires"
+                      title={t("recordings.share_title")}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
