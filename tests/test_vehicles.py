@@ -62,6 +62,30 @@ def test_plate_correction_metadata_preserves_historical_evidence():
     }
 
 
+def test_vehicle_sighting_evidence_preserves_plate_and_detector_metadata():
+    from services.api.routes.vehicles import _vehicle_sighting_evidence
+
+    assert _vehicle_sighting_evidence({
+        "plate_text": "ABCDXYZ",
+        "plate_confidence": 0.91,
+        "plate_source": "ocr",
+        "confidence": 0.87,
+        "identity_key": "ABCDXYZ",
+    }) == {
+        "plate_text": "ABCDXYZ",
+        "plate_confidence": 0.91,
+        "plate_source": "ocr",
+        "vehicle_confidence": 0.87,
+        "identity_key": "ABCDXYZ",
+        "identity_kind": "plate",
+    }
+
+    assert _vehicle_sighting_evidence({
+        "confidence": 0.72,
+        "identity_key": "appearance-1",
+    })["identity_kind"] == "appearance"
+
+
 def test_vehicle_merge_rewrites_identity_without_changing_detection_metadata():
     from services.api.routes.vehicles import _rewrite_vehicle_detection_ids
 

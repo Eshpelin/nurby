@@ -142,6 +142,26 @@ def _vehicle_ids_in(obs: Observation) -> set[str]:
     return out
 
 
+def _vehicle_sighting_evidence(entry: dict) -> dict:
+    """Expose the detector/OCR facts for one vehicle sighting unchanged.
+
+    A vehicle detail view must explain a learned association without turning
+    the current Vehicle row into the source of truth.  Keep the normalized
+    plate, detector confidence, OCR confidence/source, and identity key from
+    the observation alongside the sighting so human corrections do not erase
+    what the camera originally reported.
+    """
+    plate_text = entry.get("plate_text")
+    return {
+        "plate_text": plate_text,
+        "plate_confidence": entry.get("plate_confidence"),
+        "plate_source": entry.get("plate_source"),
+        "vehicle_confidence": entry.get("confidence"),
+        "identity_key": entry.get("identity_key"),
+        "identity_kind": "plate" if plate_text else "appearance",
+    }
+
+
 async def _visible_vehicle_ids(db: AsyncSession, allowed) -> set[str] | None:
     """Return vehicle identities backed by at least one visible observation.
 
@@ -313,11 +333,13 @@ async def vehicle_activity_feed(
     for o in obs:
         if target not in _vehicle_ids_in(o):
             continue
-        plate = None
+        sighting = None
         for v in (o.vehicle_detections or {}).get("vehicles", []) or []:
             if str(v.get("vehicle_id")) == target:
-                plate = v.get("plate_text")
+                sighting = _vehicle_sighting_evidence(v)
                 break
+        if sighting is None:
+            continue
         feed.append({
             "observation_id": str(o.id),
             "camera_id": str(o.camera_id),
@@ -325,7 +347,7 @@ async def vehicle_activity_feed(
             "started_at": o.started_at,
             "vlm_description": o.vlm_description,
             "thumbnail_path": o.thumbnail_path,
-            "plate_text": plate,
+            **sighting,
         })
         if len(feed) >= limit:
             break

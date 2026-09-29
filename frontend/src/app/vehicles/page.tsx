@@ -52,6 +52,10 @@ interface VehicleActivity {
   vlm_description: string | null;
   thumbnail_path: string | null;
   plate_text: string | null;
+  plate_confidence: number | null;
+  plate_source: string | null;
+  vehicle_confidence: number | null;
+  identity_kind: "plate" | "appearance";
 }
 
 const timeAgo = (iso: string | null) => timeAgoBase(iso, { fallback: "never" });
@@ -250,7 +254,11 @@ export default function VehiclesPage() {
                             <div className="text-[11px] truncate">{a.vlm_description || "Vehicle seen"}</div>
                             <div className="text-[10px] text-muted-foreground">
                               {a.camera_name || "camera"} · {timeAgo(a.started_at)}
-                              {a.plate_text ? ` · plate ${a.plate_text}` : ""}
+                              {a.plate_text ? (
+                                <> · plate {a.plate_text}{a.plate_confidence != null ? ` (${Math.round(a.plate_confidence * 100)}% ${a.plate_source || "OCR"})` : ""}</>
+                              ) : (
+                                <> · appearance-only match</>
+                              )}
                             </div>
                           </div>
                         </Link>
