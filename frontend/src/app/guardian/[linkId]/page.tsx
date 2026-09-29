@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { DependantAvatar } from "@/components/guardian-avatar";
 import { formatWith } from "@/lib/time";
 import {
@@ -24,7 +25,8 @@ import {
 
 export default function DependantDetailPage() {
   const { linkId } = useParams<{ linkId: string }>();
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = useCallback((key: string) => translate(user?.locale, key), [user?.locale]);
   const [dependant, setDependant] = useState<Dependant | null>(null);
   const [status, setStatus] = useState<DependantStatus | null>(null);
   const [events, setEvents] = useState<GuardianEvent[]>([]);
@@ -54,7 +56,7 @@ export default function DependantDetailPage() {
       }
       const sRes = await authFetch(`/api/guardian/links/${linkId}/status`);
       if (sRes.ok) setStatus(await sRes.json());
-      else if (sRes.status === 410) setError("This guardian link is no longer active.");
+      else if (sRes.status === 410) setError(t("guardian_detail.link_inactive"));
       const eRes = await authFetch(`/api/guardian/links/${linkId}/events`);
       if (eRes.ok) {
         const data = await eRes.json();
@@ -62,11 +64,11 @@ export default function DependantDetailPage() {
         setLastPickup(data.last_pickup || null);
       }
     } catch {
-      setError("Could not load this dependant.");
+      setError(t("guardian_detail.load_failed"));
     } finally {
       setLoading(false);
     }
-  }, [authFetch, linkId]);
+  }, [authFetch, linkId, t]);
 
   useEffect(() => {
     load();
@@ -74,7 +76,7 @@ export default function DependantDetailPage() {
     return () => clearInterval(t);
   }, [load]);
 
-  if (loading) return <div className="p-8 text-muted-foreground">Loading...</div>;
+  if (loading) return <div className="p-8 text-muted-foreground">{t("guardian_detail.loading")}</div>;
 
   const st = status?.state || "unknown";
   const c = stateColor(st);
@@ -83,7 +85,7 @@ export default function DependantDetailPage() {
   return (
     <div className="max-w-3xl mx-auto p-6">
       <Link href="/guardian" className="text-sm text-muted-foreground hover:text-foreground">
-        ← All dependants
+        ← {t("guardian_detail.all_dependants")}
       </Link>
 
       {error && (
@@ -102,30 +104,30 @@ export default function DependantDetailPage() {
               size={52}
             />
             <h1 className="text-2xl font-semibold tracking-tight truncate">
-              {dependant?.display_name || status?.display_name || "Dependant"}
+              {dependant?.display_name || status?.display_name || t("guardian_detail.dependant")}
             </h1>
           </div>
           <span className="flex items-center gap-2 shrink-0">
             <span className={`h-2.5 w-2.5 rounded-full ${c.dot}`} />
-            <span className={`text-sm ${c.text}`}>{c.label}</span>
+            <span className={`text-sm ${c.text}`}>{t(`guardian.state_${st}`)}</span>
           </span>
         </div>
         <div className="mt-3 text-sm flex items-center gap-2 flex-wrap">
           {st === "unknown" ? (
-            <span className="text-muted-foreground">No recent sighting. Nothing to show yet.</span>
+            <span className="text-muted-foreground">{t("guardian_detail.no_recent_sighting")}</span>
           ) : (
             <span>
               {status?.zone ? (
                 <span className="text-foreground">{status.zone}</span>
               ) : (
-                <span className="text-muted-foreground">Location unknown</span>
+                <span className="text-muted-foreground">{t("guardian.location_unknown")}</span>
               )}
               <span className="text-muted-foreground">
-                {" "}· last seen {timeAgo(status?.last_seen_at || null)}
+                {" "}· {t("guardian_detail.last_seen")} {timeAgo(status?.last_seen_at || null)}
               </span>
             </span>
           )}
-          {status?.delayed && <AsOfChip />}
+          {status?.delayed && <AsOfChip locale={user?.locale} />}
         </div>
       </div>
 
@@ -147,7 +149,7 @@ export default function DependantDetailPage() {
       {/* Notifications: what alerts, and how they reach you. */}
       {dependant && (
         <section className="mt-6">
-          <h2 className="text-sm font-medium text-muted-foreground mb-2">Notifications</h2>
+          <h2 className="text-sm font-medium text-muted-foreground mb-2">{t("notifications.title")}</h2>
           <AlertToggles linkId={linkId} initial={dependant.alert_prefs} />
           <div className="h-3" />
           <ChannelToggles
@@ -165,7 +167,7 @@ export default function DependantDetailPage() {
           onClick={() => setShowTrust(true)}
           className="text-xs text-muted-foreground hover:text-foreground underline"
         >
-          What can I see, and what stays private?
+          {t("guardian_detail.trust_link")}
         </button>
       </div>
 
@@ -488,10 +490,10 @@ function SearchPanel({ linkId }: { linkId: string }) {
   );
 }
 
-function AsOfChip() {
+function AsOfChip({ locale }: { locale?: string }) {
   return (
     <span className="inline-flex items-center rounded-md bg-amber-950/40 px-2 py-0.5 text-[11px] text-amber-300">
-      as of ~30 min ago
+      {translate(locale, "guardian_detail.as_of")}
     </span>
   );
 }
