@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { useWSSubscribe } from "@/lib/ws";
 import { ReinterpretButton } from "@/components/ReinterpretButton";
 import { MomentModal } from "@/components/MomentModal";
@@ -156,6 +157,8 @@ const Sparkle = ({ className }: { className?: string }) => (
  */
 export function IncidentCard({ incident, cameraName }: Props) {
   const { token, authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) =>
+    translate(user?.locale, key, values);
   const [expanded, setExpanded] = useState(false);
   const [moment, setMoment] = useState<{ obsId: string; ts: string } | null>(null);
   const [obs, setObs] = useState<IncidentObs[] | null>(null);
@@ -227,7 +230,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
         ? `${Math.round(span / 60)}m`
         : `${(span / 3600).toFixed(1)}h`;
 
-  const headline = formatSignature(incident.signature_kind, incident.signature_key);
+  const headline = formatSignature(incident.signature_kind, incident.signature_key, t);
 
   const tone = live.finalized
     ? "border-emerald-700/40 bg-emerald-950/15 hover:border-emerald-600/60"
@@ -307,7 +310,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
         <div className="flex items-center gap-2 text-[11px] mb-1.5">
           <RepeatIcon className={`w-3.5 h-3.5 ${accentDot}`} />
           <span className={`font-medium uppercase tracking-wider ${accent}`}>
-            {live.finalized ? "Incident closed" : "Incident · live"}
+            {live.finalized ? t("incident.closed") : t("incident.live")}
           </span>
           {!live.finalized && (
             <span className="relative flex h-1.5 w-1.5">
@@ -316,10 +319,10 @@ export function IncidentCard({ incident, cameraName }: Props) {
             </span>
           )}
           <span className="text-muted-foreground">·</span>
-          <span className="text-muted-foreground">{cameraName || "Camera"}</span>
+          <span className="text-muted-foreground">{cameraName || t("incident.camera")}</span>
           <span className="text-muted-foreground">·</span>
           <span className="text-muted-foreground font-mono">
-            {live.occurrence_count}× over {spanLabel}
+            {t("incident.seen_over", { count: live.occurrence_count, span: spanLabel })}
           </span>
           {status && status !== "open" && (
             <span
@@ -327,7 +330,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
                 STATUS_TONE[status] ?? STATUS_TONE.open
               }`}
             >
-              {status}
+              {t(`incident.status_${status}`)}
             </span>
           )}
           <ChevronDown
@@ -352,7 +355,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
             <p className="text-sm font-medium leading-snug">
               {headline}
               <span className="ml-1 text-xs font-normal text-muted-foreground">
-                seen {live.occurrence_count}×
+                {t("incident.seen_count", { count: live.occurrence_count })}
               </span>
             </p>
             {live.finalized && live.summary_text ? (
@@ -362,27 +365,27 @@ export function IncidentCard({ incident, cameraName }: Props) {
               </p>
             ) : null}
             <div className="mt-1 flex items-center gap-1 flex-wrap">
-              {(incident.thumbnails || []).slice(-8).map((t) => (
+              {(incident.thumbnails || []).slice(-8).map((thumb) => (
                 <span
-                  key={t.obs_id}
+                  key={thumb.obs_id}
                   role="button"
                   tabIndex={0}
                   onClick={(e) => {
                     // Don't toggle the card. open the moment modal instead.
                     e.stopPropagation();
-                    setMoment({ obsId: t.obs_id, ts: t.ts });
+                    setMoment({ obsId: thumb.obs_id, ts: thumb.ts });
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.stopPropagation();
                       e.preventDefault();
-                      setMoment({ obsId: t.obs_id, ts: t.ts });
+                      setMoment({ obsId: thumb.obs_id, ts: thumb.ts });
                     }
                   }}
                   className={`text-[10px] font-mono ${accent}/80 px-1 py-0.5 rounded bg-violet-500/10 hover:bg-violet-500/25 hover:underline transition-colors cursor-pointer`}
-                  title={`View this moment. ${formatDateTime(t.ts)}`}
+                  title={`${t("incident.open_exact_clip")}. ${formatDateTime(thumb.ts)}`}
                 >
-                  {formatWith(new Date(t.ts), {
+                  {formatWith(new Date(thumb.ts), {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
@@ -391,14 +394,14 @@ export function IncidentCard({ incident, cameraName }: Props) {
             </div>
             {live.finalized && live.summary_provider_name && (
               <p className="mt-1 text-[10px] text-muted-foreground/70">
-                summary by {live.summary_provider_name}
+                {t("incident.summary_by", { provider: live.summary_provider_name })}
               </p>
             )}
             {live.finalized && (
               <div className="mt-2">
                 <ReinterpretButton
                   endpoint={`/api/incidents/${incident.id}/reinterpret`}
-                  label="Reinterpret"
+                  label={t("incident.reinterpret")}
                   variant="compact"
                 />
               </div>
@@ -413,14 +416,14 @@ export function IncidentCard({ incident, cameraName }: Props) {
           <div className="rounded border border-border/50 bg-card/40 p-2.5 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Status
+                {t("incident.status")}
               </span>
               <span
                 className={`px-1.5 py-0.5 rounded border text-[10px] font-medium capitalize ${
                   STATUS_TONE[status] ?? STATUS_TONE.open
                 }`}
               >
-                {status}
+                {t(`incident.status_${status}`)}
               </span>
               <div className="ml-auto flex items-center gap-1.5">
                 {status === "open" ? (
@@ -430,14 +433,14 @@ export function IncidentCard({ incident, cameraName }: Props) {
                       onClick={() => act("resolve", { reason })}
                       className="text-[11px] px-2 py-0.5 rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"
                     >
-                      Resolve
+                      {t("incident.resolve")}
                     </button>
                     <button
                       disabled={busy}
                       onClick={() => act("dismiss", { reason })}
                       className="text-[11px] px-2 py-0.5 rounded border border-slate-500/40 text-slate-300 hover:bg-slate-500/15 disabled:opacity-50"
                     >
-                      Dismiss
+                      {t("incident.dismiss")}
                     </button>
                   </>
                 ) : (
@@ -446,7 +449,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
                     onClick={() => act("reopen")}
                     className="text-[11px] px-2 py-0.5 rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/15 disabled:opacity-50"
                   >
-                    Reopen
+                    {t("incident.reopen")}
                   </button>
                 )}
               </div>
@@ -455,14 +458,14 @@ export function IncidentCard({ incident, cameraName }: Props) {
               <input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Reason (optional)"
+                placeholder={t("incident.reason_placeholder")}
                 className="w-full text-[11px] bg-black/30 border border-border/50 rounded px-2 py-1 outline-none focus:border-border"
               />
             )}
             <div className="flex items-center gap-2 text-[11px]">
-              <span className="text-muted-foreground">Assigned</span>
+              <span className="text-muted-foreground">{t("incident.assigned")}</span>
               <span className="text-foreground/90">
-                {detail?.ownership?.assigned_to ?? "nobody"}
+                {detail?.ownership?.assigned_to ?? t("incident.nobody")}
               </span>
               <div className="ml-auto flex gap-1.5">
                 {user && !detail?.ownership?.assigned_to && (
@@ -471,7 +474,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
                     onClick={() => act("assign", { user_id: user.id })}
                     className="text-[11px] px-2 py-0.5 rounded border border-sky-500/40 text-sky-300 hover:bg-sky-500/15 disabled:opacity-50"
                   >
-                    Assign to me
+                    {t("incident.assign_me")}
                   </button>
                 )}
                 {detail?.ownership?.assigned_to && (
@@ -480,7 +483,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
                     onClick={() => act("assign", { user_id: null })}
                     className="text-[11px] px-2 py-0.5 rounded border border-slate-500/40 text-slate-300 hover:bg-slate-500/15 disabled:opacity-50"
                   >
-                    Unassign
+                    {t("incident.unassign")}
                   </button>
                 )}
               </div>
@@ -504,11 +507,11 @@ export function IncidentCard({ incident, cameraName }: Props) {
           {detail?.alerts && detail.alerts.length > 0 && (
             <div className="rounded border border-border/50 bg-card/40 p-2.5 space-y-1.5">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Alerts
+                {t("incident.alerts")}
               </p>
               {detail.alerts.map((a) => (
                 <div key={a.event_id} className="text-[11px] flex items-center gap-2 flex-wrap">
-                  <span className="text-foreground/90">{a.trigger_reason ?? "rule"}</span>
+                  <span className="text-foreground/90">{a.trigger_reason ?? t("incident.rule")}</span>
                   <span className="text-muted-foreground">·</span>
                   <span
                     className={
@@ -519,15 +522,15 @@ export function IncidentCard({ incident, cameraName }: Props) {
                           : "text-amber-300"
                     }
                   >
-                    {a.action_type ?? "action"}: {a.action_status ?? "—"}
+                    {a.action_type ?? t("incident.action")}: {a.action_status ?? "—"}
                   </span>
                   {a.action_error && (
                     <span className="text-rose-300/80" title={a.action_error}>
-                      (failed)
+                      ({t("incident.failed")})
                     </span>
                   )}
                   <span className="ml-auto text-[10px] text-muted-foreground">
-                    {a.seen ? "seen" : "unseen"}
+                    {a.seen ? t("incident.seen") : t("incident.unseen")}
                   </span>
                 </div>
               ))}
@@ -546,7 +549,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
                 }
                 className="px-2 py-0.5 rounded border border-violet-500/40 text-violet-300 hover:bg-violet-500/15"
               >
-                Open exact clip
+                {t("incident.open_exact_clip")}
               </button>
             )}
             {detail?.evidence_export && (
@@ -557,7 +560,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
                 }).toString()}`}
                 className="px-2 py-0.5 rounded border border-border/60 text-muted-foreground hover:text-foreground hover:border-border"
               >
-                Download evidence
+                {t("incident.download_evidence")}
               </a>
             )}
           </div>
@@ -566,7 +569,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
           {detail?.related_sightings && detail.related_sightings.length > 0 && (
             <div className="rounded border border-border/50 bg-card/40 p-2.5 space-y-1">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Related sightings
+                {t("incident.related_sightings")}
               </p>
               {detail.related_sightings.map((r) => (
                 <div key={r.id} className="text-[11px] text-muted-foreground">
@@ -578,7 +581,7 @@ export function IncidentCard({ incident, cameraName }: Props) {
           )}
 
           {loading && obs === null ? (
-            <p className="text-xs text-muted-foreground">Loading occurrences.</p>
+            <p className="text-xs text-muted-foreground">{t("incident.loading_occurrences")}</p>
           ) : obs && obs.length > 0 ? (
             obs.map((o) => (
               <div
@@ -590,20 +593,20 @@ export function IncidentCard({ incident, cameraName }: Props) {
                     {formatWith(new Date(o.started_at), { hour: "numeric", minute: "2-digit", second: "2-digit" })}
                   </span>
                   {o.refined_by_provider_name && (
-                    <span className="text-sky-300">✨ refined</span>
+                    <span className="text-sky-300">✨ {t("incident.refined")}</span>
                   )}
                 </div>
                 {o.vlm_description ? (
                   <p className="leading-relaxed">{o.vlm_description}</p>
                 ) : (
                   <p className="text-muted-foreground italic">
-                    (no description)
+                    {t("incident.no_description")}
                   </p>
                 )}
               </div>
             ))
           ) : (
-            <p className="text-xs text-muted-foreground">No occurrences recorded.</p>
+            <p className="text-xs text-muted-foreground">{t("incident.no_occurrences")}</p>
           )}
         </div>
       )}
@@ -621,23 +624,27 @@ export function IncidentCard({ incident, cameraName }: Props) {
   );
 }
 
-function formatSignature(kind: string, key: string): string {
+function formatSignature(
+  kind: string,
+  key: string,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
   if (kind === "person") return key;
   if (kind === "cluster") {
     const short = key.split(",")[0]?.slice(0, 8) ?? "stranger";
-    return `Recurring stranger ${short}`;
+    return t("incident.recurring_stranger", { id: short });
   }
   // Matched by body appearance, no face this time. Say so plainly rather
   // than claiming a recognition we did not make.
-  if (kind === "body") return "Unrecognized person (matched by appearance)";
-  if (kind === "unknown") return "Unknown person";
+  if (kind === "body") return t("incident.person_body");
+  if (kind === "unknown") return t("incident.unknown_person");
   if (kind === "object") {
     const labels = key.split(",");
     if (labels.length === 1) return capitalize(labels[0]);
     if (labels.length === 2) return `${capitalize(labels[0])} + ${labels[1]}`;
     return `${capitalize(labels[0])} + ${labels.length - 1} more`;
   }
-  return "Motion";
+  return t("incident.motion");
 }
 
 function capitalize(s: string): string {
