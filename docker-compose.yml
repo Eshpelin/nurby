@@ -9,7 +9,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nurby_dev}
       POSTGRES_DB: nurby
     ports:
-      - "5433:5432"
+      # Database access is for local administration only. The API reaches
+      # Postgres over the compose network; never publish it to the LAN.
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Runs once on a fresh volume to enable the pgvector extension so
@@ -25,7 +27,8 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      # Redis is an internal dependency, not a host-facing service.
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -121,7 +124,8 @@ services:
     image: ollama/ollama:latest
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      # Ollama is called by the API; keep its model endpoint off the LAN.
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_models:/root/.ollama
     # deploy:
@@ -166,7 +170,9 @@ services:
       dockerfile: services/grounding/Dockerfile
     restart: unless-stopped
     ports:
-      - "8800:8800"
+      # Grounding is an internal optional service. Configure the API to use
+      # it over the compose network instead of exposing it to the LAN.
+      - "127.0.0.1:8800:8800"
     environment:
       GROUNDING_WEIGHTS_DIR: /data/grounding
       GROUNDING_MODEL_ID: ${GROUNDING_MODEL_ID:-nvidia/LocateAnything-3B}
