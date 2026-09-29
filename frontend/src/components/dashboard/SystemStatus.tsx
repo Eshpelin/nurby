@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import type { SystemStatus } from "@/lib/systemStatus";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 const DOT: Record<string, string> = {
   ok: "bg-green-500 pulse-dot",
@@ -17,11 +19,13 @@ const PILL_TEXT: Record<string, string> = {
 // The single header pill. One verdict for the whole system; quiet grey/green
 // when healthy, coloured when not. Replaces the separate live + AI pills.
 export function SystemStatusPill({ status }: { status: SystemStatus }) {
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   return (
     <Link
       href={status.href}
       role="status"
-      title={status.detail || "All systems are running."}
+      title={status.detail || t("system_status.all_running")}
       className={`flex items-center gap-2 text-xs transition-colors ${PILL_TEXT[status.level]}`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${DOT[status.level]}`} />
@@ -47,6 +51,8 @@ const STRIP_STRONG: Record<string, string> = {
 // once, with the detail and a way to look closer. Replaces the two
 // full-width banners and the empty-feed re-explanation.
 export function SystemStatusStrip({ status }: { status: SystemStatus }) {
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   if (status.level === "ok") return null;
   return (
     <div className={`mb-4 flex items-start gap-2.5 rounded-lg border p-3 ${STRIP_TONE[status.level]}`}>
@@ -54,7 +60,7 @@ export function SystemStatusStrip({ status }: { status: SystemStatus }) {
       <p className="text-xs leading-relaxed">
         <span className={`font-semibold ${STRIP_STRONG[status.level]}`}>{status.label}.</span>{" "}
         <span className="text-muted-foreground">{status.detail}</span>{" "}
-        <Link href={status.href} className="text-accent hover:underline">System doctor</Link>
+        <Link href={status.href} className="text-accent hover:underline">{t("system_status.doctor")}</Link>
       </p>
     </div>
   );
