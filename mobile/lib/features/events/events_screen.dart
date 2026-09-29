@@ -18,15 +18,15 @@ typedef EventsQuery = ({bool? acked, String? cameraId});
 
 /// First page of event history per filter.
 final eventsProvider = FutureProvider.family<List<Event>, EventsQuery>(
-    (ref, q) => ref.watch(eventRepoProvider).history(
-          acked: q.acked,
-          cameraId: q.cameraId,
-          limit: _pageSize,
-        ));
+  (ref, q) => ref
+      .watch(eventRepoProvider)
+      .history(acked: q.acked, cameraId: q.cameraId, limit: _pageSize),
+);
 
 /// Observation detail for the "View observation" link-out.
 final _observationProvider = FutureProvider.family<Observation, String>(
-    (ref, id) => ref.watch(observationRepoProvider).get(id));
+  (ref, id) => ref.watch(observationRepoProvider).get(id),
+);
 
 /// Alerts tab: rule-fired event history with ack workflow.
 class EventsScreen extends ConsumerStatefulWidget {
@@ -49,6 +49,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   final Set<String> _selectedIds = <String>{};
   bool _selectionMode = false;
   bool _allMatching = false;
+  bool _bulkBusy = false;
 
   EventsQuery get _query => (acked: _acked, cameraId: _cameraId);
 
@@ -102,9 +103,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   }
 
   Map<String, dynamic> _selectionFilters() => {
-        if (_cameraId != null) 'camera_id': _cameraId,
-        if (_acked != null) 'acked': _acked,
-      };
+    if (_cameraId != null) 'camera_id': _cameraId,
+    if (_acked != null) 'acked': _acked,
+  };
 
   void _selectAllMatching() {
     setState(() {
@@ -115,46 +116,70 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   }
 
   Future<void> _downloadSelectedCsv() async {
-    final url = ref.read(eventRepoProvider).exportUrl(
+    final url = ref
+        .read(eventRepoProvider)
+        .exportUrl(
           ids: _selectedIds.toList(),
-          filters: _allMatching
-              ? _selectionFilters().map((k, v) => MapEntry(k, '$v'))
-              : null,
+          filters:
+              _allMatching
+                  ? _selectionFilters().map((k, v) => MapEntry(k, '$v'))
+                  : null,
         );
-    if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication) && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the event export.')));
+    if (!await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication,
+        ) &&
+        mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the event export.')),
+      );
     }
   }
 
   Future<void> _bulkDelete() async {
-    if (_selectedIds.isEmpty && !_allMatching) return;
+    if (_bulkBusy || (_selectedIds.isEmpty && !_allMatching)) return;
+    setState(() => _bulkBusy = true);
     final ids = _selectedIds.toList(growable: false);
     try {
-      final preview = await ref.read(eventRepoProvider).previewBulk(
-            ids: ids, allMatching: _allMatching, filters: _selectionFilters());
+      final preview = await ref
+          .read(eventRepoProvider)
+          .previewBulk(
+            ids: ids,
+            allMatching: _allMatching,
+            filters: _selectionFilters(),
+          );
       if (!mounted) return;
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Delete alerts?'),
-          content: Text(
-            '${preview.matching} event${preview.matching == 1 ? '' : 's'} from ${_allMatching ? 'all matching filters' : 'this selection'}\n'
-            'Linked recordings: ${preview.linkedRecordings} (preserved).\n\n'
-            'This cannot be undone.',
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Delete'),
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Delete alerts?'),
+              content: Text(
+                '${preview.matching} event${preview.matching == 1 ? '' : 's'} from ${_allMatching ? 'all matching filters' : 'this selection'}\n'
+                'Linked recordings: ${preview.linkedRecordings} (preserved).\n\n'
+                'This cannot be undone.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Delete'),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       if (confirmed != true) return;
-      final result = await ref.read(eventRepoProvider).deleteBulk(
-            ids: ids, allMatching: _allMatching, filters: _selectionFilters());
+      final result = await ref
+          .read(eventRepoProvider)
+          .deleteBulk(
+            ids: ids,
+            allMatching: _allMatching,
+            filters: _selectionFilters(),
+          );
       if (!mounted) return;
       setState(() {
         _clearSelection();
@@ -173,18 +198,26 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       outcome.write('. Linked recordings were preserved.');
       await showDialog<void>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(result.failed > 0 || result.skipped > 0
-              ? 'Some alerts were not deleted'
-              : 'Alerts deleted'),
-          content: Text(outcome.toString()),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
-          ],
-        ),
+        builder:
+            (ctx) => AlertDialog(
+              title: Text(
+                result.failed > 0 || result.skipped > 0
+                    ? 'Some alerts were not deleted'
+                    : 'Alerts deleted',
+              ),
+              content: Text(outcome.toString()),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
       );
     } catch (e) {
       if (mounted) _showMutationError(e);
+    } finally {
+      if (mounted) setState(() => _bulkBusy = false);
     }
   }
 
@@ -200,7 +233,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     if (first == null || first.length < _pageSize) return;
     setState(() => _loadingMore = true);
     try {
-      final more = await ref.read(eventRepoProvider).history(
+      final more = await ref
+          .read(eventRepoProvider)
+          .history(
             acked: _acked,
             cameraId: _cameraId,
             limit: _pageSize,
@@ -213,8 +248,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -231,9 +267,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   /// repository, so tell the user the ack will sync rather than that it failed.
   void _showMutationError(Object e) {
     final queued = e is DioException && isConnectivityError(e);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:
-            Text(queued ? 'Queued — will sync when online' : apiErrorMessage(e))));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          queued ? 'Queued — will sync when online' : apiErrorMessage(e),
+        ),
+      ),
+    );
   }
 
   Future<void> _ack(Event event) async {
@@ -272,21 +312,22 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     final hasUnacked = visible.any((e) => !e.acked);
 
     final body = Column(
-        children: [
-          _filterBar(cameras),
-          if (_selectionMode) _selectionBar(visible),
-          Expanded(
-            child: firstPage.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => _ErrorRetry(
-                message: apiErrorMessage(e),
-                onRetry: () => ref.invalidate(eventsProvider(_query)),
-              ),
-              data: (items) => _list([...items, ..._extra]),
-            ),
+      children: [
+        _filterBar(cameras),
+        if (_selectionMode) _selectionBar(visible),
+        Expanded(
+          child: firstPage.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error:
+                (e, _) => _ErrorRetry(
+                  message: apiErrorMessage(e),
+                  onRetry: () => ref.invalidate(eventsProvider(_query)),
+                ),
+            data: (items) => _list([...items, ..._extra]),
           ),
-        ],
-      );
+        ),
+      ],
+    );
     if (widget.embedded) return body;
     return Scaffold(
       appBar: AppBar(
@@ -298,7 +339,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
               child: const Text(
                 'Ack all',
                 style: TextStyle(
-                    color: NurbyColors.accent, fontWeight: FontWeight.w600),
+                  color: NurbyColors.accent,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
         ],
@@ -314,16 +357,24 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         children: [
-          _chip('Unreviewed', _acked == false, () => setState(() {
-                _acked = false;
-                _clearSelection();
-                _resetPaging();
-              })),
-          _chip('All', _acked == null, () => setState(() {
-                _acked = null;
-                _clearSelection();
-                _resetPaging();
-              })),
+          _chip(
+            'Unreviewed',
+            _acked == false,
+            () => setState(() {
+              _acked = false;
+              _clearSelection();
+              _resetPaging();
+            }),
+          ),
+          _chip(
+            'All',
+            _acked == null,
+            () => setState(() {
+              _acked = null;
+              _clearSelection();
+              _resetPaging();
+            }),
+          ),
           Container(
             width: 1,
             margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
@@ -331,11 +382,15 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
           ),
           const SizedBox(width: 4),
           for (final c in cameras)
-            _chip(c.name, _cameraId == c.id, () => setState(() {
-                  _cameraId = _cameraId == c.id ? null : c.id;
-                  _clearSelection();
-                  _resetPaging();
-                })),
+            _chip(
+              c.name,
+              _cameraId == c.id,
+              () => setState(() {
+                _cameraId = _cameraId == c.id ? null : c.id;
+                _clearSelection();
+                _resetPaging();
+              }),
+            ),
         ],
       ),
     );
@@ -348,24 +403,41 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
         child: Row(
           children: [
-            Text(_allMatching ? 'All matching selected' : '${_selectedIds.length} selected', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              _allMatching
+                  ? 'All matching selected'
+                  : '${_selectedIds.length} selected',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             const Spacer(),
-            TextButton(onPressed: () => _selectPage(visible), child: const Text('Select page')),
+            TextButton(
+              onPressed: _bulkBusy ? null : () => _selectPage(visible),
+              child: const Text('Select page'),
+            ),
             if (visible.length >= _pageSize && !_allMatching)
-              TextButton(onPressed: _selectAllMatching, child: const Text('All matching')),
+              TextButton(
+                onPressed: _bulkBusy ? null : _selectAllMatching,
+                child: const Text('All matching'),
+              ),
             IconButton(
               tooltip: 'Export CSV',
-              onPressed: (_selectedIds.isEmpty && !_allMatching) ? null : _downloadSelectedCsv,
+              onPressed:
+                  _bulkBusy || (_selectedIds.isEmpty && !_allMatching)
+                      ? null
+                      : _downloadSelectedCsv,
               icon: const Icon(Icons.download_outlined),
             ),
             IconButton(
               tooltip: 'Delete selected',
-              onPressed: (_selectedIds.isEmpty && !_allMatching) ? null : _bulkDelete,
+              onPressed:
+                  _bulkBusy || (_selectedIds.isEmpty && !_allMatching)
+                      ? null
+                      : _bulkDelete,
               icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
             ),
             IconButton(
               tooltip: 'Clear selection',
-              onPressed: () => setState(_clearSelection),
+              onPressed: _bulkBusy ? null : () => setState(_clearSelection),
               icon: const Icon(Icons.close),
             ),
           ],
@@ -387,7 +459,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
           color: selected ? NurbyColors.accent : NurbyColors.foreground,
         ),
         side: BorderSide(
-            color: selected ? NurbyColors.accent : NurbyColors.border),
+          color: selected ? NurbyColors.accent : NurbyColors.border,
+        ),
         onSelected: (_) => onTap(),
       ),
     );
@@ -427,9 +500,10 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
               padding: EdgeInsets.all(16),
               child: Center(
                 child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ),
             );
           }
@@ -449,16 +523,21 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
   Widget _eventRow(Event event) {
     final time = DateFormat('MMM d, HH:mm:ss').format(event.firedAt);
-    final status = event.actionStatus != null
-        ? ' · ${event.actionType ?? 'action'}: ${event.actionStatus}'
-        : '';
+    final status =
+        event.actionStatus != null
+            ? ' · ${event.actionType ?? 'action'}: ${event.actionStatus}'
+            : '';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => _selectionMode ? _toggleSelected(event.id) : _showDetailSheet(event),
+          onTap:
+              () =>
+                  _selectionMode
+                      ? _toggleSelected(event.id)
+                      : _showDetailSheet(event),
           onLongPress: () => _toggleSelected(event.id),
           child: IntrinsicHeight(
             child: Row(
@@ -468,15 +547,22 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     child: Row(
                       children: [
                         if (_selectionMode)
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: Icon(
-                              _selectedIds.contains(event.id) ? Icons.check_circle : Icons.radio_button_unchecked,
-                              color: _selectedIds.contains(event.id) ? NurbyColors.accent : NurbyColors.mutedForeground,
+                              _selectedIds.contains(event.id)
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked,
+                              color:
+                                  _selectedIds.contains(event.id)
+                                      ? NurbyColors.accent
+                                      : NurbyColors.mutedForeground,
                             ),
                           ),
                         Expanded(
@@ -489,13 +575,17 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                    fontSize: 14, fontWeight: FontWeight.w600),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                               const SizedBox(height: 4),
-                              Text('$time$status',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: monoStyle),
+                              Text(
+                                '$time$status',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: monoStyle,
+                              ),
                             ],
                           ),
                         ),
@@ -505,13 +595,16 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                               foregroundColor: NurbyColors.accent,
                               minimumSize: const Size(0, 32),
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10),
+                                horizontal: 10,
+                              ),
                             ),
                             onPressed: () => _ack(event),
                             child: const Text(
                               'Ack',
                               style: TextStyle(
-                                  fontSize: 12.5, fontWeight: FontWeight.w600),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                       ],
@@ -531,96 +624,114 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       context: context,
       backgroundColor: NurbyColors.card,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-              20, 18, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-          child: SingleChildScrollView(
-            child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(event.ruleName,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 14),
-              _kv('FIRED',
-                  DateFormat('MMM d, yyyy HH:mm:ss').format(event.firedAt)),
-              if (event.actionType != null)
-                _kv(
-                    'ACTION',
-                    '${event.actionType}'
-                    '${event.actionStatus != null ? ' · ${event.actionStatus}' : ''}'),
-              _kv('STATUS', event.acked ? 'acknowledged' : 'unreviewed'),
-              const SizedBox(height: 12),
-              // Ack says "I saw this". Mute says "stop telling me". On a
-              // phone, where the alert actually lands, the second is the
-              // more urgent of the two.
-              Wrap(
-                spacing: 6,
-                children: [
-                  for (final (d, label) in kMuteChoices)
-                    ActionChip(
-                      avatar: const Icon(Icons.notifications_off_outlined,
-                          size: 14),
-                      label: Text(label, style: const TextStyle(fontSize: 12)),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _mute(event, d);
-                      },
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Feedback (#195) asks whether the alert was useful or even
-              // correct; notes are the free-text follow-up.
-              EventFeedbackPanel(eventId: event.id),
-              const SizedBox(height: 16),
-              EventNotes(eventId: event.id),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  if (event.observationId != null) ...[
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.image_outlined, size: 18),
-                      label: const Text('View sighting'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: NurbyColors.foreground,
-                        side: const BorderSide(color: NurbyColors.border),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _showObservationSheet(event.observationId!);
-                      },
-                    ),
-                    const SizedBox(width: 10),
-                  ],
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.ios_share, size: 18),
-                    label: const Text('Share'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: NurbyColors.foreground,
-                      side: const BorderSide(color: NurbyColors.border),
-                    ),
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      showCreateShareSheet(
-                        context,
-                        kind: 'event',
-                        resourceId: event.id,
-                        label: event.ruleName,
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-          ),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      isScrollControlled: true,
+      builder:
+          (ctx) => SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                18,
+                20,
+                MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.ruleName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _kv(
+                      'FIRED',
+                      DateFormat('MMM d, yyyy HH:mm:ss').format(event.firedAt),
+                    ),
+                    if (event.actionType != null)
+                      _kv(
+                        'ACTION',
+                        '${event.actionType}'
+                            '${event.actionStatus != null ? ' · ${event.actionStatus}' : ''}',
+                      ),
+                    _kv('STATUS', event.acked ? 'acknowledged' : 'unreviewed'),
+                    const SizedBox(height: 12),
+                    // Ack says "I saw this". Mute says "stop telling me". On a
+                    // phone, where the alert actually lands, the second is the
+                    // more urgent of the two.
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        for (final (d, label) in kMuteChoices)
+                          ActionChip(
+                            avatar: const Icon(
+                              Icons.notifications_off_outlined,
+                              size: 14,
+                            ),
+                            label: Text(
+                              label,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _mute(event, d);
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Feedback (#195) asks whether the alert was useful or even
+                    // correct; notes are the free-text follow-up.
+                    EventFeedbackPanel(eventId: event.id),
+                    const SizedBox(height: 16),
+                    EventNotes(eventId: event.id),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        if (event.observationId != null) ...[
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.image_outlined, size: 18),
+                            label: const Text('View sighting'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: NurbyColors.foreground,
+                              side: const BorderSide(color: NurbyColors.border),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _showObservationSheet(event.observationId!);
+                            },
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.ios_share, size: 18),
+                          label: const Text('Share'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: NurbyColors.foreground,
+                            side: const BorderSide(color: NurbyColors.border),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            showCreateShareSheet(
+                              context,
+                              kind: 'event',
+                              resourceId: event.id,
+                              label: event.ruleName,
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
     );
   }
 
@@ -628,8 +739,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     try {
       await ref.read(eventRepoProvider).mute(event.id, duration: d);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Muted.')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Muted.')));
       }
     } catch (e) {
       if (mounted) _showMutationError(e);
@@ -667,85 +779,99 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       backgroundColor: NurbyColors.card,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) => Consumer(
-        builder: (ctx, ref, _) {
-          final obsAsync = ref.watch(_observationProvider(observationId));
-          return SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              child: obsAsync.when(
-                loading: () => const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                error: (e, _) => Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(apiErrorMessage(e),
-                      style:
-                          const TextStyle(color: NurbyColors.mutedForeground)),
-                ),
-                data: (obs) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (obs.thumbnailPath != null) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          ref
-                              .read(observationRepoProvider)
-                              .thumbnailUrl(obs.id),
-                          width: double.infinity,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) =>
-                              const SizedBox.shrink(),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                    ],
-                    Text(
-                      obs.vlmDescription ?? 'No description',
-                      style: const TextStyle(fontSize: 14, height: 1.4),
-                    ),
-                    if (obs.labels.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          for (final label in obs.labels)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 9, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: NurbyColors.cardElevated,
-                                border:
-                                    Border.all(color: NurbyColors.border),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                label,
-                                style: const TextStyle(
-                                    fontSize: 11.5,
-                                    color: NurbyColors.mutedForeground),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    Text(
-                      DateFormat('MMM d, yyyy HH:mm:ss').format(obs.startedAt),
-                      style: monoStyle,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      builder:
+          (ctx) => Consumer(
+            builder: (ctx, ref, _) {
+              final obsAsync = ref.watch(_observationProvider(observationId));
+              return SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  child: obsAsync.when(
+                    loading:
+                        () => const Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                    error:
+                        (e, _) => Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            apiErrorMessage(e),
+                            style: const TextStyle(
+                              color: NurbyColors.mutedForeground,
+                            ),
+                          ),
+                        ),
+                    data:
+                        (obs) => Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (obs.thumbnailPath != null) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(
+                                  ref
+                                      .read(observationRepoProvider)
+                                      .thumbnailUrl(obs.id),
+                                  width: double.infinity,
+                                  fit: BoxFit.contain,
+                                  errorBuilder:
+                                      (_, __, ___) => const SizedBox.shrink(),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                            ],
+                            Text(
+                              obs.vlmDescription ?? 'No description',
+                              style: const TextStyle(fontSize: 14, height: 1.4),
+                            ),
+                            if (obs.labels.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  for (final label in obs.labels)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 9,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: NurbyColors.cardElevated,
+                                        border: Border.all(
+                                          color: NurbyColors.border,
+                                        ),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        label,
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          color: NurbyColors.mutedForeground,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            Text(
+                              DateFormat(
+                                'MMM d, yyyy HH:mm:ss',
+                              ).format(obs.startedAt),
+                              style: monoStyle,
+                            ),
+                          ],
+                        ),
+                  ),
+                ),
+              );
+            },
+          ),
     );
   }
 }
@@ -761,8 +887,10 @@ class _ErrorRetry extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(message,
-              style: const TextStyle(color: NurbyColors.mutedForeground)),
+          Text(
+            message,
+            style: const TextStyle(color: NurbyColors.mutedForeground),
+          ),
           const SizedBox(height: 12),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
         ],
