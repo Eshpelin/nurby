@@ -503,12 +503,23 @@ async def feedback_summary(
         )
     ).scalar_one()
 
+    # Nuisance alerts are reviewed alerts marked incorrect or correct-but-not-
+    # useful. Keep both denominators explicit: reviewed-rate is the honest
+    # quality signal, while fired-rate makes sparse feedback visible instead
+    # of rewarding a low response rate.
+    nuisance_alerts = rating_counts.get("correct_but_not_useful", 0) + rating_counts.get("incorrect", 0)
+    nuisance_rate_reviewed = round(nuisance_alerts / reviewed_rows, 4) if reviewed_rows else None
+    nuisance_rate_fired = round(nuisance_alerts / total_events, 4) if total_events else None
+
     return {
         "window_hours": hours,
         "events_fired": total_events,
         "events_reviewed": reviewed_rows,
         "response_rate": round(reviewed_rows / total_events, 4) if total_events else None,
         "distinct_reviewers": reviewers,
+        "nuisance_alerts": nuisance_alerts,
+        "nuisance_rate_reviewed": nuisance_rate_reviewed,
+        "nuisance_rate_fired": nuisance_rate_fired,
         "rating_counts": {
             "useful": rating_counts.get("useful", 0),
             "correct_but_not_useful": rating_counts.get("correct_but_not_useful", 0),

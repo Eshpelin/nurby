@@ -294,6 +294,9 @@ async def test_summary_reports_counts_and_response_rate():
     assert res["events_reviewed"] == 4
     assert res["response_rate"] == 0.4
     assert res["distinct_reviewers"] == 2
+    assert res["nuisance_alerts"] == 2
+    assert res["nuisance_rate_reviewed"] == 0.5
+    assert res["nuisance_rate_fired"] == 0.2
     assert res["rating_counts"] == {
         "useful": 6, "correct_but_not_useful": 0, "incorrect": 2,
     }
@@ -311,6 +314,8 @@ async def test_summary_with_no_events_has_no_rate():
     ])
     res = await events_routes.feedback_summary(hours=24, _current_user=_user("admin"), db=db)
     assert res["response_rate"] is None
+    assert res["nuisance_rate_reviewed"] is None
+    assert res["nuisance_rate_fired"] is None
 
 
 # ── schema gating over HTTP ─────────────────────────────────────────
