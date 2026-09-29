@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { RecordingModal } from "@/components/RecordingModal";
 import { formatWith } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 // A scrubber for one camera with an activity heatmap drawn over it.
 //
@@ -78,7 +79,8 @@ export function ActivityStrip({
   variant?: "full" | "compact";
   hours?: number;
 }) {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const compact = variant === "compact";
   const [hours, setHours] = useState(fixedHours ?? 3);
   const [data, setData] = useState<StripData | null>(null);
@@ -188,7 +190,7 @@ export function ActivityStrip({
     const hit = clipFor(ms);
     if (!hit) {
       // Motion-triggered recording leaves gaps. Say so rather than no-op.
-      setNote(`No footage at ${fmtClock(ms)}`);
+      setNote(t("activity_strip.no_footage_at", { time: fmtClock(ms) }));
       setTimeout(() => setNote(null), 1800);
       return;
     }
@@ -245,7 +247,7 @@ export function ActivityStrip({
 
       {!hasAny && (
         <div className="absolute inset-0 flex items-center justify-center text-[9px] text-muted-foreground pointer-events-none">
-          No activity in the last {hours}h
+          {t("activity_strip.no_activity", { hours })}
         </div>
       )}
     </div>
@@ -260,14 +262,14 @@ export function ActivityStrip({
         <span className="font-mono">{fmtClock(hoverMs)}</span>
         {hoverBucket.person_ids.length > 0 && (
           <span className="ml-1.5 text-green-400">
-            {hoverBucket.person_ids.map((id) => personById[id]?.name || "Unknown").join(", ")}
+            {hoverBucket.person_ids.map((id) => personById[id]?.name || t("activity_strip.unknown")).join(", ")}
           </span>
         )}
         {hoverBucket.person_ids.length === 0 && hoverBucket.motion > 0 && (
-          <span className="ml-1.5 text-sky-400">movement</span>
+          <span className="ml-1.5 text-sky-400">{t("activity_strip.movement")}</span>
         )}
         <span className="ml-1.5 text-muted-foreground">
-          {hoverHasFootage ? "· click to play" : "· no footage"}
+          {hoverHasFootage ? t("activity_strip.click_to_play") : t("activity_strip.no_footage")}
         </span>
       </div>
     ) : null;
@@ -279,7 +281,7 @@ export function ActivityStrip({
           key={p.id}
           className="absolute -translate-x-1/2"
           style={{ left: `${pctOf(p.first_seen)}%` }}
-          title={`${p.name || "Unknown"} · ${fmtClock(p.first_seen)}–${fmtClock(p.last_seen)}`}
+          title={`${p.name || t("activity_strip.unknown")} · ${fmtClock(p.first_seen)}–${fmtClock(p.last_seen)}`}
         >
           {p.name ? (
             <img
@@ -327,13 +329,13 @@ export function ActivityStrip({
     <div className="rounded-lg border border-border bg-card/50 p-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Activity
+          {t("activity_strip.activity")}
         </span>
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
-            <span className="w-2 h-2 rounded-sm bg-sky-400/70" /> movement
-            <span className="w-2 h-2 rounded-sm bg-green-500/80 ml-1.5" /> person
-            <span className="w-2 h-2 rounded-sm bg-white/10 ml-1.5" /> footage
+            <span className="w-2 h-2 rounded-sm bg-sky-400/70" /> {t("activity_strip.movement")}
+            <span className="w-2 h-2 rounded-sm bg-green-500/80 ml-1.5" /> {t("activity_strip.person")}
+            <span className="w-2 h-2 rounded-sm bg-white/10 ml-1.5" /> {t("activity_strip.footage")}
           </span>
           <div className="flex items-center gap-1">
             {HOURS_OPTIONS.map((x) => (
@@ -359,7 +361,7 @@ export function ActivityStrip({
       </div>
       <div className="flex justify-between mt-1 text-[9px] text-muted-foreground font-mono">
         <span>{data ? fmtClock(data.start) : ""}</span>
-        <span>{note || (data ? fmtClock(data.end) : "now")}</span>
+        <span>{note || (data ? fmtClock(data.end) : t("activity_strip.now"))}</span>
       </div>
       {modal}
     </div>
