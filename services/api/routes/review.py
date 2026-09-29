@@ -80,6 +80,19 @@ def _association_visible(association: EntityAssociation, allowed) -> bool:
     return bool(allowed_ids.intersection(str(camera_id) for camera_id in (association.camera_histogram or {})))
 
 
+def _scoped_camera_histogram(association: EntityAssociation, allowed) -> dict[str, int]:
+    """Return only camera counts visible to the current reviewer."""
+    histogram = association.camera_histogram or {}
+    if allowed is ALL:
+        return {str(camera_id): int(count or 0) for camera_id, count in histogram.items()}
+    allowed_ids = {str(camera_id) for camera_id in allowed}
+    return {
+        str(camera_id): int(count or 0)
+        for camera_id, count in histogram.items()
+        if str(camera_id) in allowed_ids
+    }
+
+
 def _supporting_evidence_count(association: EntityAssociation) -> int:
     """Read support counts from both current and pre-lifecycle rows.
 
@@ -602,7 +615,7 @@ async def list_review_items(
                     "distinct_days": association.distinct_days,
                     "first_seen_at": association.first_seen_at,
                     "last_seen_at": association.last_seen_at,
-                    "camera_histogram": association.camera_histogram or {},
+                    "camera_histogram": _scoped_camera_histogram(association, allowed),
                     "evidence_policy": evidence_policy(
                         _supporting_evidence_count(association),
                         getattr(association, "contradictory_evidence_count", 0),

@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from services.api.routes.review import _scoped_evidence
 from services.api.routes.review import _association_visible
+from services.api.routes.review import _scoped_camera_histogram
 from services.api.routes.review import _supporting_evidence_count
 from services.api.routes.review import _reconcile_observation_sources
 from shared.camera_access import ALL
@@ -67,6 +68,13 @@ def test_association_visibility_is_camera_scoped_before_queue_pagination():
     assert _association_visible(row, {"camera-a"}) is True
     assert _association_visible(row, {"camera-c"}) is False
     assert _association_visible(row, ALL) is True
+
+
+def test_association_histogram_does_not_leak_restricted_cameras():
+    row = SimpleNamespace(camera_histogram={"camera-a": 2, "camera-b": 7})
+
+    assert _scoped_camera_histogram(row, {"camera-a"}) == {"camera-a": 2}
+    assert _scoped_camera_histogram(row, ALL) == {"camera-a": 2, "camera-b": 7}
 
 
 def test_legacy_association_support_falls_back_to_evidence_count():
