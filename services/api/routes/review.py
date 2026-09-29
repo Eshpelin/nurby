@@ -93,6 +93,35 @@ def _scoped_camera_histogram(association: EntityAssociation, allowed) -> dict[st
     }
 
 
+def _pending_cluster_query(cluster_model, sample_model, allowed):
+    """Build a pending-cluster query scoped by any visible sample.
+
+    ``first_camera_id`` is only a creation-time hint. A cluster can be first
+    seen on a restricted camera and later have valid evidence on a camera the
+    reviewer may access, so ACL filtering must use the sample ledger before
+    pagination.
+    """
+    query = select(cluster_model).where(cluster_model.status == "pending")
+    if allowed is not ALL:
+        query = (
+            query.join(sample_model, sample_model.cluster_id == cluster_model.id)
+            .where(sample_model.camera_id.in_(allowed))
+            .distinct()
+        )
+    return query.order_by(cluster_model.last_seen_at.desc())
+
+
+def _visible_cluster_camera_id(cluster, recurrence: dict, allowed):
+    """Return a camera id safe to attach to a review item."""
+    visible = recurrence.get("camera_ids") or []
+    if visible:
+        try:
+            return uuid.UUID(str(visible[0]))
+        except (TypeError, ValueError):
+            pass
+    return cluster.first_camera_id if allowed is ALL else None
+
+
 def _supporting_evidence_count(association: EntityAssociation) -> int:
     """Read support counts from both current and pre-lifecycle rows.
 
@@ -449,13 +478,7 @@ async def list_review_items(
             ))))
         except (TypeError, ValueError):
             recurrence_threshold_days = 3
-        face_query = apply_camera_filter(
-            select(FaceCluster)
-            .where(FaceCluster.status == "pending")
-            .order_by(FaceCluster.last_seen_at.desc()),
-            allowed,
-            FaceCluster.first_camera_id,
-        )
+        face_query = _pending_cluster_query(FaceCluster, FaceClusterSample, allowed)
         face_clusters = (await db.execute(face_query.limit(100))).scalars().all()
         face_recurrence = await _cluster_sample_summaries(
             db, FaceClusterSample, [cluster.id for cluster in face_clusters], allowed
@@ -480,7 +503,7 @@ async def list_review_items(
                 ),
                 created_at=cluster.first_seen_at,
                 updated_at=cluster.last_seen_at,
-                camera_id=cluster.first_camera_id,
+                camera_id=_visible_cluster_camera_id(cluster, recurrence, allowed),
                 unread=True,
                 evidence={
                     "sample_thumbnail_path": cluster.sample_thumbnail_path,
@@ -493,13 +516,7 @@ async def list_review_items(
                 provenance={"source": "face_cluster", "cluster_status": cluster.status},
             ))
 
-        body_query = apply_camera_filter(
-            select(BodyCluster)
-            .where(BodyCluster.status == "pending")
-            .order_by(BodyCluster.last_seen_at.desc()),
-            allowed,
-            BodyCluster.first_camera_id,
-        )
+        body_query = _pending_cluster_query(BodyCluster, BodyClusterSample, allowed)
         body_clusters = (await db.execute(body_query.limit(100))).scalars().all()
         body_recurrence = await _cluster_sample_summaries(
             db, BodyClusterSample, [cluster.id for cluster in body_clusters], allowed
@@ -524,7 +541,7 @@ async def list_review_items(
                 ),
                 created_at=cluster.first_seen_at,
                 updated_at=cluster.last_seen_at,
-                camera_id=cluster.first_camera_id,
+                camera_id=_visible_cluster_camera_id(cluster, recurrence, allowed),
                 unread=True,
                 evidence={
                     "sample_thumbnail_path": cluster.sample_thumbnail_path,

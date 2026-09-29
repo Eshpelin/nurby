@@ -6,6 +6,7 @@ from services.api.routes.review import _association_visible
 from services.api.routes.review import _scoped_camera_histogram
 from services.api.routes.review import _supporting_evidence_count
 from services.api.routes.review import _reconcile_observation_sources
+from services.api.routes.review import _visible_cluster_camera_id
 from shared.camera_access import ALL
 
 
@@ -75,6 +76,20 @@ def test_association_histogram_does_not_leak_restricted_cameras():
 
     assert _scoped_camera_histogram(row, {"camera-a"}) == {"camera-a": 2}
     assert _scoped_camera_histogram(row, ALL) == {"camera-a": 2, "camera-b": 7}
+
+
+def test_review_cluster_camera_uses_visible_sample_not_first_camera():
+    first_camera = uuid4()
+    visible_camera = uuid4()
+    cluster = SimpleNamespace(first_camera_id=first_camera)
+
+    assert _visible_cluster_camera_id(
+        cluster, {"camera_ids": [str(visible_camera)]}, {str(visible_camera)}
+    ) == visible_camera
+    assert _visible_cluster_camera_id(
+        cluster, {"camera_ids": []}, {str(visible_camera)}
+    ) is None
+    assert _visible_cluster_camera_id(cluster, {"camera_ids": []}, ALL) == first_camera
 
 
 def test_legacy_association_support_falls_back_to_evidence_count():
