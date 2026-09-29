@@ -95,6 +95,21 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
     }
   };
 
+  const revoke = async () => {
+    if (!window.confirm(t("voiceprint.revoke_help"))) return;
+    setBusy(true);
+    try {
+      const response = await authFetch(`/api/voiceprints/persons/${personId}/profile`, { method: "DELETE" });
+      if (!response.ok) throw new Error(`Could not revoke voiceprint (${response.status})`);
+      setSelected(new Set());
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Voiceprint revocation failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const candidates = clips.filter((clip) => clip.review_status === "candidate");
   const confirmed = clips.filter((clip) => clip.review_status === "confirmed");
   const rejected = clips.filter((clip) => clip.review_status === "rejected");
@@ -117,6 +132,11 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
         </span>
         {trainingModel && <> · {t("voiceprint.training_meta", { count: trainingSampleCount, model: trainingModel })}</>}
       </div>
+      {trainingStatus === "ready" && (
+        <button type="button" onClick={() => void revoke()} disabled={busy} className="mt-2 text-[10px] text-red-300 hover:text-red-200 disabled:opacity-50">
+          {busy ? t("voiceprint.revoking") : t("voiceprint.revoke")}
+        </button>
+      )}
       {loading ? <p className="py-3 text-xs text-muted-foreground">{t("voiceprint.finding")}</p> : error ? <p className="py-3 text-xs text-red-400">{error}</p> : (
         <>
           {candidates.length === 0 && confirmed.length === 0 && <p className="py-3 text-xs text-muted-foreground">{t("voiceprint.no_clips")}</p>}

@@ -207,3 +207,35 @@ async def decide_voiceprint_candidate(
             else profile.last_error or "No retained confirmed audio clips are available yet."
         ),
     }
+
+
+@router.delete("/persons/{person_id}/profile")
+async def revoke_voiceprint_profile(
+    person_id: uuid.UUID,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete the derived profile and revoke every confirmed source clip."""
+    if await db.get(Person, person_id) is None:
+        raise HTTPException(status_code=404, detail="Person not found")
+    profile = await db.scalar(select(VoiceprintProfile).where(VoiceprintProfile.person_id == person_id))
+    reviews = (await db.execute(
+        select(VoiceprintSampleReview)
+        .where(VoiceprintSampleReview.person_id == person_id)
+        .where(VoiceprintSampleReview.decision == "confirmed")
+    )).scalars().all()
+    now = datetime.now(timezone.utc)
+    for review in reviews:
+        review.decision = "removed"
+        review.consent_given = False
+        review.reviewed_by_user_id = current_user.id
+        review.reviewed_at = now
+    if profile is not None:
+        await db.delete(profile)
+    await db.commit()
+    return {
+        "person_id": str(person_id),
+        "profile_deleted": profile is not None,
+        "clips_revoked": len(reviews),
+        "training_ready": False,
+    }
