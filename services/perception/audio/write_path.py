@@ -67,6 +67,7 @@ async def _write(
         store_raw = bool(cam.audio_store_raw)
 
         capture_id: uuid.UUID | None = None
+        cap: AudioCapture | None = None
         if store_raw:
             new_capture_id = uuid.uuid4()
             stored = await write_opus(segment, new_capture_id)
@@ -142,6 +143,30 @@ async def _write(
             speaker_source=attribution.source if attribution else None,
             conversation_id=conversation_id,
         )
+        if cap is not None:
+            try:
+                from services.perception.audio.voiceprint import match_voiceprint
+
+                voice_match = await match_voiceprint(db, cap)
+                if voice_match is not None:
+                    voice_person_id, voice_confidence = voice_match
+                    if attribution is None or attribution.person_id is None:
+                        transcript.speaker_person_id = voice_person_id
+                        transcript.speaker_confidence = voice_confidence
+                        transcript.speaker_source = "voice"
+                    elif attribution.person_id == voice_person_id:
+                        transcript.speaker_confidence = min(
+                            1.0, ((attribution.confidence or 0.0) + voice_confidence) / 2
+                        )
+                        transcript.speaker_source = "fused"
+                    else:
+                        # Conflicting identity signals are reviewable ambiguity,
+                        # never a silent winner.
+                        transcript.speaker_person_id = None
+                        transcript.speaker_confidence = None
+                        transcript.speaker_source = "ambiguous"
+            except Exception:
+                logger.exception("voiceprint attribution failed capture=%s", cap.id)
         db.add(transcript)
         try:
             from services.perception.audio.name_mentions import process_transcript_name_mentions

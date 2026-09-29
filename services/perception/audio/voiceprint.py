@@ -26,6 +26,8 @@ logger = logging.getLogger("nurby.perception.audio.voiceprint")
 
 MODEL_VERSION = "mfcc-local-v1"
 EMBEDDING_DIMENSION = 240
+MATCH_THRESHOLD = 0.88
+MATCH_MARGIN = 0.05
 
 
 def extract_voiceprint_features(path: str) -> list[float]:
@@ -51,6 +53,55 @@ def extract_voiceprint_features(path: str) -> list[float]:
     if norm <= 0:
         raise ValueError("audio feature extraction returned an empty vector")
     return (vector / norm).astype(np.float32).tolist()
+
+
+def select_voiceprint_match(
+    candidates: list[tuple[UUID, list[float]]],
+    vector: list[float],
+    *,
+    threshold: float = MATCH_THRESHOLD,
+    margin: float = MATCH_MARGIN,
+) -> tuple[UUID, float] | None:
+    """Choose one sufficiently separated profile, otherwise remain unknown."""
+    probe = np.asarray(vector, dtype=np.float32)
+    probe_norm = float(np.linalg.norm(probe))
+    if probe_norm <= 0:
+        return None
+    scored: list[tuple[UUID, float]] = []
+    for person_id, embedding in candidates:
+        profile = np.asarray(embedding, dtype=np.float32)
+        profile_norm = float(np.linalg.norm(profile))
+        if profile_norm <= 0 or profile.shape != probe.shape:
+            continue
+        score = float(np.dot(probe, profile) / (probe_norm * profile_norm))
+        if np.isfinite(score):
+            scored.append((person_id, score))
+    if not scored:
+        return None
+    scored.sort(key=lambda item: item[1], reverse=True)
+    best = scored[0]
+    if best[1] < threshold or len(scored) > 1 and best[1] - scored[1][1] < margin:
+        return None
+    return best
+
+
+async def match_voiceprint(db: AsyncSession, capture: AudioCapture) -> tuple[UUID, float] | None:
+    """Return a conservative hypothesis for one retained capture."""
+    path = resolve_inside(capture.file_path, settings.audio_storage_path)
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        vector = extract_voiceprint_features(path)
+    except Exception:
+        logger.warning("voiceprint matching failed capture=%s", capture.id, exc_info=True)
+        return None
+    rows = (await db.execute(
+        select(VoiceprintProfile.person_id, VoiceprintProfile.embedding)
+        .where(VoiceprintProfile.status == "ready")
+        .where(VoiceprintProfile.consent_confirmed.is_(True))
+        .where(VoiceprintProfile.embedding.is_not(None))
+    )).all()
+    return select_voiceprint_match([(person_id, embedding) for person_id, embedding in rows], vector)
 
 
 async def train_voiceprint(db: AsyncSession, person_id: UUID) -> VoiceprintProfile:
