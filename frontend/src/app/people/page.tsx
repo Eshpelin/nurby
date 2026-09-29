@@ -1167,16 +1167,16 @@ export default function PeoplePage() {
           />
           <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-2xl shadow-xl max-h-[85vh] overflow-y-auto">
             <h2 className="text-lg font-semibold mb-1">
-              Choose a photo for {photoPickerPerson.display_name}
+              {t("people.choose_photo", { name: photoPickerPerson.display_name })}
             </h2>
             <p className="text-xs text-muted-foreground mb-4">
-              Pick the clearest face from recent detections. It becomes their profile photo.
+              {t("people.choose_photo_help")}
             </p>
             {photoLoading ? (
-              <div className="py-12 text-center text-sm text-muted-foreground">Loading faces.</div>
+              <div className="py-12 text-center text-sm text-muted-foreground">{t("people.loading_faces")}</div>
             ) : photoCandidates.length === 0 ? (
               <div className="py-12 text-center text-sm text-muted-foreground">
-                No detected faces yet for this person.
+                {t("people.no_faces")}
               </div>
             ) : (
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
@@ -1191,7 +1191,7 @@ export default function PeoplePage() {
                       onClick={() => choosePhoto(c.observation_id)}
                       disabled={settingPhoto}
                       className="relative aspect-square rounded-md overflow-hidden border border-border hover:border-accent focus:border-accent transition-colors disabled:opacity-50"
-                      title="Use this photo"
+                      title={t("people.use_photo")}
                     >
                       <img
                         src={`/api/observations/${c.observation_id}/thumbnail${token ? `?token=${token}` : ""}`}
@@ -1210,7 +1210,7 @@ export default function PeoplePage() {
                 disabled={settingPhoto}
                 className="px-3 py-2 text-sm rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
               >
-                {settingPhoto ? "Saving." : "Close"}
+                {settingPhoto ? t("people.saving_dot") : t("people.close")}
               </button>
             </div>
           </div>
@@ -1225,14 +1225,9 @@ export default function PeoplePage() {
             onClick={() => setNameMergeConfirm(null)}
           />
           <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md shadow-xl">
-            <h2 className="text-lg font-semibold mb-1">Add to existing person?</h2>
+            <h2 className="text-lg font-semibold mb-1">{t("people.add_existing_title")}</h2>
             <p className="text-xs text-muted-foreground mb-5 leading-relaxed">
-              A person named{" "}
-              <span className="font-medium text-foreground">{nameMergeConfirm.existingName}</span>{" "}
-              already exists. This is usually the same person picked up as a
-              separate face. Add this face to{" "}
-              <span className="font-medium text-foreground">{nameMergeConfirm.existingName}</span>{" "}
-              so their sightings stay together?
+              {t("people.add_existing_body", { name: nameMergeConfirm.existingName })}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -1240,7 +1235,7 @@ export default function PeoplePage() {
                 disabled={namingSubmitting === nameMergeConfirm.clusterId}
                 className="px-3 py-2 text-sm rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
               >
-                Cancel
+                {t("people.cancel")}
               </button>
               <button
                 onClick={() => handleNameSuggestion(nameMergeConfirm.clusterId, false, true)}
@@ -1248,8 +1243,8 @@ export default function PeoplePage() {
                 className="px-3 py-2 text-sm rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
               >
                 {namingSubmitting === nameMergeConfirm.clusterId
-                  ? "Saving."
-                  : "Keep separate"}
+                  ? t("people.saving_dot")
+                  : t("people.keep_separate")}
               </button>
               <button
                 onClick={() => handleNameSuggestion(nameMergeConfirm.clusterId, true)}
@@ -1257,8 +1252,8 @@ export default function PeoplePage() {
                 className="px-3 py-2 text-sm rounded-md bg-accent text-accent-foreground hover:bg-accent/90 transition-colors disabled:opacity-50"
               >
                 {namingSubmitting === nameMergeConfirm.clusterId
-                  ? "Adding."
-                  : `Add to ${nameMergeConfirm.existingName}`}
+                  ? t("people.saving_dot")
+                  : t("people.add_to", { name: nameMergeConfirm.existingName })}
               </button>
             </div>
           </div>
@@ -1273,17 +1268,12 @@ export default function PeoplePage() {
             onClick={() => { if (!merging) setMergePerson(null); }}
           />
           <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md shadow-xl">
-            <h2 className="text-lg font-semibold mb-1">Merge person</h2>
+            <h2 className="text-lg font-semibold mb-1">{t("people.merge_title")}</h2>
             <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-              All faces and sightings of{" "}
-              <span className="font-medium text-foreground">{mergePerson.display_name}</span>{" "}
-              move to the person you pick, and{" "}
-              <span className="font-medium text-foreground">{mergePerson.display_name}</span>{" "}
-              is deleted. Use this when the same real person was enrolled twice.
-              This cannot be undone.
+              {t("people.merge_body", { name: mergePerson.display_name })}
             </p>
             <label className="text-xs font-medium text-muted-foreground block mb-1">
-              Merge into
+              {t("people.merge_into")}
             </label>
             <select
               value={mergeTargetId}
@@ -1291,7 +1281,7 @@ export default function PeoplePage() {
               className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
               autoFocus
             >
-              <option value="">Select a person</option>
+              <option value="">{t("people.select_person")}</option>
               {persons
                 .filter((p) => p.id !== mergePerson.id)
                 .map((p) => (
@@ -1304,14 +1294,14 @@ export default function PeoplePage() {
                 disabled={merging}
                 className="px-3 py-2 text-sm rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
               >
-                Cancel
+                {t("people.cancel")}
               </button>
               <button
                 onClick={handleMerge}
                 disabled={!mergeTargetId || merging}
                 className="px-3 py-2 text-sm rounded-md bg-accent text-accent-foreground hover:bg-accent/90 transition-colors disabled:opacity-50"
               >
-                {merging ? "Merging." : "Merge"}
+                {merging ? t("people.merging") : t("people.merge")}
               </button>
             </div>
           </div>
@@ -1327,7 +1317,7 @@ export default function PeoplePage() {
           />
           <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md shadow-xl">
             <h2 className="text-lg font-semibold mb-4">
-              {editPerson ? "Edit person" : "Add person"}
+              {editPerson ? t("people.edit_person") : t("people.add_person_title")}
             </h2>
 
             <div className="space-y-3">
@@ -1445,7 +1435,7 @@ export default function PeoplePage() {
                 disabled={submitting}
                 className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
               >
-                {submitting ? "Saving." : "Save"}
+                {submitting ? t("people.saving_dot") : t("people.save")}
               </button>
             </div>
           </div>
