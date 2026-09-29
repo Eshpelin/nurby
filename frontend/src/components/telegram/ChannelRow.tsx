@@ -413,13 +413,13 @@ export function ChannelRow({
             {channel.delivery_mode === "webhook" && webhookInfo && (
               <div className="mt-2 text-[11px] text-muted-foreground space-y-1">
                 <div>
-                  URL.{" "}
+                  {t("telegram.url")}{" "}
                   <span className="font-mono text-foreground/90 break-all">
-                    {webhookInfo.url || "(not registered)"}
+                    {webhookInfo.url || t("telegram.not_registered")}
                   </span>
                 </div>
                 <div>
-                  Pending updates.{" "}
+                  {t("telegram.pending_updates")}{" "}
                   <span
                     className={
                       webhookInfo.pending_update_count > 0
@@ -432,19 +432,17 @@ export function ChannelRow({
                 </div>
                 {webhookInfo.pending_update_count > 0 && (
                   <div className="text-amber-400">
-                    Telegram has {webhookInfo.pending_update_count} unprocessed updates.
-                    Check your public URL is reachable.
+                    {t("telegram.pending_help", { count: webhookInfo.pending_update_count })}
                   </div>
                 )}
                 {webhookInfo.last_error_message && (
                   <div className="text-red-400">
-                    Last error. {webhookInfo.last_error_message}
+                    {t("telegram.last_error")} {webhookInfo.last_error_message}
                   </div>
                 )}
                 {webhookInfo.backend_reachable === false && (
                   <div className="text-red-400">
-                    Backend not reachable at the public URL.{" "}
-                    {webhookInfo.backend_probe_error || "Webhook delivery will silently fail."}
+                    {t("telegram.backend_unreachable")} {webhookInfo.backend_probe_error || t("telegram.webhook_silent_fail")}
                   </div>
                 )}
                 <div className="flex gap-2 pt-1">
@@ -500,7 +498,7 @@ export function ChannelRow({
 
           {/* Media quality */}
           <div>
-            <div className="text-xs font-medium mb-1.5">Media quality</div>
+            <div className="text-xs font-medium mb-1.5">{t("telegram.media_quality")}</div>
             <div className="flex gap-2">
               {(["off", "low", "high"] as const).map((q) => (
                 <label key={q} className="flex items-center gap-1.5 text-[11px] cursor-pointer">
@@ -523,11 +521,11 @@ export function ChannelRow({
 
           {/* Per-chat rate limit */}
           <div>
-            <div className="text-xs font-medium mb-1.5">Per-chat rate limit</div>
+            <div className="text-xs font-medium mb-1.5">{t("telegram.rate_limit")}</div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <div className="text-[11px] text-muted-foreground mb-0.5">
-                  QPS. <span className="text-foreground/90">{qpsLocal.toFixed(2)}</span>
+                  {t("telegram.qps")}. <span className="text-foreground/90">{qpsLocal.toFixed(2)}</span>
                 </div>
                 <input
                   type="range"
