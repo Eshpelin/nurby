@@ -72,6 +72,15 @@ def test_naive_timestamps_are_rejected():
         advance(PackageLifecycle(), PackageEvidence(datetime(2026, 9, 28), present=True))
 
 
+def test_late_observation_cannot_move_lifecycle_backwards():
+    state = PackageLifecycle(state=PackageState.WAITING, last_present_at=BASE + timedelta(minutes=10))
+    late = advance(
+        state,
+        PackageEvidence(BASE + timedelta(minutes=3), present=False, observation_id=uuid4()),
+    )
+    assert late == state
+
+
 class _Result:
     def __init__(self, value):
         self.value = value

@@ -67,6 +67,15 @@ def advance(
     if evidence.observed_at.tzinfo is None:
         raise ValueError("observed_at must be timezone-aware")
 
+    # Capture/queue delivery can complete out of order. A late frame must not
+    # move the last-present boundary backwards, add an absence check from the
+    # past, or overwrite the evidence pointer for a newer observation.
+    if (
+        lifecycle.last_present_at is not None
+        and evidence.observed_at < lifecycle.last_present_at
+    ):
+        return lifecycle
+
     if lifecycle.state == PackageState.GONE:
         return lifecycle
 
