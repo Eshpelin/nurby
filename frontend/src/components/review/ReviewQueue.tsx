@@ -104,6 +104,7 @@ type VisualCandidate = {
 type ReviewQueueProps = {
   onOpenEvent?: (eventId: string) => void;
   focusId?: string | null;
+  cameraId?: string | null;
 };
 
 type ReviewFilter = "all" | "incident" | "alert" | "camera_health" | "notification" | "suggestions";
@@ -131,7 +132,7 @@ const RECOMMENDATION_LABEL_KEY: Record<string, string> = {
   review_conflict: "review.recommend_review_conflict",
 };
 
-export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
+export function ReviewQueue({ onOpenEvent, focusId, cameraId }: ReviewQueueProps) {
   const { authFetch, token, user } = useAuth();
   const t = useCallback(
     (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values),
@@ -160,6 +161,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
     setLoading(true);
     try {
       const params = new URLSearchParams({ limit: "25" });
+      if (cameraId) params.set("camera_id", cameraId);
       if (showArchived) params.set("include_archived", "true");
       if (unreadOnly) params.set("unread_only", "true");
       if (filter === "suggestions") {
@@ -183,7 +185,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
     } finally {
       setLoading(false);
     }
-  }, [authFetch, filter, focusId, showArchived, unreadOnly, t]);
+  }, [authFetch, cameraId, filter, focusId, showArchived, unreadOnly, t]);
 
   useEffect(() => {
     void load();
@@ -279,7 +281,8 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
     if (relationshipDetails[item.id]) return;
     setEvidenceLoading(item.id);
     try {
-      const res = await authFetch(`/api/review/relationship-suggestions/${item.source_id}`);
+      const detailQuery = cameraId ? `?camera_id=${encodeURIComponent(cameraId)}` : "";
+      const res = await authFetch(`/api/review/relationship-suggestions/${item.source_id}${detailQuery}`);
       if (!res.ok) throw new Error(t("review.evidence_unavailable"));
       const detail: RelationshipDetail = await res.json();
       setRelationshipDetails((current) => ({ ...current, [item.id]: detail }));

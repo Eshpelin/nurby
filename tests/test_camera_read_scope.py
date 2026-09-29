@@ -148,6 +148,14 @@ def test_association_review_scopes_histogram_before_candidate_window(http):
     assert not any("from household_mode_changes" in s for s in db.statements)
 
 
+def test_review_queue_rejects_foreign_camera_before_source_queries(http):
+    client, db = http
+    response = client.get("/review", params={"camera_id": str(db.foreign_camera)})
+    assert response.status_code == 404, response.text
+    assert not any("from events" in s or "from incidents" in s or
+                   "from entity_associations" in s for s in db.statements)
+
+
 @pytest.mark.parametrize("path", ["summaries", "transcripts", "conversations", "audio", "conversations/{id}/clip"])
 def test_foreign_detail_and_media_are_hidden(http, path):
     client, db = http

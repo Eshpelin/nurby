@@ -335,6 +335,7 @@ export default function EventsPage() {
       <ReviewQueue
         onOpenEvent={(eventId) => void openEvent(eventId)}
         focusId={searchParams.get("review")}
+        cameraId={cameraFilter || null}
       />
         <div className="mb-4"><ActivityFilterBar /></div>
 

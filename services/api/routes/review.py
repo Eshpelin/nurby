@@ -370,6 +370,7 @@ async def _camera_names(db: AsyncSession, camera_ids: Iterable[uuid.UUID]) -> di
 @router.get("", response_model=ReviewQueueResponse)
 async def list_review_items(
     kind: str | None = Query(default=None),
+    camera_id: uuid.UUID | None = Query(default=None),
     unread_only: bool = Query(default=False),
     include_archived: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=100),
@@ -389,6 +390,13 @@ async def list_review_items(
         raise HTTPException(status_code=422, detail=f"unknown review kind: {sorted(invalid)[0]}")
     requested &= _KINDS
     allowed = await allowed_camera_ids(current_user, db)
+    if camera_id is not None:
+        # Reject a foreign camera before any source query. This keeps the
+        # scoped queue consistent with the rest of the camera-aware API and
+        # prevents existence leaks through totals or pagination metadata.
+        if allowed is not ALL and camera_id not in allowed:
+            raise HTTPException(status_code=404, detail="Review queue not found")
+        allowed = {camera_id}
     items: list[ReviewItemResponse] = []
 
     if "incident" in requested:
@@ -1105,6 +1113,7 @@ async def decide_relationship_suggestion(
 @router.get("/relationship-suggestions/{association_id}")
 async def get_relationship_suggestion(
     association_id: uuid.UUID,
+    camera_id: uuid.UUID | None = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1114,6 +1123,10 @@ async def get_relationship_suggestion(
         raise HTTPException(status_code=404, detail="Relationship suggestion not found")
 
     allowed = await allowed_camera_ids(current_user, db)
+    if camera_id is not None:
+        if allowed is not ALL and camera_id not in allowed:
+            raise HTTPException(status_code=404, detail="Relationship suggestion not found")
+        allowed = {camera_id}
     allowed_ids = {str(camera_id) for camera_id in allowed} if allowed is not ALL else None
     association_cameras = {str(camera_id) for camera_id in (association.camera_histogram or {})}
     if allowed_ids is not None and not association_cameras.intersection(allowed_ids):
