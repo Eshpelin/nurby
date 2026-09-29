@@ -95,14 +95,14 @@ function formatTime(iso: string): string {
   return formatWith(d, { hour: "2-digit", minute: "2-digit" });
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: Locale): string {
   const d = new Date(iso);
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  if (d.toDateString() === today.toDateString()) return translate(locale, "common.today");
+  if (d.toDateString() === yesterday.toDateString()) return translate(locale, "common.yesterday");
   return formatWith(d, { month: "short", day: "numeric" });
 }
 
@@ -623,7 +623,7 @@ export default function PeoplePage() {
   // Group activities by date
   const groupedActivities: Record<string, PersonActivity[]> = {};
   for (const a of activities) {
-    const dateKey = formatDate(a.started_at);
+    const dateKey = formatDate(a.started_at, locale);
     if (!groupedActivities[dateKey]) groupedActivities[dateKey] = [];
     groupedActivities[dateKey].push(a);
   }
@@ -1465,7 +1465,7 @@ export default function PeoplePage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2 mt-2">
                       <select
-                        aria-label={`Replacement person for ${reference.name}`}
+                        aria-label={t("people.replacement_for", { name: reference.name })}
                         value={referenceTargetIds[`${reference.kind}:${reference.id}`] || ""}
                         onChange={(event) => setReferenceTargetIds((current) => ({
                           ...current,
