@@ -375,6 +375,8 @@ def test_contradiction_provenance_explains_expected_edge_and_visit_window():
     assert result["present_vehicle_ids"] == ["vehicle-2"]
     assert result["observation_count"] == 2
     assert result["journey_last_seen_at"].endswith("+00:00")
+    assert result["policy_version"] == "identity-evidence-v1"
+    assert result["score_semantics"] == "uncalibrated_support_balance"
 
 
 def test_cooccurrence_contradiction_provenance_is_explicit_and_bounded():
@@ -397,6 +399,7 @@ def test_cooccurrence_contradiction_provenance_is_explicit_and_bounded():
     assert result["pair"][0]["key"] == "face-1"
     assert result["camera_ids"] == ["camera-a"]
     assert result["observation_count"] == 2
+    assert result["policy_version"] == "identity-evidence-v1"
 
 
 def test_vehicle_visit_timing_is_a_conservative_reviewer_hint():

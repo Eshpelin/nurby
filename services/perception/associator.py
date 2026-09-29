@@ -60,6 +60,7 @@ logger = logging.getLogger("nurby.perception.associator")
 # enough that a single unusual day cannot mint a fact on its own.
 DEFAULT_MIN_DISTINCT_DAYS = 3
 DEFAULT_ASSOCIATION_STALE_DAYS = 45
+EVIDENCE_POLICY_VERSION = "identity-evidence-v1"
 COOCCURRENCE_GAP = timedelta(seconds=90)
 # A single shared keyframe is not enough to make a useful companionship
 # hypothesis. Journeys shorter than this remain available as ordinary
@@ -231,6 +232,8 @@ def contradiction_provenance(
     missing/low-quality observation without exposing raw frames here.
     """
     return {
+        "policy_version": EVIDENCE_POLICY_VERSION,
+        "score_semantics": "uncalibrated_support_balance",
         "policy": "absence_in_finalized_journey",
         "subject_kind": edge.subject_kind,
         "subject_key": edge.subject_key,
@@ -258,6 +261,8 @@ def cooccurrence_contradiction_provenance(
         {"kind": edge.object_kind, "key": edge.object_key},
     ]
     return {
+        "policy_version": EVIDENCE_POLICY_VERSION,
+        "score_semantics": "uncalibrated_support_balance",
         "policy": "solo_finalized_visit_on_pair_camera",
         "subject_kind": journey.subject_kind,
         "subject_key": journey.subject_key,
@@ -711,6 +716,8 @@ async def record_pairing(
             score=evidence_score,
             explanation=evidence_explanation,
             evidence_metadata={
+                "policy_version": EVIDENCE_POLICY_VERSION,
+                "score_semantics": "uncalibrated_support_balance",
                 "vehicle_id": object_key,
                 "vehicle_label": object_label,
                 **(evidence_metadata or {}),
