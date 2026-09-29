@@ -195,3 +195,15 @@ def test_chained_output_writes_vars(monkeypatch):
 
     vars_bag = asyncio.run(run())
     assert vars_bag["threat"]["level"] == "high"
+
+
+def test_local_fallback_only_applies_to_hosted_cost_budget():
+    from services.events import actions as actions_mod
+    from services.perception.usage import PerceptionBudgetDecision
+
+    cost_block = PerceptionBudgetDecision(False, "blocked", "Next VLM call would exceed cost budget 10c", 11, 1)
+    token_block = PerceptionBudgetDecision(False, "blocked", "Next VLM call would exceed token budget 10", 1, 11)
+
+    assert actions_mod._local_fallback_allowed("openai", cost_block)
+    assert not actions_mod._local_fallback_allowed("openai", token_block)
+    assert not actions_mod._local_fallback_allowed("ollama", cost_block)

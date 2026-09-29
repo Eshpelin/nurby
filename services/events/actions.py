@@ -831,6 +831,20 @@ async def _get_provider_by_kind(kind: str) -> Provider | None:
         return None
 
 
+def _local_fallback_allowed(provider_kind: str, budget) -> bool:
+    """Allow local fallback only for a hosted-cost trip, never a token cap.
+
+    A token limit is an intentional workload bound even for Ollama. A hosted
+    cost limit, however, should degrade to the configured local provider when
+    one exists instead of turning a rule result into an avoidable failure.
+    """
+    return (
+        provider_kind != "ollama"
+        and not budget.allowed
+        and "cost budget" in (budget.reason or "")
+    )
+
+
 def _load_thumbnail_b64(observation_data: dict) -> str | None:
     path = observation_data.get("thumbnail_path")
     if not path or not os.path.exists(path):
@@ -1051,9 +1065,22 @@ async def _execute_vlm_call(action, observation_data, rule, event_id, ctx):
         rule_id=str(getattr(rule, "id", "")) if rule is not None else None,
     )
     if not budget.allowed:
-        err = f"Perception budget reached: {budget.reason}"
-        await _update_event_status(event_id, "vlm_call", "failed", err)
-        return _apply_vlm_error(observation_data, output_name, on_error, fallback_value, err)
+        local_provider = await _get_provider_by_kind("ollama")
+        if _local_fallback_allowed(provider_kind, budget) and local_provider:
+            logger.info(
+                "perception budget reached for hosted rule VLM; using local Ollama fallback"
+            )
+            provider_kind = "ollama"
+            provider = local_provider
+            model = render(model_tpl, ctx) or provider.default_model or ""
+            if schema and provider_kind not in PROVIDER_SUPPORTS_SCHEMA:
+                user_prompt = (
+                    f"{user_prompt}\n\nReply with only JSON matching this schema. {json.dumps(schema)}"
+                )
+        else:
+            err = f"Perception budget reached: {budget.reason}"
+            await _update_event_status(event_id, "vlm_call", "failed", err)
+            return _apply_vlm_error(observation_data, output_name, on_error, fallback_value, err)
 
     last_error: str | None = None
     parsed = None
