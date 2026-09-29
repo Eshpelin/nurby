@@ -540,16 +540,16 @@ export function TriggerSection(props: TriggerSectionProps) {
       {formTriggerType === "audio_event" && (
         <div className="space-y-2">
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Sound type</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.audio.sound_type")}</label>
             <StyledSelect
               value={formTriggerAudioLabel}
-              options={AUDIO_LABELS.map((a) => ({ value: a.value, label: a.label }))}
+              options={AUDIO_LABELS.map((a) => ({ value: a.value, label: t(`rules.trigger.audio.${a.value}`) }))}
               onChange={setFormTriggerAudioLabel}
             />
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">
-              Confidence threshold (0.1 low, 0.7 strict)
+              {t("rules.trigger.audio.confidence")}
             </label>
             <input
               type="number" min="0.05" max="0.95" step="0.05"
@@ -559,11 +559,10 @@ export function TriggerSection(props: TriggerSectionProps) {
             />
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Detection runs locally on each camera&apos;s audio track. Needs an RTSP stream that publishes audio.
+            {t("rules.trigger.audio.help")}
           </p>
           <p className="text-[11px] text-amber-600 dark:text-amber-300">
-            Informational best-effort signal. It can miss or misfire, and is not a substitute for certified
-            smoke, CO, or alarm devices.
+            {t("rules.trigger.audio.warning")}
           </p>
         </div>
       )}
@@ -571,7 +570,7 @@ export function TriggerSection(props: TriggerSectionProps) {
       {formTriggerType === "clap_pattern" && (
         <div className="space-y-2">
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Number of claps</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.claps.number")}</label>
             <div className="flex gap-1.5">
               {["2", "3", "4", "5"].map((n) => (
                 <button
@@ -584,15 +583,13 @@ export function TriggerSection(props: TriggerSectionProps) {
                       : "border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {n} claps
+                  {t("rules.trigger.claps.count", { count: n })}
                 </button>
               ))}
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Counts claps that land within ~2s of each other.
-            Two claps lights one action, three claps another.
-            Needs audio enabled on the camera.
+            {t("rules.trigger.claps.help")}
           </p>
         </div>
       )}
@@ -600,19 +597,19 @@ export function TriggerSection(props: TriggerSectionProps) {
       {formTriggerType === "speech_phrase" && (
         <div className="space-y-2">
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Phrases to listen for</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.speech.phrases")}</label>
             <RulePhraseInput
               values={formTriggerPhrases}
               onChange={setFormTriggerPhrases}
-              placeholder='e.g. "lights on", "we have a problem"'
+              placeholder={t("rules.trigger.speech.placeholder")}
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Match mode</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.speech.match_mode")}</label>
             <div className="flex gap-1.5">
               {([
-                { v: "any", l: "Any phrase" },
-                { v: "all", l: "All phrases" },
+                { v: "any", key: "any" },
+                { v: "all", key: "all" },
               ] as const).map((m) => (
                 <button
                   key={m.v}
@@ -624,14 +621,13 @@ export function TriggerSection(props: TriggerSectionProps) {
                       : "border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {m.l}
+                  {t(`rules.trigger.speech.${m.key}`)}
                 </button>
               ))}
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Matches transcript text from the camera&apos;s STT pipeline.
-            Case-insensitive substring. Needs audio + transcription enabled.
+            {t("rules.trigger.speech.help")}
           </p>
         </div>
       )}
