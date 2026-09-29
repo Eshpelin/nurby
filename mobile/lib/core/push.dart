@@ -41,6 +41,7 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   bool _ready = false;
+  void Function(String? payload)? _responseHandler;
 
   static const _channel = AndroidNotificationChannel(
     'nurby_alerts',
@@ -58,10 +59,15 @@ class NotificationService {
         requestSoundPermission: true,
       );
       await _plugin.initialize(
-          const InitializationSettings(android: android, iOS: ios));
+        const InitializationSettings(android: android, iOS: ios),
+        onDidReceiveNotificationResponse: (response) {
+          _responseHandler?.call(response.payload);
+        },
+      );
       await _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.createNotificationChannel(_channel);
       _ready = true;
     } catch (e) {
@@ -69,16 +75,25 @@ class NotificationService {
     }
   }
 
+  /// Installs the authenticated handler after login. The notification plugin
+  /// itself is initialized before auth is available, so taps must be routed
+  /// through a late-bound callback.
+  void setResponseHandler(void Function(String? payload)? handler) {
+    _responseHandler = handler;
+  }
+
   /// iOS system dialog / Android 13+ POST_NOTIFICATIONS runtime permission.
   Future<void> requestPermissions() async {
     try {
       await _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.requestNotificationsPermission();
       await _plugin
           .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
+            IOSFlutterLocalNotificationsPlugin
+          >()
           ?.requestPermissions(alert: true, badge: true, sound: true);
     } catch (e) {
       log('permission request failed: $e', name: _logName);
@@ -161,12 +176,17 @@ Future<AlertCheckResult> applyAlertCounts({
   );
   if (newAlerts > 0) {
     await notifications.show(
-        'Nurby', newAlerts == 1 ? '1 new alert' : '$newAlerts new alerts');
+      'Nurby',
+      newAlerts == 1 ? '1 new alert' : '$newAlerts new alerts',
+    );
   }
   await prefs.setInt(kLastUnreadKey, unread);
   await prefs.setInt(kLastUnreviewedKey, unreviewed);
   return AlertCheckResult(
-      newAlerts: newAlerts, unread: unread, unreviewed: unreviewed);
+    newAlerts: newAlerts,
+    unread: unread,
+    unreviewed: unreviewed,
+  );
 }
 
 /// Polls the server for unread notification / unreviewed event counts and
@@ -224,6 +244,7 @@ class PushManager {
   final NotificationService _notifications;
   StreamSubscription<String>? _tokenSub;
   StreamSubscription<RemoteMessage>? _messageSub;
+  StreamSubscription<RemoteMessage>? _openedMessageSub;
 
   /// Called whenever auth transitions to loggedIn (startup or fresh login).
   Future<void> onLogin(ApiClient api, SharedPreferences prefs) async {
@@ -238,6 +259,9 @@ class PushManager {
     _tokenSub = null;
     await _messageSub?.cancel();
     _messageSub = null;
+    await _openedMessageSub?.cancel();
+    _openedMessageSub = null;
+    _notifications.setResponseHandler(null);
     try {
       await Workmanager().cancelByUniqueName(kBackgroundTaskId);
     } catch (e) {
@@ -247,7 +271,9 @@ class PushManager {
 
   /// Best-effort server-side cleanup; call before the auth token is cleared.
   static Future<void> deleteDevice(
-      ApiClient api, SharedPreferences prefs) async {
+    ApiClient api,
+    SharedPreferences prefs,
+  ) async {
     final token = prefs.getString(kFcmTokenKey);
     if (token == null) return;
     try {
@@ -288,28 +314,59 @@ class PushManager {
       await _registerDevice(api, prefs, token);
       _tokenSub ??= messaging.onTokenRefresh.listen((t) {
         _registerDevice(api, prefs, t).catchError(
-            (Object e) => log('token refresh re-register failed: $e',
-                name: _logName));
+          (Object e) =>
+              log('token refresh re-register failed: $e', name: _logName),
+        );
       });
       _messageSub ??= FirebaseMessaging.onMessage.listen((msg) {
         final n = msg.notification;
         _notifications.show(
           n?.title ?? 'Nurby',
           n?.body ?? msg.data['message']?.toString() ?? 'New alert',
+          payload: msg.data['event_id']?.toString(),
         );
       });
+      _notifications.setResponseHandler(
+        (payload) => _recordEventOpened(api, payload),
+      );
+      _openedMessageSub ??= FirebaseMessaging.onMessageOpenedApp.listen(
+        (msg) => _recordEventOpened(api, msg.data['event_id']?.toString()),
+      );
+      final initialMessage =
+          await FirebaseMessaging.instance.getInitialMessage();
+      if (initialMessage != null) {
+        await _recordEventOpened(
+          api,
+          initialMessage.data['event_id']?.toString(),
+        );
+      }
     } catch (e) {
       log('FCM registration skipped: $e', name: _logName);
     }
   }
 
+  Future<void> _recordEventOpened(ApiClient api, String? eventId) async {
+    if (eventId == null || eventId.isEmpty) return;
+    try {
+      await api.postJson('/api/events/$eventId/opened');
+    } catch (e) {
+      log('push open telemetry failed: $e', name: _logName);
+    }
+  }
+
   Future<void> _registerDevice(
-      ApiClient api, SharedPreferences prefs, String token) async {
-    await api.postJson('/api/push/devices', body: {
-      'platform': Platform.isIOS ? 'ios' : 'android',
-      'token': token,
-      'app_version': kAppVersion,
-    });
+    ApiClient api,
+    SharedPreferences prefs,
+    String token,
+  ) async {
+    await api.postJson(
+      '/api/push/devices',
+      body: {
+        'platform': Platform.isIOS ? 'ios' : 'android',
+        'token': token,
+        'app_version': kAppVersion,
+      },
+    );
     await prefs.setString(kFcmTokenKey, token);
   }
 
