@@ -141,10 +141,17 @@ async def get_body_thumbnail(
         raise HTTPException(status_code=401, detail="User not found or deactivated")
     allowed = await allowed_camera_ids(user, db)
     cluster = await db.get(BodyCluster, cluster_id)
-    if not cluster or not cluster.sample_thumbnail_path or (
-        allowed is not ALL and cluster.first_camera_id not in allowed
-    ):
+    if not cluster or not cluster.sample_thumbnail_path:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
+    if allowed is not ALL:
+        visible_sample = await db.execute(
+            select(BodyClusterSample.id)
+            .where(BodyClusterSample.cluster_id == cluster_id)
+            .where(BodyClusterSample.camera_id.in_(allowed))
+            .limit(1)
+        )
+        if visible_sample.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Thumbnail not found")
     return _serve_thumbnail(cluster.sample_thumbnail_path)
 
 

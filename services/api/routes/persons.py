@@ -213,10 +213,17 @@ async def get_cluster_thumbnail(
     user = await _query_token_user(token, db)
     cluster = await db.get(FaceCluster, cluster_id)
     allowed = await allowed_camera_ids(user, db)
-    if not cluster or not cluster.sample_thumbnail_path or (
-        allowed is not ALL and cluster.first_camera_id not in allowed
-    ):
+    if not cluster or not cluster.sample_thumbnail_path:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
+    if allowed is not ALL:
+        visible_sample = await db.execute(
+            select(FaceClusterSample.id)
+            .where(FaceClusterSample.cluster_id == cluster_id)
+            .where(FaceClusterSample.camera_id.in_(allowed))
+            .limit(1)
+        )
+        if visible_sample.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Thumbnail not found")
     path = resolve_inside(cluster.sample_thumbnail_path, settings.thumbnails_path)
     if path is None:
         raise HTTPException(status_code=403, detail="Access denied")
