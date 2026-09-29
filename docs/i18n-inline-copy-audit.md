@@ -51,8 +51,9 @@ should move to the shared English/Spanish catalog in follow-up slices:
   are catalog-driven. Ask Nurby’s main page, provider fallback, history rail,
   and empty state are now catalog-driven. ChatComposer, model/cost controls,
   deep-scan warnings and actions, and onboarding modal copy are also
-  catalog-driven; model-generated answers, tool names, and evidence text
-  remain intentional data/technical exceptions.
+  catalog-driven. AgentResponseCard status, trace, citation, completion,
+  inspector, and safety labels are catalog-driven; model-generated answers,
+  tool names, and evidence text remain intentional data/technical exceptions.
 - `frontend/src/components/IncidentCard.tsx`, `PersonActivityModal.tsx`,
   `ZoneEditorCanvas.tsx`, `PTZControlPanel.tsx`, and `LiveConversationCard.tsx`:
   activity, camera-control, and live-audio copy.

@@ -12,6 +12,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import type { AgentEvent } from "@/lib/agentWs";
 import type { AgentRunDetail, Citation } from "./types";
 import CitationChip from "./CitationChip";
@@ -49,17 +50,23 @@ export function renderAnswer(text: string, citations: Citation[]): React.ReactNo
   return out;
 }
 
-export function traceProgressLabel(trace: Pick<TraceItem, "name" | "kind" | "done">[]): string {
+export function traceProgressLabel(
+  trace: Pick<TraceItem, "name" | "kind" | "done">[],
+  label?: (key: string) => string,
+): string {
   const current = trace.find((item) => !item.done) ?? trace[trace.length - 1];
-  if (!current) return "Investigating.";
-  const labels: Record<string, string> = {
-    get_camera_layout: "Checking which cameras are available",
-    search_observations: "Searching recent camera evidence",
-    get_observations: "Reading camera observations",
-    get_recordings: "Checking recordings",
-    summarize_observations: "Summarizing the evidence",
+  if (!current) return label ? label("ask.investigating") : "Investigating.";
+  const labels: Record<string, [string, string]> = {
+    get_camera_layout: ["ask.trace_camera_layout", "Checking which cameras are available"],
+    search_observations: ["ask.trace_search_observations", "Searching recent camera evidence"],
+    get_observations: ["ask.trace_get_observations", "Reading camera observations"],
+    get_recordings: ["ask.trace_get_recordings", "Checking recordings"],
+    summarize_observations: ["ask.trace_summarize", "Summarizing the evidence"],
   };
-  return labels[current.name] || (current.kind === "vlm" ? "Looking at camera frames" : `Running ${current.name.replaceAll("_", " ")}`);
+  const known = labels[current.name];
+  if (known) return label ? label(known[0]) : known[1];
+  if (current.kind === "vlm") return label ? label("ask.trace_vlm") : "Looking at camera frames";
+  return `${label ? label("ask.trace_running") : "Running"} ${current.name.replaceAll("_", " ")}`;
 }
 
 interface TraceItem {
@@ -346,7 +353,8 @@ const ACTION_META: Record<
  * which POSTs the proposed body to the normal endpoint.
  */
 function RuleDraftConfirm({ action }: { action: RuleDraftAction }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [state, setState] = useState<"idle" | "creating" | "created" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -366,7 +374,7 @@ function RuleDraftConfirm({ action }: { action: RuleDraftAction }) {
       if (res.ok) {
         setState("created");
       } else {
-        let detail = `Failed (${res.status}).`;
+        let detail = t("ask.action_failed");
         try {
           const j = await res.json();
           if (typeof j?.detail === "string") detail = j.detail;
@@ -375,7 +383,7 @@ function RuleDraftConfirm({ action }: { action: RuleDraftAction }) {
         setState("error");
       }
     } catch {
-      setError("Could not reach the server.");
+      setError(t("common.network_error"));
       setState("error");
     }
   }
@@ -425,7 +433,7 @@ function RuleDraftConfirm({ action }: { action: RuleDraftAction }) {
           disabled={state === "creating"}
           className="text-xs px-3 py-1 rounded border border-border text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
-          Cancel
+          {t("ask.cancel")}
         </button>
       </div>
     </div>
@@ -445,6 +453,8 @@ export default function AgentResponseCard({
   detail,
   isStreaming,
 }: AgentResponseCardProps) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const vm = useMemo<ViewModel>(() => {
     if (detail) return buildFromDetail(detail);
     return buildFromEvents(events ?? []);
@@ -466,29 +476,29 @@ export default function AgentResponseCard({
     ? vm.trace.find((t) => t.call_id === inspectCallId) ?? null
     : null;
   const waitingForFinal = !vm.done && !isStreaming && vm.trace.length > 0;
-  const progressLabel = traceProgressLabel(vm.trace);
+  const progressLabel = traceProgressLabel(vm.trace, t);
 
   return (
     <div className="border border-border bg-card rounded-lg overflow-hidden">
       <div className="px-4 py-3 border-b border-border flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">You asked</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("ask.you_asked")}</div>
           <div className="text-sm font-medium">{question}</div>
         </div>
         <button
           type="button"
           onClick={copyQuestion}
-          aria-label="Copy question to clipboard"
+          aria-label={t("ask.copy_question")}
           className="text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border"
         >
-          {copied ? "copied" : "copy"}
+          {copied ? t("ask.copied") : t("ask.copy")}
         </button>
       </div>
 
       {vm.plan && (
         <div className="px-4 py-2 border-b border-border bg-background/40">
           <div className="text-[11px] italic text-muted-foreground">
-            <span className="font-mono uppercase mr-1.5">plan</span>
+            <span className="font-mono uppercase mr-1.5">{t("ask.plan")}</span>
             {vm.plan}
           </div>
         </div>
@@ -502,47 +512,47 @@ export default function AgentResponseCard({
             className="w-full px-4 py-2 flex items-center justify-between text-xs text-muted-foreground hover:bg-muted/40"
           >
             <span>
-              Trace · {vm.trace.length} step{vm.trace.length !== 1 ? "s" : ""}
-              {isStreaming && !vm.done && " · live"}
+              {t("ask.trace", { count: vm.trace.length, count_plural: vm.trace.length === 1 ? "" : "s" })}
+              {isStreaming && !vm.done && ` · ${t("ask.live")}`}
             </span>
             <span>{traceOpen ? "−" : "+"}</span>
           </button>
           {traceOpen && (
             <div className="px-4 pb-3 space-y-2">
-              {vm.trace.map((t) => (
+              {vm.trace.map((traceItem) => (
                 <button
-                  key={t.call_id}
+                  key={traceItem.call_id}
                   type="button"
-                  onClick={() => setInspectCallId(t.call_id)}
-                  aria-label={`Inspect ${t.name}`}
+                  onClick={() => setInspectCallId(traceItem.call_id)}
+                  aria-label={`${t("ask.inspect")} ${traceItem.name}`}
                   className="w-full text-left border border-border/60 rounded p-2 bg-background hover:bg-muted/40 transition-colors"
                 >
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="text-base leading-none">{t.kind === "vlm" ? "🔍" : "🛠"}</span>
-                    <span className="font-mono font-medium">{t.name}</span>
-                    {t.cached && (
+                    <span className="text-base leading-none">{traceItem.kind === "vlm" ? "🔍" : "🛠"}</span>
+                    <span className="font-mono font-medium">{traceItem.name}</span>
+                    {traceItem.cached && (
                       <span className="text-[9px] px-1 py-px rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        cached
+                        {t("ask.cached")}
                       </span>
                     )}
-                    {!t.done && (
+                    {!traceItem.done && (
                       <span className="text-[9px] px-1 py-px rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                        running
+                        {t("ask.running")}
                       </span>
                     )}
-                    {t.error && (
+                    {traceItem.error && (
                       <span className="text-[9px] px-1 py-px rounded bg-red-500/20 text-red-300 border border-red-500/30">
-                        error
+                        {t("ask.error")}
                       </span>
                     )}
-                    {typeof t.latency_ms === "number" && (
-                      <span className="ml-auto text-[10px] text-muted-foreground font-mono">{t.latency_ms}ms</span>
+                    {typeof traceItem.latency_ms === "number" && (
+                      <span className="ml-auto text-[10px] text-muted-foreground font-mono">{traceItem.latency_ms}ms</span>
                     )}
                   </div>
                   <div className="mt-1 text-[11px] text-muted-foreground font-mono truncate">
-                    {t.args_summary}
+                    {traceItem.args_summary}
                   </div>
-                  <div className="text-[11px] mt-0.5 truncate">{t.result_summary}</div>
+                  <div className="text-[11px] mt-0.5 truncate">{traceItem.result_summary}</div>
                 </button>
               ))}
             </div>
@@ -553,12 +563,12 @@ export default function AgentResponseCard({
       <div className="p-4 space-y-3">
         {vm.budgetExhausted && (
           <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded p-2">
-            You&apos;ve used your daily AI budget. Resets at midnight household time. Admins can raise your limit in Settings.
+            {t("ask.budget_exhausted")}
           </div>
         )}
         {vm.cancelled && (
           <div className="text-xs text-zinc-300 bg-zinc-500/10 border border-zinc-500/30 rounded p-2">
-            Cancelled by you. Partial findings below.
+            {t("ask.cancelled_partial")}
           </div>
         )}
         {vm.failed && vm.errorMessage && !vm.budgetExhausted && (
@@ -572,13 +582,13 @@ export default function AgentResponseCard({
         ) : vm.done ? (
           vm.noEvidence ? (
             <div className="text-sm text-muted-foreground italic">
-              No evidence found in the inspected footage.
+              {t("ask.no_evidence")}
             </div>
           ) : null
         ) : (
           <div className="text-sm text-muted-foreground italic">
             {waitingForFinal
-              ? "The investigation finished; loading the final answer…"
+              ? t("ask.loading_final_answer")
               : progressLabel}
           </div>
         )}
@@ -591,7 +601,7 @@ export default function AgentResponseCard({
 
         {vm.citations.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border/60">
-            <span className="text-[10px] uppercase text-muted-foreground mr-1">Citations</span>
+            <span className="text-[10px] uppercase text-muted-foreground mr-1">{t("ask.citations")}</span>
             {vm.citations.map((c, i) => (
               <CitationChip key={`${c.kind}:${c.id}:${i}`} citation={c} />
             ))}
@@ -600,14 +610,14 @@ export default function AgentResponseCard({
 
         {vm.done && vm.model && (
           <div className="text-[10px] text-muted-foreground border-t border-border/60 pt-2">
-            Answered by <span className="font-mono text-foreground">{vm.providerName ? `${vm.providerName} / ` : ""}{vm.model}</span>.
-            <span className="block mt-1">Ask uses a tool-capable model for camera lookups; this can differ from the model used for camera descriptions.</span>
+            {t("ask.answered_by")} <span className="font-mono text-foreground">{vm.providerName ? `${vm.providerName} / ` : ""}{vm.model}</span>.
+            <span className="block mt-1">{t("ask.tool_model_note")}</span>
           </div>
         )}
 
         {vm.done && vm.answer && (
           <div className="text-[10px] text-muted-foreground italic border-t border-border/60 pt-2">
-            Nurby answers from camera evidence and can be wrong. Do not rely on Nurby for safety-critical monitoring.
+            {t("ask.safety_disclaimer")}
           </div>
         )}
       </div>
@@ -625,20 +635,20 @@ export default function AgentResponseCard({
               <div className="text-sm font-semibold font-mono">{inspected.name}</div>
               <button
                 onClick={() => setInspectCallId(null)}
-                aria-label="Close inspector"
+                aria-label={t("ask.close_inspector")}
                 className="text-muted-foreground hover:text-foreground"
               >
                 ✕
               </button>
             </div>
             <div>
-              <div className="text-[10px] uppercase text-muted-foreground mb-1">Arguments</div>
+              <div className="text-[10px] uppercase text-muted-foreground mb-1">{t("ask.arguments")}</div>
               <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-x-auto max-h-72">
                 {JSON.stringify(inspected.args_full, null, 2)}
               </pre>
             </div>
             <div>
-              <div className="text-[10px] uppercase text-muted-foreground mb-1">Result</div>
+              <div className="text-[10px] uppercase text-muted-foreground mb-1">{t("ask.result")}</div>
               <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-x-auto max-h-72">
                 {JSON.stringify(inspected.result_full, null, 2)}
               </pre>
