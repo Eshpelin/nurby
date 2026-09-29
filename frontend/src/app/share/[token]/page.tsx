@@ -14,7 +14,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { formatDateTime } from "@/lib/time";
+import { formatDateTime, getDisplayLocale, setDisplayLocale } from "@/lib/time";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface ShareData {
   kind: "recording" | "observation" | "event";
@@ -31,52 +32,55 @@ interface ShareData {
 }
 
 const KIND_TITLE: Record<ShareData["kind"], string> = {
-  recording: "Shared recording",
-  observation: "Shared frame",
-  event: "Shared event",
+  recording: "share.recording",
+  observation: "share.observation",
+  event: "share.event",
 };
 
-function formatDuration(seconds: number | null | undefined): string | null {
+function formatDuration(seconds: number | null | undefined, t: (key: string, values?: Record<string, string | number>) => string): string | null {
   if (seconds == null) return null;
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+  if (h > 0) return t("share.hours", { h, m, s });
+  if (m > 0) return t("share.minutes", { m, s });
+  return t("share.seconds", { s });
 }
 
 // Friendly copy per failure mode. The API returns 404 for an unknown
 // token and 410 with a specific detail for revoked / expired / exhausted.
-function errorCopy(status: number, detail: string | null): { title: string; body: string } {
+function errorCopy(status: number, detail: string | null, t: (key: string, values?: Record<string, string | number>) => string): { title: string; body: string } {
   const d = (detail || "").toLowerCase();
   if (d.includes("revoked")) {
     return {
-      title: "This link was revoked",
-      body: "The person who shared it turned it off. Ask them for a new link if you still need it.",
+      title: t("share.revoked_title"),
+      body: t("share.revoked_body"),
     };
   }
   if (d.includes("expired")) {
     return {
-      title: "This link has expired",
-      body: "Share links always have an expiry. Ask the person who shared it for a fresh one.",
+      title: t("share.expired_title"),
+      body: t("share.expired_body"),
     };
   }
   if (d.includes("view limit")) {
     return {
-      title: "This link reached its view limit",
-      body: "It was set to allow a limited number of opens, and they have been used up.",
+      title: t("share.limit_title"),
+      body: t("share.limit_body"),
     };
+  }
+  if (status === 0) {
+    return { title: t("share.network_title"), body: t("share.network_body") };
   }
   if (status === 410) {
     return {
-      title: "This is no longer available",
-      body: detail || "The shared item has been removed.",
+      title: t("share.unavailable_title"),
+      body: detail || t("share.removed_body"),
     };
   }
   return {
-    title: "This link is not valid",
-    body: "Check that the full link was copied. It may also have been deleted.",
+    title: t("share.invalid_title"),
+    body: t("share.invalid_body"),
   };
 }
 
@@ -85,6 +89,17 @@ export default function SharePage() {
   const [data, setData] = useState<ShareData | null>(null);
   const [error, setError] = useState<{ status: number; detail: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [locale, setLocale] = useState<Locale>("en");
+
+  useEffect(() => {
+    const stored = getDisplayLocale();
+    const browser = typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("es") ? "es" : "en";
+    const next = (stored === "es" || browser === "es" ? "es" : "en") as Locale;
+    setLocale(next);
+    setDisplayLocale(next);
+  }, []);
+
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
 
   useEffect(() => {
     if (!token) return;
@@ -104,7 +119,7 @@ export default function SharePage() {
         const payload: ShareData = await res.json();
         if (!cancelled) setData(payload);
       } catch {
-        if (!cancelled) setError({ status: 0, detail: "Could not reach the server. Try again in a moment." });
+        if (!cancelled) setError({ status: 0, detail: null });
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -121,7 +136,7 @@ export default function SharePage() {
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-2.5">
           <span className="w-2.5 h-2.5 rounded-full bg-accent pulse-dot" />
           <span className="text-sm font-semibold tracking-tight">Nurby</span>
-          <span className="text-xs text-muted-foreground">Secure share</span>
+          <span className="text-xs text-muted-foreground">{t("share.secure")}</span>
         </div>
       </header>
 
@@ -129,19 +144,19 @@ export default function SharePage() {
         {loading ? (
           <div className="flex items-center justify-center py-24">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            <span className="sr-only">{t("share.loading")}</span>
           </div>
         ) : error ? (
-          <ExpiredCard status={error.status} detail={error.detail} />
+          <ExpiredCard status={error.status} detail={error.detail} t={t} />
         ) : data ? (
-          <ShareContent token={token} data={data} />
+          <ShareContent token={token} data={data} t={t} />
         ) : null}
       </main>
 
       <footer className="border-t border-border-subtle">
         <div className="max-w-3xl mx-auto px-6 py-4">
           <p className="text-[11px] text-muted-foreground">
-            Shared from a private Nurby camera system. This link shows one item
-            only and stops working when it expires or is revoked.
+            {t("share.footer")}
           </p>
         </div>
       </footer>
@@ -149,8 +164,8 @@ export default function SharePage() {
   );
 }
 
-function ExpiredCard({ status, detail }: { status: number; detail: string | null }) {
-  const copy = errorCopy(status, detail);
+function ExpiredCard({ status, detail, t }: { status: number; detail: string | null; t: (key: string, values?: Record<string, string | number>) => string }) {
+  const copy = errorCopy(status, detail, t);
   return (
     <div className="rounded-lg border border-border bg-card px-8 py-14 text-center max-w-md mx-auto mt-10">
       <div className="w-11 h-11 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
@@ -165,13 +180,13 @@ function ExpiredCard({ status, detail }: { status: number; detail: string | null
   );
 }
 
-function ShareContent({ token, data }: { token: string; data: ShareData }) {
+function ShareContent({ token, data, t }: { token: string; data: ShareData; t: (key: string, values?: Record<string, string | number>) => string }) {
   const mediaUrl = `/api/share/${encodeURIComponent(token)}/media`;
-  const duration = formatDuration(data.duration_seconds);
+  const duration = formatDuration(data.duration_seconds, t);
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">{KIND_TITLE[data.kind]}</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{t(KIND_TITLE[data.kind])}</h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-sm text-muted-foreground">
           {data.camera_name && (
             <span className="inline-flex items-center gap-1.5">
@@ -194,7 +209,7 @@ function ShareContent({ token, data }: { token: string; data: ShareData }) {
                   : "border-border bg-muted text-muted-foreground"
               }`}
             >
-              {data.severity}
+              {data.severity === "alert" ? t("events.alerts") : data.severity}
             </span>
           )}
         </div>
@@ -206,10 +221,10 @@ function ShareContent({ token, data }: { token: string; data: ShareData }) {
         ) : data.media_type === "image" ? (
           // Plain <img>: the media endpoint is same-origin and token-scoped.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={mediaUrl} alt="Shared frame" className="w-full max-h-[70vh] object-contain bg-black" />
+          <img src={mediaUrl} alt={t("share.frame_alt")} className="w-full max-h-[70vh] object-contain bg-black" />
         ) : (
           <div className="px-6 py-14 text-center text-sm text-muted-foreground">
-            No image was captured for this {data.kind}.
+            {t("share.no_media", { kind: t(KIND_TITLE[data.kind]).toLowerCase() })}
           </div>
         )}
         {data.description && (
@@ -222,11 +237,11 @@ function ShareContent({ token, data }: { token: string; data: ShareData }) {
       <p className="text-[11px] text-muted-foreground">
         {data.expires_at && (
           <>
-            This link expires <span className="font-mono">{formatDateTime(data.expires_at)}</span>.
+            {t("share.expires", { date: formatDateTime(data.expires_at) })}
           </>
         )}
         {data.views_left != null && (
-          <> {data.views_left} view{data.views_left === 1 ? "" : "s"} remaining.</>
+          <> {t(data.views_left === 1 ? "share.views_one" : "share.views_other", { count: data.views_left })}</>
         )}
       </p>
     </div>
