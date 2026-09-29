@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 interface Provider {
   id: string;
@@ -39,7 +40,8 @@ export function ReinterpretButton({
   variant = "default",
   onSuccess,
 }: Props) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [open, setOpen] = useState(false);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [picked, setPicked] = useState<string>("");
@@ -78,7 +80,7 @@ export function ReinterpretButton({
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j.detail || `status ${res.status}`);
+        throw new Error(j.detail || `${t("reinterpret.failed")} (${res.status})`);
       }
       setDone(true);
       onSuccess?.();
@@ -87,7 +89,7 @@ export function ReinterpretButton({
         setOpen(false);
       }, 1500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "failed");
+      setError(err instanceof Error ? err.message : t("reinterpret.failed"));
     } finally {
       setBusy(false);
     }
@@ -107,9 +109,9 @@ export function ReinterpretButton({
           setOpen((v) => !v);
         }}
         className={triggerClass}
-        title="Re-run with the model of your choice"
+        title={t("reinterpret.trigger_title")}
       >
-        ✨ {label}
+        ✨ {label === "Reinterpret" ? t("reinterpret.trigger") : label}
       </button>
       {open && (
         <div
@@ -117,14 +119,14 @@ export function ReinterpretButton({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            Pick a model
+            {t("reinterpret.pick_model")}
           </div>
           <select
             value={picked}
             onChange={(e) => setPicked(e.target.value)}
             className="w-full px-2 py-1.5 text-xs rounded border border-border bg-background"
           >
-            <option value="">(camera default chain)</option>
+            <option value="">{t("reinterpret.default_chain")}</option>
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -133,10 +135,7 @@ export function ReinterpretButton({
             ))}
           </select>
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            The chosen model gets the full source data
-            (transcripts, observations, segments) and produces a
-            fresh interpretation. Existing narration stays in the
-            history.
+            {t("reinterpret.help")}
           </p>
           {error && (
             <p className="text-[11px] text-danger">{error}</p>
@@ -147,7 +146,7 @@ export function ReinterpretButton({
               onClick={() => setOpen(false)}
               className="px-2 py-1 text-xs rounded text-muted-foreground hover:text-foreground"
             >
-              Cancel
+              {t("reinterpret.cancel")}
             </button>
             <button
               type="button"
@@ -155,7 +154,7 @@ export function ReinterpretButton({
               disabled={busy}
               className="px-2 py-1 text-xs rounded bg-violet-500/20 text-violet-200 border border-violet-500/40 hover:bg-violet-500/30 disabled:opacity-50"
             >
-              {busy ? "Running." : done ? "Done" : "Re-interpret"}
+              {busy ? t("reinterpret.running") : done ? t("reinterpret.done") : t("reinterpret.run")}
             </button>
           </div>
         </div>
