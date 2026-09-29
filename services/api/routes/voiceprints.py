@@ -23,12 +23,31 @@ from shared.auth import require_admin
 from shared.camera_access import ALL, allowed_camera_ids
 from shared.config import settings
 from shared.database import get_db
-from shared.models import AudioCapture, Camera, Person, Transcript, User, VoiceprintProfile, VoiceprintSampleReview
+from shared.models import AudioAuditLog, AudioCapture, Camera, Person, Transcript, User, VoiceprintProfile, VoiceprintSampleReview
 from shared.paths import resolve_inside
 
 router = APIRouter()
 MIN_CLIP_SECONDS = 2.0
 MIN_VIDEO_CONFIDENCE = 0.75
+
+
+def _voiceprint_audit_record(
+    transcript: Transcript,
+    user: User,
+    *,
+    field: str,
+    old_value: str | None,
+    new_value: str | None,
+) -> AudioAuditLog:
+    """Create a biometric lifecycle audit row without sensitive payloads."""
+    return AudioAuditLog(
+        transcript_id=transcript.id,
+        camera_id=transcript.camera_id,
+        user_id=user.id,
+        field=field,
+        old_value=old_value,
+        new_value=new_value,
+    )
 
 
 class VoiceprintSampleDecision(BaseModel):
@@ -197,6 +216,8 @@ async def decide_voiceprint_candidate(
     if review is None:
         review = VoiceprintSampleReview(person_id=person_id, transcript_id=transcript.id)
         db.add(review)
+    previous_decision = review.decision if review is not None else None
+    previous_consent = bool(review.consent_given) if review is not None else False
     review.decision = {
         "confirm": "confirmed",
         "reject": "rejected",
@@ -207,6 +228,20 @@ async def decide_voiceprint_candidate(
     review.reviewed_by_user_id = current_user.id
     review.reviewed_at = datetime.now(timezone.utc)
     profile = await train_voiceprint(db, person_id)
+    db.add(_voiceprint_audit_record(
+        transcript,
+        current_user,
+        field="voiceprint_clip_decision",
+        old_value=f"{previous_decision or 'candidate'}:{'consented' if previous_consent else 'not_consented'}",
+        new_value=f"{review.decision}:{'consented' if review.consent_given else 'not_consented'}",
+    ))
+    db.add(_voiceprint_audit_record(
+        transcript,
+        current_user,
+        field="voiceprint_training",
+        old_value=None,
+        new_value=profile.status,
+    ))
     await db.commit()
     return {
         "person_id": str(person_id),
@@ -235,23 +270,32 @@ async def revoke_voiceprint_profile(
     if await db.get(Person, person_id) is None:
         raise HTTPException(status_code=404, detail="Person not found")
     profile = await db.scalar(select(VoiceprintProfile).where(VoiceprintProfile.person_id == person_id))
-    reviews = (await db.execute(
-        select(VoiceprintSampleReview)
+    review_rows = (await db.execute(
+        select(VoiceprintSampleReview, Transcript)
+        .join(Transcript, Transcript.id == VoiceprintSampleReview.transcript_id)
         .where(VoiceprintSampleReview.person_id == person_id)
         .where(VoiceprintSampleReview.decision == "confirmed")
-    )).scalars().all()
+    )).all()
     now = datetime.now(timezone.utc)
-    for review in reviews:
+    for review, transcript in review_rows:
+        old_value = f"{review.decision}:{'consented' if review.consent_given else 'not_consented'}"
         review.decision = "removed"
         review.consent_given = False
         review.reviewed_by_user_id = current_user.id
         review.reviewed_at = now
+        db.add(_voiceprint_audit_record(
+            transcript,
+            current_user,
+            field="voiceprint_revoked",
+            old_value=old_value,
+            new_value="removed:not_consented",
+        ))
     if profile is not None:
         await db.delete(profile)
     await db.commit()
     return {
         "person_id": str(person_id),
         "profile_deleted": profile is not None,
-        "clips_revoked": len(reviews),
+        "clips_revoked": len(review_rows),
         "training_ready": False,
     }

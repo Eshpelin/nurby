@@ -9,6 +9,7 @@ from services.api.routes.voiceprints import (
     VoiceprintSampleDecision,
     _clip_response,
     _eligible_clip,
+    _voiceprint_audit_record,
 )
 
 
@@ -72,3 +73,26 @@ def test_candidate_response_exposes_quality_without_biometric_artifacts():
     assert response["attribution_model_version"] == "video-correlated-v1"
     assert "voiceprint" not in response
     assert "embedding" not in response
+
+
+def test_voiceprint_audit_record_contains_only_lifecycle_metadata():
+    transcript = _transcript()
+    transcript.id = uuid4()
+    transcript.camera_id = uuid4()
+    user = SimpleNamespace(id=uuid4())
+
+    audit = _voiceprint_audit_record(
+        transcript,
+        user,
+        field="voiceprint_revoked",
+        old_value="confirmed:consented",
+        new_value="removed:not_consented",
+    )
+
+    assert audit.transcript_id == transcript.id
+    assert audit.camera_id == transcript.camera_id
+    assert audit.user_id == user.id
+    assert audit.field == "voiceprint_revoked"
+    assert audit.old_value == "confirmed:consented"
+    assert audit.new_value == "removed:not_consented"
+    assert not hasattr(audit, "embedding")
