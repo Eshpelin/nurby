@@ -20,7 +20,8 @@ const Speaker = ({ className }: { className?: string }) => (
 );
 
 import { useAuth } from "@/lib/auth";
-import { formatDateTime } from "@/lib/time";
+import { Locale, translate } from "@/lib/i18n";
+import { formatDateTime, getDisplayLocale } from "@/lib/time";
 
 interface Capability {
   probed: boolean;
@@ -76,21 +77,26 @@ const STATUS_STYLES: Record<string, string> = {
   queued: "bg-blue-500/15 text-blue-300 border-blue-500/30",
 };
 
-const REASON_TEXT: Record<string, string> = {
-  quiet_hours: "quiet hours",
-  cooldown: "still in cooldown",
-  daily_cap: "daily limit reached",
-  disabled: "voice turned off",
-  estop: "Nurby paused",
-  unsupported: "camera cannot play audio",
-  empty_text: "nothing to say",
-  policy: "blocked by policy",
+const REASON_KEYS: Record<string, string> = {
+  quiet_hours: "camera_voice.reason_quiet_hours",
+  cooldown: "camera_voice.reason_cooldown",
+  daily_cap: "camera_voice.reason_daily_cap",
+  disabled: "camera_voice.reason_disabled",
+  estop: "camera_voice.reason_estop",
+  unsupported: "camera_voice.reason_unsupported",
+  empty_text: "camera_voice.reason_empty_text",
+  policy: "camera_voice.reason_policy",
 };
 
 export default function CameraVoicePage() {
   const params = useParams();
   const cameraId = params?.id as string;
   const { token } = useAuth();
+  const locale = (getDisplayLocale() as Locale) || "en";
+  const t = useCallback(
+    (key: string, values?: Record<string, string | number>) => translate(locale, key, values),
+    [locale],
+  );
 
   const [config, setConfig] = useState<VoiceConfig | null>(null);
   const [presets, setPresets] = useState<PresetOption[]>([]);
@@ -126,10 +132,10 @@ export default function CameraVoicePage() {
         if (presetResp.ok) setPresets((await presetResp.json()).presets ?? []);
         await loadEvents();
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Could not load voice settings");
+        setError(e instanceof Error ? e.message : t("camera_voice.load_failed"));
       }
     })();
-  }, [token, cameraId, authHeaders, loadEvents]);
+  }, [token, cameraId, authHeaders, loadEvents, t]);
 
   const update = async (patch: Record<string, unknown>) => {
     if (!config) return;
@@ -144,7 +150,7 @@ export default function CameraVoicePage() {
       if (!resp.ok) throw new Error(await resp.text());
       setConfig(await resp.json());
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Save failed");
+      setError(e instanceof Error ? e.message : t("camera_voice.save_failed"));
     } finally {
       setSaving(false);
     }
@@ -160,16 +166,17 @@ export default function CameraVoicePage() {
       });
       const body = await resp.json();
       if (body.spoken) {
-        setTestResult(`Played through ${body.transport}.`);
+        setTestResult(t("camera_voice.test_played", { transport: body.transport ?? t("camera_voice.unknown") }));
       } else {
         // The test runs through the real guards, so a refusal here is
         // the same refusal a rule would get. Say which one it was.
-        const reason = REASON_TEXT[body.reason] ?? body.reason ?? "unknown";
-        setTestResult(`Not played: ${reason}${body.detail ? ` (${body.detail})` : ""}`);
+        const reasonKey = REASON_KEYS[body.reason];
+        const reason = reasonKey ? t(reasonKey) : body.reason ?? t("camera_voice.unknown");
+        setTestResult(t("camera_voice.test_not_played", { reason, detail: body.detail ? ` (${body.detail})` : "" }));
       }
       await loadEvents();
     } catch (e: unknown) {
-      setTestResult(e instanceof Error ? e.message : "Test failed");
+      setTestResult(e instanceof Error ? e.message : t("camera_voice.test_failed"));
     } finally {
       setTesting(false);
     }
@@ -179,7 +186,7 @@ export default function CameraVoicePage() {
     return (
       <div className="min-h-screen bg-black text-zinc-200 p-8">
         <div className="text-zinc-400">
-          {error ?? "Loading voice settings."}
+          {error ?? t("camera_voice.loading")}
         </div>
       </div>
     );
@@ -200,15 +207,15 @@ export default function CameraVoicePage() {
           className="inline-flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 mb-4"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Back to {config.name}
+          {t("camera_voice.back_to", { name: config.name })}
         </Link>
 
         <h1 className="flex items-center gap-2 text-lg font-medium text-zinc-100 mb-1">
           <Speaker className="w-5 h-5 text-zinc-400" />
-          Voice
+          {t("camera_voice.title")}
         </h1>
         <p className="text-xs text-zinc-500 mb-6">
-          What this camera is allowed to say out loud, and when.
+          {t("camera_voice.subtitle")}
         </p>
 
         {error && (
@@ -221,10 +228,10 @@ export default function CameraVoicePage() {
         <section className={`rounded-lg border p-4 mb-6 ${capTone}`}>
           <div className="text-xs font-medium mb-1">
             {!cap.probed
-              ? "Speaker not checked"
+              ? t("camera_voice.speaker_not_checked")
               : cap.supported
-                ? "Speaker available"
-                : "No usable speaker"}
+                ? t("camera_voice.speaker_available")
+                : t("camera_voice.no_usable_speaker")}
           </div>
           <p className="text-xs opacity-90">{cap.summary}</p>
           {cap.probed_at && (
@@ -418,7 +425,7 @@ export default function CameraVoicePage() {
                     <p className="text-[11px] text-zinc-600">
                       {event.created_at ? formatDateTime(event.created_at) : ""}
                       {event.suppressed_reason
-                        ? ` · ${REASON_TEXT[event.suppressed_reason] ?? event.suppressed_reason}`
+                        ? ` · ${REASON_KEYS[event.suppressed_reason] ? t(REASON_KEYS[event.suppressed_reason]) : event.suppressed_reason}`
                         : ""}
                       {event.error_message ? ` · ${event.error_message}` : ""}
                       {` · ${event.trigger}`}
