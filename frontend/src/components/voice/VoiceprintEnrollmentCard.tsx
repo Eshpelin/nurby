@@ -41,6 +41,9 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [trainingMessage, setTrainingMessage] = useState<string | null>(null);
+  const [trainingStatus, setTrainingStatus] = useState<string>("not_ready");
+  const [trainingSampleCount, setTrainingSampleCount] = useState(0);
+  const [trainingModel, setTrainingModel] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,9 +52,18 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
         `/api/voiceprints/persons/${personId}/candidates${includeRejected ? "?include_rejected=true" : ""}`,
       );
       if (!response.ok) throw new Error(`Voice clips unavailable (${response.status})`);
-      const body = await response.json() as { candidates: Clip[]; training_message?: string };
+      const body = await response.json() as {
+        candidates: Clip[];
+        training_message?: string;
+        training_status?: string;
+        training_sample_count?: number;
+        training_model_version?: string | null;
+      };
       setClips(body.candidates);
       setTrainingMessage(body.training_message ?? null);
+      setTrainingStatus(body.training_status ?? "not_ready");
+      setTrainingSampleCount(body.training_sample_count ?? 0);
+      setTrainingModel(body.training_model_version ?? null);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Voice clips unavailable");
@@ -99,6 +111,12 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
         <button type="button" onClick={() => void load()} className="text-[10px] text-muted-foreground hover:text-foreground">{t("voiceprint.refresh")}</button>
       </div>
       {trainingMessage && <p className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 p-2 text-[10px] text-amber-200">{trainingMessage}</p>}
+      <div className="mt-2 text-[10px] text-muted-foreground">
+        <span className={trainingStatus === "ready" ? "text-emerald-400" : "text-amber-300"}>
+          {trainingStatus === "ready" ? t("voiceprint.training_ready") : t("voiceprint.training_not_ready")}
+        </span>
+        {trainingModel && <> · {t("voiceprint.training_meta", { count: trainingSampleCount, model: trainingModel })}</>}
+      </div>
       {loading ? <p className="py-3 text-xs text-muted-foreground">{t("voiceprint.finding")}</p> : error ? <p className="py-3 text-xs text-red-400">{error}</p> : (
         <>
           {candidates.length === 0 && confirmed.length === 0 && <p className="py-3 text-xs text-muted-foreground">{t("voiceprint.no_clips")}</p>}

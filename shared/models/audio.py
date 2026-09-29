@@ -117,6 +117,31 @@ class VoiceprintSampleReview(Base):
     )
 
 
+class VoiceprintProfile(Base):
+    """Consent-gated local voiceprint derived from reviewed audio clips.
+
+    The embedding is never serialized by an API response.  ``model_version``
+    makes the derived artifact reproducible and gives a future stronger local
+    speaker model a safe migration path instead of silently mixing vectors.
+    """
+
+    __tablename__ = "voiceprint_profiles"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    person_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("persons.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
+    embedding = mapped_column(Vector(240), nullable=True)
+    model_version: Mapped[str] = mapped_column(String(64), nullable=False, default="mfcc-local-v1")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="not_ready")
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source_transcript_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    consent_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    trained_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class AudioDetection(Base):
     __tablename__ = "audio_detections"
 

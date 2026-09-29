@@ -7,8 +7,8 @@ pretend to create a biometric model before an enrollment worker exists.
 
 from __future__ import annotations
 
-import uuid
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -17,12 +17,13 @@ from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.perception.audio.voiceprint import train_voiceprint
 from shared.auth import require_admin
 from shared.camera_access import ALL, allowed_camera_ids
-from shared.database import get_db
-from shared.models import AudioCapture, Camera, Person, Transcript, User, VoiceprintSampleReview
-from shared.paths import resolve_inside
 from shared.config import settings
+from shared.database import get_db
+from shared.models import AudioCapture, Camera, Person, Transcript, User, VoiceprintProfile, VoiceprintSampleReview
+from shared.paths import resolve_inside
 
 router = APIRouter()
 MIN_CLIP_SECONDS = 2.0
@@ -133,13 +134,22 @@ async def list_voiceprint_candidates(
         if review and review.decision in {"rejected", "removed"} and not include_rejected:
             continue
         candidates.append(_clip_response(transcript, capture, camera, review))
+    profile = await db.scalar(select(VoiceprintProfile).where(VoiceprintProfile.person_id == person_id))
     return {
         "person_id": str(person_id),
         "requires_manual_sample": False,
         "consent_required_before_training": True,
-        "training_available": False,
-        "training_ready": False,
-        "training_message": "Confirm eligible clips and biometric consent; voiceprint training is not available yet.",
+        "training_available": True,
+        "training_ready": bool(profile and profile.status == "ready"),
+        "training_status": profile.status if profile else "not_ready",
+        "training_sample_count": profile.sample_count if profile else 0,
+        "training_model_version": profile.model_version if profile else None,
+        "training_at": profile.trained_at if profile else None,
+        "training_message": (
+            "Voiceprint ready from confirmed clips; matching remains a hypothesis."
+            if profile and profile.status == "ready"
+            else "Confirm eligible clips and biometric consent to build a local voiceprint."
+        ),
         "candidates": candidates,
     }
 
@@ -180,12 +190,20 @@ async def decide_voiceprint_candidate(
     review.consent_given = body.decision == "confirm" and body.consent_given
     review.reviewed_by_user_id = current_user.id
     review.reviewed_at = datetime.now(timezone.utc)
+    profile = await train_voiceprint(db, person_id)
     await db.commit()
     return {
         "person_id": str(person_id),
         "transcript_id": str(transcript.id),
         "decision": review.decision,
         "consent_given": review.consent_given,
-        "training_started": False,
-        "training_message": "Clip decision recorded; no voiceprint is created until the enrollment worker is available.",
+        "training_started": body.decision in {"confirm", "remove"},
+        "training_status": profile.status,
+        "training_sample_count": profile.sample_count,
+        "training_model_version": profile.model_version,
+        "training_message": (
+            "Local voiceprint rebuilt from confirmed clips; attribution remains a hypothesis."
+            if profile.status == "ready"
+            else profile.last_error or "No retained confirmed audio clips are available yet."
+        ),
     }

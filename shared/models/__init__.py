@@ -32,11 +32,12 @@ from shared.models.audio import (  # noqa: F401
     AudioAuditLog,
     AudioCapture,
     AudioDetection,
-    VoiceprintSampleReview,
     Conversation,
     SpeechEvent,
     Summary,
     Transcript,
+    VoiceprintProfile,
+    VoiceprintSampleReview,
     VoiceSession,
 )
 from shared.models.cameras import (  # noqa: F401
@@ -91,8 +92,8 @@ from shared.models.observations import (  # noqa: F401
     Observation,
     ObservationAction,
     ObservationIncident,
-    PackageLifecycleRecord,
     ObservationVlmPass,
+    PackageLifecycleRecord,
     PersonActionSegment,
 )
 from shared.models.onboarding import (  # noqa: F401
@@ -186,4 +187,5 @@ __all__ = [
     "VoiceSession",
     "WebhookSubscription",
     "VoiceprintSampleReview",
+    "VoiceprintProfile",
 ]
