@@ -175,7 +175,7 @@ export function ChannelRow({
           <div className="flex items-center gap-2 flex-wrap">
             <div className="text-sm font-medium truncate">{channel.label}</div>
             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${pill.cls}`}>
-              {pill.label}
+              {t(pill.label)}
             </span>
             <span
               className={`text-[10px] px-1.5 py-0.5 rounded border ${
@@ -196,8 +196,8 @@ export function ChannelRow({
               }`}
               title={
                 channel.owned_by_me
-                  ? "You own this channel"
-                  : `Shared by ${channel.owner_display_name || "another user"}. You can use it in your rules.`
+                  ? t("telegram.you_own")
+                  : t("telegram.shared_by_help", { name: channel.owner_display_name || t("telegram.other_user") })
               }
             >
               {channel.owned_by_me
@@ -298,7 +298,7 @@ export function ChannelRow({
             type="button"
             onClick={askDelete}
             disabled={!channel.owned_by_me}
-            title={channel.owned_by_me ? "" : "Only the owner can delete a shared channel"}
+            title={channel.owned_by_me ? "" : t("telegram.delete_owner_only")}
             className="px-2 py-1 text-[11px] rounded border border-border hover:bg-muted text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           >
             {t("telegram.delete")}

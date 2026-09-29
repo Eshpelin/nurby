@@ -58,15 +58,15 @@ export interface TestResult {
 export function statusPill(c: TelegramChannel): { label: string; cls: string } {
   switch (c.pairing_status) {
     case "paired":
-      return { label: "Paired", cls: "bg-green-500/15 text-green-400 border-green-500/30" };
+      return { label: "telegram.status_paired", cls: "bg-green-500/15 text-green-400 border-green-500/30" };
     case "pending":
-      return { label: "Pending pairing", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
+      return { label: "telegram.status_pending", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
     case "blocked":
-      return { label: "Blocked", cls: "bg-red-500/15 text-red-400 border-red-500/30" };
+      return { label: "telegram.status_blocked", cls: "bg-red-500/15 text-red-400 border-red-500/30" };
     case "disabled":
-      return { label: "Disabled", cls: "bg-muted text-muted-foreground border-border" };
+      return { label: "telegram.status_disabled", cls: "bg-muted text-muted-foreground border-border" };
     case "error":
     default:
-      return { label: "Error", cls: "bg-red-500/15 text-red-400 border-red-500/30" };
+      return { label: "telegram.status_error", cls: "bg-red-500/15 text-red-400 border-red-500/30" };
   }
 }
