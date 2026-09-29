@@ -773,7 +773,22 @@ async def _execute_notify(action, observation_data, rule, event_id, ctx):
             if delivered:
                 notif = await db.get(Notification, uuid.UUID(notif_id))
                 if notif is not None:
-                    notif.delivered_at = datetime.now(timezone.utc)
+                    delivered_at = datetime.now(timezone.utc)
+                    notif.delivered_at = delivered_at
+                    from shared.models import NotificationDelivery
+                    db.add(NotificationDelivery(
+                        notification_id=notif.id,
+                        event_id=event_id,
+                        channel="in_app",
+                        delivered_at=delivered_at,
+                    ))
+                    if push_result.get("sent", 0):
+                        db.add(NotificationDelivery(
+                            notification_id=notif.id,
+                            event_id=event_id,
+                            channel="push",
+                            delivered_at=delivered_at,
+                        ))
                     await db.commit()
             await record_event_for_activation(
                 db,

@@ -30,6 +30,7 @@ describe("AlertQualityCard (#199)", () => {
         open_rate_delivered: 0.4,
         clip_opened_alerts: 2,
         clip_open_rate_delivered: 0.2,
+        delivery_by_channel: [{ channel: "in_app", delivered_alerts: 10 }, { channel: "push", delivered_alerts: 5 }],
         nuisance_by_camera_day: [{ camera_id: "camera-1", day: "2026-09-29", reviewed: 2, nuisance: 1, nuisance_rate_reviewed: 0.5 }],
       }),
     });
@@ -42,6 +43,7 @@ describe("AlertQualityCard (#199)", () => {
     expect(screen.getByText(/15% of all fired alerts/)).toBeInTheDocument();
     expect(screen.getByText(/4\/10 \(40%\)/)).toBeInTheDocument();
     expect(screen.getByText(/2\/10 \(20%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/in_app: 10/)).toBeInTheDocument();
     expect(screen.getByText(/Nuisance by camera-day/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Review alerts" })).toHaveAttribute("href", "/events");
   });

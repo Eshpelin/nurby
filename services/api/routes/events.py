@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.auth import get_current_user, require_admin
 from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
-from shared.models import Camera, Event, EventFeedback, EventNote, Notification, Observation, Person, Rule, User
+from shared.models import Camera, Event, EventFeedback, EventNote, Notification, NotificationDelivery, Observation, Person, Rule, User
 from shared.paths import escape_like
 from shared.schemas import (
     BulkDeleteResponse,
@@ -557,6 +557,14 @@ async def feedback_summary(
             .group_by(Event.camera_id, func.date(Event.fired_at), EventFeedback.rating)
         )
     ).all()
+    delivery_rows = (
+        await db.execute(
+            select(NotificationDelivery.channel, func.count(func.distinct(NotificationDelivery.event_id)))
+            .join(Event, Event.id == NotificationDelivery.event_id)
+            .where(Event.fired_at >= cutoff)
+            .group_by(NotificationDelivery.channel)
+        )
+    ).all()
     camera_days: dict[tuple[str, str], dict[str, int]] = {}
     for camera_id, day, rating, count in camera_day_rows:
         key = (str(camera_id) if camera_id is not None else "unscoped", str(day))
@@ -579,6 +587,10 @@ async def feedback_summary(
         "open_rate_delivered": round(opened_delivered / delivered_alerts, 4) if delivered_alerts else None,
         "clip_opened_alerts": clip_opened_delivered,
         "clip_open_rate_delivered": round(clip_opened_delivered / delivered_alerts, 4) if delivered_alerts else None,
+        "delivery_by_channel": [
+            {"channel": channel, "delivered_alerts": count}
+            for channel, count in sorted(delivery_rows)
+        ],
         "nuisance_by_camera_day": [
             {
                 "camera_id": camera_id,

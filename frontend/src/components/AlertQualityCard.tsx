@@ -18,6 +18,7 @@ interface FeedbackSummary {
   open_rate_delivered: number | null;
   clip_opened_alerts: number;
   clip_open_rate_delivered: number | null;
+  delivery_by_channel: { channel: string; delivered_alerts: number }[];
   nuisance_by_camera_day: {
     camera_id: string;
     day: string;
@@ -91,6 +92,16 @@ export function AlertQualityCard() {
             <p className="mt-3 text-[11px] text-muted-foreground">
               {t("alert_quality.explanation", { firedRate: percent(summary.nuisance_rate_fired) })}
             </p>
+            {(summary.delivery_by_channel ?? []).length > 0 && (
+              <div className="mt-3 border-t border-border pt-3">
+                <div className="text-xs font-medium mb-1">{t("alert_quality.by_channel")}</div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                  {summary.delivery_by_channel.map((row) => (
+                    <span key={row.channel}>{row.channel}: {row.delivered_alerts}</span>
+                  ))}
+                </div>
+              </div>
+            )}
             {(summary.nuisance_by_camera_day ?? []).length > 0 && (
               <div className="mt-3 border-t border-border pt-3">
                 <div className="text-xs font-medium mb-1">{t("alert_quality.by_camera_day")}</div>

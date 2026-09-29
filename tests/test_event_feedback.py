@@ -292,6 +292,7 @@ async def test_summary_reports_counts_and_response_rate():
         FakeResult(scalar=1),                                 # opened delivered events
         FakeResult(scalar=1),                                 # clip-opened delivered events
         FakeResult(rows=[("camera-1", "2026-09-29", "incorrect", 2)]),  # camera/day ratings
+        FakeResult(rows=[("in_app", 3), ("push", 2)]),       # delivery channels
     ])
     res = await events_routes.feedback_summary(hours=168, _current_user=_user("admin"), db=db)
     assert res["events_fired"] == 10
@@ -306,6 +307,10 @@ async def test_summary_reports_counts_and_response_rate():
     assert res["open_rate_delivered"] == round(1 / 3, 4)
     assert res["clip_opened_alerts"] == 1
     assert res["clip_open_rate_delivered"] == round(1 / 3, 4)
+    assert res["delivery_by_channel"] == [
+        {"channel": "in_app", "delivered_alerts": 3},
+        {"channel": "push", "delivered_alerts": 2},
+    ]
     assert res["nuisance_by_camera_day"] == [{
         "camera_id": "camera-1", "day": "2026-09-29", "reviewed": 2,
         "nuisance": 2, "nuisance_rate_reviewed": 1.0,
@@ -320,6 +325,7 @@ async def test_summary_reports_counts_and_response_rate():
 async def test_summary_with_no_events_has_no_rate():
     db = FeedbackDB(responses=[
         FakeResult(scalar=0),
+        FakeResult(rows=[]),
         FakeResult(rows=[]),
         FakeResult(rows=[]),
         FakeResult(scalar=0),
