@@ -783,8 +783,11 @@ export default function PeoplePage() {
                     <div>
                       <div className="text-sm font-medium">{s.auto_label}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        Seen {s.sighting_count} time{s.sighting_count !== 1 ? "s" : ""}
-                        {" · "}First {timeAgo(s.first_seen_at)} / Last {timeAgo(s.last_seen_at)}
+                        {t(s.sighting_count === 1 ? "people.body_seen_once" : "people.body_seen_times", {
+                          count: s.sighting_count,
+                          first: timeAgo(s.first_seen_at),
+                          last: timeAgo(s.last_seen_at),
+                        })}
                       </div>
                     </div>
                     <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
