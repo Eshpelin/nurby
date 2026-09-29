@@ -11,22 +11,23 @@ import { useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useEscapeKey } from "@/lib/useEscapeKey";
 import { formatDateTime } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 export type ShareKind = "recording" | "observation" | "event";
 
-const KIND_NOUN: Record<ShareKind, string> = {
-  recording: "recording",
-  observation: "frame",
-  event: "event",
+const KIND_KEY: Record<ShareKind, string> = {
+  recording: "share.create_recording",
+  observation: "share.create_frame",
+  event: "share.create_event",
 };
 
 // The API stores whole days only (clamped 1-30), so 24 hours is the
 // shortest link we can offer.
 const EXPIRY_OPTIONS = [
-  { label: "24 hours", days: 1 },
-  { label: "3 days", days: 3 },
-  { label: "7 days", days: 7 },
-  { label: "30 days", days: 30 },
+  { key: "share.expiry_24_hours", days: 1 },
+  { key: "share.expiry_3_days", days: 3 },
+  { key: "share.expiry_7_days", days: 7 },
+  { key: "share.expiry_30_days", days: 30 },
 ] as const;
 
 interface CreatedShare {
@@ -45,7 +46,8 @@ interface ShareDialogProps {
 }
 
 export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogProps) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [expiryDays, setExpiryDays] = useState<number>(7);
   const [maxViewsInput, setMaxViewsInput] = useState<string>("");
   const [creating, setCreating] = useState(false);
@@ -56,7 +58,7 @@ export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogPro
 
   useEscapeKey(onClose);
 
-  const noun = KIND_NOUN[kind];
+  const noun = t(KIND_KEY[kind]).replace(/^Share this |^Compartir esta /, "").toLowerCase();
 
   const createShare = async () => {
     setCreating(true);
@@ -88,7 +90,7 @@ export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogPro
           : `${window.location.origin}${data.path}`;
       setCreated({ url, expires_at: data.expires_at, max_views: data.max_views });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the link");
+      setError(err instanceof Error ? err.message : t("share.create_link"));
     } finally {
       setCreating(false);
     }
@@ -112,10 +114,10 @@ export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogPro
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md shadow-xl mx-4">
         <div className="flex items-start justify-between gap-4 mb-1">
-          <h2 className="text-lg font-semibold">Share this {noun}</h2>
+          <h2 className="text-lg font-semibold">{t(KIND_KEY[kind])}</h2>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("wizard.close")}
             className="shrink-0 p-1.5 -mr-1.5 -mt-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -132,7 +134,7 @@ export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogPro
           <div className="space-y-4">
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-                Link expires after
+                {t("share.expires_after")}
               </label>
               <div className="flex items-center gap-1.5">
                 {EXPIRY_OPTIONS.map((opt) => (
@@ -147,7 +149,7 @@ export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogPro
                         : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
                     }`}
                   >
-                    {opt.label}
+                    {t(opt.key)}
                   </button>
                 ))}
               </div>
@@ -155,24 +157,23 @@ export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogPro
 
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-                Max views (optional)
+                {t("share.max_views")}
               </label>
               <input
                 type="number"
                 min={1}
                 value={maxViewsInput}
                 onChange={(e) => setMaxViewsInput(e.target.value)}
-                placeholder="Unlimited"
+                placeholder={t("share.unlimited")}
                 className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
               />
               <p className="text-[10px] text-muted-foreground mt-1">
-                The link stops working after this many opens.
+                {t("share.view_limit_help")}
               </p>
             </div>
 
             <p className="text-[11px] text-muted-foreground leading-relaxed rounded-md border border-border-subtle bg-background/40 px-3 py-2">
-              Anyone with the link can view this {noun} until it expires, without
-              signing in. You can revoke it at any time from Settings.
+              {t("share.anonymous_notice", { kind: noun })}
             </p>
 
             {error && <p className="text-xs text-red-400">{error}</p>}
@@ -182,14 +183,14 @@ export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogPro
                 onClick={onClose}
                 className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
               >
-                Cancel
+                {t("share.cancel")}
               </button>
               <button
                 onClick={createShare}
                 disabled={creating}
                 className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
-                {creating ? "Creating." : "Create link"}
+                {creating ? t("share.creating") : t("share.create_link")}
               </button>
             </div>
           </div>
@@ -216,7 +217,7 @@ export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogPro
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    Copied
+                    {t("share.copied")}
                   </>
                 ) : (
                   <>
@@ -224,7 +225,7 @@ export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogPro
                       <rect x="9" y="9" width="13" height="13" rx="2" />
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                     </svg>
-                    Copy
+                    {t("share.copy")}
                   </>
                 )}
               </button>
@@ -234,17 +235,16 @@ export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogPro
               <p className="text-[11px] text-warning/90 leading-relaxed">
                 Anyone with this link can view the {noun}
                 {created.expires_at ? (
-                  <> until <span className="font-mono">{formatDateTime(created.expires_at)}</span></>
+                  <> {t("share.until")} <span className="font-mono">{formatDateTime(created.expires_at)}</span></>
                 ) : (
-                  " until it expires"
+                  ` ${t("share.until_expires")}`
                 )}
                 {created.max_views != null &&
-                  ` (or after ${created.max_views} view${created.max_views === 1 ? "" : "s"})`}
-                . No sign-in required.
+                  ` (${t(created.max_views === 1 ? "share.or_after_views_one" : "share.or_after_views_other", { count: created.max_views })})`}
+                {` ${t("share.no_sign_in")}`}
               </p>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                This link is shown only once. Copy it now; you can revoke it later
-                from Settings, but not view it again.
+                {t("share.once_notice")}
               </p>
             </div>
 
@@ -253,7 +253,7 @@ export function ShareDialog({ kind, resourceId, label, onClose }: ShareDialogPro
                 onClick={onClose}
                 className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
               >
-                Done
+                {t("share.done")}
               </button>
             </div>
           </div>
