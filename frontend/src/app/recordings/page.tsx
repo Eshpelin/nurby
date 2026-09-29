@@ -357,17 +357,22 @@ export default function RecordingsPage() {
       const preview = await previewRes.json().catch(() => ({}));
       if (!previewRes.ok) throw new Error(preview.detail || `Preview failed (${previewRes.status})`);
       const camerasInScope = (preview.cameras || [])
-        .map((id: string) => cameraNames[id] || "Unknown camera")
+        .map((id: string) => cameraNames[id] || t("recordings.unknown_camera_short"))
         .join(", ");
-      const scope = selectAllMatching ? "the current filters" : "the selected recordings";
+      const scope = selectAllMatching ? t("recordings.current_filters") : t("recordings.selected_recordings");
       const missing = preview.missing_files
-        ? ` ${preview.missing_files} file${preview.missing_files === 1 ? " is" : "s are"} already missing.`
+        ? t("recordings.missing_files", { count: preview.missing_files, plural: preview.missing_files === 1 ? "" : "s" })
         : "";
       const estimate = formatFileSize(preview.estimated_bytes || 0);
       if (!window.confirm(
-        `Delete ${preview.matching} recording${preview.matching === 1 ? "" : "s"} from ${scope}?\n` +
-        `Cameras: ${camerasInScope || "none"}\nEstimated storage reclaimed: ${estimate}.${missing}\n` +
-        "This removes recording files and cannot be undone."
+        t("recordings.bulk_delete_confirm", {
+          count: preview.matching,
+          plural: preview.matching === 1 ? "" : "s",
+          scope,
+          cameras: camerasInScope || t("incident.nobody"),
+          estimate,
+          missing,
+        })
       )) return;
       const res = await authFetch("/api/recordings/bulk/delete", {
         method: "POST",
@@ -375,19 +380,25 @@ export default function RecordingsPage() {
         body: JSON.stringify(body),
       });
       const result = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(result.detail || `Bulk delete failed (${res.status})`);
+      if (!res.ok) throw new Error(result.detail || `${t("recordings.bulk_delete_failed")} (${res.status})`);
       const removed = new Set([...selectedIds]);
       setRecordings((prev) => prev.filter((r) => !removed.has(r.id)));
       setSelectedIds(new Set());
       setSelectAllMatching(false);
       if (selectAllMatching) await fetchRecordings();
-      setBulkMessage(`Deleted ${result.deleted} recording${result.deleted === 1 ? "" : "s"}${result.missing ? `; ${result.missing} file${result.missing === 1 ? "" : "s"} were already missing` : ""}.`);
+      setBulkMessage(t("recordings.deleted_result", {
+        count: result.deleted,
+        plural: result.deleted === 1 ? "" : "s",
+        missing: result.missing
+          ? t("recordings.missing_files", { count: result.missing, plural: result.missing === 1 ? "" : "s" })
+          : "",
+      }));
     } catch (err) {
-      setBulkMessage(err instanceof Error ? err.message : "Bulk delete failed");
+      setBulkMessage(err instanceof Error ? err.message : t("recordings.bulk_delete_failed"));
     } finally {
       setBulkBusy(false);
     }
-  }, [authFetch, cameraNames, fetchRecordings, selectedIds, selectAllMatching, selectionFilters]);
+  }, [authFetch, cameraNames, fetchRecordings, selectedIds, selectAllMatching, selectionFilters, t]);
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -987,7 +998,7 @@ export default function RecordingsPage() {
                 )}
                 <div className="p-3 space-y-1.5">
                   <div className="text-sm font-medium truncate">
-                    {cameraNames[rec.camera_id] || "Unknown camera"}
+                    {cameraNames[rec.camera_id] || t("recordings.unknown_camera_short")}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {formatDateTime(rec.started_at)}
@@ -1061,7 +1072,7 @@ export default function RecordingsPage() {
             <div className="flex items-start justify-between gap-4 px-4 py-3 border-b border-border">
               <div className="min-w-0">
                 <div className="text-sm font-medium truncate">
-                  {cameraNames[expandedRec.camera_id] || "Unknown camera"}
+                  {cameraNames[expandedRec.camera_id] || t("recordings.unknown_camera_short")}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {formatDateTime(expandedRec.started_at)}
@@ -1138,7 +1149,7 @@ export default function RecordingsPage() {
                     disabled={seekTargets.length === 0}
                     className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
                   title={t("recordings.previous_detection")}
-                  >◀ Prev</button>
+                  >{t("recordings.previous_short")}</button>
                   <button
                     onClick={() => seekToDetection(1)}
                     disabled={seekTargets.length === 0}
@@ -1147,8 +1158,8 @@ export default function RecordingsPage() {
                   >{t("recordings.next")} ▶</button>
                   <span className="text-[11px] text-muted-foreground">
                     {seekTargets.length > 0
-                      ? `${seekTargets.length} ${objectFilters[0] || "detection"} moment${seekTargets.length === 1 ? "" : "s"}`
-                      : "no detections"}
+                      ? t(seekTargets.length === 1 ? "recordings.detection_moments_one" : "recordings.detection_moments_many", { count: seekTargets.length })
+                      : t("recordings.no_detections")}
                   </span>
                 </div>
                 <button
@@ -1175,7 +1186,7 @@ export default function RecordingsPage() {
                   }}
                   className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                   title={t("recordings.set_clip_start")}
-                >Set start{clipStart != null ? ` · ${formatClock(clipStart)}` : ""}</button>
+                >{t("recordings.set_start")}{clipStart != null ? ` · ${formatClock(clipStart)}` : ""}</button>
                 <button
                   onClick={() => {
                     const t = videoRef.current?.currentTime ?? 0;
@@ -1184,10 +1195,10 @@ export default function RecordingsPage() {
                   }}
                   className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                   title={t("recordings.set_clip_end")}
-                >Set end{clipEnd != null ? ` · ${formatClock(clipEnd)}` : ""}</button>
+                >{t("recordings.set_end")}{clipEnd != null ? ` · ${formatClock(clipEnd)}` : ""}</button>
                 {clipStart != null && clipEnd != null && clipEnd > clipStart && (
                   <span className="text-[11px] text-muted-foreground">
-                    {formatClock(clipEnd - clipStart)} selected
+                    {formatClock(clipEnd - clipStart)} {t("recordings.selected_duration")}
                   </span>
                 )}
                 <div className="flex-1" />
@@ -1220,20 +1231,20 @@ export default function RecordingsPage() {
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" y1="15" x2="12" y2="3" />
                   </svg>
-                  Download clip
+                  {t("recordings.download_clip")}
                 </a>
               </div>
               {confirmDeleteId === expandedRec.id ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2">
                   <span className="text-xs text-red-300 flex-1 min-w-[180px]">
-                    Delete this recording and its file?
+                    {t("recordings.delete_confirm_single")}
                   </span>
                   <button
                     onClick={() => handleDelete(expandedRec.id)}
                     disabled={deletingId === expandedRec.id}
                     className="px-3 py-1.5 text-sm rounded-md bg-red-600 text-white font-medium hover:bg-red-500 transition-colors disabled:opacity-50"
                   >
-                    {deletingId === expandedRec.id ? "Deleting." : "Yes, delete"}
+                    {deletingId === expandedRec.id ? t("recordings.deleting_short") : t("recordings.yes_delete")}
                   </button>
                   <button
                     onClick={() => {
@@ -1243,7 +1254,7 @@ export default function RecordingsPage() {
                     disabled={deletingId === expandedRec.id}
                     className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
                   >
-                    Cancel
+                    {t("recordings.cancel")}
                   </button>
                 </div>
               ) : (
@@ -1259,7 +1270,7 @@ export default function RecordingsPage() {
                         <polyline points="7 10 12 15 17 10" />
                         <line x1="12" y1="15" x2="12" y2="3" />
                       </svg>
-                      Download
+                      {t("recordings.download")}
                     </a>
                     <button
                       onClick={() => setShareRec(expandedRec)}
@@ -1273,7 +1284,7 @@ export default function RecordingsPage() {
                         <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
                         <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
                       </svg>
-                      Share
+                      {t("recordings.share")}
                     </button>
                   </div>
                   <button
@@ -1290,7 +1301,7 @@ export default function RecordingsPage() {
                       <path d="M14 11v6" />
                       <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
                     </svg>
-                    Delete
+                    {t("recordings.delete")}
                   </button>
                 </div>
               )}
@@ -1306,7 +1317,7 @@ export default function RecordingsPage() {
         <ShareDialog
           kind="recording"
           resourceId={shareRec.id}
-          label={`${cameraNames[shareRec.camera_id] || "Unknown camera"} · ${formatDateTime(shareRec.started_at)}`}
+          label={`${cameraNames[shareRec.camera_id] || t("recordings.unknown_camera_short")} · ${formatDateTime(shareRec.started_at)}`}
           onClose={() => setShareRec(null)}
         />
       )}

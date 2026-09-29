@@ -34,7 +34,8 @@ type RangeValue = (typeof RANGES)[number]["value"];
 
 export default function EventsPage() {
   const { authFetch, user } = useAuth();
-  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
+  const locale = user?.locale;
+  const t = useCallback((key: string, values?: Record<string, string | number>) => translate(locale, key, values), [locale]);
   const searchParams = useSearchParams();
   const [events, setEvents] = useState<EventEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,18 +96,18 @@ export default function EventsPage() {
       setError(null);
       try {
         const res = await authFetch(`/api/events/history?${buildQuery(offset)}`);
-        if (!res.ok) throw new Error(`Failed to load alerts (${res.status})`);
+        if (!res.ok) throw new Error(`${t("events.load_failed")} (${res.status})`);
         const list: EventEntry[] = await res.json();
         setEvents((prev) => (offset === 0 ? list : [...prev, ...list]));
         setHasMore(list.length === PAGE_SIZE);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load alerts");
+        setError(e instanceof Error ? e.message : t("events.load_failed"));
       } finally {
         setLoading(false);
         setLoadingMore(false);
       }
     },
-    [authFetch, buildQuery]
+    [authFetch, buildQuery, t]
   );
 
   useEffect(() => {
@@ -182,7 +183,7 @@ export default function EventsPage() {
       params.delete("limit");
       params.delete("offset");
       const res = await authFetch(`/api/events/export.csv?${params}`);
-      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      if (!res.ok) throw new Error(`${t("events.export_failed")} (${res.status})`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -191,9 +192,9 @@ export default function EventsPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Export failed");
+      setError(e instanceof Error ? e.message : t("events.export_failed"));
     }
-  }, [authFetch, buildQuery]);
+  }, [authFetch, buildQuery, t]);
 
   const selectionFilters = useCallback(() => {
     const hours = RANGES.find((r) => r.value === range)?.hours ?? 0;
@@ -220,7 +221,7 @@ export default function EventsPage() {
         for (const id of selectedIds) params.append("event_id", id);
       }
       const res = await authFetch(`/api/events/export.csv?${params}`);
-      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      if (!res.ok) throw new Error(`${t("events.export_failed")} (${res.status})`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -229,9 +230,9 @@ export default function EventsPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setBulkMessage(e instanceof Error ? e.message : "Export failed");
+      setBulkMessage(e instanceof Error ? e.message : t("events.export_failed"));
     }
-  }, [authFetch, selectedIds, selectAllMatching, selectionFilters]);
+  }, [authFetch, selectedIds, selectAllMatching, selectionFilters, t]);
 
   const bulkDelete = useCallback(async () => {
     if (!selectAllMatching && selectedIds.size === 0) return;
@@ -255,7 +256,7 @@ export default function EventsPage() {
           count: preview.matching,
           plural: preview.matching === 1 ? "" : "s",
           scope,
-          cameras: camerasInScope || "none",
+          cameras: camerasInScope || t("incident.nobody"),
           linked: preview.linked_recordings || 0,
         })
       )) return;
@@ -265,7 +266,7 @@ export default function EventsPage() {
         body: JSON.stringify(body),
       });
       const result = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(result.detail || `Bulk delete failed (${res.status})`);
+      if (!res.ok) throw new Error(result.detail || `${t("events.bulk_delete_failed")} (${res.status})`);
       const removed = new Set(selectedIds);
       setEvents((prev) => prev.filter((e) => !removed.has(e.id)));
       setSelectedIds(new Set());
@@ -276,11 +277,11 @@ export default function EventsPage() {
         plural: result.deleted === 1 ? "" : "s",
       }));
     } catch (e) {
-      setBulkMessage(e instanceof Error ? e.message : "Bulk delete failed");
+      setBulkMessage(e instanceof Error ? e.message : t("events.bulk_delete_failed"));
     } finally {
       setBulkBusy(false);
     }
-  }, [authFetch, cameraNames, fetchEvents, selectedIds, selectAllMatching, selectionFilters]);
+  }, [authFetch, cameraNames, fetchEvents, selectedIds, selectAllMatching, selectionFilters, t]);
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -444,7 +445,7 @@ export default function EventsPage() {
                         return next;
                       });
                     }}
-                    aria-label={`Select event from ${formatDateTime(ev.fired_at)}`}
+                    aria-label={t("events.select_event", { time: formatDateTime(ev.fired_at) })}
                     className="accent-[var(--accent)]"
                   />
                   <span
@@ -457,7 +458,7 @@ export default function EventsPage() {
                     }`}
                   />
                   <span className="text-sm font-medium">
-                    {ev.rule_id ? ruleNames.get(ev.rule_id) || "Deleted rule" : "Rule"}
+                    {ev.rule_id ? ruleNames.get(ev.rule_id) || t("events.deleted_rule") : t("events.rule")}
                   </span>
                   {cameraOf(ev) && (
                     <span className="px-1.5 py-0.5 text-[10px] rounded bg-muted text-muted-foreground">
@@ -471,7 +472,7 @@ export default function EventsPage() {
                   )}
                   {muted && (
                     <span className="px-1.5 py-0.5 text-[10px] rounded bg-muted text-muted-foreground">
-                      🔕 Muted
+                      🔕 {t("events.muted")}
                     </span>
                   )}
                   <span
@@ -493,7 +494,7 @@ export default function EventsPage() {
                           onClick={() => ack(ev.id)}
                           className="px-2 py-1 text-[11px] rounded-md bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors"
                         >
-                          ✓ Acknowledge
+                          ✓ {t("events.acknowledge")}
                         </button>
                       )}
                       {!muted && (
@@ -503,7 +504,7 @@ export default function EventsPage() {
                           className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors"
                           title={t("events.snooze_title")}
                         >
-                          🔕 Mute 10m
+                          🔕 {t("events.mute_10m")}
                         </button>
                       )}
                       <button
@@ -512,7 +513,7 @@ export default function EventsPage() {
                         className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors"
                           title={t("events.share_title")}
                       >
-                        🔗 Share
+                        🔗 {t("events.share")}
                       </button>
                       {ev.action_status === "failed" && ev.action_error && (
                         <span className="text-[11px] text-red-400 truncate">{ev.action_error}</span>
@@ -555,7 +556,7 @@ export default function EventsPage() {
           kind="event"
           resourceId={shareEvent.id}
           label={[
-            shareEvent.rule_id ? ruleNames.get(shareEvent.rule_id) || "Rule" : "Event",
+            shareEvent.rule_id ? ruleNames.get(shareEvent.rule_id) || t("events.rule") : t("events.title"),
             cameraOf(shareEvent),
             formatDateTime(shareEvent.fired_at),
           ]
