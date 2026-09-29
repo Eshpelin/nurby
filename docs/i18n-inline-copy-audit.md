@@ -13,6 +13,10 @@ UI copy.
 - person/follow feed, WHEP player, conversation card, moment modal, alert
   feedback, devices, vehicles, and the existing settings slices documented in
   the #265 issue history.
+- camera settings: General, Feed, YOLO-World prompts, Audio Conversations,
+  Incident Tracking, Relationship Privacy, Timezone, Retention, Storage,
+  Authentication, Danger Zone, package tracking, ONVIF/PTZ detection, PTZ
+  controls, and privacy zones.
 
 ## Remaining user-facing surfaces
 
@@ -23,8 +27,9 @@ should move to the shared English/Spanish catalog in follow-up slices:
   and first-camera/no-results guidance.
 - `frontend/src/app/people/page.tsx`: people, unknown-cluster, merge, and
   deletion dialogs.
-- `frontend/src/app/cameras/[id]/page.tsx` and its camera settings panels:
-  package tracking, ONVIF, and remaining camera configuration copy.
+- `frontend/src/app/cameras/[id]/page.tsx` and its remaining camera settings
+  panels: AI analysis, detection, refiners, recaps, summarization, zones, and
+  any page-level status or save feedback still containing product copy.
 - `frontend/src/components/rules/TriggerSection.tsx` and related editors:
   rule labels, hints, option labels, and zone instructions.
 - `frontend/src/app/recordings/page.tsx` and `frontend/src/app/events/page.tsx`:
