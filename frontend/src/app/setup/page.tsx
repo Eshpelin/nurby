@@ -4,10 +4,18 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, ApiError } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 
 export default function SetupPage() {
   const { register } = useAuth();
   const router = useRouter();
+  const [locale, setLocale] = useState<Locale>("en");
+  const t = (key: string) => translate(locale, key);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("nurby.locale");
+    if (saved === "en" || saved === "es") setLocale(saved);
+  }, []);
 
   // If setup is already complete, this form can only 409. Bounce home so
   // an existing install never lands on a doomed "Create account" screen.
@@ -49,7 +57,7 @@ export default function SetupPage() {
     try {
       await register(email, password, displayName);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Setup failed";
+      const msg = err instanceof Error ? err.message : t("setup.failed");
       setError(msg);
       // 409 = email already exists / setup already completed. Remember
       // the email so the button stays disabled until it changes.
@@ -65,9 +73,9 @@ export default function SetupPage() {
     <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Create Admin Account</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("setup.title")}</h1>
           <p className="text-sm text-muted-foreground">
-            Set up the first admin user for your Nurby instance.
+            {t("setup.subtitle")}
           </p>
         </div>
 
@@ -80,7 +88,7 @@ export default function SetupPage() {
 
           <div className="space-y-2">
             <label htmlFor="display-name" className="text-sm font-medium text-foreground">
-              Display Name
+              {t("setup.display_name")}
             </label>
             <input
               id="display-name"
@@ -89,13 +97,13 @@ export default function SetupPage() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
-              placeholder="Admin"
+              placeholder={t("setup.display_name_placeholder")}
             />
           </div>
 
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium text-foreground">
-              Email
+              {t("setup.email")}
             </label>
             <input
               id="email"
@@ -110,13 +118,13 @@ export default function SetupPage() {
                   ? "border-red-500/50 focus:ring-red-500"
                   : "border-border focus:ring-accent"
               }`}
-              placeholder="admin@example.com"
+              placeholder={t("setup.email_placeholder")}
             />
             {emailTaken && (
               <p className="text-xs text-red-400">
-                An account with this email already exists. Use a different email or{" "}
+                {t("setup.email_taken")} {" "}
                 <Link href="/login" className="underline">
-                  sign in
+                  {t("setup.sign_in")}
                 </Link>
                 .
               </p>
@@ -125,7 +133,7 @@ export default function SetupPage() {
 
           <div className="space-y-2">
             <label htmlFor="password" className="text-sm font-medium text-foreground">
-              Password
+              {t("setup.password")}
             </label>
             <div className="relative">
               <input
@@ -136,15 +144,15 @@ export default function SetupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-md border border-border bg-muted px-3 py-2 pr-16 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
-                placeholder="Choose a strong password"
+                placeholder={t("setup.password_placeholder")}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute inset-y-0 right-0 px-3 text-xs text-muted-foreground hover:text-foreground"
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t("setup.hide_password") : t("setup.show_password")}
               >
-                {showPassword ? "Hide" : "Show"}
+                {showPassword ? t("setup.hide") : t("setup.show")}
               </button>
             </div>
           </div>
@@ -154,14 +162,14 @@ export default function SetupPage() {
             disabled={submitting || emailTaken}
             className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-accent/90 disabled:opacity-50"
           >
-            {submitting ? "Creating account..." : "Create account"}
+            {submitting ? t("setup.creating") : t("setup.create_account")}
           </button>
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          Already set up?{" "}
+          {t("setup.already_set_up")} {" "}
           <Link href="/login" className="text-accent hover:underline">
-            Sign in
+            {t("setup.sign_in")}
           </Link>
         </p>
       </div>
