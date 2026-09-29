@@ -847,7 +847,7 @@ export default function RecordingsPage() {
               type="search"
               value={speechQuery}
               onChange={(e) => setSpeechQuery(e.target.value)}
-              placeholder="Search what was said… (e.g. “gate”, “package”, a name)"
+              placeholder={t("recordings.speech_placeholder")}
               className="w-full pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
@@ -864,7 +864,7 @@ export default function RecordingsPage() {
               onClick={() => { setSpeechQuery(""); setSpeechResults(null); setSpeechError(null); }}
               className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
-              Clear
+              {t("recordings.clear")}
             </button>
           )}
         </form>
@@ -879,32 +879,34 @@ export default function RecordingsPage() {
         <div className="mb-6 rounded-lg border border-border bg-card overflow-hidden">
           <div className="px-4 py-2.5 border-b border-border text-xs text-muted-foreground">
             {speechResults.length === 0
-              ? "No speech matched that search."
-              : `${speechResults.length} spoken moment${speechResults.length === 1 ? "" : "s"} matched "${speechQuery.trim()}"`}
+              ? t("recordings.no_speech_match")
+              : speechResults.length === 1
+                ? t("recordings.spoken_match_one", { query: speechQuery.trim() })
+                : t("recordings.spoken_match_many", { count: speechResults.length, query: speechQuery.trim() })}
           </div>
           {speechError && (
             <div className="px-4 py-2 text-xs text-red-400 border-b border-border">{speechError}</div>
           )}
           <ul className="divide-y divide-border-subtle max-h-80 overflow-y-auto">
-            {speechResults.map((t) => (
-              <li key={t.id}>
+            {speechResults.map((hit) => (
+              <li key={hit.id}>
                 <button
-                  onClick={() => openTranscriptHit(t)}
+                  onClick={() => openTranscriptHit(hit)}
                   className="w-full text-left px-4 py-2.5 flex items-start gap-3 hover:bg-muted/60 transition-colors group"
                 >
                   <span className="shrink-0 mt-0.5 text-accent">🔊</span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm text-foreground truncate group-hover:whitespace-normal">
-                      {t.text}
+                      {hit.text}
                     </span>
                     <span className="block text-[11px] text-muted-foreground mt-0.5">
-                      {cameraNames[t.camera_id] || "Unknown camera"}
+                      {cameraNames[hit.camera_id] || t("recordings.unknown_camera")}
                       <span className="mx-1.5">·</span>
-                      {formatDateTime(t.started_at)}
+                      {formatDateTime(hit.started_at)}
                     </span>
                   </span>
                   <span className="shrink-0 self-center text-[11px] text-muted-foreground group-hover:text-accent">
-                    Play ▶
+                    {t("recordings.play")}
                   </span>
                 </button>
               </li>
@@ -921,8 +923,8 @@ export default function RecordingsPage() {
         hasActiveFilters ? (
           <EmptyState
             title={t("recordings.no_match_title")}
-            body="Try a different camera, person, or object, or widen the date range."
-            actionLabel="Clear filters"
+            body={t("recordings.no_match_body")}
+            actionLabel={t("recordings.clear_filters")}
             onAction={resetFiltersAndPage}
           />
         ) : (
@@ -930,7 +932,7 @@ export default function RecordingsPage() {
             icon={<CameraGlyph />}
             title={t("recordings.empty_title")}
             body={t("recordings.empty_body")}
-            actionLabel="Go to cameras"
+            actionLabel={t("recordings.go_to_cameras")}
             actionHref="/"
           />
         )
