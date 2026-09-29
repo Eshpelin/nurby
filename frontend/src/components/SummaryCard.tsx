@@ -1,6 +1,8 @@
 "use client";
 
 import { formatWith } from "@/lib/time";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 interface PersonSeen {
   name: string;
@@ -44,6 +46,8 @@ const ClockIcon = ({ className }: { className?: string }) => (
  * on it as the "story" of a chunk of time.
  */
 export function SummaryCard(props: SummaryCardProps) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const {
     cameraName,
     kind,
@@ -80,10 +84,10 @@ export function SummaryCard(props: SummaryCardProps) {
         <div className="flex items-center gap-2 text-[11px] mb-2">
           <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
           <span className="font-medium uppercase tracking-wider text-indigo-300">
-            {kind === "event" ? "Event recap" : "Recap"}
+            {kind === "event" ? t("summary.event_recap") : t("summary.recap")}
           </span>
           <span className="text-muted-foreground">·</span>
-          <span className="text-muted-foreground">{cameraName || "Camera"}</span>
+          <span className="text-muted-foreground">{cameraName || t("summary.camera")}</span>
           <span className="ml-auto flex items-center gap-1 text-muted-foreground">
             <ClockIcon className="w-3 h-3" />
             <span>
@@ -104,8 +108,8 @@ export function SummaryCard(props: SummaryCardProps) {
                 className="px-1.5 py-0.5 text-[10px] rounded bg-emerald-900/30 text-emerald-300 border border-emerald-800/40"
                 title={
                   p.first_seen && p.last_seen
-                    ? `${p.first_seen} → ${p.last_seen}, ${p.sightings} sightings`
-                    : `${p.sightings} sightings`
+                    ? `${p.first_seen} → ${p.last_seen}, ${t(p.sightings === 1 ? "summary.sightings_one" : "summary.sightings_many", { count: p.sightings })}`
+                    : t(p.sightings === 1 ? "summary.sightings_one" : "summary.sightings_many", { count: p.sightings })
                 }
               >
                 {p.name}
