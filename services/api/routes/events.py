@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import String, and_, case, cast, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -559,7 +559,36 @@ async def feedback_summary(
     ).all()
     delivery_rows = (
         await db.execute(
-            select(NotificationDelivery.channel, func.count(func.distinct(NotificationDelivery.event_id)))
+            select(
+                NotificationDelivery.channel,
+                func.count(func.distinct(NotificationDelivery.event_id)),
+                func.count(
+                    func.distinct(
+                        case(
+                            (
+                                and_(
+                                    NotificationDelivery.channel == "in_app",
+                                    Event.opened_at.is_not(None),
+                                ),
+                                NotificationDelivery.event_id,
+                            )
+                        )
+                    )
+                ),
+                func.count(
+                    func.distinct(
+                        case(
+                            (
+                                and_(
+                                    NotificationDelivery.channel == "in_app",
+                                    Event.clip_opened_at.is_not(None),
+                                ),
+                                NotificationDelivery.event_id,
+                            )
+                        )
+                    )
+                ),
+            )
             .join(Event, Event.id == NotificationDelivery.event_id)
             .where(Event.fired_at >= cutoff)
             .group_by(NotificationDelivery.channel)
@@ -588,8 +617,13 @@ async def feedback_summary(
         "clip_opened_alerts": clip_opened_delivered,
         "clip_open_rate_delivered": round(clip_opened_delivered / delivered_alerts, 4) if delivered_alerts else None,
         "delivery_by_channel": [
-            {"channel": channel, "delivered_alerts": count}
-            for channel, count in sorted(delivery_rows)
+            {
+                "channel": channel,
+                "delivered_alerts": delivered,
+                "opened_alerts": opened,
+                "clip_opened_alerts": clip_opened,
+            }
+            for channel, delivered, opened, clip_opened in sorted(delivery_rows)
         ],
         "nuisance_by_camera_day": [
             {

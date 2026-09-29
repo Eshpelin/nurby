@@ -18,7 +18,12 @@ interface FeedbackSummary {
   open_rate_delivered: number | null;
   clip_opened_alerts: number;
   clip_open_rate_delivered: number | null;
-  delivery_by_channel: { channel: string; delivered_alerts: number }[];
+  delivery_by_channel: {
+    channel: string;
+    delivered_alerts: number;
+    opened_alerts: number;
+    clip_opened_alerts: number;
+  }[];
   nuisance_by_camera_day: {
     camera_id: string;
     day: string;
@@ -97,7 +102,14 @@ export function AlertQualityCard() {
                 <div className="text-xs font-medium mb-1">{t("alert_quality.by_channel")}</div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
                   {summary.delivery_by_channel.map((row) => (
-                    <span key={row.channel}>{row.channel}: {row.delivered_alerts}</span>
+                    <span key={row.channel}>
+                      {t("alert_quality.channel_stats", {
+                        channel: row.channel,
+                        delivered: row.delivered_alerts,
+                        opened: row.opened_alerts,
+                        clips: row.clip_opened_alerts,
+                      })}
+                    </span>
                   ))}
                 </div>
               </div>
