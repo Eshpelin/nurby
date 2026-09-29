@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { formatDateTime } from "@/lib/time";
 import { AssociationSummary } from "@/components/review/AssociationSummary";
+import { translate } from "@/lib/i18n";
 
 interface SubjectPerson {
   kind: "person";
@@ -132,7 +133,8 @@ const RANGES = [
  * transcript, and recording the subject appeared in.
  */
 export function FollowFeedPage({ kind, id }: Props) {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,19 +189,19 @@ export function FollowFeedPage({ kind, id }: Props) {
     <div className="px-6 py-6 max-w-5xl mx-auto">
       <div className="flex items-center gap-3 mb-5">
         <Link href="/people" className="text-muted-foreground hover:text-foreground text-sm">
-          ← People
+          ← {t("follow.people")}
         </Link>
         <span className="text-muted-foreground">/</span>
         <h1 className="text-lg font-semibold flex items-center gap-2">
           <FollowIcon className="w-5 h-5 text-accent" />
-          Following {subjectName}
+          {t("follow.following")} {subjectName}
         </h1>
         {kind === "person" && subjectName && (
           <Link
             href={`/memory?entity_kind=person&entity_key=${id}`}
             className="ml-auto text-xs px-2.5 py-1 rounded-md border border-border text-muted-foreground hover:text-foreground"
           >
-            Notes about {subjectName}
+            {t("follow.notes_about")} {subjectName}
           </Link>
         )}
       </div>
@@ -212,6 +214,7 @@ export function FollowFeedPage({ kind, id }: Props) {
           rangeS={rangeS}
           setRangeS={setRangeS}
           heatPeak={heatPeak}
+          t={t}
         />
       )}
 
@@ -222,7 +225,7 @@ export function FollowFeedPage({ kind, id }: Props) {
       {bundle && bundle.stats.cameras_seen.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap mb-4">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">
-            Cameras
+            {t("follow.cameras")}
           </span>
           <button
             type="button"
@@ -233,7 +236,7 @@ export function FollowFeedPage({ kind, id }: Props) {
                 : "border-border text-muted-foreground hover:text-foreground"
             }`}
           >
-            All
+            {t("follow.all")}
           </button>
           {bundle.stats.cameras_seen.map((c) => (
             <button
@@ -258,23 +261,22 @@ export function FollowFeedPage({ kind, id }: Props) {
       )}
 
       {loading && !bundle ? (
-        <div className="text-sm text-muted-foreground">Building timeline.</div>
+        <div className="text-sm text-muted-foreground">{t("follow.building")}</div>
       ) : error ? (
         <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-xs text-danger">
           {error}
         </div>
       ) : bundle && bundle.feed.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-card/30 p-8 text-center">
-          <h3 className="text-sm font-medium mb-1">Nothing to show</h3>
+          <h3 className="text-sm font-medium mb-1">{t("follow.empty_title")}</h3>
           <p className="text-xs text-muted-foreground max-w-md mx-auto">
-            No sightings in this window. Try widening the time range or
-            removing the camera filter.
+            {t("follow.empty_body")}
           </p>
         </div>
       ) : bundle ? (
         <div className="space-y-2">
           {bundle.feed.map((item) => (
-            <FeedRow key={`${item.kind}-${item.id}`} item={item} token={token} />
+            <FeedRow key={`${item.kind}-${item.id}`} item={item} token={token} t={t} />
           ))}
         </div>
       ) : null}
@@ -289,6 +291,7 @@ function FollowHeader({
   rangeS,
   setRangeS,
   heatPeak,
+  t,
 }: {
   subject: Subject;
   stats: Stats;
@@ -296,6 +299,7 @@ function FollowHeader({
   rangeS: number;
   setRangeS: (v: number) => void;
   heatPeak: number;
+  t: (key: string) => string;
 }) {
   const photoUrl =
     subject.kind === "person" && subject.photo_path && token
@@ -342,36 +346,36 @@ function FollowHeader({
                   : "border-border text-muted-foreground hover:text-foreground"
               }`}
             >
-              {r.l}
+              {t(r.v === 86400 ? "follow.range_24h" : r.v === 604800 ? "follow.range_7d" : r.v === 2592000 ? "follow.range_30d" : "follow.range_all")}
             </button>
           ))}
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mb-4">
-        <Stat label="Sightings" value={String(stats.total_sightings)} />
+        <Stat label={t("follow.sightings")} value={String(stats.total_sightings)} />
         <Stat
-          label="Cameras"
+          label={t("follow.cameras")}
           value={String(stats.cameras_seen.length)}
         />
-        <Stat label="First seen" value={formatTs(stats.first_seen_at)} />
-        <Stat label="Last seen" value={formatTs(stats.last_seen_at)} />
-        <Stat label="Incidents" value={String(stats.incidents_count)} />
-        <Stat label="Conversations" value={String(stats.conversations_count)} />
+        <Stat label={t("follow.first_seen")} value={formatTs(stats.first_seen_at)} />
+        <Stat label={t("follow.last_seen")} value={formatTs(stats.last_seen_at)} />
+        <Stat label={t("follow.incidents")} value={String(stats.incidents_count)} />
+        <Stat label={t("follow.conversations")} value={String(stats.conversations_count)} />
         <Stat
-          label="Recordings"
+          label={t("follow.recordings")}
           value={String(stats.recordings_count)}
-          hint="overlapping presence"
+          hint={t("follow.overlapping_presence")}
         />
         <Stat
-          label="Peak hour"
+          label={t("follow.peak_hour")}
           value={peakHour(stats.hour_buckets) ?? "—"}
         />
       </div>
 
       <div>
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
-          Activity by hour
+          {t("follow.activity_by_hour")}
         </div>
         <div className="flex items-end gap-1 h-12">
           {Array.from({ length: 24 }).map((_, h) => {
@@ -432,7 +436,7 @@ function peakHour(buckets: Record<string, number>): string | null {
   return best == null ? null : `${best}:00 (${n})`;
 }
 
-function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
+function FeedRow({ item, token, t }: { item: FeedItem; token: string | null; t: (key: string) => string }) {
   const time = formatDateTime(item.ts);
   if (item.kind === "observation") {
     return (
@@ -440,7 +444,7 @@ function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground mb-1.5">
           <span className="font-mono">{time}</span>
           <span>·</span>
-          <span>{item.camera_name || "Camera"}</span>
+          <span>{item.camera_name || t("follow.camera")}</span>
           {item.refined_by_provider_name && (
             <span className="ml-auto text-sky-300">
               ✨ refined
@@ -460,7 +464,7 @@ function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
             </div>
           )}
           <p className="text-sm leading-relaxed flex-1">
-            {item.vlm_description || "Motion detected"}
+            {item.vlm_description || t("follow.motion_detected")}
           </p>
         </div>
       </div>
@@ -481,10 +485,10 @@ function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
               item.finalized ? "text-emerald-300" : "text-violet-300"
             }`}
           >
-            {item.finalized ? "Incident closed" : "Incident · live"}
+            {item.finalized ? t("follow.incident_closed") : t("follow.incident_live")}
           </span>
           <span className="text-muted-foreground">·</span>
-          <span className="text-muted-foreground">{item.camera_name || "Camera"}</span>
+          <span className="text-muted-foreground">{item.camera_name || t("follow.camera")}</span>
           <span className="text-muted-foreground">·</span>
           <span className="text-muted-foreground font-mono">
             {item.occurrence_count}× · {time}
@@ -494,7 +498,7 @@ function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
           <p className="text-sm leading-relaxed">{item.summary_text}</p>
         ) : (
           <p className="text-xs text-muted-foreground italic">
-            Live incident, no summary yet.
+            {t("follow.live_no_summary")}
           </p>
         )}
       </div>
@@ -505,10 +509,10 @@ function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
       <div className="rounded-lg border border-emerald-700/40 bg-emerald-950/15 p-3">
         <div className="flex items-center gap-2 text-[11px] mb-1.5">
           <span className="font-medium uppercase tracking-wider text-emerald-300">
-            Conversation
+            {t("follow.conversation")}
           </span>
           <span className="text-muted-foreground">·</span>
-          <span className="text-muted-foreground">{item.camera_name || "Camera"}</span>
+          <span className="text-muted-foreground">{item.camera_name || t("follow.camera")}</span>
           <span className="text-muted-foreground">·</span>
           <span className="text-muted-foreground font-mono">
             {item.transcript_count} msg · {time}
@@ -518,7 +522,7 @@ function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
           <p className="text-sm leading-relaxed">{item.summary_text}</p>
         ) : (
           <p className="text-xs text-muted-foreground italic">
-            Conversation in progress.
+            {t("follow.conversation_progress")}
           </p>
         )}
         {item.has_clip && token && (
@@ -537,10 +541,10 @@ function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
       <div className="rounded-lg border border-emerald-700/30 bg-emerald-950/10 p-3">
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground mb-1">
           <span className="text-emerald-300 uppercase tracking-wider">
-            Transcript
+            {t("follow.transcript")}
           </span>
           <span>·</span>
-          <span>{item.camera_name || "Camera"}</span>
+          <span>{item.camera_name || t("follow.camera")}</span>
           <span>·</span>
           <span className="font-mono">{time}</span>
         </div>
@@ -553,7 +557,7 @@ function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
     <div className="rounded-lg border border-blue-700/40 bg-blue-950/15 p-3">
       <div className="flex items-center gap-2 text-[11px] mb-1.5">
         <span className="font-medium uppercase tracking-wider text-blue-300">
-          Recording
+          {t("follow.recording")}
         </span>
         <span className="text-muted-foreground">·</span>
         <span className="text-muted-foreground">{item.camera_name || "Camera"}</span>
@@ -566,8 +570,7 @@ function FeedRow({ item, token }: { item: FeedItem; token: string | null }) {
         </span>
       </div>
       <p className="text-xs text-muted-foreground">
-        Recording overlaps the subject&apos;s presence on this camera. Open the
-        Recordings page for inline playback.
+        {t("follow.recording_overlap")}
       </p>
     </div>
   );
