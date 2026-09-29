@@ -898,6 +898,7 @@ export default function CameraConfigPage() {
 
         {/* ── Incident tracking ── */}
         <IncidentTrackingSection
+          locale={locale}
           incidentIdleSeconds={incidentIdleSeconds}
           incidentTrackingEnabled={incidentTrackingEnabled}
           setIncidentIdleSeconds={setIncidentIdleSeconds}

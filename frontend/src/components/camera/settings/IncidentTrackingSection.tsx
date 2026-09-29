@@ -6,8 +6,10 @@
 import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, Toggle } from "./primitives";
 import { formatInterval } from "./format";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface IncidentTrackingSectionProps {
+  locale: Locale;
   incidentIdleSeconds: number;
   incidentTrackingEnabled: boolean;
   setIncidentIdleSeconds: Dispatch<SetStateAction<number>>;
@@ -15,27 +17,29 @@ interface IncidentTrackingSectionProps {
 }
 
 export function IncidentTrackingSection({
+  locale,
   incidentIdleSeconds,
   incidentTrackingEnabled,
   setIncidentIdleSeconds,
   setIncidentTrackingEnabled,
 }: IncidentTrackingSectionProps) {
+  const t = (key: string) => translate(locale, key);
   return (
         <Section
-          title="Incident tracking"
+          title={t("camera.incident_tracking.title")}
           advanced
-          description="Group repeated observations of the same person or object on this camera into one persistent rolling card with a stable id, live updates, and a final summary on close."
+          description={t("camera.incident_tracking.description")}
         >
-          <FieldRow label="Tracking">
+          <FieldRow label={t("camera.incident_tracking.tracking_label")}>
             <Toggle
               checked={incidentTrackingEnabled}
               onChange={setIncidentTrackingEnabled}
-              label={incidentTrackingEnabled ? "On" : "Off"}
+              label={incidentTrackingEnabled ? t("common.on") : t("common.off")}
             />
           </FieldRow>
 
           {incidentTrackingEnabled && (
-            <FieldRow label="Idle window" hint="Seconds without a matching detection before the incident closes and gets summarized.">
+            <FieldRow label={t("camera.incident_tracking.idle_label")} hint={t("camera.incident_tracking.idle_hint")}>
               <div className="flex items-center gap-3">
                 <input
                   type="range"
