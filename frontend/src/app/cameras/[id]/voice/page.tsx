@@ -244,10 +244,9 @@ export default function CameraVoicePage() {
 
         {/* Presets are the product; the numbers below are the escape hatch. */}
         <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-5 mb-6">
-          <h2 className="text-sm font-medium text-zinc-300 mb-1">How it behaves</h2>
+          <h2 className="text-sm font-medium text-zinc-300 mb-1">{t("camera_voice.behavior_title")}</h2>
           <p className="text-xs text-zinc-500 mb-4">
-            Pick an intent. The timing and volume follow from it, and you can
-            still adjust them below.
+            {t("camera_voice.behavior_help")}
           </p>
           <div className="grid gap-2">
             {presets.map((preset) => {
@@ -269,7 +268,7 @@ export default function CameraVoicePage() {
                     </span>
                     {active && (
                       <span className="text-[10px] uppercase tracking-wide text-emerald-400">
-                        current
+                        {t("camera_voice.current")}
                       </span>
                     )}
                   </div>
@@ -281,11 +280,11 @@ export default function CameraVoicePage() {
         </section>
 
         <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-5 mb-6">
-          <h2 className="text-sm font-medium text-zinc-300 mb-4">Details</h2>
+          <h2 className="text-sm font-medium text-zinc-300 mb-4">{t("camera_voice.details")}</h2>
 
           <label className="flex items-center justify-between gap-3 mb-4">
             <span className="text-xs text-zinc-400">
-              Allow this camera to speak
+              {t("camera_voice.allow_speaking")}
             </span>
             <input
               type="checkbox"
@@ -298,7 +297,7 @@ export default function CameraVoicePage() {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <label className="block">
-              <span className="text-xs text-zinc-400">Volume ceiling</span>
+              <span className="text-xs text-zinc-400">{t("camera_voice.volume_ceiling")}</span>
               <input
                 type="number"
                 min={1}
@@ -309,16 +308,16 @@ export default function CameraVoicePage() {
                 className="mt-1 w-full rounded-md border border-zinc-800 bg-black px-2 py-1.5 text-xs text-zinc-200"
               />
               <span className="text-[11px] text-zinc-600">
-                A rule cannot exceed this.
+                {t("camera_voice.volume_help")}
               </span>
             </label>
 
             <label className="block">
-              <span className="text-xs text-zinc-400">Voice</span>
+              <span className="text-xs text-zinc-400">{t("camera_voice.voice")}</span>
               <input
                 type="text"
                 value={config.speaker_voice ?? ""}
-                placeholder="household default"
+                placeholder={t("camera_voice.household_default")}
                 disabled={saving}
                 onChange={(e) => update({ speaker_voice: e.target.value || null })}
                 className="mt-1 w-full rounded-md border border-zinc-800 bg-black px-2 py-1.5 text-xs text-zinc-200"
@@ -326,7 +325,7 @@ export default function CameraVoicePage() {
             </label>
 
             <label className="block">
-              <span className="text-xs text-zinc-400">Quiet from</span>
+              <span className="text-xs text-zinc-400">{t("camera_voice.quiet_from")}</span>
               <input
                 type="time"
                 value={config.speaker_quiet_start ?? ""}
@@ -337,7 +336,7 @@ export default function CameraVoicePage() {
             </label>
 
             <label className="block">
-              <span className="text-xs text-zinc-400">Quiet until</span>
+              <span className="text-xs text-zinc-400">{t("camera_voice.quiet_until")}</span>
               <input
                 type="time"
                 value={config.speaker_quiet_end ?? ""}
@@ -348,7 +347,7 @@ export default function CameraVoicePage() {
             </label>
 
             <label className="block">
-              <span className="text-xs text-zinc-400">Cooldown (seconds)</span>
+              <span className="text-xs text-zinc-400">{t("camera_voice.cooldown")}</span>
               <input
                 type="number"
                 min={0}
@@ -359,11 +358,11 @@ export default function CameraVoicePage() {
                 }
                 className="mt-1 w-full rounded-md border border-zinc-800 bg-black px-2 py-1.5 text-xs text-zinc-200"
               />
-              <span className="text-[11px] text-zinc-600">0 means no cooldown.</span>
+              <span className="text-[11px] text-zinc-600">{t("camera_voice.no_cooldown")}</span>
             </label>
 
             <label className="block">
-              <span className="text-xs text-zinc-400">Most times per day</span>
+              <span className="text-xs text-zinc-400">{t("camera_voice.daily_cap")}</span>
               <input
                 type="number"
                 min={0}
@@ -372,17 +371,16 @@ export default function CameraVoicePage() {
                 onChange={(e) => update({ speaker_daily_cap: Number(e.target.value) })}
                 className="mt-1 w-full rounded-md border border-zinc-800 bg-black px-2 py-1.5 text-xs text-zinc-200"
               />
-              <span className="text-[11px] text-zinc-600">0 means no limit.</span>
+              <span className="text-[11px] text-zinc-600">{t("camera_voice.no_daily_limit")}</span>
             </label>
           </div>
         </section>
 
         {/* The test goes through the real path, guards included. */}
         <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-5 mb-6">
-          <h2 className="text-sm font-medium text-zinc-300 mb-1">Test it</h2>
+          <h2 className="text-sm font-medium text-zinc-300 mb-1">{t("camera_voice.test_title")}</h2>
           <p className="text-xs text-zinc-500 mb-3">
-            Plays a short phrase through the same path a rule would use, with
-            the same quiet hours and limits. If it refuses, it says why.
+            {t("camera_voice.test_help")}
           </p>
           <div className="flex items-center gap-3">
             <button
@@ -390,7 +388,7 @@ export default function CameraVoicePage() {
               disabled={testing}
               className="px-3 py-1.5 text-xs rounded-md bg-emerald-600/20 text-emerald-300 border border-emerald-600/40 hover:bg-emerald-600/30 disabled:opacity-50"
             >
-              {testing ? "Speaking." : "Say a test phrase"}
+              {testing ? t("camera_voice.speaking") : t("camera_voice.say_test")}
             </button>
             {testResult && (
               <span className="text-xs text-zinc-400">{testResult}</span>
@@ -402,13 +400,13 @@ export default function CameraVoicePage() {
             otherwise indistinguishable from one that never fired. */}
         <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-5">
           <h2 className="text-sm font-medium text-zinc-300 mb-1">
-            What this camera said
+            {t("camera_voice.history_title")}
           </h2>
           <p className="text-xs text-zinc-500 mb-4">
-            Including what it decided not to say.
+            {t("camera_voice.history_help")}
           </p>
           {events.length === 0 ? (
-            <p className="text-xs text-zinc-600">Nothing yet.</p>
+            <p className="text-xs text-zinc-600">{t("camera_voice.history_empty")}</p>
           ) : (
             <ul className="divide-y divide-zinc-900">
               {events.map((event) => (
