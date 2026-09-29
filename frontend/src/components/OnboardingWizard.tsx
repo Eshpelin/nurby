@@ -289,6 +289,7 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
           )}
           {step === "magic" && (
             <MagicStep
+              t={t}
               onDone={finishWizard}
               browserTz={browserTz}
               tzAccepted={tzAccepted}
@@ -521,6 +522,7 @@ type MagicPhase =
   | "summary";      // what was provisioned + next steps
 
 function MagicStep({
+  t,
   onDone,
   onFallback,
   onCloudFallback,
@@ -528,6 +530,7 @@ function MagicStep({
   tzAccepted,
   onTzAccepted,
 }: {
+  t: (key: string, values?: Record<string, string | number>) => string;
   onDone: () => void;
   onFallback: () => void;
   onCloudFallback: () => void;
@@ -732,22 +735,22 @@ function MagicStep({
       <div className="text-center space-y-1">
         <div className="text-3xl">✨</div>
         <h3 className="text-lg font-semibold">
-          {phase === "summary" ? "Here's what I set up" : "Working some magic"}
+          {phase === "summary" ? t("onboarding.magic_summary") : t("onboarding.magic_working")}
         </h3>
         {busy && (
           <p className="text-xs text-muted-foreground">
-            Setting up everything you need to see Nurby in action.
+            {t("onboarding.magic_busy")}
           </p>
         )}
       </div>
 
       {/* Task checklist */}
       <div className="space-y-2">
-        <MagicTaskRow state={tasks.camera} label="Add a live demo camera" />
+        <MagicTaskRow state={tasks.camera} label={t("onboarding.task_camera")} />
         <MagicTaskRow
           state={tasks.vlm}
-          label="Set up a private local vision model"
-          skippedNote={vlmNote || "Skipped"}
+          label={t("onboarding.task_vlm")}
+          skippedNote={vlmNote || t("onboarding.skipped")}
         />
       </div>
 
@@ -766,14 +769,14 @@ function MagicStep({
               }}
               className="px-3 py-1.5 text-xs rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90"
             >
-              Retry
+              {t("onboarding.retry")}
             </button>
             <button
               type="button"
               onClick={onFallback}
               className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted"
             >
-              Set up a camera manually
+              {t("onboarding.manual_camera")}
             </button>
           </div>
         </div>
@@ -783,26 +786,25 @@ function MagicStep({
       {phase === "fork" && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            No local AI was found on this machine. Pick how you want scene
-            descriptions and &ldquo;Ask Nurby&rdquo; to work:
+            {t("onboarding.no_local_ai")}
           </p>
           <div className="rounded-md border border-border p-3 space-y-1">
-            <div className="text-xs font-medium">🖥️ Install Ollama (private, free)</div>
+            <div className="text-xs font-medium">{t("onboarding.install_ollama")}</div>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Get it from{" "}
+              {t("onboarding.ollama_help")} {" "}
               <a href="https://ollama.com/download" target="_blank" rel="noreferrer" className="underline">
                 ollama.com/download
               </a>
-              , or start the bundled service with{" "}
+              , {t("onboarding.ollama_or_start")} {" "}
               <code className="font-mono bg-muted px-1 rounded">docker compose --profile local-ai up -d ollama</code>.
-              Then hit re-check.
+              {t("onboarding.ollama_recheck_hint")}
             </p>
             <button
               type="button"
               onClick={detectAndDeploy}
               className="mt-1 px-3 py-1 text-[11px] rounded-md border border-border hover:bg-muted"
             >
-              Re-check for Ollama
+              {t("onboarding.recheck_ollama")}
             </button>
           </div>
           <button
@@ -810,10 +812,8 @@ function MagicStep({
             onClick={onCloudFallback}
             className="w-full text-left rounded-md border border-border p-3 hover:border-accent transition-colors"
           >
-            <div className="text-xs font-medium">☁️ Use a cloud model instead</div>
-            <p className="text-[11px] text-muted-foreground">
-              OpenAI, Anthropic or Gemini with your own API key. Frames are sent to the provider.
-            </p>
+            <div className="text-xs font-medium">{t("onboarding.use_cloud")}</div>
+            <p className="text-[11px] text-muted-foreground">{t("onboarding.cloud_help")}</p>
           </button>
           <button
             type="button"
@@ -825,10 +825,8 @@ function MagicStep({
             }
             className="w-full text-left rounded-md border border-border p-3 hover:border-accent transition-colors"
           >
-            <div className="text-xs font-medium">⏭️ Continue without AI descriptions</div>
-            <p className="text-[11px] text-muted-foreground">
-              Detection, faces, recording and rules work without a vision model. Add one later in Settings.
-            </p>
+            <div className="text-xs font-medium">{t("onboarding.continue_without_ai")}</div>
+            <p className="text-[11px] text-muted-foreground">{t("onboarding.no_ai_help")}</p>
           </button>
         </div>
       )}
@@ -853,14 +851,14 @@ function MagicStep({
           )}
           <div className="flex items-center justify-between">
             <p className="text-[11px] text-muted-foreground">
-              {fallbackNote ? "Cancel keeps finished layers; you can resume anytime from Settings." : "Big download; a few minutes on fast connections. Cancel keeps finished layers."}
+              {fallbackNote ? t("onboarding.cancel_keeps_layers") : t("onboarding.download_minutes")}
             </p>
             <button
               type="button"
               onClick={cancelPull}
               className="px-3 py-1 text-[11px] rounded-md border border-border hover:bg-muted"
             >
-              Cancel
+              {t("onboarding.cancel")}
             </button>
           </div>
         </div>
@@ -870,21 +868,21 @@ function MagicStep({
       {phase === "summary" && (
         <div className="space-y-3">
           <div className="rounded-md border border-border p-3 space-y-1.5 text-xs">
-            <div>📹 Demo camera streaming sample CCTV footage. Add your own from the dashboard.</div>
+            <div>{t("onboarding.demo_summary")}</div>
             {deployedModel ? (
               <div>
-                🧠 Local AI: <span className="font-mono">{deployedModel}</span>
+                {t("onboarding.local_ai")} <span className="font-mono">{deployedModel}</span>
                 {alreadyInstalled && !fellBackFrom && (
-                  <span className="text-muted-foreground"> — already on your machine, nothing downloaded</span>
+                  <span className="text-muted-foreground"> {t("onboarding.already_installed")}</span>
                 )}
                 {fellBackFrom && (
-                  <span className="text-muted-foreground"> (fell back from {fellBackFrom})</span>
+                  <span className="text-muted-foreground"> {t("onboarding.fell_back", { model: fellBackFrom })}</span>
                 )}
-                . Runs on this machine; nothing leaves your network.
+                . {t("onboarding.runs_local")}
               </div>
             ) : (
               <div className="text-muted-foreground">
-                🧠 No vision model set up. {vlmNote}
+                {t("onboarding.no_model")} {vlmNote}
               </div>
             )}
           </div>
