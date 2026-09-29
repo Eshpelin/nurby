@@ -13,15 +13,19 @@ resource.
 
 - The API listens on `:4748`, plain HTTP, no TLS anywhere in the stack.
 - MediaMTX exposes three more ports: `:8889` (WHEP/WebRTC HTTP), `:8189/udp`
-  (ICE media), `:8888` (HLS). The mobile app builds these URLs by swapping the
-  port on the API host (`live_view.dart`), so remote access would require four
-  ports forwarded — a non-starter for normal users.
+  (ICE media), `:8888` (HLS). The web and mobile clients now use Nurby's
+  camera-scoped WHEP/HLS proxy endpoints instead of addressing those ports
+  directly, so signaling and HLS can travel through one future HTTPS ingress.
+  WebRTC media still needs an ICE/TURN topology for low-latency remote playback.
 - `public_base_url` is a string setting used to print URLs (share links,
   Telegram webhook). Nothing verifies it is actually reachable.
 - The doctor checks db/redis/mediamtx/smtp/disk/cameras/providers, but has no
   concept of network reachability.
-- Mobile stores a single `server_base_url`; the pairing QR embeds the LAN URL.
-  Off-LAN, the app is dead.
+- Mobile stores a single `server_base_url`; new pairing QRs carry both the
+  browser/LAN endpoint and configured public endpoint, and the app tries them
+  in order. Older one-URL pairing payloads remain supported. Manual server
+  configuration is still single-endpoint, and the ingress/automatic TLS path
+  is not implemented yet.
 - Share links (`/share/<token>`) are already well-scoped for anonymous access:
   hashed tokens, forced expiry, view caps, revocation, single resource, no
   live access. They are ready for public exposure; the network is not.
