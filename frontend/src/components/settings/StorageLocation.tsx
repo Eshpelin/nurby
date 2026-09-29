@@ -218,7 +218,7 @@ export function StorageLocationForm({
             setDirty(true);
             setSaved(false);
           }}
-          placeholder="D:\Nurby\recordings or /srv/nurby/recordings"
+          placeholder={t("settings.storage_path_placeholder")}
           className="flex-1 text-xs font-mono bg-background border border-border rounded px-2 py-1.5"
         />
         <button
@@ -320,7 +320,7 @@ function CopyableEnvBlock({ docker, locale }: { docker: boolean; locale: Locale 
     <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 space-y-1.5">
       <p className="text-[11px] text-amber-300">
         {t("settings.storage_docker_help")} {" "}
-        <code className="bg-background px-1 rounded">.env</code> and restart:
+        <code className="bg-background px-1 rounded">.env</code> {t("settings.storage_restart")}
       </p>
       <pre className="text-[10px] font-mono bg-background rounded p-2 overflow-x-auto">
         {text}
@@ -392,14 +392,14 @@ export function StorageOverviewBlock() {
                 title={!loc.exists ? t("settings.storage_not_writable") : loc.writable ? t("settings.storage_writable") : t("settings.storage_not_writable")}
               />
               <span className="text-muted-foreground w-20 flex-shrink-0">
-                {loc.key === "recordings" ? t("settings.storage_recordings_label") : LOCATION_LABELS[loc.key] ?? loc.key}
+                {loc.key === "recordings" ? t("settings.storage_recordings_label") : loc.key === "thumbnails" ? t("settings.storage_thumbnails") : loc.key === "audio" ? t("settings.storage_audio") : LOCATION_LABELS[loc.key] ?? loc.key}
               </span>
               <code className="bg-background px-1 rounded truncate">{loc.path}</code>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {loc.source === "custom" && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent">
-                  custom
+                  {t("settings.storage_custom")}
                 </span>
               )}
               <span className="text-[11px] text-muted-foreground">
@@ -422,7 +422,7 @@ export function StorageOverviewBlock() {
               <span className="text-[11px] text-muted-foreground flex-shrink-0">
                 {profile.stats?.uploaded_bytes
                   ? `${formatBytesStored(profile.stats.uploaded_bytes)} ${t("settings.storage_stored")}`
-                  : "0 bytes stored"}
+                  : t("settings.storage_zero_stored")}
               </span>
             </div>
           ))}
@@ -461,6 +461,7 @@ export function StorageLowSpaceBanner() {
   // the monitoring view. Admin-only; quiet 60s poll.
   const { user } = useAuth();
   const locale = (user?.locale as Locale) || "en";
+  const t = (key: string) => translate(locale, key);
   const { overview } = useStorageOverview(user?.role === "admin", 60_000);
 
   if (user?.role !== "admin" || !overview?.low_space) return null;
@@ -468,9 +469,9 @@ export function StorageLowSpaceBanner() {
   return (
     <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 flex items-start justify-between gap-3">
       <div className="text-xs text-red-400">
-        <span className="font-medium">Low disk space. </span>
+        <span className="font-medium">{t("settings.storage_low_space")} </span>
         {rec?.free_bytes != null
-          ? `Only ${formatBytes(rec.free_bytes)} at ${rec.path}. `
+          ? `${t("settings.storage_only_free")} ${formatBytes(rec.free_bytes)} ${t("settings.storage_at")} ${rec.path}. `
           : ""}
         {overview.warnings[0] ?? ""}
       </div>
@@ -478,7 +479,7 @@ export function StorageLowSpaceBanner() {
         href="/settings#storage"
         className="text-xs text-red-300 hover:text-red-200 underline whitespace-nowrap"
       >
-        Review storage
+        {t("settings.storage_review")}
       </Link>
     </div>
   );
