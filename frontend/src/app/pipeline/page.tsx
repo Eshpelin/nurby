@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
+import { translate } from "@/lib/i18n";
 
 interface CameraRow {
   camera_id: string;
@@ -61,11 +62,11 @@ function fmtDuration(seconds: number): string {
   return remM ? `${h}h ${remM}m` : `${h}h`;
 }
 
-const HEALTH_LABEL: Record<PipelineSummary["health"], string> = {
-  clear: "All caught up",
-  catching_up: "Catching up",
-  backlogged: "Backlogged",
-  degraded: "Needs attention",
+const HEALTH_KEY: Record<PipelineSummary["health"], string> = {
+  clear: "pipeline.health.clear",
+  catching_up: "pipeline.health.catching_up",
+  backlogged: "pipeline.health.backlogged",
+  degraded: "pipeline.health.degraded",
 };
 
 const HEALTH_TONE: Record<PipelineSummary["health"], string> = {
@@ -92,7 +93,10 @@ function statusTone(status: string): string {
 }
 
 export default function PipelinePage() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const locale = user?.locale;
+  const t = (key: string, values?: Record<string, string | number>) =>
+    translate(locale, key, values);
   const [data, setData] = useState<PipelineSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -109,15 +113,15 @@ export default function PipelinePage() {
         setData(await res.json());
         setError(null);
       } else {
-        setError(`Failed to load (${res.status})`);
+        setError(translate(locale, "pipeline.error_status", { status: res.status }));
       }
     } catch {
-      setError("Failed to load pipeline stats");
+      setError(translate(locale, "pipeline.error"));
     } finally {
       inFlight.current = false;
       setLoaded(true);
     }
-  }, [authFetch]);
+  }, [authFetch, locale]);
 
   useEffect(() => {
     load();
@@ -139,13 +143,12 @@ export default function PipelinePage() {
           <span
             className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${HEALTH_TONE[data.health]}`}
           >
-            {HEALTH_LABEL[data.health]}
+            {t(HEALTH_KEY[data.health])}
           </span>
         )}
       </div>
       <p className="text-sm text-muted-foreground mb-5">
-        Where the AI perception backlog stands across every camera, and when
-        it will be caught up.
+        {t("pipeline.description")}
       </p>
 
       {error && (
@@ -155,43 +158,42 @@ export default function PipelinePage() {
       )}
 
       {!loaded ? (
-        <div className="text-sm text-muted-foreground">Loading…</div>
+        <div className="text-sm text-muted-foreground">{t("common.loading")}</div>
       ) : !data || data.camera_count === 0 ? (
         <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          No perception activity yet. Once cameras start streaming, backlog and
-          throughput show up here.
+          {t("pipeline.empty")}
         </div>
       ) : (
         <>
           {/* KPI strip */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <Kpi
-              label="Frames queued"
+              label={t("pipeline.frames_queued")}
               value={data.total_queued.toString()}
               hint={
                 data.total_high_priority > 0
-                  ? `${data.total_high_priority} high priority`
-                  : "across all cameras"
+                  ? t("pipeline.high_priority", { count: data.total_high_priority })
+                  : t("pipeline.all_cameras")
               }
               tone={data.total_queued > 30 ? "warn" : "normal"}
             />
             <Kpi
-              label="Time to clear"
+              label={t("pipeline.time_to_clear")}
               value={fmtDuration(data.fleet_eta_seconds)}
-              hint="serial, one shared VLM"
+              hint={t("pipeline.shared_vlm")}
               tone={data.fleet_eta_seconds > 120 ? "warn" : "normal"}
             />
             <Kpi
-              label="Current rate"
+              label={t("pipeline.current_rate")}
               value={data.sec_per_frame > 0 ? `${data.sec_per_frame}s` : "—"}
-              hint="per frame"
+              hint={t("pipeline.per_frame")}
             />
             <Kpi
-              label="Throughput"
+              label={t("pipeline.throughput")}
               value={
                 data.frames_per_min > 0 ? `${data.frames_per_min}` : "—"
               }
-              hint="frames / min"
+              hint={t("pipeline.frames_per_min")}
             />
           </div>
 
@@ -200,12 +202,12 @@ export default function PipelinePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-xs text-muted-foreground text-left">
-                  <th className="font-medium px-4 py-2.5">Camera</th>
-                  <th className="font-medium px-3 py-2.5 text-right">Backlog</th>
-                  <th className="font-medium px-3 py-2.5 text-right">Latency</th>
-                  <th className="font-medium px-3 py-2.5 text-right">ETA</th>
-                  <th className="font-medium px-3 py-2.5 text-right">Dropped</th>
-                  <th className="font-medium px-4 py-2.5">Status</th>
+                  <th className="font-medium px-4 py-2.5">{t("pipeline.camera")}</th>
+                  <th className="font-medium px-3 py-2.5 text-right">{t("pipeline.backlog")}</th>
+                  <th className="font-medium px-3 py-2.5 text-right">{t("pipeline.latency")}</th>
+                  <th className="font-medium px-3 py-2.5 text-right">{t("pipeline.eta")}</th>
+                  <th className="font-medium px-3 py-2.5 text-right">{t("pipeline.dropped")}</th>
+                  <th className="font-medium px-4 py-2.5">{t("pipeline.status")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -243,7 +245,7 @@ export default function PipelinePage() {
                       {c.total_dropped || "—"}
                     </td>
                     <td className={`px-4 py-2.5 ${statusTone(c.status)}`}>
-                      {c.status}
+                      {t(`pipeline.status.${c.status}`)}
                       {c.reason && (
                         <span className="text-xs text-muted-foreground ml-1">
                           · {c.reason}
@@ -257,8 +259,7 @@ export default function PipelinePage() {
           </div>
 
           <p className="mt-3 text-xs text-muted-foreground">
-            Per-camera ETA assumes that camera drains alone. Time to clear at
-            the top adds them up, since the cameras share one VLM worker.
+            {t("pipeline.footnote")}
           </p>
         </>
       )}

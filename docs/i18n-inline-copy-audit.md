@@ -47,7 +47,9 @@ should move to the shared English/Spanish catalog in follow-up slices:
   pagination/result copy remain; filters, download/share, trim/reset, and
   review-control labels are catalog-driven.
 - `frontend/src/app/pipeline/page.tsx`, Ask/admin, and run detail pages:
-  operational table headings and loading/empty states.
+  operational table headings, status labels, errors, and loading/empty states
+  are catalog-driven. Ask Nurby’s main chat still needs a separate pass for
+  provider onboarding, history, and composer copy.
 - `frontend/src/components/IncidentCard.tsx`, `PersonActivityModal.tsx`,
   `ZoneEditorCanvas.tsx`, `PTZControlPanel.tsx`, and `LiveConversationCard.tsx`:
   activity, camera-control, and live-audio copy.
