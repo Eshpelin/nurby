@@ -637,11 +637,11 @@ export default function PeoplePage() {
       {suggestions.length > 0 && (
         <div className="mb-10">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold">Who are these people?</h2>
+            <h2 className="text-lg font-semibold">{t("people.suggestions_title")}</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              {suggestions.length} unknown{" "}
-              {suggestions.length === 1 ? "person" : "people"} discovered from
-              your camera feeds
+              {t(suggestions.length === 1 ? "people.suggestions_body_one" : "people.suggestions_body_many", {
+                count: suggestions.length,
+              })}
             </p>
           </div>
 
@@ -654,18 +654,19 @@ export default function PeoplePage() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <div className="text-sm font-medium">Unknown person</div>
+                      <div className="text-sm font-medium">{t("people.unknown_person")}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {s.sighting_count === 1 ? (
                           // A single visit can still span time (one continuous
                           // presence), so First/Last would read as multiple
                           // sightings. Show it as one visit.
-                          <>Seen once · {timeAgo(s.last_seen_at)}</>
+                          <>{t("people.seen_once", { time: timeAgo(s.last_seen_at) })}</>
                         ) : (
-                          <>
-                            Seen {s.sighting_count} times · First{" "}
-                            {timeAgo(s.first_seen_at)} / Last {timeAgo(s.last_seen_at)}
-                          </>
+                          t("people.seen_times", {
+                            count: s.sighting_count,
+                            first: timeAgo(s.first_seen_at),
+                            last: timeAgo(s.last_seen_at),
+                          })
                         )}
                       </div>
                     </div>
@@ -681,7 +682,7 @@ export default function PeoplePage() {
                             src={sample.id === "main"
                               ? `/api/persons/suggestions/${s.id}/thumbnail${token ? `?token=${token}` : ""}`
                               : `/api/persons/suggestions/${s.id}/samples/${sample.id}/thumbnail${token ? `?token=${token}` : ""}`}
-                            alt="Sighting"
+                            alt={t("people.sighting_alt")}
                             className="w-full h-full object-cover"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                           />
@@ -721,7 +722,7 @@ export default function PeoplePage() {
                         [s.id]: e.target.value,
                       }))
                     }
-                    placeholder="Who is this?"
+                    placeholder={t("people.name_placeholder")}
                     className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") handleNameSuggestion(s.id);
@@ -735,13 +736,13 @@ export default function PeoplePage() {
                     }
                     className="w-full px-3 py-1.5 text-xs rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
                   >
-                    {namingSubmitting === s.id ? "Saving" : "Name"}
+                    {namingSubmitting === s.id ? t("people.saving") : t("people.name")}
                   </button>
                   <button
                     onClick={() => handleIgnoreSuggestion(s.id)}
                     className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    Not a person / Ignore
+                    {t("people.ignore")}
                   </button>
                 </div>
               </div>
@@ -758,15 +759,13 @@ export default function PeoplePage() {
         <div className="mb-10">
           <div className="mb-4">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold">Body-only sightings</h2>
+              <h2 className="text-lg font-semibold">{t("people.body_title")}</h2>
               <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-mono">
-                no face
+                {t("people.no_face")}
               </span>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              People recognized across cameras by clothing, shape, and
-              gait. Their face was never clearly visible. Link to an
-              existing person or name them to confirm.
+              {t("people.body_body")}
             </p>
           </div>
 
@@ -800,7 +799,7 @@ export default function PeoplePage() {
                             src={sample.id === "main"
                               ? `/api/body-clusters/suggestions/${s.id}/thumbnail${token ? `?token=${token}` : ""}`
                               : `/api/body-clusters/suggestions/${s.id}/samples/${sample.id}/thumbnail${token ? `?token=${token}` : ""}`}
-                            alt="Body sighting"
+                            alt={t("people.body_sighting_alt")}
                             className="w-full h-full object-cover"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                           />
@@ -818,7 +817,7 @@ export default function PeoplePage() {
                     onChange={(e) => setBodyLinkInputs((p) => ({ ...p, [s.id]: e.target.value }))}
                     className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground"
                   >
-                    <option value="">Link to existing person...</option>
+                    <option value="">{t("people.link_existing")}</option>
                     {persons.map((p) => (
                       <option key={p.id} value={p.id}>{p.display_name}</option>
                     ))}
@@ -828,15 +827,15 @@ export default function PeoplePage() {
                     disabled={!bodyLinkInputs[s.id] || bodySubmitting === s.id}
                     className="w-full px-3 py-1.5 text-xs rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
                   >
-                    {bodySubmitting === s.id ? "Linking" : "Link to selected person"}
+                    {bodySubmitting === s.id ? t("people.linking") : t("people.link_selected")}
                   </button>
 
-                  <div className="text-[11px] text-muted-foreground text-center my-1">or name as new person</div>
+                  <div className="text-[11px] text-muted-foreground text-center my-1">{t("people.or_name_new")}</div>
                   <input
                     type="text"
                     value={bodyNameInputs[s.id] || ""}
                     onChange={(e) => setBodyNameInputs((p) => ({ ...p, [s.id]: e.target.value }))}
-                    placeholder="Name for this body match"
+                    placeholder={t("people.body_name_placeholder")}
                     className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                     onKeyDown={(e) => { if (e.key === "Enter") handleBodyName(s.id); }}
                   />
@@ -845,13 +844,13 @@ export default function PeoplePage() {
                     disabled={!bodyNameInputs[s.id]?.trim() || bodySubmitting === s.id}
                     className="w-full px-3 py-1.5 text-xs rounded-md border border-border text-foreground font-medium hover:bg-muted disabled:opacity-50 transition-colors"
                   >
-                    {bodySubmitting === s.id ? "Saving" : "Name as new"}
+                    {bodySubmitting === s.id ? t("people.saving") : t("people.name_as_new")}
                   </button>
                   <button
                     onClick={() => handleBodyIgnore(s.id)}
                     className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    Not a person / Ignore
+                    {t("people.ignore")}
                   </button>
                 </div>
               </div>
