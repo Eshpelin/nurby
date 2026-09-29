@@ -5,8 +5,10 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, inputClass } from "./primitives";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface GeneralSectionProps {
+  locale: Locale;
   locationLabel: string;
   name: string;
   setLocationLabel: Dispatch<SetStateAction<string>>;
@@ -14,14 +16,16 @@ interface GeneralSectionProps {
 }
 
 export function GeneralSection({
+  locale,
   locationLabel,
   name,
   setLocationLabel,
   setName,
 }: GeneralSectionProps) {
+  const t = (key: string) => translate(locale, key);
   return (
-        <Section title="General" description="Basic camera identification and location">
-          <FieldRow label="Name">
+        <Section title={t("camera.general.title")} description={t("camera.general.description")}>
+          <FieldRow label={t("camera.general.name")}>
             <input
               type="text"
               value={name}
@@ -30,12 +34,12 @@ export function GeneralSection({
             />
           </FieldRow>
 
-          <FieldRow label="Location Label" hint="Where this camera is">
+          <FieldRow label={t("camera.general.location_label")} hint={t("camera.general.location_hint")}>
             <input
               type="text"
               value={locationLabel}
               onChange={(e) => setLocationLabel(e.target.value)}
-              placeholder="e.g. Front porch"
+              placeholder={t("camera.general.location_placeholder")}
               className={inputClass}
             />
           </FieldRow>

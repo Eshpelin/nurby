@@ -729,6 +729,7 @@ export default function CameraConfigPage() {
 
         {/* ── General ── */}
         <GeneralSection
+          locale={locale}
           locationLabel={locationLabel}
           name={name}
           setLocationLabel={setLocationLabel}
