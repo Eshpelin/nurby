@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import CameraBrandHelp from "@/components/CameraBrandHelp";
 import { OllamaDeployPanel } from "@/components/OllamaDeployPanel";
 import { AddCameraModal } from "@/components/AddCameraModal";
@@ -49,7 +50,8 @@ const PROVIDER_PRESETS = ONBOARDING_PRESETS;
  * (see /app/page.tsx).
  */
 export function OnboardingWizard({ onClose, onComplete }: Props) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   // Welcome first (#293): the magic/manual choice is the promise of the
   // first visit, and the storage question only means something once a
   // path is picked. The manual path asks storage before any camera
@@ -283,7 +285,7 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
             <StorageStep onNext={() => setStep("camera")} />
           )}
           {step === "choose" && (
-            <ChooseStep onMagic={onMagicChosen} onManual={onManualChosen} />
+            <ChooseStep t={t} onMagic={onMagicChosen} onManual={onManualChosen} />
           )}
           {step === "magic" && (
             <MagicStep
@@ -299,7 +301,7 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
             />
           )}
           {step === "camera" && (
-            <CameraStep onAdded={() => setStep("provider")} />
+            <CameraStep t={t} onAdded={() => setStep("provider")} />
           )}
           {step === "provider" && (
             <ProviderStep
@@ -332,6 +334,7 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
               browserTz={browserTz}
               tzAccepted={tzAccepted}
               onTzAccepted={setTzAccepted}
+              t={t}
             />
           )}
         </div>
@@ -448,18 +451,20 @@ function StorageStep({ onNext }: { onNext: () => void }) {
 // First fork. one-click "magic" that provisions everything locally, or the
 // hands-on path for people who want to wire their own camera and model.
 function ChooseStep({
+  t,
   onMagic,
   onManual,
 }: {
+  t: (key: string, values?: Record<string, string | number>) => string;
   onMagic: () => void;
   onManual: () => void;
 }) {
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-xl font-semibold">Welcome to Nurby</h3>
+        <h3 className="text-xl font-semibold">{t("onboarding.choose_title")}</h3>
         <p className="text-sm text-muted-foreground leading-relaxed mt-1">
-          Pick how you want to start. You can change anything later.
+          {t("onboarding.choose_body")}
         </p>
       </div>
 
@@ -472,15 +477,13 @@ function ChooseStep({
         >
           <div className="flex items-center gap-2 mb-2">
             <span className="text-lg leading-none">✨</span>
-            <span className="text-sm font-semibold">Show me some magic</span>
+            <span className="text-sm font-semibold">{t("onboarding.magic_title")}</span>
           </div>
           <p className="text-[12px] text-muted-foreground leading-relaxed">
-            One click. Nurby adds a live demo camera, sets up a private local
-            vision model if you don&apos;t have one, and drops you on the
-            dashboard. Nothing leaves your machine.
+            {t("onboarding.magic_body")}
           </p>
           <span className="inline-block mt-3 text-[11px] font-medium text-accent group-hover:underline">
-            Do it all for me →
+            {t("onboarding.magic_action")}
           </span>
         </button>
 
@@ -492,14 +495,13 @@ function ChooseStep({
         >
           <div className="flex items-center gap-2 mb-2">
             <span className="text-lg leading-none">🛠️</span>
-            <span className="text-sm font-semibold">Set it up myself</span>
+            <span className="text-sm font-semibold">{t("onboarding.manual_title")}</span>
           </div>
           <p className="text-[12px] text-muted-foreground leading-relaxed">
-            I know what I&apos;m doing. Walk me through adding my own camera and
-            choosing a vision model, local or cloud.
+            {t("onboarding.manual_body")}
           </p>
           <span className="inline-block mt-3 text-[11px] font-medium text-muted-foreground">
-            Start the guided setup →
+            {t("onboarding.manual_action")}
           </span>
         </button>
       </div>
@@ -1121,7 +1123,7 @@ function ProviderStep({
   );
 }
 
-function CameraStep({ onAdded }: { onAdded: () => void }) {
+function CameraStep({ t, onAdded }: { t: (key: string, values?: Record<string, string | number>) => string; onAdded: () => void }) {
   const { authFetch } = useAuth();
   const [mode, setMode] = useState<"demo" | "own">("demo");
   const [demoBusy, setDemoBusy] = useState(false);
@@ -1133,12 +1135,12 @@ function CameraStep({ onAdded }: { onAdded: () => void }) {
     try {
       const r = await authFetch("/api/cameras/demo", { method: "POST" });
       if (!r.ok) {
-        setDemoError("Could not add the demo camera. You can add a real one instead.");
+        setDemoError(t("onboarding.demo_error"));
         return;
       }
       onAdded();
     } catch {
-      setDemoError("Network error adding the demo camera.");
+      setDemoError(t("onboarding.demo_network_error"));
     } finally {
       setDemoBusy(false);
     }
@@ -1147,19 +1149,19 @@ function CameraStep({ onAdded }: { onAdded: () => void }) {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-base font-semibold mb-1">Add your first camera</h3>
+        <h3 className="text-base font-semibold mb-1">{t("onboarding.camera_title")}</h3>
         <p className="text-xs text-muted-foreground">
-          No camera yet? Start with the demo feed and see Nurby work in seconds. You can connect real cameras anytime.
+          {t("onboarding.camera_body")}
         </p>
       </div>
 
       <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 space-y-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium">Demo camera</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent">recommended</span>
+          <span className="text-xs font-medium">{t("onboarding.demo_camera")}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent">{t("onboarding.recommended")}</span>
         </div>
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Streams looping sample CCTV footage through the full pipeline, so you can watch detections, people, and rules with zero setup.
+          {t("onboarding.demo_body")}
         </p>
         {demoError && <div className="text-[11px] text-red-400">{demoError}</div>}
         <button
@@ -1168,7 +1170,7 @@ function CameraStep({ onAdded }: { onAdded: () => void }) {
           disabled={demoBusy}
           className="px-3 py-1.5 text-xs rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90 disabled:opacity-50"
         >
-          {demoBusy ? "Adding." : "Use demo camera and continue"}
+          {demoBusy ? t("onboarding.adding") : t("onboarding.use_demo")}
         </button>
       </div>
 
@@ -1177,7 +1179,7 @@ function CameraStep({ onAdded }: { onAdded: () => void }) {
         onClick={() => setMode(mode === "own" ? "demo" : "own")}
         className="text-xs text-muted-foreground hover:text-foreground underline"
       >
-        {mode === "own" ? "Hide" : "Or connect your own camera"}
+        {mode === "own" ? t("onboarding.hide") : t("onboarding.connect_camera")}
       </button>
 
       {mode === "own" && (
@@ -1190,11 +1192,13 @@ function CameraStep({ onAdded }: { onAdded: () => void }) {
 }
 
 function DoneStep({
+  t,
   onClose,
   browserTz,
   tzAccepted,
   onTzAccepted,
 }: {
+  t: (key: string, values?: Record<string, string | number>) => string;
   onClose: () => void;
   browserTz: string;
   tzAccepted: boolean;
@@ -1207,12 +1211,8 @@ function DoneStep({
           <polyline points="20 6 9 17 4 12" />
         </svg>
       </div>
-      <h3 className="text-lg font-semibold">You&apos;re set</h3>
-      <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
-        Your camera is connected. Give it ~30 seconds. Nurby starts
-        describing activity as soon as it sees motion, and the first
-        observations will land on your timeline.
-      </p>
+      <h3 className="text-lg font-semibold">{t("onboarding.done_title")}</h3>
+      <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">{t("onboarding.done_body")}</p>
       {browserTz && (
         <label className="text-left max-w-md mx-auto flex items-start gap-2.5 rounded-md border border-border bg-card/40 px-3 py-2 cursor-pointer hover:border-accent/40 transition-colors">
           <input
@@ -1222,16 +1222,14 @@ function DoneStep({
             className="mt-0.5 accent-green-500"
           />
           <span>
-            <span className="block text-xs font-medium">Use {browserTz} as the Nurby timezone</span>
-            <span className="block text-[11px] text-muted-foreground leading-tight">
-              Detected from this browser. Recaps and schedules run in it. Change later in Settings → System timezone.
-            </span>
+            <span className="block text-xs font-medium">{t("onboarding.use_timezone", { timezone: browserTz })}</span>
+            <span className="block text-[11px] text-muted-foreground leading-tight">{t("onboarding.timezone_hint")}</span>
           </span>
         </label>
       )}
       <div className="text-left max-w-md mx-auto space-y-2">
         <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-          Two things worth doing next
+          {t("onboarding.next_title")}
         </div>
         <a
           href="/rules/new?template=package-at-door"
@@ -1239,10 +1237,8 @@ function DoneStep({
         >
           <span className="text-base leading-none">🔔</span>
           <span>
-            <span className="block text-xs font-medium">Create your first alert</span>
-            <span className="block text-[11px] text-muted-foreground leading-tight">
-              Start from a ready-made template, like &ldquo;tell me when a package arrives&rdquo;.
-            </span>
+            <span className="block text-xs font-medium">{t("onboarding.first_alert")}</span>
+            <span className="block text-[11px] text-muted-foreground leading-tight">{t("onboarding.first_alert_hint")}</span>
           </span>
         </a>
         <a
@@ -1251,10 +1247,8 @@ function DoneStep({
         >
           <span className="text-base leading-none">💬</span>
           <span>
-            <span className="block text-xs font-medium">Ask Nurby anything</span>
-            <span className="block text-[11px] text-muted-foreground leading-tight">
-              &ldquo;What happened today?&rdquo; &middot; &ldquo;Was anyone at the door?&rdquo;
-            </span>
+            <span className="block text-xs font-medium">{t("onboarding.ask_anything")}</span>
+            <span className="block text-[11px] text-muted-foreground leading-tight">{t("onboarding.ask_hint")}</span>
           </span>
         </a>
       </div>
@@ -1263,7 +1257,7 @@ function DoneStep({
         onClick={onClose}
         className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90"
       >
-        Open dashboard
+        {t("onboarding.open_dashboard")}
       </button>
     </div>
   );
