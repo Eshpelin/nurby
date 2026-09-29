@@ -1617,6 +1617,32 @@ async def analyze_clip_target(
             return _error_result("redaction_failed")
         if provider is None:
             return _error_result("no_provider")
+        from services.perception.usage import check_perception_budget, estimate_vlm_usage
+
+        estimated_in, estimated_out, estimated_cost = estimate_vlm_usage(
+            provider,
+            system_prompt=prompt.text,
+            user_prompt=question,
+            output_text=None,
+            model=model,
+            image_tokens=765 * len(redacted),
+        )
+        budget = await check_perception_budget(
+            str(camera_id),
+            estimated_cost_cents=estimated_cost,
+            estimated_tokens=estimated_in + estimated_out,
+        )
+        if not budget.allowed:
+            if _cost_only_budget_fallback_allowed(provider, budget):
+                local_provider = await _active_local_provider()
+                if local_provider is not None:
+                    logger.info("using local Ollama fallback for budgeted clip analysis")
+                    provider = local_provider
+                    model = provider.default_model or model
+                else:
+                    return _error_result("perception_budget_exceeded")
+            else:
+                return _error_result("perception_budget_exceeded")
         try:
             raw = await call_vlm_structured(provider, redacted, question, system_prompt=prompt.text)
         except Exception:
