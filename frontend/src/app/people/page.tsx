@@ -9,6 +9,7 @@ import { extractApiError } from "@/lib/api-error";
 import { timeAgo as timeAgoBase, formatWith } from "@/lib/time";
 import { AssociationSummary } from "@/components/review/AssociationSummary";
 import { VoiceprintEnrollmentCard } from "@/components/voice/VoiceprintEnrollmentCard";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface Person {
   id: string;
@@ -106,7 +107,9 @@ function formatDate(iso: string): string {
 }
 
 export default function PeoplePage() {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const toast = useToast();
   const confirm = useConfirm();
   const [persons, setPersons] = useState<Person[]>([]);
@@ -861,30 +864,30 @@ export default function PeoplePage() {
       <div>
         <div className="mb-6 flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">People</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">{t("people.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Activity updates across all cameras
+              {t("people.subtitle")}
             </p>
           </div>
           <button
             onClick={openCreate}
             className="px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90 flex-shrink-0"
           >
-            + Add person
+            + {t("people.add_person")}
           </button>
         </div>
 
         {loading ? (
           <div className="text-sm text-muted-foreground py-20 text-center">
-            Loading.
+            {t("people.loading")}
           </div>
         ) : persons.length === 0 ? (
           <div>
             <EmptyState
               icon={<CameraGlyph />}
-              title="No people recognized yet"
-              body="As your cameras see faces, Nurby groups them into people you can name. You can also add someone now with a face photo, so Nurby recognizes them from their first visit."
-              actionLabel="Go to cameras"
+              title={t("people.empty_title")}
+              body={t("people.empty_body")}
+              actionLabel={t("people.go_to_cameras")}
               actionHref="/"
             />
             <div className="text-center mt-3">
@@ -892,7 +895,7 @@ export default function PeoplePage() {
                 onClick={openCreate}
                 className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors"
               >
-                + Add a person with a photo
+                + {t("people.add_with_photo")}
               </button>
             </div>
           </div>
