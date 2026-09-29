@@ -53,11 +53,13 @@ import { SystemStatusStrip } from "@/components/dashboard/SystemStatus";
 import { StorageLowSpaceBanner } from "@/components/settings/StorageLocation";
 import { computeSystemStatus } from "@/lib/systemStatus";
 import { PROVIDERS_CHANGED_EVENT } from "@/lib/providers-changed";
+import { translate } from "@/lib/i18n";
 
 // ── Main unified page ──
 
 function DashboardContent() {
   const { authFetch, token, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const { status: wsStatus, subscribe } = useWebSocket();
   const { down: workersDown, degraded: degradedComponents, hasRealCameras } = useWorkerHealth();
   const searchParams = useSearchParams();
@@ -922,14 +924,14 @@ function DashboardContent() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <span className="flex-1">Learning your new camera. First detections appear within a minute.</span>
+          <span className="flex-1">{t("dashboard.learning_camera")}</span>
           <button
             type="button"
             onClick={() => {
               setLearningDismissed(true);
               try { localStorage.setItem("nurby_learning_dismissed", "1"); } catch { /* ignore */ }
             }}
-            aria-label="Dismiss"
+            aria-label={t("common.dismiss")}
             className="hover:text-foreground leading-none flex-shrink-0"
           >
             ×
@@ -944,15 +946,15 @@ function DashboardContent() {
           the hero and this stays a single line of chrome. */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Watching{" "}
+          {t("dashboard.watching")} {" "}
           <span className="text-foreground font-medium">
-            {cameras.length} {cameras.length === 1 ? "camera" : "cameras"}
+            {cameras.length} {t(cameras.length === 1 ? "dashboard.camera_one" : "dashboard.camera_other")}
           </span>
           {persons.length > 0 && (
             <>
               {" · "}
               <span className="text-foreground font-medium">
-                {persons.length} {persons.length === 1 ? "person" : "people"}
+                {persons.length} {t(persons.length === 1 ? "dashboard.person_one" : "dashboard.person_other")}
               </span>
             </>
           )}
@@ -1011,18 +1013,18 @@ function DashboardContent() {
                 <button
                   onClick={() => { setModalInitialType(undefined); setModalOpen(true); }}
                   className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
-                  title="Connect another camera (RTSP, ONVIF, webcam)"
-                >+ Camera</button>
+                  title={t("dashboard.connect_camera_title")}
+                >+ {t("dashboard.camera")}</button>
                 <Link
                   href="/rules"
                   className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
-                  title="Create and manage alert rules"
-                >Rules</Link>
+                  title={t("dashboard.rules_title")}
+                >{t("dashboard.rules")}</Link>
                 <button
                   onClick={() => setWidgetBuilder({ open: true, editing: null })}
                   className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
-                  title="Add a custom data widget"
-                >+ Widget</button>
+                  title={t("dashboard.widget_title")}
+                >+ {t("dashboard.widget")}</button>
                 <button
                   onClick={toggleTimeline}
                   className={`text-[11px] px-2 py-1 rounded border transition-colors flex items-center gap-1.5 ${
@@ -1030,11 +1032,11 @@ function DashboardContent() {
                       ? "border-accent/40 bg-accent/10 text-accent-foreground"
                       : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   }`}
-                  title={timelineOpen ? "Hide the timeline panel" : "Show the timeline panel"}
+                  title={timelineOpen ? t("dashboard.hide_timeline") : t("dashboard.show_timeline")}
                   aria-pressed={timelineOpen}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${timelineOpen ? "bg-accent" : "bg-muted-foreground/40"}`} />
-                  Timeline
+                  {t("dashboard.timeline")}
                 </button>
               </>
             }
@@ -1047,11 +1049,11 @@ function DashboardContent() {
             <div className="fixed inset-0 bg-black/60" />
             <div className="relative w-full max-w-md rounded-xl border border-border bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <span className="text-sm font-medium">Filters</span>
+                <span className="text-sm font-medium">{t("dashboard.filters")}</span>
                 <div className="flex items-center gap-3">
                   {activeFilterCount > 0 && (
                     <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                      Clear all
+                      {t("dashboard.clear_all")}
                     </button>
                   )}
                   <button onClick={() => setFilterModalOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -1065,12 +1067,12 @@ function DashboardContent() {
               <div className="p-5 space-y-5">
                 {/* Time Range */}
                 <div>
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">Time Range</span>
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">{t("dashboard.time_range")}</span>
                   <div className="flex gap-2">
                     {(["today", "7d", "30d"] as TimeRange[]).map((range) => (
                       <button key={range} onClick={() => setTimeRange(range)}
                         className={`flex-1 px-3 py-2 text-xs rounded-lg transition-colors ${timeRange === range ? "bg-accent/15 text-accent-foreground font-medium border border-accent/30" : "text-muted-foreground border border-border hover:text-foreground hover:bg-muted/50"}`}>
-                        {range === "today" ? "Today" : range === "7d" ? "7 days" : "30 days"}
+                        {range === "today" ? t("dashboard.today") : range === "7d" ? t("dashboard.seven_days") : t("dashboard.thirty_days")}
                       </button>
                     ))}
                   </div>
@@ -1078,13 +1080,13 @@ function DashboardContent() {
 
                 {/* Event Types */}
                 <div>
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">Event Types</span>
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">{t("dashboard.event_types")}</span>
                   <div className="flex flex-col gap-1">
-                    {([["recordings", "Recordings"], ["observations", "Sightings"], ["conversations", "Conversations"], ["transcripts", "Raw Transcripts"], ["summaries", "Camera recaps"], ["speech", "Camera Speech"], ["status", "Status Changes"]] as [EventFilter, string][]).map(([value, label]) => (
+                    {([["recordings", "dashboard.event_recordings"], ["observations", "dashboard.event_sightings"], ["conversations", "dashboard.event_conversations"], ["transcripts", "dashboard.event_transcripts"], ["summaries", "dashboard.event_recaps"], ["speech", "dashboard.event_speech"], ["status", "dashboard.event_status"]] as [EventFilter, string][]).map(([value, labelKey]) => (
                       <label key={value} className="flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
                         <input type="checkbox" checked={eventFilters.has(value)} onChange={() => toggleEventFilter(value)}
                           className="w-3.5 h-3.5 rounded border-border accent-accent" />
-                        <span className={eventFilters.has(value) ? "text-foreground" : "text-muted-foreground"}>{label}</span>
+                        <span className={eventFilters.has(value) ? "text-foreground" : "text-muted-foreground"}>{t(labelKey)}</span>
                       </label>
                     ))}
                   </div>
@@ -1092,18 +1094,17 @@ function DashboardContent() {
 
                 {/* Observation grouping */}
                 <div>
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">Group repeats</span>
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">{t("dashboard.group_repeats")}</span>
                   <p className="text-[10px] text-muted-foreground/80 mb-2 leading-relaxed">
-                    Collapse repeated observations of the same person or
-                    object on a camera into one rolling card.
+                    {t("dashboard.group_repeats_help")}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {([
-                      { v: 0, l: "Off" },
-                      { v: 300, l: "5 min" },
-                      { v: 600, l: "10 min" },
-                      { v: 1800, l: "30 min" },
-                      { v: 3600, l: "1 hour" },
+                      { v: 0, key: "off" },
+                      { v: 300, key: "five_minutes" },
+                      { v: 600, key: "ten_minutes" },
+                      { v: 1800, key: "thirty_minutes" },
+                      { v: 3600, key: "one_hour" },
                     ] as const).map((opt) => (
                       <button
                         key={opt.v}
@@ -1115,7 +1116,7 @@ function DashboardContent() {
                             : "border-border hover:border-muted-foreground text-muted-foreground"
                         }`}
                       >
-                        {opt.l}
+                        {t(`dashboard.group.${opt.key}`)}
                       </button>
                     ))}
                   </div>
@@ -1124,30 +1125,30 @@ function DashboardContent() {
                 <div className="grid grid-cols-2 gap-4">
                   {/* Person Filter */}
                   <div>
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">Person</span>
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">{t("dashboard.person")}</span>
                     <select value={filterPerson} onChange={(e) => { setFilterPerson(e.target.value); if (e.target.value) handleSearch(); }}
                       className="w-full px-3 py-2 rounded-lg bg-background border border-border text-xs focus:outline-none focus:ring-1 focus:ring-accent">
-                      <option value="">Any person</option>
+                      <option value="">{t("dashboard.any_person")}</option>
                       {persons.map((p) => <option key={p.id} value={p.display_name}>{p.display_name}</option>)}
                     </select>
                   </div>
 
                   {/* Object Filter */}
                   <div>
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">Object</span>
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">{t("dashboard.object")}</span>
                     <input type="text" value={filterObject} onChange={(e) => setFilterObject(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { handleSearch(); setFilterModalOpen(false); } }}
-                      placeholder="e.g. car, dog"
+                      placeholder={t("dashboard.object_placeholder")}
                       className="w-full px-3 py-2 rounded-lg bg-background border border-border text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
                   </div>
                 </div>
 
                 {/* Camera Filter */}
                 <div>
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">Camera</span>
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">{t("dashboard.camera")}</span>
                   <select value={selectedCamera || ""} onChange={(e) => setSelectedCamera(e.target.value || null)}
                     className="w-full px-3 py-2 rounded-lg bg-background border border-border text-xs focus:outline-none focus:ring-1 focus:ring-accent">
-                    <option value="">All cameras</option>
+                    <option value="">{t("dashboard.all_cameras")}</option>
                     {cameras.map((cam) => <option key={cam.id} value={cam.id}>{cam.name}</option>)}
                   </select>
                 </div>
@@ -1156,7 +1157,7 @@ function DashboardContent() {
               <div className="px-5 py-4 border-t border-border">
                 <button onClick={() => { handleSearch(); setFilterModalOpen(false); }}
                   className="w-full py-2.5 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors">
-                  Apply Filters
+                  {t("dashboard.apply_filters")}
                 </button>
               </div>
             </div>
@@ -1180,14 +1181,14 @@ function DashboardContent() {
               <div className="relative flex-1">
                 <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSearch(); } if (e.key === "Escape") clearSearch(); }}
-                  placeholder={`Try "${searchHint}"`}
+                  placeholder={t("dashboard.search_placeholder", { hint: searchHint })}
                   className="w-full bg-card border border-border focus:border-accent rounded-lg pl-9 pr-32 py-2.5 text-sm focus:outline-none transition-colors"
                 />
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
                 </svg>
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                  {searchActive && <button onClick={clearSearch} className="px-1.5 py-0.5 text-[10px] rounded border border-border text-muted-foreground hover:bg-muted">Clear</button>}
+                  {searchActive && <button onClick={clearSearch} className="px-1.5 py-0.5 text-[10px] rounded border border-border text-muted-foreground hover:bg-muted">{t("dashboard.clear")}</button>}
                   {!isSearching && searchQuery.trim() && !searchActive && (
                     <button onClick={handleSearch} className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted border border-border text-muted-foreground hover:bg-border">search</button>
                   )}
@@ -1195,7 +1196,7 @@ function DashboardContent() {
               </div>
               <button onClick={() => setFilterModalOpen(true)}
                 className={`relative flex-shrink-0 px-3 py-2.5 rounded-lg border transition-colors ${activeFilterCount > 0 ? "border-accent/40 bg-accent/10 text-accent-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"}`}
-                title="Filters">
+                title={t("dashboard.filters") }>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
                 </svg>
@@ -1229,12 +1230,12 @@ function DashboardContent() {
                       <circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" />
                     </svg>
                     <div>
-                      <p className="text-xs font-medium">AI answers unavailable</p>
-                      <p className="text-[10px] text-muted-foreground">Connect an AI provider in Settings to enable natural language answers.</p>
+                    <p className="text-xs font-medium">{t("dashboard.ai_unavailable")}</p>
+                    <p className="text-[10px] text-muted-foreground">{t("dashboard.ai_unavailable_help")}</p>
                     </div>
                   </div>
                   <a href="/settings" className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-accent/50 transition-colors whitespace-nowrap">
-                    Go to Settings
+                    {t("dashboard.go_to_settings")}
                   </a>
                 </div>
               </div>
