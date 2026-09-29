@@ -30,9 +30,9 @@ import numpy as np
 from sqlalchemy import select
 
 from services.agent.budget import estimate_cost
-from services.perception.usage import record_vlm_usage
+from services.perception.usage import check_perception_budget, estimate_vlm_usage, record_vlm_usage
 from shared.database import async_session
-from shared.models import Vehicle
+from shared.models import Provider, Vehicle
 
 logger = logging.getLogger("nurby.perception.vehicles")
 
@@ -339,6 +339,34 @@ async def _describe_vehicle(vehicle_id, crop: np.ndarray, camera_id=None) -> Non
         provider = await get_active_provider()
         if provider is None:
             return
+        estimated_in, estimated_out, estimated_cost = estimate_vlm_usage(
+            provider,
+            system_prompt=_VEHICLE_SYSTEM_PROMPT,
+            user_prompt=None,
+            output_text=None,
+            image_tokens=765,
+        )
+        budget = await check_perception_budget(
+            str(camera_id) if camera_id else None,
+            estimated_cost_cents=estimated_cost,
+            estimated_tokens=estimated_in + estimated_out,
+        )
+        if not budget.allowed:
+            reason = budget.reason or ""
+            if "cost budget" not in reason or "token budget" in reason:
+                return
+            async with async_session() as db:
+                local = (
+                    await db.execute(
+                        select(Provider)
+                        .where(Provider.active.is_(True), Provider.kind == "ollama")
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+            if local is None:
+                return
+            provider = local
+            logger.info("vehicle description using local Ollama after hosted cost budget")
         client = VLMClient()
         desc = await client.describe(
             crop, [], provider, system_prompt=_VEHICLE_SYSTEM_PROMPT

@@ -17,9 +17,9 @@ import numpy as np
 from sqlalchemy import select
 
 from services.agent.budget import estimate_cost
-from services.perception.usage import record_vlm_usage
+from services.perception.usage import check_perception_budget, estimate_vlm_usage, record_vlm_usage
 from shared.database import async_session
-from shared.models import FaceEmbedding, Person
+from shared.models import FaceEmbedding, Person, Provider
 
 logger = logging.getLogger("nurby.perception.faces")
 
@@ -521,6 +521,42 @@ class FaceRecognizer:
                 "No speculation beyond what the image shows. No sentences, just a "
                 "short label. Example. 'Caucasian male, 30s, dark jacket'."
             )
+            async with async_session() as db:
+                source_cluster = await db.get(FaceCluster, cluster_id)
+            camera_id_for_budget = (
+                str(source_cluster.first_camera_id)
+                if source_cluster is not None and source_cluster.first_camera_id
+                else None
+            )
+            estimated_in, estimated_out, estimated_cost = estimate_vlm_usage(
+                provider,
+                system_prompt=system_prompt,
+                user_prompt=None,
+                output_text=None,
+                model=getattr(provider, "default_model", None),
+                image_tokens=765,
+            )
+            budget = await check_perception_budget(
+                camera_id_for_budget,
+                estimated_cost_cents=estimated_cost,
+                estimated_tokens=estimated_in + estimated_out,
+            )
+            if not budget.allowed:
+                reason = budget.reason or ""
+                if "cost budget" not in reason or "token budget" in reason:
+                    return
+                async with async_session() as db:
+                    local = (
+                        await db.execute(
+                            select(Provider)
+                            .where(Provider.active.is_(True), Provider.kind == "ollama")
+                            .limit(1)
+                        )
+                    ).scalar_one_or_none()
+                if local is None:
+                    return
+                provider = local
+                logger.info("face appearance description using local Ollama after hosted cost budget")
             client = VLMClient()
             desc = await client.describe(
                 frame=img,
