@@ -15,12 +15,12 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import numpy as np
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.config import settings
 from shared.app_settings import get_setting
-from shared.models import AudioCapture, Person, Transcript, VoiceprintProfile, VoiceprintSampleReview
+from shared.models import AudioCapture, Camera, Person, Transcript, VoiceprintProfile, VoiceprintSampleReview
 from shared.paths import resolve_inside
 
 logger = logging.getLogger("nurby.perception.audio.voiceprint")
@@ -103,9 +103,23 @@ async def match_voiceprint(db: AsyncSession, capture: AudioCapture) -> tuple[UUI
         return None
     rows = (await db.execute(
         select(VoiceprintProfile.person_id, VoiceprintProfile.embedding)
+        .join(Person, Person.id == VoiceprintProfile.person_id)
+        .join(Camera, Camera.id == capture.camera_id)
         .where(VoiceprintProfile.status == "ready")
         .where(VoiceprintProfile.consent_confirmed.is_(True))
+        .where(VoiceprintProfile.model_version == MODEL_VERSION)
         .where(VoiceprintProfile.embedding.is_not(None))
+        # A facility-scoped camera may only use profiles belonging to the
+        # same facility, while unscoped people/cameras retain the legacy
+        # household-wide behavior. This prevents a profile from one
+        # facility being used to label speech captured in another.
+        .where(
+            or_(
+                Camera.facility_id.is_(None),
+                Person.facility_id.is_(None),
+                Person.facility_id == Camera.facility_id,
+            )
+        )
     )).all()
     return select_voiceprint_match([(person_id, embedding) for person_id, embedding in rows], vector)
 
