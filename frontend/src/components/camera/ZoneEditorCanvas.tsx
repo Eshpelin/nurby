@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWSSubscribe } from "@/lib/ws";
+import { translate, type Locale } from "@/lib/i18n";
 import type { MotionZone } from "./types";
 
 const SIGNAL_COLORS = ["red", "amber", "green"] as const;
@@ -71,13 +72,16 @@ export function ZoneEditorCanvas({
   width,
   height,
   cameraId,
+  locale,
 }: {
   zones: MotionZone[];
   onChange: (zones: MotionZone[]) => void;
   width: number;
   height: number;
   cameraId?: string;
+  locale: Locale;
 }) {
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drawing, setDrawing] = useState(false);
   const [currentPoints, setCurrentPoints] = useState<number[][]>([]);
@@ -278,21 +282,18 @@ export function ZoneEditorCanvas({
           >
             <div className="flex items-center gap-1.5 mb-0.5">
               <span className={`w-2 h-2 rounded-full ${ZONE_COLORS[b.value].dot}`} />
-              <span className="text-xs font-medium">{b.label}</span>
+              <span className="text-xs font-medium">{t(`camera.zones.kind.${b.value}`)}</span>
               {b.value === "zone" && (
-                <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground">recommended</span>
+                <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground">{t("camera.zones.recommended")}</span>
               )}
             </div>
-            <div className="text-[10px] leading-snug opacity-80">{b.desc}</div>
+            <div className="text-[10px] leading-snug opacity-80">{t(`camera.zones.kind_desc.${b.value}`)}</div>
           </button>
         ))}
       </div>
       {hasInclude && hasExclude && (
         <p className="text-[11px] text-warning">
-          Heads up: you have both &quot;Watch only here&quot; and &quot;Ignore&quot; masks.
-          Once a watch-only mask exists, everything outside it is already
-          ignored, so the separate ignore areas are redundant. Keep one
-          style or the other.
+          {t("camera.zones.mask_warning")}
         </p>
       )}
       <div className="flex flex-wrap gap-2 mb-2">
@@ -303,7 +304,7 @@ export function ZoneEditorCanvas({
             disabled={!canFinish}
             className="px-2.5 py-1.5 text-xs rounded-md border border-accent bg-accent/10 text-accent-foreground disabled:opacity-50"
           >
-            Finish ({currentPoints.length}/{needMin === 2 ? "2" : `≥${needMin}`})
+            {t("camera.zones.finish", { current: currentPoints.length, minimum: needMin === 2 ? "2" : `≥${needMin}` })}
           </button>
         )}
       </div>
@@ -318,8 +319,8 @@ export function ZoneEditorCanvas({
 
       <p className="text-[11px] text-muted-foreground">
         {zoneType === "tripwire"
-          ? "Click two points to drop a tripwire line. Auto-finishes on the second click."
-          : `Click to add points. Finish when done (minimum ${needMin} points).`}
+          ? t("camera.zones.tripwire_hint")
+          : t("camera.zones.draw_hint", { minimum: needMin })}
       </p>
 
       {zones.length > 0 && (
@@ -335,30 +336,30 @@ export function ZoneEditorCanvas({
                   className="bg-transparent border-0 outline-none flex-1 min-w-0 font-medium focus:ring-1 focus:ring-accent rounded px-1"
                 />
                 <span className="text-muted-foreground">
-                  {ZONE_KINDS.find((k) => k.value === zone.type)?.label || zone.type} · {zone.points.length} pts
+                  {t(`camera.zones.kind.${zone.type}`)} · {zone.points.length} {t("camera.zones.points_short")}
                 </span>
                 <button
                   type="button"
                   onClick={() => removeZone(i)}
                   className="text-muted-foreground hover:text-red-400 transition-colors px-1"
-                  aria-label="Remove zone"
+                  aria-label={t("camera.zones.remove")}
                 >×</button>
               </div>
               {zone.type === "loiter" && (
                 <div className="flex items-center gap-2 pl-4">
-                  <label className="text-muted-foreground">Fires after</label>
+                  <label className="text-muted-foreground">{t("camera.zones.fires_after")}</label>
                   <input
                     type="number" min="1" max="3600"
                     value={zone.loiter_threshold_seconds ?? 30}
                     onChange={(e) => updateZone(i, { loiter_threshold_seconds: parseInt(e.target.value) || 30 })}
                     className="w-16 px-1.5 py-0.5 rounded bg-background border border-border text-xs"
                   />
-                  <span className="text-muted-foreground">seconds inside the zone.</span>
+                  <span className="text-muted-foreground">{t("camera.zones.seconds_inside")}</span>
                 </div>
               )}
               {zone.type === "tripwire" && (
                 <div className="flex items-center gap-2 pl-4">
-                  <label className="text-muted-foreground">Direction</label>
+                  <label className="text-muted-foreground">{t("camera.zones.direction")}</label>
                   <div className="flex gap-1">
                     {["any", "in", "out"].map((d) => (
                       <button
@@ -370,7 +371,7 @@ export function ZoneEditorCanvas({
                             ? "border-indigo-500 bg-indigo-500/10 text-indigo-400"
                             : "border-border text-muted-foreground hover:bg-muted"
                         }`}
-                      >{d}</button>
+                      >{t(`camera.zones.direction.${d}`)}</button>
                     ))}
                   </div>
                 </div>
@@ -383,7 +384,7 @@ export function ZoneEditorCanvas({
                 return (
                   <div className="pl-4 space-y-2">
                     <div className="flex items-center gap-2">
-                      <label className="text-muted-foreground">Orientation</label>
+                      <label className="text-muted-foreground">{t("camera.zones.orientation")}</label>
                       <div className="flex gap-1">
                         {(["vertical", "horizontal"] as const).map((o) => (
                           <button
@@ -395,17 +396,17 @@ export function ZoneEditorCanvas({
                                 ? "border-yellow-500 bg-yellow-500/10 text-yellow-400"
                                 : "border-border text-muted-foreground hover:bg-muted"
                             }`}
-                          >{o}</button>
+                          >{t(`camera.zones.orientation.${o}`)}</button>
                         ))}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-[11px]">
-                      <span className="text-muted-foreground">Live:</span>
+                      <span className="text-muted-foreground">{t("camera.zones.live")}:</span>
                       {det ? (
                         <>
                           <span className={`w-2 h-2 rounded-full ${SIGNAL_DOT[det.state] || SIGNAL_DOT.unknown}`} />
                           <span className="capitalize">{det.state}</span>
-                          {!det.calibrated && <span className="text-amber-400">uncalibrated</span>}
+                          {!det.calibrated && <span className="text-amber-400">{t("camera.zones.uncalibrated")}</span>}
                           {lamps && (
                             <span className="text-muted-foreground font-mono">
                               {SIGNAL_COLORS.map((c) => `${c[0].toUpperCase()}:${Math.round(lamps[c]?.v ?? 0)}`).join("  ")}
@@ -413,11 +414,11 @@ export function ZoneEditorCanvas({
                           )}
                         </>
                       ) : (
-                        <span className="text-muted-foreground">waiting for live frames…</span>
+                        <span className="text-muted-foreground">{t("camera.zones.waiting_frames")}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground text-[11px]">Capture:</span>
+                      <span className="text-muted-foreground text-[11px]">{t("camera.zones.capture")}:</span>
                       {SIGNAL_COLORS.map((c) => (
                         <button
                           key={c}
@@ -433,22 +434,20 @@ export function ZoneEditorCanvas({
                               ? "border-green-500 bg-green-500/10 text-green-400"
                               : "border-border text-muted-foreground hover:bg-muted"
                           }`}
-                        >{captured[c] ? `${c} ✓` : c}</button>
+                        >{captured[c] ? `${t(`camera.zones.color.${c}`)} ✓` : t(`camera.zones.color.${c}`)}</button>
                       ))}
                       {Object.keys(captured).length > 0 && (
                         <button
                           type="button"
                           onClick={() => updateZone(i, { calibration: {} })}
                           className="text-[11px] text-muted-foreground hover:text-red-400 px-1"
-                        >clear</button>
+                        >{t("camera.zones.clear")}</button>
                       )}
                     </div>
                     <p className="text-[10px] text-muted-foreground leading-snug">
-                      Draw this box over the signal head, pick orientation, and <strong>Save</strong>.
-                      Live brightness then appears above. Capture each colour while the real light
-                      shows it, then Save again. {allCaptured
-                        ? "Calibrated: detection now uses per-lamp brightness."
-                        : "Capture all three to switch from the rough fallback to calibrated detection."}
+                      {t("camera.zones.signal_help")} {allCaptured
+                        ? t("camera.zones.calibrated")
+                        : t("camera.zones.capture_all")}
                     </p>
                   </div>
                 );
@@ -460,4 +459,3 @@ export function ZoneEditorCanvas({
     </div>
   );
 }
-

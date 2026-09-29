@@ -1060,6 +1060,7 @@ export default function CameraConfigPage() {
           description={t("camera_detail.zones_description")}
         >
           <ZoneEditorCanvas
+            locale={locale}
             zones={motionZones}
             onChange={setMotionZones}
             width={camera.width || 1920}
