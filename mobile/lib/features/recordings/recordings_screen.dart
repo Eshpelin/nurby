@@ -244,8 +244,9 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
         details.write(
           '. Failed item ids: ${result.failedIds.take(5).join(', ')}',
         );
-        if (result.failedIds.length > 5)
+        if (result.failedIds.length > 5) {
           details.write(' and ${result.failedIds.length - 5} more');
+        }
       }
       await showDialog<void>(
         context: context,
@@ -266,19 +267,23 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
             ),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      }
     } finally {
       if (mounted) setState(() => _bulkBusy = false);
     }
   }
 
   static String _formatBytes(int bytes) {
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024)
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    }
+    if (bytes < 1024 * 1024 * 1024) {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
