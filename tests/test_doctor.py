@@ -130,6 +130,38 @@ async def test_check_worker_warns_when_redis_unreachable():
 
 
 @pytest.mark.asyncio
+async def test_public_access_skips_without_configured_url(monkeypatch):
+    monkeypatch.setattr(doctor.settings, "public_base_url", None)
+    result = await doctor._check_public_access()
+    assert result.status == "skip"
+    assert "configured" in result.detail
+
+
+@pytest.mark.asyncio
+async def test_public_access_warns_for_reachable_http(monkeypatch):
+    monkeypatch.setattr(doctor.settings, "public_base_url", "http://nurby.example")
+
+    class Response:
+        status_code = 200
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url):
+            assert url == "http://nurby.example/api/health"
+            return Response()
+
+    monkeypatch.setattr(doctor.httpx, "AsyncClient", lambda **kwargs: Client())
+    result = await doctor._check_public_access()
+    assert result.status == "warn"
+    assert "HTTPS" in (result.hint or "")
+
+
+@pytest.mark.asyncio
 async def test_offline_camera_does_not_blame_user_when_ingestion_down():
     """The regression that made margaret's run untestable: with ingestion
     stopped, the doctor told the user to check their stream URL and

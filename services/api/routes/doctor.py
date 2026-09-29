@@ -9,6 +9,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -197,6 +198,60 @@ async def _check_mediamtx() -> DoctorCheck:
                 "Live view is down; recording to disk still works. "
                 "Check: docker compose logs mediamtx"
             ),
+            latency_ms=_timed(start),
+        )
+
+
+async def _check_public_access() -> DoctorCheck:
+    """Check the configured remote URL from the backend itself.
+
+    This cannot prove a phone on cellular can reach the installation, but it
+    catches common reverse-proxy, DNS, and TLS mistakes before pairing.
+    """
+    start = time.monotonic()
+    base = (settings.public_base_url or "").strip().rstrip("/")
+    if not base:
+        return DoctorCheck(
+            id="public_access", label="Remote access", status="skip",
+            detail="No public base URL is configured",
+            hint="Set PUBLIC_BASE_URL for remote pairing, webhooks, and cellular access.",
+            latency_ms=_timed(start),
+        )
+    parsed = urlparse(base)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return DoctorCheck(
+            id="public_access", label="Remote access", status="fail",
+            detail=f"Configured URL is invalid: {base}",
+            hint="Use a complete http:// or https:// URL without a trailing path.",
+            latency_ms=_timed(start),
+        )
+    try:
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            response = await client.get(f"{base}/api/health")
+        if response.status_code >= 400:
+            return DoctorCheck(
+                id="public_access", label="Remote access", status="fail",
+                detail=f"{base}/api/health returned HTTP {response.status_code}",
+                hint="Check reverse-proxy routing, authentication exclusions, and DNS/TLS configuration.",
+                latency_ms=_timed(start),
+            )
+        if parsed.scheme != "https":
+            return DoctorCheck(
+                id="public_access", label="Remote access", status="warn",
+                detail="Public URL responds, but it is not using HTTPS",
+                hint="Use HTTPS for remote access, or use a private Tailscale/WireGuard endpoint.",
+                latency_ms=_timed(start),
+            )
+        return DoctorCheck(
+            id="public_access", label="Remote access", status="ok",
+            detail="Configured public URL responds over HTTPS",
+            latency_ms=_timed(start),
+        )
+    except Exception as exc:
+        return DoctorCheck(
+            id="public_access", label="Remote access", status="fail",
+            detail=f"Could not reach {base}/api/health: {str(exc)[:160]}",
+            hint="Check DNS, port forwarding, reverse-proxy routing, and whether the URL is reachable from the Nurby host.",
             latency_ms=_timed(start),
         )
 
@@ -454,6 +509,7 @@ async def run_doctor(
         _run_with_timeout(_check_db(db), "db", "Database"),
         _run_with_timeout(_check_redis(), "redis", "Redis"),
         _run_with_timeout(_check_mediamtx(), "mediamtx", "Stream relay (mediamtx)"),
+        _run_with_timeout(_check_public_access(), "public_access", "Remote access"),
         _run_with_timeout(_check_smtp(), "smtp", "Email (SMTP)"),
         _run_with_timeout(_check_alert_channels(), "alert_channels", "Alert delivery"),
         _run_with_timeout(_check_disk(), "disk", "Disk space"),
