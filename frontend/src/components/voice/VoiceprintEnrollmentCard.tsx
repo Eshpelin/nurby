@@ -44,6 +44,7 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
   const [trainingStatus, setTrainingStatus] = useState<string>("not_ready");
   const [trainingSampleCount, setTrainingSampleCount] = useState(0);
   const [trainingModel, setTrainingModel] = useState<string | null>(null);
+  const [trainingQuality, setTrainingQuality] = useState<string>("unavailable");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,12 +59,14 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
         training_status?: string;
         training_sample_count?: number;
         training_model_version?: string | null;
+        training_quality?: { status?: string };
       };
       setClips(body.candidates);
       setTrainingMessage(body.training_message ?? null);
       setTrainingStatus(body.training_status ?? "not_ready");
       setTrainingSampleCount(body.training_sample_count ?? 0);
       setTrainingModel(body.training_model_version ?? null);
+      setTrainingQuality(body.training_quality?.status ?? "unavailable");
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Voice clips unavailable");
@@ -131,6 +134,7 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
           {trainingStatus === "ready" ? t("voiceprint.training_ready") : t("voiceprint.training_not_ready")}
         </span>
         {trainingModel && <> · {t("voiceprint.training_meta", { count: trainingSampleCount, model: trainingModel })}</>}
+        <span> · {t("voiceprint.quality_status", { status: t(`voiceprint.quality_${trainingQuality}`) })}</span>
       </div>
       {trainingStatus === "ready" && (
         <button type="button" onClick={() => void revoke()} disabled={busy} className="mt-2 text-[10px] text-red-300 hover:text-red-200 disabled:opacity-50">

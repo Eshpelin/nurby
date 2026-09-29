@@ -135,6 +135,13 @@ async def list_voiceprint_candidates(
             continue
         candidates.append(_clip_response(transcript, capture, camera, review))
     profile = await db.scalar(select(VoiceprintProfile).where(VoiceprintProfile.person_id == person_id))
+    confirmed_count = sum(1 for _, _, _, review in rows if review and review.decision == "confirmed")
+    retained_count = profile.sample_count if profile else 0
+    quality_status = (
+        "good" if retained_count >= 3
+        else "limited" if retained_count > 0
+        else "unavailable"
+    )
     return {
         "person_id": str(person_id),
         "requires_manual_sample": False,
@@ -145,6 +152,12 @@ async def list_voiceprint_candidates(
         "training_sample_count": profile.sample_count if profile else 0,
         "training_model_version": profile.model_version if profile else None,
         "training_at": profile.trained_at if profile else None,
+        "training_quality": {
+            "status": quality_status,
+            "confirmed_clip_count": confirmed_count,
+            "retained_clip_count": retained_count,
+            "retention_ratio": round(retained_count / confirmed_count, 3) if confirmed_count else 0.0,
+        },
         "training_message": (
             "Voiceprint ready from confirmed clips; matching remains a hypothesis."
             if profile and profile.status == "ready"
