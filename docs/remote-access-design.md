@@ -211,6 +211,11 @@ take on yet.
 **Phase 3 — zero-step (business decision)**
 11. First-party relay service, on by default, E2E-encrypted.
 
+Until the phase-2 Funnel/tunnel work exists, the supported mesh-network
+workaround is documented in `docs/remote-access-tailscale.md`. It uses the
+existing authenticated WHEP/HLS proxies and does not make direct MediaMTX
+ports part of the normal remote path.
+
 ## Decisions to confirm
 
 1. Phone-assisted reachability probe acceptable for v1 (vs. standing up
