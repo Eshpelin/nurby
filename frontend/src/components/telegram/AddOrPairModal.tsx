@@ -210,7 +210,7 @@ export function AddOrPairModal({
               </div>
               <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal pl-4">
                 <li>
-                  Open{" "}
+                  {t("telegram.botfather_open")} {" "}
                   <a
                     href="https://t.me/BotFather"
                     target="_blank"
@@ -219,18 +219,15 @@ export function AddOrPairModal({
                   >
                     @BotFather
                   </a>{" "}
-                  in Telegram (the official bot maker) and press <span className="font-medium">Start</span>.
+                  {t("telegram.botfather_start")} <span className="font-medium">Start</span>.
                 </li>
                 <li>
-                  Send <span className="font-mono text-foreground">/newbot</span>. It asks for a
-                  name (e.g. <span className="text-foreground">Home Alerts</span>) and a username
-                  ending in <span className="font-mono text-foreground">bot</span>.
+                  {t("telegram.botfather_newbot")} <span className="font-mono text-foreground">/newbot</span>. {t("telegram.botfather_name")} <span className="text-foreground">Home Alerts</span> {t("telegram.botfather_username")} <span className="font-mono text-foreground">bot</span>.
                 </li>
                 <li>
-                  BotFather replies with a <span className="font-medium text-foreground">token</span> that
-                  looks like <span className="font-mono text-foreground">123456789:ABCdef...</span>. Copy it.
+                  {t("telegram.botfather_token")} <span className="font-medium text-foreground">token</span> {t("telegram.botfather_token_shape")} <span className="font-mono text-foreground">123456789:ABCdef...</span>. {t("telegram.copy_it")}
                 </li>
-                <li>Paste the token below. Nurby checks it instantly.</li>
+                <li>{t("telegram.paste_token")}</li>
               </ol>
             </div>
             <div className="space-y-3">
