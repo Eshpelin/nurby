@@ -825,6 +825,7 @@ export default function CameraConfigPage() {
 
         {/* Detection */}
         <DetectionSection
+          locale={locale}
           detectClasses={detectClasses}
           detectFaces={detectFaces}
           detectObjects={detectObjects}

@@ -7,8 +7,10 @@ import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, Toggle } from "./primitives";
 import { DetectionModelSelect, LabelPicker } from "../ModelPickers";
 import { DETECTION_MODEL_CATALOG } from "../detection-models";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface DetectionSectionProps {
+  locale: Locale;
   detectClasses: string[] | null;
   detectFaces: boolean;
   detectObjects: boolean;
@@ -34,6 +36,7 @@ interface DetectionSectionProps {
 }
 
 export function DetectionSection({
+  locale,
   detectClasses,
   detectFaces,
   detectObjects,
@@ -57,30 +60,29 @@ export function DetectionSection({
   setPlatelessReid,
   setSceneMode,
 }: DetectionSectionProps) {
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   return (
         <Section
-          title="Detection"
-          description="Object and face detection models for this camera"
+          title={t("camera.detection.title")}
+          description={t("camera.detection.description")}
         >
-          <FieldRow label="Scene Mode" hint="Controls how unknown faces are handled">
+          <FieldRow label={t("camera.detection.scene_mode")} hint={t("camera.detection.scene_mode_hint")}>
             <div className="space-y-2">
               <div className="flex gap-2">
                 {(["indoor", "outdoor"] as const).map((mode) => (
                   <button key={mode} onClick={() => setSceneMode(mode)}
                     className={`flex-1 px-3 py-2 text-xs rounded-lg transition-colors ${sceneMode === mode ? "bg-accent/15 text-accent-foreground font-medium border border-accent/30" : "text-muted-foreground border border-border hover:text-foreground hover:bg-muted/50"}`}>
-                    {mode === "indoor" ? "Indoor" : "Outdoor"}
+                    {t(`camera.detection.scene.${mode}`)}
                   </button>
                 ))}
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {sceneMode === "outdoor"
-                  ? "Outdoor mode will still recognize people you have already named, but will not try to identify unknown faces. This prevents your People page from filling up with strangers walking by."
-                  : "Indoor mode will track all faces and suggest unknown people for you to name."}
+                {t(`camera.detection.scene_help.${sceneMode}`)}
               </p>
             </div>
           </FieldRow>
 
-          <FieldRow label="Group unplated vehicles" hint="Re-identify vehicles with no readable plate by appearance">
+          <FieldRow label={t("camera.detection.plateless")} hint={t("camera.detection.plateless_hint")}>
             <div className="space-y-2">
               <div className="flex gap-2">
                 {([["auto", null], ["on", true], ["off", false]] as const).map(([key, val]) => {
@@ -88,38 +90,38 @@ export function DetectionSection({
                   return (
                     <button key={key} onClick={() => setPlatelessReid(val)}
                       className={`flex-1 px-3 py-2 text-xs rounded-lg transition-colors capitalize ${active ? "bg-accent/15 text-accent-foreground font-medium border border-accent/30" : "text-muted-foreground border border-border hover:text-foreground hover:bg-muted/50"}`}>
-                      {key}
+                      {t(`camera.detection.plateless.${key}`)}
                     </button>
                   );
                 })}
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
                 {platelessReid === null
-                  ? `Auto. ${sceneMode === "outdoor" ? "off for this outdoor camera, since a busy street would create many one-off vehicles." : "on for this camera."} Override with On or Off.`
+                  ? t(`camera.detection.plateless_auto.${sceneMode}`)
                   : platelessReid
-                    ? "On. unplated vehicles seen repeatedly here are grouped into one provisional identity by appearance."
-                    : "Off. unplated vehicles are still detected and timelined, but not grouped into identities."}
+                    ? t("camera.detection.plateless_on_help")
+                    : t("camera.detection.plateless_off_help")}
               </p>
             </div>
           </FieldRow>
 
-          <FieldRow label="Object Detection" hint="Enable YOLO-based object recognition">
+          <FieldRow label={t("camera.detection.objects")} hint={t("camera.detection.objects_hint")}>
             <Toggle
               checked={detectObjects}
               onChange={setDetectObjects}
-              label={detectObjects ? "Enabled" : "Disabled"}
+              label={detectObjects ? t("common.enabled") : t("common.disabled")}
             />
           </FieldRow>
 
           {detectObjects && (
             <>
               {/* Per-camera object-class override */}
-              <FieldRow label="Objects on this camera" hint="Override the global 'objects to detect' list, just for this camera.">
+              <FieldRow label={t("camera.detection.camera_objects")} hint={t("camera.detection.camera_objects_hint")}>
                 <div className="space-y-2">
                   <Toggle
                     checked={detectClasses !== null}
                     onChange={(v) => setDetectClasses(v ? [] : null)}
-                    label={detectClasses !== null ? "Custom for this camera" : "Using global default"}
+                    label={detectClasses !== null ? t("camera.detection.custom_camera") : t("camera.detection.global_default")}
                   />
                   {detectClasses !== null && (
                     <LabelPicker
@@ -127,7 +129,7 @@ export function DetectionSection({
                       available={modelClasses}
                       loading={modelClassesLoading}
                       onChange={setDetectClasses}
-                      placeholder="Pick classes (leave empty to detect everything here)"
+                      placeholder={t("camera.detection.classes_placeholder")}
                       activeModels={detectionModels.map((m) => m.model)}
                     />
                   )}
@@ -135,16 +137,16 @@ export function DetectionSection({
               </FieldRow>
 
               {/* License plate reading (basic, on by default) */}
-              <FieldRow label="License Plates" hint="Read plates on detected vehicles.">
+              <FieldRow label={t("camera.detection.plates")} hint={t("camera.detection.plates_hint")}>
                 <Toggle
                   checked={detectPlates}
                   onChange={setDetectPlates}
-                  label={detectPlates ? "Enabled" : "Disabled"}
+                  label={detectPlates ? t("common.enabled") : t("common.disabled")}
                 />
               </FieldRow>
 
               {/* Model list */}
-              <FieldRow label="Detection Models" hint="Run multiple models for better accuracy">
+              <FieldRow label={t("camera.detection.models")} hint={t("camera.detection.models_hint")}>
                 <div className="space-y-2">
                   {detectionModels.map((m, i) => (
                     <div key={i} className="flex items-center gap-2 p-2.5 rounded-md border border-border bg-background">
@@ -188,7 +190,7 @@ export function DetectionSection({
                           setDetectionModels(detectionModels.filter((_, j) => j !== i));
                         }}
                         className="text-muted-foreground hover:text-danger transition-colors text-sm px-1"
-                        title="Remove model"
+                        title={t("camera.detection.remove_model")}
                       >
                         ×
                       </button>
@@ -207,12 +209,12 @@ export function DetectionSection({
                     }}
                     className="w-full py-2 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border rounded-md hover:border-accent transition-colors"
                   >
-                    + Add detection model
+                    {t("camera.detection.add_model")}
                   </button>
 
                   {detectionModels.length === 0 && (
                     <p className="text-[11px] text-muted-foreground">
-                      No models configured. Single YOLO model with {(objectConfidence * 100).toFixed(0)}% confidence used as fallback.
+                      {t("camera.detection.no_models", { confidence: (objectConfidence * 100).toFixed(0) })}
                     </p>
                   )}
                 </div>
@@ -220,7 +222,7 @@ export function DetectionSection({
 
               {/* Fallback confidence (shown when no models configured) */}
               {detectionModels.length === 0 && (
-                <FieldRow label="Confidence Threshold" hint="Min confidence for default YOLO model">
+                <FieldRow label={t("camera.detection.confidence")} hint={t("camera.detection.confidence_hint")}>
                   <div className="flex items-center gap-3">
                     <input
                       type="range"
@@ -241,12 +243,12 @@ export function DetectionSection({
               {/* Merge strategy (only when multiple models) */}
               {detectionModels.length > 1 && (
                 <>
-                  <FieldRow label="Merge Strategy" hint="How to combine results from multiple models">
+                  <FieldRow label={t("camera.detection.merge")} hint={t("camera.detection.merge_hint")}>
                     <div className="flex gap-1.5">
                       {([
-                        { value: "any", label: "Any Model", desc: "Union of all detections" },
-                        { value: "consensus", label: "Consensus", desc: "Multiple models must agree" },
-                        { value: "best", label: "Best Score", desc: "Highest confidence per object" },
+                        { value: "any" },
+                        { value: "consensus" },
+                        { value: "best" },
                       ] as const).map((opt) => (
                         <button
                           key={opt.value}
@@ -258,21 +260,21 @@ export function DetectionSection({
                               : "border-border hover:border-muted-foreground text-muted-foreground"
                           }`}
                         >
-                          {opt.label}
+                          {t(`camera.detection.merge.${opt.value}`)}
                         </button>
                       ))}
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-1.5">
                       {detectionMerge === "any"
-                        ? "Keep all detections from all models. Overlapping boxes get de-duplicated."
+                        ? t("camera.detection.merge_any_help")
                         : detectionMerge === "consensus"
-                          ? `Only keep objects detected by at least ${detectionConsensusMin} model${detectionConsensusMin !== 1 ? "s" : ""}.`
-                          : "For each detected object region, keep only the highest confidence result."}
+                          ? t("camera.detection.merge_consensus_help", { count: detectionConsensusMin })
+                          : t("camera.detection.merge_best_help")}
                     </p>
                   </FieldRow>
 
                   {detectionMerge === "consensus" && (
-                    <FieldRow label="Min Agreement" hint="Number of models that must detect the same object">
+                    <FieldRow label={t("camera.detection.min_agreement")} hint={t("camera.detection.min_agreement_hint")}>
                       <div className="flex items-center gap-3">
                         <input
                           type="range"
@@ -294,11 +296,11 @@ export function DetectionSection({
             </>
           )}
 
-          <FieldRow label="Face Detection" hint="Detect and match known people">
+          <FieldRow label={t("camera.detection.faces")} hint={t("camera.detection.faces_hint")}>
             <Toggle
               checked={detectFaces}
               onChange={setDetectFaces}
-              label={detectFaces ? "Enabled" : "Disabled"}
+              label={detectFaces ? t("common.enabled") : t("common.disabled")}
             />
           </FieldRow>
         </Section>
