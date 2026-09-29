@@ -42,12 +42,30 @@ from services.events.templates import (
 )
 from services.perception.usage import check_perception_budget, estimate_vlm_usage, record_vlm_usage
 from shared.database import async_session
-from shared.models import Event, Notification, Provider, TelegramChannel, WebhookSubscription
+from shared.models import Event, EventChannelDelivery, Notification, Provider, TelegramChannel, WebhookSubscription
 
 logger = logging.getLogger("nurby.events.actions")
 
 # Outbound delivery defaults. retries with exponential backoff.
 _RETRY_BACKOFF = (0.5, 1.5, 3.0)
+
+
+async def _record_event_channel_delivery(
+    *, event_id: uuid.UUID, rule_id: uuid.UUID | None, channel: str, destination: str | None,
+) -> None:
+    """Record a successful direct channel send without creating an inbox row."""
+    try:
+        async with async_session() as db:
+            db.add(EventChannelDelivery(
+                event_id=event_id,
+                rule_id=rule_id,
+                channel=channel,
+                destination=destination,
+                delivered_at=datetime.now(timezone.utc),
+            ))
+            await db.commit()
+    except Exception:
+        logger.exception("Failed to record %s delivery for event %s", channel, event_id)
 
 
 async def dispatch_subscriptions(observation_data: dict, rule, event_id) -> None:
@@ -823,6 +841,10 @@ async def _execute_email(action, observation_data, rule, event_id, ctx):
 
     try:
         await send_email(to=recipient, subject=subject, body=body)
+        if not observation_data.get("_test_alert"):
+            await _record_event_channel_delivery(
+                event_id=event_id, rule_id=rule.id, channel="email", destination=recipient,
+            )
         await _update_event_status(event_id, "email", "success")
         _set_test_result(observation_data, "success")
     except Exception as exc:
@@ -2175,6 +2197,9 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
             # reply resolves back to this Event for note-taking.
             sent_msg_id = photo_result.get("message_id")
             if sent_msg_id and not observation_data.get("_test_alert"):
+                await _record_event_channel_delivery(
+                    event_id=event_id, rule_id=rule.id, channel="telegram", destination=str(channel_uuid),
+                )
                 await _record_telegram_delivery(event_id, channel_uuid, int(sent_msg_id), "photo")
                 await store_message_index(
                     channel_uuid, int(sent_msg_id),
@@ -2205,6 +2230,9 @@ async def _execute_telegram(action, observation_data, rule, event_id, ctx):
             )
             sent_msg_id = result.get("message_id")
             if sent_msg_id and not observation_data.get("_test_alert"):
+                await _record_event_channel_delivery(
+                    event_id=event_id, rule_id=rule.id, channel="telegram", destination=str(channel_uuid),
+                )
                 await _record_telegram_delivery(event_id, channel_uuid, int(sent_msg_id), "text")
                 await store_message_index(
                     channel_uuid, int(sent_msg_id),

@@ -57,6 +57,7 @@ from shared.models.digests import (  # noqa: F401
     HouseholdFact,
     Notification,
     NotificationDelivery,
+    EventChannelDelivery,
     ScheduledReport,
 )
 from shared.models.guardian import (  # noqa: F401
@@ -157,6 +158,7 @@ __all__ = [
     "MotionSample",
     "Notification",
     "NotificationDelivery",
+    "EventChannelDelivery",
     "Observation",
     "ObservationAction",
     "ObservationIncident",

@@ -3,14 +3,14 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import String, and_, case, cast, func, or_, select
+from sqlalchemy import String, and_, case, cast, func, or_, select, union_all
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user, require_admin
 from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
-from shared.models import Camera, Event, EventFeedback, EventNote, Notification, NotificationDelivery, Observation, Person, Rule, User
+from shared.models import Camera, Event, EventChannelDelivery, EventFeedback, EventNote, Notification, NotificationDelivery, Observation, Person, Rule, User
 from shared.paths import escape_like
 from shared.schemas import (
     BulkDeleteResponse,
@@ -557,20 +557,25 @@ async def feedback_summary(
             .group_by(Event.camera_id, func.date(Event.fired_at), EventFeedback.rating)
         )
     ).all()
+    delivery_ledger = union_all(
+        select(NotificationDelivery.channel, NotificationDelivery.event_id)
+        .where(NotificationDelivery.event_id.is_not(None)),
+        select(EventChannelDelivery.channel, EventChannelDelivery.event_id),
+    ).subquery()
     delivery_rows = (
         await db.execute(
             select(
-                NotificationDelivery.channel,
-                func.count(func.distinct(NotificationDelivery.event_id)),
+                delivery_ledger.c.channel,
+                func.count(func.distinct(delivery_ledger.c.event_id)),
                 func.count(
                     func.distinct(
                         case(
                             (
                                 and_(
-                                    NotificationDelivery.channel == "in_app",
+                                    delivery_ledger.c.channel == "in_app",
                                     Event.opened_at.is_not(None),
                                 ),
-                                NotificationDelivery.event_id,
+                                delivery_ledger.c.event_id,
                             )
                         )
                     )
@@ -580,18 +585,18 @@ async def feedback_summary(
                         case(
                             (
                                 and_(
-                                    NotificationDelivery.channel == "in_app",
+                                    delivery_ledger.c.channel == "in_app",
                                     Event.clip_opened_at.is_not(None),
                                 ),
-                                NotificationDelivery.event_id,
+                                delivery_ledger.c.event_id,
                             )
                         )
                     )
                 ),
             )
-            .join(Event, Event.id == NotificationDelivery.event_id)
+            .join(Event, Event.id == delivery_ledger.c.event_id)
             .where(Event.fired_at >= cutoff)
-            .group_by(NotificationDelivery.channel)
+            .group_by(delivery_ledger.c.channel)
         )
     ).all()
     camera_days: dict[tuple[str, str], dict[str, int]] = {}

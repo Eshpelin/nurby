@@ -118,6 +118,33 @@ class NotificationDelivery(Base):
     )
 
 
+class EventChannelDelivery(Base):
+    """Direct rule-action delivery for channels without an inbox row (#199).
+
+    Email and Telegram actions are intentionally not copied into the in-app
+    notification table. This small event-linked ledger lets retained-monitoring
+    metrics count those concrete sends without creating phantom inbox alerts.
+    """
+
+    __tablename__ = "event_channel_deliveries"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    rule_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    channel: Mapped[str] = mapped_column(String(24), nullable=False)
+    destination: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    delivered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "event_id", "rule_id", "channel", "destination",
+            name="uq_event_channel_delivery_destination",
+        ),
+    )
+
+
 class ScheduledReport(Base):
     """A saved, recurring agent question with a delivery schedule.
 
