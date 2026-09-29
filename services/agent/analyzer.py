@@ -70,6 +70,26 @@ from shared.paths import resolve_inside
 logger = logging.getLogger("nurby.agent.analyzer")
 
 
+def _cost_only_budget_fallback_allowed(provider, budget) -> bool:
+    """Permit local fallback only when a hosted cost cap caused the block."""
+    reason = getattr(budget, "reason", "") or ""
+    return (
+        getattr(provider, "kind", None) != "ollama"
+        and not getattr(budget, "allowed", True)
+        and "cost budget" in reason
+        and "token budget" not in reason
+    )
+
+
+async def _active_local_provider() -> Provider | None:
+    async with async_session() as db:
+        return await db.scalar(
+            select(Provider)
+            .where(Provider.kind == "ollama", Provider.active.is_(True))
+            .limit(1)
+        )
+
+
 # ────────────────────────────────────────────────────────────────────
 # Public dataclass
 # ────────────────────────────────────────────────────────────────────
@@ -1361,7 +1381,15 @@ async def analyze_frame_target(
             estimated_tokens=estimated_in + estimated_out,
         )
         if not budget.allowed:
-            return _error_result("perception_budget_exceeded")
+            if _cost_only_budget_fallback_allowed(provider, budget):
+                local_provider = await _active_local_provider()
+                if local_provider is not None:
+                    logger.info("using local Ollama fallback for budgeted frame analysis")
+                    provider = local_provider
+                else:
+                    return _error_result("perception_budget_exceeded")
+            else:
+                return _error_result("perception_budget_exceeded")
         # VLM call.
         try:
             raw = await call_vlm_structured(provider, redacted, question, system_prompt=prompt.text)

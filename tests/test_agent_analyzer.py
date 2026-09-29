@@ -370,3 +370,15 @@ async def test_missing_recording_returns_media_evicted(monkeypatch):
     res = await A.analyze_frame_target(ctx, obs_id, "anything")
     assert res.error == "media_evicted"
     assert stub.call_count == 0
+
+
+def test_analyzer_local_fallback_requires_cost_only_budget_block():
+    cost_block = SimpleNamespace(allowed=False, reason="Next VLM call would exceed cost budget 10c")
+    token_block = SimpleNamespace(allowed=False, reason="Next VLM call would exceed token budget 10")
+    combined_block = SimpleNamespace(allowed=False, reason="Next VLM call would exceed cost budget 10c and token budget 10")
+    hosted = SimpleNamespace(kind="openai")
+
+    assert A._cost_only_budget_fallback_allowed(hosted, cost_block)
+    assert not A._cost_only_budget_fallback_allowed(hosted, token_block)
+    assert not A._cost_only_budget_fallback_allowed(hosted, combined_block)
+    assert not A._cost_only_budget_fallback_allowed(SimpleNamespace(kind="ollama"), cost_block)
