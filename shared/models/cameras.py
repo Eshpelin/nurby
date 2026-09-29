@@ -156,6 +156,9 @@ class Camera(Base):
     # detectors remain independently controlled by their own settings.
     relationship_inference_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     relationship_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    vehicle_relationship_inference_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    cooccurrence_inference_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    name_mention_inference_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Package lifecycle is an explicit per-camera subscription. Existing
     # cameras stay enabled by default; turning it off stops new lifecycle
     # records without deleting prior delivery history.

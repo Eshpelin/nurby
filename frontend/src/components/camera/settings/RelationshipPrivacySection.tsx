@@ -5,6 +5,12 @@ interface RelationshipPrivacySectionProps {
   notificationsEnabled: boolean;
   setInferenceEnabled: (value: boolean) => void;
   setNotificationsEnabled: (value: boolean) => void;
+  vehicleInferenceEnabled: boolean;
+  cooccurrenceInferenceEnabled: boolean;
+  nameMentionInferenceEnabled: boolean;
+  setVehicleInferenceEnabled: (value: boolean) => void;
+  setCooccurrenceInferenceEnabled: (value: boolean) => void;
+  setNameMentionInferenceEnabled: (value: boolean) => void;
 }
 
 export function RelationshipPrivacySection({
@@ -12,6 +18,12 @@ export function RelationshipPrivacySection({
   notificationsEnabled,
   setInferenceEnabled,
   setNotificationsEnabled,
+  vehicleInferenceEnabled,
+  cooccurrenceInferenceEnabled,
+  nameMentionInferenceEnabled,
+  setVehicleInferenceEnabled,
+  setCooccurrenceInferenceEnabled,
+  setNameMentionInferenceEnabled,
 }: RelationshipPrivacySectionProps) {
   return (
     <Section
@@ -29,6 +41,24 @@ export function RelationshipPrivacySection({
         hint="When disabled, recurring unknown-subject notifications from this camera are suppressed. Existing review history is preserved."
       >
         <Toggle checked={notificationsEnabled} onChange={setNotificationsEnabled} label={notificationsEnabled ? "Enabled" : "Disabled"} />
+      </FieldRow>
+      <FieldRow
+        label="Vehicle evidence"
+        hint="Allow person-to-vehicle patterns from this camera. Disable this to keep vehicle sightings while preventing relationship hypotheses."
+      >
+        <Toggle checked={vehicleInferenceEnabled} onChange={setVehicleInferenceEnabled} label={vehicleInferenceEnabled ? "Enabled" : "Disabled"} />
+      </FieldRow>
+      <FieldRow
+        label="Co-occurrence evidence"
+        hint="Allow recurring person/appearance co-occurrence hypotheses from this camera."
+      >
+        <Toggle checked={cooccurrenceInferenceEnabled} onChange={setCooccurrenceInferenceEnabled} label={cooccurrenceInferenceEnabled ? "Enabled" : "Disabled"} />
+      </FieldRow>
+      <FieldRow
+        label="Spoken-name evidence"
+        hint="Allow transcript name mentions to create reviewable identity hypotheses from this camera."
+      >
+        <Toggle checked={nameMentionInferenceEnabled} onChange={setNameMentionInferenceEnabled} label={nameMentionInferenceEnabled ? "Enabled" : "Disabled"} />
       </FieldRow>
     </Section>
   );

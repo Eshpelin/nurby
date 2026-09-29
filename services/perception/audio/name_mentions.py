@@ -175,7 +175,10 @@ async def process_transcript_name_mentions(db: AsyncSession, transcript: Transcr
     if transcript.filtered:
         return 0
     camera = await db.get(Camera, transcript.camera_id)
-    if camera is not None and not camera.relationship_inference_enabled:
+    if camera is not None and (
+        not camera.relationship_inference_enabled
+        or not camera.name_mention_inference_enabled
+    ):
         return 0
     mentions = extract_name_mentions(transcript.text)
     if not mentions:

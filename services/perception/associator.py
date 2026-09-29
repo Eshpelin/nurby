@@ -781,6 +781,7 @@ async def process_journey(
             select(Camera.id)
             .where(Camera.id.in_(cameras))
             .where(Camera.relationship_inference_enabled.is_(True))
+            .where(Camera.vehicle_relationship_inference_enabled.is_(True))
         )
     ).scalars().all()
     if not inference_cameras:
@@ -976,6 +977,7 @@ async def process_cooccurrences(
                 select(Camera.id)
                 .where(Camera.id.in_(shared_cameras))
                 .where(Camera.relationship_inference_enabled.is_(True))
+                .where(Camera.cooccurrence_inference_enabled.is_(True))
             )
         ).scalars().all() if shared_cameras else []
         shared_cameras = shared_cameras.intersection(set(enabled_rows))

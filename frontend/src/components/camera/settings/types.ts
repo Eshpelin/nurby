@@ -20,6 +20,9 @@ interface Camera {
   audio_transcribe_enabled?: boolean;
   relationship_inference_enabled?: boolean;
   relationship_notifications_enabled?: boolean;
+  vehicle_relationship_inference_enabled?: boolean;
+  cooccurrence_inference_enabled?: boolean;
+  name_mention_inference_enabled?: boolean;
   package_tracking_enabled?: boolean;
   package_pickup_policy?: "recognized_person" | "resident_only";
   vlm_provider_id: string | null;

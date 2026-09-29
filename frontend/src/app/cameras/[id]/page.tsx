@@ -130,6 +130,9 @@ export default function CameraConfigPage() {
   const [incidentIdleSeconds, setIncidentIdleSeconds] = useState(600);
   const [relationshipInferenceEnabled, setRelationshipInferenceEnabled] = useState(true);
   const [relationshipNotificationsEnabled, setRelationshipNotificationsEnabled] = useState(true);
+  const [vehicleRelationshipInferenceEnabled, setVehicleRelationshipInferenceEnabled] = useState(true);
+  const [cooccurrenceInferenceEnabled, setCooccurrenceInferenceEnabled] = useState(true);
+  const [nameMentionInferenceEnabled, setNameMentionInferenceEnabled] = useState(true);
   const [packageTrackingEnabled, setPackageTrackingEnabled] = useState(true);
   const [packagePickupPolicy, setPackagePickupPolicy] = useState<"recognized_person" | "resident_only">("recognized_person");
   const [privacyZoneTargets, setPrivacyZoneTargets] = useState<string[]>([]);
@@ -245,6 +248,9 @@ export default function CameraConfigPage() {
       setIncidentIdleSeconds(cam.incident_idle_seconds ?? 600);
       setRelationshipInferenceEnabled(cam.relationship_inference_enabled ?? true);
       setRelationshipNotificationsEnabled(cam.relationship_notifications_enabled ?? true);
+      setVehicleRelationshipInferenceEnabled(cam.vehicle_relationship_inference_enabled ?? true);
+      setCooccurrenceInferenceEnabled(cam.cooccurrence_inference_enabled ?? true);
+      setNameMentionInferenceEnabled(cam.name_mention_inference_enabled ?? true);
       setPackageTrackingEnabled(cam.package_tracking_enabled ?? true);
       setPackagePickupPolicy(cam.package_pickup_policy ?? "recognized_person");
       setPrivacyZoneTargets(cam.privacy_zone_targets ?? []);
@@ -428,6 +434,9 @@ export default function CameraConfigPage() {
         incident_idle_seconds: incidentIdleSeconds,
         relationship_inference_enabled: relationshipInferenceEnabled,
         relationship_notifications_enabled: relationshipNotificationsEnabled,
+        vehicle_relationship_inference_enabled: vehicleRelationshipInferenceEnabled,
+        cooccurrence_inference_enabled: cooccurrenceInferenceEnabled,
+        name_mention_inference_enabled: nameMentionInferenceEnabled,
         package_tracking_enabled: packageTrackingEnabled,
         package_pickup_policy: packagePickupPolicy,
         privacy_zone_targets: privacyZoneTargets.length > 0 ? privacyZoneTargets : null,
@@ -932,6 +941,12 @@ export default function CameraConfigPage() {
           notificationsEnabled={relationshipNotificationsEnabled}
           setInferenceEnabled={setRelationshipInferenceEnabled}
           setNotificationsEnabled={setRelationshipNotificationsEnabled}
+          vehicleInferenceEnabled={vehicleRelationshipInferenceEnabled}
+          cooccurrenceInferenceEnabled={cooccurrenceInferenceEnabled}
+          nameMentionInferenceEnabled={nameMentionInferenceEnabled}
+          setVehicleInferenceEnabled={setVehicleRelationshipInferenceEnabled}
+          setCooccurrenceInferenceEnabled={setCooccurrenceInferenceEnabled}
+          setNameMentionInferenceEnabled={setNameMentionInferenceEnabled}
         />
 
         {/* ── Smart Track (PTZ auto-follow) ── */}

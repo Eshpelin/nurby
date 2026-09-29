@@ -112,6 +112,9 @@ class CameraCreate(BaseModel):
     exclude_from_review: bool = False
     relationship_inference_enabled: bool = True
     relationship_notifications_enabled: bool = True
+    vehicle_relationship_inference_enabled: bool = True
+    cooccurrence_inference_enabled: bool = True
+    name_mention_inference_enabled: bool = True
     package_tracking_enabled: bool = True
     package_pickup_policy: str = Field(default="recognized_person", pattern=r"^(recognized_person|resident_only)$")
     enabled: bool = True
@@ -196,6 +199,9 @@ class CameraUpdate(BaseModel):
     exclude_from_review: bool | None = None
     relationship_inference_enabled: bool | None = None
     relationship_notifications_enabled: bool | None = None
+    vehicle_relationship_inference_enabled: bool | None = None
+    cooccurrence_inference_enabled: bool | None = None
+    name_mention_inference_enabled: bool | None = None
     package_tracking_enabled: bool | None = None
     package_pickup_policy: str | None = Field(default=None, pattern=r"^(recognized_person|resident_only)$")
     scene_baseline_detection_enabled: bool | None = None
@@ -304,6 +310,9 @@ class CameraResponse(BaseModel):
     exclude_from_review: bool = False
     relationship_inference_enabled: bool = True
     relationship_notifications_enabled: bool = True
+    vehicle_relationship_inference_enabled: bool = True
+    cooccurrence_inference_enabled: bool = True
+    name_mention_inference_enabled: bool = True
     enabled: bool = True
     privacy_zone_targets: list[str] | None = None
     privacy_zone_blur_strength: int = 55
