@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 interface OnboardingMetrics {
   users_with_preferences: number;
@@ -33,7 +34,9 @@ function minutes(seconds: number | null): string {
 // Admin-only, aggregate onboarding outcomes. Read-only. Its endpoint is
 // admin-gated, so a non-admin never sees numbers here.
 export function OnboardingMetricsCard() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const locale = user?.locale;
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const [data, setData] = useState<OnboardingMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,22 +49,22 @@ export function OnboardingMetricsCard() {
       if (!res.ok) throw new Error("load");
       setData(await res.json());
     } catch {
-      setError("Could not load onboarding metrics.");
+      setError(translate(locale, "onboarding_metrics.error"));
     } finally {
       setLoading(false);
     }
-  }, [authFetch]);
+  }, [authFetch, locale]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (loading) return <p role="status" className="text-sm text-muted-foreground">Loading onboarding metrics…</p>;
+  if (loading) return <p role="status" className="text-sm text-muted-foreground">{t("onboarding_metrics.loading")}</p>;
   if (error) return <p role="alert" className="text-sm text-red-500">{error}</p>;
   if (!data) return null;
 
-  const stat = (label: string, value: string) => (
-    <div className="rounded-lg border border-border p-2">
+  const stat = (label: string, value: string, key?: string) => (
+    <div key={key} className="rounded-lg border border-border p-2">
       <div className="text-lg font-semibold">{value}</div>
       <div className="text-xs text-muted-foreground">{label}</div>
     </div>
@@ -69,31 +72,31 @@ export function OnboardingMetricsCard() {
 
   const funnel = data.funnel ?? {};
   const funnelRow: Array<[string, number]> = [
-    ["Wizard shown", funnel.wizard_shown ?? 0],
-    ["Chose magic", funnel.magic_clicked ?? 0],
-    ["Chose manual", funnel.manual_clicked ?? 0],
-    ["Completed", funnel.wizard_completed ?? 0],
+    [t("onboarding_metrics.wizard_shown"), funnel.wizard_shown ?? 0],
+    [t("onboarding_metrics.magic_clicked"), funnel.magic_clicked ?? 0],
+    [t("onboarding_metrics.manual_clicked"), funnel.manual_clicked ?? 0],
+    [t("onboarding_metrics.completed"), funnel.wizard_completed ?? 0],
   ];
 
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {stat("With a goal", String(data.users_with_preferences))}
-        {stat("Configured", String(data.configured_count))}
-        {stat("Verified", String(data.verified_count))}
-        {stat("Verified rate", pct(data.verified_rate))}
-        {stat("Median to first useful", minutes(data.median_seconds_to_first_useful))}
-        {stat("Abandoned (7d+)", String(data.abandoned_count))}
-        {stat("Synthetic-only", String(data.synthetic_only_count))}
-        {stat("Paused", String(data.paused_count))}
+        {stat(t("onboarding_metrics.with_goal"), String(data.users_with_preferences))}
+        {stat(t("onboarding_metrics.configured"), String(data.configured_count))}
+        {stat(t("onboarding_metrics.verified"), String(data.verified_count))}
+        {stat(t("onboarding_metrics.verified_rate"), pct(data.verified_rate))}
+        {stat(t("onboarding_metrics.median_useful"), minutes(data.median_seconds_to_first_useful))}
+        {stat(t("onboarding_metrics.abandoned"), String(data.abandoned_count))}
+        {stat(t("onboarding_metrics.synthetic_only"), String(data.synthetic_only_count))}
+        {stat(t("onboarding_metrics.paused"), String(data.paused_count))}
       </div>
       {data.funnel !== undefined && (
         <div>
           <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
-            First-run wizard funnel
+            {t("onboarding_metrics.funnel_title")}
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {funnelRow.map(([label, value]) => stat(label, String(value)))}
+            {funnelRow.map(([label, value]) => stat(label, String(value), label))}
           </div>
         </div>
       )}
