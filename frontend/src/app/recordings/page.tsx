@@ -116,7 +116,7 @@ function formatClock(seconds: number): string {
 // Small activity chips on a recording card: what was seen during the clip.
 // A recording links to detections only by time overlap, so these come from the
 // /facets endpoint rather than the recording row itself.
-function FacetChips({ facet }: { facet: Facet | undefined }) {
+function FacetChips({ facet, t }: { facet: Facet | undefined; t: (key: string, values?: Record<string, string | number>) => string }) {
   if (!facet) return null;
   const { objects, persons, vehicles, has_audio } = facet;
   if (
@@ -129,24 +129,24 @@ function FacetChips({ facet }: { facet: Facet | undefined }) {
   return (
     <div className="flex flex-wrap gap-1 pt-1">
       {persons.map((p) => (
-        <span key={`p-${p}`} className={`${chip} border-accent/40 bg-accent/10 text-accent`} title={`Person: ${p}`}>
+        <span key={`p-${p}`} className={`${chip} border-accent/40 bg-accent/10 text-accent`} title={t("recordings.person_chip", { name: p })}>
           🧑 {p}
         </span>
       ))}
       {vehicles.map((v) => (
-        <span key={`v-${v}`} className={`${chip} border-amber-500/40 bg-amber-500/10 text-amber-300`} title={`Vehicle: ${v}`}>
+        <span key={`v-${v}`} className={`${chip} border-amber-500/40 bg-amber-500/10 text-amber-300`} title={t("recordings.vehicle_chip", { name: v })}>
           🚗 {v}
         </span>
       ))}
       {objects
         .filter((o) => o !== "person")
         .map((o) => (
-          <span key={`o-${o}`} className={`${chip} border-border bg-muted text-muted-foreground`} title={`Object: ${o}`}>
+          <span key={`o-${o}`} className={`${chip} border-border bg-muted text-muted-foreground`} title={t("recordings.object_chip", { name: o })}>
             {OBJECT_GLYPH[o] || "•"} {o}
           </span>
         ))}
       {has_audio && (
-        <span className={`${chip} border-border bg-muted text-muted-foreground`} title="Has audio transcript">
+        <span className={`${chip} border-border bg-muted text-muted-foreground`} title={t("recordings.audio_chip")}>
           🔊 audio
         </span>
       )}
@@ -976,14 +976,14 @@ export default function RecordingsPage() {
                         return next;
                       });
                     }}
-                    aria-label={`Select recording from ${formatDateTime(rec.started_at)}`}
+                    aria-label={t("recordings.select_recording", { time: formatDateTime(rec.started_at) })}
                     className="accent-[var(--accent)]"
                   />
                 </label>
                 {rec.thumbnail_path ? (
                   <img
                     src={`/api/recordings/${rec.id}/thumbnail${token ? `?token=${token}` : ""}`}
-                    alt="Recording thumbnail"
+                    alt={t("recordings.thumbnail_alt")}
                     className="w-full h-36 object-cover bg-muted"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = "none";
@@ -1009,7 +1009,7 @@ export default function RecordingsPage() {
                     {rec.remote_state === "uploaded" && (
                       <span
                         className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
-                        title={rec.storage_profile_name ? `Stored on ${rec.storage_profile_name} (FTP)` : "Stored on FTP"}
+                        title={rec.storage_profile_name ? t("recordings.stored_on_ftp", { profile: rec.storage_profile_name }) : t("recordings.stored_on_ftp_generic")}
                       >
                         On FTP
                       </span>
@@ -1028,7 +1028,7 @@ export default function RecordingsPage() {
                       </span>
                     )}
                   </div>
-                  <FacetChips facet={facets[rec.id]} />
+                  <FacetChips facet={facets[rec.id]} t={t} />
                 </div>
               </div>
             ))}
@@ -1040,10 +1040,10 @@ export default function RecordingsPage() {
               disabled={!hasPrevPage}
               className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              Previous
+              {t("recordings.previous_short")}
             </button>
             <span className="text-xs text-muted-foreground">
-              Page {page + 1}
+              {t("recordings.page_label", { page: page + 1 })}
             </span>
             <button
               onClick={() => setPage((p) => p + 1)}
@@ -1169,9 +1169,9 @@ export default function RecordingsPage() {
                       ? "border-accent bg-accent/10 text-accent"
                       : "border-border text-muted-foreground hover:text-foreground"
                   }`}
-                  title="Overlay detection boxes on playback"
+                  title={t("recordings.overlay_title")}
                 >
-                  Detections {showBoxes ? "on" : "off"}
+                  {t("recordings.detections_toggle", { state: showBoxes ? t("recordings.detection_state_on") : t("recordings.detection_state_off") })}
                 </button>
               </div>
 
