@@ -45,6 +45,7 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
   const [trainingSampleCount, setTrainingSampleCount] = useState(0);
   const [trainingModel, setTrainingModel] = useState<string | null>(null);
   const [trainingQuality, setTrainingQuality] = useState<string>("unavailable");
+  const [matchingEnabled, setMatchingEnabled] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +61,7 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
         training_sample_count?: number;
         training_model_version?: string | null;
         training_quality?: { status?: string };
+        matching_enabled?: boolean;
       };
       setClips(body.candidates);
       setTrainingMessage(body.training_message ?? null);
@@ -67,6 +69,7 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
       setTrainingSampleCount(body.training_sample_count ?? 0);
       setTrainingModel(body.training_model_version ?? null);
       setTrainingQuality(body.training_quality?.status ?? "unavailable");
+      setMatchingEnabled(body.matching_enabled ?? false);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Voice clips unavailable");
@@ -129,6 +132,9 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
         <button type="button" onClick={() => void load()} className="text-[10px] text-muted-foreground hover:text-foreground">{t("voiceprint.refresh")}</button>
       </div>
       {trainingMessage && <p className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 p-2 text-[10px] text-amber-200">{trainingMessage}</p>}
+      <p className={`mt-2 rounded border p-2 text-[10px] ${matchingEnabled ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-200" : "border-amber-500/30 bg-amber-500/5 text-amber-200"}`}>
+        {matchingEnabled ? t("voiceprint.matching_enabled") : t("voiceprint.matching_disabled")}
+      </p>
       <div className="mt-2 text-[10px] text-muted-foreground">
         <span className={trainingStatus === "ready" ? "text-emerald-400" : "text-amber-300"}>
           {trainingStatus === "ready" ? t("voiceprint.training_ready") : t("voiceprint.training_not_ready")}

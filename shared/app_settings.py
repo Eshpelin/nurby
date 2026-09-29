@@ -103,6 +103,10 @@ DEFAULTS: dict[str, Any] = {
     # notifications and Telegram webhook registration). Sourced from
     # env config by default; an explicit override stored here wins.
     "public_base_url": None,
+    # Biometric speaker matching is an explicit deployment-level opt-in in
+    # addition to each person's consented enrollment. Keep inference off until
+    # an administrator enables the reviewed local model path.
+    "voiceprint_matching_enabled": False,
     # Outbound webhook hardening. Off by default: LAN webhooks (ESP32
     # sirens, relays, n8n on the same host) are a first-class feature.
     # Cloud metadata endpoints are always refused regardless of this flag.

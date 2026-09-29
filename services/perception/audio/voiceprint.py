@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.config import settings
+from shared.app_settings import get_setting
 from shared.models import AudioCapture, Person, Transcript, VoiceprintProfile, VoiceprintSampleReview
 from shared.paths import resolve_inside
 
@@ -87,6 +88,11 @@ def select_voiceprint_match(
 
 async def match_voiceprint(db: AsyncSession, capture: AudioCapture) -> tuple[UUID, float] | None:
     """Return a conservative hypothesis for one retained capture."""
+    # Enrollment consent is person-specific; inference also requires the
+    # administrator's explicit deployment-level opt-in. This keeps a newly
+    # migrated or restored profile from silently activating matching.
+    if not bool(await get_setting("voiceprint_matching_enabled", False)):
+        return None
     path = resolve_inside(capture.file_path, settings.audio_storage_path)
     if not path or not os.path.exists(path):
         return None

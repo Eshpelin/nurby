@@ -678,6 +678,7 @@ SETTINGS_WHITELIST: tuple[str, ...] = (
     "body_reid_tentative_decay_days",
     "cluster_naming_min_sightings",
     "public_base_url",
+    "voiceprint_matching_enabled",
     "rules_cooldown_backend",
     "onboarding_dismissed",
     "setup_checklist_dismissed",

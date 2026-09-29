@@ -18,6 +18,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.audio.voiceprint import train_voiceprint
+from shared.app_settings import get_setting
 from shared.auth import require_admin
 from shared.camera_access import ALL, allowed_camera_ids
 from shared.config import settings
@@ -135,6 +136,7 @@ async def list_voiceprint_candidates(
             continue
         candidates.append(_clip_response(transcript, capture, camera, review))
     profile = await db.scalar(select(VoiceprintProfile).where(VoiceprintProfile.person_id == person_id))
+    matching_enabled = bool(await get_setting("voiceprint_matching_enabled", False))
     confirmed_count = sum(1 for _, _, _, review in rows if review and review.decision == "confirmed")
     retained_count = profile.sample_count if profile else 0
     quality_status = (
@@ -147,6 +149,7 @@ async def list_voiceprint_candidates(
         "requires_manual_sample": False,
         "consent_required_before_training": True,
         "training_available": True,
+        "matching_enabled": matching_enabled,
         "training_ready": bool(profile and profile.status == "ready"),
         "training_status": profile.status if profile else "not_ready",
         "training_sample_count": profile.sample_count if profile else 0,
