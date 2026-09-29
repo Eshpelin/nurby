@@ -383,7 +383,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                   if (!recurrence?.samples?.length || !recurrence.cluster_id || !recurrence.cluster_kind) return null;
                   const prefix = recurrence.cluster_kind === "face" ? "/api/persons" : "/api/body-clusters";
                   return (
-                    <div className="mt-2 flex items-center gap-1.5" aria-label="Recurring sample evidence">
+                    <div className="mt-2 flex items-center gap-1.5" aria-label={t("review.recurring_sample_evidence")}>
                       <span className="mr-1 text-[10px] text-muted-foreground">{t("review.linked_appearances")}</span>
                       {recurrence.samples.map((sample) => (
                         <a
@@ -394,7 +394,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                           title={new Date(sample.captured_at).toLocaleString()}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={`${prefix}/suggestions/${recurrence.cluster_id}/samples/${sample.id}/thumbnail?token=${encodeURIComponent(token || "")}`} alt="Recurring sample" className="h-10 w-10 rounded border border-border object-cover" />
+                          <img src={`${prefix}/suggestions/${recurrence.cluster_id}/samples/${sample.id}/thumbnail?token=${encodeURIComponent(token || "")}`} alt={t("review.recurring_sample")} className="h-10 w-10 rounded border border-border object-cover" />
                         </a>
                       ))}
                     </div>
@@ -584,7 +584,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                     {item.kind === "relationship_suggestion" && ["co_present_with", "arrives_with", "accompanies"].includes(String(item.provenance.relation)) && (
                       <>
                         <select
-                          aria-label={`Link subject of ${item.title} to a person`}
+                          aria-label={t("review.link_subject_person", { title: item.title })}
                           value={linkedSubject[item.id] || ""}
                           onChange={(event) => {
                             setLinkedSubject((current) => ({ ...current, [item.id]: event.target.value }));
@@ -600,7 +600,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                           ))}
                         </select>
                         <select
-                          aria-label={`Link subject of ${item.title} to an unknown visual cluster`}
+                          aria-label={t("review.link_subject_cluster_aria", { title: item.title })}
                           value={linkedSubjectCluster[item.id] || ""}
                           onChange={(event) => {
                             setLinkedSubjectCluster((current) => ({ ...current, [item.id]: event.target.value }));
@@ -612,7 +612,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                           {clusters.map((cluster) => <option key={`subject-${cluster.kind}:${cluster.id}`} value={`${cluster.kind}:${cluster.id}`}>{t("review.link_subject_cluster", { label: cluster.label, kind: cluster.kind })}</option>)}
                         </select>
                         <select
-                          aria-label={`Link companion of ${item.title} to a person`}
+                          aria-label={t("review.link_companion_person", { title: item.title })}
                           value={linkedObject[item.id] || ""}
                           onChange={(event) => {
                             setLinkedObject((current) => ({ ...current, [item.id]: event.target.value }));
@@ -628,7 +628,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                           ))}
                         </select>
                         <select
-                          aria-label={`Link companion of ${item.title} to an unknown visual cluster`}
+                          aria-label={t("review.link_companion_cluster_aria", { title: item.title })}
                           value={linkedObjectCluster[item.id] || ""}
                           onChange={(event) => {
                             setLinkedObjectCluster((current) => ({ ...current, [item.id]: event.target.value }));
