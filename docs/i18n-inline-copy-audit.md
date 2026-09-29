@@ -17,7 +17,7 @@ UI copy.
   Incident Tracking, Relationship Privacy, Timezone, Retention, Storage,
   Authentication, AI Analysis, Detection, Activity Digest/recaps, Danger Zone,
   VLM Refiner, Summarization, package tracking, ONVIF/PTZ detection, PTZ
-  controls, and privacy zones.
+  controls, privacy zones, and the ZoneEditorCanvas controls.
 
 ## Remaining user-facing surfaces
 
@@ -28,9 +28,9 @@ should move to the shared English/Spanish catalog in follow-up slices:
   and first-camera/no-results guidance.
 - `frontend/src/app/people/page.tsx`: people, unknown-cluster, merge, and
   deletion dialogs.
-- `frontend/src/app/cameras/[id]/page.tsx` and its remaining camera settings
-  panels: `ZoneEditorCanvas` controls and any page-level status or save
-  feedback still containing product copy.
+- `frontend/src/app/cameras/[id]/page.tsx` and its camera settings panels are
+  catalog-driven for the audited product copy. Re-open this entry only when a
+  new camera-facing surface is added.
 - `frontend/src/components/rules/TriggerSection.tsx` and related editors:
   rule labels, hints, option labels, and zone instructions.
 - `frontend/src/app/recordings/page.tsx` and `frontend/src/app/events/page.tsx`:
