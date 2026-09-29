@@ -331,7 +331,7 @@ export function AddOrPairModal({
             {pairTab === "dm" && pair && (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Tap the link below or scan the QR. Telegram opens, hit Start.
+                  {t("telegram.open_or_scan")}
                 </p>
                 <a
                   href={pair.deep_link}
@@ -339,14 +339,14 @@ export function AddOrPairModal({
                   rel="noreferrer"
                   className="block text-center px-4 py-3 rounded-md border border-accent/40 bg-accent/10 text-accent text-sm font-medium hover:bg-accent/20"
                 >
-                  Open in Telegram
+                  {t("telegram.open_telegram")}
                 </a>
                 {qrSrc && (
                   <div className="flex justify-center">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={qrSrc}
-                      alt="Telegram pairing QR"
+                    alt={t("telegram.pairing_qr_alt")}
                       width={240}
                       height={240}
                       className="rounded border border-border bg-white p-1"
@@ -360,7 +360,7 @@ export function AddOrPairModal({
               <div className="text-xs text-muted-foreground space-y-2.5">
                 <ol className="list-decimal pl-4 space-y-1.5">
                   <li>
-                    Open the group or channel where you want alerts (or create a new one).
+                    {t("telegram.open_group")}
                   </li>
                   <li>
                     Add{" "}
@@ -371,7 +371,7 @@ export function AddOrPairModal({
                     &ldquo;Post messages&rdquo; permission (channels only accept posts from admins).
                   </li>
                   <li>
-                    Send this exact message in that group or channel so Nurby learns which chat it is.
+                    {t("telegram.send_pair_command")}
                   </li>
                 </ol>
                 <div className="rounded-md bg-background border border-border px-3 py-2 font-mono text-xs select-all flex items-center justify-between gap-2">
@@ -381,26 +381,26 @@ export function AddOrPairModal({
                     onClick={() => navigator.clipboard?.writeText(`/pair ${pair.nonce}`)}
                     className="text-[10px] px-1.5 py-0.5 rounded border border-border hover:bg-muted text-muted-foreground"
                   >
-                    Copy
+                    {t("telegram.copy")}
                   </button>
                 </div>
                 <p className="text-[11px] text-muted-foreground/80">
-                  As soon as the bot sees that message, this dialog flips to Paired. no need to refresh.
+                  {t("telegram.pair_auto_complete")}
                 </p>
               </div>
             )}
 
             {pairTab === "group" && pair && !pairChannel && (
               <div className="text-xs text-muted-foreground">
-                Loading bot details.
+                {t("telegram.loading_bot")}
               </div>
             )}
 
             <div className="mt-4 text-[11px] text-muted-foreground flex items-center justify-between">
               <span>
                 {pairExpired
-                  ? "Pairing link expired."
-                  : `Waiting for Telegram. Expires in ${Math.max(0, secondsLeft)}s.`}
+                  ? t("telegram.pair_expired")
+                  : t("telegram.waiting_expires", { seconds: Math.max(0, secondsLeft) })}
               </span>
               {pairExpired && (
                 <button
@@ -408,7 +408,7 @@ export function AddOrPairModal({
                   onClick={restartPair}
                   className="px-2 py-1 text-[11px] rounded border border-border hover:bg-muted"
                 >
-                  Try again
+                  {t("telegram.try_again")}
                 </button>
               )}
             </div>
@@ -423,10 +423,10 @@ export function AddOrPairModal({
         {step === 3 && (
           <div className="space-y-3">
             <div className="rounded-md border border-green-500/30 bg-green-500/10 text-green-400 text-sm px-3 py-2">
-              Paired ✓
+              {t("telegram.paired_check")}
               {pairChannel?.chat_title ? (
                 <span className="ml-1 text-foreground/90">
-                  with{" "}
+                  {t("telegram.with")} {" "}
                   <span className="font-medium">{pairChannel.chat_title}</span>
                 </span>
               ) : null}
@@ -437,14 +437,14 @@ export function AddOrPairModal({
                 onClick={sendTest}
                 className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted"
               >
-                Send test
+                {t("telegram.send_test")}
               </button>
               <button
                 type="button"
                 onClick={onClose}
                 className="px-3 py-1.5 text-xs rounded-md border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20"
               >
-                Close
+                {t("telegram.close")}
               </button>
             </div>
           </div>
