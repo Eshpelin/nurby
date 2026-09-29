@@ -5,6 +5,8 @@ from services.api.routes.review import _scoped_evidence
 from services.api.routes.review import _association_visible
 from services.api.routes.review import _scoped_camera_histogram
 from services.api.routes.review import _evidence_availability, _supporting_evidence_count
+from services.api.routes.review import _scoped_observation_source_query
+from sqlalchemy.dialects import postgresql
 
 
 def test_evidence_availability_distinguishes_expired_and_partial_sources():
@@ -137,3 +139,20 @@ def test_review_evidence_marks_all_deleted_observation_sources_unavailable():
 
     assert result["observation_ids"] == []
     assert result["observation_sources_available"] is False
+
+
+def test_observation_source_lookup_rechecks_camera_scope_before_returning_ids():
+    camera_id = str(uuid4())
+    query = _scoped_observation_source_query({uuid4()}, {camera_id})
+    sql = str(query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})).lower()
+
+    assert "observations.camera_id in" in sql
+    assert "observations.id in" in sql
+
+
+def test_unrestricted_observation_source_lookup_keeps_existing_behavior():
+    query = _scoped_observation_source_query({uuid4()}, None)
+    sql = str(query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})).lower()
+
+    assert "observations.id in" in sql
+    assert "observations.camera_id in" not in sql

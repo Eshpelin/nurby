@@ -193,6 +193,22 @@ def _reconcile_observation_sources(scoped: dict, existing_ids: set[str]) -> dict
     return scoped
 
 
+def _scoped_observation_source_query(observation_ids: set[uuid.UUID], allowed_ids: set[str] | None):
+    """Resolve evidence frames with an independent observation-camera ACL.
+
+    AssociationEvidence stores copied camera ids for fast review, but that
+    metadata can be stale after an observation is moved, redacted, or created
+    by an older producer. The source table is the final authority before an
+    observation id is returned to a restricted reviewer.
+    """
+    query = select(Observation.id).where(Observation.id.in_(observation_ids))
+    if allowed_ids is not None:
+        query = query.where(
+            Observation.camera_id.in_([uuid.UUID(camera_id) for camera_id in allowed_ids])
+        )
+    return query
+
+
 def _evidence_availability(evidence: list[dict]) -> str:
     """Summarize whether a reviewer can still inspect source episodes."""
     statuses = [str(item.get("source_status")) for item in evidence]
@@ -1131,9 +1147,7 @@ async def get_relationship_suggestion(
         existing_observation_ids = {
             str(value)
             for value in (
-                await db.execute(
-                    select(Observation.id).where(Observation.id.in_(observation_ids))
-                )
+                await db.execute(_scoped_observation_source_query(observation_ids, allowed_ids))
             ).scalars().all()
         }
     evidence = []
