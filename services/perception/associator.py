@@ -246,6 +246,29 @@ def contradiction_provenance(
     }
 
 
+def cooccurrence_contradiction_provenance(
+    edge: EntityAssociation,
+    journey: Journey,
+    camera_ids: list[str],
+    observation_ids: list[str],
+) -> dict:
+    """Explain a later solo visit against a learned co-occurrence pair."""
+    endpoints = [
+        {"kind": edge.subject_kind, "key": edge.subject_key},
+        {"kind": edge.object_kind, "key": edge.object_key},
+    ]
+    return {
+        "policy": "solo_finalized_visit_on_pair_camera",
+        "subject_kind": journey.subject_kind,
+        "subject_key": journey.subject_key,
+        "pair": endpoints,
+        "observation_count": len(observation_ids),
+        "camera_ids": sorted(str(value) for value in camera_ids),
+        "journey_started_at": journey.started_at.isoformat() if journey.started_at else None,
+        "journey_last_seen_at": journey.last_seen_at.isoformat() if journey.last_seen_at else None,
+    }
+
+
 def should_archive_association(
     association: EntityAssociation,
     now: datetime,
@@ -933,6 +956,7 @@ async def process_cooccurrences(
             .where(Journey.last_seen_at >= start - gap)
         )
     ).scalars().all()
+    cooccurred_pairs: set[tuple[tuple[str, str], tuple[str, str]]] = set()
     touched = 0
     for other in others:
         other_start, other_end = journey_window(other)
@@ -975,6 +999,7 @@ async def process_cooccurrences(
             [(journey.subject_kind, journey.subject_key, journey),
              (other.subject_kind, other.subject_key, other)]
         )
+        cooccurred_pairs.add(((left[0], left[1]), (right[0], right[1])))
         episode_key = "cooccurrence:" + ":".join(sorted((str(journey.id), str(other.id))))
         edge = await record_pairing(
             db,
@@ -1003,6 +1028,89 @@ async def process_cooccurrences(
             evidence_explanation="Both subjects were observed in overlapping finalized visit episodes on a shared camera.",
         )
         if edge is not None:
+            touched += 1
+
+    # A pair's absence is useful only when it is observable: the current
+    # journey must use a camera previously used by the pair. This avoids
+    # treating a camera not being present, or a retained-media gap, as
+    # contradictory evidence. The ledger remains append-only and replay-safe.
+    current_camera_ids = {str(camera_id) for camera_id in cameras}
+    pair_edges = (
+        await db.execute(
+            select(EntityAssociation)
+            .where(EntityAssociation.relation == "accompanies")
+            .where(EntityAssociation.source == "learned")
+            .where(EntityAssociation.status != "rejected")
+        )
+    ).scalars().all()
+    if pair_edges and current_camera_ids:
+        evidence_rows = (
+            await db.execute(
+                select(Observation.id)
+                .where(Observation.camera_id.in_(cameras))
+                .where(Observation.started_at >= start)
+                .where(Observation.started_at <= end)
+                .order_by(Observation.started_at.asc())
+                .limit(12)
+            )
+        ).scalars().all()
+        observation_ids = [str(observation_id) for observation_id in evidence_rows]
+        current_endpoint = (journey.subject_kind, journey.subject_key)
+        for edge in pair_edges:
+            endpoints = {
+                (edge.subject_kind, edge.subject_key),
+                (edge.object_kind, edge.object_key),
+            }
+            if current_endpoint not in endpoints or len(endpoints) != 2:
+                continue
+            partner = next(endpoint for endpoint in endpoints if endpoint != current_endpoint)
+            pair_key = tuple(sorted((current_endpoint, partner)))
+            if pair_key in cooccurred_pairs:
+                continue
+            pair_cameras = {str(value) for value in (edge.camera_histogram or {})}
+            shared_cameras = current_camera_ids.intersection(pair_cameras)
+            if not shared_cameras:
+                continue
+            episode_key = f"cooccurrence_contradiction:{journey.id}:{edge.id}"
+            exists = (
+                await db.execute(
+                    select(AssociationEvidence.id)
+                    .where(AssociationEvidence.association_id == edge.id)
+                    .where(AssociationEvidence.episode_key == episode_key)
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if exists:
+                continue
+            db.add(AssociationEvidence(
+                association_id=edge.id,
+                episode_key=episode_key,
+                evidence_kind="cooccurrence_absence",
+                role="contradictory",
+                journey_id=journey.id,
+                observation_ids=observation_ids,
+                camera_ids=sorted(shared_cameras),
+                observed_at=start,
+                explanation=(
+                    "The subject was observed in a finalized visit on a camera "
+                    "used by this pair, but no overlapping partner journey was found."
+                ),
+                evidence_metadata=cooccurrence_contradiction_provenance(
+                    edge, journey, sorted(shared_cameras), observation_ids
+                ),
+            ))
+            edge.contradictory_evidence_count = int(
+                getattr(edge, "contradictory_evidence_count", 0) or 0
+            ) + 1
+            supporting = int(
+                getattr(edge, "supporting_evidence_count", edge.evidence_count) or 0
+            )
+            edge.confidence_score, edge.decision_explanation = evidence_balance(
+                supporting, edge.contradictory_evidence_count
+            )
+            if not edge.user_confirmed and edge.status == "established":
+                if edge.contradictory_evidence_count >= supporting:
+                    edge.status = "ambiguous"
             touched += 1
     return touched
 

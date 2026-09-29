@@ -377,6 +377,28 @@ def test_contradiction_provenance_explains_expected_edge_and_visit_window():
     assert result["journey_last_seen_at"].endswith("+00:00")
 
 
+def test_cooccurrence_contradiction_provenance_is_explicit_and_bounded():
+    from services.perception.associator import cooccurrence_contradiction_provenance
+
+    when = _at(1, 8)
+    edge = SimpleNamespace(
+        subject_kind="cluster", subject_key="face-1",
+        object_kind="body", object_key="body-2",
+    )
+    journey = SimpleNamespace(
+        subject_kind="cluster", subject_key="face-1",
+        started_at=when, last_seen_at=_at(1, 8, 30),
+    )
+    result = cooccurrence_contradiction_provenance(
+        edge, journey, ["camera-a"], ["obs-1", "obs-2"]
+    )
+
+    assert result["policy"] == "solo_finalized_visit_on_pair_camera"
+    assert result["pair"][0]["key"] == "face-1"
+    assert result["camera_ids"] == ["camera-a"]
+    assert result["observation_count"] == 2
+
+
 def test_vehicle_visit_timing_is_a_conservative_reviewer_hint():
     start = _at(1, 8)
     end = _at(1, 8, 10)
