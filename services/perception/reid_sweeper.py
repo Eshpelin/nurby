@@ -25,12 +25,20 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
+import numpy as np
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.perception.recurrence_notifications import reconcile_recurrence_notifications
 from shared.app_settings import get_setting
 from shared.database import async_session
-from shared.models import BodyCluster, FaceCluster, Observation
+from shared.models import (
+    BodyCluster,
+    BodyClusterSample,
+    FaceCluster,
+    Notification,
+    Observation,
+)
 
 logger = logging.getLogger("nurby.perception.reid_sweeper")
 
@@ -70,6 +78,7 @@ class BodyReIDSweeper:
         async with async_session() as db:
             await self._decay_tentative(db)
             await self._fuse_face_overlaps(db)
+            await self._merge_tentative(db)
             await db.commit()
         # Phase 4. Prompt the household to name new clusters that
         # crossed the sightings threshold. Wrapped in a try so a
@@ -239,6 +248,114 @@ class BodyReIDSweeper:
                 "body re-id fusion. promoted %d body cluster(s) via face overlap",
                 promoted,
             )
+
+    async def _merge_tentative(self, db: AsyncSession) -> int:
+        """Merge conservatively duplicate anonymous body clusters.
+
+        Body re-identification is intentionally approximate, so this only
+        considers pending/tentative clusters and requires both representative
+        and nearest-sample distances to clear a tight threshold.  Confirmed or
+        person-linked clusters are never merged by this housekeeping pass.
+        """
+        threshold = float(await get_setting("body_reid_merge_threshold", 0.85))
+        rows = (await db.execute(
+            select(
+                BodyCluster.id,
+                BodyCluster.representative_embedding,
+            )
+            .where(BodyCluster.status == "pending")
+            .where(BodyCluster.confidence == "tentative")
+            .where(BodyCluster.person_id.is_(None))
+        )).all()
+        if len(rows) < 2 or len(rows) > 600:
+            return 0
+
+        ids = [row[0] for row in rows]
+        reps = {row[0]: np.array(row[1]) for row in rows}
+        samples = (await db.execute(
+            select(BodyClusterSample.cluster_id, BodyClusterSample.embedding)
+            .where(BodyClusterSample.cluster_id.in_(ids))
+            .order_by(BodyClusterSample.captured_at.desc())
+        )).all()
+        embeddings: dict = {cluster_id: [reps[cluster_id]] for cluster_id in ids}
+        counts: dict = {}
+        for cluster_id, embedding in samples:
+            if counts.get(cluster_id, 0) >= 24:
+                continue
+            embeddings.setdefault(cluster_id, []).append(np.array(embedding))
+            counts[cluster_id] = counts.get(cluster_id, 0) + 1
+
+        groups = []
+        for index, left_id in enumerate(ids):
+            for right_id in ids[index + 1:]:
+                if float(np.linalg.norm(reps[left_id] - reps[right_id])) > threshold + 0.5:
+                    continue
+                nearest = min(
+                    float(np.linalg.norm(left - right))
+                    for left in embeddings[left_id]
+                    for right in embeddings[right_id]
+                )
+                if nearest < threshold:
+                    groups.append((left_id, right_id))
+
+        merged = 0
+        for left_id, right_id in groups:
+            left = await db.get(BodyCluster, left_id)
+            right = await db.get(BodyCluster, right_id)
+            if not left or not right:
+                continue
+            if not all((cluster.status == "pending", cluster.confidence == "tentative", cluster.person_id is None)
+                       for cluster in (left, right)):
+                continue
+            survivor, absorbed = (
+                (left, right)
+                if (left.sighting_count or 0, -(left.first_seen_at.timestamp() if left.first_seen_at else 0))
+                >= (right.sighting_count or 0, -(right.first_seen_at.timestamp() if right.first_seen_at else 0))
+                else (right, left)
+            )
+            absorbed_marker = f"recurring_unknown:body:{absorbed.id}"
+            survivor_marker = f"recurring_unknown:body:{survivor.id}"
+            notifications = (await db.execute(
+                select(Notification).where(Notification.dedupe_key == absorbed_marker)
+            )).scalars().all()
+            reconcile_recurrence_notifications(notifications, survivor_marker)
+            await db.execute(
+                update(BodyClusterSample)
+                .where(BodyClusterSample.cluster_id == absorbed.id)
+                .values(cluster_id=survivor.id)
+            )
+            await db.flush()
+            moved_embeddings = (await db.execute(
+                select(BodyClusterSample.embedding)
+                .where(BodyClusterSample.cluster_id == survivor.id)
+            )).scalars().all()
+            if moved_embeddings:
+                representative = np.mean(
+                    [np.array(embedding) for embedding in moved_embeddings], axis=0
+                )
+                norm = np.linalg.norm(representative)
+                if norm:
+                    representative = representative / norm
+                survivor.representative_embedding = representative.tolist()
+            survivor.sighting_count = (survivor.sighting_count or 0) + (absorbed.sighting_count or 0)
+            if absorbed.first_seen_at and (
+                not survivor.first_seen_at
+                or absorbed.first_seen_at < survivor.first_seen_at
+            ):
+                survivor.first_seen_at = absorbed.first_seen_at
+            if absorbed.last_seen_at and (
+                not survivor.last_seen_at
+                or absorbed.last_seen_at > survivor.last_seen_at
+            ):
+                survivor.last_seen_at = absorbed.last_seen_at
+            if not survivor.sample_thumbnail_path and absorbed.sample_thumbnail_path:
+                survivor.sample_thumbnail_path = absorbed.sample_thumbnail_path
+            absorbed.status = "merged"
+            absorbed.sighting_count = 0
+            merged += 1
+        if merged:
+            logger.info("body re-id merge. merged %d tentative cluster(s)", merged)
+        return merged
 
 
 def uuid_from(value):
