@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { timeAgo } from "@/lib/time";
+import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 
 export interface NotificationItem {
   id: string;
@@ -42,6 +44,9 @@ export function NotificationsDropdown({
   onMarkAllRead,
   token,
 }: NotificationsDropdownProps) {
+  const { user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string) => translate(locale, key);
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,18 +69,18 @@ export function NotificationsDropdown({
       className="absolute right-0 top-full mt-2 w-96 max-h-[28rem] overflow-y-auto rounded-lg border border-border bg-background shadow-lg z-50"
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <span className="text-sm font-medium">Notifications</span>
+        <span className="text-sm font-medium">{t("notifications.title")}</span>
         <button
           onClick={onMarkAllRead}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
-          Mark all read
+          {t("notifications.mark_all_read")}
         </button>
       </div>
 
       {notifications.length === 0 ? (
         <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-          No notifications yet.
+          {t("notifications.empty")}
         </div>
       ) : (
         <ul className="divide-y divide-border">
@@ -98,21 +103,21 @@ export function NotificationsDropdown({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={`/api/observations/${n.observation_id}/thumbnail?token=${encodeURIComponent(token)}`}
-                    alt="Alert snapshot"
+                    alt={t("notifications.snapshot_alt")}
                     className="mt-2 h-12 w-20 rounded border border-border object-cover"
                   />
                 )}
                 <span className="text-xs text-muted-foreground">
-                  {n.updated_at ? `Updated ${timeAgo(n.updated_at)}` : timeAgo(n.created_at)}
+                  {n.updated_at ? `${t("notifications.updated")} ${timeAgo(n.updated_at)}` : timeAgo(n.created_at)}
                 </span>
                 {n.event_id && (
                   <a href={`/events?alert=${encodeURIComponent(n.event_id)}`} onClick={onClose} className="block mt-1 text-xs text-accent hover:underline">
-                    Open alert
+                    {t("notifications.open_alert")}
                   </a>
                 )}
                 {!n.event_id && (
                   <a href={`/events?review=${encodeURIComponent(n.id)}`} onClick={onClose} className="block mt-1 text-xs text-accent hover:underline">
-                    Open in Review Center
+                    {t("notifications.open_review")}
                   </a>
                 )}
               </div>
@@ -120,7 +125,7 @@ export function NotificationsDropdown({
                 <button
                   onClick={() => onMarkRead(n.id)}
                   className="shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors mt-0.5"
-                  title="Mark as read"
+                  title={t("notifications.mark_read")}
                 >
                   <svg
                     width="14"
