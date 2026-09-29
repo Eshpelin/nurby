@@ -5,6 +5,7 @@ import { ActivityFilterBar } from "@/components/activity/ActivityFilterBar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { RecordingDetectionOverlay } from "@/components/RecordingDetectionOverlay";
 import { MotionHeatstrip } from "@/components/MotionHeatstrip";
@@ -156,7 +157,9 @@ function FacetChips({ facet }: { facet: Facet | undefined }) {
 const PAGE_SIZE = 24;
 
 export default function RecordingsPage() {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = useCallback((key: string, values?: Record<string, string | number>) => translate(locale, key, values), [locale]);
   const searchParams = useSearchParams();
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
@@ -631,10 +634,9 @@ export default function RecordingsPage() {
     <div className="px-6 py-6 max-w-6xl mx-auto">
       <div className="flex items-baseline justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Recordings</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("recordings.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {recordings.length} recording{recordings.length !== 1 ? "s" : ""}{" "}
-            on this page
+            {t("recordings.page_count", { count: recordings.length, plural: recordings.length !== 1 ? "s" : "" })}
           </p>
         </div>
         <div className="mb-4"><ActivityFilterBar /></div>
@@ -651,7 +653,7 @@ export default function RecordingsPage() {
             }}
             className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
           >
-            <option value="">All cameras</option>
+            <option value="">{t("recordings.all_cameras")}</option>
             {cameras.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -666,7 +668,7 @@ export default function RecordingsPage() {
             disabled={persons.length === 0}
             title="Only show clips where this person was seen"
           >
-            <option value="">Anyone</option>
+            <option value="">{t("recordings.anyone")}</option>
             {persons.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nickname || p.display_name}
@@ -681,7 +683,7 @@ export default function RecordingsPage() {
             disabled={vehicles.length === 0}
             title="Only show clips where this vehicle was seen"
           >
-            <option value="">Any vehicle</option>
+            <option value="">{t("recordings.any_vehicle")}</option>
             {vehicles.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.license_plate || v.display_name}
@@ -695,15 +697,15 @@ export default function RecordingsPage() {
             className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
             title="Where the recordings are stored"
           >
-            <option value="">All locations</option>
-            <option value="local">Local only</option>
-            <option value="pending">Uploading</option>
-            <option value="uploaded">On FTP</option>
-            <option value="failed">Upload failed</option>
+            <option value="">{t("recordings.all_locations")}</option>
+            <option value="local">{t("recordings.local_only")}</option>
+            <option value="pending">{t("recordings.uploading")}</option>
+            <option value="uploaded">{t("recordings.on_ftp")}</option>
+            <option value="failed">{t("recordings.upload_failed")}</option>
           </select>
 
           <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">From</label>
+            <label className="text-xs text-muted-foreground">{t("recordings.from")}</label>
             <input
               type="datetime-local"
               value={dateFrom}
@@ -712,7 +714,7 @@ export default function RecordingsPage() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">To</label>
+            <label className="text-xs text-muted-foreground">{t("recordings.to")}</label>
             <input
               type="datetime-local"
               value={dateTo}
@@ -738,7 +740,7 @@ export default function RecordingsPage() {
 
         {/* Row 2: object-class multi-select chips + actions */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground mr-1">Contains</span>
+          <span className="text-xs text-muted-foreground mr-1">{t("recordings.contains")}</span>
           {COMMON_OBJECTS.map((o) => {
             const on = objectFilters.includes(o);
             return (
@@ -766,7 +768,7 @@ export default function RecordingsPage() {
             title="Download every clip matching these filters as a single zip"
             className="px-3 py-2 text-xs rounded-md border border-accent bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40"
           >
-            Download range
+            {t("recordings.download_range")}
           </button>
 
           <button
@@ -778,7 +780,7 @@ export default function RecordingsPage() {
             disabled={recordings.length === 0}
             className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
           >
-            Select page
+            {t("recordings.select_page")}
           </button>
           {(selectedIds.size > 0 || selectAllMatching) && (
             <>
@@ -787,24 +789,24 @@ export default function RecordingsPage() {
                 onClick={() => downloadSelected(false)}
                 disabled={bulkBusy}
                 className="px-3 py-2 text-xs rounded-md border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
-              >Download selected</button>
+              >{t("recordings.download_selected")}</button>
               <button
                 type="button"
                 onClick={() => downloadSelected(true)}
                 disabled={bulkBusy}
                 className="px-3 py-2 text-xs rounded-md border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
-              >Evidence bundle</button>
+              >{t("recordings.evidence_bundle")}</button>
               <button
                 type="button"
                 onClick={bulkDelete}
                 disabled={bulkBusy}
                 className="px-3 py-2 text-xs rounded-md border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-              >{bulkBusy ? "Deleting…" : `Delete ${selectedCount}`}</button>
+              >{bulkBusy ? t("recordings.deleting") : t("recordings.delete_selected", { count: selectedCount })}</button>
               <button
                 type="button"
                 onClick={() => { setSelectedIds(new Set()); setSelectAllMatching(false); }}
                 className="px-2 py-2 text-xs text-muted-foreground hover:text-foreground"
-              >Clear selection</button>
+              >{t("recordings.clear_selection")}</button>
             </>
           )}
 
@@ -813,15 +815,15 @@ export default function RecordingsPage() {
               onClick={resetFiltersAndPage}
               className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
-              Clear filters
+              {t("recordings.clear_filters")}
             </button>
           )}
         </div>
 
         {recordings.length > 0 && selectedIds.size === recordings.length && !selectAllMatching && hasNextPage && (
           <div className="rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-accent flex items-center justify-between">
-            <span>All {recordings.length} recordings on this page are selected.</span>
-            <button type="button" onClick={() => setSelectAllMatching(true)} className="underline">Select all matching filters</button>
+            <span>{t("recordings.page_selected", { count: recordings.length })}</span>
+            <button type="button" onClick={() => setSelectAllMatching(true)} className="underline">{t("recordings.select_all_matching")}</button>
           </div>
         )}
         {bulkMessage && (
@@ -854,7 +856,7 @@ export default function RecordingsPage() {
             disabled={!speechQuery.trim() || speechLoading}
             className="px-3 py-2 text-xs rounded-md border border-accent bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40"
           >
-            {speechLoading ? "Searching…" : "Search speech"}
+            {speechLoading ? t("recordings.searching") : t("recordings.search_speech")}
           </button>
           {speechResults !== null && (
             <button
@@ -913,12 +915,12 @@ export default function RecordingsPage() {
 
       {loading ? (
         <div className="text-sm text-muted-foreground py-20 text-center">
-          Loading recordings.
+          {t("recordings.loading")}
         </div>
       ) : recordings.length === 0 ? (
         hasActiveFilters ? (
           <EmptyState
-            title="No recordings match these filters"
+            title={t("recordings.no_match_title")}
             body="Try a different camera, person, or object, or widen the date range."
             actionLabel="Clear filters"
             onAction={resetFiltersAndPage}
@@ -926,8 +928,8 @@ export default function RecordingsPage() {
         ) : (
           <EmptyState
             icon={<CameraGlyph />}
-            title="No recordings yet"
-            body="Recordings appear here as your cameras capture clips. Make sure a camera is connected and its recording mode is set to continuous, motion, or clip in its settings."
+            title={t("recordings.empty_title")}
+            body={t("recordings.empty_body")}
             actionLabel="Go to cameras"
             actionHref="/"
           />
