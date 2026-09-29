@@ -179,7 +179,7 @@ export default function CameraConfigPage() {
         authFetch(`/api/providers`),
       ]);
       if (!camRes.ok) {
-        setError("Camera not found");
+        setError(t("camera_detail.not_found"));
         setLoading(false);
         return;
       }
@@ -272,7 +272,7 @@ export default function CameraConfigPage() {
       setSmartTrackMoveBudget(cam.ptz_smart_track_move_budget_per_minute ?? 30);
       setPtzProfileToken(cam.ptz_profile_token ?? "Profile_1");
     } catch {
-      setError("Failed to load camera");
+      setError(t("camera_detail.load_failed"));
     } finally {
       setLoading(false);
       // Mark autosave as armed only after the hydrate burst settles.
@@ -282,7 +282,7 @@ export default function CameraConfigPage() {
         firstLoadDone.current = true;
       }, 0);
     }
-  }, [cameraId]);
+  }, [authFetch, cameraId, t]);
 
   useEffect(() => {
     // Wait for auth to hydrate the token from localStorage before fetching.
@@ -639,9 +639,9 @@ export default function CameraConfigPage() {
         <Link
           href={`/memory?entity_kind=camera&entity_key=${cameraId}&label=${encodeURIComponent(camera.name)}`}
           className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground hover:border-foreground/30"
-          title="Household notes about this camera"
+          title={t("camera_detail.notes_title")}
         >
-          Notes
+          {t("camera_detail.notes")}
         </Link>
       </div>
 
@@ -661,7 +661,7 @@ export default function CameraConfigPage() {
           className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-2"
         >
           <span className={`inline-block transition-transform ${liveViewOpen ? "rotate-90" : ""}`}>▸</span>
-          Live view
+          {t("camera_detail.live_view")}
         </button>
         {liveViewOpen && (
           <div className="relative w-full aspect-video bg-black rounded-lg border border-border overflow-hidden">
@@ -695,8 +695,8 @@ export default function CameraConfigPage() {
       {/* Tabs */}
       <div className="flex items-center gap-1 mb-5 border-b border-border">
         {([
-          { v: "settings", l: "Settings" },
-          { v: "activity", l: "Activity" },
+          { v: "settings", l: t("camera_detail.settings") },
+          { v: "activity", l: t("camera_detail.activity") },
         ] as const).map((t) => (
           <button
             key={t.v}
@@ -721,8 +721,8 @@ export default function CameraConfigPage() {
       <div className="space-y-5">
         {/* ── Quick personas ── */}
         <Section
-          title="Quick setup"
-          description="Apply a preset bundle to fill detection, recording, and summary settings in one click. Override anything afterward."
+          title={t("camera_detail.quick_setup")}
+          description={t("camera_detail.quick_setup_description")}
         >
           <PersonaPicker variant="compact" cameraName={name} onApply={(patch) => applyPersona(patch)} />
         </Section>
@@ -1009,8 +1009,8 @@ export default function CameraConfigPage() {
 
         {/* ── Privacy zones ── */}
         <Section
-          title="Blur areas"
-          description="AI detects beds, bathrooms, monitors, windows on every keyframe and blurs them before the frame is stored, sent to the VLM, or used for thumbnails."
+          title={t("camera_detail.blur_areas")}
+          description={t("camera_detail.blur_areas_description")}
         >
           <PrivacyZonesSection
             cameraId={cameraId as string}
@@ -1056,8 +1056,8 @@ export default function CameraConfigPage() {
 
         {/* ── Motion Zones ── */}
         <Section
-          title="Zones and Tripwires"
-          description="Draw areas on the live frame and give them jobs. Named areas let rules target places (person in Driveway) without hiding anything; loiter areas and tripwires power their matching rule types; masks hide pixels from the AI entirely; a veto area pauses all alerts while something is inside it."
+          title={t("camera_detail.zones")}
+          description={t("camera_detail.zones_description")}
         >
           <ZoneEditorCanvas
             zones={motionZones}
