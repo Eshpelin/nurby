@@ -389,6 +389,10 @@ async def archive_stale_associations(
             .where(EntityAssociation.source == "learned")
             .where(EntityAssociation.user_confirmed.is_(False))
             .where(EntityAssociation.last_seen_at.is_not(None))
+            # Multiple associator workers may sweep at the same time. Claim
+            # rows while reading them so only one worker can archive and emit
+            # the lifecycle event for a stale claim.
+            .with_for_update(skip_locked=True)
         )
     ).scalars().all()
     archived = 0
