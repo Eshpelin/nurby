@@ -325,6 +325,20 @@ async def test_enrichment_yields_before_provider_when_camera_budget_blocks(monke
     assert manager._vlm is None
 
 
+def test_enrichment_local_fallback_requires_cost_only_block():
+    import services.perception.vlm_enrichment_worker as worker_mod
+
+    assert worker_mod._cost_only_budget_fallback_allowed(
+        SimpleNamespace(allowed=False, reason="Next VLM call would exceed cost budget 10c")
+    )
+    assert not worker_mod._cost_only_budget_fallback_allowed(
+        SimpleNamespace(allowed=False, reason="Next VLM call would exceed token budget 10")
+    )
+    assert not worker_mod._cost_only_budget_fallback_allowed(
+        SimpleNamespace(allowed=False, reason="Next VLM call would exceed cost budget 10c and token budget 10")
+    )
+
+
 async def _async_false():
     return False
     assert appends[0]["description"] is None

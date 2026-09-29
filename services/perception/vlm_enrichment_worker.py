@@ -48,7 +48,7 @@ from shared.ffmpeg_safe import (
     assert_allowed_args,
     contained_input,
 )
-from shared.models import Observation, ObservationVlmPass, Recording
+from shared.models import Observation, ObservationVlmPass, Provider, Recording
 
 logger = logging.getLogger("nurby.perception.vlm_enrichment")
 
@@ -122,6 +122,16 @@ REPAIR_PROMPT = (
 # `anomaly` is last because its common answer carries no scene detail.
 FALLBACK_LENS_ORDER = ("attributes", "temporal", "anomaly")
 _EMPTY_ANOMALY = "nothing unusual"
+
+
+def _cost_only_budget_fallback_allowed(budget) -> bool:
+    """Local fallback is allowed only when a hosted cost cap is the cause."""
+    reason = getattr(budget, "reason", "") or ""
+    return (
+        not getattr(budget, "allowed", True)
+        and "cost budget" in reason
+        and "token budget" not in reason
+    )
 
 _COLORS = {
     "red", "orange", "yellow", "green", "blue", "purple", "pink", "brown",
@@ -313,6 +323,15 @@ class EnrichmentManager:
             )).first()
             return r is not None
 
+    async def _local_fallback_provider(self):
+        """Return an active local provider for cost-only degradation."""
+        async with async_session() as db:
+            return await db.scalar(
+                select(Provider)
+                .where(Provider.kind == "ollama", Provider.active.is_(True))
+                .limit(1)
+            )
+
     # ---- one lens ---------------------------------------------------
 
     async def _enrich_one(self) -> bool:
@@ -363,9 +382,18 @@ class EnrichmentManager:
             estimated_tokens=estimated_in + estimated_out,
         )
         if not budget.allowed:
-            await self._touch(obs_id)
-            logger.info("skipping enrichment lens=%s for %s: %s", lens, obs_id, budget.reason)
-            return True
+            local_provider = None
+            if _cost_only_budget_fallback_allowed(budget):
+                local_provider = await self._local_fallback_provider()
+            if local_provider is None:
+                await self._touch(obs_id)
+                logger.info("skipping enrichment lens=%s for %s: %s", lens, obs_id, budget.reason)
+                return True
+            logger.info(
+                "perception budget reached for enrichment; using local Ollama fallback lens=%s",
+                lens,
+            )
+            provider = local_provider
 
         if self._vlm is None:
             from services.perception.vlm import VLMClient
