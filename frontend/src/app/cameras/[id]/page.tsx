@@ -1029,6 +1029,7 @@ export default function CameraConfigPage() {
 
         {/* ── Recordings location ── */}
         <StorageSection
+          locale={locale}
           storageProfileId={storageProfileId}
           setStorageProfileId={setStorageProfileId}
         />

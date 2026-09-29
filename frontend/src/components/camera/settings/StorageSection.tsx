@@ -13,6 +13,7 @@ import {
   type StorageProfile,
 } from "@/components/storage/AddLocationForm";
 import { FieldRow, Section } from "./primitives";
+import { translate, type Locale } from "@/lib/i18n";
 
 function ago(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -24,6 +25,7 @@ function ago(iso: string | null | undefined): string {
 }
 
 interface StorageSectionProps {
+  locale?: Locale;
   storageProfileId: string | null;
   setStorageProfileId: (id: string | null) => void;
 }
@@ -34,9 +36,11 @@ interface StorageLocationInfo {
 }
 
 export function StorageSection({
+  locale = "en",
   storageProfileId,
   setStorageProfileId,
 }: StorageSectionProps) {
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const { authFetch } = useAuth();
   const [profiles, setProfiles] = useState<StorageProfile[]>([]);
   const [globalRoot, setGlobalRoot] = useState<string | null>(null);
@@ -55,7 +59,7 @@ export function StorageSection({
   const load = useCallback(async () => {
     try {
       const res = await authFetch("/api/storage-profiles");
-      if (!res.ok) return; // non-admin: leave page state untouched
+    if (!res.ok) return; // non-admin: leave page state untouched
       const list: StorageProfile[] = await res.json();
       setProfiles(list);
       if (storageProfileId && !list.some((p) => p.id === storageProfileId)) {
@@ -96,7 +100,7 @@ export function StorageSection({
   };
 
   const remove = async (id: string) => {
-    if (!window.confirm("Delete this location? Cameras using it fall back to the default.")) return;
+    if (!window.confirm(t("camera.storage.delete_confirm"))) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/storage-profiles/${id}`, { method: "DELETE" });
@@ -105,7 +109,7 @@ export function StorageSection({
         if (storageProfileId === id) setStorageProfileId(null);
       } else {
         const d = await res.json().catch(() => null);
-        window.alert(d?.detail || "Could not delete this location.");
+        window.alert(d?.detail || t("camera.storage.delete_failed"));
       }
     } finally {
       setBusy(false);
@@ -117,10 +121,10 @@ export function StorageSection({
 
   return (
     <Section
-      title="Recordings location"
-      description="Where this camera's recordings are written. Default keeps them with everything else; FTP and S3 locations upload segments to your own server or bucket (buffered locally first, so an outage never loses footage). To move only older footage off this machine, use Archive in Settings, Storage."
+      title={t("camera.storage.title")}
+      description={t("camera.storage.description")}
     >
-      <FieldRow label="Record to">
+      <FieldRow label={t("camera.storage.record_to")}>
         <div className="min-w-0 flex-1">
           <select
             value={storageProfileId ?? ""}
@@ -128,7 +132,7 @@ export function StorageSection({
             className="w-full max-w-full text-xs bg-background border border-border rounded px-2 py-1.5"
           >
             <option value="">
-              {globalRoot ? `Default — ${globalRoot}` : "Default (global location)"}
+              {globalRoot ? t("camera.storage.default_path", { path: globalRoot }) : t("camera.storage.default_global")}
             </option>
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
@@ -141,22 +145,20 @@ export function StorageSection({
 
       {staleNotice && (
         <p className="text-[11px] text-amber-300" role="status">
-          The previously selected storage location was deleted. New recordings
-          will use the default location unless you choose another one.
+          {t("camera.storage.stale_notice")}
         </p>
       )}
 
       {locationChanged && (
         <p className="text-[11px] text-amber-300">
-          Switching affects new segments only — recordings already written
-          stay in the previous location and won&apos;t play until moved.{" "}
+          {t("camera.storage.switch_notice")} {" "}
           <a
             href="https://github.com/Eshpelin/nurby/blob/main/docs/operations/storage-location.md"
             target="_blank"
             rel="noreferrer"
             className="underline"
           >
-            Migration notes
+            {t("camera.storage.migration_notes")}
           </a>
         </p>
       )}
@@ -164,21 +166,21 @@ export function StorageSection({
       {selected && (
         <p className="text-[11px] text-muted-foreground">
           {selected.kind === "ftp" || selected.kind === "s3"
-            ? `New segments upload to ${remoteName} after they are written; until then they buffer in the default location. Recordings made before this change stay where they are.`
-            : `New segments land under ${selected.root}. Recordings made before this change stay in the previous location.`}
+            ? t("camera.storage.remote_notice", { remote: remoteName })
+            : t("camera.storage.local_notice", { root: selected.root })}
         </p>
       )}
 
       {(selected?.kind === "ftp" || selected?.kind === "s3") && selected.stats && (selected.stats.pending > 0 || selected.stats.failed > 0 || selected.stats.uploaded > 0) && (
         <div className="text-[11px] text-muted-foreground flex items-center gap-3">
-          <span>{selected.stats.uploaded} on {remoteName}</span>
+          <span>{t("camera.storage.uploaded", { count: selected.stats.uploaded, remote: remoteName })}</span>
           {selected.stats.pending > 0 && (
-            <span className="text-amber-300">{selected.stats.pending} waiting to upload</span>
+            <span className="text-amber-300">{t("camera.storage.waiting", { count: selected.stats.pending })}</span>
           )}
           {selected.stats.failed > 0 && (
-            <span className="text-red-400">{selected.stats.failed} failed — kept locally</span>
+            <span className="text-red-400">{t("camera.storage.failed", { count: selected.stats.failed })}</span>
           )}
-          {selected.stats.last_upload_at && <span>last upload {ago(selected.stats.last_upload_at)}</span>}
+          {selected.stats.last_upload_at && <span>{t("camera.storage.last_upload", { time: ago(selected.stats.last_upload_at) })}</span>}
         </div>
       )}
 
@@ -189,7 +191,7 @@ export function StorageSection({
             onClick={() => setAdding(true)}
             className="text-[11px] text-accent hover:underline"
           >
-            + New location
+            + {t("camera.storage.new_location")}
           </button>
         ) : (
           <AddLocationForm
@@ -213,9 +215,9 @@ export function StorageSection({
                 disabled={busy}
                 onClick={() => remove(p.id)}
                 className="text-muted-foreground hover:text-red-400 disabled:opacity-50"
-                aria-label={`Delete location ${p.name}`}
+                aria-label={`${t("camera.storage.delete")} ${p.name}`}
               >
-                Delete
+                {t("camera.storage.delete")}
               </button>
             </div>
           ))}
