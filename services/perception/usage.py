@@ -301,15 +301,14 @@ async def record_vlm_usage(
             model=model,
             image_tokens=image_tokens,
         )
-        native_usage = (
-            actual_tokens_in is not None
-            and actual_tokens_out is not None
-            and actual_cost_cents is not None
-        )
-        if native_usage:
+        native_tokens = actual_tokens_in is not None and actual_tokens_out is not None
+        native_cost = actual_cost_cents is not None
+        if native_tokens:
             tokens_in = max(0, int(actual_tokens_in))
             tokens_out = max(0, int(actual_tokens_out))
+        if native_cost:
             cost_cents = max(0, int(actual_cost_cents))
+        native_usage = native_tokens and native_cost
         def parse(value: str | None):
             try:
                 return uuid.UUID(str(value)) if value else None
@@ -328,6 +327,9 @@ async def record_vlm_usage(
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
                 cost_cents=cost_cents,
+                # Token counts may be provider-native even when cost still
+                # uses our pricing estimate because the provider does not
+                # return a billable amount in its response.
                 estimated=not native_usage,
                 succeeded=succeeded,
             ))

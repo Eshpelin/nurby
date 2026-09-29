@@ -89,3 +89,46 @@ async def test_record_vlm_usage_preserves_native_counters(monkeypatch):
         "estimated": False,
         "succeeded": True,
     }]
+
+
+@pytest.mark.asyncio
+async def test_record_vlm_usage_accepts_native_tokens_when_cost_is_estimated(monkeypatch):
+    rows = []
+
+    class FakeUsage:
+        def __init__(self, **kwargs):
+            rows.append(kwargs)
+
+    class FakeDb:
+        def add(self, row):
+            assert row is not None
+
+        async def commit(self):
+            return None
+
+    class FakeSession:
+        async def __aenter__(self):
+            return FakeDb()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    import shared.database
+    import shared.models
+
+    monkeypatch.setattr(shared.database, "async_session", lambda: FakeSession())
+    monkeypatch.setattr(shared.models, "PerceptionVlmUsage", FakeUsage)
+
+    await usage_module.record_vlm_usage(
+        SimpleNamespace(kind="google", default_model="gemini-2.0-flash"),
+        workload="daily_digest",
+        system_prompt="system",
+        user_prompt="prompt",
+        output_text="reply",
+        actual_tokens_in=44,
+        actual_tokens_out=8,
+    )
+
+    assert rows[0]["tokens_in"] == 44
+    assert rows[0]["tokens_out"] == 8
+    assert rows[0]["estimated"] is True

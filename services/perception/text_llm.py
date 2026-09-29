@@ -51,6 +51,25 @@ async def call_text(
     """
     http = await _client()
     kind = provider.kind
+    native_usage: dict[str, int] | None = None
+
+    def capture_usage(payload: dict) -> None:
+        nonlocal native_usage
+        usage = payload.get("usage") or payload.get("usageMetadata") or {}
+        if kind == "ollama":
+            tokens_in = usage.get("prompt_eval_count", payload.get("prompt_eval_count"))
+            tokens_out = usage.get("eval_count", payload.get("eval_count"))
+        elif kind == "google":
+            tokens_in = usage.get("promptTokenCount")
+            tokens_out = usage.get("candidatesTokenCount")
+        else:
+            tokens_in = usage.get("prompt_tokens", usage.get("input_tokens"))
+            tokens_out = usage.get("completion_tokens", usage.get("output_tokens"))
+        if tokens_in is not None and tokens_out is not None:
+            try:
+                native_usage = {"tokens_in": max(0, int(tokens_in)), "tokens_out": max(0, int(tokens_out))}
+            except (TypeError, ValueError):
+                native_usage = None
 
     async def _do() -> str | None:
         if kind == "openai":
@@ -70,7 +89,9 @@ async def call_text(
                 json=payload,
             )
             resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
+            payload = resp.json()
+            capture_usage(payload)
+            return payload["choices"][0]["message"]["content"]
         if kind == "anthropic":
             model = provider.default_model or "claude-sonnet-4-20250514"
             # Anthropic's API requires max_tokens. Use a generous
@@ -91,7 +112,9 @@ async def call_text(
                 },
             )
             resp.raise_for_status()
-            return resp.json()["content"][0]["text"]
+            payload = resp.json()
+            capture_usage(payload)
+            return payload["content"][0]["text"]
         if kind == "google":
             model = provider.default_model or "gemini-1.5-flash"
             gen_config: dict = {}
@@ -109,7 +132,9 @@ async def call_text(
                 json=payload,
             )
             resp.raise_for_status()
-            cands = resp.json().get("candidates") or []
+            payload = resp.json()
+            capture_usage(payload)
+            cands = payload.get("candidates") or []
             if cands and cands[0].get("content", {}).get("parts"):
                 return cands[0]["content"]["parts"][0].get("text")
             return None
@@ -127,7 +152,9 @@ async def call_text(
                 json=payload,
             )
             resp.raise_for_status()
-            return resp.json().get("response")
+            payload = resp.json()
+            capture_usage(payload)
+            return payload.get("response")
         logger.warning("unknown provider kind for text call: %s", kind)
         return None
 
@@ -155,6 +182,8 @@ async def call_text(
                 camera_id=camera_id,
                 model=getattr(provider, "default_model", None),
                 succeeded=result is not None,
+                actual_tokens_in=native_usage.get("tokens_in") if native_usage else None,
+                actual_tokens_out=native_usage.get("tokens_out") if native_usage else None,
             )
         except Exception:
             logger.debug("camera text usage recording failed", exc_info=True)
