@@ -738,6 +738,7 @@ export default function CameraConfigPage() {
 
         {/* ── Feed ── */}
         <FeedSection
+          locale={locale}
           detectionModels={detectionModels}
           modelClasses={modelClasses}
           modelClassesLoading={modelClassesLoading}

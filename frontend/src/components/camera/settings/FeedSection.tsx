@@ -7,8 +7,10 @@ import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, inputClass } from "./primitives";
 import { STREAM_TYPES } from "./constants";
 import { LabelPicker } from "../ModelPickers";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface FeedSectionProps {
+  locale: Locale;
   detectionModels: { model: string; confidence: number; enabled: boolean; label_filter: string[] }[];
   modelClasses: string[];
   modelClassesLoading: boolean;
@@ -33,6 +35,7 @@ interface FeedSectionProps {
 }
 
 export function FeedSection({
+  locale,
   detectionModels,
   modelClasses,
   modelClassesLoading,
@@ -55,10 +58,13 @@ export function FeedSection({
   streamType,
   streamUrl,
 }: FeedSectionProps) {
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
+  const streamTypeLabel = (value: string) => t(`camera.feed.stream_type.${value}`);
+  const recordingModeLabel = (value: string) => t(`camera.feed.recording_mode.${value}`);
   return (
-        <Section title="Feed"
-          advanced description="Stream source and connection settings">
-          <FieldRow label="Feed Type">
+        <Section title={t("camera.feed.title")}
+          advanced description={t("camera.feed.description")}>
+          <FieldRow label={t("camera.feed.type")}>
             <select
               value={streamType}
               onChange={(e) => setStreamType(e.target.value)}
@@ -66,15 +72,15 @@ export function FeedSection({
             >
               {Object.entries(STREAM_TYPES).map(([val, label]) => (
                 <option key={val} value={val}>
-                  {label}
+                  {streamTypeLabel(val) || label}
                 </option>
               ))}
             </select>
           </FieldRow>
 
           <FieldRow
-            label={streamType === "usb" ? "Device" : "Stream URL"}
-            hint={streamType === "usb" ? "Device index (0, 1) or path" : undefined}
+            label={streamType === "usb" ? t("camera.feed.device") : t("camera.feed.stream_url")}
+            hint={streamType === "usb" ? t("camera.feed.device_hint") : undefined}
           >
             <input
               type="text"
@@ -85,7 +91,7 @@ export function FeedSection({
           </FieldRow>
 
           {streamType === "http_snapshot" && (
-            <FieldRow label="Poll Interval" hint="Seconds between snapshot fetches">
+            <FieldRow label={t("camera.feed.poll_interval")} hint={t("camera.feed.poll_interval_hint")}>
               <div className="flex items-center gap-3">
                 <input
                   type="range"
@@ -97,20 +103,20 @@ export function FeedSection({
                   className="flex-1 accent-accent"
                 />
                 <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                  {snapshotInterval}s
+                  {t("camera.feed.seconds", { seconds: snapshotInterval })}
                 </span>
               </div>
             </FieldRow>
           )}
 
-          <FieldRow label="Recording Mode" hint="When to save video to disk">
+          <FieldRow label={t("camera.feed.recording_mode")} hint={t("camera.feed.recording_mode_hint")}>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {([
-                { value: "off", label: "Off" },
-                { value: "always", label: "Always" },
-                { value: "on_motion", label: "On Motion" },
-                { value: "on_object", label: "On Detection" },
-                { value: "clip", label: "Clips" },
+                { value: "off" },
+                { value: "always" },
+                { value: "on_motion" },
+                { value: "on_object" },
+                { value: "clip" },
               ] as const).map((opt) => (
                 <button
                   key={opt.value}
@@ -125,31 +131,23 @@ export function FeedSection({
                       : "border-border hover:border-muted-foreground text-muted-foreground"
                   }`}
                 >
-                  {opt.label}
+                  {recordingModeLabel(opt.value)}
                 </button>
               ))}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              {recordingMode === "off"
-                ? "No video saved to disk. Live view and AI analysis still work."
-                : recordingMode === "always"
-                  ? "Record continuously in 5-minute segments. Uses the most storage."
-                  : recordingMode === "on_motion"
-                    ? "Start recording when motion is detected. Stop after motion ends."
-                    : recordingMode === "on_object"
-                      ? "Record only when specific objects are detected by the AI pipeline."
-                      : "Save bounded clips around AI observations with pre and post buffers. Best for rare, labelled triggers. Use Continuous if triggers fire constantly."}
+              {t(`camera.feed.recording_help.${recordingMode}`)}
             </p>
           </FieldRow>
 
           {recordingMode === "on_object" && (
-            <FieldRow label="Record When Detected" hint="Which objects trigger recording. Labels come from the detection model.">
+            <FieldRow label={t("camera.feed.record_when_detected")} hint={t("camera.feed.record_when_detected_hint")}>
               <LabelPicker
                 selected={recordingTriggerObjects}
                 available={modelClasses}
                 loading={modelClassesLoading}
                 onChange={setRecordingTriggerObjects}
-                placeholder="Search labels or press Enter for custom"
+                placeholder={t("camera.feed.label_placeholder")}
                 activeModels={detectionModels.map((m) => m.model)}
                 onAddModel={(model) => {
                   if (detectionModels.some((m) => m.model === model)) return;
@@ -161,7 +159,7 @@ export function FeedSection({
               />
               {recordingTriggerObjects.length === 0 && (
                 <p className="text-[11px] text-muted-foreground mt-1.5">
-                  No objects selected. Recording triggers on any detection.
+                  {t("camera.feed.no_objects")}
                 </p>
               )}
             </FieldRow>
@@ -169,7 +167,7 @@ export function FeedSection({
 
           {["clip", "on_motion", "on_object"].includes(recordingMode) && (
             <>
-              <FieldRow label="Pre-buffer" hint="Seconds of footage to keep before the trigger event">
+              <FieldRow label={t("camera.feed.pre_buffer")} hint={t("camera.feed.pre_buffer_hint")}>
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
@@ -181,12 +179,12 @@ export function FeedSection({
                     className="flex-1 accent-accent"
                   />
                   <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                    {recordingClipPre}s
+                  {t("camera.feed.seconds", { seconds: recordingClipPre })}
                   </span>
                 </div>
               </FieldRow>
 
-              <FieldRow label="Post-buffer" hint="Seconds to keep recording after the trigger event">
+              <FieldRow label={t("camera.feed.post_buffer")} hint={t("camera.feed.post_buffer_hint")}>
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
@@ -198,14 +196,14 @@ export function FeedSection({
                     className="flex-1 accent-accent"
                   />
                   <span className="font-mono text-xs text-muted-foreground w-12 text-right">
-                    {recordingClipPost}s
+                  {t("camera.feed.seconds", { seconds: recordingClipPost })}
                   </span>
                 </div>
               </FieldRow>
             </>
           )}
 
-          <FieldRow label="Motion Sensitivity" hint="Higher = more sensitive">
+          <FieldRow label={t("camera.feed.motion_sensitivity")} hint={t("camera.feed.motion_sensitivity_hint")}>
             <div className="flex items-center gap-3">
               <input
                 type="range"
