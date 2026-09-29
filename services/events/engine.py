@@ -627,6 +627,27 @@ class RuleEngine:
         if trigger_type in ("association_deviation", "association_unauthorized"):
             return False
 
+        # Recurring unknown face/body clusters are emitted when the same
+        # unresolved subject crosses the configured distinct-day threshold.
+        # This is intentionally a threshold-crossing event, not a per-frame
+        # observation, so rules remain quiet until there is something useful
+        # to review.
+        if data.get("event_kind") == "recurring_unknown":
+            if trigger_type != "recurring_unknown":
+                return False
+            cam_filter = pattern.get("camera_id")
+            if cam_filter and str(cam_filter) != str(data.get("camera_id")):
+                return False
+            kind = pattern.get("cluster_kind")
+            if kind and kind != data.get("cluster_kind"):
+                return False
+            min_days = pattern.get("min_distinct_days")
+            if min_days is not None and int(data.get("distinct_days") or 0) < int(min_days):
+                return False
+            return True
+        if trigger_type == "recurring_unknown":
+            return False
+
         if trigger_type == "object_detected":
             label = pattern.get("label")
             detections = data.get("object_detections", {}).get("objects", [])

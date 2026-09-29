@@ -60,6 +60,10 @@ async def main():
     # the whole action vocabulary rather than growing their own.
     from services.perception import deviations as _dev_mod
     _dev_mod.set_rule_event_sink(pipeline.rule_engine.evaluate)
+    # Recurring unknown subjects use the same engine so users can automate
+    # the review signal without creating a second notification mechanism.
+    from services.perception import recurrence_notifications as _recurrence_mod
+    _recurrence_mod.set_rule_event_sink(pipeline.rule_engine.evaluate)
     from services.perception.vlm_queue import publish_stats_forever
 
     # Storage-location override (issue #251): pick up a recordings-root

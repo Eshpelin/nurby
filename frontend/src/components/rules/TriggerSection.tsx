@@ -631,7 +631,7 @@ export function TriggerSection(props: TriggerSectionProps) {
         </div>
       )}
 
-      {(["camera_offline", "camera_online", "camera_degraded", "camera_recovered"].includes(formTriggerType) || formTriggerType === "incident_started" || formTriggerType === "incident_ended") && (
+      {(["camera_offline", "camera_online", "camera_degraded", "camera_recovered"].includes(formTriggerType) || formTriggerType === "incident_started" || formTriggerType === "incident_ended" || formTriggerType === "recurring_unknown") && (
         <div className="space-y-2">
           <label className="text-xs text-muted-foreground block mb-1.5">
             Which camera (optional)
@@ -682,7 +682,9 @@ export function TriggerSection(props: TriggerSectionProps) {
               ? "Fires when a previously degraded camera view returns to a healthy scene."
               : formTriggerType === "incident_started"
               ? "Fires the moment repeat sightings of the same person or vehicle cluster into a new incident."
-              : "Fires once when an incident closes, carrying its duration, sighting count, and an AI-written recap your webhook, email, or Telegram message can include."}
+              : formTriggerType === "incident_ended"
+              ? "Fires once when an incident closes, carrying its duration, sighting count, and an AI-written recap your webhook, email, or Telegram message can include."
+              : "Fires when the same unresolved person or appearance crosses the configured distinct-day threshold. The review notification remains available so you can inspect evidence before assigning an identity."}
           </p>
         </div>
       )}

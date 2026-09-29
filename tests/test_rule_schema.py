@@ -45,11 +45,12 @@ FRONTEND_TRIGGER_TYPES = [
     "any",
     "association_deviation",
     "association_unauthorized",
+    "recurring_unknown",
 ]
 
 
 def test_frontend_trigger_types_all_registered():
-    assert len(FRONTEND_TRIGGER_TYPES) == 28
+    assert len(FRONTEND_TRIGGER_TYPES) == 29
     registered = {t["type"] for t in TRIGGER_TYPES}
     missing = set(FRONTEND_TRIGGER_TYPES) - registered
     assert not missing, f"frontend trigger types missing from registry: {sorted(missing)}"

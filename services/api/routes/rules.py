@@ -754,6 +754,16 @@ def _synthesize_observation_for_trigger(
             obs["duration_seconds"] = float(trigger_pattern.get("min_duration_seconds") or 60) + 1
             obs["summary"] = "Synthesized incident recap for testing."
 
+    elif t == "recurring_unknown":
+        pcam = trigger_pattern.get("camera_id") or cam
+        obs["camera_id"] = str(pcam)
+        obs["event_kind"] = "recurring_unknown"
+        obs["cluster_kind"] = trigger_pattern.get("cluster_kind") or "face"
+        obs["cluster_id"] = str(uuid.uuid4())
+        obs["distinct_days"] = max(3, int(trigger_pattern.get("min_distinct_days") or 3))
+        obs["threshold_days"] = 3
+        obs["notification_marker"] = "recurring_unknown:test"
+
     elif t == "plate_list":
         mode = (trigger_pattern.get("mode") or "blacklist").lower()
         plates = trigger_pattern.get("plates") or []

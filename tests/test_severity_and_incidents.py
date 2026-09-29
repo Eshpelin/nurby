@@ -88,6 +88,31 @@ def test_incident_payload_does_not_fire_observation_rules(monkeypatch):
     assert rec.call_count == 0
 
 
+def test_recurring_unknown_filters_kind_camera_and_distinct_days(monkeypatch):
+    rule = FakeRule(
+        name="r",
+        trigger_pattern={
+            "type": "recurring_unknown",
+            "cluster_kind": "face",
+            "camera_id": "cam-1",
+            "min_distinct_days": 3,
+        },
+    )
+    eng, rec = install_engine(monkeypatch, [rule])
+    base = {
+        "event_kind": "recurring_unknown",
+        "cluster_kind": "face",
+        "camera_id": "cam-1",
+        "distinct_days": 3,
+    }
+    asyncio.run(eng.evaluate({**base, "cluster_kind": "body"}))
+    asyncio.run(eng.evaluate({**base, "camera_id": "cam-2"}))
+    asyncio.run(eng.evaluate({**base, "distinct_days": 2}))
+    assert rec.call_count == 0
+    asyncio.run(eng.evaluate(base))
+    assert rec.call_count == 1
+
+
 # ── severity stamping ─────────────────────────────────────────────
 
 def test_event_carries_rule_severity(monkeypatch):

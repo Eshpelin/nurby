@@ -269,6 +269,23 @@ TRIGGER_TYPES: list[dict] = [
         ],
     },
     {
+        "type": "recurring_unknown",
+        "label": "Recurring unknown subject",
+        "description": (
+            "The same unresolved person or appearance has been seen on the "
+            "configured number of distinct days. Review it before assigning an identity."
+        ),
+        "group": "system",
+        "fields": [
+            dict(_CAMERA_FILTER),
+            {"name": "cluster_kind", "type": "enum", "required": False,
+             "enum": ["face", "body"],
+             "description": "Only recurring face identities or appearance clusters."},
+            {"name": "min_distinct_days", "type": "number", "required": False,
+             "description": "Optional minimum distinct-day count; defaults to the configured threshold."},
+        ],
+    },
+    {
         "type": "incident_started",
         "label": "Incident begins",
         "description": "A new cluster of repeat sightings opens (same person/vehicle keeps appearing).",

@@ -19,6 +19,16 @@ from shared.models import BodyClusterSample, Camera, FaceClusterSample, Notifica
 
 RECURRENCE_THRESHOLD_DAYS = 3
 
+# Set by the perception entry point so recurrence crossings can use the same
+# rule/action pipeline as incidents and camera-health transitions. Keeping the
+# sink optional preserves the helper's database-only behavior in API/tests.
+_rule_event_sink = None
+
+
+def set_rule_event_sink(sink) -> None:
+    global _rule_event_sink
+    _rule_event_sink = sink
+
 
 def reconcile_recurrence_notifications(notifications, survivor_marker: str):
     """Re-key a merged cluster's alerts without creating a second active item.
@@ -125,4 +135,23 @@ async def maybe_emit_recurrence_notification(
             created_at=now,
         )
     )
+    if _rule_event_sink is not None:
+        try:
+            await _rule_event_sink({
+                "event_kind": "recurring_unknown",
+                "camera_id": str(camera_id) if camera_id is not None else None,
+                "cluster_kind": cluster_kind,
+                "cluster_id": str(cluster_id),
+                "distinct_days": len(days),
+                "threshold_days": threshold_days,
+                "notification_marker": marker,
+                "occurred_at": now.isoformat(),
+            })
+        except Exception:
+            # A rule/action failure must never prevent the cluster sample and
+            # its review notification from being committed.
+            import logging
+            logging.getLogger(__name__).exception(
+                "Recurring-unknown rule event failed for cluster %s", cluster_id
+            )
     return True
