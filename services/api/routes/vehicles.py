@@ -132,6 +132,15 @@ def _plate_correction_metadata(vehicle_id: uuid.UUID, old_plate: str | None, new
     }
 
 
+def _merged_episode_key(source_vehicle_id: str, episode_key: str | None, evidence_id) -> str:
+    """Create a bounded, collision-resistant key for merged evidence."""
+    base = f"merge:{source_vehicle_id}:{episode_key or 'unknown'}"
+    if len(base) <= 255:
+        return base
+    suffix = f":source-evidence:{evidence_id}"
+    return f"{base[:255 - len(suffix)]}{suffix}"
+
+
 def _vehicle_ids_in(obs: Observation) -> set[str]:
     vd = obs.vehicle_detections or {}
     out: set[str] = set()
@@ -534,9 +543,23 @@ async def merge_vehicle(
                 select(AssociationEvidence).where(AssociationEvidence.association_id == source_edge.id)
             )
         ).scalars().all()
+        existing_episode_keys = {
+            str(value)
+            for value in (
+                await db.execute(
+                    select(AssociationEvidence.episode_key)
+                    .where(AssociationEvidence.association_id == target_edge.id)
+                )
+            ).scalars().all()
+            if value
+        }
         for row in evidence:
             row.association_id = target_edge.id
-            row.episode_key = f"merge:{source_id}:{row.episode_key}"[:255]
+            merged_key = _merged_episode_key(source_id, row.episode_key, row.id)
+            if merged_key in existing_episode_keys:
+                merged_key = _merged_episode_key(source_id, merged_key, row.id)
+            row.episode_key = merged_key
+            existing_episode_keys.add(merged_key)
             metadata = dict(row.evidence_metadata or {})
             metadata["reconciled_from_vehicle_id"] = source_id
             row.evidence_metadata = metadata
@@ -556,6 +579,18 @@ async def merge_vehicle(
         target_edge.camera_histogram = _merge_histogram(target_edge.camera_histogram, source_edge.camera_histogram)
         target_edge.first_seen_at = min(filter(None, (target_edge.first_seen_at, source_edge.first_seen_at)), default=None)
         target_edge.last_seen_at = max(filter(None, (target_edge.last_seen_at, source_edge.last_seen_at)), default=None)
+        target_edge.user_confirmed = bool(target_edge.user_confirmed or source_edge.user_confirmed)
+        target_edge.confidence_score, target_edge.decision_explanation = evidence_balance(
+            int(target_edge.supporting_evidence_count or 0),
+            int(target_edge.contradictory_evidence_count or 0),
+        )
+        if target_edge.user_confirmed:
+            target_edge.status = "confirmed"
+        elif (
+            target_edge.status == "established"
+            and target_edge.contradictory_evidence_count >= target_edge.supporting_evidence_count
+        ):
+            target_edge.status = "ambiguous"
         await db.delete(source_edge)
 
     target.sighting_count = (target.sighting_count or 0) + (source.sighting_count or 0)

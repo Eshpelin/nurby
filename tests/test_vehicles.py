@@ -62,6 +62,17 @@ def test_plate_correction_metadata_preserves_historical_evidence():
     }
 
 
+def test_merged_episode_key_is_bounded_and_collision_resistant():
+    from services.api.routes.vehicles import _merged_episode_key
+
+    key = _merged_episode_key("source", "episode-1", "evidence-1")
+    assert key == "merge:source:episode-1"
+
+    long_key = _merged_episode_key("source", "x" * 400, "evidence-1")
+    assert len(long_key) == 255
+    assert long_key.endswith(":source-evidence:evidence-1")
+
+
 def test_vehicle_sighting_evidence_preserves_plate_and_detector_metadata():
     from services.api.routes.vehicles import _vehicle_sighting_evidence
 
