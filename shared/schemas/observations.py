@@ -71,6 +71,9 @@ class EventResponse(BaseModel):
     acked_at: datetime | None = None
     acked_by_user_id: uuid.UUID | None = None
     acked_via: str | None = None
+    opened_at: datetime | None = None
+    opened_by_user_id: uuid.UUID | None = None
+    opened_via: str | None = None
     muted_until: datetime | None = None
 
     @field_validator("payload", mode="before")

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.auth import get_current_user, require_admin
 from shared.camera_access import ALL, AllowedCameras, allowed_camera_ids, apply_camera_filter, require_camera_in_scope
 from shared.database import get_db
-from shared.models import Camera, Event, EventFeedback, EventNote, Observation, Person, Rule, User
+from shared.models import Camera, Event, EventFeedback, EventNote, Notification, Observation, Person, Rule, User
 from shared.paths import escape_like
 from shared.schemas import (
     BulkDeleteResponse,
@@ -511,6 +511,28 @@ async def feedback_summary(
     nuisance_rate_reviewed = round(nuisance_alerts / reviewed_rows, 4) if reviewed_rows else None
     nuisance_rate_fired = round(nuisance_alerts / total_events, 4) if total_events else None
 
+    # Count an alert as opened only after the user explicitly expands its
+    # detail. Join to delivered notifications so the denominator is not
+    # inflated by persisted-only alerts.
+    delivered_alerts = (
+        await db.execute(
+            select(func.count(func.distinct(Event.id)))
+            .join(Notification, Notification.event_id == Event.id)
+            .where(Event.fired_at >= cutoff, Notification.delivered_at.is_not(None))
+        )
+    ).scalar_one()
+    opened_delivered = (
+        await db.execute(
+            select(func.count(func.distinct(Event.id)))
+            .join(Notification, Notification.event_id == Event.id)
+            .where(
+                Event.fired_at >= cutoff,
+                Event.opened_at.is_not(None),
+                Notification.delivered_at.is_not(None),
+            )
+        )
+    ).scalar_one()
+
     camera_day_rows = (
         await db.execute(
             select(
@@ -541,6 +563,9 @@ async def feedback_summary(
         "nuisance_alerts": nuisance_alerts,
         "nuisance_rate_reviewed": nuisance_rate_reviewed,
         "nuisance_rate_fired": nuisance_rate_fired,
+        "delivered_alerts": delivered_alerts,
+        "opened_alerts": opened_delivered,
+        "open_rate_delivered": round(opened_delivered / delivered_alerts, 4) if delivered_alerts else None,
         "nuisance_by_camera_day": [
             {
                 "camera_id": camera_id,
@@ -564,6 +589,31 @@ async def feedback_summary(
             "timing": reason_counts.get("timing", 0),
         },
     }
+
+
+@router.post("/{event_id}/opened", response_model=EventResponse)
+async def mark_event_opened(
+    event_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record the first explicit web opening of an alert detail.
+
+    This is intentionally idempotent and does not mark the alert handled.
+    It provides a real view signal for retained-monitoring metrics without
+    treating acknowledgement or feedback as a proxy for opening.
+    """
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    await require_camera_in_scope(current_user, db, event.camera_id)
+    if event.opened_at is None:
+        event.opened_at = datetime.now(timezone.utc)
+        event.opened_by_user_id = current_user.id
+        event.opened_via = "web"
+        await db.commit()
+        await db.refresh(event)
+    return event
 
 
 @router.get("/{event_id}/feedback", response_model=list[EventFeedbackResponse])

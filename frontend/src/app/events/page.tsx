@@ -140,6 +140,16 @@ export default function EventsPage() {
     setEvents((prev) => prev.map((e) => (e.id === updated.id ? { ...e, ...updated } : e)));
   }, []);
 
+  const openEvent = useCallback(async (id: string) => {
+    setExpandedId((current) => (current === id ? null : id));
+    try {
+      const res = await authFetch(`/api/events/${id}/opened`, { method: "POST" });
+      if (res.ok) patchEvent(await res.json());
+    } catch {
+      // Opening telemetry is best-effort and must not block alert review.
+    }
+  }, [authFetch, patchEvent]);
+
   const ack = useCallback(
     async (id: string) => {
       try {
@@ -317,7 +327,7 @@ export default function EventsPage() {
         >{t("events.select_page")}</button>
       </div>
       <ReviewQueue
-        onOpenEvent={(eventId) => setExpandedId(eventId)}
+        onOpenEvent={(eventId) => void openEvent(eventId)}
         focusId={searchParams.get("review")}
       />
         <div className="mb-4"><ActivityFilterBar /></div>
@@ -411,7 +421,7 @@ export default function EventsPage() {
             return (
               <div
                 key={ev.id}
-                onClick={() => setExpandedId(expanded ? null : ev.id)}
+                onClick={() => void openEvent(ev.id)}
                 className="rounded-md border border-border bg-card p-3 cursor-pointer hover:border-muted-foreground/30 transition-colors"
               >
                 <div className="flex items-center gap-2 flex-wrap">
