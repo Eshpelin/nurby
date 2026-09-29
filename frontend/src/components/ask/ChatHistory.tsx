@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import type { AgentRunSummary, RunStatus } from "./types";
+import { translate } from "@/lib/i18n";
 
 interface ChatHistoryProps {
   selectedRunId: string | null;
@@ -49,7 +50,9 @@ export default function ChatHistory({
   onNewChat,
   refreshKey = 0,
 }: ChatHistoryProps) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const locale = user?.locale;
+  const t = (key: string) => translate(locale, key);
   const [runs, setRuns] = useState<AgentRunSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [backendMissing, setBackendMissing] = useState(false);
@@ -92,11 +95,11 @@ export default function ChatHistory({
         <button
           type="button"
           onClick={onNewChat}
-          aria-label="New chat"
+          aria-label={t("ask.new_chat")}
           className="w-full px-3 py-2 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 flex items-center justify-center gap-2"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-          New chat
+          {t("ask.new_chat")}
         </button>
       </div>
       <div className="flex-1 overflow-y-auto">
@@ -108,11 +111,11 @@ export default function ChatHistory({
           </div>
         ) : backendMissing ? (
           <div className="p-4 text-xs text-muted-foreground">
-            Agent backend not yet deployed. History will appear once /api/agent/runs is live.
+            {t("ask.history_backend_missing")}
           </div>
         ) : runs.length === 0 ? (
           <div className="p-4 text-xs text-muted-foreground">
-            No questions yet. Ask one to get started.
+            {t("ask.history_empty")}
           </div>
         ) : (
           <ul className="py-1">
@@ -129,7 +132,7 @@ export default function ChatHistory({
                     <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
                       <div className="flex items-center gap-1.5">
                         <span className={`px-1.5 py-px rounded border ${STATUS_PILL[r.status] || ""}`}>
-                          {r.status === "budget_exhausted" ? "budget" : r.status}
+                          {r.status === "budget_exhausted" ? t("ask.budget") : r.status}
                         </span>
                         <span>{timeAgo(r.started_at)}</span>
                       </div>

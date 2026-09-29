@@ -28,12 +28,16 @@ import {
   consumePreferredAgentModel,
   rememberPreferredAgentModel,
 } from "@/lib/agent-model-preference";
+import { translate } from "@/lib/i18n";
 
 const LS_MODEL_KEY = "nurby:agent-last-model";
 const LS_ONBOARDED_KEY = "nurby:agent-onboarded";
 
 export default function AskPage() {
   const { authFetch, token, user } = useAuth();
+  const locale = user?.locale;
+  const t = (key: string, values?: Record<string, string | number>) =>
+    translate(locale, key, values);
   const search = useSearchParams();
 
   const [providers, setProviders] = useState<ProviderModel[]>([]);
@@ -205,10 +209,10 @@ export default function AskPage() {
           detail,
         ]);
       } else {
-        setSubmitError(`Could not load the completed answer (${res.status}).`);
+        setSubmitError(translate(locale, "ask.completed_answer_error", { status: res.status }));
       }
     } catch {
-      setSubmitError("The run completed, but its final answer could not be loaded. Refresh to retry.");
+      setSubmitError(translate(locale, "ask.completed_answer_network_error"));
     }
     setActiveQuestion(null);
     setActiveRunId(null);
@@ -216,7 +220,7 @@ export default function AskPage() {
     setHistoryRefresh((k) => k + 1);
     refreshUsage();
     lastTurnFinishedAt.current = Date.now();
-  }, [authFetch, refreshUsage]);
+  }, [authFetch, locale, refreshUsage]);
 
   useEffect(() => {
     if (!activeRunId) return;
@@ -263,30 +267,30 @@ export default function AskPage() {
         }),
       });
       if (res.status === 404) {
-        setSubmitError("Agent backend not yet deployed. /api/agent/ask returned 404.");
+        setSubmitError(translate(locale, "ask.backend_missing_submit"));
         setActiveQuestion(null);
         return;
       }
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setSubmitError(body?.detail ?? `Send failed (${res.status}).`);
+        setSubmitError(body?.detail ?? translate(locale, "ask.send_failed", { status: res.status }));
         setActiveQuestion(null);
         return;
       }
       const data = await res.json();
       const runId = data.run_id ?? data.id;
       if (!runId) {
-        setSubmitError("Backend response missing run_id.");
+        setSubmitError(translate(locale, "ask.missing_run_id"));
         setActiveQuestion(null);
         return;
       }
       setActiveRunId(runId);
       setHistoryRefresh((k) => k + 1);
     } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : "Network error.");
+      setSubmitError(e instanceof Error ? e.message : translate(locale, "common.network_error"));
       setActiveQuestion(null);
     }
-  }, [authFetch, model, parentRunId, deepScan, deep]);
+  }, [authFetch, locale, model, parentRunId, deepScan, deep]);
 
   const cancelActive = useCallback(async () => {
     if (!activeRunId) return;
@@ -395,13 +399,13 @@ export default function AskPage() {
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            aria-label="Open chat history"
+            aria-label={t("ask.open_history")}
             className="text-xs px-2 py-1 rounded border border-border"
           >
-            ☰ History
+            ☰ {t("ask.history")}
           </button>
           {user?.role === "admin" && (
-            <a href="/ask/admin" className="text-xs text-muted-foreground hover:text-foreground">Admin</a>
+            <a href="/ask/admin" className="text-xs text-muted-foreground hover:text-foreground">{t("ask.admin")}</a>
           )}
         </div>
 
@@ -409,7 +413,7 @@ export default function AskPage() {
           <div className="max-w-3xl mx-auto px-4 py-6">
             {providersMissing && (
               <div className="mb-4 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded p-2">
-                Agent backend not yet deployed. The /api/agent endpoints returned 404. The UI is ready; come back once Wave 2A lands.
+                {t("ask.backend_missing_banner")}
               </div>
             )}
             {submitError && (
@@ -420,23 +424,22 @@ export default function AskPage() {
             {noProviders ? (
               <div className="max-w-xl mx-auto px-6 py-12 text-center space-y-4">
                 <div className="text-3xl">✨</div>
-                <h1 className="text-xl font-semibold tracking-tight">Ask Nurby needs an AI provider</h1>
+                <h1 className="text-xl font-semibold tracking-tight">{t("ask.provider_required_title")}</h1>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Ask Nurby answers questions about your cameras in plain English, which needs an AI provider.
-                  Detection, recording, and alerts keep working without one.
+                  {t("ask.provider_required_body")}
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
                   <Link
                     href="/settings"
                     className="px-4 py-2 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90"
                   >
-                    Set one up
+                    {t("ask.set_up_provider")}
                   </Link>
                   <Link
                     href="/"
                     className="px-4 py-2 text-sm rounded-md border border-border hover:bg-muted text-foreground"
                   >
-                    Use keyword search →
+                    {t("ask.use_keyword_search")}
                   </Link>
                 </div>
               </div>
@@ -467,7 +470,7 @@ export default function AskPage() {
                     disabled={!lastQuestion.trim()}
                     className="text-xs px-3 py-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
                   >
-                    Not seeing it? Scan the raw footage →
+                    {t("ask.scan_raw_footage")}
                   </button>
                 )}
                 <DeepScanResults scan={deep.scan} error={deep.error} />
@@ -477,7 +480,7 @@ export default function AskPage() {
                     onClick={deep.reset}
                     className="mt-3 text-xs text-muted-foreground hover:text-foreground"
                   >
-                    Clear scan
+                    {t("ask.clear_scan")}
                   </button>
                 )}
               </div>
