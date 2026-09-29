@@ -13,6 +13,13 @@ interface FeedbackSummary {
   nuisance_alerts: number;
   nuisance_rate_reviewed: number | null;
   nuisance_rate_fired: number | null;
+  nuisance_by_camera_day: {
+    camera_id: string;
+    day: string;
+    reviewed: number;
+    nuisance: number;
+    nuisance_rate_reviewed: number | null;
+  }[];
 }
 
 function percent(value: number | null): string {
@@ -23,17 +30,23 @@ export function AlertQualityCard() {
   const { authFetch, user } = useAuth();
   const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [summary, setSummary] = useState<FeedbackSummary | null>(null);
+  const [cameraNames, setCameraNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    authFetch("/api/events/feedback/summary?hours=168")
-      .then(async (res) => {
-        if (!res.ok) return null;
-        return await res.json() as FeedbackSummary;
-      })
-      .then((data) => {
-        if (!cancelled) setSummary(data);
+    Promise.all([
+      authFetch("/api/events/feedback/summary?hours=168"),
+      authFetch("/api/cameras"),
+    ])
+      .then(async ([summaryResponse, cameraResponse]) => {
+        if (summaryResponse.ok && !cancelled) setSummary(await summaryResponse.json() as FeedbackSummary);
+        if (cameraResponse.ok && !cancelled) {
+          const cameras = await cameraResponse.json();
+          if (Array.isArray(cameras)) {
+            setCameraNames(Object.fromEntries(cameras.map((camera: { id: string; name: string }) => [camera.id, camera.name])));
+          }
+        }
       })
       .catch(() => {
         if (!cancelled) setSummary(null);
@@ -71,6 +84,19 @@ export function AlertQualityCard() {
             <p className="mt-3 text-[11px] text-muted-foreground">
               {t("alert_quality.explanation", { firedRate: percent(summary.nuisance_rate_fired) })}
             </p>
+            {(summary.nuisance_by_camera_day ?? []).length > 0 && (
+              <div className="mt-3 border-t border-border pt-3">
+                <div className="text-xs font-medium mb-1">{t("alert_quality.by_camera_day")}</div>
+                <div className="space-y-1">
+                  {(summary.nuisance_by_camera_day ?? []).slice(0, 5).map((row) => (
+                    <div key={`${row.camera_id}-${row.day}`} className="flex justify-between gap-3 text-[11px] text-muted-foreground">
+                      <span className="truncate">{cameraNames[row.camera_id] || (row.camera_id === "unscoped" ? t("alert_quality.unscoped") : row.camera_id)} · {row.day}</span>
+                      <span className="shrink-0">{row.nuisance}/{row.reviewed} · {percent(row.nuisance_rate_reviewed)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <p className="text-xs text-muted-foreground">{t("alert_quality.unavailable")}</p>

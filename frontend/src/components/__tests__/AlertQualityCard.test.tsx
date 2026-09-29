@@ -25,6 +25,7 @@ describe("AlertQualityCard (#199)", () => {
         nuisance_alerts: 3,
         nuisance_rate_reviewed: 0.3,
         nuisance_rate_fired: 0.15,
+        nuisance_by_camera_day: [{ camera_id: "camera-1", day: "2026-09-29", reviewed: 2, nuisance: 1, nuisance_rate_reviewed: 0.5 }],
       }),
     });
 
@@ -34,6 +35,7 @@ describe("AlertQualityCard (#199)", () => {
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("30%")).toBeInTheDocument();
     expect(screen.getByText(/15% of all fired alerts/)).toBeInTheDocument();
+    expect(screen.getByText(/Nuisance by camera-day/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Review alerts" })).toHaveAttribute("href", "/events");
   });
 });
