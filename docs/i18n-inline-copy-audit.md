@@ -29,8 +29,8 @@ should move to the shared English/Spanish catalog in follow-up slices:
 - `frontend/src/app/people/page.tsx`: people, unknown-cluster, merge, and
   deletion dialogs.
 - `frontend/src/app/cameras/[id]/page.tsx` and its remaining camera settings
-  panels: zones and any page-level status or save feedback still containing
-  product copy.
+  panels: `ZoneEditorCanvas` controls and any page-level status or save
+  feedback still containing product copy.
 - `frontend/src/components/rules/TriggerSection.tsx` and related editors:
   rule labels, hints, option labels, and zone instructions.
 - `frontend/src/app/recordings/page.tsx` and `frontend/src/app/events/page.tsx`:
