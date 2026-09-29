@@ -9,11 +9,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useVlmOptional } from "@/lib/useVlmOptional";
+import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 
 const DISMISS_KEY = "nurby:vlm-optional-dismissed";
 
 export function VLMOptionalBanner() {
   const { configured, loading } = useVlmOptional();
+  const { user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string) => translate(locale, key);
   const [dismissed, setDismissed] = useState(true);
 
   // Read the persisted dismissal on mount. Start dismissed so the banner
@@ -61,10 +66,9 @@ export function VLMOptionalBanner() {
         <path d="M12 8h.01" />
       </svg>
       <div className="flex-1 text-sm">
-        <span className="font-medium">AI provider optional.</span>{" "}
+        <span className="font-medium">{t("vlm_optional.title")}</span>{" "}
         <span className="text-muted-foreground">
-          Detection, recording, and alerts work without it. Add a provider to
-          enable scene descriptions and Ask Nurby.
+          {t("vlm_optional.body")}
         </span>{" "}
         <Link
           href="/settings"
@@ -83,13 +87,13 @@ export function VLMOptionalBanner() {
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
-          Settings
+          {t("vlm_optional.settings")}
         </Link>
       </div>
       <button
         type="button"
         onClick={dismiss}
-        aria-label="Dismiss"
+        aria-label={t("vlm_optional.dismiss")}
         className="text-muted-foreground hover:text-foreground text-lg leading-none flex-shrink-0"
       >
         ×
