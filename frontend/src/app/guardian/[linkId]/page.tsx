@@ -135,7 +135,7 @@ export default function DependantDetailPage() {
       {lastPickup && <PickupMomentCard event={lastPickup} />}
 
       {/* Image */}
-      <ImagePanel linkId={linkId} canView={!!ent?.can?.image} />
+      <ImagePanel linkId={linkId} canView={!!ent?.can?.image} locale={user?.locale} />
 
       {/* Day-timeline. real arrival/pickup/zone events, grouped by day. */}
       <EventTimeline events={events} />
@@ -150,11 +150,12 @@ export default function DependantDetailPage() {
       {dependant && (
         <section className="mt-6">
           <h2 className="text-sm font-medium text-muted-foreground mb-2">{t("notifications.title")}</h2>
-          <AlertToggles linkId={linkId} initial={dependant.alert_prefs} />
+          <AlertToggles linkId={linkId} initial={dependant.alert_prefs} locale={user?.locale} />
           <div className="h-3" />
           <ChannelToggles
             linkId={linkId}
             initial={dependant.notify_channels || { telegram: true, email: true, in_app: true }}
+            locale={user?.locale}
           />
         </section>
       )}
@@ -187,8 +188,9 @@ export default function DependantDetailPage() {
   );
 }
 
-function ImagePanel({ linkId, canView }: { linkId: string; canView: boolean }) {
+function ImagePanel({ linkId, canView, locale }: { linkId: string; canView: boolean; locale?: string }) {
   const { token } = useAuth();
+  const t = useCallback((key: string) => translate(locale, key), [locale]);
   const [src, setSrc] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -216,16 +218,16 @@ function ImagePanel({ linkId, canView }: { linkId: string; canView: boolean }) {
         setCooldown(wait ? parseInt(wait, 10) : 3600);
         setMsg(null);
       } else if (res.status === 404) {
-        setMsg("No recent image available.");
+        setMsg(t("guardian_detail.image_missing"));
       } else {
-        setMsg("Image not available on your plan.");
+        setMsg(t("guardian_detail.image_plan_locked"));
       }
     } catch {
-      setMsg("Could not load the image.");
+      setMsg(t("guardian_detail.image_load_failed"));
     } finally {
       setLoading(false);
     }
-  }, [linkId, token]);
+  }, [linkId, token, t]);
 
   if (!canView) return null;
 
@@ -235,32 +237,32 @@ function ImagePanel({ linkId, canView }: { linkId: string; canView: boolean }) {
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Latest image</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">{t("guardian_detail.latest_image")}</h2>
         <button
           onClick={fetchImage}
           disabled={loading || cooldown > 0}
           className="px-3 py-1 rounded-md border border-border text-xs hover:bg-muted transition-colors disabled:opacity-50"
         >
-          {loading ? "Loading..." : cooldown > 0 ? `${mm}:${ss}` : src ? "Refresh" : "Show image"}
+          {loading ? t("guardian_detail.loading") : cooldown > 0 ? `${mm}:${ss}` : src ? t("guardian_detail.refresh") : t("guardian_detail.show_image")}
         </button>
       </div>
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="Latest sighting" className="w-full rounded-lg border border-border" />
+        <img src={src} alt={t("guardian_detail.latest_sighting_alt")} className="w-full rounded-lg border border-border" />
       ) : cooldown > 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm">
           <div className="text-muted-foreground">
-            Free plan allows one image per hour. Next image in{" "}
+            {t("guardian_detail.image_rate_limit")} {" "}
             <span className="text-foreground tabular-nums">
               {mm}:{ss}
             </span>
             .
           </div>
-          <div className="text-[11px] text-emerald-400 mt-1">Upgrade for unlimited images.</div>
+          <div className="text-[11px] text-emerald-400 mt-1">{t("guardian_detail.image_upgrade")}</div>
         </div>
       ) : (
         <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-          {msg || "Tap Show image to load the most recent blurred snapshot."}
+          {msg || t("guardian_detail.image_prompt")}
         </div>
       )}
     </div>
@@ -270,11 +272,14 @@ function ImagePanel({ linkId, canView }: { linkId: string; canView: boolean }) {
 function AlertToggles({
   linkId,
   initial,
+  locale,
 }: {
   linkId: string;
   initial: Record<string, boolean>;
+  locale?: string;
 }) {
   const { authFetch } = useAuth();
+  const t = (key: string) => translate(locale, key);
   const [prefs, setPrefs] = useState<Record<string, boolean>>(initial);
   const [saving, setSaving] = useState(false);
 
@@ -297,7 +302,7 @@ function AlertToggles({
   return (
     <div>
       <div className="text-xs text-muted-foreground mb-1.5">
-        What to tell me {saving && <span>saving...</span>}
+        {t("guardian_detail.what_to_tell_me")} {saving && <span>{t("guardian_detail.saving")}</span>}
       </div>
       <div className="rounded-lg border border-border bg-card divide-y divide-border">
         {ALERT_KINDS.map((a) => (
@@ -305,7 +310,7 @@ function AlertToggles({
             key={a.key}
             className="flex items-center justify-between px-4 py-3 text-sm cursor-pointer"
           >
-            <span>{a.label}</span>
+            <span>{t(`guardian_detail.alert_${a.key}`)}</span>
             <button
               type="button"
               onClick={() => toggle(a.key)}
@@ -329,11 +334,14 @@ function AlertToggles({
 function ChannelToggles({
   linkId,
   initial,
+  locale,
 }: {
   linkId: string;
   initial: Record<string, boolean>;
+  locale?: string;
 }) {
   const { authFetch } = useAuth();
+  const t = (key: string) => translate(locale, key);
   const [channels, setChannels] = useState<Record<string, boolean>>(initial);
   const [saving, setSaving] = useState(false);
 
@@ -356,7 +364,7 @@ function ChannelToggles({
   return (
     <div>
       <div className="text-xs text-muted-foreground mb-1.5">
-        How to reach me {saving && <span>saving...</span>}
+        {t("guardian_detail.how_to_reach_me")} {saving && <span>{t("guardian_detail.saving")}</span>}
       </div>
       <div className="rounded-lg border border-border bg-card divide-y divide-border">
         {NOTIFY_CHANNELS.map((ch) => (
@@ -364,7 +372,7 @@ function ChannelToggles({
             key={ch.key}
             className="flex items-center justify-between px-4 py-3 text-sm cursor-pointer"
           >
-            <span>{ch.label}</span>
+            <span>{t(`guardian_detail.channel_${ch.key}`)}</span>
             <button
               type="button"
               onClick={() => toggle(ch.key)}
@@ -382,7 +390,7 @@ function ChannelToggles({
         ))}
       </div>
       <p className="text-[11px] text-muted-foreground mt-2">
-        Telegram needs a paired bot. Email goes to your account address. In-app always shows here.
+        {t("guardian_detail.channel_help")}
       </p>
     </div>
   );
