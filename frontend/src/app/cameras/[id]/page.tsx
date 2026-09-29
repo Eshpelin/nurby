@@ -1062,7 +1062,7 @@ export default function CameraConfigPage() {
         </Section>
 
         {/* ── Danger Zone ── */}
-        <DangerZoneSection deleteConfirm={deleteConfirm} handleDelete={handleDelete} setDeleteConfirm={setDeleteConfirm} />
+        <DangerZoneSection locale={locale} deleteConfirm={deleteConfirm} handleDelete={handleDelete} setDeleteConfirm={setDeleteConfirm} />
       </div>
       )}
 
