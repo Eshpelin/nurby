@@ -115,14 +115,15 @@ export default function GuardianAdminPage() {
                 personName={personName(l.person_id)}
                 guardianName={userName(l.guardian_user_id)}
                 onChange={refresh}
+                locale={user?.locale}
               />
             ))}
           </div>
         )}
       </section>
 
-      <PickupManager persons={persons} />
-      <AccessLog persons={persons} users={users} />
+      <PickupManager persons={persons} locale={user?.locale} />
+      <AccessLog persons={persons} users={users} locale={user?.locale} />
     </div>
   );
 }
@@ -330,13 +331,16 @@ function LinkRow({
   personName,
   guardianName,
   onChange,
+  locale,
 }: {
   link: GuardianLink;
   personName: string;
   guardianName: string;
   onChange: () => void;
+  locale?: string;
 }) {
   const { authFetch } = useAuth();
+  const t = (key: string) => translate(locale, key);
   const toast = useToast();
   const confirm = useConfirm();
   const revoked = !!link.revoked_at;
@@ -351,19 +355,19 @@ function LinkRow({
   };
   const revoke = async () => {
     const ok = await confirm({
-      title: `Revoke ${guardianName}'s access?`,
-      body: `${guardianName} will immediately lose access to ${personName}. This cannot be undone.`,
+      title: t("guardian_admin.revoke_title").replace("{guardian}", guardianName),
+      body: t("guardian_admin.revoke_body").replace("{guardian}", guardianName).replace("{person}", personName),
       danger: true,
-      confirmLabel: "Revoke access",
+      confirmLabel: t("guardian_admin.revoke_access"),
     });
     if (!ok) return;
     try {
       const res = await authFetch(`/api/guardian/links/${link.id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) throw new Error();
-      toast.success("Access revoked");
+      toast.success(t("guardian_admin.access_revoked"));
       onChange();
     } catch {
-      toast.error("Could not revoke access.");
+      toast.error(t("guardian_admin.revoke_failed"));
     }
   };
 
@@ -404,7 +408,7 @@ function LinkRow({
                     : "border-border text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {f.label} {on ? "on" : "off"}
+              {t(`guardian_admin.flag_${String(f.key)}`)} {on ? t("guardian_admin.on") : t("guardian_admin.off")}
               </button>
             );
           })}
@@ -422,8 +426,9 @@ interface Pickup {
   active: boolean;
 }
 
-function PickupManager({ persons }: { persons: Person[] }) {
+function PickupManager({ persons, locale }: { persons: Person[]; locale?: string }) {
   const { authFetch } = useAuth();
+  const t = (key: string) => translate(locale, key);
   const [personId, setPersonId] = useState("");
   const [pickups, setPickups] = useState<Pickup[]>([]);
   const [name, setName] = useState("");
@@ -470,14 +475,14 @@ function PickupManager({ persons }: { persons: Person[] }) {
 
   return (
     <section className="mt-8">
-      <h2 className="text-sm font-medium text-muted-foreground mb-2">Approved pickups</h2>
+      <h2 className="text-sm font-medium text-muted-foreground mb-2">{t("guardian_admin.approved_pickups")}</h2>
       <div className="rounded-lg border border-border bg-card p-5">
         <select
           value={personId}
           onChange={(e) => setPersonId(e.target.value)}
           className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
         >
-          <option value="">Select a person to manage their pickup list...</option>
+          <option value="">{t("guardian_admin.select_pickup_person")}</option>
           {persons.map((p) => (
             <option key={p.id} value={p.id}>
               {p.nickname || p.display_name}
@@ -489,7 +494,7 @@ function PickupManager({ persons }: { persons: Person[] }) {
           <>
             <div className="mt-3 space-y-1.5">
               {pickups.length === 0 && (
-                <div className="text-sm text-muted-foreground">No approved pickups yet.</div>
+                <div className="text-sm text-muted-foreground">{t("guardian_admin.no_pickups")}</div>
               )}
               {pickups.map((pk) => (
                 <div
@@ -507,7 +512,7 @@ function PickupManager({ persons }: { persons: Person[] }) {
                     onClick={() => remove(pk.id)}
                     className="text-xs text-red-400 hover:text-red-300"
                   >
-                    Remove
+                    {t("guardian_admin.remove")}
                   </button>
                 </div>
               ))}
@@ -516,7 +521,7 @@ function PickupManager({ persons }: { persons: Person[] }) {
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Name"
+                placeholder={t("guardian_admin.name")}
                 className="flex-1 min-w-[120px] rounded-md border border-border bg-background px-2 py-1.5 text-sm"
               />
               <select
@@ -524,14 +529,14 @@ function PickupManager({ persons }: { persons: Person[] }) {
                 onChange={(e) => setKind(e.target.value)}
                 className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
               >
-                <option value="person">Person</option>
-                <option value="vehicle">Vehicle</option>
+                <option value="person">{t("guardian_admin.person_kind")}</option>
+                <option value="vehicle">{t("guardian_admin.vehicle_kind")}</option>
               </select>
               {kind === "vehicle" && (
                 <input
                   value={plate}
                   onChange={(e) => setPlate(e.target.value)}
-                  placeholder="Plate"
+                  placeholder={t("guardian_admin.plate")}
                   className="w-28 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
                 />
               )}
@@ -539,7 +544,7 @@ function PickupManager({ persons }: { persons: Person[] }) {
                 onClick={add}
                 className="px-3 py-1.5 rounded-md border border-border text-sm hover:bg-muted"
               >
-                Add
+                {t("guardian_admin.add")}
               </button>
             </div>
           </>
@@ -557,8 +562,9 @@ interface LogEntry {
   at: string;
 }
 
-function AccessLog({ persons, users }: { persons: Person[]; users: AdminUser[] }) {
+function AccessLog({ persons, users, locale }: { persons: Person[]; users: AdminUser[]; locale?: string }) {
   const { authFetch } = useAuth();
+  const t = (key: string) => translate(locale, key);
   const [entries, setEntries] = useState<LogEntry[]>([]);
 
   const load = useCallback(async () => {
@@ -584,10 +590,10 @@ function AccessLog({ persons, users }: { persons: Person[]; users: AdminUser[] }
 
   return (
     <section className="mt-8 mb-12">
-      <h2 className="text-sm font-medium text-muted-foreground mb-2">Access log</h2>
+      <h2 className="text-sm font-medium text-muted-foreground mb-2">{t("guardian_admin.access_log")}</h2>
       <div className="rounded-lg border border-border bg-card divide-y divide-border max-h-80 overflow-auto">
         {entries.length === 0 ? (
-          <div className="p-4 text-sm text-muted-foreground">No access recorded yet.</div>
+          <div className="p-4 text-sm text-muted-foreground">{t("guardian_admin.no_access")}</div>
         ) : (
           entries.map((e) => (
             <div key={e.id} className="flex items-center justify-between px-4 py-2 text-xs">
