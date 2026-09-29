@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/lib/auth";
 import { extractApiError } from "@/lib/api-error";
+import { translate, type Locale } from "@/lib/i18n";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PersonaPicker } from "@/components/PersonaPicker";
@@ -44,7 +45,9 @@ import Link from "next/link";
 
 
 export default function CameraConfigPage() {
-  const { authFetch, token, loading: authLoading } = useAuth();
+  const { authFetch, token, loading: authLoading, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = useCallback((key: string) => translate(locale, key), [locale]);
   const params = useParams();
   const router = useRouter();
   const cameraId = params.id as string;
@@ -545,7 +548,7 @@ export default function CameraConfigPage() {
   if (loading) {
     return (
       <div className="px-6 py-6">
-        <div className="text-sm text-muted-foreground">Loading camera config...</div>
+        <div className="text-sm text-muted-foreground">{t("camera_detail.loading")}</div>
       </div>
     );
   }
@@ -555,7 +558,7 @@ export default function CameraConfigPage() {
       <div className="px-6 py-6">
         <div className="text-sm text-danger">{error}</div>
         <Link href="/" className="text-sm text-accent hover:underline mt-2 inline-block">
-          Back to cameras
+          {t("camera_detail.back")}
         </Link>
       </div>
     );
@@ -609,7 +612,7 @@ export default function CameraConfigPage() {
             <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
           </svg>
-          Voice
+          {t("camera_detail.voice")}
         </Link>
         <Link
           href={`/cameras/${cameraId}/audio`}
@@ -622,7 +625,7 @@ export default function CameraConfigPage() {
             <line x1="12" y1="19" x2="12" y2="23" />
             <line x1="8" y1="23" x2="16" y2="23" />
           </svg>
-          Audio
+          {t("camera_detail.audio")}
         </Link>
         <Link
           href={`/memory?entity_kind=camera&entity_key=${cameraId}&label=${encodeURIComponent(camera.name)}`}
