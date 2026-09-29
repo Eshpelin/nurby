@@ -7,7 +7,6 @@ import {
   type Camera,
   type Person,
 } from "./types";
-import Link from "next/link";
 import { ModelClassPicker } from "./ModelClassPicker";
 import { StyledSelect } from "./StyledSelect";
 import { GeometryEditor } from "./GeometryEditor";
@@ -444,16 +443,10 @@ export function TriggerSection(props: TriggerSectionProps) {
 
       {formTriggerType === "face_recognized" && (
         <div className="space-y-2">
-          <label className="text-xs text-muted-foreground block">Person</label>
+          <label className="text-xs text-muted-foreground block">{t("rules.trigger.face.person")}</label>
           {persons.length === 0 ? (
             <p className="text-xs px-2 py-3 rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 text-amber-300">
-              No people in your library yet, so this rule will fire for{" "}
-              <span className="font-medium">any known face</span> once one
-              exists. To alert on a specific person,{" "}
-              <Link href="/people" className="underline hover:text-amber-200">
-                add them on the People page
-              </Link>{" "}
-              first (name + face photo), then pick them here.
+              {t("rules.trigger.face.empty")}
             </p>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
@@ -468,8 +461,8 @@ export function TriggerSection(props: TriggerSectionProps) {
               >
                 <span className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground flex-shrink-0">*</span>
                 <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">Anyone known</div>
-                  <div className="text-[10px] text-muted-foreground truncate">Any recognized face</div>
+                  <div className="text-sm font-medium truncate">{t("rules.trigger.face.any_known")}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">{t("rules.trigger.face.any_recognized")}</div>
                 </div>
               </button>
               {persons.map((p) => {
@@ -507,14 +500,14 @@ export function TriggerSection(props: TriggerSectionProps) {
       {formTriggerType === "motion" && (
         <div>
           <label className="text-xs text-muted-foreground block mb-1.5">
-            Motion sensitivity
+            {t("rules.trigger.motion.sensitivity")}
           </label>
           <div className="grid grid-cols-4 gap-1">
             {[
-              { value: "very_high", label: "Any movement", desc: "Triggers on smallest change" },
-              { value: "high", label: "Sensitive", desc: "Small movements" },
-              { value: "medium", label: "Normal", desc: "Moderate activity" },
-              { value: "low", label: "Only major", desc: "Large movements only" },
+              { value: "very_high", label: t("rules.trigger.motion.any"), desc: t("rules.trigger.motion.any_desc") },
+              { value: "high", label: t("rules.trigger.motion.sensitive"), desc: t("rules.trigger.motion.small") },
+              { value: "medium", label: t("rules.trigger.motion.normal"), desc: t("rules.trigger.motion.moderate") },
+              { value: "low", label: t("rules.trigger.motion.major"), desc: t("rules.trigger.motion.large") },
             ].map((s) => (
               <button
                 key={s.value}
