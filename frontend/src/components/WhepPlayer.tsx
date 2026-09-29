@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 /** Browser WHEP client using the API's camera-scoped signaling proxy. */
 export function WhepPlayer({ cameraId, onFailed }: { cameraId: string; onFailed?: () => void }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [state, setState] = useState<"connecting" | "failed">("connecting");
 
@@ -78,8 +80,8 @@ export function WhepPlayer({ cameraId, onFailed }: { cameraId: string; onFailed?
   return (
     <div className="absolute inset-0 bg-black">
       <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 h-full w-full object-cover" />
-      {state === "connecting" && <div className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground">Connecting to live camera.</div>}
-      {state === "failed" && <div className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground">Live camera unavailable.</div>}
+      {state === "connecting" && <div className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground">{t("camera_player.connecting")}</div>}
+      {state === "failed" && <div className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground">{t("camera_player.unavailable")}</div>}
     </div>
   );
 }
