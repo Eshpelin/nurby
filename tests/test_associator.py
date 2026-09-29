@@ -18,6 +18,7 @@ from services.perception.associator import (
     COOCCURRENCE_SUBJECT_KINDS,
     bump,
     cooccurrence_metrics,
+    cooccurrence_has_sustained_presence,
     evidence_balance,
     evidence_policy,
     fold,
@@ -460,6 +461,32 @@ def test_cooccurrence_metrics_explain_overlap_and_arrival_gap():
         "overlap_seconds": 60.0,
         "arrival_gap_seconds": 0.0,
     }
+
+
+def test_one_frame_cooccurrence_does_not_enter_pair_ledger():
+    first = SimpleNamespace(
+        started_at=_at(1, 8), last_seen_at=_at(1, 8), ended_at=None,
+        segments=[{"camera_id": "cam-1"}],
+    )
+    second = SimpleNamespace(
+        started_at=_at(1, 8), last_seen_at=_at(1, 8), ended_at=None,
+        segments=[{"camera_id": "cam-1"}],
+    )
+    assert not cooccurrence_has_sustained_presence(first, second)
+
+
+def test_cooccurrence_requires_sustained_presence_for_both_endpoints():
+    first = SimpleNamespace(
+        started_at=_at(1, 8), last_seen_at=_at(1, 8) + timedelta(seconds=1), ended_at=None,
+        segments=[{"camera_id": "cam-1"}],
+    )
+    second = SimpleNamespace(
+        started_at=_at(1, 8), last_seen_at=_at(1, 8) + timedelta(seconds=3), ended_at=None,
+        segments=[{"camera_id": "cam-1"}],
+    )
+    assert not cooccurrence_has_sustained_presence(first, second)
+    first.last_seen_at = _at(1, 8) + timedelta(seconds=2)
+    assert cooccurrence_has_sustained_presence(first, second)
 
 
 def test_body_subjects_are_not_associable():

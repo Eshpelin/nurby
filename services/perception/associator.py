@@ -61,6 +61,10 @@ logger = logging.getLogger("nurby.perception.associator")
 DEFAULT_MIN_DISTINCT_DAYS = 3
 DEFAULT_ASSOCIATION_STALE_DAYS = 45
 COOCCURRENCE_GAP = timedelta(seconds=90)
+# A single shared keyframe is not enough to make a useful companionship
+# hypothesis. Journeys shorter than this remain available as ordinary
+# observation evidence but do not enter the pair ledger.
+MIN_COOCCURRENCE_PRESENCE = timedelta(seconds=2)
 
 # Subject kinds worth associating with vehicles. Body-cluster subjects are
 # intentionally excluded here because appearance-only vehicle habits should
@@ -401,6 +405,30 @@ def journeys_cooccur(first: Journey, second: Journey, gap: timedelta = COOCCURRE
     if not set(journey_camera_ids(first)).intersection(journey_camera_ids(second)):
         return False
     return max(first_start, second_start) <= min(first_end, second_end) + gap
+
+
+def cooccurrence_has_sustained_presence(
+    first: Journey,
+    second: Journey,
+    minimum: timedelta = MIN_COOCCURRENCE_PRESENCE,
+) -> bool:
+    """Require both endpoints to have more than a one-frame presence.
+
+    Journey overlap is intentionally permissive because adjacent arrivals are
+    useful evidence. The pair ledger is stricter: a zero-duration or nearly
+    instantaneous track can be one shared frame, a detector duplicate, or an
+    ambiguous hand-off. Keep those sightings in the source timeline but do not
+    promote them into a recurring companionship hypothesis.
+    """
+    first_start, first_end = journey_window(first)
+    second_start, second_end = journey_window(second)
+    if not (first_start and first_end and second_start and second_end):
+        return False
+    minimum_seconds = max(0.0, minimum.total_seconds())
+    return (
+        (first_end - first_start).total_seconds() >= minimum_seconds
+        and (second_end - second_start).total_seconds() >= minimum_seconds
+    )
 
 
 def cooccurrence_metrics(
@@ -923,6 +951,8 @@ async def process_cooccurrences(
         if not shared_cameras:
             continue
         if not journeys_cooccur(journey, other, gap):
+            continue
+        if not cooccurrence_has_sustained_presence(journey, other):
             continue
         # Keep the review card actionable: attach a small, time-bounded set
         # of frames from the cameras the two journeys actually shared. This
