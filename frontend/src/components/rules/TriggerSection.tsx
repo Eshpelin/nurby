@@ -748,7 +748,7 @@ export function TriggerSection(props: TriggerSectionProps) {
             if (!cam) return null;
             return (
               <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">
+            <label className="text-xs text-muted-foreground block mb-1.5">
                     {formTriggerType === "line_cross"
                     ? t("rules.trigger.geometry.draw_tripwire")
                     : formTriggerType === "wrong_way"
@@ -768,7 +768,7 @@ export function TriggerSection(props: TriggerSectionProps) {
           })()}
 
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Which objects count (optional)</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.object_scope")}</label>
             <ModelClassPicker
               value={formTriggerObjectClass}
               onChange={setFormTriggerObjectClass}
@@ -861,25 +861,22 @@ export function TriggerSection(props: TriggerSectionProps) {
             <div className="space-y-3">
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">
-                  Signal zone (auto-detected colour)
+                  {t("rules.trigger.geometry.signal_zone")}
                 </label>
                 <input
                   value={formTriggerSignalZone}
                   onChange={(e) => setFormTriggerSignalZone(e.target.value)}
-                  placeholder="Signal North"
+                  placeholder={t("rules.trigger.geometry.signal_placeholder")}
                   className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Draw a <span className="font-medium">Traffic signal</span> zone over the light in the
-                  camera&apos;s <span className="font-medium">Zones &amp; Tripwires</span> settings, then type
-                  its exact name here. Nurby reads the lamp colour and fires only when it is red. Leave
-                  blank to use a manual time window instead.
+                  {t("rules.trigger.geometry.signal_help")}
                 </p>
               </div>
               {!formTriggerSignalZone.trim() && (
             <div>
               <label className="text-xs text-muted-foreground block mb-1">
-                Red-light window (local time)
+                {t("rules.trigger.geometry.red_window")}
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -888,7 +885,7 @@ export function TriggerSection(props: TriggerSectionProps) {
                   onChange={(e) => setFormTriggerRedAfter(e.target.value)}
                   className="px-2 py-1.5 rounded-md bg-background border border-border text-sm"
                 />
-                <span className="text-xs text-muted-foreground">to</span>
+                <span className="text-xs text-muted-foreground">{t("rules.trigger.geometry.to")}</span>
                 <input
                   type="time"
                   value={formTriggerRedBefore}
@@ -897,10 +894,7 @@ export function TriggerSection(props: TriggerSectionProps) {
                 />
               </div>
               <p className="text-[11px] text-muted-foreground mt-1.5">
-                Only crossings inside this window count. Leave both blank to
-                treat the light as always red. Overnight windows (e.g. 22:00
-                to 06:00) wrap midnight. This manual window is the fallback
-                when no signal zone is set above.
+                {t("rules.trigger.geometry.red_window_help")}
               </p>
             </div>
               )}
@@ -912,10 +906,10 @@ export function TriggerSection(props: TriggerSectionProps) {
       {formTriggerType === "speed_over" && (
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-muted-foreground block mb-1.5">Pick a camera</label>
+            <label className="text-xs text-muted-foreground block mb-1.5">{t("rules.trigger.geometry.pick_camera")}</label>
             {cameras.length === 0 ? (
               <p className="text-xs text-muted-foreground px-2 py-3 rounded-md border border-dashed border-border">
-                No cameras yet. Add one on the Cameras page first.
+                {t("rules.trigger.geometry.no_cameras")}
               </p>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -950,13 +944,13 @@ export function TriggerSection(props: TriggerSectionProps) {
               <>
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1.5">
-                    Gate 1. Click two points across the lane.
+                    {t("rules.trigger.geometry.gate_one")}
                   </label>
                   <GeometryEditor camera={cam} mode="line" points={formTriggerGeomPoints} onChange={setFormTriggerGeomPoints} />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1.5">
-                    Gate 2. A second line further along the lane.
+                    {t("rules.trigger.geometry.gate_two")}
                   </label>
                   <GeometryEditor camera={cam} mode="line" points={formTriggerGeomPointsB} onChange={setFormTriggerGeomPointsB} />
                 </div>
@@ -965,7 +959,7 @@ export function TriggerSection(props: TriggerSectionProps) {
           })()}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Real distance between gates (metres)</label>
+              <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.gate_distance")}</label>
               <input
                 type="number"
                 min="1"
@@ -976,7 +970,7 @@ export function TriggerSection(props: TriggerSectionProps) {
               />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Alert above (km/h)</label>
+              <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.speed_threshold")}</label>
               <input
                 type="number"
                 min="1"
@@ -987,10 +981,7 @@ export function TriggerSection(props: TriggerSectionProps) {
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Nurby times a vehicle between the two gates and divides by the
-            real distance you measured on the ground. This is approximate
-            (roughly within 10-20%), good for catching a speeder on your
-            street, not for legal citations.
+            {t("rules.trigger.geometry.speed_help")}
           </p>
         </div>
       )}
@@ -998,25 +989,23 @@ export function TriggerSection(props: TriggerSectionProps) {
       {formTriggerType === "crosswalk_violation" && (
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Crosswalk (zone name)</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.crosswalk_zone")}</label>
             <input
               value={formTriggerCrosswalkZone}
               onChange={(e) => setFormTriggerCrosswalkZone(e.target.value)}
-              placeholder="Crosswalk"
+              placeholder={t("rules.trigger.geometry.crosswalk_placeholder")}
               className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
             />
             <p className="text-[11px] text-muted-foreground mt-1">
-              Draw the crossing as a named zone in the camera&apos;s
-              <span className="font-medium"> Zones &amp; Tripwires</span> settings, then type its exact name
-              here. The rule fires when a vehicle and a pedestrian are in the zone at the same time.
+              {t("rules.trigger.geometry.crosswalk_help")}
             </p>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Vehicle type (optional)</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.vehicle_type_optional")}</label>
             <input
               value={formTriggerObjectClass}
               onChange={(e) => setFormTriggerObjectClass(e.target.value)}
-              placeholder="any vehicle (car, truck, bus, motorcycle)"
+              placeholder={t("rules.trigger.geometry.vehicle_placeholder")}
               className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
             />
           </div>
@@ -1026,21 +1015,20 @@ export function TriggerSection(props: TriggerSectionProps) {
       {formTriggerType === "lane_occupancy" && (
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Lane (zone name)</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.lane_zone")}</label>
             <input
               value={formTriggerLaneZone}
               onChange={(e) => setFormTriggerLaneZone(e.target.value)}
-              placeholder="Lane 1"
+              placeholder={t("rules.trigger.geometry.lane_placeholder")}
               className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
             />
             <p className="text-[11px] text-muted-foreground mt-1">
-              Draw the lane as a named zone in the camera&apos;s
-              <span className="font-medium"> Zones &amp; Tripwires</span> settings, then type its exact name here.
+              {t("rules.trigger.geometry.lane_help")}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Alert at (vehicles)</label>
+              <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.vehicle_count_threshold")}</label>
               <input
                 type="number"
                 min="1"
@@ -1050,11 +1038,11 @@ export function TriggerSection(props: TriggerSectionProps) {
               />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Vehicle type (optional)</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.vehicle_type_optional")}</label>
               <input
                 value={formTriggerObjectClass}
                 onChange={(e) => setFormTriggerObjectClass(e.target.value)}
-                placeholder="any vehicle"
+                placeholder={t("rules.trigger.geometry.any_vehicle_placeholder")}
                 className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-sm"
               />
             </div>
@@ -1065,10 +1053,10 @@ export function TriggerSection(props: TriggerSectionProps) {
               checked={formTriggerRequireStationary}
               onChange={(e) => setFormTriggerRequireStationary(e.target.checked)}
             />
-            Only count stopped vehicles (a real backup, not free-flowing traffic)
+            {t("rules.trigger.geometry.stopped_only")}
           </label>
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Must hold for (seconds)</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.hold_seconds")}</label>
             <input
               type="number"
               min="0"
@@ -1077,8 +1065,7 @@ export function TriggerSection(props: TriggerSectionProps) {
               className="w-24 px-2 py-1.5 rounded-md bg-background border border-border text-sm"
             />
             <p className="text-[11px] text-muted-foreground mt-1">
-              The lane must stay over the threshold this long before firing. 0 fires on the
-              first frame; a few seconds avoids a brief cluster passing through.
+              {t("rules.trigger.geometry.hold_help")}
             </p>
           </div>
         </div>
