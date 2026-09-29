@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { ActivityFilterBar } from "@/components/activity/ActivityFilterBar";
 import { EmptyState } from "@/components/EmptyState";
 import { formatWith } from "@/lib/time";
+import { translate, type Locale } from "@/lib/i18n";
 
 // A merged activity item from GET /timeline (observation or transcript),
 // already interleaved newest-first by the backend.
@@ -41,14 +42,14 @@ function toLocalInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function dayLabel(iso: string): string {
+function dayLabel(iso: string, t: (key: string) => string): string {
   const d = new Date(iso);
   const today = new Date();
   const yest = new Date(today.getTime() - 86400000);
   const same = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  if (same(d, today)) return "Today";
-  if (same(d, yest)) return "Yesterday";
+  if (same(d, today)) return t("timeline.today");
+  if (same(d, yest)) return t("timeline.yesterday");
   return formatWith(d, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
 }
 
@@ -73,7 +74,9 @@ function personNames(item: TimelineItem): string[] {
 }
 
 export default function TimelinePage() {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = useCallback((key: string) => translate(locale, key), [locale]);
   const router = useRouter();
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
@@ -166,13 +169,13 @@ export default function TimelinePage() {
   const groups = useMemo(() => {
     const out: { day: string; items: TimelineItem[] }[] = [];
     for (const it of visible) {
-      const d = dayLabel(it.started_at);
+      const d = dayLabel(it.started_at, t);
       const last = out[out.length - 1];
       if (last && last.day === d) last.items.push(it);
       else out.push({ day: d, items: [it] });
     }
     return out;
-  }, [visible]);
+  }, [visible, t]);
 
   const hasFilters = !!cameraFilter || !!dateFrom || !!dateTo || kindFilter !== "all";
   const hasNext = items.length === PAGE_SIZE;
@@ -180,9 +183,9 @@ export default function TimelinePage() {
   return (
     <div className="px-6 py-6 max-w-4xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Activity</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("timeline.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Everything that happened, newest first. Click any moment to watch it.
+          {t("timeline.subtitle")}
         </p>
         <div className="mt-4">
           <ActivityFilterBar />
@@ -195,15 +198,15 @@ export default function TimelinePage() {
           onChange={(e) => { setCameraFilter(e.target.value); setPage(0); }}
           className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
         >
-          <option value="">All cameras</option>
+          <option value="">{t("timeline.all_cameras")}</option>
           {cameras.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
 
         <div className="flex rounded-md border border-border overflow-hidden">
           {([
-            { k: "all", label: "Everything" },
-            { k: "observation", label: "Sightings" },
-            { k: "transcript", label: "Speech" },
+            { k: "all", label: t("timeline.everything") },
+            { k: "observation", label: t("timeline.sightings") },
+            { k: "transcript", label: t("timeline.speech") },
           ] as const).map((o) => (
             <button
               key={o.k}
@@ -218,13 +221,13 @@ export default function TimelinePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">From</label>
+          <label className="text-xs text-muted-foreground">{t("timeline.from")}</label>
           <input type="datetime-local" value={dateFrom}
             onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
             className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">To</label>
+          <label className="text-xs text-muted-foreground">{t("timeline.to")}</label>
           <input type="datetime-local" value={dateTo}
             onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
             className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
@@ -232,7 +235,7 @@ export default function TimelinePage() {
 
         <div className="flex items-center gap-1">
           <button onClick={applyLastNight}
-            className="px-2 py-1.5 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">Last night</button>
+            className="px-2 py-1.5 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">{t("timeline.last_night")}</button>
           {[{ label: "24h", hours: 24 }, { label: "7d", hours: 168 }].map((p) => (
             <button key={p.label} onClick={() => applyPreset(p.hours)}
               className="px-2 py-1.5 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">{p.label}</button>
@@ -243,25 +246,25 @@ export default function TimelinePage() {
           <button
             onClick={() => { setCameraFilter(""); setDateFrom(""); setDateTo(""); setKindFilter("all"); setPage(0); }}
             className="px-3 py-2 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-            Clear filters
+            {t("timeline.clear_filters")}
           </button>
         )}
       </div>
 
       {loading ? (
-        <div className="text-sm text-muted-foreground py-20 text-center">Loading timeline.</div>
+        <div className="text-sm text-muted-foreground py-20 text-center">{t("timeline.loading")}</div>
       ) : visible.length === 0 ? (
         hasFilters ? (
           <EmptyState
-            title="No events match these filters"
-            body="Try a different camera or kind, or widen the date range."
-            actionLabel="Clear filters"
+            title={t("timeline.no_match_title")}
+            body={t("timeline.no_match_body")}
+            actionLabel={t("timeline.clear_filters")}
             onAction={() => { setCameraFilter(""); setDateFrom(""); setDateTo(""); setKindFilter("all"); }}
           />
         ) : (
           <EmptyState
-            title="Nothing on the timeline yet"
-            body="Detections and spoken moments from your cameras show up here as they happen."
+            title={t("timeline.empty_title")}
+            body={t("timeline.empty_body")}
           />
         )
       ) : (
@@ -305,12 +308,12 @@ export default function TimelinePage() {
                             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                               <span className="font-mono">{clockLabel(it.started_at)}</span>
                               <span>·</span>
-                              <span className="truncate">{cameraNames[it.camera_id] || "Unknown camera"}</span>
-                              <span className="ml-auto opacity-0 group-hover:opacity-100 text-accent transition-opacity">Play ▶</span>
+                              <span className="truncate">{cameraNames[it.camera_id] || t("timeline.unknown_camera")}</span>
+                              <span className="ml-auto opacity-0 group-hover:opacity-100 text-accent transition-opacity">{t("timeline.play")} ▶</span>
                             </div>
                             <div className="mt-1 text-sm text-foreground line-clamp-2">
                               {isObs
-                                ? (it.vlm_description || "Motion detected")
+                                ? (it.vlm_description || t("timeline.motion_detected"))
                                 : <span className="italic">“{it.text}”</span>}
                             </div>
                             {(persons.length > 0 || objects.length > 0) && (
@@ -335,10 +338,10 @@ export default function TimelinePage() {
 
           <div className="flex items-center justify-between mt-2">
             <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-              className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed">Previous</button>
-            <span className="text-xs text-muted-foreground">Page {page + 1}</span>
+              className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed">{t("timeline.previous")}</button>
+            <span className="text-xs text-muted-foreground">{t("timeline.page")} {page + 1}</span>
             <button onClick={() => setPage((p) => p + 1)} disabled={!hasNext}
-              className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed">Next</button>
+              className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed">{t("timeline.next")}</button>
           </div>
         </>
       )}
