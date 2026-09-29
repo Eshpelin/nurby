@@ -34,7 +34,10 @@ const DEFAULT_DRAFT: ExperiencePreferences = { version: 1, place: "home", goal: 
 export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClose, onChanged }: Props) {
   const { authFetch, user } = useAuth();
   const locale = user?.locale || "en";
-  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
+  const t = useCallback(
+    (key: string, values?: Record<string, string | number>) => translate(locale, key, values),
+    [locale],
+  );
   const [experience, setExperience] = useState<Experience | null>(null);
   const [activation, setActivation] = useState<ActivationList | null>(null);
   const [loading, setLoading] = useState(true);
@@ -148,11 +151,11 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
   }, [authFetch, load, onChanged]);
 
   const saveGoal = useCallback(async (next: ExperiencePreferences, go: StepKey) => {
-    if (await putExperience(next, "Could not save your goal. Try again.")) {
+    if (await putExperience(next, t("wizard.goal_save_failed"))) {
       touched.current = true;
       setStep(go);
     }
-  }, [putExperience]);
+  }, [putExperience, t]);
 
   const goto = (k: StepKey) => { touched.current = true; setStep(k); };
   // Skipping is pure navigation: it never calls an activation endpoint, so a
@@ -269,18 +272,18 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
 
         <label className="mt-5 block text-sm font-medium" htmlFor="wiz-place-label">{t("wizard.place_name")}</label>
         <input id="wiz-place-label" type="text" maxLength={80} disabled={busy}
-          placeholder={draft.place === "business" ? "e.g. Front shop" : "e.g. Home"}
+          placeholder={draft.place === "business" ? t("wizard.place_business_placeholder") : t("wizard.place_home_placeholder")}
           className="mt-2 w-full rounded-lg border border-border bg-background p-2 text-sm"
           value={draft.place_label ?? ""} onChange={(e) => setDraft((d) => ({ ...d, place_label: e.target.value || null }))} />
 
         <div className="mt-6 flex items-center gap-2">
           <button className={primary} disabled={busy}
             onClick={() => saveGoal({ ...draft, place: DETECTION_GOALS.has(draft.goal) ? draft.place : null }, DETECTION_GOALS.has(draft.goal) ? "rule" : "done")}>
-            {busy ? "Saving…" : t("wizard.continue")}
+            {busy ? t("wizard.saving") : t("wizard.continue")}
           </button>
           <button className={btn} disabled={busy}
             onClick={() => saveGoal({ version: 1, place: null, goal: "explore", focus: "daily" }, "done")}>
-            Just explore
+            {t("wizard.just_explore")}
           </button>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">{selected.needs}</p>
@@ -417,7 +420,7 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
               key={`${prefs.goal}:${prefs.focus}:${prefs.paused ? 1 : 0}:${prefs.place_label ?? ""}`}
               paused={!!prefs.paused}
               pauseBusy={busy}
-              onTogglePause={() => { void putExperience({ ...prefs, paused: !prefs.paused }, "Could not update your workflow."); }}
+              onTogglePause={() => { void putExperience({ ...prefs, paused: !prefs.paused }, t("wizard.workflow_update_failed")); }}
             />
           </div>
         )}
