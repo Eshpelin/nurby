@@ -193,6 +193,18 @@ def _reconcile_observation_sources(scoped: dict, existing_ids: set[str]) -> dict
     return scoped
 
 
+def _evidence_availability(evidence: list[dict]) -> str:
+    """Summarize whether a reviewer can still inspect source episodes."""
+    statuses = [str(item.get("source_status")) for item in evidence]
+    if not statuses:
+        return "none"
+    if all(status == "source_expired" for status in statuses):
+        return "expired"
+    if any(status in {"source_expired", "source_changed"} for status in statuses):
+        return "partial"
+    return "available"
+
+
 def _review_visible(camera_id):
     """Match the existing Events review policy for excluded cameras."""
     excluded = select(Camera.id).where(Camera.exclude_from_review.is_(True))
@@ -1217,6 +1229,8 @@ async def get_relationship_suggestion(
             except (TypeError, ValueError):
                 item["transcript_audits"] = []
 
+    evidence_availability = _evidence_availability(evidence)
+
     review_events = (
         await db.execute(
             select(AssociationReviewEvent)
@@ -1252,6 +1266,7 @@ async def get_relationship_suggestion(
         "first_seen_at": association.first_seen_at,
         "last_seen_at": association.last_seen_at,
         "archived_at": association.archived_at,
+        "evidence_availability": evidence_availability,
         "review_events": [
             {
                 "id": str(event.id),

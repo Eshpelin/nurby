@@ -26,6 +26,7 @@ type ReviewItem = {
 type RelationshipDetail = {
   evidence_count: number;
   distinct_days: number;
+  evidence_availability?: "available" | "partial" | "expired" | "none";
   supporting_evidence_count?: number;
   contradictory_evidence_count?: number;
   confidence_score?: number | null;
@@ -407,6 +408,15 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                       <p className="text-[10px] text-muted-foreground">{t("review.loading_evidence")}</p>
                     ) : relationshipDetails[item.id]?.evidence.length || relationshipDetails[item.id]?.review_events?.length ? (
                       <div className="space-y-1.5">
+                        {relationshipDetails[item.id].evidence_availability && relationshipDetails[item.id].evidence_availability !== "available" && (
+                          <p className="rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-[10px] text-amber-200">
+                            {relationshipDetails[item.id].evidence_availability === "none"
+                              ? t("review.evidence_none")
+                              : relationshipDetails[item.id].evidence_availability === "expired"
+                              ? t("review.evidence_expired")
+                              : t("review.evidence_partial")}
+                          </p>
+                        )}
                         <p className="text-[10px] text-muted-foreground">
                           {t("review.independent_visits", { count: relationshipDetails[item.id].distinct_days })} · {t("review.source_episodes_below")}
                         </p>

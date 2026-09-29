@@ -4,7 +4,14 @@ from uuid import uuid4
 from services.api.routes.review import _scoped_evidence
 from services.api.routes.review import _association_visible
 from services.api.routes.review import _scoped_camera_histogram
-from services.api.routes.review import _supporting_evidence_count
+from services.api.routes.review import _evidence_availability, _supporting_evidence_count
+
+
+def test_evidence_availability_distinguishes_expired_and_partial_sources():
+    assert _evidence_availability([]) == "none"
+    assert _evidence_availability([{"source_status": "source_expired"}]) == "expired"
+    assert _evidence_availability([{"source_status": "available"}, {"source_status": "source_changed"}]) == "partial"
+    assert _evidence_availability([{"source_status": "available"}]) == "available"
 from services.api.routes.review import _reconcile_observation_sources
 from services.api.routes.review import _visible_cluster_camera_id
 from shared.camera_access import ALL
