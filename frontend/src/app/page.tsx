@@ -1211,8 +1211,8 @@ function DashboardContent() {
                 <div className="flex items-center gap-3">
                   <div className="w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full animate-spin flex-shrink-0" />
                   <div>
-                    <p className="text-xs font-medium text-accent">Analyzing {searchResults.length} observation{searchResults.length !== 1 ? "s" : ""}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">AI is reading through camera data to answer your question.</p>
+                    <p className="text-xs font-medium text-accent">{t(searchResults.length === 1 ? "dashboard.analyzing_one" : "dashboard.analyzing_other", { count: searchResults.length })}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{t("dashboard.ai_reading_camera_data")}</p>
                   </div>
                 </div>
               </div>
@@ -1246,9 +1246,9 @@ function DashboardContent() {
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-accent pulse-dot" />
-                    <span className="text-[10px] font-medium text-accent uppercase tracking-wider">AI Answer</span>
+                    <span className="text-[10px] font-medium text-accent uppercase tracking-wider">{t("dashboard.ai_answer")}</span>
                   </div>
-                  <button onClick={() => setAiAnswer(null)} className="text-[10px] text-muted-foreground hover:text-foreground">Dismiss</button>
+                  <button onClick={() => setAiAnswer(null)} className="text-[10px] text-muted-foreground hover:text-foreground">{t("common.dismiss")}</button>
                 </div>
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{aiAnswer}</p>
               </div>
@@ -1264,7 +1264,7 @@ function DashboardContent() {
                     <path d="M12 2L9.1 8.6 2 9.3l5.5 4.9L5.8 22 12 18l6.2 4-1.7-7.8L22 9.3l-7.1-.7L12 2z"/>
                   </svg>
                 </div>
-                <span className="text-sm font-semibold flex-shrink-0">Recap</span>
+                <span className="text-sm font-semibold flex-shrink-0">{t("dashboard.recap")}</span>
                 <div className="flex rounded-md border border-border overflow-hidden flex-shrink-0">
                   <button onClick={() => setDigestPeriod("hourly")}
                     className={`px-2 py-1 text-[10px] transition-colors ${digestPeriod === "hourly" ? "bg-accent text-black font-medium" : "text-muted-foreground hover:bg-muted"}`}>
@@ -1276,14 +1276,14 @@ function DashboardContent() {
                   </button>
                 </div>
                 <button onClick={fetchDigest} disabled={digestLoading}
-                  title="Regenerate digest"
+                  title={t("dashboard.regenerate_digest")}
                   className="p-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 flex-shrink-0">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={digestLoading ? "animate-spin" : ""}>
                     <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
                   </svg>
                 </button>
                 <span className="text-[10px] text-muted-foreground truncate ml-auto">
-                  {selectedCamera && cameraMap[selectedCamera] ? cameraMap[selectedCamera].name : "All Cameras"}
+                  {selectedCamera && cameraMap[selectedCamera] ? cameraMap[selectedCamera].name : t("dashboard.all_cameras")}
                 </span>
               </div>
 
@@ -1311,14 +1311,14 @@ function DashboardContent() {
                   {digestPeriod === "daily" && (
                     <div className="mt-3 pt-3 border-t border-border/50">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">People seen today</span>
-                        {personSummariesLoading && <span className="text-[10px] text-muted-foreground">loading.</span>}
+                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("dashboard.people_seen_today")}</span>
+                        {personSummariesLoading && <span className="text-[10px] text-muted-foreground">{t("common.loading")}</span>}
                       </div>
                       {(() => {
                         const seen = personSummaries.filter((p) => p.sightings_24h > 0);
                         const unknowns = clusterSummaries.filter((c) => c.sightings_24h > 0);
                         if (seen.length === 0 && unknowns.length === 0 && !personSummariesLoading) {
-                          return <p className="text-[11px] text-muted-foreground">No faces recognized or grouped in the last 24 hours.</p>;
+                          return <p className="text-[11px] text-muted-foreground">{t("dashboard.no_faces_today")}</p>;
                         }
                         return (
                           <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
@@ -1335,7 +1335,7 @@ function DashboardContent() {
                                   )}
                                 </div>
                                 <div className="mt-1 text-[11px] font-medium truncate">{p.display_name}</div>
-                                <div className="text-[9px] text-muted-foreground">{p.sightings_24h} visit{p.sightings_24h > 1 ? "s" : ""}</div>
+                                <div className="text-[9px] text-muted-foreground">{t(p.sightings_24h === 1 ? "dashboard.visit_one" : "dashboard.visit_other", { count: p.sightings_24h })}</div>
                               </button>
                             ))}
                             {unknowns.map((c) => (
@@ -1350,7 +1350,7 @@ function DashboardContent() {
                                 </div>
                                 <div className="mt-1 text-[11px] font-medium truncate text-amber-300/90">{c.auto_label}</div>
                                 <div className="text-[9px] text-muted-foreground truncate">
-                                  {c.appearance_description || (c.appearance_description_status === "pending" ? "describing." : `${c.sightings_24h} visit${c.sightings_24h > 1 ? "s" : ""}`)}
+                                  {c.appearance_description || (c.appearance_description_status === "pending" ? t("dashboard.describing") : t(c.sightings_24h === 1 ? "dashboard.visit_one" : "dashboard.visit_other", { count: c.sightings_24h }))}
                                 </div>
                               </button>
                             ))}
@@ -1363,10 +1363,10 @@ function DashboardContent() {
               ) : (
                 <div className="text-xs text-muted-foreground leading-relaxed">
                   {cameras.length === 0
-                    ? "Connect a camera to start generating activity summaries."
+                    ? t("dashboard.digest_connect_camera")
                     : digestPeriod === "hourly"
-                      ? "No activity in the last hour. The digest will appear as soon as events are observed."
-                      : "No activity in the last 24 hours. Try adjusting cameras or check back later."}
+                      ? t("dashboard.digest_no_hour")
+                      : t("dashboard.digest_no_day")}
                 </div>
               )}
             </div>
@@ -1395,7 +1395,7 @@ function DashboardContent() {
                     </span>
                   )}
                 </span>
-                <button onClick={() => { setLiveEvents([]); setLiveTriggers([]); }} className="text-[10px] text-muted-foreground hover:text-foreground">clear</button>
+                <button onClick={() => { setLiveEvents([]); setLiveTriggers([]); }} className="text-[10px] text-muted-foreground hover:text-foreground">{t("dashboard.clear")}</button>
               </div>
               {liveTriggers.filter((t) => t.kind === "vlm").slice(0, 2).map((t) => (
                 <div key={`vlm-${t.id}`}
