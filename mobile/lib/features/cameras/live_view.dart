@@ -31,15 +31,6 @@ class CameraLiveView extends ConsumerStatefulWidget {
 class _CameraLiveViewState extends ConsumerState<CameraLiveView> {
   bool _webrtcFailed = false;
 
-  /// MediaMTX publishes under the last path segment of the stream URL.
-  String? get _streamName {
-    final url = widget.camera.streamUrl;
-    if (url == null || url.isEmpty) return null;
-    final trimmed = url.replaceAll(RegExp(r'/+$'), '');
-    final idx = trimmed.lastIndexOf('/');
-    return idx >= 0 ? trimmed.substring(idx + 1) : trimmed;
-  }
-
   /// WebRTC signaling is camera-scoped by the API; MediaMTX is not exposed
   /// as an authorization surface to mobile clients.
   String? _whepUrl() {
