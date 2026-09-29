@@ -8,12 +8,15 @@ import { STREAM_TYPES } from "@/lib/camera-types";
 import type { StreamType, DiscoveredDevice, DiscoveredOnvifDevice, ModalTab } from "@/lib/camera-types";
 import CameraBrandHelp from "@/components/CameraBrandHelp";
 import { extractApiError } from "@/lib/api-error";
+import { translate, type Locale } from "@/lib/i18n";
 
 // Network stream types we can probe via /api/cameras/test-connection before saving.
 const TESTABLE_STREAM_TYPES = ["rtsp", "http_mjpeg", "http_snapshot", "hls"];
 
 function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: DiscoveredOnvifDevice, username?: string, password?: string) => void }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const [devices, setDevices] = useState<DiscoveredOnvifDevice[]>([]);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -76,7 +79,7 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            <span className="text-muted-foreground">Scanning network for ONVIF cameras...</span>
+            <span className="text-muted-foreground">{t("camera_add.scanning")}</span>
           </>
         ) : (
           <>
@@ -85,7 +88,7 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
               <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
               <path d="M2 12h20" />
             </svg>
-            <span>{hasScanned ? "Rescan network" : "Scan Network"}</span>
+            <span>{hasScanned ? t("camera_add.rescan") : t("camera_add.scan_start")}</span>
           </>
         )}
       </button>
@@ -99,8 +102,8 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
       {devices.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-              Found {devices.length} device{devices.length !== 1 ? "s" : ""}
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+              {t("camera_add.found", { count: devices.length, plural: devices.length !== 1 ? "s" : "" })}
             </span>
             <div className="flex-1 h-px bg-border" />
           </div>
@@ -115,11 +118,11 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium truncate">{dev.name}</span>
                     {dev.already_added && (
-                      <span className="shrink-0 text-[10px] font-medium text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">Already added</span>
+                      <span className="shrink-0 text-[10px] font-medium text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">{t("camera_add.already_added")}</span>
                     )}
                     {dev.auth_required && !dev.already_added && (
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-yellow-500">
-                        <title>Authentication required</title>
+                      <title>{t("camera_add.auth_required")}</title>
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
                       </svg>
                     )}
@@ -134,7 +137,7 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
                 {!dev.already_added && (
                   <button type="button" onClick={() => handleAddDevice(dev)} disabled={addingIp === dev.ip}
                     className="shrink-0 px-2.5 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90 transition-opacity disabled:opacity-50">
-                    {addingIp === dev.ip ? "Adding..." : "Add"}
+                    {addingIp === dev.ip ? t("camera_add.adding") : t("camera_add.add")}
                   </button>
                 )}
               </div>
@@ -159,7 +162,9 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
 }
 
 export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded = false }: { onClose: () => void; onSuccess: () => void; initialStreamType?: StreamType; embedded?: boolean }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string) => translate(locale, key);
   const { startPublish, stopPublish } = useWebcamPublisher();
   useEscapeKey(onClose, !embedded);
   const [activeTab, setActiveTab] = useState<ModalTab>("manual");
@@ -503,8 +508,8 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
         : "relative w-full max-w-lg mx-4 rounded-lg border border-border bg-card-elevated p-6 shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin"}>
         {!embedded && (
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-semibold">Add Camera</h2>
-            <button type="button" onClick={onClose} aria-label="Close add camera" className="text-muted-foreground hover:text-foreground transition-colors text-xl leading-none">&times;</button>
+            <h2 className="text-lg font-semibold">{t("camera_add.title")}</h2>
+            <button type="button" onClick={onClose} aria-label={t("camera_add.close")} className="text-muted-foreground hover:text-foreground transition-colors text-xl leading-none">&times;</button>
           </div>
         )}
 
@@ -512,14 +517,14 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
         <div className="flex gap-1 mb-5 p-1 rounded-md bg-muted/30 border border-border">
           <button type="button" onClick={() => setActiveTab("manual")}
             className={`flex-1 px-3 py-1.5 text-sm rounded transition-colors ${activeTab === "manual" ? "bg-card-elevated text-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-            Manual Setup
+            {t("camera_add.manual")}
           </button>
           <button type="button" onClick={() => setActiveTab("scan")}
             className={`flex-1 px-3 py-1.5 text-sm rounded transition-colors flex items-center justify-center gap-1.5 ${activeTab === "scan" ? "bg-card-elevated text-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /><path d="M2 12h20" />
             </svg>
-            Scan Network
+            {t("camera_add.scan")}
           </button>
         </div>
 
@@ -534,12 +539,12 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
         {activeTab === "manual" && (
           <form onSubmit={handleManualSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm text-muted-foreground mb-1.5">Name</label>
+              <label className="block text-sm text-muted-foreground mb-1.5">{t("camera_add.name")}</label>
               <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Front Door" required className={inputClass} />
             </div>
 
             <div>
-              <label className="block text-sm text-muted-foreground mb-1.5">Feed Type</label>
+              <label className="block text-sm text-muted-foreground mb-1.5">{t("camera_add.feed_type")}</label>
               <div className="grid grid-cols-3 gap-1.5">
                 {STREAM_TYPES.filter((t) => showAudioSources || !["audio_rtsp", "browser_mic"].includes(t.value)).map((t) => (
                   <button key={t.value} type="button" onClick={() => { setStreamType(t.value); setStreamUrl(""); setDevices([]); setScanError(null); setSelectedDeviceIndex(null); setManualInput(false); }}
@@ -551,7 +556,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
               </div>
               {!showAudioSources && (
                 <button type="button" onClick={() => setShowAudioSources(true)} className="mt-2 text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2">
-                  Add a microphone instead
+                  {t("camera_add.add_microphone")}
                 </button>
               )}
               <p className="text-[11px] text-muted-foreground mt-1.5">{selectedType.hint}</p>
@@ -559,7 +564,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
 
             {streamType === "webcam" ? (
               <div>
-                <label className="block text-sm text-muted-foreground mb-1.5">Camera Device</label>
+                <label className="block text-sm text-muted-foreground mb-1.5">{t("camera_add.camera_device")}</label>
                 {webcamDevices.length > 0 ? (
                   <select value={webcamDeviceId} onChange={(e) => setWebcamDeviceId(e.target.value)} className={inputClass}>
                     {webcamDevices.map((d, i) => (
@@ -567,21 +572,21 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
                     ))}
                   </select>
                 ) : (
-                  <p className="text-[11px] text-muted-foreground">Requesting camera access...</p>
+                  <p className="text-[11px] text-muted-foreground">{t("camera_add.requesting_access")}</p>
                 )}
                 {webcamError && <p className="text-[11px] text-danger mt-1">{webcamError}</p>}
                 <div className="mt-3 rounded-md overflow-hidden border border-border bg-black aspect-video">
                   {webcamStream ? (
                     <video ref={webcamPreviewRef} autoPlay muted playsInline className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[11px] text-muted-foreground">No preview</div>
+                    <div className="w-full h-full flex items-center justify-center text-[11px] text-muted-foreground">{t("camera_add.no_preview")}</div>
                   )}
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1.5">Stream stays live while this tab is open. Closing the tab stops it.</p>
+                <p className="text-[11px] text-muted-foreground mt-1.5">{t("camera_add.stream_stays_live")}</p>
               </div>
             ) : streamType === "browser_mic" ? (
               <div className="rounded-md border border-border bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
-                <p className="font-medium text-foreground mb-1">No URL needed.</p>
+                <p className="font-medium text-foreground mb-1">{t("camera_add.no_url")}</p>
                 After you save, open the camera and tap the &quot;Open mic page&quot; button.
                 On your phone, hit Start mic to publish audio over WebSocket.
                 The phone stays live while the tab is open.
@@ -651,14 +656,14 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
             )}
 
             <div>
-              <label className="block text-sm text-muted-foreground mb-1.5">Location Label</label>
+              <label className="block text-sm text-muted-foreground mb-1.5">{t("camera_add.location")}</label>
               <p className="text-[11px] text-muted-foreground mb-1">Used in alerts, for example “Person at Front door (Porch)”.</p>
-              <input type="text" value={locationLabel} onChange={(e) => setLocationLabel(e.target.value)} placeholder="Optional" className={inputClass} />
+              <input type="text" value={locationLabel} onChange={(e) => setLocationLabel(e.target.value)} placeholder={t("camera_add.optional")} className={inputClass} />
             </div>
 
             <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
               <div>
-                <label className="block text-sm text-foreground">Recording retention</label>
+                <label className="block text-sm text-foreground">{t("camera_add.retention")}</label>
                 <p className="text-[11px] text-muted-foreground">New cameras keep the last 30 days by default. Change this if you need a different local history.</p>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -712,16 +717,16 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
               {(!name.trim() || (streamType === "webcam" ? !webcamStream : streamType === "browser_mic" ? false : !streamUrl.trim())) && !submitting && (
                 <p className="text-xs text-muted-foreground">
                   {!name.trim()
-                    ? "Enter a Name above to continue."
+                    ? t("camera_add.enter_name")
                     : streamType === "webcam"
-                      ? "Waiting for camera preview."
-                      : "Stream URL required."}
+                      ? t("camera_add.waiting_preview")
+                      : t("camera_add.stream_required")}
                 </p>
               )}
               <div className="flex gap-2">
-                <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">{embedded ? "Back to setup" : "Cancel"}</button>
+                <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">{embedded ? t("camera_add.back_setup") : t("camera_add.cancel")}</button>
                 <button type="submit" disabled={submitting || !name.trim() || (streamType === "webcam" ? !webcamStream : streamType === "browser_mic" ? false : !streamUrl.trim())} className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
-                  {submitting ? (testingConnection ? "Testing connection..." : "Adding...") : streamType === "webcam" ? "Start Streaming" : "Add Camera"}
+                  {submitting ? (testingConnection ? t("camera_add.testing") : t("camera_add.adding")) : streamType === "webcam" ? t("camera_add.start_streaming") : t("camera_add.add_camera")}
                 </button>
               </div>
             </div>
