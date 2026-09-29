@@ -122,7 +122,7 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
                     <div className="text-[10px] text-muted-foreground">{clip.duration_seconds}s · {Math.round((clip.speaker_confidence ?? 0) * 100)}% {t("voiceprint.visual_attribution")}</div>
                     <div className="mt-1 text-[10px] text-muted-foreground">{clip.attribution_reason}</div>
                     <div className="mt-1 text-[10px] text-muted-foreground">
-                      {t("voiceprint.quality")}: {clip.quality?.eligible ? t("voiceprint.eligible") : t("voiceprint.not_eligible", { reasons: clip.quality?.reasons.join(", ") || "needs review" })} · {t("voiceprint.source", { version: clip.attribution_model_version ?? "video-correlated-v1" })}
+                      {t("voiceprint.quality")}: {clip.quality?.eligible ? t("voiceprint.eligible") : t("voiceprint.not_eligible", { reasons: clip.quality?.reasons.join(", ") || t("voiceprint.needs_review") })} · {t("voiceprint.source", { version: clip.attribution_model_version ?? "video-correlated-v1" })}
                     </div>
                     {clip.transcript && <div className="mt-1 text-xs text-foreground/90">“{clip.transcript}”</div>}
                     {clip.audio_available && clip.audio_url && (
@@ -155,7 +155,7 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
             <input type="checkbox" checked={includeRejected} onChange={(event) => setIncludeRejected(event.target.checked)} className="accent-accent" />
             {t("voiceprint.show_rejected")}
           </label>
-          {includeRejected && rejected.map((clip) => <div key={clip.transcript_id} className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground"><span>{formatDateTime(clip.started_at)} · Rejected</span><button type="button" onClick={() => void decide([clip.transcript_id], "reopen")} disabled={busy} className="text-accent hover:underline">{t("voiceprint.reopen")}</button></div>)}
+          {includeRejected && rejected.map((clip) => <div key={clip.transcript_id} className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground"><span>{formatDateTime(clip.started_at)} · {t("voiceprint.rejected")}</span><button type="button" onClick={() => void decide([clip.transcript_id], "reopen")} disabled={busy} className="text-accent hover:underline">{t("voiceprint.reopen")}</button></div>)}
         </>
       )}
     </section>
