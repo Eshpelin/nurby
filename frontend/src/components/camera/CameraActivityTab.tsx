@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { ConversationCard } from "@/components/ConversationCard";
 import { SummaryCard } from "@/components/SummaryCard";
+import { Locale, translate } from "@/lib/i18n";
+import { getDisplayLocale } from "@/lib/time";
 
 interface ActivityConversation {
   id: string;
@@ -48,6 +50,8 @@ export function CameraActivityTab({
   cameraName: string;
 }) {
   const { authFetch } = useAuth();
+  const locale = (getDisplayLocale() as Locale) || "en";
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const [convs, setConvs] = useState<ActivityConversation[]>([]);
   const [summaries, setSummaries] = useState<ActivitySummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,9 +107,9 @@ export function CameraActivityTab({
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         {([
-          { v: "all", l: `All (${convs.length + summaries.length})` },
-          { v: "conversations", l: `Conversations (${convs.length})` },
-          { v: "summaries", l: `Summaries (${summaries.length})` },
+          { v: "all", l: t("camera_activity.all", { count: convs.length + summaries.length }) },
+          { v: "conversations", l: t("camera_activity.conversations", { count: convs.length }) },
+          { v: "summaries", l: t("camera_activity.summaries", { count: summaries.length }) },
         ] as const).map((f) => (
           <button
             key={f.v}
@@ -121,19 +125,17 @@ export function CameraActivityTab({
           </button>
         ))}
         <span className="ml-auto text-[10px] text-muted-foreground/70 font-mono">
-          refreshes every 15s
+          {t("camera_activity.refresh")}
         </span>
       </div>
 
       {loading ? (
-        <div className="text-xs text-muted-foreground">Loading activity.</div>
+        <div className="text-xs text-muted-foreground">{t("camera_activity.loading")}</div>
       ) : entries.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-card/30 p-8 text-center">
-          <h3 className="text-sm font-medium mb-1">Nothing yet</h3>
+          <h3 className="text-sm font-medium mb-1">{t("camera_activity.empty_title")}</h3>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            Activity rolls up here as conversations close and the
-            summarizer worker runs. Check the dashboard timeline for the
-            latest live signal.
+            {t("camera_activity.empty_body")}
           </p>
         </div>
       ) : (

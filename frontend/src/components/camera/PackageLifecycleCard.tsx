@@ -81,7 +81,7 @@ export function PackageLifecycleCard({ cameraId, token, authFetch, locale: reque
     const currentId = evidenceObservationId(item);
     const beforeId = item.state === "gone" ? item.evidence?.last_present_observation_id : null;
     const links: { id: string; label: string }[] = [];
-    if (beforeId && beforeId !== currentId) links.push({ id: beforeId, label: "Before disappearance" });
+    if (beforeId && beforeId !== currentId) links.push({ id: beforeId, label: t("package.before_disappearance") });
     if (currentId) links.push({ id: currentId, label: evidenceLabel(item) });
     return links;
   };
