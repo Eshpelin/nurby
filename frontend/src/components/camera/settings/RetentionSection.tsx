@@ -5,8 +5,10 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow } from "./primitives";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface RetentionSectionProps {
+  locale: Locale;
   retentionDays: number;
   retentionGb: number;
   retentionMode: string;
@@ -19,6 +21,7 @@ interface RetentionSectionProps {
 }
 
 export function RetentionSection({
+  locale,
   retentionDays,
   retentionGb,
   retentionMode,
@@ -27,22 +30,23 @@ export function RetentionSection({
   setRetentionMode,
   archiveName = null,
 }: RetentionSectionProps) {
-  const leaves = archiveName ? `move to ${archiveName}` : "be deleted";
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
+  const leaves = archiveName ? t("camera.retention.move_to", { archive: archiveName }) : t("camera.retention.be_deleted");
   return (
         <Section
-          title="Retention"
+          title={t("camera.retention.title")}
           description={
             archiveName
-              ? `How long recordings stay on this machine before moving to the archive (${archiveName})`
-              : "How long recordings are kept before deletion"
+              ? t("camera.retention.description_archive", { archive: archiveName })
+              : t("camera.retention.description_delete")
           }
         >
-          <FieldRow label="Retention Policy">
+          <FieldRow label={t("camera.retention.policy_label")}>
             <div className="flex gap-1.5">
               {([
-                { value: "none", label: "Keep Forever" },
-                { value: "time", label: "By Age" },
-                { value: "size", label: "By Size" },
+                { value: "none", label: t("camera.retention.keep_forever") },
+                { value: "time", label: t("camera.retention.by_age") },
+                { value: "size", label: t("camera.retention.by_size") },
               ] as const).map((opt) => (
                 <button
                   key={opt.value}
@@ -62,8 +66,8 @@ export function RetentionSection({
 
           {retentionMode === "time" && (
             <FieldRow
-              label={archiveName ? "Keep On This Machine For" : "Keep Recordings For"}
-              hint={archiveName ? `Older recordings move to ${archiveName}` : "Delete recordings older than this"}
+              label={archiveName ? t("camera.retention.keep_machine_for") : t("camera.retention.keep_recordings_for")}
+              hint={archiveName ? t("camera.retention.older_move", { archive: archiveName }) : t("camera.retention.older_delete")}
             >
               <div className="flex items-center gap-3">
                 <input
@@ -104,8 +108,8 @@ export function RetentionSection({
 
           {retentionMode === "size" && (
             <FieldRow
-              label={archiveName ? "Max On This Machine" : "Max Storage"}
-              hint={archiveName ? `Oldest recordings move to ${archiveName} past this` : "Delete oldest recordings when limit is reached"}
+              label={archiveName ? t("camera.retention.max_machine") : t("camera.retention.max_storage")}
+              hint={archiveName ? t("camera.retention.oldest_move", { archive: archiveName }) : t("camera.retention.oldest_delete")}
             >
               <div className="flex items-center gap-3">
                 <input
@@ -148,16 +152,15 @@ export function RetentionSection({
             >
               <p className={`text-xs ${archiveName ? "text-muted-foreground" : "text-warning"}`}>
                 {retentionMode === "time"
-                  ? `Recordings older than ${retentionDays} day${retentionDays !== 1 ? "s" : ""} will ${archiveName ? leaves : "be automatically deleted from disk"}.`
-                  : `When recordings exceed ${retentionGb} GB, the oldest will ${archiveName ? leaves : "be deleted to make space"}.`}
+                  ? t("camera.retention.age_warning", { days: retentionDays, plural: retentionDays !== 1 ? "s" : "", action: archiveName ? leaves : t("camera.retention.auto_delete") })
+                  : t("camera.retention.size_warning", { size: retentionGb, action: archiveName ? leaves : t("camera.retention.delete_make_space") })}
               </p>
             </div>
           )}
 
           {retentionMode === "none" && archiveName && (
             <p className="text-[11px] text-muted-foreground">
-              This camera keeps everything on this machine, so nothing from it moves to
-              {" "}{archiveName}. Choose By Age or By Size to start archiving.
+              {t("camera.retention.keep_all_help", { archive: archiveName })}
             </p>
           )}
         </Section>

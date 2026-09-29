@@ -1017,6 +1017,7 @@ export default function CameraConfigPage() {
 
         {/* ── Retention ── */}
         <RetentionSection
+          locale={locale}
           retentionDays={retentionDays}
           retentionGb={retentionGb}
           retentionMode={retentionMode}
