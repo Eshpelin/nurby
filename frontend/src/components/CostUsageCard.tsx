@@ -133,6 +133,16 @@ export function CostUsageCard() {
               </div>
             </div>
           )}
+          {report.by_provider.length > 0 && (
+            <div>
+              <div className="text-xs font-medium mb-1">{t("cost.by_provider")}</div>
+              <div className="space-y-1">
+                {report.by_provider.slice(0, 6).map((row) => (
+                  <div key={row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} {t("cost.calls_lower")}</span></div>
+                ))}
+              </div>
+            </div>
+          )}
           {report.by_rule.length > 0 && (
             <div>
               <div className="text-xs font-medium mb-1">{t("cost.by_rule")}</div>
