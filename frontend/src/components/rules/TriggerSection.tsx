@@ -12,8 +12,10 @@ import { ModelClassPicker } from "./ModelClassPicker";
 import { StyledSelect } from "./StyledSelect";
 import { GeometryEditor } from "./GeometryEditor";
 import { RulePhraseInput } from "./RulePhraseInput";
+import { translate, type Locale } from "@/lib/i18n";
 
 export interface TriggerSectionProps {
+  locale?: Locale;
   cameras: Camera[];
   persons: Person[];
   activeModels: string[];
@@ -96,6 +98,7 @@ export interface TriggerSectionProps {
 
 export function TriggerSection(props: TriggerSectionProps) {
   const {
+    locale = "en",
     cameras,
     persons,
     activeModels,
@@ -174,21 +177,22 @@ export function TriggerSection(props: TriggerSectionProps) {
     formTriggerMinDistinctDays,
     setFormTriggerMinDistinctDays,
   } = props;
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
 
   return (
     <fieldset className="border border-border rounded-md p-3 space-y-3">
       <legend className="text-xs font-medium text-muted-foreground px-1">
-        When should this rule fire
+        {t("rules.trigger.when")}
       </legend>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-        {TRIGGER_TYPES.map((t) => {
-          const selected = formTriggerType === t.value;
-          const accent = TRIGGER_ACCENTS[t.accent] || TRIGGER_ACCENTS.slate;
+        {TRIGGER_TYPES.map((triggerType) => {
+          const selected = formTriggerType === triggerType.value;
+          const accent = TRIGGER_ACCENTS[triggerType.accent] || TRIGGER_ACCENTS.slate;
           return (
             <button
-              key={t.value}
+              key={triggerType.value}
               type="button"
-              onClick={() => setFormTriggerType(t.value)}
+              onClick={() => setFormTriggerType(triggerType.value)}
               className={`relative text-left rounded-md border p-3 transition-all ${
                 selected
                   ? `${accent.active} ring-2`
@@ -196,11 +200,11 @@ export function TriggerSection(props: TriggerSectionProps) {
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <t.icon className={selected ? "text-foreground" : "text-muted-foreground"} />
-                <span className="text-sm font-medium">{t.label}</span>
+                <triggerType.icon className={selected ? "text-foreground" : "text-muted-foreground"} />
+                <span className="text-sm font-medium">{t(`rules.trigger.type.${triggerType.value}`)}</span>
                 {selected && <span className={`ml-auto w-2 h-2 rounded-full ${accent.dot}`} />}
               </div>
-              <div className="text-[11px] text-muted-foreground leading-snug">{t.desc}</div>
+              <div className="text-[11px] text-muted-foreground leading-snug">{t(`rules.trigger.type_desc.${triggerType.value}`)}</div>
             </button>
           );
         })}
@@ -214,16 +218,16 @@ export function TriggerSection(props: TriggerSectionProps) {
             activeModels={activeModels}
             classes={modelClasses}
             loading={modelClassesLoading}
-            anyLabel="Any object"
+            anyLabel={t("rules.trigger.any_object")}
           />
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Confirmation</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.confirmation")}</label>
             <div className="flex gap-1.5">
               {([
-                { v: "1", l: "Instant" },
-                { v: "2", l: "2 frames" },
-                { v: "3", l: "3 frames" },
-                { v: "5", l: "5 frames" },
+                { v: "1", key: "instant" },
+                { v: "2", key: "two_frames" },
+                { v: "3", key: "three_frames" },
+                { v: "5", key: "five_frames" },
               ] as const).map((m) => (
                 <button
                   key={m.v}
@@ -235,23 +239,21 @@ export function TriggerSection(props: TriggerSectionProps) {
                       : "border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {m.l}
+                  {t(`rules.trigger.confirm.${m.key}`)}
                 </button>
               ))}
             </div>
             <p className="text-[11px] text-muted-foreground mt-1.5">
-              How many keyframes the same object must persist before firing.
-              Instant reacts fastest; more frames kill one-frame false
-              positives like headlight flare or a leaf gusting past.
+              {t("rules.trigger.confirmation_help")}
             </p>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Movement</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.movement")}</label>
             <div className="flex gap-1.5">
               {([
-                { v: "any", l: "Any" },
-                { v: "moving", l: "Moving only" },
-                { v: "stationary", l: "Parked & still only" },
+                { v: "any", key: "any" },
+                { v: "moving", key: "moving" },
+                { v: "stationary", key: "stationary" },
               ] as const).map((m) => (
                 <button
                   key={m.v}
@@ -263,14 +265,12 @@ export function TriggerSection(props: TriggerSectionProps) {
                       : "border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {m.l}
+                  {t(`rules.trigger.movement.${m.key}`)}
                 </button>
               ))}
             </div>
             <p className="text-[11px] text-muted-foreground mt-1.5">
-              &quot;Moving only&quot; is the parked-car fix: an object that has
-              held still stops re-alerting, but starts alerting again the
-              moment it moves.
+              {t("rules.trigger.movement_help")}
             </p>
           </div>
           {(() => {
@@ -286,15 +286,13 @@ export function TriggerSection(props: TriggerSectionProps) {
             ];
             if (areaNames.length === 0) return (
               <p className="text-[11px] text-muted-foreground">
-                Tip: draw a <span className="font-medium">Named area</span> on a
-                camera (camera settings → Zones) and you can scope this rule to
-                it, e.g. only a person in the Driveway.
+                {t("rules.trigger.named_area_tip")}
               </p>
             );
             return (
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">
-                  Only in named areas (optional)
+                  {t("rules.trigger.named_areas")}
                 </label>
                 <div className="flex flex-wrap gap-1.5">
                   {areaNames.map((name) => {
@@ -322,8 +320,7 @@ export function TriggerSection(props: TriggerSectionProps) {
                   })}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1.5">
-                  Fires only when the object&apos;s feet are inside one of the
-                  selected areas. No selection = anywhere in frame.
+                  {t("rules.trigger.named_areas_help")}
                 </p>
               </div>
             );

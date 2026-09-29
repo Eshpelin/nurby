@@ -32,6 +32,7 @@ import { TriggerSection } from "./TriggerSection";
 import { ConditionsSection } from "./ConditionsSection";
 import { ActionsSection } from "./ActionsSection";
 import TestPanel from "./TestPanel";
+import type { Locale } from "@/lib/i18n";
 
 export interface RuleBuilderProps {
   editRule: Rule | null;
@@ -103,7 +104,8 @@ export function RuleBuilder({
   onSaved,
   onCancel,
 }: RuleBuilderProps) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
   const [state, dispatch] = useReducer(ruleFormReducer, INITIAL_RULE_FORM_STATE);
   const [modelClasses, setModelClasses] = useState<string[]>([]);
   const [modelClassesLoading, setModelClassesLoading] = useState(false);
@@ -612,6 +614,7 @@ export function RuleBuilder({
             defaultOpen={!editRule}
           >
             <TriggerSection
+              locale={locale}
               cameras={cameras}
               persons={persons}
               activeModels={activeModels}
