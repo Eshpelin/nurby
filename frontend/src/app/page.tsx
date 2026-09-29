@@ -1454,7 +1454,7 @@ function DashboardContent() {
             {isSearching ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <svg className="animate-spin h-5 w-5 text-muted-foreground" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                <div className="text-xs text-muted-foreground">Searching observations.</div>
+                <div className="text-xs text-muted-foreground">{t("dashboard.searching_observations")}</div>
               </div>
             ) : timelineLoading && entries.length === 0 ? (
               <div className="space-y-3">
@@ -1477,25 +1477,25 @@ function DashboardContent() {
                       <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                     </svg>
                   </div>
-                  <h3 className="text-sm font-semibold mb-1">Connect your first camera</h3>
+                  <h3 className="text-sm font-semibold mb-1">{t("dashboard.connect_first_camera")}</h3>
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-4 leading-relaxed">
-                    The timeline fills in as motion, faces, and objects are detected. Add any RTSP feed, discover ONVIF cameras on your network, or use this device as a test source.
+                    {t("dashboard.connect_first_camera_help")}
                   </p>
                   <div className="flex items-center justify-center gap-2">
                     <button onClick={async () => {
                       try { const r = await authFetch("/api/cameras/demo", { method: "POST" }); if (r.ok) fetchCameras(); } catch { /* silent */ }
                     }}
                       className="px-3 py-1.5 text-xs rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90"
-                      title="No camera? Stream looping sample footage to try Nurby.">
-                      Try a demo camera
+                      title={t("dashboard.demo_camera_title")}>
+                      {t("dashboard.try_demo_camera")}
                     </button>
                     <button onClick={() => { setModalInitialType(undefined); setModalOpen(true); }}
                       className="px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90">
-                      Add a camera
+                      {t("dashboard.add_camera")}
                     </button>
                     <button onClick={() => { setModalInitialType("usb"); setModalOpen(true); }}
                       className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted">
-                      Use webcam
+                      {t("dashboard.use_webcam")}
                     </button>
                   </div>
                 </div>
@@ -1506,13 +1506,13 @@ function DashboardContent() {
                       <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
                     </svg>
                   </div>
-                  <h3 className="text-sm font-semibold mb-1">No matches</h3>
+                  <h3 className="text-sm font-semibold mb-1">{t("dashboard.no_matches")}</h3>
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-4">
-                    Nothing matched {searchQuery.trim() ? <>&ldquo;<span className="font-medium text-foreground">{searchQuery.trim()}</span>&rdquo;</> : "these filters"}. Try broadening the time range or removing filters.
+                    {t("dashboard.no_matches_help", { query: searchQuery.trim() || t("dashboard.these_filters") })}
                   </p>
                   <button onClick={clearAllFilters}
                     className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted">
-                    Clear filters
+                    {t("dashboard.clear_filters")}
                   </button>
                 </div>
               ) : (
@@ -1522,16 +1522,16 @@ function DashboardContent() {
                       <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                     </svg>
                   </div>
-                  <h3 className="text-sm font-semibold mb-1">Nothing here yet</h3>
+                  <h3 className="text-sm font-semibold mb-1">{t("dashboard.nothing_here")}</h3>
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-4 leading-relaxed">
                     {/* Don't re-explain a stopped worker: the status strip at
                         the top of the page already owns that. Speak only to
                         what an empty feed means once things are running. */}
                     {workersDown.length > 0
-                      ? "Detection is paused (see the notice above). Events resume once it's running."
+                      ? t("dashboard.empty_detection_paused")
                       : cameras.some((c) => c.status === "offline")
-                      ? "Some cameras are offline. Check their stream URLs or credentials."
-                      : "Cameras are watching. Events appear here as soon as something moves."}
+                      ? t("dashboard.empty_cameras_offline")
+                      : t("dashboard.empty_watching")}
                   </p>
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     {activeFilterCount > 0 && (
