@@ -8,6 +8,7 @@ import {
   type PairInit,
 } from "./telegram-shared";
 import { extractApiError } from "@/lib/api-error";
+import { translate } from "@/lib/i18n";
 
 export function AddOrPairModal({
   existingChannelId,
@@ -18,7 +19,9 @@ export function AddOrPairModal({
   onClose: () => void;
   onChannelChange: () => void;
 }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) =>
+    translate(user?.locale, key, values);
   // Steps. 1 = enter token, 2 = pair, 3 = success
   const [step, setStep] = useState<1 | 2 | 3>(existingChannelId ? 2 : 1);
   const [label, setLabel] = useState("");
@@ -69,7 +72,7 @@ export function AddOrPairModal({
         setPairExpired(false);
         setSecondsLeft(data.expires_in_seconds);
       } catch {
-        setError("Network error starting pairing.");
+        setError(t("telegram.pair_network_error"));
       }
     },
     [authFetch]
@@ -126,11 +129,11 @@ export function AddOrPairModal({
   const submitStep1 = async () => {
     setError(null);
     if (!label.trim()) {
-      setError("Label is required.");
+      setError(t("telegram.label_required"));
       return;
     }
     if (!token.trim()) {
-      setError("Bot token is required.");
+      setError(t("telegram.token_required"));
       return;
     }
     setSubmitting(true);
@@ -150,7 +153,7 @@ export function AddOrPairModal({
       setStep(2);
       onChannelChange();
     } catch {
-      setError("Network error. Try again.");
+      setError(t("telegram.network_try_again"));
     } finally {
       setSubmitting(false);
     }
@@ -186,7 +189,7 @@ export function AddOrPairModal({
       <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between mb-2">
           <h2 className="text-lg font-semibold">
-            {step === 1 ? "Add Telegram channel" : step === 2 ? "Pair with Telegram" : "Paired"}
+            {step === 1 ? t("telegram.add") : step === 2 ? t("telegram.pair_with") : t("telegram.paired")}
           </h2>
           <button
             onClick={onClose}
@@ -199,13 +202,11 @@ export function AddOrPairModal({
         {step === 1 && (
           <>
             <p className="text-xs text-muted-foreground mb-3">
-              Telegram alerts are sent by a bot you create. it is free and takes about a
-              minute. You will make a bot, then choose where it sends. a private chat, a
-              group, or a channel.
+              {t("telegram.add_help")}
             </p>
             <div className="rounded-md border border-border bg-background/50 p-3 mb-4 space-y-2">
               <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Step 1. Create your bot and get its token
+                {t("telegram.step_create_bot")}
               </div>
               <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal pl-4">
                 <li>
@@ -235,7 +236,7 @@ export function AddOrPairModal({
             <div className="space-y-3">
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">
-                  Label
+                  {t("telegram.label")}
                 </label>
                 <input
                   value={label}
@@ -246,7 +247,7 @@ export function AddOrPairModal({
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">
-                  Bot token
+                  {t("telegram.bot_token")}
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -261,7 +262,7 @@ export function AddOrPairModal({
                     onClick={() => setShowToken((s) => !s)}
                     className="px-3 py-2 text-xs rounded-md border border-border hover:bg-muted"
                   >
-                    {showToken ? "Hide" : "Show"}
+                    {showToken ? t("telegram.hide") : t("telegram.show")}
                   </button>
                 </div>
               </div>
@@ -276,7 +277,7 @@ export function AddOrPairModal({
                   onClick={onClose}
                   className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted"
                 >
-                  Cancel
+                  {t("telegram.cancel")}
                 </button>
                 <button
                   type="button"
@@ -284,7 +285,7 @@ export function AddOrPairModal({
                   onClick={submitStep1}
                   className="px-3 py-1.5 text-xs rounded-md border border-green-500/40 bg-green-500/10 text-green-400 hover:bg-green-500/20 disabled:opacity-50"
                 >
-                  {submitting ? "Validating." : "Continue"}
+                  {submitting ? t("telegram.validating") : t("telegram.continue")}
                 </button>
               </div>
             </div>
@@ -294,7 +295,7 @@ export function AddOrPairModal({
         {step === 2 && (
           <>
             <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-              Step 2. Choose where this bot sends alerts
+              {t("telegram.step_choose_destination")}
             </div>
             <p className="text-xs text-muted-foreground mb-3">
               A bot can only message places it has been added to, so pick a destination
@@ -312,7 +313,7 @@ export function AddOrPairModal({
                     : "border-border hover:bg-muted"
                 }`}
               >
-                Direct message
+              {t("telegram.direct_message")}
               </button>
               <button
                 type="button"
@@ -323,7 +324,7 @@ export function AddOrPairModal({
                     : "border-border hover:bg-muted"
                 }`}
               >
-                Group / channel
+                {t("telegram.group_channel")}
               </button>
             </div>
 
