@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
-import { formatDateTime } from "@/lib/time";
+import { formatDateTime, getDisplayLocale } from "@/lib/time";
+import { translate, type Locale } from "@/lib/i18n";
 
 type Association = {
   id: string;
@@ -47,7 +48,9 @@ type AssociationSummaryProps = {
 };
 
 export function AssociationSummary({ objectKind, objectKey, subjectKind, subjectKey }: AssociationSummaryProps) {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const locale = (user?.locale || getDisplayLocale() || "en") as Locale;
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const [items, setItems] = useState<Association[] | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<string, EvidenceDetail>>({});
@@ -90,13 +93,20 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
 
   if (items === null || items.length === 0) return null;
 
+  const relationLabel = (relation: string) => t(`association.relation_${relation}`);
+  const statusLabel = (item: Association) => item.user_confirmed
+    ? t("association.confirmed")
+    : item.status === "candidate"
+      ? t("association.suggested")
+      : t(`association.status_${item.status}`);
+
   return (
-    <section className="mb-4 rounded-md border border-border bg-card/40 p-3" aria-label="Identity associations">
-      <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">Observed associations</div>
+    <section className="mb-4 rounded-md border border-border bg-card/40 p-3" aria-label={t("association.title")}>
+      <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">{t("association.title")}</div>
       <div className="space-y-1.5">
         {items.map((item) => {
           const label = item.counterpart_label;
-          const relation = item.relation === "accompanies" ? "often seen with" : item.relation.replaceAll("_", " ");
+          const relation = item.relation === "accompanies" ? t("association.relation_often_with") : relationLabel(item.relation);
           return (
             <div key={item.id} className="rounded border border-border/70 px-2.5 py-2">
               <div className="flex items-center gap-2">
@@ -105,32 +115,32 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
                   {relation} <span className="font-medium">{label}</span>
                 </div>
                 <div className="text-[10px] text-muted-foreground">
-                  {item.distinct_days} independent {item.distinct_days === 1 ? "visit" : "visits"} · {item.evidence_count} evidence episodes
-                  {(item.supporting_evidence_count ?? 0) > 0 && ` · ${item.supporting_evidence_count} support`}
-                  {(item.contradictory_evidence_count ?? 0) > 0 && ` · ${item.contradictory_evidence_count} conflict`}
+                  {t(item.distinct_days === 1 ? "association.visits_one" : "association.visits_other", { count: item.distinct_days })} · {t(item.evidence_count === 1 ? "association.episodes_one" : "association.episodes_other", { count: item.evidence_count })}
+                  {(item.supporting_evidence_count ?? 0) > 0 && ` · ${t("association.support", { count: item.supporting_evidence_count ?? 0 })}`}
+                  {(item.contradictory_evidence_count ?? 0) > 0 && ` · ${t("association.conflict", { count: item.contradictory_evidence_count ?? 0 })}`}
                 </div>
                 {item.decision_explanation && (
                   <div className="mt-1 text-[10px] text-muted-foreground">{item.decision_explanation}</div>
                 )}
               </div>
               <span className={`text-[10px] ${item.status === "established" ? "text-emerald-400" : "text-amber-300"}`}>
-                {item.user_confirmed ? "confirmed" : item.status === "candidate" ? "suggested" : item.status}
+                {statusLabel(item)}
               </span>
               {!item.user_confirmed && item.status !== "archived" && (
-                <Link href="/events" className="text-[10px] text-accent hover:underline">Review suggestion</Link>
+                <Link href="/events" className="text-[10px] text-accent hover:underline">{t("association.review")}</Link>
               )}
               {item.user_confirmed && item.status === "established" && (
                 <button type="button" onClick={() => void changeDecision(item, "revoke")} className="text-[10px] text-muted-foreground hover:text-foreground">
-                  Remove
+                  {t("association.remove")}
                 </button>
               )}
               {item.status === "archived" && (
                 <button type="button" onClick={() => void changeDecision(item, "restore")} className="text-[10px] text-accent hover:underline">
-                  Restore for review
+                  {t("association.restore")}
                 </button>
               )}
               <button type="button" onClick={() => void toggleEvidence(item)} className="text-[10px] text-muted-foreground hover:text-foreground">
-                {expanded === item.id ? "Hide evidence" : "Evidence"}
+                {expanded === item.id ? t("association.hide_evidence") : t("association.evidence")}
               </button>
               </div>
               {expanded === item.id && details[item.id] && (
@@ -138,30 +148,30 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
                   {details[item.id].evidence.slice(0, 5).map((evidence) => (
                     <div key={evidence.id} className="text-[10px] text-muted-foreground">
                       <span className={evidence.role === "contradictory" ? "text-amber-300" : "text-emerald-300"}>
-                        {evidence.role === "contradictory" ? "Conflict" : "Support"}
+                        {evidence.role === "contradictory" ? t("association.conflict_label") : t("association.support_label")}
                       </span>
                       {` · ${formatDateTime(evidence.observed_at)}`}
                       {typeof evidence.score === "number" && (
-                        <span className="ml-2 text-foreground/80" title="Source score; not a calibrated probability">
+                        <span className="ml-2 text-foreground/80" title={t("association.source_score")}>
                           Source score: {Math.round(evidence.score * 100)}%
                         </span>
                       )}
                       {evidence.explanation ? ` — ${evidence.explanation}` : ""}
                       {Array.isArray(evidence.metadata.plate_reads) && evidence.metadata.plate_reads.length > 0 && (
                         <span className="ml-2 text-foreground/80">
-                          Plate reads: {(evidence.metadata.plate_reads as { text?: string; confidence?: number | null }[])
+                          {t("association.plate_reads", { reads: (evidence.metadata.plate_reads as { text?: string; confidence?: number | null }[])
                             .map((read) => `${read.text || "unknown"}${typeof read.confidence === "number" ? ` (${Math.round(read.confidence * 100)}%)` : ""}`)
-                            .join(", ")}
+                            .join(", ") })}
                         </span>
                       )}
                       {token && evidence.observation_ids.length > 0 && (
-                        <div className="mt-1 flex gap-1.5" aria-label="Evidence thumbnails">
+                        <div className="mt-1 flex gap-1.5" aria-label={t("association.evidence_thumbnails")}>
                           {evidence.observation_ids.slice(0, 3).map((observationId) => {
                             const thumbnail = `/api/observations/${observationId}/thumbnail?token=${encodeURIComponent(token)}`;
                             return (
                               <a key={observationId} href={thumbnail} target="_blank" rel="noreferrer" title="Open evidence frame">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={thumbnail} alt="Evidence frame" className="h-12 w-16 rounded border border-border object-cover" />
+                                <img src={thumbnail} alt={t("association.open_evidence_frame")} className="h-12 w-16 rounded border border-border object-cover" />
                               </a>
                             );
                           })}
@@ -170,16 +180,16 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
                       {typeof evidence.metadata.visit_timing === "object" && evidence.metadata.visit_timing !== null &&
                         typeof (evidence.metadata.visit_timing as { relation_hint?: unknown }).relation_hint === "string" && (
                           <span className="ml-2 text-foreground/80">
-                            Observed timing: {(evidence.metadata.visit_timing as { relation_hint: string }).relation_hint.replaceAll("_", " ")}
+                            {t("association.observed_timing", { timing: relationLabel((evidence.metadata.visit_timing as { relation_hint: string }).relation_hint) })}
                           </span>
                         )}
                       {evidence.source_url && (
                         <a href={evidence.source_url} target="_blank" rel="noreferrer" className="ml-2 text-accent hover:underline">
-                          {evidence.metadata.transcript_id ? "Open transcript" : evidence.metadata.transcript_id === undefined && evidence.source_url.includes("journeys") ? "Open journey" : "Open source"}
+                          {evidence.metadata.transcript_id ? t("association.open_transcript") : evidence.metadata.transcript_id === undefined && evidence.source_url.includes("journeys") ? t("association.open_journey") : t("association.open_source")}
                         </a>
                       )}
-                      {evidence.source_status === "source_changed" && <span className="ml-2 italic">Source changed; re-check</span>}
-                      {evidence.source_status === "source_expired" && <span className="ml-2 italic">Source no longer retained</span>}
+                      {evidence.source_status === "source_changed" && <span className="ml-2 italic">{t("association.source_changed")}</span>}
+                      {evidence.source_status === "source_expired" && <span className="ml-2 italic">{t("association.source_expired")}</span>}
                     </div>
                   ))}
                 </div>
