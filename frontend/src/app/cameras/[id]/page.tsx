@@ -777,6 +777,7 @@ export default function CameraConfigPage() {
 
         {/* ── VLM / AI Analysis ── */}
         <AiAnalysisSection
+          locale={locale}
           activeProvider={activeProvider}
           detectionModels={detectionModels}
           modelClasses={modelClasses}

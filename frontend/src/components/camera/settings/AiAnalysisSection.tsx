@@ -5,12 +5,13 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, inputClass } from "./primitives";
-import { DEFAULT_VLM_PROMPT } from "./constants";
 import { formatInterval } from "./format";
 import { LabelPicker } from "../ModelPickers";
 import type { Provider } from "./types";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface AiAnalysisSectionProps {
+  locale: Locale;
   activeProvider: Provider | undefined;
   detectionModels: { model: string; confidence: number; enabled: boolean; label_filter: string[] }[];
   modelClasses: string[];
@@ -37,6 +38,7 @@ interface AiAnalysisSectionProps {
 }
 
 export function AiAnalysisSection({
+  locale,
   activeProvider,
   detectionModels,
   modelClasses,
@@ -61,20 +63,21 @@ export function AiAnalysisSection({
   vlmTrigger,
   vlmTriggerObjects,
 }: AiAnalysisSectionProps) {
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   return (
         <Section
-          title="AI Analysis"
+          title={t("camera.ai.title")}
           advanced
-          description="Configure which model analyzes this camera and how"
+          description={t("camera.ai.description")}
         >
-          <FieldRow label="AI model" hint="Leave on System Default to use global setting">
+          <FieldRow label={t("camera.ai.model")} hint={t("camera.ai.model_hint")}>
             <select
               value={vlmProviderId || ""}
               onChange={(e) => setVlmProviderId(e.target.value || null)}
               className={inputClass}
             >
               <option value="">
-                System Default{activeProvider ? ` (${activeProvider.name})` : ""}
+                {t("camera.ai.system_default")}{activeProvider ? ` (${activeProvider.name})` : ""}
               </option>
               {providers.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -90,7 +93,7 @@ export function AiAnalysisSection({
             )}
           </FieldRow>
 
-          <FieldRow label="Analysis Frequency" hint="Rate limit. Minimum gap between consecutive VLM calls">
+          <FieldRow label={t("camera.ai.frequency")} hint={t("camera.ai.frequency_hint")}>
             <div className="flex items-center gap-3">
               <input
                 type="range"
@@ -107,16 +110,16 @@ export function AiAnalysisSection({
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">
               {vlmInterval === 0
-                ? "Analyze every motion keyframe. More API calls"
-                : `Wait at least ${formatInterval(vlmInterval)} between VLM calls`}
+                ? t("camera.ai.frequency_unlimited")
+                : t("camera.ai.frequency_wait", { interval: formatInterval(vlmInterval) })}
             </p>
           </FieldRow>
 
-          <FieldRow label="Trigger Condition" hint="Gate. What qualifies a frame for VLM analysis in the first place">
+          <FieldRow label={t("camera.ai.trigger_condition")} hint={t("camera.ai.trigger_condition_hint")}>
             <div className="flex gap-1.5 mb-2">
               {([
-                { value: "always", label: "Always", desc: "Time-based, using frequency above" },
-                { value: "on_object", label: "On Detection", desc: "Only when specific objects are detected" },
+                { value: "always" },
+                { value: "on_object" },
               ] as const).map((opt) => (
                 <button
                   key={opt.value}
@@ -128,27 +131,27 @@ export function AiAnalysisSection({
                       : "border-border hover:border-muted-foreground text-muted-foreground"
                   }`}
                 >
-                  {opt.label}
+                  {t(`camera.ai.trigger.${opt.value}`)}
                 </button>
               ))}
             </div>
             <p className="text-[11px] text-muted-foreground">
               {vlmTrigger === "always"
-                ? "VLM runs on every keyframe (respecting frequency limit above)"
+                ? t("camera.ai.trigger_always_help")
                 : vlmTriggerObjects.length > 0
-                  ? `VLM only runs when ${vlmTriggerObjects.join(", ")} detected by object detection`
-                  : "VLM only runs when any object is detected"}
+                  ? t("camera.ai.trigger_objects_help", { objects: vlmTriggerObjects.join(", ") })
+                  : t("camera.ai.trigger_any_help")}
             </p>
           </FieldRow>
 
           {vlmTrigger === "on_object" && (
-            <FieldRow label="Trigger Objects" hint="Labels come from the detection model. Type to search or add a custom label.">
+            <FieldRow label={t("camera.ai.trigger_objects")} hint={t("camera.ai.trigger_objects_hint")}>
               <LabelPicker
                 selected={vlmTriggerObjects}
                 available={modelClasses}
                 loading={modelClassesLoading}
                 onChange={setVlmTriggerObjects}
-                placeholder="Search labels or press Enter for custom"
+                placeholder={t("camera.ai.label_placeholder")}
                 activeModels={detectionModels.map((m) => m.model)}
                 onAddModel={(model) => {
                   if (detectionModels.some((m) => m.model === model)) return;
@@ -160,13 +163,13 @@ export function AiAnalysisSection({
               />
               {vlmTriggerObjects.length === 0 && (
                 <p className="text-[11px] text-muted-foreground mt-1.5">
-                  No objects selected. VLM will trigger on any detection.
+                  {t("camera.ai.no_trigger_objects")}
                 </p>
               )}
             </FieldRow>
           )}
 
-          <FieldRow label="Max Output Tokens" hint="Per-camera output cap. The provider's cap (set in Settings) further tightens this.">
+          <FieldRow label={t("camera.ai.max_output_tokens")} hint={t("camera.ai.max_output_tokens_hint")}>
             <div className="flex items-center gap-3">
               <input
                 type="range"
@@ -183,25 +186,25 @@ export function AiAnalysisSection({
             </div>
           </FieldRow>
 
-          <FieldRow label="Max Input Tokens" hint="Per-camera prompt size cap. Empty defers to the provider's input cap.">
+          <FieldRow label={t("camera.ai.max_input_tokens")} hint={t("camera.ai.max_input_tokens_hint")}>
             <input
               type="number"
               min={64}
               value={vlmMaxInputTokens}
               onChange={(e) => setVlmMaxInputTokens(e.target.value)}
               className={inputClass}
-              placeholder="defer to provider"
+              placeholder={t("camera.ai.defer_to_provider")}
             />
           </FieldRow>
 
           <FieldRow
-            label="Custom Prompt"
-            hint="System prompt sent to the VLM for every frame on this camera. It steers what the model focuses on and how it phrases descriptions. Leave blank to use the built-in default."
+            label={t("camera.ai.custom_prompt")}
+            hint={t("camera.ai.custom_prompt_hint")}
           >
             <textarea
               value={vlmPrompt}
               onChange={(e) => setVlmPrompt(e.target.value)}
-              placeholder={DEFAULT_VLM_PROMPT}
+              placeholder={t("camera.ai.default_prompt")}
               rows={4}
               className={`${inputClass} resize-y`}
             />
@@ -211,7 +214,7 @@ export function AiAnalysisSection({
                 onClick={() => setShowDefaultVlmPrompt((v) => !v)}
                 className="text-[11px] text-muted-foreground hover:text-accent transition-colors"
               >
-                {showDefaultVlmPrompt ? "Hide default prompt" : "Show default prompt"}
+                {showDefaultVlmPrompt ? t("camera.ai.hide_default") : t("camera.ai.show_default")}
               </button>
               {vlmPrompt.trim() && (
                 <button
@@ -219,17 +222,17 @@ export function AiAnalysisSection({
                   onClick={() => setVlmPrompt("")}
                   className="text-[11px] text-muted-foreground hover:text-danger transition-colors"
                 >
-                  Reset to default
+                  {t("camera.ai.reset")}
                 </button>
               )}
             </div>
             {showDefaultVlmPrompt && (
               <div className="mt-1.5 rounded-md border border-border bg-muted/40 p-2.5">
                 <p className="text-[11px] text-muted-foreground mb-1">
-                  Effective default when this field is blank:
+                  {t("camera.ai.effective_default")}
                 </p>
                 <p className="text-xs text-foreground/80 leading-relaxed">
-                  {DEFAULT_VLM_PROMPT}
+                  {t("camera.ai.default_prompt")}
                 </p>
               </div>
             )}
