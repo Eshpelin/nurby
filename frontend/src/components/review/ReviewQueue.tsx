@@ -383,21 +383,33 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                   const recurrence = item.evidence.recurrence as RecurrenceEvidence | undefined;
                   if (!recurrence?.samples?.length || !recurrence.cluster_id || !recurrence.cluster_kind) return null;
                   const prefix = recurrence.cluster_kind === "face" ? "/api/persons" : "/api/body-clusters";
+                  const recordingContextHref = (capturedAt: string, cameraId: string) => {
+                    const center = new Date(capturedAt).getTime();
+                    const from = new Date(center - 2 * 60 * 1000).toISOString();
+                    const to = new Date(center + 2 * 60 * 1000).toISOString();
+                    return `/recordings?camera_id=${encodeURIComponent(cameraId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+                  };
                   return (
                     <div className="mt-2 flex items-center gap-1.5" aria-label={t("review.recurring_sample_evidence")}>
                       <span className="mr-1 text-[10px] text-muted-foreground">{t("review.linked_appearances")}</span>
-                      {recurrence.samples.map((sample) => (
-                        <a
-                          key={sample.id}
-                          href={`${prefix}/suggestions/${recurrence.cluster_id}/samples/${sample.id}/thumbnail?token=${encodeURIComponent(token || "")}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          title={new Date(sample.captured_at).toLocaleString()}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={`${prefix}/suggestions/${recurrence.cluster_id}/samples/${sample.id}/thumbnail?token=${encodeURIComponent(token || "")}`} alt={t("review.recurring_sample")} className="h-10 w-10 rounded border border-border object-cover" />
-                        </a>
-                      ))}
+                      {recurrence.samples.map((sample) => {
+                        const thumbnailHref = `${prefix}/suggestions/${recurrence.cluster_id}/samples/${sample.id}/thumbnail?token=${encodeURIComponent(token || "")}`;
+                        return (
+                          <span key={sample.id} className="inline-flex items-center gap-0.5 rounded border border-border/70 p-0.5" title={new Date(sample.captured_at).toLocaleString()}>
+                            <a href={thumbnailHref} target="_blank" rel="noreferrer">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={thumbnailHref} alt={t("review.recurring_sample")} className="h-10 w-10 rounded object-cover" />
+                            </a>
+                            <a
+                              href={recordingContextHref(sample.captured_at, sample.camera_id)}
+                              aria-label={t("review.open_recording_context")}
+                              className="px-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                            >
+                              ↗
+                            </a>
+                          </span>
+                        );
+                      })}
                     </div>
                   );
                 })()}
