@@ -31,15 +31,15 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
     setHasScanned(false);
     try {
       const res = await authFetch("/api/cameras/discover?timeout=5");
-      if (!res.ok) throw new Error("Network scan failed");
+      if (!res.ok) throw new Error(t("camera_add.network_scan_failed"));
       const data: DiscoveredOnvifDevice[] = await res.json();
       setDevices(data);
       setHasScanned(true);
       if (data.length === 0) {
-        setScanError("No ONVIF cameras found on the local network. Make sure the cameras are powered on and connected to the same network. Check that multicast traffic is not blocked by your firewall.");
+        setScanError(t("camera_add.no_onvif"));
       }
     } catch (err) {
-      setScanError(err instanceof Error ? err.message : "Scan failed");
+      setScanError(err instanceof Error ? err.message : t("camera_add.scan_failed"));
       setHasScanned(true);
     } finally {
       setScanning(false);
@@ -144,10 +144,10 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
               {dev.auth_required && !dev.already_added && (
                 <div className="px-3 pb-2.5 pt-0">
                   <div className="grid grid-cols-2 gap-2">
-                    <input type="text" placeholder="Username" value={authInputs[dev.ip]?.username || ""}
+                    <input type="text" placeholder={t("camera_add.username")} value={authInputs[dev.ip]?.username || ""}
                       onChange={(e) => handleAuthChange(dev.ip, "username", e.target.value)}
                       className="w-full px-2 py-1.5 text-xs rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
-                    <input type="password" placeholder="Password" value={authInputs[dev.ip]?.password || ""}
+                    <input type="password" placeholder={t("camera_add.password")} value={authInputs[dev.ip]?.password || ""}
                       onChange={(e) => handleAuthChange(dev.ip, "password", e.target.value)}
                       className="w-full px-2 py-1.5 text-xs rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
                   </div>
@@ -221,12 +221,12 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
     setSelectedDeviceIndex(null);
     try {
       const res = await authFetch("/api/cameras/devices");
-      if (!res.ok) throw new Error("Failed to scan for devices");
+      if (!res.ok) throw new Error(t("camera_add.device_scan_failed"));
       const data: DiscoveredDevice[] = await res.json();
       setDevices(data);
-      if (data.length === 0) setScanError("No video devices found. Try manual input instead.");
+      if (data.length === 0) setScanError(t("camera_add.no_video_devices"));
     } catch (err) {
-      setScanError(err instanceof Error ? err.message : "Scan failed");
+      setScanError(err instanceof Error ? err.message : t("camera_add.scan_failed"));
     } finally {
       setScanningDevices(false);
     }
@@ -269,18 +269,18 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
           if (!(tr.ok && tj.ok)) {
             lastFailedTestUrl.current = urlKey;
             const friendly: Record<string, string> = {
-              dns: "The camera's address could not be found",
-              refused: "The camera refused the connection",
-              timeout: "The camera did not respond",
-              auth: "The camera rejected the username or password",
-              not_found: "The camera answered, but the stream path is wrong",
-              decode: "The camera answered, but the video could not be read",
+              dns: t("camera_add.error_dns"),
+              refused: t("camera_add.error_refused"),
+              timeout: t("camera_add.error_timeout"),
+              auth: t("camera_add.error_auth"),
+              not_found: t("camera_add.error_not_found"),
+              decode: t("camera_add.error_decode"),
             };
             const headline =
-              friendly[tj.error_code as string] || "Could not connect to the camera";
+              friendly[tj.error_code as string] || t("camera_add.error_connect");
             setError(
               `${headline}: ${tj.error || tj.detail || `status ${tr.status}`}. ` +
-                "Fix it and try again, or submit again to add the camera anyway.",
+                t("camera_add.error_retry"),
             );
             setErrorHint(tj.hint || null);
             // These failures are usually solved by the per-brand URL and
@@ -309,7 +309,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
       }
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add camera");
+      setError(err instanceof Error ? err.message : t("camera_add.error_add"));
     } finally {
       setSubmitting(false);
     }
@@ -326,7 +326,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
         setWebcamDevices(list);
         if (list.length && !webcamDeviceId) setWebcamDeviceId(list[0].deviceId);
       } catch (err) {
-        setWebcamError(err instanceof Error ? err.message : "Unable to list cameras");
+      setWebcamError(err instanceof Error ? err.message : t("camera_add.error_list_cameras"));
       }
     })();
     return () => { cancelled = true; };
@@ -357,7 +357,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
           if (clean) setName(clean);
         }
       } catch (err) {
-        setWebcamError(err instanceof Error ? err.message : "Camera access denied");
+      setWebcamError(err instanceof Error ? err.message : t("camera_add.error_camera_access"));
       }
     })();
     return () => {
@@ -405,7 +405,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
         throw new Error(extractApiError(body, `Request failed with status ${res.status}`));
       }
       const created = await res.json().catch(() => null);
-      if (!created?.id) throw new Error("Camera created without id");
+      if (!created?.id) throw new Error(t("camera_add.error_missing_id"));
       try {
         await startPublish({
           cameraId: created.id,
@@ -421,7 +421,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
       }
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start webcam");
+      setError(err instanceof Error ? err.message : t("camera_add.error_webcam"));
     } finally {
       setSubmitting(false);
     }
