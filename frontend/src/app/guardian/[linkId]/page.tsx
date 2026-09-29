@@ -15,7 +15,6 @@ import {
   DependantStatus,
   EVENT_META,
   GuardianEvent,
-  HANDOVER_LABELS,
   HandoverState,
   isStaffConfirmed,
   NOTIFY_CHANNELS,
@@ -132,19 +131,19 @@ export default function DependantDetailPage() {
       </div>
 
       {/* Pickup moment. The highest-value event gets its own warm card. */}
-      {lastPickup && <PickupMomentCard event={lastPickup} />}
+      {lastPickup && <PickupMomentCard event={lastPickup} locale={user?.locale} />}
 
       {/* Image */}
       <ImagePanel linkId={linkId} canView={!!ent?.can?.image} locale={user?.locale} />
 
       {/* Day-timeline. real arrival/pickup/zone events, grouped by day. */}
-      <EventTimeline events={events} />
+      <EventTimeline events={events} locale={user?.locale} />
 
       {/* Weekly trends (premium) */}
-      {ent?.premium && <TrendsPanel linkId={linkId} />}
+      {ent?.premium && <TrendsPanel linkId={linkId} locale={user?.locale} />}
 
       {/* Smart search (premium) */}
-      {ent?.can?.search && <SearchPanel linkId={linkId} />}
+      {ent?.can?.search && <SearchPanel linkId={linkId} locale={user?.locale} />}
 
       {/* Notifications: what alerts, and how they reach you. */}
       {dependant && (
@@ -430,8 +429,9 @@ function UpsellPanel({ ent }: { ent: Dependant["entitlements"] }) {
   );
 }
 
-function SearchPanel({ linkId }: { linkId: string }) {
+function SearchPanel({ linkId, locale }: { linkId: string; locale?: string }) {
   const { authFetch } = useAuth();
+  const t = (key: string) => translate(locale, key);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<
     { observation_id: string; at: string; zone: string | null; caption: string | null }[]
@@ -458,13 +458,13 @@ function SearchPanel({ linkId }: { linkId: string }) {
 
   return (
     <section className="mt-6">
-      <h2 className="text-sm font-medium text-muted-foreground mb-2">Ask about their day</h2>
+      <h2 className="text-sm font-medium text-muted-foreground mb-2">{t("guardian_detail.ask_about_day")}</h2>
       <div className="flex gap-2">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && run()}
-          placeholder="outdoor, lunch, classroom..."
+          placeholder={t("guardian_detail.search_placeholder")}
           className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
         />
         <button
@@ -472,18 +472,18 @@ function SearchPanel({ linkId }: { linkId: string }) {
           disabled={busy}
           className="px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition-colors disabled:opacity-50"
         >
-          {busy ? "..." : "Search"}
+          {busy ? "..." : t("guardian_detail.search")}
         </button>
       </div>
       {searched && (
         <div className="mt-3 rounded-lg border border-border bg-card divide-y divide-border">
           {results.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-muted-foreground">No matches.</div>
+            <div className="px-4 py-3 text-sm text-muted-foreground">{t("guardian_detail.no_matches")}</div>
           ) : (
             results.map((r) => (
               <div key={r.observation_id} className="px-4 py-2.5 text-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-foreground">{r.zone || "Seen"}</span>
+                  <span className="text-foreground">{r.zone || t("guardian_detail.seen_label")}</span>
                   <span className="text-muted-foreground text-xs">{timeAgo(r.at)}</span>
                 </div>
                 {r.caption && (
@@ -506,7 +506,8 @@ function AsOfChip({ locale }: { locale?: string }) {
   );
 }
 
-function PickupMomentCard({ event }: { event: GuardianEvent }) {
+function PickupMomentCard({ event, locale }: { event: GuardianEvent; locale?: string }) {
+  const t = (key: string) => translate(locale, key);
   const state: HandoverState =
     event.handover_state ?? (event.pickup_matched ? "approved_match" : "possible");
   const confirmed = isStaffConfirmed(event);
@@ -515,12 +516,12 @@ function PickupMomentCard({ event }: { event: GuardianEvent }) {
   const tone = confirmed
     ? { border: "border-emerald-800", bg: "bg-emerald-950/20", dot: "bg-emerald-500" }
     : { border: "border-amber-800", bg: "bg-amber-950/20", dot: "bg-amber-500" };
-  const label = event.handover_state_label ?? HANDOVER_LABELS[state];
+  const label = event.handover_state_label ?? t(`guardian_detail.handover_${state}`);
   const footnote = confirmed
-    ? "An authorized staff member confirmed this handover."
+    ? t("guardian_detail.handover_confirmed_help")
     : corrected
-      ? "Staff reviewed this and recorded no confirmed handover."
-      : "Based on nearby camera sightings. Handover has not been confirmed by staff.";
+      ? t("guardian_detail.handover_corrected_help")
+      : t("guardian_detail.handover_inferred_help");
   return (
     <div className={`mt-4 rounded-lg border p-5 ${tone.border} ${tone.bg}`}>
       <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
@@ -536,7 +537,8 @@ function PickupMomentCard({ event }: { event: GuardianEvent }) {
   );
 }
 
-function EventTimeline({ events }: { events: GuardianEvent[] }) {
+function EventTimeline({ events, locale }: { events: GuardianEvent[]; locale?: string }) {
+  const t = (key: string) => translate(locale, key);
   // Group by day, newest first.
   const groups: { day: string; items: GuardianEvent[] }[] = [];
   for (const e of events) {
@@ -548,10 +550,10 @@ function EventTimeline({ events }: { events: GuardianEvent[] }) {
 
   return (
     <section className="mt-6">
-      <h2 className="text-sm font-medium text-muted-foreground mb-2">Their day</h2>
+      <h2 className="text-sm font-medium text-muted-foreground mb-2">{t("guardian_detail.their_day")}</h2>
       {events.length === 0 ? (
         <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-          No events yet. Arrival, pickup, and zone moments will appear here.
+          {t("guardian_detail.no_events")}
         </div>
       ) : (
         <div className="space-y-4">
@@ -590,8 +592,9 @@ interface TrendDay {
   zones: string[];
 }
 
-function TrendsPanel({ linkId }: { linkId: string }) {
+function TrendsPanel({ linkId, locale }: { linkId: string; locale?: string }) {
   const { authFetch } = useAuth();
+  const t = (key: string) => translate(locale, key);
   const [data, setData] = useState<{ days_seen: number; total_sightings: number; days: TrendDay[] } | null>(
     null
   );
@@ -615,16 +618,16 @@ function TrendsPanel({ linkId }: { linkId: string }) {
 
   return (
     <section className="mt-6">
-      <h2 className="text-sm font-medium text-muted-foreground mb-2">This week</h2>
+      <h2 className="text-sm font-medium text-muted-foreground mb-2">{t("guardian_detail.this_week")}</h2>
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="flex gap-6 text-sm">
           <div>
             <div className="text-xl font-semibold">{data.days_seen}</div>
-            <div className="text-xs text-muted-foreground">days seen</div>
+            <div className="text-xs text-muted-foreground">{t("guardian_detail.days_seen")}</div>
           </div>
           <div>
             <div className="text-xl font-semibold">{data.total_sightings}</div>
-            <div className="text-xs text-muted-foreground">sightings</div>
+            <div className="text-xs text-muted-foreground">{t("guardian_detail.sightings")}</div>
           </div>
         </div>
         <div className="mt-3 space-y-1">
@@ -634,14 +637,14 @@ function TrendsPanel({ linkId }: { linkId: string }) {
                 {formatWith(new Date(d.date), { weekday: "short", day: "numeric" })}
               </span>
               <span>
-                {d.first_seen ? clockTime(d.first_seen) : "-"} to{" "}
+                {d.first_seen ? clockTime(d.first_seen) : "-"} {t("guardian_detail.to")} {" "}
                 {d.last_seen ? clockTime(d.last_seen) : "-"}
               </span>
             </div>
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground mt-2">
-          Gentle wellbeing signals, not judgments.
+          {t("guardian_detail.wellbeing_note")}
         </p>
       </div>
     </section>
