@@ -1579,11 +1579,11 @@ function DashboardContent() {
                       >
                         <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
                         <span className="text-[11px] text-muted-foreground font-medium">{formatHourBucket(bucketKey)}</span>
-                        <span className="text-[11px] text-muted-foreground/70 italic">all quiet</span>
+                        <span className="text-[11px] text-muted-foreground/70 italic">{t("dashboard.all_quiet")}</span>
                         {d.recCount > 0 && (
-                          <span className="text-[10px] text-muted-foreground/70">· {d.recCount} rec</span>
+                          <span className="text-[10px] text-muted-foreground/70">· {t("dashboard.recording_count", { count: d.recCount })}</span>
                         )}
-                        <span className="ml-auto text-[10px] text-muted-foreground/60">{isExpanded ? "hide" : "peek"}</span>
+                        <span className="ml-auto text-[10px] text-muted-foreground/60">{isExpanded ? t("dashboard.hide") : t("dashboard.peek")}</span>
                       </button>
                     )}
                     {!searchActive && d && !d.quiet && (
@@ -1611,7 +1611,7 @@ function DashboardContent() {
                               <span className="text-[10px] text-muted-foreground truncate">{d.topCams.join(", ")}</span>
                             )}
                           </div>
-                          <span className="text-[10px] text-muted-foreground flex-shrink-0">{isExpanded ? "\u25BC hide" : "\u25B6 show"}</span>
+                          <span className="text-[10px] text-muted-foreground flex-shrink-0">{isExpanded ? `\u25BC ${t("dashboard.hide")}` : `\u25B6 ${t("dashboard.show")}`}</span>
                         </div>
                         <ul className="space-y-1">
                           {d.highlights.slice(0, 5).map((h, i) => {
@@ -1635,13 +1635,13 @@ function DashboardContent() {
                             );
                           })}
                           {d.highlights.length > 5 && (
-                            <li className="text-[10px] text-muted-foreground pl-3.5">and {d.highlights.length - 5} more</li>
+                            <li className="text-[10px] text-muted-foreground pl-3.5">{t("dashboard.and_more", { count: d.highlights.length - 5 })}</li>
                           )}
                         </ul>
                       </button>
                     )}
                     {searchActive && (
-                      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2 sticky top-0 bg-background/80 backdrop-blur-sm py-1 z-10">Search Results</div>
+                      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2 sticky top-0 bg-background/80 backdrop-blur-sm py-1 z-10">{t("dashboard.search_results")}</div>
                     )}
                     {isExpanded && (
                     <div className="space-y-1.5 pl-2 border-l border-border/50">
@@ -1659,7 +1659,7 @@ function DashboardContent() {
                             disabled={hs?.loading}
                             className="text-[11px] text-accent hover:underline disabled:opacity-50 mb-1"
                           >
-                            {hs?.loading ? "Summarizing this hour." : "✨ Summarize this hour"}
+                            {hs?.loading ? t("dashboard.summarizing_hour") : t("dashboard.summarize_hour")}
                           </button>
                         );
                       })()}
@@ -1678,7 +1678,7 @@ function DashboardContent() {
                                 <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 01-3.46 0" />
                               </svg>
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs"><span className={`${tone} font-medium`}>Rule fired</span> · {n.message}</p>
+                                <p className="text-xs"><span className={`${tone} font-medium`}>{t("dashboard.rule_fired")}</span> · {n.message}</p>
                                 {cam?.name && <p className="text-[10px] text-muted-foreground mt-0.5">{cam.name}</p>}
                               </div>
                               <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0">{formatTime(n.created_at)}</span>
@@ -1698,7 +1698,7 @@ function DashboardContent() {
                                 className="rounded-lg border border-emerald-700/30 bg-emerald-950/15 p-3"
                               >
                                 <div className="flex items-center gap-2 text-[10px] text-emerald-300 uppercase tracking-wider mb-1">
-                                  <span>Transcript</span>
+                                  <span>{t("dashboard.transcript")}</span>
                                   <span className="text-muted-foreground">·</span>
                                   <span className="text-muted-foreground">{r.camera_name || cam?.name || "Camera"}</span>
                                   <span className="ml-auto font-mono text-muted-foreground">{formatTime(r.started_at)}</span>
@@ -1714,7 +1714,7 @@ function DashboardContent() {
                                 className="rounded-lg border border-emerald-700/40 bg-emerald-950/20 p-3"
                               >
                                 <div className="flex items-center gap-2 text-[10px] text-emerald-300 uppercase tracking-wider mb-1">
-                                  <span>Conversation</span>
+                                  <span>{t("dashboard.conversation")}</span>
                                   <span className="text-muted-foreground">·</span>
                                   <span className="text-muted-foreground">{r.camera_name || cam?.name || "Camera"}</span>
                                   {r.transcript_count != null && (
@@ -1722,7 +1722,7 @@ function DashboardContent() {
                                   )}
                                   <span className="ml-auto font-mono text-muted-foreground">{formatTime(r.started_at)}</span>
                                 </div>
-                                <p className="text-xs leading-relaxed text-foreground">{r.summary_text || "(no summary)"}</p>
+                                <p className="text-xs leading-relaxed text-foreground">{r.summary_text || t("dashboard.no_summary")}</p>
                               </div>
                             );
                           }
@@ -1765,7 +1765,7 @@ function DashboardContent() {
                                           <div className="flex flex-wrap items-center gap-1">
                                             {srNamed.map((f, i) => <span key={`n${i}`} className="text-xs font-medium text-green-400">{f.person_name}</span>)}
                                             {srNamed.length > 0 && srUnknown.length > 0 && <span className="text-[10px] text-muted-foreground">+</span>}
-                                            {srUnknown.length > 0 && <span className="text-xs text-yellow-400">{srUnknown.length === 1 ? "Unknown person" : `${srUnknown.length} unknown`}</span>}
+                                            {srUnknown.length > 0 && <span className="text-xs text-yellow-400">{t(srUnknown.length === 1 ? "dashboard.unknown_person" : "dashboard.unknown_count", { count: srUnknown.length })}</span>}
                                           </div>
                                         ) : (
                                           <p className="text-xs font-medium line-clamp-1">
@@ -2041,7 +2041,7 @@ function DashboardContent() {
                           <div
                             key={entry.id}
                             onClick={() => setMomentEvent({ observationId: obs.id, cameraId: obs.camera_id, cameraName: cam?.name ?? null, ts: obs.started_at })}
-                            title="Click to see the full description and recording"
+                            title={t("dashboard.open_observation_title")}
                             className="rounded-lg border border-border hover:border-accent/50 hover:bg-card/50 overflow-hidden transition-colors cursor-pointer"
                           >
                             <div className="flex gap-3">
@@ -2066,9 +2066,9 @@ function DashboardContent() {
                                                 href={`/follow/person/${f.person_id}`}
                                                 onClick={(e) => e.stopPropagation()}
                                                 className="ml-0.5 text-[10px] text-accent hover:underline"
-                                                title={`Follow ${f.person_name} across cameras`}
+                                                title={t("dashboard.follow_person_title", { name: f.person_name || "" })}
                                               >
-                                                follow ↗
+                                                {t("dashboard.follow")}
                                               </Link>
                                             )}
                                           </span>
@@ -2076,18 +2076,18 @@ function DashboardContent() {
                                         {namedFaces.length > 0 && unknownFaces.length > 0 && <span className="text-[10px] text-muted-foreground">+</span>}
                                         {unknownFaces.length > 0 && unknownFaces[0]?.cluster_id ? (
                                           <span className="inline-flex items-center gap-1 text-xs text-yellow-400">
-                                            {unknownFaces.length === 1 ? "Unknown person" : `${unknownFaces.length} unknown`}
+                                            {t(unknownFaces.length === 1 ? "dashboard.unknown_person" : "dashboard.unknown_count", { count: unknownFaces.length })}
                                             <Link
                                               href={`/follow/cluster/${unknownFaces[0].cluster_id}`}
                                               onClick={(e) => e.stopPropagation()}
                                               className="ml-0.5 text-[10px] text-accent hover:underline"
-                                              title="Follow this recurring stranger"
+                                              title={t("dashboard.follow_recurring_stranger")}
                                             >
-                                              follow ↗
+                                              {t("dashboard.follow")}
                                             </Link>
                                           </span>
                                         ) : unknownFaces.length > 0 ? (
-                                          <span className="text-xs text-yellow-400">{unknownFaces.length === 1 ? "Unknown person" : `${unknownFaces.length} unknown`}</span>
+                                          <span className="text-xs text-yellow-400">{t(unknownFaces.length === 1 ? "dashboard.unknown_person" : "dashboard.unknown_count", { count: unknownFaces.length })}</span>
                                         ) : null}
                                       </div>
                                     )}
