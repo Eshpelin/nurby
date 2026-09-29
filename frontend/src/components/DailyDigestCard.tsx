@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
 import { formatDateTime } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 interface Visitor {
   name: string;
@@ -54,7 +55,8 @@ const BRIEF_COLLAPSED_KEY = "nurby.morningBrief.collapsed";
 const PREVIEW_BULLETS = 3;
 
 export function DailyDigestCard() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [digest, setDigest] = useState<DailyDigest | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -136,9 +138,9 @@ export function DailyDigestCard() {
         className="w-full px-3 py-2 flex items-center gap-2 text-left"
       >
         <SunIcon className="w-4 h-4 text-amber-400 flex-shrink-0" />
-        <span className="text-sm font-medium">Morning recap</span>
+        <span className="text-sm font-medium">{t("daily_digest.title")}</span>
         {notableCount > 0 && (
-          <span className="text-xs text-muted-foreground">· {notableCount} event{notableCount === 1 ? "" : "s"} overnight</span>
+          <span className="text-xs text-muted-foreground">· {t(notableCount === 1 ? "daily_digest.events_overnight_one" : "daily_digest.events_overnight_other", { count: notableCount })}</span>
         )}
         <ChevronIcon
           className={`ml-auto w-3.5 h-3.5 text-muted-foreground transition-transform ${
@@ -174,10 +176,10 @@ export function DailyDigestCard() {
               className="text-[11px] text-amber-300/90 hover:text-amber-200"
             >
               {showAll
-                ? "Show less"
+                ? t("daily_digest.show_less")
                 : bullets.length > PREVIEW_BULLETS
-                  ? `Show ${bullets.length - PREVIEW_BULLETS} more`
-                  : "Show more"}
+                  ? t("daily_digest.show_more_count", { count: bullets.length - PREVIEW_BULLETS })
+                  : t("daily_digest.show_more")}
             </button>
           )}
           {/* Provenance and the regenerate control are only worth the row once
@@ -186,8 +188,8 @@ export function DailyDigestCard() {
           <div className="flex items-center gap-2 pt-1 text-[10px] text-muted-foreground/70">
             <span>
               {digest.provider_name
-                ? `narrated by ${digest.provider_name}`
-                : "facts only (no LLM)"}
+                ? t("daily_digest.narrated_by", { provider: digest.provider_name })
+                : t("daily_digest.facts_only")}
             </span>
             <span>·</span>
             <span>{formatDateTime(digest.generated_at)}</span>
@@ -197,7 +199,7 @@ export function DailyDigestCard() {
               disabled={busy}
               className="ml-auto px-2 py-0.5 rounded border border-border text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
-              {busy ? "Re-running." : "Regenerate"}
+              {busy ? t("daily_digest.rerunning") : t("daily_digest.regenerate")}
             </button>
           </div>
           )}
