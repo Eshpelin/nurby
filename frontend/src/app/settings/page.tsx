@@ -1280,9 +1280,9 @@ export default function SettingsPage() {
             aria-expanded={showAdvancedSettings}
           >
             <div>
-              <div className="text-sm font-medium">Advanced tuning</div>
+              <div className="text-sm font-medium">{t("settings.advanced_title")}</div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                Pipeline timing and background AI behavior
+                {t("settings.advanced_help")}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -1405,13 +1405,13 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-medium flex items-center gap-2">
-                Morning digest
-                <span className="text-[10px] font-normal uppercase tracking-wider text-amber-500/80 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.5">household</span>
+                {t("settings.morning_digest")}
+                <span className="text-[10px] font-normal uppercase tracking-wider text-amber-500/80 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.5">{t("settings.household")}</span>
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
                 {dailyDigestEnabled
-                  ? `Bullet-point recap of the last 24h, generated at ${String(dailyDigestHour).padStart(2, "0")}:00 local time.`
-                  : "Disabled. No daily digest will be generated automatically."}
+                  ? t("settings.digest_enabled_help", { time: `${String(dailyDigestHour).padStart(2, "0")}:00` })
+                  : t("settings.digest_disabled_help")}
               </div>
             </div>
             <button
@@ -1430,7 +1430,7 @@ export default function SettingsPage() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="text-[11px] text-muted-foreground block mb-1">
-                  Hour of day (local)
+                  {t("settings.digest_hour")}
                 </label>
                 <select
                   value={dailyDigestHour}
