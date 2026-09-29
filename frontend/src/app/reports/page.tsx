@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { useToast, useConfirm } from "@/lib/feedback";
 import { EmptyState } from "@/components/EmptyState";
 import { timeAgo, formatWith } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 interface PersonOption {
   id: string;
@@ -50,7 +51,8 @@ function fmtTime(hour: number, minute: number): string {
 }
 
 export default function ReportsPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = useCallback((key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values), [user?.locale]);
   const toast = useToast();
   const confirm = useConfirm();
   const [reports, setReports] = useState<ScheduledReport[]>([]);
@@ -76,14 +78,14 @@ export default function ReportsPage() {
   const load = useCallback(async () => {
     try {
       const res = await authFetch("/api/reports");
-      if (!res.ok) throw new Error(`Failed to load reports (${res.status})`);
+      if (!res.ok) throw new Error(`${t("reports.load_failed")} (${res.status})`);
       setReports(await res.json());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load reports");
+      setError(e instanceof Error ? e.message : t("reports.load_failed"));
     } finally {
       setLoading(false);
     }
-  }, [authFetch]);
+  }, [authFetch, t]);
 
   useEffect(() => {
     load();
@@ -132,7 +134,7 @@ export default function ReportsPage() {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => null);
-        throw new Error(j?.detail || `Failed (${res.status})`);
+        throw new Error(j?.detail || `${t("reports.create_failed")} (${res.status})`);
       }
       setName("");
       setPrompt("");
@@ -144,11 +146,11 @@ export default function ReportsPage() {
       setShowForm(false);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create report");
+      setError(e instanceof Error ? e.message : t("reports.create_failed"));
     } finally {
       setSaving(false);
     }
-  }, [authFetch, name, prompt, personId, time, days, email, tgChannelId, webhookUrl, load]);
+  }, [authFetch, name, prompt, personId, time, days, email, tgChannelId, webhookUrl, load, t]);
 
   const runNow = useCallback(
     async (id: string) => {
@@ -158,18 +160,18 @@ export default function ReportsPage() {
         const res = await authFetch(`/api/reports/${id}/run`, { method: "POST" });
         if (!res.ok) {
           const j = await res.json().catch(() => null);
-          throw new Error(j?.detail || `Run failed (${res.status})`);
+          throw new Error(j?.detail || `${t("reports.run_failed")} (${res.status})`);
         }
         const updated: ScheduledReport = await res.json();
         setReports((prev) => prev.map((r) => (r.id === id ? updated : r)));
         setExpandedId(id);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Run failed");
+        setError(e instanceof Error ? e.message : t("reports.run_failed"));
       } finally {
         setRunningId(null);
       }
     },
-    [authFetch]
+    [authFetch, t]
   );
 
   const toggleEnabled = useCallback(
@@ -195,8 +197,8 @@ export default function ReportsPage() {
     async (id: string) => {
       const report = reports.find((r) => r.id === id);
       const ok = await confirm({
-        title: `Delete report${report ? ` "${report.name}"` : ""}?`,
-        body: "It will stop running on its schedule. This cannot be undone.",
+        title: t("reports.delete_confirm_title", { suffix: report ? t("reports.delete_confirm_suffix", { name: report.name }) : "" }),
+        body: t("reports.delete_confirm_body"),
         danger: true,
       });
       if (!ok) return;
@@ -204,15 +206,15 @@ export default function ReportsPage() {
         const res = await authFetch(`/api/reports/${id}`, { method: "DELETE" });
         if (res.ok || res.status === 204) {
           setReports((prev) => prev.filter((r) => r.id !== id));
-          toast.success("Report deleted");
+          toast.success(t("reports.deleted"));
         } else {
-          toast.error("Could not delete the report.");
+          toast.error(t("reports.delete_failed"));
         }
       } catch {
-        toast.error("Could not delete the report.");
+        toast.error(t("reports.delete_failed"));
       }
     },
-    [authFetch, reports, confirm, toast]
+    [authFetch, reports, confirm, toast, t]
   );
 
   const inputClass =
@@ -222,10 +224,9 @@ export default function ReportsPage() {
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Scheduled questions</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("reports.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Saved questions on a clock. &quot;What was Simon doing all day&quot;,
-            every night at 7 PM, in your notifications or inbox.
+            {t("reports.help")}
           </p>
         </div>
         <button
@@ -233,7 +234,7 @@ export default function ReportsPage() {
           onClick={() => setShowForm((v) => !v)}
           className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90"
         >
-          {showForm ? "Close" : "New report"}
+          {showForm ? t("reports.close") : t("reports.new")}
         </button>
       </div>
 
@@ -246,20 +247,20 @@ export default function ReportsPage() {
       {showForm && (
         <div className="mb-6 rounded-lg border border-border bg-card p-5 space-y-3">
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Name</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("reports.name")}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Simon's day"
+              placeholder={t("reports.name_placeholder")}
               className={inputClass}
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Question</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("reports.question")}</label>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder='e.g. "What was Simon doing all day? Anything unusual?"'
+              placeholder={t("reports.question_placeholder")}
               rows={2}
               className={inputClass}
             />
@@ -267,14 +268,14 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground block mb-1">
-                Focus on (optional)
+                {t("reports.focus")}
               </label>
               <select
                 value={personId}
                 onChange={(e) => setPersonId(e.target.value)}
                 className={inputClass}
               >
-                <option value="">Whole household</option>
+                <option value="">{t("reports.household")}</option>
                 {persons.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.nickname || p.display_name}
@@ -283,7 +284,7 @@ export default function ReportsPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Deliver at</label>
+              <label className="text-xs text-muted-foreground block mb-1">{t("reports.deliver_at")}</label>
               <input
                 type="time"
                 value={time}
@@ -293,7 +294,7 @@ export default function ReportsPage() {
             </div>
             <div>
               <label className="text-xs text-muted-foreground block mb-1">
-                Also email to (optional)
+                {t("reports.email")}
               </label>
               <input
                 type="email"
@@ -307,14 +308,14 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground block mb-1">
-                Also send to Telegram (optional)
+                {t("reports.telegram")}
               </label>
               <select
                 value={tgChannelId}
                 onChange={(e) => setTgChannelId(e.target.value)}
                 className={inputClass}
               >
-                <option value="">No Telegram</option>
+                <option value="">{t("reports.no_telegram")}</option>
                 {tgChannels.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
@@ -323,13 +324,13 @@ export default function ReportsPage() {
               </select>
               {tgChannels.length === 0 && (
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Pair a bot under Settings → Telegram to deliver reports there.
+                  {t("reports.telegram_help")}
                 </p>
               )}
             </div>
             <div>
               <label className="text-xs text-muted-foreground block mb-1">
-                Also POST to a webhook (optional)
+                {t("reports.webhook")}
               </label>
               <input
                 type="url"
@@ -339,13 +340,13 @@ export default function ReportsPage() {
                 className={inputClass}
               />
               <p className="text-[11px] text-muted-foreground mt-1">
-                Receives JSON: report name, generated_at, and the full text.
+                {t("reports.webhook_help")}
               </p>
             </div>
           </div>
                     <div>
             <label className="text-xs text-muted-foreground block mb-1">
-              Days (none selected = every day)
+              {t("reports.days")}
             </label>
             <div className="flex gap-1.5 flex-wrap">
               {DAYS.map((d) => (
@@ -375,19 +376,19 @@ export default function ReportsPage() {
               disabled={saving || !name.trim() || !prompt.trim()}
               className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
             >
-              {saving ? "Saving." : "Create report"}
+              {saving ? t("reports.saving") : t("reports.create")}
             </button>
           </div>
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-muted-foreground py-12 text-center">Loading reports.</p>
+        <p className="text-sm text-muted-foreground py-12 text-center">{t("reports.loading")}</p>
       ) : reports.length === 0 && !showForm ? (
         <EmptyState
-          title="No scheduled reports yet"
-          body={'A report is a saved question on a clock, like "What was Simon doing all day?" delivered every night at 7 PM to your notifications, email, or Telegram. Create one to get a recap without asking.'}
-          actionLabel="New report"
+          title={t("reports.empty_title")}
+          body={t("reports.empty_body")}
+          actionLabel={t("reports.new")}
           onAction={() => setShowForm(true)}
         />
       ) : (
@@ -407,7 +408,7 @@ export default function ReportsPage() {
                     {fmtTime(r.hour, r.minute)}
                     {r.days && r.days.length > 0 && r.days.length < 7
                       ? ` · ${r.days.join(", ")}`
-                      : " · daily"}
+                      : ` · ${t("reports.daily")}`}
                   </span>
                   {r.delivery?.email && (
                     <span className="px-1.5 py-0.5 text-[10px] rounded bg-muted text-muted-foreground">
@@ -426,7 +427,7 @@ export default function ReportsPage() {
                   )}
                   {r.last_status === "failed" && (
                     <span className="px-1.5 py-0.5 text-[10px] rounded bg-red-500/15 text-red-400 border border-red-500/30">
-                      last run failed
+                      {t("reports.last_failed")}
                     </span>
                   )}
                   <div className="ml-auto flex items-center gap-1.5">
@@ -435,23 +436,23 @@ export default function ReportsPage() {
                       onClick={() => runNow(r.id)}
                       disabled={runningId === r.id}
                       className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors disabled:opacity-50"
-                      title="Run the report now to preview the output"
+                      title={t("reports.run_now_help")}
                     >
-                      {runningId === r.id ? "Running." : "Run now"}
+                      {runningId === r.id ? t("reports.running") : t("reports.run_now")}
                     </button>
                     <button
                       type="button"
                       onClick={() => toggleEnabled(r)}
                       className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors"
                     >
-                      {r.enabled ? "Pause" : "Resume"}
+                      {r.enabled ? t("reports.pause") : t("reports.resume")}
                     </button>
                     <button
                       type="button"
                       onClick={() => remove(r.id)}
                       className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40 transition-colors"
                     >
-                      Delete
+                      {t("reports.delete")}
                     </button>
                   </div>
                 </div>
@@ -462,7 +463,7 @@ export default function ReportsPage() {
                     onClick={() => setExpandedId(expanded ? null : r.id)}
                     className="mt-2 text-[11px] text-muted-foreground hover:text-foreground"
                   >
-                    {expanded ? "Hide last report" : `Show last report (${timeAgo(r.last_run_at)})`}
+                    {expanded ? t("reports.hide_last") : t("reports.show_last", { time: timeAgo(r.last_run_at) })}
                   </button>
                 )}
                 {expanded && r.last_output && (
