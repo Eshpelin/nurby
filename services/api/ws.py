@@ -82,18 +82,32 @@ def _allowed_to_receive(allowed: AllowedCameras, message: dict) -> bool:
     """Per-recipient fan-out gate for one socket and one decoded message.
 
     Always deliver when the recipient is unrestricted (``ALL``), or when the
-    message is not camera-specific (no usable top-level ``camera_id``, e.g.
-    a system notice). Otherwise deliver only when the message's camera is in
-    the recipient's allowlist. An empty allowlist therefore drops every
-    camera-tagged message (fail-closed)."""
+    message is not camera-specific. For multi-camera evidence payloads,
+    delivery requires every referenced camera to be in the recipient's
+    allowlist; sending a mixed payload would otherwise disclose evidence from
+    a camera the recipient cannot see. An empty allowlist therefore drops
+    every camera-tagged message (fail-closed)."""
     if allowed is ALL:
         return True
     if not isinstance(message, dict):
         return True
     camera_id = _coerce_camera_id(message.get("camera_id"))
-    if camera_id is None:
+    if camera_id is not None:
+        return camera_id in allowed
+
+    # Association and relationship evidence may summarize several cameras
+    # and therefore use ``camera_ids`` instead of a single ``camera_id``.
+    # Treat a present, non-empty list as camera-scoped even when one entry is
+    # malformed: failing closed is safer than delivering partial evidence.
+    if "camera_ids" not in message:
         return True
-    return camera_id in allowed
+    raw_camera_ids = message.get("camera_ids")
+    if not isinstance(raw_camera_ids, (list, tuple, set)) or not raw_camera_ids:
+        return True
+    parsed = [_coerce_camera_id(raw) for raw in raw_camera_ids]
+    if any(camera is None for camera in parsed):
+        return False
+    return set(parsed) <= allowed
 
 # ── Cross-process relay ─────────────────────────────────────────────
 #
