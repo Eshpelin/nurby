@@ -283,6 +283,11 @@ DEFAULTS: dict[str, Any] = {
     # childcare | security. Narrows the meaningful actions so a site is not shown logic from
     # another vertical.
     "har_action_set": "all",
+    # Temporal HAR backend. Geometric is the safe runnable default; deployments
+    # with an exported ST-GCN ONNX model can opt in explicitly.
+    "har_action_backend": "geometric",
+    "har_action_model_path": "",
+    "har_action_label_map": {},
     # Live clips are blurred frame-by-frame and cached before serving, so they
     # are safe to serve by default. Turn the feature off entirely with
     # guardian_clips_enabled. guardian_unblurred_clips_enabled is an explicit

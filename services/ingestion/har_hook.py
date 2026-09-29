@@ -57,7 +57,16 @@ def current_tracks(camera_id) -> list[dict]:
         return []
 
 # Cheap cache of the HAR settings so we don't hit the store every frame.
-_cfg: dict = {"at": 0.0, "enabled": False, "cadence": 8, "test_mode": False, "action_set": "all"}
+_cfg: dict = {
+    "at": 0.0,
+    "enabled": False,
+    "cadence": 8,
+    "test_mode": False,
+    "action_set": "all",
+    "backend": "geometric",
+    "model_path": None,
+    "label_map": {},
+}
 _CFG_TTL = 30.0
 
 
@@ -72,6 +81,11 @@ async def _config() -> dict:
         _cfg["cadence"] = int(await get_setting("har_cadence_fps", 8) or 8)
         _cfg["test_mode"] = bool(await get_setting("guardian_har_test_mode", False))
         _cfg["action_set"] = str(await get_setting("har_action_set", "all") or "all")
+        backend = str(await get_setting("har_action_backend", "geometric") or "geometric").strip().lower()
+        _cfg["backend"] = backend if backend in {"geometric", "stgcn"} else "geometric"
+        _cfg["model_path"] = str(await get_setting("har_action_model_path", "") or "").strip() or None
+        raw_label_map = await get_setting("har_action_label_map", {})
+        _cfg["label_map"] = raw_label_map if isinstance(raw_label_map, dict) else {}
     except Exception:
         _cfg["enabled"] = False
     _cfg["at"] = now
@@ -150,7 +164,12 @@ async def run_har(camera_id, frame, loop, executor, get_redis=None) -> None:
         if runner is None:
             from services.perception.har_runner import HARRunner
 
-            runner = HARRunner(cam)  # identity attached post-hoc from the Redis map
+            runner = HARRunner(
+                cam,
+                backend_name=cfg["backend"],
+                model_path=cfg["model_path"],
+                label_map=cfg["label_map"],
+            )  # identity attached post-hoc from the Redis map
             _runners[cam] = runner
 
         # Global concurrency cap so N cameras cannot thundering-herd the CPU.

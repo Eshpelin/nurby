@@ -44,13 +44,15 @@ class HARRunner:
         camera_id,
         *,
         backend_name: str = "geometric",
+        model_path: str | None = None,
+        label_map: dict | None = None,
         window: int = DEFAULT_WINDOW,
         min_frames: int = DEFAULT_MIN_FRAMES,
         identity_fn=None,          # (camera_id, tracker_id) -> {person_id, person_name} | None
         tracker=None,              # ObjectTracker-like; default created lazily
     ):
         self.camera_id = str(camera_id)
-        self.backend = get_backend(backend_name)
+        self.backend = get_backend(backend_name, model_path=model_path, label_map=label_map)
         self.window = window
         self.min_frames = min_frames
         self._identity_fn = identity_fn or (lambda c, t: None)

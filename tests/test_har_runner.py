@@ -71,6 +71,34 @@ def test_runner_no_identity_leaves_person_none():
     assert any(s["person_id"] is None for s in segs_all)
 
 
+def test_runner_passes_model_configuration_to_backend(monkeypatch):
+    captured = {}
+
+    class FakeBackend:
+        name = "stgcn"
+
+        def classify(self, window):
+            return "standing", 0.9
+
+    def fake_get_backend(name, *, model_path=None, label_map=None):
+        captured.update(name=name, model_path=model_path, label_map=label_map)
+        return FakeBackend()
+
+    monkeypatch.setattr("services.perception.har_runner.get_backend", fake_get_backend)
+    HARRunner(
+        "cam-config",
+        backend_name="stgcn",
+        model_path="/models/har.onnx",
+        label_map={"0": "standing"},
+    )
+
+    assert captured == {
+        "name": "stgcn",
+        "model_path": "/models/har.onnx",
+        "label_map": {"0": "standing"},
+    }
+
+
 def test_runner_flush_closes_on_track_loss():
     runner = HARRunner("cam-3", min_frames=3, window=5, identity_fn=lambda c, t: {"person_id": PID})
     for t in range(5):
