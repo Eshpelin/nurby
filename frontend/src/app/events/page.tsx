@@ -48,7 +48,7 @@ export default function EventsPage() {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
 
-  const [cameraFilter, setCameraFilter] = useState("");
+  const [cameraFilter, setCameraFilter] = useState(() => searchParams.get("camera_id") ?? "");
   const [ruleFilter, setRuleFilter] = useState("");
   const [ackedFilter, setAckedFilter] = useState<"" | "false" | "true">("");
   const [severityFilter, setSeverityFilter] = useState<"" | "alert" | "detection">("alert");

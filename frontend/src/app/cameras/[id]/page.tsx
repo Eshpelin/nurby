@@ -643,6 +643,13 @@ export default function CameraConfigPage() {
         >
           {t("camera_detail.notes")}
         </Link>
+        <Link
+          href={`/events?camera_id=${encodeURIComponent(cameraId)}`}
+          className="inline-flex items-center gap-1.5 rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs text-accent transition-colors hover:bg-accent/20"
+          title={t("camera_detail.review_identity_title")}
+        >
+          {t("camera_detail.review_identity")}
+        </Link>
       </div>
 
       {/* Live view (#319). The workspace used to show everything about the
