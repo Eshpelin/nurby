@@ -511,6 +511,27 @@ async def feedback_summary(
     nuisance_rate_reviewed = round(nuisance_alerts / reviewed_rows, 4) if reviewed_rows else None
     nuisance_rate_fired = round(nuisance_alerts / total_events, 4) if total_events else None
 
+    camera_day_rows = (
+        await db.execute(
+            select(
+                Event.camera_id,
+                func.date(Event.fired_at),
+                EventFeedback.rating,
+                func.count(),
+            )
+            .join(Event, Event.id == EventFeedback.event_id)
+            .where(Event.fired_at >= cutoff)
+            .group_by(Event.camera_id, func.date(Event.fired_at), EventFeedback.rating)
+        )
+    ).all()
+    camera_days: dict[tuple[str, str], dict[str, int]] = {}
+    for camera_id, day, rating, count in camera_day_rows:
+        key = (str(camera_id) if camera_id is not None else "unscoped", str(day))
+        row = camera_days.setdefault(key, {"reviewed": 0, "nuisance": 0})
+        row["reviewed"] += count
+        if rating in ("incorrect", "correct_but_not_useful"):
+            row["nuisance"] += count
+
     return {
         "window_hours": hours,
         "events_fired": total_events,
@@ -520,6 +541,17 @@ async def feedback_summary(
         "nuisance_alerts": nuisance_alerts,
         "nuisance_rate_reviewed": nuisance_rate_reviewed,
         "nuisance_rate_fired": nuisance_rate_fired,
+        "nuisance_by_camera_day": [
+            {
+                "camera_id": camera_id,
+                "day": day,
+                "reviewed": values["reviewed"],
+                "nuisance": values["nuisance"],
+                "nuisance_rate_reviewed": round(values["nuisance"] / values["reviewed"], 4)
+                if values["reviewed"] else None,
+            }
+            for (camera_id, day), values in sorted(camera_days.items())
+        ],
         "rating_counts": {
             "useful": rating_counts.get("useful", 0),
             "correct_but_not_useful": rating_counts.get("correct_but_not_useful", 0),

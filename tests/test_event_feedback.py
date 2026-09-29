@@ -288,6 +288,7 @@ async def test_summary_reports_counts_and_response_rate():
         FakeResult(rows=[("duplicate", 2)]),                  # reasons
         FakeResult(scalar=4),                                 # distinct reviewed events
         FakeResult(scalar=2),                                 # distinct reviewers
+        FakeResult(rows=[("camera-1", "2026-09-29", "incorrect", 2)]),  # camera/day ratings
     ])
     res = await events_routes.feedback_summary(hours=168, _current_user=_user("admin"), db=db)
     assert res["events_fired"] == 10
@@ -297,6 +298,10 @@ async def test_summary_reports_counts_and_response_rate():
     assert res["nuisance_alerts"] == 2
     assert res["nuisance_rate_reviewed"] == 0.5
     assert res["nuisance_rate_fired"] == 0.2
+    assert res["nuisance_by_camera_day"] == [{
+        "camera_id": "camera-1", "day": "2026-09-29", "reviewed": 2,
+        "nuisance": 2, "nuisance_rate_reviewed": 1.0,
+    }]
     assert res["rating_counts"] == {
         "useful": 6, "correct_but_not_useful": 0, "incorrect": 2,
     }
@@ -311,6 +316,7 @@ async def test_summary_with_no_events_has_no_rate():
         FakeResult(rows=[]),
         FakeResult(scalar=0),
         FakeResult(scalar=0),
+        FakeResult(rows=[]),
     ])
     res = await events_routes.feedback_summary(hours=24, _current_user=_user("admin"), db=db)
     assert res["response_rate"] is None
