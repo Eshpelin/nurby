@@ -997,7 +997,7 @@ export default function CameraConfigPage() {
 
         {/* ── YOLO-World prompts ── */}
         {detectionModels.some((m) => m.model.includes("world")) && (
-          <YoloWorldPromptsSection setYoloWorldPrompts={setYoloWorldPrompts} yoloWorldPrompts={yoloWorldPrompts} />
+          <YoloWorldPromptsSection locale={locale} setYoloWorldPrompts={setYoloWorldPrompts} yoloWorldPrompts={yoloWorldPrompts} />
         )}
 
         {/* ── Privacy zones ── */}

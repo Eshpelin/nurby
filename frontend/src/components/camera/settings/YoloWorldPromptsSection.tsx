@@ -5,32 +5,34 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, KeywordChipInput } from "./primitives";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface YoloWorldPromptsSectionProps {
+  locale: Locale;
   setYoloWorldPrompts: Dispatch<SetStateAction<string[]>>;
   yoloWorldPrompts: string[];
 }
 
 export function YoloWorldPromptsSection({
+  locale,
   setYoloWorldPrompts,
   yoloWorldPrompts,
 }: YoloWorldPromptsSectionProps) {
+  const t = (key: string) => translate(locale, key);
   return (
           <Section
-            title="Open-vocabulary prompts"
+            title={t("camera.yolo_world.title")}
           advanced
-            description="When a YOLO-World model is in this camera's detection list, these phrases drive what it detects. Plain English. Add anything you want flagged."
+            description={t("camera.yolo_world.description")}
           >
-            <FieldRow label="Class names to detect">
+            <FieldRow label={t("camera.yolo_world.class_names")}>
               <KeywordChipInput
                 values={yoloWorldPrompts}
                 onChange={setYoloWorldPrompts}
-                placeholder="person, package, delivery driver, raccoon, ..."
+                placeholder={t("camera.yolo_world.placeholder")}
               />
               <p className="text-[11px] text-muted-foreground mt-1.5">
-                Each phrase becomes a detection class. Combine with the
-                existing Detection Models picker to pair YOLO-World
-                with a faster general-purpose model.
+                {t("camera.yolo_world.help")}
               </p>
             </FieldRow>
           </Section>
