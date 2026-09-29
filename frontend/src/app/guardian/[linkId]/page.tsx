@@ -160,7 +160,7 @@ export default function DependantDetailPage() {
       )}
 
       {/* Premium upsell */}
-      {ent && <UpsellPanel ent={ent} />}
+      {ent && <UpsellPanel ent={ent} locale={user?.locale} />}
 
       <div className="mt-8 text-center">
         <button
@@ -173,6 +173,7 @@ export default function DependantDetailPage() {
 
       {showTrust && (
         <TrustModal
+          locale={user?.locale}
           onClose={() => {
             try {
               localStorage.setItem("guardian_trust_ack", "1");
@@ -395,22 +396,23 @@ function ChannelToggles({
   );
 }
 
-function UpsellPanel({ ent }: { ent: Dependant["entitlements"] }) {
+function UpsellPanel({ ent, locale }: { ent: Dependant["entitlements"]; locale?: string }) {
+  const t = (key: string) => translate(locale, key);
   const locked: { label: string; desc: string }[] = [];
   if (ent.delayed)
-    locked.push({ label: "Live presence", desc: "See where they are right now, not 30 minutes ago." });
+    locked.push({ label: t("guardian_detail.upsell_live_presence"), desc: t("guardian_detail.upsell_live_presence_help") });
   if (!ent.live_video)
-    locked.push({ label: "Live video", desc: "Short blurred live clips, on demand." });
+    locked.push({ label: t("guardian_detail.upsell_live_video"), desc: t("guardian_detail.upsell_live_video_help") });
   if (!ent.audio)
-    locked.push({ label: "Audio signals", desc: "Surface audio events for added context." });
+    locked.push({ label: t("guardian_detail.upsell_audio"), desc: t("guardian_detail.upsell_audio_help") });
   if (!ent.premium)
-    locked.push({ label: "Daily recap", desc: "A warm daily summary of their day." });
+    locked.push({ label: t("guardian_detail.upsell_recap"), desc: t("guardian_detail.upsell_recap_help") });
 
   if (locked.length === 0) return null;
 
   return (
     <section className="mt-6">
-      <h2 className="text-sm font-medium text-muted-foreground mb-2">Upgrade</h2>
+      <h2 className="text-sm font-medium text-muted-foreground mb-2">{t("guardian_detail.upgrade")}</h2>
       <div className="grid gap-3 sm:grid-cols-2">
         {locked.map((u) => (
           <div key={u.label} className="rounded-lg border border-border bg-card p-4">
@@ -423,7 +425,7 @@ function UpsellPanel({ ent }: { ent: Dependant["entitlements"] }) {
         ))}
       </div>
       <p className="text-[11px] text-muted-foreground mt-3">
-        Paid plans are not yet available. These will unlock when billing launches.
+        {t("guardian_detail.billing_coming")}
       </p>
     </section>
   );
@@ -651,31 +653,32 @@ function TrendsPanel({ linkId, locale }: { linkId: string; locale?: string }) {
   );
 }
 
-function TrustModal({ onClose }: { onClose: () => void }) {
+function TrustModal({ onClose, locale }: { onClose: () => void; locale?: string }) {
+  const t = (key: string) => translate(locale, key);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="max-w-md w-full rounded-lg border border-border bg-card p-6">
-        <h2 className="text-lg font-semibold">What you can see</h2>
+        <h2 className="text-lg font-semibold">{t("guardian_detail.what_you_can_see")}</h2>
         <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-          <li>Whether your dependant is present, and where, in plain words.</li>
-          <li>Arrival, pickup, and zone moments as they happen.</li>
-          <li>Recent images, blurred so no one is identifiable by face.</li>
+          <li>{t("guardian_detail.see_present")}</li>
+          <li>{t("guardian_detail.see_moments")}</li>
+          <li>{t("guardian_detail.see_images")}</li>
         </ul>
-        <h2 className="text-lg font-semibold mt-4">What stays private</h2>
+        <h2 className="text-lg font-semibold mt-4">{t("guardian_detail.what_stays_private")}</h2>
         <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-          <li>Every other person stays blurred and anonymous. Always.</li>
-          <li>You only ever see the people you are bound to.</li>
-          <li>Free plans are delayed by about 30 minutes.</li>
-          <li>Every view you make is logged and visible to the facility.</li>
+          <li>{t("guardian_detail.private_others")}</li>
+          <li>{t("guardian_detail.private_bound")}</li>
+          <li>{t("guardian_detail.private_delay")}</li>
+          <li>{t("guardian_detail.private_audit")}</li>
         </ul>
         <p className="mt-4 text-xs text-muted-foreground">
-          This is an awareness aid, not a guarantee of safety.
+          {t("guardian_detail.awareness_disclaimer")}
         </p>
         <button
           onClick={onClose}
           className="mt-5 w-full rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-sm py-2 transition-colors"
         >
-          I understand
+          {t("guardian_detail.understand")}
         </button>
       </div>
     </div>
