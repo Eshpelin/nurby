@@ -949,8 +949,8 @@ export default function PeoplePage() {
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {summary?.last_seen_at
-                          ? `Last seen ${timeAgo(summary.last_seen_at)}${summary.last_seen_camera ? ` at ${summary.last_seen_camera}` : ""}`
-                          : "No sightings yet"}
+                          ? t("people.last_seen", { time: timeAgo(summary.last_seen_at), camera: summary.last_seen_camera ? ` at ${summary.last_seen_camera}` : "" })
+                          : t("people.no_sightings")}
                       </div>
                     </div>
 
@@ -960,19 +960,19 @@ export default function PeoplePage() {
                         href={`/follow/person/${p.id}`}
                         onClick={(e) => e.stopPropagation()}
                         className="px-2 py-1 text-xs rounded-md border border-accent/40 text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"
-                        title={`Follow ${p.display_name} across cameras`}
+                        title={t("people.follow_title", { name: p.display_name })}
                       >
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="12" cy="12" r="10" />
                           <circle cx="12" cy="12" r="3" />
                         </svg>
-                        Follow
+                        {t("people.follow")}
                       </Link>
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleStar(p); }}
                         disabled={togglingStar === p.id}
-                        title={p.is_starred ? "Unpin from dashboard" : "Pin to dashboard"}
-                        aria-label={p.is_starred ? "Unpin from dashboard" : "Pin to dashboard"}
+                        title={p.is_starred ? t("people.unpin_dashboard") : t("people.pin_dashboard")}
+                        aria-label={p.is_starred ? t("people.unpin_dashboard") : t("people.pin_dashboard")}
                         className={`p-1 rounded transition-colors disabled:opacity-50 ${p.is_starred ? "text-amber-400 hover:bg-amber-500/10" : "text-muted-foreground hover:text-amber-400 hover:bg-muted"}`}
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill={p.is_starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
@@ -983,7 +983,7 @@ export default function PeoplePage() {
                         <div className="flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                           <span className="text-xs text-green-400">
-                            {summary.sightings_1h} past hour
+                            {t("people.past_hour", { count: summary.sightings_1h })}
                           </span>
                         </div>
                       )}
@@ -991,13 +991,13 @@ export default function PeoplePage() {
                         <div className="flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                           <span className="text-xs text-blue-400">
-                            {summary.sightings_24h} today
+                            {t("people.today_count", { count: summary.sightings_24h })}
                           </span>
                         </div>
                       )}
                       {summary && summary.total_sightings > 0 && (
                         <div className="text-xs text-muted-foreground">
-                          {summary.total_sightings} total
+                          {t("people.total_count", { count: summary.total_sightings })}
                         </div>
                       )}
 
@@ -1028,7 +1028,7 @@ export default function PeoplePage() {
                           }}
                           className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
                         >
-                          Edit
+                          {t("people.edit")}
                         </button>
                         <button
                           onClick={(e) => {
@@ -1037,9 +1037,9 @@ export default function PeoplePage() {
                             setMergeTargetId("");
                           }}
                           className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
-                          title="Merge this person into another (same real person enrolled twice)"
+                          title={t("people.merge_title_hint")}
                         >
-                          Merge
+                          {t("people.merge")}
                         </button>
                         <button
                           onClick={(e) => {
@@ -1047,16 +1047,16 @@ export default function PeoplePage() {
                             openPhotoPicker(p);
                           }}
                           className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
-                          title="Choose this person's photo from their detected faces"
+                          title={t("people.choose_photo_title")}
                         >
-                          Photo
+                          {t("people.photo")}
                         </button>
                         <div className="flex-1" />
                         <span
                           className={`w-2 h-2 rounded-full ${p.consent_given ? "bg-green-500" : "bg-yellow-500"}`}
                         />
                         <span className="text-[11px] text-muted-foreground">
-                          {p.consent_given ? "Consent given" : "No consent"}
+                          {p.consent_given ? t("people.consent_given") : t("people.no_consent")}
                         </span>
                         <button
                           onClick={(e) => {
@@ -1065,7 +1065,7 @@ export default function PeoplePage() {
                           }}
                           className="px-2 py-1 text-xs rounded border border-red-800 text-red-400 hover:bg-red-900/30 transition-colors ml-2"
                         >
-                          Delete
+                          {t("common.delete")}
                         </button>
                       </div>
 
@@ -1075,11 +1075,11 @@ export default function PeoplePage() {
                       <div className="max-h-96 overflow-y-auto">
                         {loadingActivity ? (
                           <div className="text-xs text-muted-foreground text-center py-8">
-                            Loading activity.
+                            {t("people.loading_activity")}
                           </div>
                         ) : activities.length === 0 ? (
                           <div className="text-xs text-muted-foreground text-center py-8">
-                            No activity recorded for this person yet.
+                            {t("people.no_activity")}
                           </div>
                         ) : (
                           <div className="divide-y divide-border/50">
@@ -1114,7 +1114,7 @@ export default function PeoplePage() {
                                       <div className="flex-1 min-w-0">
                                         <div className="text-sm leading-snug">
                                           {a.vlm_description ||
-                                            "Person detected"}
+                                            t("people.person_detected")}
                                         </div>
                                         <div className="flex items-center gap-2 mt-1">
                                           <span className="text-[11px] text-muted-foreground">
@@ -1127,7 +1127,7 @@ export default function PeoplePage() {
                                           )}
                                           {a.ended_at && (
                                             <span className="text-[11px] text-muted-foreground">
-                                              until{" "}
+                                              {t("people.until")} {" "}
                                               {formatTime(a.ended_at)}
                                             </span>
                                           )}
@@ -1141,7 +1141,7 @@ export default function PeoplePage() {
                                             (1 - a.match_distance) *
                                             100
                                           ).toFixed(0)}
-                                          % match
+                                          {t("people.match")}
                                         </div>
                                       )}
                                     </div>
@@ -1326,50 +1326,50 @@ export default function PeoplePage() {
             <div className="space-y-3">
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">
-                  Name
+                  {t("people.name")}
                 </label>
                 <input
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
-                  placeholder="Display name"
+                  placeholder={t("people.display_name_placeholder")}
                   autoFocus
                 />
               </div>
 
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">
-                  Nickname
+                  {t("people.nickname")}
                 </label>
                 <input
                   type="text"
                   value={formNickname}
                   onChange={(e) => setFormNickname(e.target.value)}
                   className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
-                  placeholder="What you call them, e.g. Mommy or Lee"
+                  placeholder={t("people.nickname_placeholder")}
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Shown in updates, digests, and answers in place of the full name.
+                  {t("people.nickname_help")}
                 </p>
               </div>
 
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">
-                  Relationship
+                  {t("people.relationship")}
                 </label>
                 <input
                   type="text"
                   value={formRelationship}
                   onChange={(e) => setFormRelationship(e.target.value)}
                   className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
-                  placeholder="Family, friend, delivery, etc."
+                  placeholder={t("people.relationship_placeholder")}
                 />
               </div>
 
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">
-                  Face photo {editPerson ? "(add another)" : "(optional)"}
+                  {t("people.face_photo")} {editPerson ? t("people.add_another") : t("people.optional")}
                 </label>
                 <input
                   type="file"
@@ -1378,8 +1378,7 @@ export default function PeoplePage() {
                   className="w-full text-xs text-muted-foreground file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border file:border-border file:bg-background file:text-xs file:text-foreground file:cursor-pointer"
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  One clear photo of their face. Nurby uses it to recognize
-                  them on camera.
+                  {t("people.face_photo_help")}
                 </p>
               </div>
 
@@ -1391,7 +1390,7 @@ export default function PeoplePage() {
                   className="accent-green-500"
                 />
                 <span className="text-sm">
-                  Consent given for face recognition
+                  {t("people.consent_face")}
                 </span>
               </label>
 
@@ -1402,22 +1401,22 @@ export default function PeoplePage() {
                   onChange={(e) => setFormStarred(e.target.checked)}
                   className="accent-amber-500"
                 />
-                <span className="text-sm">Pin to dashboard status row</span>
+                  <span className="text-sm">{t("people.pin_status_row")}</span>
               </label>
 
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">
-                  Recap prompt
+                  {t("people.recap_prompt")}
                 </label>
                 <textarea
                   rows={3}
                   value={formRecapPrompt}
                   onChange={(e) => setFormRecapPrompt(e.target.value)}
-                  placeholder="What do you care about for this person? Example. Is the baby still asleep. Any crying. Did grandma take her meds. Is the dog walker on time."
+                  placeholder={t("people.recap_prompt_placeholder")}
                   className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent resize-y"
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  The dashboard recap will bias toward whatever you put here. Leave blank for a neutral status.
+                  {t("people.recap_prompt_help")}
                 </p>
               </div>
 
@@ -1449,9 +1448,9 @@ export default function PeoplePage() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60" onClick={() => setBlockedDelete(null)} />
           <div role="alertdialog" aria-modal="true" className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
-            <h2 className="text-lg font-semibold mb-2">Can’t delete {blockedDelete.personName}</h2>
+              <h2 className="text-lg font-semibold mb-2">{t("people.cannot_delete", { name: blockedDelete.personName })}</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              This person is still used by saved workflows. Reassign or disable these references before deleting them.
+              {t("people.delete_references_help")}
             </p>
             {blockedDelete.references.length > 0 ? (
               <ul className="space-y-2 max-h-56 overflow-y-auto text-sm">
@@ -1471,7 +1470,7 @@ export default function PeoplePage() {
                         }))}
                         className="min-w-0 flex-1 px-2 py-1 rounded bg-background border border-border text-xs"
                       >
-                        <option value="">Reassign to…</option>
+                        <option value="">{t("people.reassign_to")}</option>
                         {persons.filter((person) => person.id !== blockedDelete.personId).map((person) => (
                           <option key={person.id} value={person.id}>{person.display_name}</option>
                         ))}
@@ -1482,7 +1481,7 @@ export default function PeoplePage() {
                         onClick={() => resolveReference(reference, "reassign")}
                         className="px-2 py-1 text-xs rounded border border-border hover:bg-muted disabled:opacity-50"
                       >
-                        Reassign
+                        {t("people.reassign")}
                       </button>
                       <button
                         type="button"
@@ -1490,7 +1489,7 @@ export default function PeoplePage() {
                         onClick={() => resolveReference(reference, "disable")}
                         className="px-2 py-1 text-xs rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 disabled:opacity-50"
                       >
-                        Disable
+                        {t("people.disable")}
                       </button>
                     </div>
                   </li>
@@ -1498,7 +1497,7 @@ export default function PeoplePage() {
               </ul>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">All listed references have been resolved. You can try deleting the person again.</p>
+                <p className="text-sm text-muted-foreground">{t("people.references_resolved")}</p>
                 <button
                   type="button"
                   onClick={async () => {
@@ -1508,13 +1507,13 @@ export default function PeoplePage() {
                   }}
                   className="px-3 py-1.5 text-sm rounded-md bg-red-500 text-white hover:bg-red-600"
                 >
-                  Try delete again
+                  {t("people.try_delete_again")}
                 </button>
               </div>
             )}
             <div className="flex justify-end mt-5">
               <button type="button" onClick={() => setBlockedDelete(null)} className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">
-                Done
+                {t("people.done")}
               </button>
             </div>
           </div>

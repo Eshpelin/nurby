@@ -32,8 +32,9 @@ should move to the shared English/Spanish catalog in follow-up slices:
   live/search-result labels, event-card labels, and first-camera/no-results
   guidance are catalog-driven for the audited surface. Re-open only when a
   new dashboard surface is added.
-- `frontend/src/app/people/page.tsx`: people, unknown-cluster, merge, and
-  deletion dialogs.
+- `frontend/src/app/people/page.tsx`: remaining unknown-cluster suggestion
+  counts and some activity-card copy; person form, merge, photo, consent,
+  deletion-reference, and primary row actions are catalog-driven.
 - `frontend/src/app/cameras/[id]/page.tsx` and its camera settings panels are
   catalog-driven for the audited product copy. Re-open this entry only when a
   new camera-facing surface is added.
