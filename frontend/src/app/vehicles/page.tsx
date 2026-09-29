@@ -7,6 +7,7 @@ import { EmptyState, CameraGlyph } from "@/components/EmptyState";
 import { useToast, useConfirm } from "@/lib/feedback";
 import { timeAgo as timeAgoBase } from "@/lib/time";
 import { AssociationSummary } from "@/components/review/AssociationSummary";
+import { translate } from "@/lib/i18n";
 
 interface Vehicle {
   id: string;
@@ -65,7 +66,11 @@ const TYPE_ICON: Record<string, string> = {
 };
 
 export default function VehiclesPage() {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const t = useCallback(
+    (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values),
+    [user?.locale],
+  );
   const toast = useToast();
   const confirm = useConfirm();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -122,8 +127,8 @@ export default function VehiclesPage() {
 
   const remove = useCallback(async (id: string) => {
     const ok = await confirm({
-      title: "Delete this vehicle?",
-      body: "Its sighting history will be removed. This cannot be undone.",
+      title: t("vehicles.delete_title"),
+      body: t("vehicles.delete_body"),
       danger: true,
     });
     if (!ok) return;
@@ -131,15 +136,15 @@ export default function VehiclesPage() {
     try {
       const res = await authFetch(`/api/vehicles/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) throw new Error();
-      toast.success("Vehicle deleted");
+      toast.success(t("vehicles.deleted"));
     } catch {
-      toast.error("Could not delete the vehicle.");
+      toast.error(t("vehicles.delete_failed"));
       fetchAll();
     }
-  }, [authFetch, fetchAll, confirm, toast]);
+  }, [authFetch, fetchAll, confirm, toast, t]);
 
   if (loading) {
-    return <div className="px-6 py-8 text-sm text-muted-foreground">Loading vehicles.</div>;
+    return <div className="px-6 py-8 text-sm text-muted-foreground">{t("vehicles.loading")}</div>;
   }
 
   if (vehicles.length === 0) {
@@ -147,9 +152,9 @@ export default function VehiclesPage() {
       <div className="px-6 py-16 max-w-xl mx-auto">
         <EmptyState
           icon={<CameraGlyph />}
-          title="No vehicles seen yet"
-          body="When a camera reads a license plate, the vehicle appears here with its plate, a description, and every time it came and went. Plate reading is automatic — if no camera is connected yet, add one first."
-          actionLabel="Go to cameras"
+          title={t("vehicles.empty_title")}
+          body={t("vehicles.empty_body")}
+          actionLabel={t("vehicles.go_to_cameras")}
           actionHref="/"
         />
       </div>
@@ -159,9 +164,9 @@ export default function VehiclesPage() {
   return (
     <div className="px-6 py-6 max-w-4xl mx-auto">
       <div className="mb-5">
-        <h1 className="text-2xl font-semibold tracking-tight">Vehicles</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("vehicles.title")}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Every vehicle seen, identified by plate, with full enter/leave history.
+          {t("vehicles.subtitle")}
         </p>
       </div>
 
@@ -191,7 +196,7 @@ export default function VehiclesPage() {
                         </span>
                       )}
                       {v.is_provisional && (
-                        <span className="text-[9px] uppercase tracking-wide text-muted-foreground">auto</span>
+                        <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{t("vehicles.auto")}</span>
                       )}
                     </div>
                     {v.description && (
@@ -199,9 +204,9 @@ export default function VehiclesPage() {
                     )}
                     <div className="text-[11px] text-muted-foreground mt-0.5">
                       {s ? (
-                        <>last seen {timeAgo(s.last_seen_at)}{s.last_seen_camera ? ` on ${s.last_seen_camera}` : ""}</>
+                        <>{t("vehicles.last_seen", { time: timeAgo(s.last_seen_at) })}{s.last_seen_camera ? ` ${t("vehicles.on_camera", { camera: s.last_seen_camera })}` : ""}</>
                       ) : (
-                        <>last seen {timeAgo(v.last_seen_at)}</>
+                        <>{t("vehicles.last_seen", { time: timeAgo(v.last_seen_at) })}</>
                       )}
                     </div>
                   </div>
@@ -209,21 +214,21 @@ export default function VehiclesPage() {
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {s && (
                     <div className="hidden sm:flex flex-col items-end text-[10px] font-mono text-muted-foreground">
-                      <span className="text-accent">{s.sightings_1h} / 1h</span>
-                      <span>{s.total_sightings} total</span>
+                      <span className="text-accent">{t("vehicles.sightings_hour", { count: s.sightings_1h })}</span>
+                      <span>{t("vehicles.sightings_total", { count: s.total_sightings })}</span>
                     </div>
                   )}
-                  <button onClick={() => toggleStar(v)} title="Star" className={`text-base ${v.is_starred ? "text-yellow-400" : "text-muted-foreground hover:text-foreground"}`}>
+                  <button onClick={() => toggleStar(v)} title={t("vehicles.star")} className={`text-base ${v.is_starred ? "text-yellow-400" : "text-muted-foreground hover:text-foreground"}`}>
                     {v.is_starred ? "★" : "☆"}
                   </button>
                   <Link
                     href={`/memory?entity_kind=vehicle&entity_key=${v.id}`}
-                    title="Household notes about this vehicle"
+                    title={t("vehicles.notes_title")}
                     className="text-muted-foreground hover:text-foreground text-xs"
                   >
-                    Notes
+                    {t("vehicles.notes")}
                   </Link>
-                  <button onClick={() => setEditing(v)} title="Edit" className="text-muted-foreground hover:text-foreground text-xs">Edit</button>
+                  <button onClick={() => setEditing(v)} title={t("vehicles.edit")} className="text-muted-foreground hover:text-foreground text-xs">{t("vehicles.edit")}</button>
                 </div>
               </div>
 
@@ -231,12 +236,12 @@ export default function VehiclesPage() {
                 <div className="border-t border-border bg-background/40 p-3">
                   <AssociationSummary objectKind="vehicle" objectKey={v.id} />
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">
-                    Sightings (newest first)
+                    {t("vehicles.sightings_newest")}
                   </div>
                   {!activity[v.id] ? (
-                    <div className="text-[11px] text-muted-foreground">Loading sightings.</div>
+                    <div className="text-[11px] text-muted-foreground">{t("vehicles.loading_sightings")}</div>
                   ) : activity[v.id].length === 0 ? (
-                    <div className="text-[11px] text-muted-foreground">No sightings in the recent window.</div>
+                    <div className="text-[11px] text-muted-foreground">{t("vehicles.no_sightings")}</div>
                   ) : (
                     <div className="space-y-1.5">
                       {activity[v.id].map((a) => (
@@ -251,13 +256,13 @@ export default function VehiclesPage() {
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="text-[11px] truncate">{a.vlm_description || "Vehicle seen"}</div>
+                            <div className="text-[11px] truncate">{a.vlm_description || t("vehicles.vehicle_seen")}</div>
                             <div className="text-[10px] text-muted-foreground">
-                              {a.camera_name || "camera"} · {timeAgo(a.started_at)}
+                              {a.camera_name || t("vehicles.camera")} · {timeAgo(a.started_at)}
                               {a.plate_text ? (
-                                <> · plate {a.plate_text}{a.plate_confidence != null ? ` (${Math.round(a.plate_confidence * 100)}% ${a.plate_source || "OCR"})` : ""}</>
+                                <> · {t("vehicles.plate", { plate: a.plate_text })}{a.plate_confidence != null ? ` (${Math.round(a.plate_confidence * 100)}% ${a.plate_source || t("vehicles.ocr")})` : ""}</>
                               ) : (
-                                <> · appearance-only match</>
+                                <> · {t("vehicles.appearance_only")}</>
                               )}
                             </div>
                           </div>
@@ -266,7 +271,7 @@ export default function VehiclesPage() {
                     </div>
                   )}
                   <button onClick={() => remove(v.id)} className="mt-3 text-[11px] text-red-400 hover:text-red-300">
-                    Delete this vehicle
+                    {t("vehicles.delete")}
                   </button>
                   <MergeVehicleControl
                     source={v}
@@ -297,6 +302,8 @@ function MergeVehicleControl({
   onMerged: () => void;
 }) {
   const { authFetch } = useAuth();
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const toast = useToast();
   const confirm = useConfirm();
   const [targetId, setTargetId] = useState("");
@@ -310,8 +317,8 @@ function MergeVehicleControl({
     const target = targets.find((item) => item.id === targetId);
     if (!target) return;
     const ok = await confirm({
-      title: "Merge these vehicle identities?",
-      body: `Historical sightings and association evidence for ${source.nickname || source.display_name} will be moved to ${target.nickname || target.display_name}. Captured plate/OCR metadata is preserved. This does not claim ownership or authorization.`,
+      title: t("vehicles.merge_title"),
+      body: t("vehicles.merge_body", { source: source.nickname || source.display_name, target: target.nickname || target.display_name }),
       danger: true,
     });
     if (!ok) return;
@@ -323,12 +330,12 @@ function MergeVehicleControl({
         body: JSON.stringify({ source_id: source.id, note: note.trim() || null }),
       });
       if (!response.ok) {
-        throw new Error(response.status === 403 ? "Only an admin can merge vehicle identities." : "Merge failed");
+        throw new Error(response.status === 403 ? t("vehicles.merge_admin_only") : t("vehicles.merge_failed"));
       }
-      toast.success("Vehicle identities merged; evidence preserved");
+      toast.success(t("vehicles.merge_success"));
       onMerged();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not merge vehicle identities.");
+      toast.error(error instanceof Error ? error.message : t("vehicles.merge_error"));
     } finally {
       setBusy(false);
     }
@@ -336,19 +343,19 @@ function MergeVehicleControl({
 
   return (
     <div className="mt-3 rounded-md border border-border/70 bg-card/50 p-2">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Duplicate identity</div>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("vehicles.duplicate_identity")}</div>
       <p className="mt-1 text-[11px] text-muted-foreground">
-        Use this when two auto-created vehicles are the same car. The target identity survives.
+        {t("vehicles.duplicate_help")}
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <select
           value={targetId}
           onChange={(event) => setTargetId(event.target.value)}
           disabled={busy}
-          aria-label={`Merge ${source.display_name} into vehicle`}
+          aria-label={t("vehicles.merge_aria", { vehicle: source.display_name })}
           className="min-w-44 rounded border border-border bg-background px-2 py-1 text-[11px]"
         >
-          <option value="">Select surviving vehicle…</option>
+          <option value="">{t("vehicles.select_surviving")}</option>
           {targets.map((target) => (
             <option key={target.id} value={target.id}>
               {target.nickname || target.display_name}{target.license_plate ? ` · ${target.license_plate}` : ""}
@@ -360,8 +367,8 @@ function MergeVehicleControl({
           onChange={(event) => setNote(event.target.value)}
           disabled={busy}
           maxLength={500}
-          placeholder="Optional reason"
-          aria-label="Vehicle merge reason"
+          placeholder={t("vehicles.optional_reason")}
+          aria-label={t("vehicles.merge_reason")}
           className="min-w-44 flex-1 rounded border border-border bg-background px-2 py-1 text-[11px]"
         />
         <button
@@ -370,7 +377,7 @@ function MergeVehicleControl({
           disabled={!targetId || busy}
           className="rounded border border-amber-500/40 px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
         >
-          {busy ? "Merging…" : "Merge duplicate"}
+          {busy ? t("vehicles.merging") : t("vehicles.merge_duplicate")}
         </button>
       </div>
     </div>
@@ -379,6 +386,8 @@ function MergeVehicleControl({
 
 function EditModal({ vehicle, onClose, onSaved }: { vehicle: Vehicle; onClose: () => void; onSaved: () => void }) {
   const { authFetch } = useAuth();
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [name, setName] = useState(vehicle.display_name);
   const [plate, setPlate] = useState(vehicle.license_plate || "");
   const [make, setMake] = useState(vehicle.make || "");
@@ -410,13 +419,13 @@ function EditModal({ vehicle, onClose, onSaved }: { vehicle: Vehicle; onClose: (
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={save} className="w-full max-w-sm rounded-lg border border-border bg-card-elevated p-5 space-y-3">
-        <h2 className="text-sm font-semibold">Edit vehicle</h2>
+        <h2 className="text-sm font-semibold">{t("vehicles.edit_title")}</h2>
         {[
-          ["Name", name, setName, ref] as const,
-          ["License plate", plate, setPlate, undefined] as const,
-          ["Make", make, setMake, undefined] as const,
-          ["Model", model, setModel, undefined] as const,
-          ["Color", color, setColor, undefined] as const,
+          [t("vehicles.name"), name, setName, ref] as const,
+          [t("vehicles.license_plate"), plate, setPlate, undefined] as const,
+          [t("vehicles.make"), make, setMake, undefined] as const,
+          [t("vehicles.model"), model, setModel, undefined] as const,
+          [t("vehicles.color"), color, setColor, undefined] as const,
         ].map(([label, val, set, r]) => (
           <div key={label}>
             <label className="block text-[11px] text-muted-foreground mb-1">{label}</label>
@@ -429,9 +438,9 @@ function EditModal({ vehicle, onClose, onSaved }: { vehicle: Vehicle; onClose: (
           </div>
         ))}
         <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground">Cancel</button>
+          <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground">{t("vehicles.cancel")}</button>
           <button type="submit" disabled={saving} className="px-4 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:opacity-90 disabled:opacity-50">
-            {saving ? "Saving." : "Save"}
+            {saving ? t("vehicles.saving") : t("vehicles.save")}
           </button>
         </div>
       </form>
