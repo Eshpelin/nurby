@@ -850,6 +850,7 @@ export default function CameraConfigPage() {
 
         {/* ── Activity Digest ── */}
         <RecapsSection
+          locale={locale}
           activeProvider={activeProvider}
           digestEnabled={digestEnabled}
           digestPeriod={digestPeriod}

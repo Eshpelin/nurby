@@ -6,8 +6,10 @@
 import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, Toggle, inputClass } from "./primitives";
 import type { Provider } from "./types";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface RecapsSectionProps {
+  locale: Locale;
   activeProvider: Provider | undefined;
   digestEnabled: boolean;
   digestPeriod: string;
@@ -21,6 +23,7 @@ interface RecapsSectionProps {
 }
 
 export function RecapsSection({
+  locale,
   activeProvider,
   digestEnabled,
   digestPeriod,
@@ -32,22 +35,23 @@ export function RecapsSection({
   setDigestPrompt,
   setDigestProviderId,
 }: RecapsSectionProps) {
+  const t = (key: string) => translate(locale, key);
   return (
         <Section
-          title="Periodic recaps"
-          description="Configure the automatic activity summary shown on the cameras page"
+          title={t("camera.recaps.title")}
+          description={t("camera.recaps.description")}
         >
-          <FieldRow label="Recaps">
+          <FieldRow label={t("camera.recaps.label")}>
             <Toggle
               checked={digestEnabled}
               onChange={setDigestEnabled}
-              label={digestEnabled ? "Enabled" : "Disabled"}
+              label={digestEnabled ? t("common.enabled") : t("common.disabled")}
             />
           </FieldRow>
 
           {digestEnabled && (
             <>
-              <FieldRow label="Time Period" hint="How far back to look for activity">
+              <FieldRow label={t("camera.recaps.period")} hint={t("camera.recaps.period_hint")}>
                 <div className="flex gap-1.5 flex-wrap">
                   {(["1h", "6h", "12h", "24h", "48h", "7d"] as const).map((p) => (
                     <button
@@ -60,25 +64,20 @@ export function RecapsSection({
                           : "border-border hover:border-muted-foreground text-muted-foreground"
                       }`}
                     >
-                      {p === "1h" ? "1 hour"
-                        : p === "6h" ? "6 hours"
-                        : p === "12h" ? "12 hours"
-                        : p === "24h" ? "24 hours"
-                        : p === "48h" ? "2 days"
-                        : "7 days"}
+                      {t(`camera.recaps.period.${p}`)}
                     </button>
                   ))}
                 </div>
               </FieldRow>
 
-              <FieldRow label="Recap model" hint="Which model generates the summary">
+              <FieldRow label={t("camera.recaps.model")} hint={t("camera.recaps.model_hint")}>
                 <select
                   value={digestProviderId || ""}
                   onChange={(e) => setDigestProviderId(e.target.value || null)}
                   className={inputClass}
                 >
                   <option value="">
-                    System Default{activeProvider ? ` (${activeProvider.name})` : ""}
+                    {t("camera.recaps.system_default")}{activeProvider ? ` (${activeProvider.name})` : ""}
                   </option>
                   {providers.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -89,11 +88,11 @@ export function RecapsSection({
                 </select>
               </FieldRow>
 
-              <FieldRow label="Recap prompt" hint="Custom instructions for generating the summary">
+              <FieldRow label={t("camera.recaps.prompt")} hint={t("camera.recaps.prompt_hint")}>
                 <textarea
                   value={digestPrompt}
                   onChange={(e) => setDigestPrompt(e.target.value)}
-                  placeholder="You are Nurby, an AI camera monitoring assistant. Summarize the following camera observations into a brief digest. Be concise (2-4 sentences). Mention key activity, people, and patterns."
+                  placeholder={t("camera.recaps.prompt_placeholder")}
                   rows={3}
                   className={`${inputClass} resize-y`}
                 />
@@ -103,7 +102,7 @@ export function RecapsSection({
                     onClick={() => setDigestPrompt("")}
                     className="text-[11px] text-muted-foreground hover:text-danger mt-1 transition-colors"
                   >
-                    Reset to default
+                    {t("camera.recaps.reset")}
                   </button>
                 )}
               </FieldRow>
