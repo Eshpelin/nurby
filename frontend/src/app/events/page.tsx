@@ -518,6 +518,7 @@ export default function EventsPage() {
                         isAdmin={user?.role === "admin"}
                         cameraId={String((ev.payload as Record<string, unknown>).camera_id || "")}
                         firedAt={ev.fired_at}
+                        eventId={ev.id}
                       />
                     ) : (
                       <p className="text-[11px] text-muted-foreground">No payload recorded.</p>

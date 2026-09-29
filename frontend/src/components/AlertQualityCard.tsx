@@ -16,6 +16,8 @@ interface FeedbackSummary {
   delivered_alerts: number;
   opened_alerts: number;
   open_rate_delivered: number | null;
+  clip_opened_alerts: number;
+  clip_open_rate_delivered: number | null;
   nuisance_by_camera_day: {
     camera_id: string;
     day: string;
@@ -78,12 +80,13 @@ export function AlertQualityCard() {
           <p className="text-xs text-muted-foreground">{t("alert_quality.loading")}</p>
         ) : summary ? (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
               <div><div className="text-muted-foreground">{t("alert_quality.fired")}</div><div className="font-medium">{summary.events_fired}</div></div>
               <div><div className="text-muted-foreground">{t("alert_quality.reviewed")}</div><div className="font-medium">{summary.events_reviewed} ({percent(summary.response_rate)})</div></div>
               <div><div className="text-muted-foreground">{t("alert_quality.nuisance")}</div><div className="font-medium">{summary.nuisance_alerts}</div></div>
               <div><div className="text-muted-foreground">{t("alert_quality.nuisance_rate")}</div><div className="font-medium">{percent(summary.nuisance_rate_reviewed)}</div></div>
               <div><div className="text-muted-foreground">{t("alert_quality.opened")}</div><div className="font-medium">{summary.opened_alerts}/{summary.delivered_alerts} ({percent(summary.open_rate_delivered)})</div></div>
+              <div><div className="text-muted-foreground">{t("alert_quality.clip_opened")}</div><div className="font-medium">{summary.clip_opened_alerts}/{summary.delivered_alerts} ({percent(summary.clip_open_rate_delivered)})</div></div>
             </div>
             <p className="mt-3 text-[11px] text-muted-foreground">
               {t("alert_quality.explanation", { firedRate: percent(summary.nuisance_rate_fired) })}

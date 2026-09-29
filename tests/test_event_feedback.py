@@ -290,6 +290,7 @@ async def test_summary_reports_counts_and_response_rate():
         FakeResult(scalar=2),                                 # distinct reviewers
         FakeResult(scalar=3),                                 # delivered events
         FakeResult(scalar=1),                                 # opened delivered events
+        FakeResult(scalar=1),                                 # clip-opened delivered events
         FakeResult(rows=[("camera-1", "2026-09-29", "incorrect", 2)]),  # camera/day ratings
     ])
     res = await events_routes.feedback_summary(hours=168, _current_user=_user("admin"), db=db)
@@ -303,6 +304,8 @@ async def test_summary_reports_counts_and_response_rate():
     assert res["delivered_alerts"] == 3
     assert res["opened_alerts"] == 1
     assert res["open_rate_delivered"] == round(1 / 3, 4)
+    assert res["clip_opened_alerts"] == 1
+    assert res["clip_open_rate_delivered"] == round(1 / 3, 4)
     assert res["nuisance_by_camera_day"] == [{
         "camera_id": "camera-1", "day": "2026-09-29", "reviewed": 2,
         "nuisance": 2, "nuisance_rate_reviewed": 1.0,
@@ -319,6 +322,7 @@ async def test_summary_with_no_events_has_no_rate():
         FakeResult(scalar=0),
         FakeResult(rows=[]),
         FakeResult(rows=[]),
+        FakeResult(scalar=0),
         FakeResult(scalar=0),
         FakeResult(scalar=0),
         FakeResult(scalar=0),

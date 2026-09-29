@@ -74,6 +74,9 @@ class EventResponse(BaseModel):
     opened_at: datetime | None = None
     opened_by_user_id: uuid.UUID | None = None
     opened_via: str | None = None
+    clip_opened_at: datetime | None = None
+    clip_opened_by_user_id: uuid.UUID | None = None
+    clip_opened_via: str | None = None
     muted_until: datetime | None = None
 
     @field_validator("payload", mode="before")

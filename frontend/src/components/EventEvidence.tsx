@@ -81,14 +81,16 @@ export function EventEvidence({
   recordingId: eventRecordingId,
   cameraId,
   firedAt,
+  eventId,
 }: {
   payload: Payload;
   isAdmin?: boolean;
   recordingId?: string | null;
   cameraId?: string | null;
   firedAt?: string | null;
+  eventId?: string;
 }) {
-  const { token, user } = useAuth();
+  const { authFetch, token, user } = useAuth();
   const [imgFailed, setImgFailed] = useState(false);
   const [imgLightbox, setImgLightbox] = useState(false);
   const [resolvedRecordingId, setResolvedRecordingId] = useState<string | null>(null);
@@ -193,6 +195,9 @@ export function EventEvidence({
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
+            onMouseDown={() => {
+              if (eventId) void authFetch(`/api/events/${eventId}/clip-opened`, { method: "POST" });
+            }}
             className="px-2 py-1 text-[11px] rounded-md bg-foreground text-background font-medium hover:opacity-90"
           >
             ▶ {translate(user?.locale, "evidence.watch_clip")}

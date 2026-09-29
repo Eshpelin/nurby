@@ -162,6 +162,11 @@ class Event(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     opened_via: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    clip_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    clip_opened_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    clip_opened_via: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Per-event mute. Set by the "Mute 10 min" Telegram button. While
     # now() < muted_until, downstream Telegram re-sends for the
     # rule+camera combo of this event are skipped. Snooze wins over

@@ -532,6 +532,17 @@ async def feedback_summary(
             )
         )
     ).scalar_one()
+    clip_opened_delivered = (
+        await db.execute(
+            select(func.count(func.distinct(Event.id)))
+            .join(Notification, Notification.event_id == Event.id)
+            .where(
+                Event.fired_at >= cutoff,
+                Event.clip_opened_at.is_not(None),
+                Notification.delivered_at.is_not(None),
+            )
+        )
+    ).scalar_one()
 
     camera_day_rows = (
         await db.execute(
@@ -566,6 +577,8 @@ async def feedback_summary(
         "delivered_alerts": delivered_alerts,
         "opened_alerts": opened_delivered,
         "open_rate_delivered": round(opened_delivered / delivered_alerts, 4) if delivered_alerts else None,
+        "clip_opened_alerts": clip_opened_delivered,
+        "clip_open_rate_delivered": round(clip_opened_delivered / delivered_alerts, 4) if delivered_alerts else None,
         "nuisance_by_camera_day": [
             {
                 "camera_id": camera_id,
@@ -611,6 +624,26 @@ async def mark_event_opened(
         event.opened_at = datetime.now(timezone.utc)
         event.opened_by_user_id = current_user.id
         event.opened_via = "web"
+        await db.commit()
+        await db.refresh(event)
+    return event
+
+
+@router.post("/{event_id}/clip-opened", response_model=EventResponse)
+async def mark_event_clip_opened(
+    event_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record the first explicit start of the linked recording clip."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    await require_camera_in_scope(current_user, db, event.camera_id)
+    if event.clip_opened_at is None:
+        event.clip_opened_at = datetime.now(timezone.utc)
+        event.clip_opened_by_user_id = current_user.id
+        event.clip_opened_via = "web"
         await db.commit()
         await db.refresh(event)
     return event
