@@ -145,8 +145,8 @@ def _incident(cam_id):
     )
 
 
-def _observation(cam_id):
-    return SimpleNamespace(id=uuid.uuid4(), camera_id=cam_id)
+def _observation(cam_id, *, thumbnail_path=None):
+    return SimpleNamespace(id=uuid.uuid4(), camera_id=cam_id, thumbnail_path=thumbnail_path)
 
 
 def _event(cam_id):
@@ -213,6 +213,36 @@ def test_vlm_passes_own_camera_returns_history():
     db = StubDB(grants=[CAM_A], get_map={"Observation": obs}, vlm_passes=[])
     out = _run(observations_routes.get_vlm_passes(observation_id=obs.id, current_user=_selected_user(CAM_A), db=db))
     assert out == []
+
+
+def test_observation_thumbnail_on_foreign_camera_is_404(monkeypatch):
+    """The media URL must enforce the same ACL as the JSON observation."""
+    user = _selected_user(CAM_A)
+    obs = _observation(CAM_B, thumbnail_path="foreign.jpg")
+    db = StubDB(grants=[CAM_A], get_map={"User": user, "Observation": obs})
+    monkeypatch.setattr(observations_routes, "require_query_token", lambda _token: user.id)
+
+    with pytest.raises(HTTPException) as ei:
+        _run(observations_routes.get_observation_thumbnail(
+            observation_id=obs.id, token="signed", db=db,
+        ))
+
+    assert ei.value.status_code == 404
+
+
+def test_observation_thumbnail_on_owned_camera_reaches_media_checks(monkeypatch):
+    """An owned observation is allowed through scope before file validation."""
+    user = _selected_user(CAM_A)
+    obs = _observation(CAM_A)
+    db = StubDB(grants=[CAM_A], get_map={"User": user, "Observation": obs})
+    monkeypatch.setattr(observations_routes, "require_query_token", lambda _token: user.id)
+
+    with pytest.raises(HTTPException) as ei:
+        _run(observations_routes.get_observation_thumbnail(
+            observation_id=obs.id, token="signed", db=db,
+        ))
+
+    assert ei.value.detail == "Thumbnail not found"
 
 
 def test_activity_strip_on_foreign_camera_is_404_before_queries():
