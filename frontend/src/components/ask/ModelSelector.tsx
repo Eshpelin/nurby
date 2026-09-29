@@ -6,6 +6,8 @@
 // session starts on the same model.
 
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import type { ProviderModel } from "./types";
 
 interface ModelSelectorProps {
@@ -42,6 +44,8 @@ export default function ModelSelector({
   onDeployToolModel,
   deploying,
 }: ModelSelectorProps) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -71,7 +75,7 @@ export default function ModelSelector({
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={loading}
-        aria-label="Pick AI model"
+        aria-label={t("ask.pick_model")}
         className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border bg-background hover:bg-muted disabled:opacity-50 transition-colors"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -84,7 +88,7 @@ export default function ModelSelector({
             {value.kind} / {value.name}
           </span>
         ) : (
-          <span className="text-amber-400">pick a model</span>
+          <span className="text-amber-400">{t("ask.pick_model_short")}</span>
         )}
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
       </button>
@@ -96,9 +100,7 @@ export default function ModelSelector({
           {providers.length > 0 && !hasToolModel && onDeployToolModel && (
             <div className="p-3 border-b border-border bg-amber-500/[0.06]">
               <div className="text-[11px] text-amber-300/90 leading-snug mb-2">
-                None of your models can call tools, which Ask Nurby needs.
-                Deploy a small local model to enable it. no API key, stays on
-                your machine.
+                {t("ask.no_tool_model")}
               </div>
               <button
                 type="button"
@@ -106,13 +108,13 @@ export default function ModelSelector({
                 onClick={() => onDeployToolModel(suggestedTool)}
                 className="w-full px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:opacity-90 disabled:opacity-50"
               >
-                {deploying ? `Deploying ${suggestedTool}.` : `Set up Ask Nurby (${suggestedTool})`}
+                {deploying ? t("ask.deploying_model", { model: suggestedTool }) : t("ask.setup_model", { model: suggestedTool })}
               </button>
             </div>
           )}
           {providers.length === 0 ? (
             <div className="p-3 text-xs text-muted-foreground">
-              No providers configured. Add one in Settings → Providers.
+              {t("ask.no_providers_settings")}
             </div>
           ) : (
             kinds.map((kind) => (
@@ -134,12 +136,12 @@ export default function ModelSelector({
                           <span className="truncate">{m.name}</span>
                           {m.recommended && (
                             <span className="text-[9px] px-1 py-px rounded bg-accent/20 text-accent border border-accent/30">
-                              recommended
+                              {t("ask.recommended")}
                             </span>
                           )}
                           {m.supports_tools === false && (
                             <span className="text-[9px] px-1 py-px rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                              no tools
+                              {t("ask.no_tools")}
                             </span>
                           )}
                         </div>
@@ -148,7 +150,7 @@ export default function ModelSelector({
                         </div>
                         {m.supports_tools === false && (
                           <div className="text-[10px] text-amber-400/90 mt-0.5 leading-tight">
-                            Can&apos;t call tools. great for scene captions, not for Ask Nurby.
+                            {t("ask.no_tools_help")}
                           </div>
                         )}
                       </div>

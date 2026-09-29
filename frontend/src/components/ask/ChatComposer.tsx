@@ -6,6 +6,8 @@
 // the send button until a model is picked + text is non-empty.
 
 import { useEffect, useRef } from "react";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import Link from "next/link";
 import type { ProviderModel, UsageToday } from "./types";
 import ModelSelector from "./ModelSelector";
@@ -55,6 +57,8 @@ export default function ChatComposer({
   deepScan = false,
   onToggleDeepScan,
 }: ChatComposerProps) {
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const mention = useMentions(taRef, value, onChange);
 
@@ -107,8 +111,8 @@ export default function ChatComposer({
             onClick={mention.refresh}
             onBlur={() => setTimeout(mention.close, 100)}
             rows={1}
-            placeholder="Ask Nurby anything about your cameras. Type @ to tag a person, camera or device."
-            aria-label="Ask Nurby a question"
+            placeholder={t("ask.composer_placeholder")}
+            aria-label={t("ask.composer_label")}
             className="w-full resize-none px-3 py-2.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-accent placeholder:text-muted-foreground"
           />
         </div>
@@ -118,7 +122,7 @@ export default function ChatComposer({
               href="/settings"
               className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-accent/40 text-accent hover:bg-accent/10"
             >
-              Set up an AI model to start asking →
+              {t("ask.setup_model_to_start")}
             </Link>
           ) : (
             <>
@@ -136,7 +140,7 @@ export default function ChatComposer({
           {onToggleDeepScan && (
             <label
               className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none"
-              title="Slower: scans the raw footage with the visual grounding model. Uses the GPU."
+              title={t("ask.deep_scan_title")}
             >
               <input
                 type="checkbox"
@@ -144,7 +148,7 @@ export default function ChatComposer({
                 onChange={(e) => onToggleDeepScan(e.target.checked)}
                 className="accent-green-500"
               />
-              Deep visual scan
+              {t("ask.deep_scan")}
             </label>
           )}
           <div className="ml-auto flex items-center gap-2">
@@ -152,33 +156,33 @@ export default function ChatComposer({
               <button
                 type="button"
                 onClick={onCancel}
-                aria-label="Cancel current run"
+                aria-label={t("ask.cancel_run")}
                 className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted"
               >
-                Cancel
+                {t("ask.cancel")}
               </button>
             )}
             <button
               type="button"
               onClick={() => onSend(mention.activeMentions(value))}
               disabled={!canSend}
-              aria-label="Send question"
+              aria-label={t("ask.send_question")}
               className="px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
             >
               {inFlight ? (
                 <>
                   <span className="inline-block w-3 h-3 rounded-full border-2 border-background/40 border-t-background animate-spin" />
-                  Sending.
+                  {t("ask.sending")}
                 </>
               ) : (
-                "Send"
+                t("ask.send")
               )}
             </button>
           </div>
         </div>
         {!model && !providersLoading && !noProviders && (
           <div className="text-[10px] text-amber-400">
-            Pick a model to send. Open the chip on the left.
+            {t("ask.pick_model_hint")}
           </div>
         )}
       </div>

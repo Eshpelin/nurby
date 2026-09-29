@@ -4,6 +4,8 @@
 // for subsequent visits. Dismisses on Continue or Escape.
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import type { ProviderModel } from "./types";
 
 interface OnboardingModalProps {
@@ -14,6 +16,8 @@ interface OnboardingModalProps {
 }
 
 export default function OnboardingModal({ open, providers, onPick, onClose }: OnboardingModalProps) {
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [picked, setPicked] = useState<ProviderModel | null>(null);
 
   useEffect(() => {
@@ -31,15 +35,15 @@ export default function OnboardingModal({ open, providers, onPick, onClose }: On
     <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center p-6">
       <div className="bg-card border border-border rounded-lg max-w-md w-full p-5 space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Pick your AI model</h2>
+          <h2 className="text-lg font-semibold">{t("ask.pick_model_title")}</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Nurby never picks an AI model for you. Choose which one runs your questions. You can change this any time via the chip beside the composer.
+            {t("ask.pick_model_body")}
           </p>
         </div>
         <div className="max-h-72 overflow-auto space-y-1 border border-border rounded">
           {providers.length === 0 ? (
             <div className="p-3 text-xs text-muted-foreground">
-              No providers configured. Add one in Settings → Providers first.
+              {t("ask.no_providers_setup")}
             </div>
           ) : (
             providers.map((m) => {
@@ -55,7 +59,7 @@ export default function OnboardingModal({ open, providers, onPick, onClose }: On
                     {m.name}
                     {m.recommended && (
                       <span className="text-[9px] px-1 py-px rounded bg-accent/20 text-accent border border-accent/30">
-                        recommended
+                        {t("ask.recommended")}
                       </span>
                     )}
                   </div>
@@ -72,18 +76,18 @@ export default function OnboardingModal({ open, providers, onPick, onClose }: On
             type="button"
             onClick={onClose}
             className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted"
-            aria-label="Skip onboarding"
+            aria-label={t("ask.skip_onboarding")}
           >
-            Skip
+            {t("ask.skip")}
           </button>
           <button
             type="button"
             onClick={() => picked && onPick(picked)}
             disabled={!picked}
             className="px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
-            aria-label="Continue with picked model"
+            aria-label={t("ask.continue_with_model")}
           >
-            Continue
+            {t("ask.continue")}
           </button>
         </div>
       </div>

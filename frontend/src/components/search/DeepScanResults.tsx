@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth";
 import type { ScanStatus } from "@/lib/useDeepScan";
 import { GroundingBoxOverlay } from "./GroundingBoxOverlay";
 import { formatWith } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 export function DeepScanResults({
   scan,
@@ -19,7 +20,8 @@ export function DeepScanResults({
   scan: ScanStatus | null;
   error: string | null;
 }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
 
   if (error) {
@@ -56,8 +58,7 @@ export function DeepScanResults({
 
       {scan.leaves_privacy_boundary && (
         <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded p-2">
-          Frames were sent to a remote grounding endpoint (off-box). Use a local
-          GPU backend to keep footage on your machine.
+          {t("ask.remote_scan_warning")}
         </div>
       )}
 
@@ -72,7 +73,7 @@ export function DeepScanResults({
                 r.started_at ? (
                   <a
                     href={`/recordings?at=${encodeURIComponent(r.started_at)}&camera=${r.camera_id}`}
-                    title="Open this moment in Recordings"
+                    title={t("ask.open_recording_moment")}
                     className="block"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -95,8 +96,8 @@ export function DeepScanResults({
               <button
                 type="button"
                 onClick={() => dismiss(r.observation_id)}
-                title="Not a match"
-                aria-label="Dismiss this match"
+                title={t("ask.not_a_match")}
+                aria-label={t("ask.dismiss_match")}
                 className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-xs leading-none opacity-0 group-hover:opacity-100 hover:bg-black/80"
               >
                 ✕
@@ -112,8 +113,7 @@ export function DeepScanResults({
 
       {scan.status === "done" && scan.found === 0 && !scan.routed && (
         <div className="text-xs text-muted-foreground">
-          No matches found. Try describing it differently (color, size, or where
-          it is).
+          {t("ask.no_scan_matches")}
         </div>
       )}
     </div>

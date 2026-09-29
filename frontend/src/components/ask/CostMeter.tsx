@@ -5,6 +5,8 @@
 // bill can see where the cents went.
 
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import type { UsageToday } from "./types";
 
 interface CostMeterProps {
@@ -20,6 +22,8 @@ function fmtCents(c: number): string {
 }
 
 export default function CostMeter({ usage, loading }: CostMeterProps) {
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -55,13 +59,13 @@ export default function CostMeter({ usage, loading }: CostMeterProps) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label={`Cost today: ${fmtCents(usage.cost_cents)} of ${fmtCents(usage.cost_cents_cap)}`}
+        aria-label={`${t("ask.cost_today")}: ${fmtCents(usage.cost_cents)} ${t("ask.of")} ${fmtCents(usage.cost_cents_cap)}`}
         className="inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-md border border-border bg-background hover:bg-muted transition-colors"
       >
         <span className={`font-mono ${textColor}`}>
           {Number.isFinite(usage.cost_cents_cap) && usage.cost_cents_cap > 0
-            ? `${fmtCents(usage.cost_cents)} / ${fmtCents(usage.cost_cents_cap)} today`
-            : `${fmtCents(usage.cost_cents)} today`}
+            ? `${fmtCents(usage.cost_cents)} / ${fmtCents(usage.cost_cents_cap)} ${t("ask.today")}`
+            : `${fmtCents(usage.cost_cents)} ${t("ask.today")}`}
         </span>
         <span className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
           <span className={`block h-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />
@@ -69,13 +73,12 @@ export default function CostMeter({ usage, loading }: CostMeterProps) {
       </button>
       {open && (
         <div className="absolute bottom-full mb-2 left-0 z-50 w-80 max-h-80 overflow-auto rounded-lg border border-border bg-card shadow-xl p-3 space-y-2">
-          <div className="text-xs font-semibold">Today&apos;s spend</div>
+          <div className="text-xs font-semibold">{t("ask.today_spend")}</div>
           <div className="text-[11px] text-muted-foreground">
-            {usage.runs} run{usage.runs !== 1 ? "s" : ""} ·{" "}
-            {usage.tokens.toLocaleString()} tokens
+            {usage.runs} {t(usage.runs === 1 ? "ask.run" : "ask.runs")} · {usage.tokens.toLocaleString()} {t("ask.tokens")}
           </div>
           {(!usage.per_run || usage.per_run.length === 0) ? (
-            <div className="text-[11px] text-muted-foreground italic">No runs yet today.</div>
+            <div className="text-[11px] text-muted-foreground italic">{t("ask.no_runs_today")}</div>
           ) : (
             <div className="space-y-1 mt-1">
               {usage.per_run.map((r) => (
