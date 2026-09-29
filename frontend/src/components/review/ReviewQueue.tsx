@@ -167,7 +167,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
         params.set("kind", filter);
       }
       const res = await authFetch(`/api/review?${params.toString()}`);
-      if (!res.ok) throw new Error(`Review queue failed (${res.status})`);
+      if (!res.ok) throw new Error(t("review.request_failed"));
       const body: { items: ReviewItem[] } = await res.json();
       const visible = body.items;
       if (focusId) {
@@ -202,13 +202,13 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
         ...(Array.isArray(face) ? face.map((cluster: { id: string; auto_label?: string; sighting_count?: number }) => ({
           id: cluster.id,
           kind: "face" as const,
-          label: cluster.auto_label || "Unknown face",
+          label: cluster.auto_label || t("review.unknown_face"),
           sighting_count: cluster.sighting_count,
         })) : []),
         ...(Array.isArray(body) ? body.map((cluster: { id: string; auto_label?: string; sighting_count?: number }) => ({
           id: cluster.id,
           kind: "body" as const,
-          label: cluster.auto_label || "Unknown body",
+          label: cluster.auto_label || t("review.unknown_body"),
           sighting_count: cluster.sighting_count,
         })) : []),
       ]);
@@ -259,10 +259,10 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
               : {}),
         }),
       });
-      if (!res.ok) throw new Error(`Could not ${decision} relationship (${res.status})`);
+      if (!res.ok) throw new Error(t("review.decision_failed"));
       setItems((current) => current.filter((candidate) => candidate.id !== item.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Relationship decision failed");
+      setError(err instanceof Error ? err.message : t("review.decision_failed"));
     } finally {
       setDecisionBusy(null);
     }
@@ -279,7 +279,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
     setEvidenceLoading(item.id);
     try {
       const res = await authFetch(`/api/review/relationship-suggestions/${item.source_id}`);
-      if (!res.ok) throw new Error(`Evidence unavailable (${res.status})`);
+      if (!res.ok) throw new Error(t("review.evidence_unavailable"));
       const detail: RelationshipDetail = await res.json();
       setRelationshipDetails((current) => ({ ...current, [item.id]: detail }));
     } catch (err) {
@@ -374,7 +374,7 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={`/api/observations/${item.evidence.peak_observation_id}/thumbnail?token=${encodeURIComponent(token)}`}
-                    alt="Incident evidence"
+                    alt={t("review.incident_evidence")}
                     className="mt-2 h-16 w-24 rounded border border-border object-cover"
                   />
                 )}
