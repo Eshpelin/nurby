@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { timeAgo } from "@/lib/time";
 
 interface GNotification {
@@ -22,7 +23,8 @@ function dotColor(sev: string): string {
 // The guardian's own notification inbox. A bell with an unread badge that opens
 // a private feed scoped to their dependant, not the household.
 export function GuardianNotifications() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [items, setItems] = useState<GNotification[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -84,7 +86,7 @@ export function GuardianNotifications() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        aria-label="Notifications"
+        aria-label={t("notifications.title")}
         className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(0_0%_14.9%)] text-muted-foreground transition hover:text-foreground"
       >
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -101,17 +103,17 @@ export function GuardianNotifications() {
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-lg border border-[hsl(0_0%_14.9%)] bg-[hsl(0_0%_5.5%)] shadow-xl">
           <div className="flex items-center justify-between border-b border-[hsl(0_0%_14.9%)] px-4 py-2.5">
-            <span className="text-sm font-medium">Notifications</span>
+            <span className="text-sm font-medium">{t("notifications.title")}</span>
             {unread > 0 && (
               <button onClick={markAll} className="text-xs text-emerald-400 hover:text-emerald-300">
-                Mark all read
+                {t("notifications.mark_all_read")}
               </button>
             )}
           </div>
           <div className="max-h-96 overflow-y-auto">
             {items.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                Nothing yet. Alerts about your dependant show up here.
+                {t("notifications.guardian_empty")}
               </div>
             ) : (
               items.map((n) => (
