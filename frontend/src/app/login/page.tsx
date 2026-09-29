@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 
 // Inline SVG glyphs. The frontend does not bundle lucide-react.
 function KeyIcon({ className }: { className?: string }) {
@@ -44,6 +45,8 @@ function ArrowRightIcon({ className }: { className?: string }) {
 
 export default function LoginPage() {
   const { login, adoptSetupCode } = useAuth();
+  const [locale, setLocale] = useState<Locale>("en");
+  const t = (key: string) => translate(locale, key);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -56,6 +59,11 @@ export default function LoginPage() {
   const [provisionalOpen, setProvisionalOpen] = useState(false);
   const [setupCode, setSetupCode] = useState("");
   const [adopting, setAdopting] = useState(false);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("nurby.locale");
+    if (saved === "en" || saved === "es") setLocale(saved);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +93,7 @@ export default function LoginPage() {
     try {
       await login(email, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : t("login.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -98,7 +106,7 @@ export default function LoginPage() {
     try {
       await adoptSetupCode(setupCode);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Setup code was not accepted");
+      setError(err instanceof Error ? err.message : t("login.setup_code_failed"));
     } finally {
       setAdopting(false);
     }
@@ -109,10 +117,10 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">
-            Sign in to Nurby
+            {t("login.title")}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Enter your credentials to continue.
+            {t("login.subtitle")}
           </p>
         </div>
 
@@ -128,7 +136,7 @@ export default function LoginPage() {
               htmlFor="email"
               className="text-sm font-medium text-foreground"
             >
-              Email
+              {t("login.email")}
             </label>
             <input
               id="email"
@@ -138,7 +146,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
-              placeholder="admin@example.com"
+              placeholder={t("login.email_placeholder")}
             />
           </div>
 
@@ -147,7 +155,7 @@ export default function LoginPage() {
               htmlFor="password"
               className="text-sm font-medium text-foreground"
             >
-              Password
+              {t("login.password")}
             </label>
             <div className="relative">
               <input
@@ -158,15 +166,15 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-md border border-border bg-muted px-3 py-2 pr-16 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
-                placeholder="Your password"
+                placeholder={t("login.password_placeholder")}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute inset-y-0 right-0 px-3 text-xs text-muted-foreground hover:text-foreground"
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t("login.hide_password") : t("login.show_password")}
               >
-                {showPassword ? "Hide" : "Show"}
+                {showPassword ? t("login.hide") : t("login.show")}
               </button>
             </div>
           </div>
@@ -176,18 +184,18 @@ export default function LoginPage() {
             disabled={submitting}
             className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-accent/90 disabled:opacity-50"
           >
-            {submitting ? "Signing in..." : "Sign in"}
+            {submitting ? t("login.signing_in") : t("login.sign_in")}
           </button>
         </form>
 
         {needsSetup && (
           <p className="text-center text-sm text-muted-foreground">
-            First time?{" "}
+            {t("login.first_time")} {" "}
             <Link
               href="/setup"
               className="text-accent hover:underline"
             >
-              Create admin account
+              {t("login.create_admin")}
             </Link>
           </p>
         )}
@@ -195,23 +203,23 @@ export default function LoginPage() {
         {provisionalOpen && (
           <form onSubmit={handleAdopt} className="rounded-lg border border-yellow-500/35 bg-yellow-500/5 p-4 space-y-3">
             <div>
-              <h2 className="text-sm font-medium text-yellow-100">Continue setting up this Nurby</h2>
-              <p className="mt-1 text-xs text-muted-foreground">Enter the one-time setup code shown in the installing browser&apos;s Settings.</p>
+              <h2 className="text-sm font-medium text-yellow-100">{t("login.continue_setup")}</h2>
+              <p className="mt-1 text-xs text-muted-foreground">{t("login.setup_code_help")}</p>
             </div>
             <input
-              aria-label="One-time setup code"
+              aria-label={t("login.setup_code")}
               value={setupCode}
               onChange={(e) => setSetupCode(e.target.value.toUpperCase())}
               inputMode="text"
               autoCapitalize="characters"
               autoComplete="one-time-code"
-              placeholder="XXXXXXXX"
+              placeholder={t("login.setup_code_placeholder")}
               maxLength={8}
               required
               className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm tracking-[0.2em] text-foreground"
             />
             <button type="submit" disabled={adopting || setupCode.length < 6} className="w-full rounded-md border border-yellow-500/40 px-3 py-2 text-sm text-yellow-100 hover:bg-yellow-500/10 disabled:opacity-50">
-              {adopting ? "Continuing..." : "Continue with setup code"}
+              {adopting ? t("login.continuing") : t("login.continue_with_code")}
             </button>
           </form>
         )}
@@ -219,7 +227,7 @@ export default function LoginPage() {
         <div className="flex items-center gap-3">
           <div className="h-px flex-1 bg-border" />
           <span className="text-xs uppercase tracking-wider text-muted-foreground">
-            or
+            {t("login.or")}
           </span>
           <div className="h-px flex-1 bg-border" />
         </div>
@@ -233,10 +241,10 @@ export default function LoginPage() {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-medium text-foreground">
-              Have an invite key?
+              {t("login.have_invite")}
             </span>
             <span className="block text-xs text-muted-foreground">
-              Redeem it to create your account
+              {t("login.redeem_invite")}
             </span>
           </span>
           <ArrowRightIcon className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-accent" />
