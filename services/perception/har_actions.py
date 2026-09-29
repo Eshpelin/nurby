@@ -179,7 +179,16 @@ class STGCNActionBackend:
 
     def __init__(self, model_path: str | None = None, label_map: dict | None = None):
         self.model_path = model_path
-        self._label_map = label_map or {}
+        # JSON object keys arrive as strings from the settings API, while the
+        # ONNX argmax index is an integer. Normalize both forms at the edge so
+        # a valid deployment map does not silently degrade every action to
+        # ``unknown``.
+        self._label_map = {}
+        for key, value in (label_map or {}).items():
+            try:
+                self._label_map[int(key)] = value
+            except (TypeError, ValueError):
+                continue
         self._session = None
 
     def _load(self):  # pragma: no cover - needs the exported .onnx

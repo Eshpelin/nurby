@@ -85,6 +85,28 @@ def test_stgcn_backend_is_an_unwired_stub():
         STGCNActionBackend().classify([_frame(_standing())])
 
 
+def test_stgcn_json_label_map_keys_are_normalized(monkeypatch):
+    import numpy as np
+
+    class Input:
+        name = "poses"
+
+    class Session:
+        def get_inputs(self):
+            return [Input()]
+
+        def run(self, outputs, inputs):
+            return [np.asarray([[0.1, 3.0]], dtype=np.float32)]
+
+    backend = STGCNActionBackend(model_path="/models/har.onnx", label_map={"1": "walking"})
+    monkeypatch.setattr(backend, "_load", lambda: Session())
+
+    action, confidence = backend.classify([_frame(_standing())])
+
+    assert action == "walking"
+    assert confidence > 0.8
+
+
 # ── state machine ────────────────────────────────────────────────────────────
 
 def test_stable_action_no_emit_until_transition():
