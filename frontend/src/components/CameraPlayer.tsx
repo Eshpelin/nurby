@@ -24,6 +24,7 @@ import Link from "next/link";
 import { useWebcamPublisher } from "@/lib/webcam-publisher";
 import { RetryCountdown } from "@/components/RetryCountdown";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { WhepPlayer } from "@/components/WhepPlayer";
 
 // Structural: the dashboard wall passes its rich Camera type, the camera
@@ -55,7 +56,8 @@ export function CameraPlayer({
   // ingestion poll + connect cycle.
   const isRemoteFile =
     camera.stream_type === "file" && /^https?:\/\//.test(camera.stream_url);
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const isLocalFile = camera.stream_type === "file" && !isRemoteFile;
   const localFilePreview = isLocalFile && token
     ? `/api/cameras/${camera.id}/preview?token=${encodeURIComponent(token)}`
@@ -95,14 +97,14 @@ export function CameraPlayer({
           </svg>
         </div>
         <div className="text-[10px] uppercase tracking-wider text-emerald-300/80">
-          Audio-only mic
+          {t("camera_player.audio_only")}
         </div>
         {camera.stream_type === "browser_mic" && (
           <Link
             href={`/mic/${camera.id}`}
             className="text-[11px] px-2.5 py-1 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
           >
-            Open mic page →
+            {t("camera_player.open_mic")}
           </Link>
         )}
       </div>
@@ -152,11 +154,11 @@ export function CameraPlayer({
             FILE · PLAYER ONLY
           </span>
           <span className="text-[9px] text-muted-foreground/70 text-center px-2">
-            No decoder running — detections and recording are paused.
+            {t("camera_player.file_paused")}
           </span>
         </>
       ) : (
-        <span className="text-[10px] text-muted-foreground font-mono">OFFLINE</span>
+        <span className="text-[10px] text-muted-foreground font-mono">{t("camera_player.offline")}</span>
       )}
       {!isWebcam && (camera.status_reason || camera.next_retry_at) && (
         <RetryCountdown
@@ -170,14 +172,14 @@ export function CameraPlayer({
           onClick={(e) => { e.stopPropagation(); resumeIntent(camera.id); }}
           className="text-[11px] px-2.5 py-1 rounded-md bg-amber-500 text-black font-medium hover:bg-amber-400"
         >
-          Enable camera
+          {t("camera_player.enable")}
         </button>
       )}
       {isWebcam && myPublisher?.status === "connecting" && (
-        <span className="text-[10px] text-amber-400">connecting.</span>
+        <span className="text-[10px] text-amber-400">{t("camera_player.connecting")}</span>
       )}
       {isWebcam && myPublisher?.status === "held-by-other-tab" && (
-        <span className="text-[10px] text-muted-foreground">streaming in another tab</span>
+        <span className="text-[10px] text-muted-foreground">{t("camera_player.other_tab")}</span>
       )}
     </div>
   );
