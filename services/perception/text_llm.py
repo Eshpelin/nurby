@@ -37,6 +37,8 @@ async def call_text(
     user_prompt: str,
     max_tokens: int | None = None,
     camera_id: str | None = None,
+    usage_workload: str = "camera_text_summary",
+    record_unscoped_usage: bool = False,
 ) -> str | None:
     """Single-shot text completion against any supported provider.
 
@@ -136,15 +138,17 @@ async def call_text(
         op="text",
         camera_id=camera_id,
     )
-    if camera_id:
-        # Text-only camera summaries are still VLM work and must share the
-        # same per-camera budget/report as image captions.
+    if camera_id or record_unscoped_usage:
+        # Text-only model work is still VLM usage. Camera-scoped callers
+        # share the per-camera budget/report; household-wide callers can opt
+        # into an unscoped ledger row rather than disappearing from cost
+        # visibility or being falsely allocated to every camera.
         try:
             from services.perception.usage import record_vlm_usage
 
             await record_vlm_usage(
                 provider,
-                workload="camera_text_summary",
+                workload=usage_workload,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 output_text=result,

@@ -172,6 +172,8 @@ async def narrate_window(
                 system_prompt=DAILY_SYSTEM_PROMPT,
                 user_prompt=prompt,
                 max_tokens=max_out,
+                usage_workload="daily_digest",
+                record_unscoped_usage=True,
             )
             if summary:
                 summary = summary.strip()
@@ -208,6 +210,8 @@ async def build_daily_digest(
                 system_prompt=DAILY_SYSTEM_PROMPT,
                 user_prompt=prompt,
                 max_tokens=max_out,
+                usage_workload="daily_digest",
+                record_unscoped_usage=True,
             )
             if summary_text:
                 summary_text = summary_text.strip()
