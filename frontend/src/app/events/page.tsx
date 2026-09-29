@@ -34,7 +34,7 @@ type RangeValue = (typeof RANGES)[number]["value"];
 
 export default function EventsPage() {
   const { authFetch, user } = useAuth();
-  const t = (key: string) => translate(user?.locale, key);
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const searchParams = useSearchParams();
   const [events, setEvents] = useState<EventEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -247,14 +247,17 @@ export default function EventsPage() {
       const preview = await previewRes.json().catch(() => ({}));
       if (!previewRes.ok) throw new Error(preview.detail || `Preview failed (${previewRes.status})`);
       const camerasInScope = (preview.cameras || [])
-        .map((id: string) => cameraNames.get(id) || "Unknown camera")
+        .map((id: string) => cameraNames.get(id) || t("events.unknown_camera"))
         .join(", ");
-      const scope = selectAllMatching ? "the current filters" : "the selected events";
+      const scope = selectAllMatching ? t("events.all_matching") : t("events.selected", { count: selectedIds.size });
       if (!window.confirm(
-        `Delete ${preview.matching} event${preview.matching === 1 ? "" : "s"} from ${scope}?\n` +
-        `Cameras: ${camerasInScope || "none"}\n` +
-        `Linked recordings: ${preview.linked_recordings || 0} (preserved).\n` +
-        "This cannot be undone."
+        t("events.delete_confirm", {
+          count: preview.matching,
+          plural: preview.matching === 1 ? "" : "s",
+          scope,
+          cameras: camerasInScope || "none",
+          linked: preview.linked_recordings || 0,
+        })
       )) return;
       const res = await authFetch("/api/events/bulk/delete", {
         method: "POST",
@@ -268,7 +271,10 @@ export default function EventsPage() {
       setSelectedIds(new Set());
       setSelectAllMatching(false);
       if (selectAllMatching) await fetchEvents(0);
-      setBulkMessage(`Deleted ${result.deleted} event${result.deleted === 1 ? "" : "s"}. Linked recordings were preserved.`);
+      setBulkMessage(t("events.deleted_result", {
+        count: result.deleted,
+        plural: result.deleted === 1 ? "" : "s",
+      }));
     } catch (e) {
       setBulkMessage(e instanceof Error ? e.message : "Bulk delete failed");
     } finally {
@@ -383,16 +389,16 @@ export default function EventsPage() {
 
       {(selectedIds.size > 0 || selectAllMatching) && (
         <div className="flex flex-wrap items-center gap-2 mb-4 rounded-md border border-accent/30 bg-accent/5 px-3 py-2">
-          <span className="text-xs text-accent">{selectAllMatching ? "All matching events" : `${selectedIds.size} selected`}</span>
-          <button type="button" onClick={downloadSelectedCsv} disabled={bulkBusy} className="px-2 py-1 text-xs rounded border border-accent text-accent">Download CSV</button>
-          <button type="button" onClick={bulkDelete} disabled={bulkBusy} className="px-2 py-1 text-xs rounded border border-red-500/50 text-red-400">{bulkBusy ? "Deleting…" : "Delete"}</button>
-          <button type="button" onClick={() => { setSelectedIds(new Set()); setSelectAllMatching(false); }} className="px-2 py-1 text-xs text-muted-foreground">Clear</button>
+          <span className="text-xs text-accent">{selectAllMatching ? t("events.all_matching") : t("events.selected", { count: selectedIds.size })}</span>
+          <button type="button" onClick={downloadSelectedCsv} disabled={bulkBusy} className="px-2 py-1 text-xs rounded border border-accent text-accent">{t("events.download_csv_short")}</button>
+          <button type="button" onClick={bulkDelete} disabled={bulkBusy} className="px-2 py-1 text-xs rounded border border-red-500/50 text-red-400">{bulkBusy ? t("events.deleting") : t("events.delete")}</button>
+          <button type="button" onClick={() => { setSelectedIds(new Set()); setSelectAllMatching(false); }} className="px-2 py-1 text-xs text-muted-foreground">{t("events.clear")}</button>
         </div>
       )}
       {events.length > 0 && selectedIds.size === events.length && !selectAllMatching && hasMore && (
         <div className="mb-4 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-accent flex items-center justify-between">
-          <span>All loaded events are selected.</span>
-          <button type="button" onClick={() => setSelectAllMatching(true)} className="underline">Select all matching filters</button>
+          <span>{t("events.all_loaded_selected")}</span>
+          <button type="button" onClick={() => setSelectAllMatching(true)} className="underline">{t("events.select_all_matching")}</button>
         </div>
       )}
       {bulkMessage && <div className="mb-4 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">{bulkMessage}</div>}
