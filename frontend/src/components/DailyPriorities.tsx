@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 interface DailyPriority {
   key: string;
@@ -31,7 +32,8 @@ const button = "rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted
 // Read-only daily priorities for the person's audience and goal. It never
 // changes a rule; pausing only quiets the nudges via the parent's save.
 export function DailyPriorities({ refreshKey = 0, paused, onTogglePause, pauseBusy }: Props) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [wf, setWf] = useState<DailyWorkflow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +46,7 @@ export function DailyPriorities({ refreshKey = 0, paused, onTogglePause, pauseBu
       if (!res.ok) throw new Error("load");
       setWf(await res.json());
     } catch {
-      setError("Could not load today's priorities.");
+      setError(t("daily_priorities.load_failed"));
     } finally {
       setLoading(false);
     }
@@ -54,17 +56,17 @@ export function DailyPriorities({ refreshKey = 0, paused, onTogglePause, pauseBu
     void load();
   }, [load, refreshKey]);
 
-  if (loading) return <p role="status" className="mt-4 text-sm text-muted-foreground">Loading your priorities…</p>;
+  if (loading) return <p role="status" className="mt-4 text-sm text-muted-foreground">{t("daily_priorities.loading")}</p>;
   if (error) return <p role="alert" className="mt-4 text-sm text-red-500">{error}</p>;
   if (!wf) return null;
   const priorities = wf.priorities ?? [];
 
   return (
-    <section aria-label="Today's priorities" className="mt-4 rounded-lg border border-border p-3">
+    <section aria-label={t("daily_priorities.aria_label")} className="mt-4 rounded-lg border border-border p-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">Today{wf.place_label ? ` · ${wf.place_label}` : ""}</h3>
+        <h3 className="text-sm font-semibold">{t("daily_priorities.today")}{wf.place_label ? ` · ${wf.place_label}` : ""}</h3>
         <button className={button} disabled={pauseBusy} onClick={onTogglePause}>
-          {paused ? "Resume daily guidance" : "Pause daily guidance"}
+          {paused ? t("daily_priorities.resume") : t("daily_priorities.pause")}
         </button>
       </div>
       <ul className="mt-3 space-y-2">
