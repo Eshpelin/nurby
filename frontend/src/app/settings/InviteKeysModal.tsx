@@ -11,6 +11,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { Locale, translate } from "@/lib/i18n";
 import { formatDate, formatDateTime, timeAgo } from "@/lib/time";
 import {
   Camera,
@@ -47,7 +48,9 @@ export default function InviteKeysModal({
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const [mode, setMode] = useState<Mode>("keys");
 
   return (
@@ -57,15 +60,14 @@ export default function InviteKeysModal({
         {/* Header */}
         <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-border">
           <div>
-            <h2 className="text-lg font-semibold">Invite keys</h2>
+            <h2 className="text-lg font-semibold">{t("invite.keys")}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Share a key to let someone create an account with a role and
-              camera access you choose.
+              {t("invite.help")}
             </p>
           </div>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("invite.close")}
             className="text-muted-foreground hover:text-foreground text-xl leading-none -mt-1"
           >
             ×
@@ -79,6 +81,7 @@ export default function InviteKeysModal({
               inviteKeys={inviteKeys}
               onInviteNew={() => setMode("invite")}
               onChanged={onChanged}
+              locale={locale}
             />
           ) : (
             <InviteForm
@@ -89,6 +92,7 @@ export default function InviteKeysModal({
                 setMode("keys");
               }}
               onCancel={() => setMode("keys")}
+              locale={locale}
             />
           )}
         </div>
@@ -103,43 +107,46 @@ function KeysView({
   inviteKeys,
   onInviteNew,
   onChanged,
+  locale,
 }: {
   inviteKeys: InviteKey[];
   onInviteNew: () => void;
   onChanged: () => void;
+  locale: Locale;
 }) {
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
           {inviteKeys.length === 0
-            ? "No keys yet"
-            : `${inviteKeys.length} key${inviteKeys.length !== 1 ? "s" : ""}`}
+            ? t("invite.no_keys")
+            : t(inviteKeys.length === 1 ? "invite.key_count" : "invite.key_count_plural", { count: inviteKeys.length })}
         </span>
         <button
           onClick={onInviteNew}
           className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90"
         >
-          Invite new user
+          {t("invite.new_user")}
         </button>
       </div>
 
       {inviteKeys.length === 0 ? (
         <div className="rounded-md border border-dashed border-border bg-background/40 px-4 py-8 text-center">
           <p className="text-sm text-muted-foreground">
-            You haven&apos;t invited anyone yet.
+            {t("invite.none_yet")}
           </p>
           <button
             onClick={onInviteNew}
             className="mt-3 px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
           >
-            Create your first invite
+            {t("invite.first")}
           </button>
         </div>
       ) : (
         <div className="space-y-2.5">
           {inviteKeys.map((ik) => (
-            <KeyCard key={ik.id} ik={ik} onChanged={onChanged} />
+            <KeyCard key={ik.id} ik={ik} onChanged={onChanged} locale={locale} />
           ))}
         </div>
       )}
@@ -147,8 +154,9 @@ function KeysView({
   );
 }
 
-function KeyCard({ ik, onChanged }: { ik: InviteKey; onChanged: () => void }) {
+function KeyCard({ ik, onChanged, locale }: { ik: InviteKey; onChanged: () => void; locale: Locale }) {
   const { authFetch } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const [copied, setCopied] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
@@ -157,6 +165,7 @@ function KeyCard({ ik, onChanged }: { ik: InviteKey; onChanged: () => void }) {
 
   const status = inviteKeyStatus(ik);
   const pill = STATUS_STYLE[status];
+  const statusLabel = status === "active" ? t("invite.active") : status === "expired" ? t("invite.expired") : t("invite.full");
   const pct = ik.max_uses > 0 ? Math.min(100, (ik.use_count / ik.max_uses) * 100) : 0;
   const remaining = Math.max(0, ik.max_uses - ik.use_count);
 
@@ -188,11 +197,11 @@ function KeyCard({ ik, onChanged }: { ik: InviteKey; onChanged: () => void }) {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium">{roleLabel(ik.role)}</span>
           <span className={`text-[10px] uppercase tracking-wider border rounded px-1.5 py-0.5 ${pill.cls}`}>
-            {pill.label}
+            {statusLabel}
           </span>
         </div>
         <div className="text-[11px] text-muted-foreground text-right whitespace-nowrap">
-          Created {formatDate(ik.created_at)}
+          {t("invite.created", { date: formatDate(ik.created_at) })}
           {ik.created_by && (
             <div className="truncate max-w-[160px]">
               by {ik.created_by.display_name || ik.created_by.email}
@@ -213,13 +222,13 @@ function KeyCard({ ik, onChanged }: { ik: InviteKey; onChanged: () => void }) {
           onClick={() => setShowKey((v) => !v)}
           className="px-2 py-1.5 text-[11px] rounded border border-border hover:bg-muted transition-colors flex-shrink-0"
         >
-          {showKey ? "Hide" : "Show"}
+          {showKey ? t("invite.hide") : t("invite.show")}
         </button>
         <button
           onClick={copyLink}
           className="px-2 py-1.5 text-[11px] rounded border border-border hover:bg-muted transition-colors flex-shrink-0"
         >
-          {copied ? "Copied" : "Copy link"}
+          {copied ? t("invite.copied") : t("invite.copy_link")}
         </button>
       </div>
 
@@ -227,15 +236,15 @@ function KeyCard({ ik, onChanged }: { ik: InviteKey; onChanged: () => void }) {
       <div className="space-y-1">
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
           <span>
-            {ik.use_count} of {ik.max_uses} used
-            {status === "active" && remaining > 0 && ` · ${remaining} left`}
+            {t("invite.used", { used: ik.use_count, max: ik.max_uses })}
+            {status === "active" && remaining > 0 && t("invite.left", { count: remaining })}
           </span>
           <span>
             {ik.expires_at === null
-              ? "Never expires"
+              ? t("invite.never_expires")
               : status === "expired"
-                ? `Expired ${formatDate(ik.expires_at)}`
-                : `Expires ${formatDate(ik.expires_at)}`}
+                ? t("invite.expired_on", { date: formatDate(ik.expires_at) })
+                : t("invite.expires", { date: formatDate(ik.expires_at) })}
           </span>
         </div>
         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -256,13 +265,12 @@ function KeyCard({ ik, onChanged }: { ik: InviteKey; onChanged: () => void }) {
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <span className={`transition-transform ${showUsers ? "rotate-90" : ""}`}>›</span>
-            Used by {ik.redemptions.length}{" "}
-            {ik.redemptions.length === 1 ? "person" : "people"}
+            {t("invite.used_by", { count: ik.redemptions.length, kind: ik.redemptions.length === 1 ? t("invite.person") : t("invite.people") })}
           </button>
           {showUsers && (
             <ul className="mt-2 space-y-1.5">
               {ik.redemptions.map((r) => (
-                <RedemptionRow key={r.user_id} r={r} />
+                <RedemptionRow key={r.user_id} r={r} locale={locale} />
               ))}
             </ul>
           )}
@@ -273,19 +281,19 @@ function KeyCard({ ik, onChanged }: { ik: InviteKey; onChanged: () => void }) {
       <div className="flex justify-end">
         {confirmRevoke ? (
           <div className="flex items-center gap-2 text-[11px]">
-            <span className="text-muted-foreground">Revoke this key?</span>
+            <span className="text-muted-foreground">{t("invite.revoke_question")}</span>
             <button
               onClick={revoke}
               disabled={revoking}
               className="px-2 py-1 rounded border border-red-800 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
             >
-              {revoking ? "Revoking." : "Revoke"}
+              {revoking ? t("invite.revoking") : t("invite.revoke")}
             </button>
             <button
               onClick={() => setConfirmRevoke(false)}
               className="px-2 py-1 rounded border border-border hover:bg-muted"
             >
-              Keep
+              {t("invite.keep")}
             </button>
           </div>
         ) : (
@@ -293,7 +301,7 @@ function KeyCard({ ik, onChanged }: { ik: InviteKey; onChanged: () => void }) {
             onClick={() => setConfirmRevoke(true)}
             className="text-[11px] text-red-400/80 hover:text-red-400 transition-colors"
           >
-            Revoke key
+            {t("invite.revoke_key")}
           </button>
         )}
       </div>
@@ -301,7 +309,8 @@ function KeyCard({ ik, onChanged }: { ik: InviteKey; onChanged: () => void }) {
   );
 }
 
-function RedemptionRow({ r }: { r: InviteRedemption }) {
+function RedemptionRow({ r, locale }: { r: InviteRedemption; locale: Locale }) {
+  const t = (key: string) => translate(locale, key);
   const name = r.display_name || r.email;
   return (
     <li className="flex items-center gap-2 text-xs">
@@ -313,7 +322,7 @@ function RedemptionRow({ r }: { r: InviteRedemption }) {
           <span className="font-medium truncate">{name}</span>
           {!r.is_active && (
             <span className="text-[9px] uppercase tracking-wide text-muted-foreground border border-border rounded px-1">
-              disabled
+              {t("invite.disabled")}
             </span>
           )}
         </div>
@@ -338,12 +347,15 @@ function InviteForm({
   authFetch,
   onDone,
   onCancel,
+  locale,
 }: {
   cameras: Camera[];
   authFetch: (input: string, init?: RequestInit) => Promise<Response>;
   onDone: () => void;
   onCancel: () => void;
+  locale: Locale;
 }) {
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const [role, setRole] = useState("viewer");
   const [maxUses, setMaxUses] = useState(1);
   const [expiryDays, setExpiryDays] = useState(7);
@@ -394,16 +406,17 @@ function InviteForm({
           <div className="w-11 h-11 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center mx-auto mb-2 text-green-400 text-xl">
             ✓
           </div>
-          <h3 className="text-sm font-semibold">Invite ready</h3>
+          <h3 className="text-sm font-semibold">{t("invite.ready")}</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Send this link to the person you&apos;re inviting. They&apos;ll
-            create a <strong>{roleLabel(created.role)}</strong> account
-            {created.max_uses > 1 ? `, usable ${created.max_uses} times.` : "."}
+            {t(created.max_uses > 1 ? "invite.ready_help_many" : "invite.ready_help_one", {
+              role: roleLabel(created.role),
+              count: created.max_uses,
+            })}
           </p>
         </div>
 
         <div className="rounded-md border border-border bg-background p-3 space-y-2">
-          <label className="text-[11px] font-medium text-muted-foreground">Share link</label>
+          <label className="text-[11px] font-medium text-muted-foreground">{t("invite.share_link")}</label>
           <div className="flex items-center gap-1.5">
             <code className="flex-1 min-w-0 text-xs font-mono bg-muted px-2 py-1.5 rounded select-all truncate">
               {inviteLink(created.key)}
@@ -412,11 +425,11 @@ function InviteForm({
               onClick={copyLink}
               className="px-3 py-1.5 text-xs rounded border border-border hover:bg-muted transition-colors flex-shrink-0"
             >
-              {copied ? "Copied" : "Copy"}
+              {copied ? t("invite.copied") : t("invite.copy")}
             </button>
           </div>
           <div className="text-[11px] text-muted-foreground">
-            Or share the key directly:{" "}
+            {t("invite.share_key")} {" "}
             <code className="font-mono select-all">{created.key}</code>
           </div>
         </div>
@@ -432,13 +445,13 @@ function InviteForm({
             }}
             className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
           >
-            Invite another
+            {t("invite.another")}
           </button>
           <button
             onClick={onDone}
             className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90"
           >
-            Done
+            {t("invite.done")}
           </button>
         </div>
       </div>
@@ -451,25 +464,25 @@ function InviteForm({
         onClick={onCancel}
         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
-        <span>‹</span> Back to keys
+        <span>‹</span> {t("invite.back")}
       </button>
 
       <div>
-        <label className="text-xs font-medium text-muted-foreground block mb-1">Role</label>
+        <label className="text-xs font-medium text-muted-foreground block mb-1">{t("invite.role")}</label>
         <select
           value={role}
           onChange={(e) => setRole(e.target.value)}
           className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
         >
-          <option value="viewer">Viewer — can watch, can&apos;t change settings</option>
-          <option value="admin">Admin — full access</option>
+          <option value="viewer">{t("invite.viewer")}</option>
+          <option value="admin">{t("invite.admin")}</option>
         </select>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1">
-            Max uses
+            {t("invite.max_uses")}
           </label>
           <input
             type="number"
@@ -480,23 +493,23 @@ function InviteForm({
             className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
           />
           <p className="text-[10px] text-muted-foreground mt-1">
-            How many accounts this key can create.
+            {t("invite.max_uses_help")}
           </p>
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground block mb-1">Expires</label>
+          <label className="text-xs font-medium text-muted-foreground block mb-1">{t("invite.expires_label")}</label>
           <select
             value={expiryDays}
             onChange={(e) => setExpiryDays(Number(e.target.value))}
             className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
           >
-            <option value={0}>Never</option>
-            <option value={1}>In 1 day</option>
-            <option value={7}>In 7 days</option>
-            <option value={30}>In 30 days</option>
+            <option value={0}>{t("invite.never")}</option>
+            <option value={1}>{t("invite.in_day")}</option>
+            <option value={7}>{t("invite.in_days", { count: 7 })}</option>
+            <option value={30}>{t("invite.in_days", { count: 30 })}</option>
           </select>
           <p className="text-[10px] text-muted-foreground mt-1">
-            A shorter window is safer.
+            {t("invite.expires_help")}
           </p>
         </div>
       </div>
@@ -504,7 +517,7 @@ function InviteForm({
       {cameras.length > 0 && (
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1">
-            Camera access
+            {t("invite.camera_access")}
           </label>
           <div className="space-y-1 max-h-32 overflow-y-auto rounded-md border border-border bg-background p-2">
             {cameras.map((cam) => (
@@ -523,7 +536,7 @@ function InviteForm({
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground mt-1">
-            Leave empty for no camera access. An admin can grant access later.
+            {t("invite.no_camera_access")}
           </p>
         </div>
       )}
@@ -533,14 +546,14 @@ function InviteForm({
           onClick={onCancel}
           className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
         >
-          Cancel
+          {t("invite.cancel")}
         </button>
         <button
           onClick={create}
           disabled={creating}
           className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
         >
-          {creating ? "Creating." : "Create invite"}
+          {creating ? t("invite.creating") : t("invite.create")}
         </button>
       </div>
     </div>
