@@ -912,9 +912,9 @@ export default function CameraConfigPage() {
         <section className="rounded-lg border border-border bg-card px-4 py-3.5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-sm font-medium">Package tracking</h2>
+              <h2 className="text-sm font-medium">{t("camera.package_tracking.title")}</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                Track delivery, waiting, and removal evidence on this camera. Existing package history is preserved when disabled.
+                {t("camera.package_tracking.description")}
               </p>
             </div>
             <button
@@ -924,20 +924,20 @@ export default function CameraConfigPage() {
               onClick={() => setPackageTrackingEnabled((enabled) => !enabled)}
               className={`rounded-full border px-3 py-1 text-xs ${packageTrackingEnabled ? "border-emerald-500/50 text-emerald-400" : "border-border text-muted-foreground"}`}
             >
-              {packageTrackingEnabled ? "Enabled" : "Disabled"}
+              {packageTrackingEnabled ? t("common.enabled") : t("common.disabled")}
             </button>
           </div>
           <label className="mt-3 block text-xs text-muted-foreground">
-            Confirm pickup when the package disappears with
+            {t("camera.package_tracking.confirm_pickup")}
             <select
               value={packagePickupPolicy}
               onChange={(event) => setPackagePickupPolicy(event.target.value as "recognized_person" | "resident_only")}
               className="ml-1 rounded border border-border bg-background px-2 py-1 text-foreground"
             >
-              <option value="recognized_person">any recognized person</option>
-              <option value="resident_only">a household member</option>
+              <option value="recognized_person">{t("camera.package_tracking.recognized_person")}</option>
+              <option value="resident_only">{t("camera.package_tracking.household_member")}</option>
             </select>
-            . Otherwise Nurby keeps it as an unexplained disappearance.
+            {t("camera.package_tracking.disappearance_note")}
           </label>
         </section>
 
@@ -989,11 +989,11 @@ export default function CameraConfigPage() {
         )}
 
         {streamType === "rtsp" && camera?.ptz_supported !== true && (
-          <Section title="Pan, tilt, and zoom" description="Nurby only shows PTZ controls after it confirms that this camera exposes ONVIF PTZ. Fixed RTSP cameras remain uncluttered.">
+          <Section title={t("camera.onvif.title")} description={t("camera.onvif.description")}>
             <button type="button" onClick={detectPtz} disabled={ptzDetecting} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">
-              {ptzDetecting ? "Checking camera…" : "Detect PTZ support"}
+              {ptzDetecting ? t("camera.onvif.checking") : t("camera.onvif.detect")}
             </button>
-            <p className="mt-2 text-xs text-muted-foreground">Uses a read-only ONVIF check across common camera ports. No movement command is sent.</p>
+            <p className="mt-2 text-xs text-muted-foreground">{t("camera.onvif.help")}</p>
           </Section>
         )}
 
