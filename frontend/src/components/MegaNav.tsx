@@ -31,6 +31,30 @@ function navLabel(value: string, locale: string | undefined): string {
   return key ? translate(locale, key) : value;
 }
 
+const HINT_KEYS: Record<string, string> = {
+  "Is everything all right": "nav.hint.home",
+  "Show me": "nav.hint.cameras",
+  "Configure Nurby": "nav.hint.settings",
+  "What happened, newest first": "nav.hint.everything",
+  "What your rules raised": "nav.hint.alerts",
+  "Repeat sightings, grouped": "nav.hint.incidents",
+  "One subject across cameras": "nav.hint.journeys",
+  "Speech near a camera": "nav.hint.conversations",
+  "Browse & filter footage": "nav.hint.recordings",
+  "What each camera concluded": "nav.hint.camera_recaps",
+  "Find anything in your footage": "nav.hint.search",
+  "Question your footage": "nav.hint.ask_nurby",
+  "Household notes & what Nurby learned": "nav.hint.memory",
+  "Questions answered on a clock": "nav.hint.scheduled",
+  "Faces & identities": "nav.hint.people",
+  "Plates & re-ID": "nav.hint.vehicles",
+};
+
+function navHint(value: string, locale: string | undefined): string {
+  const key = HINT_KEYS[value];
+  return key ? translate(locale, key) : value;
+}
+
 const MENUS: MenuDef[] = [
   // The five places (docs/ia-rollout.md). Each is the question it
   // answers. Home and Cameras are plain links; the other three keep the
@@ -83,13 +107,13 @@ const PANEL_WIDTH: Record<string, number> = {
   people: 600,
 };
 
-function timeAgo(iso?: string | null): string {
+function timeAgo(iso?: string | null, locale?: string): string {
   if (!iso) return "";
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
+  if (s < 60) return translate(locale, "nav.time_just_now");
+  if (s < 3600) return translate(locale, "nav.time_minutes", { count: Math.floor(s / 60) });
+  if (s < 86400) return translate(locale, "nav.time_hours", { count: Math.floor(s / 3600) });
+  return translate(locale, "nav.time_days", { count: Math.floor(s / 86400) });
 }
 
 function initials(name?: string | null): string {
@@ -99,9 +123,9 @@ function initials(name?: string | null): string {
 
 // "Living Room · 2m ago", or just one part, or "Not seen yet" — never a
 // dangling separator.
-function seenLabel(camera?: string | null, iso?: string | null): string {
-  const parts = [camera, timeAgo(iso)].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "Not seen yet";
+function seenLabel(camera?: string | null, iso?: string | null, locale?: string): string {
+  const parts = [camera, timeAgo(iso, locale)].filter(Boolean);
+  return parts.length ? parts.join(" · ") : translate(locale, "nav.no_one_yet");
 }
 
 // ── shared data shapes (only the fields the panels render) ──
@@ -292,7 +316,7 @@ export function MegaNav() {
           <Link
             key={l.href}
             href={l.href}
-            title={l.hint}
+            title={navHint(l.hint, locale)}
             className={`px-3 py-1.5 rounded-md text-sm transition-colors whitespace-nowrap ${
               (l.href === "/" ? pathname === "/" : pathname.startsWith(l.href))
                 ? "bg-muted text-foreground"
@@ -367,16 +391,16 @@ export function MegaNav() {
               {active === "activity" && (
                 <ReviewPanel
                   cams={cams} alertCount={alertCount} recentAlerts={recentAlerts}
-                  latestRec={latestRec} tq={tq} onNavigate={() => setActive(null)}
+                  latestRec={latestRec} tq={tq} locale={locale} onNavigate={() => setActive(null)}
                 />
               )}
               {active === "people" && (
                 <DirectoryPanel
                   people={people} vehicles={vehicles} facesToName={facesToName}
-                  tq={tq} onNavigate={() => setActive(null)}
+                  tq={tq} locale={locale} onNavigate={() => setActive(null)}
                 />
               )}
-              {active === "ask" && <InsightsPanel onNavigate={() => setActive(null)} />}
+              {active === "ask" && <InsightsPanel locale={locale} onNavigate={() => setActive(null)} />}
             </div>
           </div>
         </div>
@@ -387,7 +411,7 @@ export function MegaNav() {
 
 /* ── panel building blocks ─────────────────────────────────────────────── */
 
-function PanelLinks({ links, onNavigate }: { links: LinkDef[]; onNavigate: () => void }) {
+function PanelLinks({ links, onNavigate, locale }: { links: LinkDef[]; onNavigate: () => void; locale?: string }) {
   return (
     <div className="mt-3 grid grid-cols-1 gap-1 border-t border-border-subtle pt-2">
       {links.map((l, i) => (
@@ -400,7 +424,7 @@ function PanelLinks({ links, onNavigate }: { links: LinkDef[]; onNavigate: () =>
         >
           <span>
             <span className="block text-sm text-foreground">{navLabel(l.label, getDisplayLocale())}</span>
-            <span className="block text-[11px] text-muted-foreground">{l.hint}</span>
+            <span className="block text-[11px] text-muted-foreground">{navHint(l.hint, locale)}</span>
           </span>
           <span className="text-muted-foreground opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all">→</span>
         </Link>
@@ -419,16 +443,16 @@ function objectLabel(e: EventRow): string {
 }
 
 function ReviewPanel({
-  cams, alertCount, recentAlerts, latestRec, tq, onNavigate, compact,
+  cams, alertCount, recentAlerts, latestRec, tq, onNavigate, compact, locale,
 }: {
   cams: Record<string, string>; alertCount: number | null; recentAlerts: EventRow[];
   latestRec: { id: string; started_at: string; camera_id: string } | null;
-  tq: string; onNavigate: () => void; compact?: boolean;
+  tq: string; onNavigate: () => void; compact?: boolean; locale?: string;
 }) {
   return (
     <div className={`grid gap-3 ${compact ? "grid-cols-1" : "grid-cols-[1.35fr_1fr]"}`}>
       <div>
-        <SectionLabel>Needs review</SectionLabel>
+        <SectionLabel>{translate(locale, "nav.needs_review")}</SectionLabel>
         <Link
           href="/events"
           onClick={onNavigate}
@@ -437,17 +461,17 @@ function ReviewPanel({
         >
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-semibold tabular-nums">{alertCount ?? "—"}</span>
-            <span className="text-xs text-muted-foreground">unreviewed alert{alertCount === 1 ? "" : "s"}</span>
+            <span className="text-xs text-muted-foreground">{translate(locale, alertCount === 1 ? "nav.unreviewed_one" : "nav.unreviewed_many")}</span>
             {(alertCount ?? 0) > 0 && <span className="ml-auto w-2 h-2 rounded-full bg-danger pulse-dot" />}
           </div>
           <ul className="mt-2 space-y-1">
-            {recentAlerts.length === 0 && <li className="text-[11px] text-muted-foreground">All caught up.</li>}
+            {recentAlerts.length === 0 && <li className="text-[11px] text-muted-foreground">{translate(locale, "nav.all_caught_up")}</li>}
             {recentAlerts.map((e, i) => (
               <li key={e.id} className="mega-item flex items-center gap-2 text-[11px]" style={{ animationDelay: `${120 + i * 50}ms` }}>
                 <span className="w-1 h-1 rounded-full bg-accent shrink-0" />
                 <span className="text-foreground truncate">{objectLabel(e)}</span>
-                <span className="text-muted-foreground truncate">{cams[e.payload?.camera_id ?? ""] || "camera"}</span>
-                <span className="ml-auto font-mono text-muted-foreground/70 shrink-0">{timeAgo(e.fired_at)}</span>
+                <span className="text-muted-foreground truncate">{cams[e.payload?.camera_id ?? ""] || translate(locale, "nav.camera")}</span>
+                <span className="ml-auto font-mono text-muted-foreground/70 shrink-0">{timeAgo(e.fired_at, locale)}</span>
               </li>
             ))}
           </ul>
@@ -455,7 +479,7 @@ function ReviewPanel({
       </div>
 
       <div>
-        <SectionLabel>Latest footage</SectionLabel>
+        <SectionLabel>{translate(locale, "nav.latest_footage")}</SectionLabel>
         <Link
           href="/recordings"
           onClick={onNavigate}
@@ -478,15 +502,15 @@ function ReviewPanel({
           </div>
           <div className="px-2.5 py-1.5">
             <div className="text-[11px] text-foreground truncate">
-              {latestRec ? (cams[latestRec.camera_id] || "Camera") : "No recordings yet"}
+              {latestRec ? (cams[latestRec.camera_id] || translate(locale, "nav.camera")) : translate(locale, "nav.no_recordings")}
             </div>
-            {latestRec && <div className="text-[10px] font-mono text-muted-foreground">{timeAgo(latestRec.started_at)}</div>}
+            {latestRec && <div className="text-[10px] font-mono text-muted-foreground">{timeAgo(latestRec.started_at, locale)}</div>}
           </div>
         </Link>
       </div>
 
       <div className="col-span-2">
-        <PanelLinks links={MENUS[0].links} onNavigate={onNavigate} />
+        <PanelLinks links={MENUS[0].links} onNavigate={onNavigate} locale={locale} />
       </div>
     </div>
   );
@@ -505,10 +529,10 @@ function Avatar({ src, name }: { src: string; name: string }) {
 }
 
 function DirectoryPanel({
-  people, vehicles, facesToName, tq, onNavigate, compact,
+  people, vehicles, facesToName, tq, onNavigate, compact, locale,
 }: {
   people: PersonSummary[]; vehicles: VehicleSummary[]; facesToName: number | null;
-  tq: string; onNavigate: () => void; compact?: boolean;
+  tq: string; onNavigate: () => void; compact?: boolean; locale?: string;
 }) {
   return (
     <div>
@@ -520,15 +544,15 @@ function DirectoryPanel({
           style={{ animationDelay: "30ms" }}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-accent pulse-dot" />
-          {facesToName} new face{facesToName === 1 ? "" : "s"} waiting to be named
+          {facesToName} {translate(locale, facesToName === 1 ? "nav.new_face_one" : "nav.new_face_many")}
           <span className="ml-auto">→</span>
         </Link>
       )}
       <div className={`grid gap-3 ${compact ? "grid-cols-1" : "grid-cols-2"}`}>
         <div>
-          <SectionLabel>Recently seen</SectionLabel>
+          <SectionLabel>{translate(locale, "nav.recently_seen")}</SectionLabel>
           <div className="space-y-1">
-            {people.length === 0 && <div className="text-[11px] text-muted-foreground px-1">No one yet.</div>}
+            {people.length === 0 && <div className="text-[11px] text-muted-foreground px-1">{translate(locale, "nav.no_one_yet")}</div>}
             {people.map((p, i) => (
               <Link
                 key={p.person_id}
@@ -541,7 +565,7 @@ function DirectoryPanel({
                 <span className="min-w-0">
                   <span className="block text-xs text-foreground truncate">{p.nickname || p.display_name}</span>
                   <span className="block text-[10px] text-muted-foreground truncate">
-                    {seenLabel(p.last_seen_camera, p.last_seen_at)}
+                    {seenLabel(p.last_seen_camera, p.last_seen_at, locale)}
                   </span>
                 </span>
               </Link>
@@ -549,9 +573,9 @@ function DirectoryPanel({
           </div>
         </div>
         <div>
-          <SectionLabel>Recent vehicles</SectionLabel>
+          <SectionLabel>{translate(locale, "nav.recent_vehicles")}</SectionLabel>
           <div className="space-y-1">
-            {vehicles.length === 0 && <div className="text-[11px] text-muted-foreground px-1">None yet.</div>}
+            {vehicles.length === 0 && <div className="text-[11px] text-muted-foreground px-1">{translate(locale, "nav.none_yet")}</div>}
             {vehicles.map((v, i) => (
               <Link
                 key={v.vehicle_id}
@@ -571,7 +595,7 @@ function DirectoryPanel({
                     {v.is_starred && <span className="text-amber-300 text-[10px]">★</span>}
                   </span>
                   <span className="block text-[10px] text-muted-foreground truncate">
-                    {seenLabel(v.last_seen_camera, v.last_seen_at)}
+                    {seenLabel(v.last_seen_camera, v.last_seen_at, locale)}
                   </span>
                 </span>
               </Link>
@@ -579,21 +603,17 @@ function DirectoryPanel({
           </div>
         </div>
       </div>
-      <PanelLinks links={MENUS[2].links} onNavigate={onNavigate} />
+      <PanelLinks links={MENUS[2].links} onNavigate={onNavigate} locale={locale} />
     </div>
   );
 }
 
-const QUICK_ASKS = [
-  "Who came to the door today?",
-  "Any unfamiliar vehicles this week?",
-  "Summarize last night",
-];
+const QUICK_ASKS = ["nav.quick_ask_door", "nav.quick_ask_vehicle", "nav.quick_ask_night"];
 
-function InsightsPanel({ onNavigate }: { onNavigate: () => void }) {
+function InsightsPanel({ onNavigate, locale }: { onNavigate: () => void; locale?: string }) {
   return (
     <div>
-      <SectionLabel>Ask Nurby</SectionLabel>
+      <SectionLabel>{translate(locale, "nav.ask_nurby")}</SectionLabel>
       <Link
         href="/ask"
         onClick={onNavigate}
@@ -603,32 +623,32 @@ function InsightsPanel({ onNavigate }: { onNavigate: () => void }) {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent">
           <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
-        Ask anything about your footage…
+        {translate(locale, "nav.ask_placeholder")}
       </Link>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {QUICK_ASKS.map((q, i) => (
           <Link
             key={q}
-            href={`/ask?q=${encodeURIComponent(q)}`}
+            href={`/ask?q=${encodeURIComponent(translate(locale, q))}`}
             onClick={onNavigate}
             className="mega-item rounded-full border border-border-subtle px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:border-accent/40 transition-colors"
             style={{ animationDelay: `${90 + i * 45}ms` }}
           >
-            {q}
+            {translate(locale, q)}
           </Link>
         ))}
       </div>
-      <PanelLinks links={MENUS[1].links} onNavigate={onNavigate} />
+      <PanelLinks links={MENUS[1].links} onNavigate={onNavigate} locale={locale} />
     </div>
   );
 }
 
-function PanelFor({ id, nav, onNavigate }: { id: string; nav: NavData; onNavigate: () => void }) {
+function PanelFor({ id, nav, locale, onNavigate }: { id: string; nav: NavData; locale?: string; onNavigate: () => void }) {
   if (id === "activity") {
     return (
       <ReviewPanel
         compact cams={nav.cams} alertCount={nav.alertCount} recentAlerts={nav.recentAlerts}
-        latestRec={nav.latestRec} tq={nav.tq} onNavigate={onNavigate}
+        latestRec={nav.latestRec} tq={nav.tq} locale={locale} onNavigate={onNavigate}
       />
     );
   }
@@ -636,11 +656,11 @@ function PanelFor({ id, nav, onNavigate }: { id: string; nav: NavData; onNavigat
     return (
       <DirectoryPanel
         compact people={nav.people} vehicles={nav.vehicles} facesToName={nav.facesToName}
-        tq={nav.tq} onNavigate={onNavigate}
+        tq={nav.tq} locale={locale} onNavigate={onNavigate}
       />
     );
   }
-  if (id === "ask") return <InsightsPanel onNavigate={onNavigate} />;
+  if (id === "ask") return <InsightsPanel locale={locale} onNavigate={onNavigate} />;
   return null;
 }
 
@@ -715,7 +735,7 @@ export function MegaNavMobile({ open, onClose }: { open: boolean; onClose: () =>
               </button>
               {isOpen && (
                 <div className="border-t border-border-subtle bg-card/40 p-3">
-                  <PanelFor id={m.id} nav={nav} onNavigate={onClose} />
+                  <PanelFor id={m.id} nav={nav} locale={locale} onNavigate={onClose} />
                 </div>
               )}
             </div>
@@ -727,7 +747,7 @@ export function MegaNavMobile({ open, onClose }: { open: boolean; onClose: () =>
             key={l.href}
             href={l.href}
             onClick={onClose}
-            title={l.hint}
+            title={navHint(l.hint, locale)}
             className={`block rounded-lg px-3 py-2.5 text-sm ${
               pathname.startsWith(l.href) ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
             }`}
