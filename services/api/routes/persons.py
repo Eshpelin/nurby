@@ -70,12 +70,12 @@ async def _person_has_scoped_sighting(person_id: uuid.UUID, user: User, db: Asyn
     row = (
         await db.execute(
             apply_camera_filter(
-                select(FaceCluster.first_camera_id)
+                select(FaceClusterSample.id)
+                .join(FaceCluster, FaceCluster.id == FaceClusterSample.cluster_id)
                 .where(FaceCluster.person_id == person_id)
-                .where(FaceCluster.first_camera_id.is_not(None))
                 .limit(1),
                 allowed,
-                FaceCluster.first_camera_id,
+                FaceClusterSample.camera_id,
             )
         )
     ).first()
@@ -83,10 +83,23 @@ async def _person_has_scoped_sighting(person_id: uuid.UUID, user: User, db: Asyn
 
 
 async def _require_cluster_in_scope(cluster: FaceCluster, user: User, db: AsyncSession) -> None:
-    """Hide a face cluster that was first observed on an unauthorized camera."""
+    """Hide a face cluster with no sample on an authorized camera."""
     allowed = await allowed_camera_ids(user, db)
-    if allowed is not ALL and cluster.first_camera_id not in allowed:
-        raise HTTPException(status_code=404, detail="Cluster not found")
+    if allowed is not ALL:
+        # Keep the narrow legacy fallback for lightweight callers/tests that
+        # only provide the persisted first-camera field.
+        if not getattr(cluster, "id", None):
+            if cluster.first_camera_id not in allowed:
+                raise HTTPException(status_code=404, detail="Cluster not found")
+            return
+        visible = await db.execute(
+            select(FaceClusterSample.id)
+            .where(FaceClusterSample.cluster_id == cluster.id)
+            .where(FaceClusterSample.camera_id.in_(allowed))
+            .limit(1)
+        )
+        if visible.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Cluster not found")
 
 
 @router.get("", response_model=list[PersonResponse])
@@ -98,7 +111,8 @@ async def list_persons(current_user: User = Depends(get_current_user), db: Async
         stmt = (
             select(Person)
             .join(FaceCluster, FaceCluster.person_id == Person.id)
-            .where(FaceCluster.first_camera_id.in_(allowed))
+            .join(FaceClusterSample, FaceClusterSample.cluster_id == FaceCluster.id)
+            .where(FaceClusterSample.camera_id.in_(allowed))
             .distinct()
             .order_by(Person.created_at)
         )
@@ -138,7 +152,11 @@ async def list_suggestions(
         .where(FaceCluster.sighting_count >= min_sightings)
     )
     if allowed is not ALL:
-        stmt = stmt.where(FaceCluster.first_camera_id.in_(allowed))
+        stmt = (
+            stmt.join(FaceClusterSample, FaceClusterSample.cluster_id == FaceCluster.id)
+            .where(FaceClusterSample.camera_id.in_(allowed))
+            .distinct()
+        )
     result = await db.execute(stmt.order_by(FaceCluster.sighting_count.desc()))
     clusters = result.scalars().all()
     return [

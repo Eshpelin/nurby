@@ -34,8 +34,19 @@ router = APIRouter()
 
 async def _require_body_cluster_in_scope(cluster: BodyCluster, user: User, db: AsyncSession) -> None:
     allowed = await allowed_camera_ids(user, db)
-    if allowed is not ALL and cluster.first_camera_id not in allowed:
-        raise HTTPException(status_code=404, detail="Body cluster not found")
+    if allowed is not ALL:
+        if not getattr(cluster, "id", None):
+            if cluster.first_camera_id not in allowed:
+                raise HTTPException(status_code=404, detail="Body cluster not found")
+            return
+        visible = await db.execute(
+            select(BodyClusterSample.id)
+            .where(BodyClusterSample.cluster_id == cluster.id)
+            .where(BodyClusterSample.camera_id.in_(allowed))
+            .limit(1)
+        )
+        if visible.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Body cluster not found")
 
 
 class NameBodyClusterBody(BaseModel):
@@ -64,7 +75,11 @@ async def list_body_suggestions(
     if not include_confirmed:
         stmt = stmt.where(BodyCluster.confidence == "tentative")
     if allowed is not ALL:
-        stmt = stmt.where(BodyCluster.first_camera_id.in_(allowed))
+        stmt = (
+            stmt.join(BodyClusterSample, BodyClusterSample.cluster_id == BodyCluster.id)
+            .where(BodyClusterSample.camera_id.in_(allowed))
+            .distinct()
+        )
     stmt = stmt.order_by(BodyCluster.sighting_count.desc())
     rows = (await db.execute(stmt)).scalars().all()
     return [
