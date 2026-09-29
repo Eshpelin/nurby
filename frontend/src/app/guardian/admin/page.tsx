@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { useToast, useConfirm } from "@/lib/feedback";
 import { formatDateTime } from "@/lib/time";
 
@@ -42,6 +43,7 @@ const FLAGS: { key: keyof GuardianLink; label: string }[] = [
 
 export default function GuardianAdminPage() {
   const { user, authFetch } = useAuth();
+  const t = useCallback((key: string) => translate(user?.locale, key), [user?.locale]);
   const [persons, setPersons] = useState<Person[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [links, setLinks] = useState<GuardianLink[]>([]);
@@ -71,11 +73,11 @@ export default function GuardianAdminPage() {
   if (user && user.role !== "admin") {
     return (
       <div className="p-8 text-muted-foreground">
-        Only a facility admin can manage guardian access.
+        {t("guardian_admin.admin_only")}
       </div>
     );
   }
-  if (loading) return <div className="p-8 text-muted-foreground">Loading...</div>;
+  if (loading) return <div className="p-8 text-muted-foreground">{t("guardian_admin.loading")}</div>;
 
   const personName = (id: string) => {
     const p = persons.find((x) => x.id === id);
@@ -89,20 +91,20 @@ export default function GuardianAdminPage() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <Link href="/guardian" className="text-sm text-muted-foreground hover:text-foreground">
-        ← Guardian
+        ← {t("guardian.title")}
       </Link>
-      <h1 className="text-2xl font-semibold tracking-tight mt-3 mb-1">Manage access</h1>
+      <h1 className="text-2xl font-semibold tracking-tight mt-3 mb-1">{t("guardian.manage_access")}</h1>
       <p className="text-sm text-muted-foreground mb-6">
-        The facility grants and revokes. A guardian never self-grants. Every view is logged.
+        {t("guardian_admin.subtitle")}
       </p>
 
-      <GrantForm persons={persons} users={users} onGranted={refresh} />
+      <GrantForm persons={persons} users={users} onGranted={refresh} locale={user?.locale} />
 
       <section className="mt-8">
-        <h2 className="text-sm font-medium text-muted-foreground mb-2">Guardian links</h2>
+        <h2 className="text-sm font-medium text-muted-foreground mb-2">{t("guardian_admin.links")}</h2>
         {links.length === 0 ? (
           <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-            No guardian links yet.
+            {t("guardian_admin.no_links")}
           </div>
         ) : (
           <div className="space-y-2">
@@ -129,12 +131,15 @@ function GrantForm({
   persons,
   users,
   onGranted,
+  locale,
 }: {
   persons: Person[];
   users: AdminUser[];
   onGranted: () => void;
+  locale?: string;
 }) {
   const { authFetch } = useAuth();
+  const t = (key: string) => translate(locale, key);
   const [personId, setPersonId] = useState("");
   const [guardianId, setGuardianId] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -149,7 +154,7 @@ function GrantForm({
     setErr(null);
     setInvite(null);
     if (!personId || (!guardianId && !inviteEmail.trim())) {
-      setErr("Pick a person, then either select a guardian or invite one by email.");
+      setErr(t("guardian_admin.pick_person_guardian"));
       return;
     }
     setBusy(true);
@@ -169,7 +174,7 @@ function GrantForm({
       });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
-        setErr(typeof b.detail === "string" ? b.detail : "Could not grant access.");
+        setErr(typeof b.detail === "string" ? b.detail : t("guardian_admin.grant_failed"));
       } else {
         const b = await res.json();
         if (b.guardian_created && b.temp_password) {
@@ -205,16 +210,16 @@ function GrantForm({
 
   return (
     <div className="rounded-lg border border-border bg-card p-5">
-      <h2 className="text-sm font-medium mb-3">Grant a guardian</h2>
+      <h2 className="text-sm font-medium mb-3">{t("guardian_admin.grant_guardian")}</h2>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm">
-          <span className="text-muted-foreground text-xs">Person (from People)</span>
+          <span className="text-muted-foreground text-xs">{t("guardian_admin.person")}</span>
           <select
             value={personId}
             onChange={(e) => setPersonId(e.target.value)}
             className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
           >
-            <option value="">Select a person...</option>
+            <option value="">{t("guardian_admin.select_person")}</option>
             {persons.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nickname || p.display_name}
@@ -224,7 +229,7 @@ function GrantForm({
           {selectedPerson && (
             <div className="mt-1.5 flex items-center gap-2 text-xs">
               <span className={selectedPerson.consent_given ? "text-emerald-400" : "text-amber-400"}>
-                {selectedPerson.consent_given ? "Consent on file" : "No consent on file"}
+                {selectedPerson.consent_given ? t("guardian_admin.consent_on_file") : t("guardian_admin.no_consent")}
               </span>
               <button
                 type="button"
@@ -232,13 +237,13 @@ function GrantForm({
                 onClick={() => toggleConsent(selectedPerson)}
                 className="rounded border border-border px-2 py-0.5 hover:bg-muted disabled:opacity-50"
               >
-                {selectedPerson.consent_given ? "Withdraw" : "Mark consented"}
+                {selectedPerson.consent_given ? t("guardian_admin.withdraw") : t("guardian_admin.mark_consented")}
               </button>
             </div>
           )}
         </label>
         <label className="text-sm">
-          <span className="text-muted-foreground text-xs">Guardian account</span>
+          <span className="text-muted-foreground text-xs">{t("guardian_admin.guardian_account")}</span>
           <select
             value={guardianId}
             onChange={(e) => {
@@ -247,7 +252,7 @@ function GrantForm({
             }}
             className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
           >
-            <option value="">Select a user...</option>
+            <option value="">{t("guardian_admin.select_user")}</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.display_name || u.email}
@@ -257,7 +262,7 @@ function GrantForm({
         </label>
         <label className="text-sm sm:col-span-2">
           <span className="text-muted-foreground text-xs">
-            ...or invite a new guardian by email
+            {t("guardian_admin.invite_by_email")}
           </span>
           <input
             type="email"
@@ -271,19 +276,19 @@ function GrantForm({
           />
         </label>
         <label className="text-sm">
-          <span className="text-muted-foreground text-xs">Tier</span>
+          <span className="text-muted-foreground text-xs">{t("guardian_admin.tier")}</span>
           <select
             value={tier}
             onChange={(e) => setTier(e.target.value)}
             className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
           >
-            <option value="full">Full guardian</option>
-            <option value="summary">Summary guardian</option>
-            <option value="alerts_only">Alerts only</option>
+            <option value="full">{t("guardian_admin.tier_full")}</option>
+            <option value="summary">{t("guardian_admin.tier_summary")}</option>
+            <option value="alerts_only">{t("guardian_admin.tier_alerts")}</option>
           </select>
         </label>
         <label className="text-sm">
-          <span className="text-muted-foreground text-xs">Relationship</span>
+          <span className="text-muted-foreground text-xs">{t("guardian_admin.relationship")}</span>
           <input
             value={relationship}
             onChange={(e) => setRelationship(e.target.value)}
@@ -294,14 +299,14 @@ function GrantForm({
       </div>
       <label className="flex items-center gap-2 mt-3 text-sm">
         <input type="checkbox" checked={primary} onChange={(e) => setPrimary(e.target.checked)} />
-        <span>Primary parent (a paid primary parent unlocks free extra guardians)</span>
+        <span>{t("guardian_admin.primary_parent")}</span>
       </label>
       {err && <div className="mt-3 text-sm text-red-400">{err}</div>}
       {invite && (
         <div className="mt-3 rounded-md border border-emerald-800 bg-emerald-950/30 p-3 text-sm">
-          <div className="font-medium text-emerald-300">Guardian account created.</div>
+          <div className="font-medium text-emerald-300">{t("guardian_admin.account_created")}</div>
           <div className="mt-1 text-muted-foreground">
-            Share these once. They sign in and set their own password.
+            {t("guardian_admin.share_credentials")}
           </div>
           <div className="mt-2 font-mono text-xs">
             <div>email: {invite.email}</div>
@@ -314,7 +319,7 @@ function GrantForm({
         disabled={busy}
         className="mt-4 px-4 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition-colors disabled:opacity-50"
       >
-        {busy ? "Granting..." : "Grant access"}
+        {busy ? t("guardian_admin.granting") : t("guardian_admin.grant_access")}
       </button>
     </div>
   );
