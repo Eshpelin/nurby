@@ -2,10 +2,13 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { translate, type Locale } from "@/lib/i18n";
 
 function ClaimForm() {
   const router = useRouter();
   const params = useSearchParams();
+  const locale: Locale = typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("es") ? "es" : "en";
+  const t = (key: string) => translate(locale, key);
   const token = params.get("token") || "";
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -19,15 +22,15 @@ function ClaimForm() {
     e.preventDefault();
     setError(null);
     if (!token) {
-      setError("This link is missing its token. Ask the facility to resend the invite.");
+      setError(t("guardian_claim.missing_token"));
       return;
     }
     if (password.length < 8) {
-      setError("Use at least 8 characters.");
+      setError(t("guardian_claim.password_short"));
       return;
     }
     if (password !== confirm) {
-      setError("The two passwords do not match.");
+      setError(t("guardian_claim.password_mismatch"));
       return;
     }
     setBusy(true);
@@ -39,7 +42,7 @@ function ClaimForm() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(data?.detail || "This invite link is invalid or has expired.");
+        setError(data?.detail || t("guardian_claim.invalid_invite"));
         setBusy(false);
         return;
       }
@@ -47,7 +50,7 @@ function ClaimForm() {
       localStorage.setItem("nurby_user", JSON.stringify(data.user));
       router.replace("/guardian");
     } catch {
-      setError("Something went wrong. Try again.");
+      setError(t("guardian_claim.generic_error"));
       setBusy(false);
     }
   }
@@ -55,26 +58,26 @@ function ClaimForm() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm rounded-lg border border-[hsl(0_0%_14.9%)] bg-[hsl(0_0%_5.5%)] p-7">
-        <h1 className="text-xl font-semibold text-foreground">Set your password</h1>
+        <h1 className="text-xl font-semibold text-foreground">{t("guardian_claim.title")}</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          You were invited to follow your dependant on Nurby Guardian. Choose a password to finish.
+          {t("guardian_claim.subtitle")}
         </p>
         {!token && (
           <p className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-400">
-            This link is missing its token. Ask the facility to resend the invite.
+            {t("guardian_claim.missing_token")}
           </p>
         )}
         <form onSubmit={submit} className="mt-5 space-y-3">
           <input
             type="text"
-            placeholder="Your name (optional)"
+            placeholder={t("guardian_claim.name_placeholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full rounded-md border border-[hsl(0_0%_14.9%)] bg-[hsl(0_0%_8%)] px-3 py-2 text-sm text-foreground outline-none focus:border-emerald-500"
           />
           <input
             type="password"
-            placeholder="New password"
+            placeholder={t("guardian_claim.password_placeholder")}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
@@ -82,7 +85,7 @@ function ClaimForm() {
           />
           <input
             type="password"
-            placeholder="Confirm password"
+            placeholder={t("guardian_claim.confirm_placeholder")}
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             autoComplete="new-password"
@@ -94,7 +97,7 @@ function ClaimForm() {
             disabled={!valid || busy}
             className="w-full rounded-md bg-emerald-500 px-3 py-2 text-sm font-medium text-black transition disabled:opacity-40"
           >
-            {busy ? "Setting up..." : "Set password and continue"}
+            {busy ? t("guardian_claim.setting_up") : t("guardian_claim.submit")}
           </button>
         </form>
       </div>
