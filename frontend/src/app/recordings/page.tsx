@@ -355,7 +355,7 @@ export default function RecordingsPage() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       const preview = await previewRes.json().catch(() => ({}));
-      if (!previewRes.ok) throw new Error(preview.detail || `Preview failed (${previewRes.status})`);
+      if (!previewRes.ok) throw new Error(preview.detail || t("recordings.preview_failed", { status: previewRes.status }));
       const camerasInScope = (preview.cameras || [])
         .map((id: string) => cameraNames[id] || t("recordings.unknown_camera_short"))
         .join(", ");
@@ -425,14 +425,14 @@ export default function RecordingsPage() {
       if (res.ok) {
         setSpeechResults(await res.json());
       } else {
-        setSpeechError("Speech search failed.");
+        setSpeechError(t("recordings.speech_search_failed"));
       }
     } catch {
-      setSpeechError("Speech search failed.");
+      setSpeechError(t("recordings.speech_search_failed"));
     } finally {
       setSpeechLoading(false);
     }
-  }, [speechQuery, cameraFilter, dateFrom, dateTo, authFetch]);
+  }, [speechQuery, cameraFilter, dateFrom, dateTo, authFetch, t]);
 
   // Open the recording covering a given camera + instant, seeked to it, with a
   // ~30s clip pre-armed around the moment. A recording links to a detection or
@@ -466,7 +466,7 @@ export default function RecordingsPage() {
         rec = (nearRes.ok ? await nearRes.json() : [])[0];
       }
       if (!rec) {
-        return "No recording covers that moment (footage already rotated out).";
+        return t("recordings.moment_not_found");
       }
       if (exact) {
         const offset = Math.max(0, (ts.getTime() - new Date(rec.started_at).getTime()) / 1000);
@@ -482,9 +482,9 @@ export default function RecordingsPage() {
       setExpandedId(rec.id);
       return null;
     } catch {
-      return "Could not open that recording.";
+      return t("recordings.open_failed");
     }
-  }, [authFetch]);
+  }, [authFetch, t]);
 
   const openTranscriptHit = useCallback(async (t: Transcript) => {
     const err = await openAtMoment(t.camera_id, t.started_at);
@@ -548,17 +548,17 @@ export default function RecordingsPage() {
       const res = await authFetch(`/api/recordings/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
         const body = await res.text().catch(() => "");
-        throw new Error(body || `Delete failed (${res.status})`);
+        throw new Error(body || `${t("recordings.delete_failed")} (${res.status})`);
       }
       setRecordings((prev) => prev.filter((r) => r.id !== id));
       if (expandedId === id) setExpandedId(null);
       setConfirmDeleteId(null);
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Delete failed");
+      setDeleteError(err instanceof Error ? err.message : t("recordings.delete_failed"));
     } finally {
       setDeletingId(null);
     }
-  }, [authFetch, expandedId]);
+  }, [authFetch, expandedId, t]);
 
   const resetFiltersAndPage = () => {
     setCameraFilter("");
@@ -582,11 +582,11 @@ export default function RecordingsPage() {
   const containsChips: ContainsChip[] = [];
   if (personFilter) {
     const p = persons.find((x) => x.id === personFilter);
-    containsChips.push({ key: `p:${personFilter}`, kind: "person", id: personFilter, label: p ? (p.nickname || p.display_name) : "Person" });
+    containsChips.push({ key: `p:${personFilter}`, kind: "person", id: personFilter, label: p ? (p.nickname || p.display_name) : t("recordings.person_fallback") });
   }
   if (vehicleFilter) {
     const v = vehicles.find((x) => x.id === vehicleFilter);
-    containsChips.push({ key: `v:${vehicleFilter}`, kind: "vehicle", id: vehicleFilter, label: v ? (v.license_plate || v.display_name) : "Vehicle" });
+    containsChips.push({ key: `v:${vehicleFilter}`, kind: "vehicle", id: vehicleFilter, label: v ? (v.license_plate || v.display_name) : t("recordings.vehicle_fallback") });
   }
   for (const o of objectFilters) {
     containsChips.push({ key: `o:${o}`, kind: "object", id: o, label: o[0].toUpperCase() + o.slice(1) });
