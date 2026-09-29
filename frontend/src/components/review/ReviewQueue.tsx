@@ -117,6 +117,19 @@ const KIND_LABEL_KEY: Record<ReviewItem["kind"], string> = {
   privacy_review: "review.privacy_controls",
 };
 
+const DECISION_LABEL_KEY: Record<string, string> = {
+  insufficient: "review.band_insufficient",
+  supporting: "review.band_supporting",
+  strong_support: "review.band_strong_support",
+  conflicted: "review.band_conflicted",
+};
+
+const RECOMMENDATION_LABEL_KEY: Record<string, string> = {
+  collect_more_evidence: "review.recommend_collect_more",
+  review_before_confirming: "review.recommend_review_before_confirming",
+  review_conflict: "review.recommend_review_conflict",
+};
+
 export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
   const { authFetch, token, user } = useAuth();
   const t = useCallback(
@@ -407,10 +420,10 @@ export function ReviewQueue({ onOpenEvent, focusId }: ReviewQueueProps) {
                         )}
                         {Boolean(item.evidence.evidence_policy && typeof item.evidence.evidence_policy === "object") && (
                           <p className="text-[10px] text-muted-foreground">
-                            {t("review.decision_guidance")}: {String((item.evidence.evidence_policy as { confidence_band?: string }).confidence_band ?? "review").replaceAll("_", " ")}
-                            {String((item.evidence.evidence_policy as { decision_recommendation?: string }).decision_recommendation ?? "").replaceAll("_", " ")
-                              ? ` · ${String((item.evidence.evidence_policy as { decision_recommendation?: string }).decision_recommendation).replaceAll("_", " ")}`
-                              : ""}
+                            {t("review.decision_guidance")}: {t(DECISION_LABEL_KEY[String((item.evidence.evidence_policy as { confidence_band?: string }).confidence_band ?? "")] || "review.band_review")}
+                            {String((item.evidence.evidence_policy as { decision_recommendation?: string }).decision_recommendation ?? "") && (
+                              ` · ${t(RECOMMENDATION_LABEL_KEY[String((item.evidence.evidence_policy as { decision_recommendation?: string }).decision_recommendation)] || "review.band_review")}`
+                            )}
                           </p>
                         )}
                         {relationshipDetails[item.id].evidence.slice(0, 5).map((evidence) => (
