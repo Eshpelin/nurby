@@ -330,17 +330,15 @@ export function TriggerSection(props: TriggerSectionProps) {
 
       {formTriggerType === "vehicle_detected" && (
         <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground block">License plate</label>
+          <label className="text-xs text-muted-foreground block">{t("rules.trigger.plate.license")}</label>
           <input
             value={formTriggerLabel}
             onChange={(e) => setFormTriggerLabel(e.target.value.toUpperCase())}
-            placeholder="ABC123  (leave blank for any vehicle)"
+            placeholder={t("rules.trigger.plate.placeholder")}
             className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono"
           />
           <p className="text-[11px] text-muted-foreground">
-            Matches when a plate containing this text is read. Leave blank to fire on any
-            vehicle that has been read. Plate reading runs automatically on cars, trucks,
-            buses, and vans.
+            {t("rules.trigger.plate.help")}
           </p>
         </div>
       )}
@@ -348,7 +346,7 @@ export function TriggerSection(props: TriggerSectionProps) {
       {formTriggerType === "plate_list" && (
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-muted-foreground block mb-1.5">Mode</label>
+            <label className="text-xs text-muted-foreground block mb-1.5">{t("rules.trigger.plate.mode")}</label>
             <div className="grid grid-cols-2 gap-1.5">
               <button
                 type="button"
@@ -359,8 +357,8 @@ export function TriggerSection(props: TriggerSectionProps) {
                     : "border-border hover:bg-muted"
                 }`}
               >
-                <div className="font-medium">Block-list</div>
-                <div className="text-[10px] text-muted-foreground">Alert when a listed plate appears</div>
+                <div className="font-medium">{t("rules.trigger.plate.blocklist")}</div>
+                <div className="text-[10px] text-muted-foreground">{t("rules.trigger.plate.blocklist_help")}</div>
               </button>
               <button
                 type="button"
@@ -371,14 +369,14 @@ export function TriggerSection(props: TriggerSectionProps) {
                     : "border-border hover:bg-muted"
                 }`}
               >
-                <div className="font-medium">Allow-list</div>
-                <div className="text-[10px] text-muted-foreground">Alert on anyone NOT listed</div>
+                <div className="font-medium">{t("rules.trigger.plate.allowlist")}</div>
+                <div className="text-[10px] text-muted-foreground">{t("rules.trigger.plate.allowlist_help")}</div>
               </button>
             </div>
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">
-              {formTriggerPlateMode === "blacklist" ? "Blocked plates" : "Allowed plates"} (one per line)
+              {formTriggerPlateMode === "blacklist" ? t("rules.trigger.plate.blocked") : t("rules.trigger.plate.allowed")} {t("rules.trigger.plate.one_per_line")}
             </label>
             <textarea
               value={formTriggerPlateList}
@@ -389,8 +387,8 @@ export function TriggerSection(props: TriggerSectionProps) {
             />
             <p className="text-[11px] text-muted-foreground mt-1">
               {formTriggerPlateMode === "blacklist"
-                ? "Fires when any of these plates is read. Spacing and case are ignored."
-                : "Fires on any vehicle whose plate is NOT in this list, e.g. an unknown car entering your garage."}
+                ? t("rules.trigger.plate.blocked_help")
+                : t("rules.trigger.plate.allowed_help")}
             </p>
           </div>
           {formTriggerPlateMode === "whitelist" && (
@@ -400,7 +398,7 @@ export function TriggerSection(props: TriggerSectionProps) {
                 checked={!formTriggerRequirePlate}
                 onChange={(e) => setFormTriggerRequirePlate(!e.target.checked)}
               />
-              Also alert on vehicles whose plate cannot be read
+              {t("rules.trigger.plate.unreadable")}
             </label>
           )}
         </div>
@@ -409,30 +407,28 @@ export function TriggerSection(props: TriggerSectionProps) {
       {formTriggerType === "parking_violation" && (
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Reserved spot (zone name)</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.parking.spot")}</label>
             <input
               value={formTriggerSpotZone}
               onChange={(e) => setFormTriggerSpotZone(e.target.value)}
-              placeholder="Spot A"
+              placeholder={t("rules.trigger.parking.spot_placeholder")}
               className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
             />
             <p className="text-[11px] text-muted-foreground mt-1">
-              Draw the parking spot as a named zone in the camera&apos;s
-              <span className="font-medium"> Zones &amp; Tripwires</span> settings, then type its exact name here.
+              {t("rules.trigger.parking.spot_help")}
             </p>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Allowed plate(s) (one per line)</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.parking.allowed_plates")}</label>
             <textarea
               value={formTriggerReservedPlates}
               onChange={(e) => setFormTriggerReservedPlates(e.target.value.toUpperCase())}
               rows={3}
-              placeholder={"MYCAR1  (leave blank to alert on ANY vehicle)"}
+              placeholder={t("rules.trigger.parking.plates_placeholder")}
               className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono"
             />
             <p className="text-[11px] text-muted-foreground mt-1">
-              The rule fires when a vehicle that is not on this list parks in the spot.
-              Leave blank to alert whenever anything parks there.
+              {t("rules.trigger.parking.plates_help")}
             </p>
           </div>
           <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
@@ -441,7 +437,7 @@ export function TriggerSection(props: TriggerSectionProps) {
               checked={formTriggerRequireStationary}
               onChange={(e) => setFormTriggerRequireStationary(e.target.checked)}
             />
-            Only alert once the vehicle is actually parked (not just passing through)
+            {t("rules.trigger.parking.stationary")}
           </label>
         </div>
       )}
