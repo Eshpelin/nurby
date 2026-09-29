@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { RecordingModal } from "@/components/RecordingModal";
 import { formatWith } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 // A single moment in time. opens when a user clicks a timestamp on an
 // incident/timeline card. Shows the exact analyzed frame for that camera +
@@ -79,7 +80,8 @@ export interface MomentModalProps {
 }
 
 export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }: MomentModalProps) {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [obs, setObs] = useState<ObservationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [recording, setRecording] = useState<RecordingLike | null>(null);
@@ -150,10 +152,10 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
       <div className="w-full max-w-2xl rounded-lg border border-border bg-card shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 px-4 py-3 border-b border-border">
           <div className="min-w-0">
-            <div className="text-sm font-medium truncate">{cameraName || "Camera"}</div>
+          <div className="text-sm font-medium truncate">{cameraName || t("moment.camera")}</div>
             <div className="text-xs text-muted-foreground mt-0.5 font-mono">{when}</div>
           </div>
-          <button onClick={close} aria-label="Close" className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+          <button onClick={close} aria-label={t("common.close")} className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -165,7 +167,7 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
           <div className="relative w-full rounded-md bg-black overflow-hidden">
             <img
               src={`/api/observations/${observationId}/thumbnail${token ? `?token=${token}` : ""}`}
-              alt={`Frame at ${when}`}
+              alt={`${t("moment.frame_at")} ${when}`}
               className="w-full max-h-[55vh] object-contain"
             />
             {recording && (
@@ -174,7 +176,7 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
                 className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-black/70 text-white hover:bg-black/90 backdrop-blur transition-colors"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
-                Play recording
+                {t("moment.play_recording")}
               </button>
             )}
           </div>
@@ -183,12 +185,12 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
           <div className="flex flex-wrap gap-1.5">
             {people.map((p, i) => (
               <span key={`p${i}`} className="text-[11px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-300 border border-green-500/30">
-                {p.person_name || "Unknown person"}
+                {p.person_name || t("moment.unknown_person")}
               </span>
             ))}
             {vehicles.map((v, i) => (
               <span key={`v${i}`} className="text-[11px] px-2 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/30">
-                {v.label || "vehicle"}{v.plate_text ? ` · ${v.plate_text}` : ""}
+                {v.label || t("moment.vehicle")}{v.plate_text ? ` · ${v.plate_text}` : ""}
               </span>
             ))}
             {objects.map((o, i) => (
@@ -205,11 +207,11 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
 
           {/* Scene description. */}
           {loading ? (
-            <p className="text-xs text-muted-foreground">Loading moment.</p>
+            <p className="text-xs text-muted-foreground">{t("moment.loading")}</p>
           ) : obs?.vlm_description ? (
             <p className="text-sm leading-relaxed text-foreground/90">{obs.vlm_description}</p>
           ) : (
-            <p className="text-xs text-muted-foreground italic">No scene description for this frame.</p>
+            <p className="text-xs text-muted-foreground italic">{t("moment.no_description")}</p>
           )}
 
           {/* Versioned VLM pass history. Pass 1 is the live caption, later
@@ -220,7 +222,7 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
                 onClick={() => setShowHistory((v) => !v)}
                 className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
               >
-                <span>VLM history · {passes.length} passes</span>
+                <span>{t("moment.vlm_history")} · {passes.length} {t("moment.passes")}</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                   className={`transition-transform ${showHistory ? "rotate-180" : ""}`}>
                   <polyline points="6 9 12 15 18 9" />
@@ -271,10 +273,10 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
 
           <div className="flex items-center justify-between pt-1">
             <a href={`/cameras/${cameraId}`} className="text-[11px] text-accent hover:underline">
-              Open this camera →
+              {t("moment.open_camera")} →
             </a>
             {!recording && !loading && (
-              <span className="text-[10px] text-muted-foreground">No recording stored for this moment</span>
+              <span className="text-[10px] text-muted-foreground">{t("moment.no_recording")}</span>
             )}
           </div>
         </div>
@@ -286,7 +288,8 @@ export function MomentModal({ observationId, cameraId, cameraName, ts, onClose }
 /** Debug view (#218): the exact prompt text and version behind the caption,
  *  each enrichment pass and each action label. Loaded only when opened. */
 function PromptsUsed({ observationId }: { observationId: string }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<PromptProvenance | null>(null);
   const [failed, setFailed] = useState(false);
@@ -327,7 +330,7 @@ function PromptsUsed({ observationId }: { observationId: string }) {
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
       >
-        <span>Prompts used</span>
+        <span>{t("moment.prompts_used")}</span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
           className={`transition-transform ${open ? "rotate-180" : ""}`}>
           <polyline points="6 9 12 15 18 9" />
@@ -335,10 +338,10 @@ function PromptsUsed({ observationId }: { observationId: string }) {
       </button>
       {open && (
         <div className="px-3 pb-3 space-y-2">
-          {failed && <p className="text-xs text-muted-foreground">Could not load prompt details.</p>}
-          {!failed && !data && <p className="text-xs text-muted-foreground">Loading prompts.</p>}
+          {failed && <p className="text-xs text-muted-foreground">{t("moment.prompts_failed")}</p>}
+          {!failed && !data && <p className="text-xs text-muted-foreground">{t("moment.prompts_loading")}</p>}
           {data && rows.length === 0 && (
-            <p className="text-xs text-muted-foreground">No VLM output on this frame.</p>
+            <p className="text-xs text-muted-foreground">{t("moment.no_vlm_output")}</p>
           )}
           {rows.map(({ id, label, entry }) => (
             <details key={id} className="text-xs border-l-2 border-border pl-2.5">
@@ -354,7 +357,7 @@ function PromptsUsed({ observationId }: { observationId: string }) {
                 </pre>
               ) : (
                 <p className="mt-1 text-[10px] text-muted-foreground italic">
-                  Recorded before prompt versioning. The exact text is unknown.
+                  {t("moment.prompt_text_unknown")}
                 </p>
               )}
             </details>
