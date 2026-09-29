@@ -1009,6 +1009,7 @@ export default function CameraConfigPage() {
         >
           <PrivacyZonesSection
             cameraId={cameraId as string}
+            locale={locale}
             targets={privacyZoneTargets}
             setTargets={setPrivacyZoneTargets}
             blurStrength={privacyZoneBlurStrength}

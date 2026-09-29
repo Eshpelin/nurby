@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface Zone {
   id: string;
@@ -19,6 +20,7 @@ interface Zone {
 }
 
 interface Props {
+  locale: Locale;
   cameraId: string;
   targets: string[];
   setTargets: (v: string[]) => void;
@@ -52,6 +54,7 @@ const FALLBACK_TARGETS = [
  * automatically once a target label appears in a frame.
  */
 export function PrivacyZonesSection({
+  locale,
   cameraId,
   targets,
   setTargets,
@@ -59,6 +62,7 @@ export function PrivacyZonesSection({
   setBlurStrength,
 }: Props) {
   const { authFetch } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const [zones, setZones] = useState<Zone[]>([]);
   const [available, setAvailable] = useState<string[]>(FALLBACK_TARGETS);
   const [loading, setLoading] = useState(false);
@@ -111,7 +115,7 @@ export function PrivacyZonesSection({
     <div className="space-y-4">
       <div>
         <label className="text-xs font-medium text-muted-foreground block mb-2">
-          What should this camera blur?
+          {t("camera.privacy_zones.targets")}
         </label>
         <div className="flex flex-wrap gap-1.5">
           {available.map((t) => {
@@ -133,14 +137,13 @@ export function PrivacyZonesSection({
           })}
         </div>
         <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">
-          Pick the kinds of objects you want hidden. The detector
-          runs on every keyframe; new zones appear here automatically.
+          {t("camera.privacy_zones.targets_help")}
         </p>
       </div>
 
       <div>
         <label className="text-xs font-medium text-muted-foreground block mb-2">
-          Blur strength
+          {t("camera.privacy_zones.strength")}
         </label>
         <div className="flex items-center gap-3">
           <input
@@ -157,23 +160,22 @@ export function PrivacyZonesSection({
           </span>
         </div>
         <p className="text-[11px] text-muted-foreground mt-1">
-          Higher = heavier Gaussian. 55 obscures faces on a monitor.
+          {t("camera.privacy_zones.strength_help")}
         </p>
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs font-medium text-muted-foreground">
-            Detected zones {zones.length > 0 ? `(${zones.length})` : ""}
+            {t("camera.privacy_zones.detected", { count: zones.length })}
           </label>
           {loading && (
-            <span className="text-[10px] text-muted-foreground">loading.</span>
+            <span className="text-[10px] text-muted-foreground">{t("common.loading")}</span>
           )}
         </div>
         {zones.length === 0 ? (
           <div className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-xs text-muted-foreground text-center">
-            No zones yet. Toggle a target above; the next keyframe
-            that contains it will populate this list.
+            {t("camera.privacy_zones.empty")}
           </div>
         ) : (
           <div className="space-y-1.5">
@@ -203,9 +205,9 @@ export function PrivacyZonesSection({
                     type="button"
                     onClick={() => patch(z.id, { active: !z.active })}
                     className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-muted/50"
-                    title={z.active ? "Pause this zone" : "Resume this zone"}
+                    title={z.active ? t("camera.privacy_zones.pause") : t("camera.privacy_zones.resume")}
                   >
-                    {z.active ? "pause" : "resume"}
+                    {z.active ? t("camera.privacy_zones.pause_short") : t("camera.privacy_zones.resume_short")}
                   </button>
                   <button
                     type="button"
@@ -215,18 +217,18 @@ export function PrivacyZonesSection({
                     }`}
                     title={
                       z.locked
-                        ? "Unlock so the detector can refresh the polygon"
-                        : "Lock the polygon so the detector won't move it"
-                    }
-                  >
-                    {z.locked ? "locked" : "lock"}
+                        ? t("camera.privacy_zones.unlock")
+                        : t("camera.privacy_zones.lock")
+                  }
+                >
+                    {z.locked ? t("camera.privacy_zones.locked") : t("camera.privacy_zones.lock_short")}
                   </button>
                   <button
                     type="button"
                     onClick={() => remove(z.id)}
                     className="text-[10px] text-danger/80 hover:text-danger px-1.5 py-0.5 rounded hover:bg-danger/10"
                   >
-                    delete
+                    {t("common.delete")}
                   </button>
                 </span>
               </div>
