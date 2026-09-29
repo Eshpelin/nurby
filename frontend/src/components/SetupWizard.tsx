@@ -20,10 +20,10 @@ interface Props {
 type StepKey = "goal" | "rule" | "test" | "confirm" | "done";
 
 const DETECTION_STEPS: { key: StepKey; label: string }[] = [
-  { key: "goal", label: "Goal" },
-  { key: "rule", label: "Rule" },
-  { key: "test", label: "Test" },
-  { key: "confirm", label: "Confirm" },
+  { key: "goal", label: "wizard.goal" },
+  { key: "rule", label: "wizard.rule" },
+  { key: "test", label: "wizard.test" },
+  { key: "confirm", label: "wizard.confirm" },
 ];
 
 const btn = "rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted/50 disabled:opacity-50";
@@ -177,7 +177,7 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label="Set up Nurby"
+        aria-label={t("wizard.aria")}
         className="flex h-full w-full max-w-md flex-col border-l border-border bg-card shadow-2xl motion-safe:animate-[wizardIn_.18s_ease-out]"
       >
         <style>{`@keyframes wizardIn{from{transform:translateX(16px);opacity:.6}to{transform:none;opacity:1}}`}</style>
@@ -195,7 +195,7 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
                 ))}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                {t("wizard.step", { step: activeIndex + 1, total: DETECTION_STEPS.length })} · {DETECTION_STEPS[activeIndex]?.label}
+                {t("wizard.step", { step: activeIndex + 1, total: DETECTION_STEPS.length })} · {t(DETECTION_STEPS[activeIndex]?.label ?? "wizard.goal")}
               </p>
             </div>
           )}
@@ -297,25 +297,25 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
         <h3 className="text-lg font-semibold tracking-tight">{t("wizard.rule_title")}</h3>
         {configured ? (
           <>
-            <p className="mt-1 text-sm text-muted-foreground">Your rule is enabled and pointed at a camera. Next, prove it works with a real event.</p>
-            <p className="mt-4 flex items-center gap-2 text-sm"><span className="text-accent">✓</span> Rule configured</p>
-            <StepNav onBack={() => goto("goal")} backLabel={t("wizard.back")} primaryLabel="Next: test it" onPrimary={() => goto("test")} />
+            <p className="mt-1 text-sm text-muted-foreground">{t("wizard.rule_ready")}</p>
+            <p className="mt-4 flex items-center gap-2 text-sm"><span className="text-accent">✓</span> {t("wizard.rule_configured")}</p>
+            <StepNav onBack={() => goto("goal")} backLabel={t("wizard.back")} primaryLabel={t("wizard.next_test")} onPrimary={() => goto("test")} />
           </>
         ) : !draftId ? (
           <>
-            <p className="mt-1 text-sm text-muted-foreground">Nurby will create a starter rule for this goal, switched off. Nothing is armed until you review and enable it.</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t("wizard.rule_draft_help")}</p>
             {!camerasLoading && cameraCount === 0 && (
               <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                Connect a real camera first. <button ref={cameraBtnRef} className="font-medium text-accent hover:underline" onClick={onSetupCamera}>Set up a camera</button>
+                {t("wizard.connect_camera")} <button ref={cameraBtnRef} className="font-medium text-accent hover:underline" onClick={onSetupCamera}>{t("wizard.setup_camera")}</button>
                 {!dismissedMarks.has("camera") && (
                   <Coachmark targetRef={cameraBtnRef} onDismiss={() => dismissMark("camera")}>
-                    Start here. Connect a camera, then come back to this step to build the rule.
+                    {t("wizard.camera_hint")}
                   </Coachmark>
                 )}
               </div>
             )}
             <div className="mt-5 flex items-center gap-2">
-              <button className={primary} disabled={busy} onClick={() => call("/api/auth/me/activation/draft-rule", { goal }, "Could not create the draft rule.")}>
+              <button className={primary} disabled={busy} onClick={() => call("/api/auth/me/activation/draft-rule", { goal }, t("wizard.create_failed"))}>
                 {busy ? t("wizard.creating") : t("wizard.create")}
               </button>
               <button className={btn} disabled={busy} onClick={() => goto("goal")}>{t("wizard.back")}</button>
@@ -323,21 +323,21 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
           </>
         ) : (
           <>
-            <p className="mt-1 text-sm text-muted-foreground">Open the draft, choose the camera and how you want to be alerted, then switch it on. Come back and mark it configured.</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t("wizard.open_draft_help")}</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link ref={draftLinkRef} href={`/rules/${draftId}/edit`} className={btn}>Open the draft rule</Link>
+              <Link ref={draftLinkRef} href={`/rules/${draftId}/edit`} className={btn}>{t("wizard.open_draft")}</Link>
             </div>
             {!dismissedMarks.has("draft") && (
               <Coachmark targetRef={draftLinkRef} onDismiss={() => dismissMark("draft")}>
-                This opens the draft rule&apos;s editor. Pick the camera and how you&apos;re alerted, switch it on, then return here.
+                {t("wizard.draft_hint")}
               </Coachmark>
             )}
             <div className="mt-5 flex items-center gap-2">
               <button className={primary} disabled={busy}
-                onClick={() => call("/api/auth/me/activation/configure", { goal, rule_id: draftId }, "The rule is not enabled, has no camera, or has no way to alert you yet.")}>
-                {busy ? "Checking…" : "I've enabled it"}
+                onClick={() => call("/api/auth/me/activation/configure", { goal, rule_id: draftId }, t("wizard.configure_failed"))}>
+                {busy ? t("wizard.checking") : t("wizard.enabled")}
               </button>
-              <button className={btn} disabled={busy} onClick={() => goto("goal")}>Back</button>
+              <button className={btn} disabled={busy} onClick={() => goto("goal")}>{t("wizard.back")}</button>
             </div>
           </>
         )}
@@ -351,19 +351,19 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
     return (
       <div>
         <h3 className="text-lg font-semibold tracking-tight">{t("wizard.test_title")}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Walk in front of the camera. The alert should reach you within a few seconds. A saved rule alone doesn&apos;t prove this works.</p>
+        <p className="mt-1 text-sm text-muted-foreground">{t("wizard.test_help")}</p>
         <div className="mt-5 rounded-lg border border-border bg-muted/20 p-4 text-sm">
           {tested ? (
-            <span className="flex items-center gap-2"><span className="text-accent">✓</span> Alert received{synthetic && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-600">demo camera</span>}</span>
+            <span className="flex items-center gap-2"><span className="text-accent">✓</span> {t("wizard.alert_received")}{synthetic && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-600">{t("wizard.demo_camera")}</span>}</span>
           ) : (
             <span className="flex items-center gap-2 text-muted-foreground">
-              <span className="h-3 w-3 animate-pulse rounded-full bg-accent/60" /> Waiting for the alert…
+              <span className="h-3 w-3 animate-pulse rounded-full bg-accent/60" /> {t("wizard.waiting_alert")}
             </span>
           )}
         </div>
-        {tested && synthetic && <p className="mt-3 text-xs text-amber-600">That was the demo camera, so it counts as a practice run. Trigger a real camera to verify.</p>}
-        <StepNav onBack={() => goto("rule")} backLabel={t("wizard.back")} primaryLabel="Next: confirm the clip" onPrimary={() => goto("confirm")} primaryDisabled={!tested} extra={
-          <button className={btn} disabled={busy} onClick={() => load()}>Check again</button>
+        {tested && synthetic && <p className="mt-3 text-xs text-amber-600">{t("wizard.demo_practice")}</p>}
+        <StepNav onBack={() => goto("rule")} backLabel={t("wizard.back")} primaryLabel={t("wizard.next_confirm")} onPrimary={() => goto("confirm")} primaryDisabled={!tested} extra={
+          <button className={btn} disabled={busy} onClick={() => load()}>{t("wizard.check_again")}</button>
         } />
       </div>
     );
@@ -373,9 +373,9 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
     return (
       <div>
         <h3 className="text-lg font-semibold tracking-tight">{t("wizard.confirm_title")}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Open the alert&apos;s clip and check it shows what you needed to see. Then confirm it below.</p>
+        <p className="mt-1 text-sm text-muted-foreground">{t("wizard.confirm_help")}</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/timeline" className={btn}>Open the alert clip</Link>
+          <Link href="/timeline" className={btn}>{t("wizard.open_clip")}</Link>
         </div>
         <div className="mt-5 flex items-center gap-2">
           <button className={primary} disabled={busy || !view?.event_id}
@@ -383,12 +383,12 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
               if (!view?.event_id) return;
               // Confirm names the exact event that was tested, so a later
               // event can't silently satisfy an old confirmation.
-              const ok = await call("/api/auth/me/activation/confirm", { goal: prefs?.goal, event_id: view.event_id }, "The test event changed. Review its evidence again.");
+              const ok = await call("/api/auth/me/activation/confirm", { goal: prefs?.goal, event_id: view.event_id }, t("wizard.confirm_changed"));
               if (ok) goto("done");
             }}>
-            {busy ? "Confirming…" : "I opened the clip, it was useful"}
+            {busy ? t("wizard.confirming") : t("wizard.confirm_useful")}
           </button>
-          <button className={btn} disabled={busy} onClick={() => goto("test")}>Back</button>
+          <button className={btn} disabled={busy} onClick={() => goto("test")}>{t("wizard.back")}</button>
         </div>
       </div>
     );
@@ -401,14 +401,14 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
       <div>
         <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/15 text-accent">✓</span>
-          <h3 className="text-lg font-semibold tracking-tight">{verified ? "You're verified" : "You're all set"}</h3>
+          <h3 className="text-lg font-semibold tracking-tight">{verified ? t("wizard.verified") : t("wizard.all_set")}</h3>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
           {verified
-            ? `Nurby delivered a real alert and you confirmed the clip${mins ? ` in ${mins} min` : ""}. Monitoring is working.`
+            ? t("wizard.verified_summary", { suffix: mins ? ` in ${mins} min` : "" })
             : prefs && DETECTION_GOALS.has(prefs.goal)
-            ? "Your goal is saved. Finish the steps whenever you're ready to reach a verified alert."
-            : "Your workspace is set. Open the timeline to review activity any time."}
+            ? t("wizard.unverified_summary")
+            : t("wizard.workspace_summary")}
         </p>
 
         {prefs && (
@@ -423,8 +423,8 @@ export function SetupWizard({ cameraCount, camerasLoading, onSetupCamera, onClos
         )}
 
         <div className="mt-6 flex items-center gap-2">
-          <button className={primary} onClick={onClose}>Done</button>
-          <button className={btn} onClick={() => { setDraft(prefs ?? DEFAULT_DRAFT); goto("goal"); }}>Change goal</button>
+          <button className={primary} onClick={onClose}>{t("wizard.done")}</button>
+          <button className={btn} onClick={() => { setDraft(prefs ?? DEFAULT_DRAFT); goto("goal"); }}>{t("wizard.change_goal")}</button>
         </div>
       </div>
     );
