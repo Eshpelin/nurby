@@ -842,6 +842,7 @@ def _local_fallback_allowed(provider_kind: str, budget) -> bool:
         provider_kind != "ollama"
         and not budget.allowed
         and "cost budget" in (budget.reason or "")
+        and "token budget" not in (budget.reason or "")
     )
 
 
