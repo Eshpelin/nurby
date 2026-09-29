@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 // Settings card for registered device instances (Device table). Rules
 // fire these via the {type: "device", device_id} action; this card is
@@ -56,7 +57,8 @@ function detailToMessage(detail: unknown): string {
 }
 
 export function DevicesSection() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [show, setShow] = useState(false);
 
   const [instances, setInstances] = useState<DeviceInstance[]>([]);
@@ -92,11 +94,11 @@ export function DevicesSection() {
       setInstances(await instRes.json());
       if (presetRes.ok) setPresets(await presetRes.json());
     } catch {
-      setLoadError("Could not load devices.");
+      setLoadError(translate(user?.locale, "devices.load_failed"));
     } finally {
       setLoading(false);
     }
-  }, [authFetch]);
+  }, [authFetch, user?.locale]);
 
   useEffect(() => {
     load();
@@ -251,9 +253,9 @@ export function DevicesSection() {
         <div className="flex items-center gap-3">
           <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-muted-foreground/40" />
           <div>
-            <div className="text-sm font-medium">Devices</div>
+            <div className="text-sm font-medium">{t("devices.title")}</div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              Physical alarms, relays and speakers rules can trigger
+              {t("devices.subtitle")}
             </div>
           </div>
         </div>
@@ -269,12 +271,12 @@ export function DevicesSection() {
         <div className="px-4 pb-4 border-t border-border pt-3 space-y-3">
           {loadError && <p className="text-xs text-red-400">{loadError}</p>}
           {loading && !loadError && (
-            <p className="text-xs text-muted-foreground">Loading.</p>
+            <p className="text-xs text-muted-foreground">{t("devices.loading")}</p>
           )}
 
           {!loading && !loadError && instances.length === 0 && (
             <p className="text-xs text-muted-foreground">
-              No devices yet. Register a buzzer, relay, or speaker and rules can fire it.
+              {t("devices.empty")}
             </p>
           )}
 
@@ -294,7 +296,7 @@ export function DevicesSection() {
                     )}
                     {!d.enabled && (
                       <span className="text-[11px] px-1.5 py-0.5 rounded border border-border text-muted-foreground flex-shrink-0">
-                        disabled
+                        {t("devices.disabled")}
                       </span>
                     )}
                   </div>
@@ -304,21 +306,21 @@ export function DevicesSection() {
                       disabled={busyId === d.id}
                       className="text-xs px-2 py-1 rounded border border-border hover:bg-muted text-muted-foreground disabled:opacity-50"
                     >
-                      {d.enabled ? "Disable" : "Enable"}
+                      {d.enabled ? t("devices.disable") : t("devices.enable")}
                     </button>
                     <button
                       onClick={() => testDevice(d)}
                       disabled={testingId === d.id}
                       className="text-xs px-2 py-1 rounded border border-border hover:bg-muted text-muted-foreground disabled:opacity-50"
                     >
-                      {testingId === d.id ? "Testing." : "Test"}
+                      {testingId === d.id ? t("devices.testing") : t("devices.test")}
                     </button>
                     <button
                       onClick={() => deleteDevice(d)}
                       disabled={busyId === d.id}
                       className="text-xs px-2 py-1 rounded border border-red-800 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
                     >
-                      Delete
+                      {t("devices.delete")}
                     </button>
                   </div>
                 </div>
@@ -327,7 +329,7 @@ export function DevicesSection() {
                 </div>
                 {result && (
                   <div className={`text-[11px] mt-1.5 ${result.ok ? "text-green-400" : "text-red-400"}`}>
-                    {result.ok ? "Test passed." : "Test failed."} {result.detail}
+                    {result.ok ? t("devices.test_passed") : t("devices.test_failed")} {result.detail}
                   </div>
                 )}
               </div>
@@ -339,19 +341,19 @@ export function DevicesSection() {
               onClick={() => setShowAdd(true)}
               className="px-2 py-1 text-xs rounded border border-dashed border-border hover:bg-muted text-muted-foreground"
             >
-              + Add device
+              + {t("devices.add")}
             </button>
           ) : (
             <div className="rounded-md border border-border bg-background p-3 space-y-3">
-              <div className="text-xs font-medium">Add device</div>
+              <div className="text-xs font-medium">{t("devices.add")}</div>
               <div>
-                <label className="text-[11px] text-muted-foreground block mb-1">Device type</label>
+                <label className="text-[11px] text-muted-foreground block mb-1">{t("devices.type")}</label>
                 <select
                   value={formPresetId}
                   onChange={(e) => pickPreset(e.target.value)}
                   className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-xs"
                 >
-                  <option value={CUSTOM}>Custom endpoint</option>
+                  <option value={CUSTOM}>{t("devices.custom_endpoint")}</option>
                   {presets.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
@@ -361,19 +363,19 @@ export function DevicesSection() {
                 )}
               </div>
               <div>
-                <label className="text-[11px] text-muted-foreground block mb-1">Name</label>
+                <label className="text-[11px] text-muted-foreground block mb-1">{t("devices.name")}</label>
                 <input
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Garage buzzer"
+                  placeholder={t("devices.name_placeholder")}
                   className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-xs"
                 />
               </div>
               {selectedPreset ? (
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-2">
-                    <label className="text-[11px] text-muted-foreground block mb-1">Device IP</label>
+                    <label className="text-[11px] text-muted-foreground block mb-1">{t("devices.ip")}</label>
                     <input
                       type="text"
                       value={formIp}
@@ -383,7 +385,7 @@ export function DevicesSection() {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-muted-foreground block mb-1">Port</label>
+                    <label className="text-[11px] text-muted-foreground block mb-1">{t("devices.port")}</label>
                     <input
                       type="text"
                       value={formPort}
@@ -394,25 +396,25 @@ export function DevicesSection() {
                 </div>
               ) : (
                 <div>
-                  <label className="text-[11px] text-muted-foreground block mb-1">Endpoint URL</label>
+                  <label className="text-[11px] text-muted-foreground block mb-1">{t("devices.endpoint")}</label>
                   <input
                     type="text"
                     value={formUrl}
                     onChange={(e) => setFormUrl(e.target.value)}
-                    placeholder="http://192.168.1.50:8090/alert"
+                  placeholder={t("devices.endpoint_placeholder")}
                     className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-xs font-mono"
                   />
                 </div>
               )}
               <div>
                 <label className="text-[11px] text-muted-foreground block mb-1">
-                  Signing secret (optional)
+                  {t("devices.secret")}
                 </label>
                 <input
                   type="password"
                   value={formSecret}
                   onChange={(e) => setFormSecret(e.target.value)}
-                  placeholder="Same value configured on the device"
+                  placeholder={t("devices.secret_placeholder")}
                   className="w-full px-2 py-1.5 rounded-md bg-background border border-border text-xs font-mono"
                 />
               </div>
@@ -428,7 +430,7 @@ export function DevicesSection() {
                   disabled={saving}
                   className="px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
                 >
-                  {saving ? "Saving." : "Save device"}
+                  {saving ? t("devices.saving") : t("devices.save")}
                 </button>
                 <button
                   onClick={() => {
@@ -437,7 +439,7 @@ export function DevicesSection() {
                   }}
                   className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>
