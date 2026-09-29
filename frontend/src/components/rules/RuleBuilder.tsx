@@ -238,6 +238,10 @@ export function RuleBuilder({
     }
     if (["camera_offline", "camera_online", "camera_degraded", "camera_recovered"].includes(s.formTriggerType) || s.formTriggerType === "incident_started" || s.formTriggerType === "incident_ended" || s.formTriggerType === "recurring_unknown") {
       if (s.formTriggerGeomCamId) p.camera_id = s.formTriggerGeomCamId;
+      if (s.formTriggerType === "recurring_unknown") {
+        if (s.formTriggerClusterKind !== "any") p.cluster_kind = s.formTriggerClusterKind;
+        p.min_distinct_days = Math.min(30, Math.max(1, parseInt(s.formTriggerMinDistinctDays) || 3));
+      }
     }
     return p;
   }, [state]);
@@ -311,6 +315,10 @@ export function RuleBuilder({
     }
     if (["camera_offline", "camera_online", "camera_degraded", "camera_recovered"].includes(s.formTriggerType) || s.formTriggerType === "incident_started" || s.formTriggerType === "incident_ended" || s.formTriggerType === "recurring_unknown") {
       if (s.formTriggerGeomCamId) trigger_pattern.camera_id = s.formTriggerGeomCamId;
+      if (s.formTriggerType === "recurring_unknown") {
+        if (s.formTriggerClusterKind !== "any") trigger_pattern.cluster_kind = s.formTriggerClusterKind;
+        trigger_pattern.min_distinct_days = Math.min(30, Math.max(1, parseInt(s.formTriggerMinDistinctDays) || 3));
+      }
     }
     if (s.formTriggerType === "plate_list") {
       trigger_pattern.mode = s.formTriggerPlateMode;
@@ -681,6 +689,10 @@ export function RuleBuilder({
               setFormTriggerMinVehicles={setterFor("formTriggerMinVehicles")}
               formTriggerSustainSeconds={state.formTriggerSustainSeconds}
               setFormTriggerSustainSeconds={setterFor("formTriggerSustainSeconds")}
+              formTriggerClusterKind={state.formTriggerClusterKind}
+              setFormTriggerClusterKind={setterFor("formTriggerClusterKind")}
+              formTriggerMinDistinctDays={state.formTriggerMinDistinctDays}
+              setFormTriggerMinDistinctDays={setterFor("formTriggerMinDistinctDays")}
               formTriggerGeomCamId={state.formTriggerGeomCamId}
               setFormTriggerGeomCamId={setterFor("formTriggerGeomCamId")}
               formTriggerGeomPoints={state.formTriggerGeomPoints}

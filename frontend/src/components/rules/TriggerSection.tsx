@@ -88,6 +88,10 @@ export interface TriggerSectionProps {
   setFormTriggerMinVehicles: (v: string) => void;
   formTriggerSustainSeconds: string;
   setFormTriggerSustainSeconds: (v: string) => void;
+  formTriggerClusterKind: "any" | "face" | "body";
+  setFormTriggerClusterKind: (v: "any" | "face" | "body") => void;
+  formTriggerMinDistinctDays: string;
+  setFormTriggerMinDistinctDays: (v: string) => void;
 }
 
 export function TriggerSection(props: TriggerSectionProps) {
@@ -165,6 +169,10 @@ export function TriggerSection(props: TriggerSectionProps) {
     setFormTriggerMinVehicles,
     formTriggerSustainSeconds,
     setFormTriggerSustainSeconds,
+    formTriggerClusterKind,
+    setFormTriggerClusterKind,
+    formTriggerMinDistinctDays,
+    setFormTriggerMinDistinctDays,
   } = props;
 
   return (
@@ -686,6 +694,36 @@ export function TriggerSection(props: TriggerSectionProps) {
               ? "Fires once when an incident closes, carrying its duration, sighting count, and an AI-written recap your webhook, email, or Telegram message can include."
               : "Fires when the same unresolved person or appearance crosses the configured distinct-day threshold. The review notification remains available so you can inspect evidence before assigning an identity."}
           </p>
+          {formTriggerType === "recurring_unknown" && (
+            <div className="grid gap-2 sm:grid-cols-2 rounded-md border border-border/70 bg-muted/20 p-2">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Subject type</label>
+                <select
+                  value={formTriggerClusterKind}
+                  onChange={(event) => setFormTriggerClusterKind(event.target.value as "any" | "face" | "body")}
+                  className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
+                >
+                  <option value="any">Face or appearance</option>
+                  <option value="face">Unknown face</option>
+                  <option value="body">Unknown appearance</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Distinct days</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={formTriggerMinDistinctDays}
+                  onChange={(event) => setFormTriggerMinDistinctDays(event.target.value)}
+                  className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
+                />
+              </div>
+              <p className="sm:col-span-2 text-[11px] text-muted-foreground">
+                Choose whether the rule watches unknown faces, unknown appearances, or both, and how many distinct days must contain evidence.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

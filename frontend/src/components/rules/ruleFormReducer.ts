@@ -54,6 +54,8 @@ export interface RuleFormState {
   formTriggerLaneZone: string;
   formTriggerMinVehicles: string;
   formTriggerSustainSeconds: string;
+  formTriggerClusterKind: "any" | "face" | "body";
+  formTriggerMinDistinctDays: string;
 
   // Conditions group
   formCondCameras: string[];
@@ -122,6 +124,8 @@ export const INITIAL_RULE_FORM_STATE: RuleFormState = {
   formTriggerLaneZone: "",
   formTriggerMinVehicles: "3",
   formTriggerSustainSeconds: "0",
+  formTriggerClusterKind: "any",
+  formTriggerMinDistinctDays: "3",
 
   formCondCameras: [],
   formScheduleMode: "always",
@@ -182,6 +186,8 @@ const TRIGGER_FIELDS_TO_RESET: (keyof RuleFormState)[] = [
   "formTriggerLaneZone",
   "formTriggerMinVehicles",
   "formTriggerSustainSeconds",
+  "formTriggerClusterKind",
+  "formTriggerMinDistinctDays",
 ];
 
 export type RuleFormAction =
@@ -264,6 +270,8 @@ export function hydrateFromRule(rule: Rule): RuleFormState {
   base.formTriggerLaneZone = (tp.lane_zone as string) || "";
   base.formTriggerMinVehicles = tp.min_vehicles != null ? String(tp.min_vehicles) : "3";
   base.formTriggerSustainSeconds = tp.sustain_seconds != null ? String(tp.sustain_seconds) : "0";
+  base.formTriggerClusterKind = tp.cluster_kind === "face" || tp.cluster_kind === "body" ? tp.cluster_kind : "any";
+  base.formTriggerMinDistinctDays = tp.min_distinct_days != null ? String(tp.min_distinct_days) : "3";
   if (tp.type === "speed_over" && Array.isArray(tp.line_a)) base.formTriggerGeomPoints = tp.line_a as number[][];
   const ms = tp.min_score as number | undefined;
   if (ms != null) {
