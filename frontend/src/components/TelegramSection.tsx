@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { useToast, useConfirm } from "@/lib/feedback";
 
 import { ChannelRow } from "./telegram/ChannelRow";
@@ -25,7 +26,8 @@ import { AddOrPairModal } from "./telegram/AddOrPairModal";
 import { type TelegramChannel } from "./telegram/telegram-shared";
 
 export default function TelegramSection() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [channels, setChannels] = useState<TelegramChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -75,13 +77,13 @@ export default function TelegramSection() {
               }`}
             />
             <div>
-              <div className="text-sm font-medium">Telegram alerts</div>
+              <div className="text-sm font-medium">{t("telegram.title")}</div>
               <div className="text-xs text-muted-foreground mt-0.5">
                 {loading
-                  ? "Loading."
+                  ? t("telegram.loading")
                   : channels.length === 0
-                  ? "No channels yet. Add a Telegram bot to receive alerts."
-                  : `${enabledPairedCount} paired${pendingCount > 0 ? `, ${pendingCount} pending` : ""}.`}
+                  ? t("telegram.empty")
+                  : `${t(enabledPairedCount === 1 ? "telegram.paired_one" : "telegram.paired_other", { count: enabledPairedCount })}${pendingCount > 0 ? `, ${t(pendingCount === 1 ? "telegram.pending_one" : "telegram.pending_other", { count: pendingCount })}` : ""}.`}
               </div>
             </div>
           </div>
@@ -90,7 +92,7 @@ export default function TelegramSection() {
             onClick={openAdd}
             className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted transition-colors"
           >
-            Add Telegram channel
+            {t("telegram.add")}
           </button>
         </div>
 
