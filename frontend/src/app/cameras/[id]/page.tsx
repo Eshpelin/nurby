@@ -868,6 +868,7 @@ export default function CameraConfigPage() {
 
         {/* ── Summarization ── */}
         <SummarizationSection
+          locale={locale}
           activeProvider={activeProvider}
           detectionModels={detectionModels}
           modelClasses={modelClasses}

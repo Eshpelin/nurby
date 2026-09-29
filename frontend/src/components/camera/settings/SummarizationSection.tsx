@@ -8,8 +8,10 @@ import { Section, FieldRow, inputClass } from "./primitives";
 import { formatInterval } from "./format";
 import { LabelPicker } from "../ModelPickers";
 import type { Provider } from "./types";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface SummarizationSectionProps {
+  locale: Locale;
   activeProvider: Provider | undefined;
   detectionModels: { model: string; confidence: number; enabled: boolean; label_filter: string[] }[];
   modelClasses: string[];
@@ -34,6 +36,7 @@ interface SummarizationSectionProps {
 }
 
 export function SummarizationSection({
+  locale,
   activeProvider,
   detectionModels,
   modelClasses,
@@ -56,13 +59,14 @@ export function SummarizationSection({
   summaryProviderId,
   vlmProviderId,
 }: SummarizationSectionProps) {
+  const t = (key: string) => translate(locale, key);
   return (
         <Section
-          title="Summarization"
+          title={t("camera.summarization.title")}
           advanced
-          description="Generate periodic or event-bound narrative recaps using a VLM. Summaries fuse per-frame descriptions, transcripts, and identity facts into a single story."
+          description={t("camera.summarization.description")}
         >
-          <FieldRow label="Mode" hint="Periodic fires on a fixed timer. Event opens on detection and closes after a quiet window. Both runs them independently.">
+          <FieldRow label={t("camera.summarization.mode")} hint={t("camera.summarization.mode_hint")}>
             <div className="flex gap-1.5">
               {(["off", "periodic", "event", "both"] as const).map((m) => (
                 <button
@@ -75,7 +79,7 @@ export function SummarizationSection({
                       : "border-border hover:border-muted-foreground text-muted-foreground"
                   }`}
                 >
-                  {m === "off" ? "Off" : m === "periodic" ? "Periodic" : m === "event" ? "Event" : "Both"}
+                  {t(`camera.summarization.mode.${m}`)}
                 </button>
               ))}
             </div>
@@ -83,14 +87,14 @@ export function SummarizationSection({
 
           {summaryMode !== "off" && (
             <>
-              <FieldRow label="Summary Model" hint="Falls back to the AI Analysis provider, then the system default.">
+              <FieldRow label={t("camera.summarization.model")} hint={t("camera.summarization.model_hint")}>
                 <select
                   value={summaryProviderId || ""}
                   onChange={(e) => setSummaryProviderId(e.target.value || null)}
                   className={inputClass}
                 >
                   <option value="">
-                    Use AI Analysis Provider{vlmProviderId ? "" : activeProvider ? ` (${activeProvider.name})` : ""}
+                    {t("camera.summarization.use_ai_provider")}{vlmProviderId ? "" : activeProvider ? ` (${activeProvider.name})` : ""}
                   </option>
                   {providers.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -101,7 +105,7 @@ export function SummarizationSection({
                 </select>
               </FieldRow>
 
-              <FieldRow label="Max Output Tokens" hint="Cap on summary length. 400 fits a 2-4 sentence recap comfortably.">
+              <FieldRow label={t("camera.summarization.max_tokens")} hint={t("camera.summarization.max_tokens_hint")}>
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
@@ -113,7 +117,7 @@ export function SummarizationSection({
                     className="flex-1 accent-accent"
                   />
                   <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                    {summaryMaxTokens} tok
+                    {summaryMaxTokens} {t("camera.summarization.tokens_short")}
                   </span>
                 </div>
               </FieldRow>
@@ -121,7 +125,7 @@ export function SummarizationSection({
           )}
 
           {(summaryMode === "periodic" || summaryMode === "both") && (
-            <FieldRow label="Period" hint="How often a periodic summary fires. The first one anchors when summarization is enabled, not retroactively.">
+            <FieldRow label={t("camera.summarization.period")} hint={t("camera.summarization.period_hint")}>
               <div className="flex items-center gap-3">
                 <input
                   type="range"
@@ -141,13 +145,13 @@ export function SummarizationSection({
 
           {(summaryMode === "event" || summaryMode === "both") && (
             <>
-              <FieldRow label="Event Trigger Objects" hint="Detection labels that count as activity. Default is person. Override for pet-cams, wildlife, vehicles.">
+              <FieldRow label={t("camera.summarization.trigger_objects")} hint={t("camera.summarization.trigger_objects_hint")}>
                 <LabelPicker
                   selected={summaryEventTriggerObjects}
                   available={modelClasses}
                   loading={modelClassesLoading}
                   onChange={setSummaryEventTriggerObjects}
-                  placeholder="Search labels or press Enter for custom"
+                  placeholder={t("camera.summarization.label_placeholder")}
                   activeModels={detectionModels.map((m) => m.model)}
                   onAddModel={(model) => {
                     if (detectionModels.some((m) => m.model === model)) return;
@@ -159,12 +163,12 @@ export function SummarizationSection({
                 />
                 {summaryEventTriggerObjects.length === 0 && (
                   <p className="text-[11px] text-warning mt-1.5">
-                    No labels selected. Event mode will never fire.
+                    {t("camera.summarization.no_labels")}
                   </p>
                 )}
               </FieldRow>
 
-              <FieldRow label="Quiet Window" hint="Seconds without a matching detection before the event closes and gets summarized.">
+              <FieldRow label={t("camera.summarization.quiet_window")} hint={t("camera.summarization.quiet_window_hint")}>
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
@@ -181,7 +185,7 @@ export function SummarizationSection({
                 </div>
               </FieldRow>
 
-              <FieldRow label="Minimum Duration" hint="Drop events shorter than this. Filters out flickers like a bird flying through.">
+              <FieldRow label={t("camera.summarization.minimum_duration")} hint={t("camera.summarization.minimum_duration_hint")}>
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
