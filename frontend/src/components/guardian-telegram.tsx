@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 interface Channel {
   id: string;
@@ -20,7 +21,8 @@ interface PairInit {
 // Compact "Connect Telegram" for a guardian: add a bot, pair the chat, done.
 // Reuses the operator telegram-channel endpoints (user-scoped).
 export function GuardianTelegram() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = useCallback((key: string) => translate(user?.locale, key), [user?.locale]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [adding, setAdding] = useState(false);
   const [token, setToken] = useState("");
@@ -78,7 +80,7 @@ export function GuardianTelegram() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setErr(typeof data?.detail === "string" ? data.detail : "Could not add that bot.");
+        setErr(typeof data?.detail === "string" ? data.detail : t("guardian_telegram.add_failed"));
         return;
       }
       const initRes = await authFetch(`/api/telegram/channels/${data.id}/pair-init`, { method: "POST" });
@@ -86,11 +88,11 @@ export function GuardianTelegram() {
       setPairing({ channelId: data.id, init });
       startPairing(data.id);
     } catch {
-      setErr("Something went wrong.");
+      setErr(t("guardian_telegram.generic_error"));
     } finally {
       setBusy(false);
     }
-  }, [authFetch, token, startPairing]);
+  }, [authFetch, token, startPairing, t]);
 
   const disconnect = useCallback(
     async (id: string) => {
@@ -104,14 +106,14 @@ export function GuardianTelegram() {
     <div className="rounded-lg border border-border bg-card p-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-medium">Telegram alerts</h2>
+          <h2 className="text-sm font-medium">{t("guardian_telegram.title")}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Get arrival and pickup alerts about your dependant on Telegram.
+            {t("guardian_telegram.subtitle")}
           </p>
         </div>
         {paired && (
           <span className="flex items-center gap-1.5 text-xs text-emerald-400">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" /> Connected
+            <span className="h-2 w-2 rounded-full bg-emerald-500" /> {t("guardian_telegram.connected")}
           </span>
         )}
       </div>
@@ -119,22 +121,22 @@ export function GuardianTelegram() {
       {paired ? (
         <div className="mt-3 flex items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-sm">
           <span>
-            {paired.chat_title || "Your chat"}
+            {paired.chat_title || t("guardian_telegram.your_chat")}
             {paired.bot_username && <span className="text-muted-foreground"> · @{paired.bot_username}</span>}
           </span>
           <button onClick={() => disconnect(paired.id)} className="text-xs text-red-400 hover:text-red-300">
-            Disconnect
+            {t("guardian_telegram.disconnect")}
           </button>
         </div>
       ) : pairing ? (
         <div className="mt-3 rounded-md border border-border bg-background p-4 text-center">
-          <p className="text-sm">Open Telegram and press Start to finish.</p>
+          <p className="text-sm">{t("guardian_telegram.open_and_start")}</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
               pairing.init.qr_payload
             )}`}
-            alt="Telegram pairing QR"
+            alt={t("guardian_telegram.qr_alt")}
             className="mx-auto my-3 h-40 w-40 rounded bg-white p-1"
           />
           <a
@@ -143,14 +145,14 @@ export function GuardianTelegram() {
             rel="noreferrer"
             className="inline-block rounded-md bg-emerald-500 px-3 py-1.5 text-sm font-medium text-black"
           >
-            Open Telegram
+            {t("guardian_telegram.open_telegram")}
           </a>
-          <p className="mt-2 text-xs text-muted-foreground">Waiting for you to press Start...</p>
+          <p className="mt-2 text-xs text-muted-foreground">{t("guardian_telegram.waiting")}</p>
         </div>
       ) : adding ? (
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
-            Create a bot with @BotFather in Telegram, then paste its token here.
+            {t("guardian_telegram.bot_help")}
           </p>
           <input
             value={token}
@@ -165,10 +167,10 @@ export function GuardianTelegram() {
               disabled={busy || token.trim().length < 10}
               className="rounded-md bg-emerald-500 px-3 py-1.5 text-sm font-medium text-black disabled:opacity-40"
             >
-              {busy ? "Connecting..." : "Connect"}
+              {busy ? t("guardian_telegram.connecting") : t("guardian_telegram.connect")}
             </button>
             <button onClick={() => setAdding(false)} className="rounded-md border border-border px-3 py-1.5 text-sm">
-              Cancel
+              {t("guardian_telegram.cancel")}
             </button>
           </div>
         </div>
@@ -177,7 +179,7 @@ export function GuardianTelegram() {
           onClick={() => setAdding(true)}
           className="mt-3 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
         >
-          Connect Telegram
+          {t("guardian_telegram.connect_telegram")}
         </button>
       )}
     </div>
