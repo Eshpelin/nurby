@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { Locale, translate } from "@/lib/i18n";
 import { formatWith } from "@/lib/time";
+import { getDisplayLocale } from "@/lib/time";
 
 interface Segment {
   id: string;
@@ -41,6 +43,8 @@ function fmt(ts?: string | null): string {
  */
 export function ActivityTimeline({ cameraId }: { cameraId: string }) {
   const { authFetch } = useAuth();
+  const locale = (getDisplayLocale() as Locale) || "en";
+  const t = (key: string) => translate(locale, key);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -68,15 +72,14 @@ export function ActivityTimeline({ cameraId }: { cameraId: string }) {
   return (
     <section className="rounded-lg border border-[hsl(0_0%_14.9%)] bg-[hsl(0_0%_5.5%)] p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-foreground">Activity timeline</h3>
+        <h3 className="text-sm font-semibold text-foreground">{t("activity_timeline.title")}</h3>
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          last 24h
+          {t("activity_timeline.last_24h")}
         </span>
       </div>
       {segments.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No actions recorded. Human action recognition is off or has not produced segments
-          for this camera yet.
+          {t("activity_timeline.empty")}
         </p>
       ) : (
         <ul className="flex flex-col gap-1.5">
@@ -90,10 +93,10 @@ export function ActivityTimeline({ cameraId }: { cameraId: string }) {
                   ACTION_COLOR[s.action] || "bg-white/5 text-white/80 border-white/10"
                 }`}
               >
-                {s.action}
+                {t(`activity_timeline.action_${s.action}`)}
               </span>
               <span className="truncate text-muted-foreground">
-                {s.person_name || (s.person_id ? "Known person" : "Unidentified")}
+                {s.person_name || (s.person_id ? t("activity_timeline.known_person") : t("activity_timeline.unidentified"))}
               </span>
             </li>
           ))}
