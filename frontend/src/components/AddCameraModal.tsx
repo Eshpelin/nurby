@@ -164,7 +164,7 @@ function NetworkScanPanel({ onSelectDevice }: { onSelectDevice: (dev: Discovered
 export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded = false }: { onClose: () => void; onSuccess: () => void; initialStreamType?: StreamType; embedded?: boolean }) {
   const { authFetch, user } = useAuth();
   const locale = (user?.locale as Locale) || "en";
-  const t = (key: string) => translate(locale, key);
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const { startPublish, stopPublish } = useWebcamPublisher();
   useEscapeKey(onClose, !embedded);
   const [activeTab, setActiveTab] = useState<ModalTab>("manual");
@@ -540,7 +540,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
           <form onSubmit={handleManualSubmit} className="space-y-4">
             <div>
               <label className="block text-sm text-muted-foreground mb-1.5">{t("camera_add.name")}</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Front Door" required className={inputClass} />
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("camera_add.name_placeholder")} required className={inputClass} />
             </div>
 
             <div>
@@ -594,7 +594,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
             ) : (
             <div>
               <label className="block text-sm text-muted-foreground mb-1.5">
-                {streamType === "usb" ? "Device Index or Path" : streamType === "file" ? "File Path" : streamType === "audio_rtsp" ? "Audio Stream URL" : "Stream URL"}
+                {streamType === "usb" ? t("camera_add.device_index_or_path") : streamType === "file" ? t("camera_add.file_path") : streamType === "audio_rtsp" ? t("camera_add.audio_stream_url") : t("camera_add.stream_url")}
               </label>
               {["rtsp", "http_mjpeg", "http_snapshot", "hls"].includes(streamType) && (
                 <div className="mb-2 min-h-8">
@@ -613,9 +613,9 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
                   <button type="button" onClick={handleDetectDevices} disabled={scanningDevices}
                     className="w-full px-3 py-2.5 text-sm rounded-md border border-dashed border-border hover:border-accent bg-muted/30 hover:bg-accent/5 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
                     {scanningDevices ? (
-                      <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg><span className="text-muted-foreground">Scanning...</span></>
+                      <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg><span className="text-muted-foreground">{t("camera_add.scanning_devices")}</span></>
                     ) : (
-                      <span>{devices.length > 0 ? "Rescan devices" : "Detect devices"}</span>
+                      <span>{devices.length > 0 ? t("camera_add.rescan_devices") : t("camera_add.detect_devices")}</span>
                     )}
                   </button>
                   {scanError && <p className="text-[11px] text-danger">{scanError}</p>}
@@ -628,7 +628,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
                       </div>
                     </button>
                   ))}
-                  <button type="button" onClick={() => setManualInput(true)} className="text-[11px] text-muted-foreground hover:text-foreground">Manual input instead</button>
+                  <button type="button" onClick={() => setManualInput(true)} className="text-[11px] text-muted-foreground hover:text-foreground">{t("camera_add.manual_input")}</button>
                   <input type="hidden" value={streamUrl} required />
                 </div>
               ) : (
@@ -636,8 +636,8 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
                   <input type="text" value={streamUrl} onChange={(e) => setStreamUrl(e.target.value)} placeholder={selectedType.placeholder} required className={`${inputClass} font-mono text-xs`} />
                   {streamType === "usb" && (
                     <div className="flex items-center justify-between mt-1">
-                      <p className="text-[11px] text-muted-foreground">Use 0 for first USB camera, 1 for second</p>
-                      <button type="button" onClick={() => setManualInput(false)} className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 ml-2">Detect devices</button>
+                      <p className="text-[11px] text-muted-foreground">{t("camera_add.usb_index_hint")}</p>
+                      <button type="button" onClick={() => setManualInput(false)} className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 ml-2">{t("camera_add.detect_devices")}</button>
                     </div>
                   )}
                 </div>
@@ -647,7 +647,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
 
             {supportsSnapshotInterval && (
               <div>
-                <label className="block text-sm text-muted-foreground mb-1.5">Poll Interval</label>
+                <label className="block text-sm text-muted-foreground mb-1.5">{t("camera_add.poll_interval")}</label>
                 <div className="flex items-center gap-3">
                   <input type="range" min={0.5} max={30} step={0.5} value={snapshotInterval} onChange={(e) => setSnapshotInterval(Number(e.target.value))} className="flex-1 accent-accent" />
                   <span className="font-mono text-xs text-muted-foreground w-12 text-right">{snapshotInterval}s</span>
@@ -657,20 +657,20 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
 
             <div>
               <label className="block text-sm text-muted-foreground mb-1.5">{t("camera_add.location")}</label>
-              <p className="text-[11px] text-muted-foreground mb-1">Used in alerts, for example “Person at Front door (Porch)”.</p>
+              <p className="text-[11px] text-muted-foreground mb-1">{t("camera_add.location_hint")}</p>
               <input type="text" value={locationLabel} onChange={(e) => setLocationLabel(e.target.value)} placeholder={t("camera_add.optional")} className={inputClass} />
             </div>
 
             <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
               <div>
                 <label className="block text-sm text-foreground">{t("camera_add.retention")}</label>
-                <p className="text-[11px] text-muted-foreground">New cameras keep the last 30 days by default. Change this if you need a different local history.</p>
+                <p className="text-[11px] text-muted-foreground">{t("camera_add.retention_hint")}</p>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {([
                   ["time", "30 days"],
-                  ["size", "By size"],
-                  ["none", "Keep forever"],
+                  ["size", t("camera_add.by_size")],
+                  ["none", t("camera_add.keep_forever")],
                 ] as const).map(([value, label]) => (
                   <button key={value} type="button" onClick={() => setRetentionMode(value)} className={`px-2.5 py-1.5 text-xs rounded-md border transition-colors ${retentionMode === value ? "border-accent bg-accent/10 text-accent-foreground" : "border-border text-muted-foreground hover:border-muted-foreground"}`}>
                     {label}
@@ -679,7 +679,7 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
               </div>
               {retentionMode === "time" && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <label htmlFor="new-camera-retention-days">Keep for</label>
+                  <label htmlFor="new-camera-retention-days">{t("camera_add.keep_for")}</label>
                   <select id="new-camera-retention-days" value={retentionDays} onChange={(e) => setRetentionDays(Number(e.target.value))} className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground">
                     {[7, 14, 30, 90, 180, 365].map((days) => <option key={days} value={days}>{days} days</option>)}
                   </select>
@@ -691,16 +691,16 @@ export function AddCameraModal({ onClose, onSuccess, initialStreamType, embedded
               <div>
                 <button type="button" onClick={() => setShowAuth(!showAuth)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
                   <span className={`text-xs transition-transform ${showAuth ? "rotate-90" : ""}`}>▶</span>
-                  Authentication <span className="text-[11px]">(optional)</span>
+                  {t("camera_add.authentication")} <span className="text-[11px]">({t("camera_add.optional_lower")})</span>
                 </button>
                 {showAuth && (
                   <div className="mt-3 space-y-3 pl-4 border-l border-border-subtle">
                     <div className="grid grid-cols-2 gap-3">
-                      <div><label className="block text-[11px] text-muted-foreground mb-1">Username</label><input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="admin" className={`${inputClass} text-xs`} /></div>
-                      <div><label className="block text-[11px] text-muted-foreground mb-1">Password</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className={`${inputClass} text-xs`} /></div>
+                      <div><label className="block text-[11px] text-muted-foreground mb-1">{t("camera_add.username")}</label><input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t("camera_add.admin_placeholder")} className={`${inputClass} text-xs`} /></div>
+                      <div><label className="block text-[11px] text-muted-foreground mb-1">{t("camera_add.password")}</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className={`${inputClass} text-xs`} /></div>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className="flex-1 h-px bg-border" />or<span className="flex-1 h-px bg-border" /></div>
-                    <div><label className="block text-[11px] text-muted-foreground mb-1">Bearer Token / API Key</label><input type="password" value={authToken} onChange={(e) => setAuthToken(e.target.value)} placeholder="Token for API-based cameras" className={`${inputClass} text-xs font-mono`} /></div>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className="flex-1 h-px bg-border" />{t("camera_add.or")}<span className="flex-1 h-px bg-border" /></div>
+                    <div><label className="block text-[11px] text-muted-foreground mb-1">{t("camera_add.bearer_token")}</label><input type="password" value={authToken} onChange={(e) => setAuthToken(e.target.value)} placeholder={t("camera_add.api_token_placeholder")} className={`${inputClass} text-xs font-mono`} /></div>
                   </div>
                 )}
               </div>
