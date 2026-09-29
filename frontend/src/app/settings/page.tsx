@@ -21,6 +21,7 @@ import { ProviderFields } from "@/components/ProviderFields";
 import { timezoneOptions } from "@/lib/timezones";
 import { rememberPreferredAgentModel } from "@/lib/agent-model-preference";
 import { CostUsageCard } from "@/components/CostUsageCard";
+import { AlertQualityCard } from "@/components/AlertQualityCard";
 import { ExpectedActivityCard } from "@/components/ExpectedActivityCard";
 import { LocaleSelector } from "@/components/settings/LocaleSelector";
 
@@ -718,6 +719,9 @@ export default function SettingsPage() {
 
         {/* AI Providers card */}
         <CostUsageCard />
+
+        {/* Alert quality card */}
+        {user?.role === "admin" && <AlertQualityCard />}
         <div id="providers" className="rounded-lg border border-border bg-card scroll-mt-20">
           <button
             onClick={() => setShowProviders(!showProviders)}
