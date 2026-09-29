@@ -28,9 +28,10 @@ UI copy.
 These contain inline labels, loading states, empty states, or actions that
 should move to the shared English/Spanish catalog in follow-up slices:
 
-- `frontend/src/app/page.tsx`: live/search-result labels and a few event-card
-  labels remain; dashboard filters, recap/AI states, and first-camera/no-
-  results guidance are now catalog-driven.
+- `frontend/src/app/page.tsx`: dashboard filters, recap/AI states,
+  live/search-result labels, event-card labels, and first-camera/no-results
+  guidance are catalog-driven for the audited surface. Re-open only when a
+  new dashboard surface is added.
 - `frontend/src/app/people/page.tsx`: people, unknown-cluster, merge, and
   deletion dialogs.
 - `frontend/src/app/cameras/[id]/page.tsx` and its camera settings panels are
