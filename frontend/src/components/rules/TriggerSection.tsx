@@ -643,7 +643,7 @@ export function TriggerSection(props: TriggerSectionProps) {
                   : "border-border bg-background hover:bg-muted/60"
               }`}
             >
-              <span className="text-sm font-medium">Any camera</span>
+              <span className="text-sm font-medium">{t("rules.trigger.geometry.any_camera")}</span>
             </button>
             {cameras.map((cam) => {
               const selected = formTriggerGeomCamId === cam.id;
@@ -669,36 +669,24 @@ export function TriggerSection(props: TriggerSectionProps) {
             })}
           </div>
           <p className="text-[11px] text-muted-foreground">
-            {formTriggerType === "camera_offline"
-              ? "Fires when the camera stops responding: power cut, network drop, or tampering. Pair with a cooldown so a flaky camera does not spam you."
-              : formTriggerType === "camera_online"
-              ? "Fires when a camera recovers after being offline. Useful to close the loop on an outage alert."
-              : formTriggerType === "camera_degraded"
-              ? "Fires when a connected camera is frozen, obscured, or persistently pointed at an unexpected scene."
-              : formTriggerType === "camera_recovered"
-              ? "Fires when a previously degraded camera view returns to a healthy scene."
-              : formTriggerType === "incident_started"
-              ? "Fires the moment repeat sightings of the same person or vehicle cluster into a new incident."
-              : formTriggerType === "incident_ended"
-              ? "Fires once when an incident closes, carrying its duration, sighting count, and an AI-written recap your webhook, email, or Telegram message can include."
-              : "Fires when the same unresolved person or appearance crosses the configured distinct-day threshold. The review notification remains available so you can inspect evidence before assigning an identity."}
+            {t(`rules.trigger.geometry.help.${formTriggerType}`)}
           </p>
           {formTriggerType === "recurring_unknown" && (
             <div className="grid gap-2 sm:grid-cols-2 rounded-md border border-border/70 bg-muted/20 p-2">
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Subject type</label>
+                <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.subject_type")}</label>
                 <select
                   value={formTriggerClusterKind}
                   onChange={(event) => setFormTriggerClusterKind(event.target.value as "any" | "face" | "body")}
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
                 >
-                  <option value="any">Face or appearance</option>
-                  <option value="face">Unknown face</option>
-                  <option value="body">Unknown appearance</option>
+                  <option value="any">{t("rules.trigger.geometry.subject.any")}</option>
+                  <option value="face">{t("rules.trigger.geometry.subject.face")}</option>
+                  <option value="body">{t("rules.trigger.geometry.subject.body")}</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Distinct days</label>
+                <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.distinct_days")}</label>
                 <input
                   type="number"
                   min={1}
@@ -709,7 +697,7 @@ export function TriggerSection(props: TriggerSectionProps) {
                 />
               </div>
               <p className="sm:col-span-2 text-[11px] text-muted-foreground">
-                Choose whether the rule watches unknown faces, unknown appearances, or both, and how many distinct days must contain evidence.
+                {t("rules.trigger.geometry.distinct_help")}
               </p>
             </div>
           )}
@@ -719,10 +707,10 @@ export function TriggerSection(props: TriggerSectionProps) {
       {(formTriggerType === "loitering" || formTriggerType === "line_cross" || formTriggerType === "wrong_way" || formTriggerType === "red_light_cross") && (
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-muted-foreground block mb-1.5">Pick a camera</label>
+            <label className="text-xs text-muted-foreground block mb-1.5">{t("rules.trigger.geometry.pick_camera")}</label>
             {cameras.length === 0 ? (
               <p className="text-xs text-muted-foreground px-2 py-3 rounded-md border border-dashed border-border">
-                No cameras yet. Add one on the Cameras page first.
+                {t("rules.trigger.geometry.no_cameras")}
               </p>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -761,13 +749,13 @@ export function TriggerSection(props: TriggerSectionProps) {
             return (
               <div>
                 <label className="text-xs text-muted-foreground block mb-1.5">
-                  {formTriggerType === "line_cross"
-                    ? "Draw tripwire. Click two points on the feed."
+                    {formTriggerType === "line_cross"
+                    ? t("rules.trigger.geometry.draw_tripwire")
                     : formTriggerType === "wrong_way"
-                    ? "Draw the lane line. Click two points across the lane."
+                    ? t("rules.trigger.geometry.draw_lane")
                     : formTriggerType === "red_light_cross"
-                    ? "Draw the stop line. Click two points across the lane."
-                    : "Draw loiter zone. Click at least three points."}
+                    ? t("rules.trigger.geometry.draw_stop")
+                    : t("rules.trigger.geometry.draw_loiter")}
                 </label>
                 <GeometryEditor
                   camera={cam}
@@ -787,14 +775,14 @@ export function TriggerSection(props: TriggerSectionProps) {
               activeModels={activeModels}
               classes={modelClasses}
               loading={modelClassesLoading}
-              anyLabel="Any tracked object"
+              anyLabel={t("rules.trigger.geometry.any_tracked")}
             />
           </div>
 
           {formTriggerType === "loitering" && (
             <div>
               <label className="text-xs text-muted-foreground block mb-1">
-                Loiter threshold (seconds inside the zone)
+                {t("rules.trigger.geometry.loiter_threshold")}
               </label>
               <div className="flex gap-1 flex-wrap">
                 {["10", "30", "60", "120", "300"].map((s) => (
@@ -807,7 +795,7 @@ export function TriggerSection(props: TriggerSectionProps) {
                         ? "border-accent bg-accent/10 text-accent"
                         : "border-border hover:bg-muted"
                     }`}
-                  >{parseInt(s) >= 60 ? `${Math.round(parseInt(s) / 60)} min` : `${s}s`}</button>
+                  >{parseInt(s) >= 60 ? t("rules.trigger.geometry.minutes", { count: Math.round(parseInt(s) / 60) }) : t("rules.trigger.geometry.seconds", { count: s })}</button>
                 ))}
                 <input
                   type="number"
@@ -822,12 +810,12 @@ export function TriggerSection(props: TriggerSectionProps) {
 
           {formTriggerType === "line_cross" && (
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Direction</label>
+              <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.direction")}</label>
               <div className="grid grid-cols-3 gap-1">
                 {[
-                  { v: "any", l: "Either way" },
-                  { v: "in", l: "Inbound" },
-                  { v: "out", l: "Outbound" },
+                  { v: "any", key: "either" },
+                  { v: "in", key: "inbound" },
+                  { v: "out", key: "outbound" },
                 ].map((d) => (
                   <button
                     key={d.v}
@@ -838,18 +826,18 @@ export function TriggerSection(props: TriggerSectionProps) {
                         ? "border-accent bg-accent/10 text-accent"
                         : "border-border hover:bg-muted"
                     }`}
-                  >{d.l}</button>
+                  >{t(`rules.trigger.geometry.direction.${d.key}`)}</button>
                 ))}
               </div>
             </div>
           )}
           {formTriggerType === "wrong_way" && (
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Allowed direction of travel</label>
+              <label className="text-xs text-muted-foreground block mb-1">{t("rules.trigger.geometry.allowed_direction")}</label>
               <div className="grid grid-cols-2 gap-1">
                 {[
-                  { v: "in", l: "This way is OK" },
-                  { v: "out", l: "That way is OK" },
+                  { v: "in", key: "this_way" },
+                  { v: "out", key: "that_way" },
                 ].map((d) => (
                   <button
                     key={d.v}
@@ -860,13 +848,11 @@ export function TriggerSection(props: TriggerSectionProps) {
                         ? "border-accent bg-accent/10 text-accent"
                         : "border-border hover:bg-muted"
                     }`}
-                  >{d.l}</button>
+                  >{t(`rules.trigger.geometry.allowed.${d.key}`)}</button>
                 ))}
               </div>
               <p className="text-[11px] text-muted-foreground mt-1.5">
-                Pick the legal direction across the line. The rule fires on a
-                vehicle crossing the OTHER way. Use &quot;Run test&quot; below to
-                confirm the side after drawing.
+                {t("rules.trigger.geometry.wrong_way_help")}
               </p>
             </div>
           )}

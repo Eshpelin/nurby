@@ -19,7 +19,9 @@ UI copy.
   VLM Refiner, Summarization, package tracking, ONVIF/PTZ detection, PTZ
   controls, privacy zones, and the ZoneEditorCanvas controls.
 - rule trigger chooser: trigger-card labels/descriptions, object confirmation
-  and movement controls, and named-area scoping guidance.
+  and movement controls, named-area scoping guidance, audio and speech
+  controls, plate-list and parking controls, and geometry-trigger camera,
+  drawing, subject, threshold, direction, and wrong-way guidance.
 
 ## Remaining user-facing surfaces
 
@@ -34,9 +36,8 @@ should move to the shared English/Spanish catalog in follow-up slices:
   catalog-driven for the audited product copy. Re-open this entry only when a
   new camera-facing surface is added.
 - `frontend/src/components/rules/TriggerSection.tsx` and related editors:
-  trigger-specific editors beyond the chooser/object-trigger slice already
-  catalog-driven above, including audio, plate, geometry, and association
-  controls.
+  association controls remain to be audited; the trigger-specific audio,
+  speech, plate, parking, and geometry slices are catalog-driven above.
 - `frontend/src/app/recordings/page.tsx` and `frontend/src/app/events/page.tsx`:
   bulk actions, trim/reset controls, pagination, and result states.
 - `frontend/src/app/pipeline/page.tsx`, Ask/admin, and run detail pages:
