@@ -7,8 +7,10 @@ import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, KeywordChipInput, inputClass } from "./primitives";
 import { LabelPicker } from "../ModelPickers";
 import type { Provider } from "./types";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface RefinerSectionProps {
+  locale: Locale;
   detectionModels: { model: string; confidence: number; enabled: boolean; label_filter: string[] }[];
   modelClasses: string[];
   modelClassesLoading: boolean;
@@ -28,6 +30,7 @@ interface RefinerSectionProps {
 }
 
 export function RefinerSection({
+  locale,
   detectionModels,
   modelClasses,
   modelClassesLoading,
@@ -45,52 +48,49 @@ export function RefinerSection({
   vlmRefinerProviderId,
   vlmRefinerTriggerObjects,
 }: RefinerSectionProps) {
+  const t = (key: string) => translate(locale, key);
   return (
         <Section
-          title="Refiner (cascade)"
+          title={t("camera.refiner.title")}
           advanced
-          description="Re-describes individual frames with a stronger second model the moment a trigger matches (a person appears, a keyword lands). Different from the AI Summarizer below, which periodically condenses many observations into a recap. The refiner upgrades single moments; the summarizer narrates stretches of time."
+          description={t("camera.refiner.description")}
         >
-          <FieldRow label="Refiner Model" hint="Off when blank. Needs a second provider entry, different from AI Analysis.">
+          <FieldRow label={t("camera.refiner.model")} hint={t("camera.refiner.model_hint")}>
             <select
               value={vlmRefinerProviderId || ""}
               onChange={(e) => setVlmRefinerProviderId(e.target.value || null)}
               className={inputClass}
             >
-              <option value="">Off</option>
+              <option value="">{t("camera.refiner.off")}</option>
               {providers.map((p) => (
                 <option key={p.id} value={p.id} disabled={p.id === vlmProviderId}>
                   {p.name}
                   {p.default_model ? ` · ${p.default_model}` : ""}
-                  {p.id === vlmProviderId ? " (primary — pick a different one)" : ""}
+                  {p.id === vlmProviderId ? ` (${t("camera.refiner.primary_note")})` : ""}
                 </option>
               ))}
             </select>
             {providers.filter((p) => p.id !== vlmProviderId).length === 0 && (
               <p className="text-[11px] text-muted-foreground mt-1.5">
-                Only one AI provider is configured, so there is nothing to
-                cascade to. Add a second provider under Settings → AI
-                Providers — for example another Ollama entry pointing at a
-                larger model (gemma3:27b) — and it will appear here.
+                {t("camera.refiner.no_second_provider")}
               </p>
             )}
             {vlmRefinerProviderId && vlmRefinerProviderId === vlmProviderId && (
               <p className="text-[11px] text-warning mt-1">
-                Refiner must differ from the primary provider. Cascade
-                disabled until you pick another model.
+                {t("camera.refiner.same_provider_warning")}
               </p>
             )}
           </FieldRow>
 
           {vlmRefinerProviderId && (
             <>
-              <FieldRow label="Escalate when YOLO sees" hint="Detection labels that fire the refiner. Pet-cams, wildlife, vehicles all welcome.">
+              <FieldRow label={t("camera.refiner.trigger_objects")} hint={t("camera.refiner.trigger_objects_hint")}>
                 <LabelPicker
                   selected={vlmRefinerTriggerObjects}
                   available={modelClasses}
                   loading={modelClassesLoading}
                   onChange={setVlmRefinerTriggerObjects}
-                  placeholder="Search labels or press Enter for custom"
+                  placeholder={t("camera.refiner.label_placeholder")}
                   activeModels={detectionModels.map((m) => m.model)}
                   onAddModel={(model) => {
                     if (detectionModels.some((m) => m.model === model)) return;
@@ -102,39 +102,38 @@ export function RefinerSection({
                 />
                 {vlmRefinerTriggerObjects.length === 0 && vlmRefinerKeywords.length === 0 && (
                   <p className="text-[11px] text-warning mt-1.5">
-                    No triggers set. Refiner will fire on every frame.
-                    Add labels or keywords to gate it.
+                    {t("camera.refiner.no_triggers")}
                   </p>
                 )}
               </FieldRow>
 
-              <FieldRow label="Escalate when primary mentions" hint="Comma or Enter to add. Case-insensitive substring match against the cheap model's text output.">
+              <FieldRow label={t("camera.refiner.trigger_keywords")} hint={t("camera.refiner.trigger_keywords_hint")}>
                 <KeywordChipInput
                   values={vlmRefinerKeywords}
                   onChange={setVlmRefinerKeywords}
-                  placeholder="package, delivery, stranger..."
+                  placeholder={t("camera.refiner.keywords_placeholder")}
                 />
               </FieldRow>
 
-              <FieldRow label="Refiner Max Output" hint="Per-camera output cap for the refiner. Empty defers to its provider cap.">
+              <FieldRow label={t("camera.refiner.max_output")} hint={t("camera.refiner.max_output_hint")}>
                 <input
                   type="number"
                   min={50}
                   value={vlmRefinerMaxTokens}
                   onChange={(e) => setVlmRefinerMaxTokens(e.target.value)}
                   className={inputClass}
-                  placeholder="defer to provider"
+                  placeholder={t("camera.refiner.defer_to_provider")}
                 />
               </FieldRow>
 
-              <FieldRow label="Refiner Max Input" hint="Per-camera prompt size cap for the refiner. Empty defers to its provider cap.">
+              <FieldRow label={t("camera.refiner.max_input")} hint={t("camera.refiner.max_input_hint")}>
                 <input
                   type="number"
                   min={64}
                   value={vlmRefinerMaxInputTokens}
                   onChange={(e) => setVlmRefinerMaxInputTokens(e.target.value)}
                   className={inputClass}
-                  placeholder="defer to provider"
+                  placeholder={t("camera.refiner.defer_to_provider")}
                 />
               </FieldRow>
             </>

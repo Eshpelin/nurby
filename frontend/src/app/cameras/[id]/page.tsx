@@ -805,6 +805,7 @@ export default function CameraConfigPage() {
 
         {/* Cascade refiner */}
         <RefinerSection
+          locale={locale}
           detectionModels={detectionModels}
           modelClasses={modelClasses}
           modelClassesLoading={modelClassesLoading}
