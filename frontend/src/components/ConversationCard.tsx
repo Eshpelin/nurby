@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
 import { ReinterpretButton } from "@/components/ReinterpretButton";
 import { formatWith } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 interface ConversationTranscript {
   id: string;
@@ -83,7 +84,8 @@ export function ConversationCard(props: ConversationCardProps) {
     transcripts: transcriptsProp,
   } = props;
 
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [expanded, setExpanded] = useState(false);
   const [transcripts, setTranscripts] = useState<ConversationTranscript[]>(
     transcriptsProp || []
@@ -199,7 +201,7 @@ export function ConversationCard(props: ConversationCardProps) {
       ? livePulse
       : transcripts.length > 0
         ? transcripts[transcripts.length - 1].text
-        : `${liveTranscriptCount} message${liveTranscriptCount === 1 ? "" : "s"}`;
+        : t(liveTranscriptCount === 1 ? "conversation.one_message" : "conversation.messages", { count: liveTranscriptCount });
 
   return (
     <div
@@ -235,7 +237,7 @@ export function ConversationCard(props: ConversationCardProps) {
               finalized ? "text-emerald-300" : "text-amber-300"
             }`}
           >
-            {finalized ? (summaryText ? "Conversation recap" : "Conversation") : "Conversation · live"}
+            {finalized ? (summaryText ? t("conversation.recap") : t("conversation.title")) : t("conversation.live")}
           </span>
           {!finalized && (
             <span className="relative flex h-1.5 w-1.5">
@@ -244,7 +246,7 @@ export function ConversationCard(props: ConversationCardProps) {
             </span>
           )}
           <span className="text-muted-foreground">·</span>
-          <span className="text-muted-foreground">{cameraName || "Camera"}</span>
+          <span className="text-muted-foreground">{cameraName || t("conversation.camera")}</span>
           <span className="text-muted-foreground">·</span>
           <span className="text-muted-foreground font-mono">
             {formatWith(start, { hour: "2-digit", minute: "2-digit" })}
@@ -253,7 +255,7 @@ export function ConversationCard(props: ConversationCardProps) {
           </span>
           <span className="text-muted-foreground">·</span>
           <span className="text-muted-foreground">
-            {liveTranscriptCount} msg
+            {t("conversation.messages_short", { count: liveTranscriptCount })}
           </span>
           <ChevronDown
             className={`ml-auto w-3.5 h-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
@@ -268,7 +270,7 @@ export function ConversationCard(props: ConversationCardProps) {
         </p>
         {summaryProviderName && finalized && summaryText && (
           <p className="mt-1 text-[10px] text-muted-foreground/70">
-            recap by {summaryProviderName}
+            {t("conversation.recap_by")} {summaryProviderName}
           </p>
         )}
       </div>
@@ -290,7 +292,7 @@ export function ConversationCard(props: ConversationCardProps) {
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  Cleaned
+                  {t("conversation.cleaned")}
                 </button>
                 <button
                   type="button"
@@ -304,7 +306,7 @@ export function ConversationCard(props: ConversationCardProps) {
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  Raw transcript
+                  {t("conversation.raw")}
                 </button>
               </>
             )}
@@ -312,7 +314,7 @@ export function ConversationCard(props: ConversationCardProps) {
               <div className="ml-auto">
                 <ReinterpretButton
                   endpoint={`/api/conversations/${id}/reinterpret`}
-                  label="Reinterpret"
+                  label={t("conversation.reinterpret")}
                   variant="compact"
                 />
               </div>
@@ -332,9 +334,9 @@ export function ConversationCard(props: ConversationCardProps) {
                 {cleanedText}
               </p>
             ) : loadingTx && transcripts.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Loading transcript.</p>
+              <p className="text-xs text-muted-foreground">{t("conversation.loading")}</p>
             ) : transcripts.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No transcript rows.</p>
+              <p className="text-xs text-muted-foreground">{t("conversation.empty")}</p>
             ) : (
               transcripts.map((t) => (
                 <TranscriptLine key={t.id} t={t} token={token} />
