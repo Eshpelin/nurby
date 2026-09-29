@@ -1,8 +1,11 @@
 """Camera content-health: frozen / obscured detection (#212)."""
 
+from types import SimpleNamespace
+
 import numpy as np
 
 from services.ingestion.content_health import ContentHealthDetector
+from services.ingestion.stream import _cost_only_budget_fallback_allowed
 
 
 def _feed(det, *, frame_hash, variance, start, step, count):
@@ -168,3 +171,18 @@ def test_frame_features_distinguishes_uniform_from_textured():
     # Identical frames hash identically; a different frame does not.
     h2, _ = _frame_features(textured)
     assert h1 == h2
+
+
+def test_content_health_budget_fallback_only_applies_to_hosted_cost_cap():
+    hosted = SimpleNamespace(kind="openai")
+    local = SimpleNamespace(kind="ollama")
+    cost_block = SimpleNamespace(
+        allowed=False, reason="Next VLM call would exceed cost budget 10c"
+    )
+    token_block = SimpleNamespace(
+        allowed=False, reason="Next VLM call would exceed token budget 1000"
+    )
+
+    assert _cost_only_budget_fallback_allowed(hosted, cost_block) is True
+    assert _cost_only_budget_fallback_allowed(hosted, token_block) is False
+    assert _cost_only_budget_fallback_allowed(local, cost_block) is False

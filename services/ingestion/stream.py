@@ -17,14 +17,18 @@ from urllib.parse import quote, urlparse, urlunparse
 
 import cv2
 import numpy as np
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from services.agent.budget import estimate_cost
 from services.ingestion.video_writer import create_segment_writer
-from services.perception.usage import record_vlm_usage
+from services.perception.usage import (
+    check_perception_budget,
+    estimate_vlm_usage,
+    record_vlm_usage,
+)
 from shared.config import settings
 from shared.database import async_session
-from shared.models import Camera, CameraStatusLog, Event, Recording
+from shared.models import Camera, CameraStatusLog, Event, Provider, Recording
 from shared.netpolicy import stream_target_rejection
 from shared.paths import safe_getsize
 from shared.redis_keys import motion_stream_key
@@ -79,6 +83,19 @@ def _frame_features(frame: "np.ndarray") -> tuple[int, float]:
     var_src = cv2.resize(gray, (32, 32), interpolation=cv2.INTER_AREA)
     variance = float(np.var(var_src))
     return ahash, variance
+
+
+def _cost_only_budget_fallback_allowed(provider, budget) -> bool:
+    """Permit local fallback only when a hosted cost cap caused the block."""
+    reason = getattr(budget, "reason", "") or ""
+    return (
+        getattr(provider, "kind", None) != "ollama"
+        and not getattr(budget, "allowed", True)
+        and "cost budget" in reason
+        and "token budget" not in reason
+    )
+
+
 # Post-capture (post-roll) is per-camera and configurable via
 # Camera.recording_clip_post; on_motion/on_object hold the recording open that
 # many seconds past the last trigger. See _should_record / _check_and_update_trigger.
@@ -1226,6 +1243,44 @@ class StreamWorker:
             "Set false only for a sustained-looking re-aim, wall, obstruction, or"
             " composition that clearly contradicts the normal baseline."
         )
+        estimated_in, estimated_out, estimated_cost = estimate_vlm_usage(
+            provider,
+            system_prompt=system_prompt,
+            user_prompt=context,
+            output_text=None,
+            model=getattr(provider, "default_model", None),
+            image_tokens=765,
+        )
+        budget = await check_perception_budget(
+            str(self.camera_id),
+            estimated_cost_cents=estimated_cost,
+            estimated_tokens=estimated_in + estimated_out,
+        )
+        if not budget.allowed:
+            if _cost_only_budget_fallback_allowed(provider, budget):
+                async with async_session() as db:
+                    provider = await db.scalar(
+                        select(Provider)
+                        .where(Provider.kind == "ollama", Provider.active.is_(True))
+                        .limit(1)
+                    )
+                if provider is None:
+                    logger.info(
+                        "skipping content-health VLM check for %s: %s",
+                        self.camera_id,
+                        budget.reason,
+                    )
+                    return
+                logger.info(
+                    "perception budget reached for content health; using local Ollama fallback"
+                )
+            else:
+                logger.info(
+                    "skipping content-health VLM check for %s: %s",
+                    self.camera_id,
+                    budget.reason,
+                )
+                return
         client = VLMClient()
         text = await client.describe(
             frame,
