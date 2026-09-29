@@ -22,5 +22,11 @@ onboarding, alert/event pages, reports, camera settings, and mobile app still
 contain inline English and are intentionally listed as follow-up migration
 work rather than being represented as translated today.
 
+The current migrated surfaces also include camera activity/package evidence,
+camera voice settings, Settings tuning/digest copy, AI usage reporting, and
+the identity review surfaces. The catalog test checks missing keys,
+interpolation mismatches, and locale-only extra keys (`locale:key`), so a
+contributor pack cannot silently drift from the English source catalog.
+
 Locale is presentation-only. It does not change camera scope, permissions,
 retention, rule semantics, timestamps’ source timezone, or model behavior.

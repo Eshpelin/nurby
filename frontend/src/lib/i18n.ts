@@ -2244,18 +2244,21 @@ export function validateCatalogs(): {
   const englishKeys = new Set(Object.keys(catalogs.en));
   const missingInLocale: Record<string, string[]> = {};
   const placeholderMismatches: Record<string, string[]> = {};
+  const unusedKeys: string[] = [];
   const placeholders = (value: string): string[] =>
     [...value.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
   for (const locale of Object.keys(catalogs) as Locale[]) {
     if (locale === "en") continue;
     missingInLocale[locale] = [...englishKeys].filter((key) => !(key in catalogs[locale]));
+    unusedKeys.push(
+      ...Object.keys(catalogs[locale])
+        .filter((key) => !englishKeys.has(key))
+        .map((key) => `${locale}:${key}`),
+    );
     placeholderMismatches[locale] = [...englishKeys].filter((key) =>
       key in catalogs[locale] &&
       placeholders(catalogs.en[key]).join("\0") !== placeholders(catalogs[locale][key]).join("\0")
     );
   }
-  // English is the source catalog, so there are no English keys that are
-  // unused by definition. The field remains part of the contract so a build
-  // validator can report extra keys when contributor packs are loaded later.
-  return { missingInLocale, unusedKeys: [], placeholderMismatches };
+  return { missingInLocale, unusedKeys, placeholderMismatches };
 }
