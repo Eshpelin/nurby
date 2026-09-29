@@ -10,6 +10,7 @@ import {
   statusPill,
 } from "./telegram-shared";
 import { extractApiError } from "@/lib/api-error";
+import { translate } from "@/lib/i18n";
 
 export function ChannelRow({
   channel,
@@ -20,7 +21,9 @@ export function ChannelRow({
   onChange: () => void;
   onResumePair: () => void;
 }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) =>
+    translate(user?.locale, key, values);
   const toast = useToast();
   const confirm = useConfirm();
   const pill = statusPill(channel);
@@ -182,7 +185,7 @@ export function ChannelRow({
               }`}
               title={channel.delivery_mode === "webhook" ? "Updates arrive via webhook POST" : "Long-polling getUpdates"}
             >
-              {channel.delivery_mode === "webhook" ? "Webhook" : "Long poll"}
+              {channel.delivery_mode === "webhook" ? t("telegram.webhook_short") : t("telegram.long_poll_short")}
             </span>
             {/* Phase 4. Owner badge + shared-by chip. */}
             <span
@@ -198,17 +201,17 @@ export function ChannelRow({
               }
             >
               {channel.owned_by_me
-                ? "You"
-                : `Shared by ${channel.owner_display_name || "other"}`}
+                ? t("telegram.you")
+                : t("telegram.shared_by", { name: channel.owner_display_name || "other" })}
             </span>
             {channel.shared_with_household && channel.owned_by_me && (
               <span className="text-[10px] px-1.5 py-0.5 rounded border bg-purple-500/15 text-purple-400 border-purple-500/30">
-                Household
+                {t("telegram.household")}
               </span>
             )}
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
-            {channel.bot_username ? <span>@{channel.bot_username}</span> : <span>(no bot)</span>}
+            {channel.bot_username ? <span>@{channel.bot_username}</span> : <span>{t("telegram.no_bot")}</span>}
             {channel.chat_title ? <span> · {channel.chat_title}</span> : null}
             {channel.chat_type ? <span> · {channel.chat_type}</span> : null}
           </div>
@@ -224,7 +227,7 @@ export function ChannelRow({
               onClick={onResumePair}
               className="px-2 py-1 text-[11px] rounded border border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
             >
-              Resume pairing
+              {t("telegram.resume_pairing")}
             </button>
           )}
 
@@ -237,7 +240,7 @@ export function ChannelRow({
               }}
               className="px-2 py-1 text-[11px] rounded border border-red-500/40 text-red-400 hover:bg-red-500/10"
             >
-              Re-enable
+              {t("telegram.re_enable")}
             </button>
           )}
 
@@ -254,7 +257,7 @@ export function ChannelRow({
               onChange={(e) => patch({ default_silent: e.target.checked })}
               className="accent-green-500"
             />
-            silent
+            {t("telegram.silent")}
           </label>
           <label
             className={`flex items-center gap-1 text-[11px] text-muted-foreground select-none ${
@@ -269,7 +272,7 @@ export function ChannelRow({
               onChange={(e) => patch({ enabled: e.target.checked })}
               className="accent-green-500"
             />
-            enabled
+            {t("telegram.enabled")}
           </label>
 
           {channel.pairing_status === "paired" && (channel.owned_by_me || channel.share_permissions === "use_and_test") && (
@@ -279,7 +282,7 @@ export function ChannelRow({
               onClick={runTest}
               className="px-2 py-1 text-[11px] rounded border border-border hover:bg-muted disabled:opacity-50"
             >
-              {testing ? "Sending." : "Send test"}
+              {testing ? t("telegram.sending") : t("telegram.send_test")}
             </button>
           )}
 
@@ -288,7 +291,7 @@ export function ChannelRow({
             onClick={() => setShowAdvanced((s) => !s)}
             className="px-2 py-1 text-[11px] rounded border border-border hover:bg-muted text-muted-foreground"
           >
-            {showAdvanced ? "Hide advanced" : "Advanced"}
+            {showAdvanced ? t("telegram.hide_advanced") : t("telegram.advanced")}
           </button>
 
           <button
@@ -298,7 +301,7 @@ export function ChannelRow({
             title={channel.owned_by_me ? "" : "Only the owner can delete a shared channel"}
             className="px-2 py-1 text-[11px] rounded border border-border hover:bg-muted text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           >
-            Delete
+            {t("telegram.delete")}
           </button>
         </div>
       </div>
@@ -308,7 +311,7 @@ export function ChannelRow({
           {/* Phase 4. Household sharing. Visible to everyone; owner
               can toggle, non-owners see a tooltip explainer. */}
           <div>
-            <div className="text-xs font-medium mb-1.5">Household sharing</div>
+            <div className="text-xs font-medium mb-1.5">{t("telegram.household_sharing")}</div>
             {channel.owned_by_me ? (
               <>
                 <label className="flex items-center gap-2 text-[11px] cursor-pointer select-none">
@@ -321,12 +324,12 @@ export function ChannelRow({
                     }
                     className="accent-purple-500"
                   />
-                  Share with household. Everyone can use this channel in their rules.
+                  {t("telegram.share_household")}
                 </label>
                 {channel.shared_with_household && (
                   <div className="mt-2">
                     <div className="text-[11px] text-muted-foreground mb-1">
-                      Share permissions
+                      {t("telegram.share_permissions")}
                     </div>
                     <div className="flex gap-2">
                       {(["use", "use_and_test"] as const).map((p) => (
@@ -341,13 +344,12 @@ export function ChannelRow({
                             }
                             className="accent-purple-500"
                           />
-                          {p === "use" ? "Use only" : "Use and test"}
+                          {p === "use" ? t("telegram.use_only") : t("telegram.use_and_test")}
                         </label>
                       ))}
                     </div>
                     <div className="text-[11px] text-muted-foreground mt-1">
-                      Token + chat binding stay yours. Others can pick this channel for their
-                      rules. &quot;Use and test&quot; also lets them fire the Send test button.
+                      {t("telegram.shared_help")}
                     </div>
                   </div>
                 )}
@@ -370,7 +372,7 @@ export function ChannelRow({
           <>
           {/* Delivery mode */}
           <div>
-            <div className="text-xs font-medium mb-1.5">Delivery mode</div>
+            <div className="text-xs font-medium mb-1.5">{t("telegram.delivery_mode")}</div>
             <div className="flex gap-2">
               <label className="flex items-center gap-1.5 text-[11px] cursor-pointer">
                 <input
@@ -381,7 +383,7 @@ export function ChannelRow({
                   onChange={() => void requestSwitchToLongPoll()}
                   className="accent-green-500"
                 />
-                Long poll (default)
+                {t("telegram.long_poll")}
               </label>
               <label className="flex items-center gap-1.5 text-[11px] cursor-pointer">
                 <input
@@ -392,7 +394,7 @@ export function ChannelRow({
                   onChange={() => void switchDelivery("webhook")}
                   className="accent-blue-500"
                 />
-                Webhook (requires public URL)
+                {t("telegram.webhook")}
               </label>
             </div>
             {webhookError && (
