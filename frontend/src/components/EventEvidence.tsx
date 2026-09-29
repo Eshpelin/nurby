@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 type Payload = Record<string, unknown>;
 
@@ -22,10 +23,11 @@ interface FaceDetection {
 }
 
 /** Build a one-line human summary of what the payload describes. */
-export function summarizePayload(payload: Payload): string {
+export function summarizePayload(payload: Payload, locale?: string): string {
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   // Camera availability events read as a sentence, not detections.
   if (payload.event_kind === "camera_status") {
-    const what = payload.camera_status === "online" ? "came back online" : "went offline";
+    const what = payload.camera_status === "online" ? t("evidence.camera_online") : t("evidence.camera_offline");
     const reason = payload.status_reason ? ` (${payload.status_reason})` : "";
     return `Camera ${what}${reason}.`;
   }
@@ -45,7 +47,7 @@ export function summarizePayload(payload: Payload): string {
     const described = [...counts.entries()]
       .map(([label, n]) => (n === 1 ? `1 ${label}` : `${n} ${label}s`))
       .join(", ");
-    parts.push(`Detected ${described}.`);
+    parts.push(t("evidence.detected", { items: described }));
   }
 
   const faces =
@@ -54,8 +56,8 @@ export function summarizePayload(payload: Payload): string {
     const named = [...new Set(faces.map((f) => f.person_name).filter(Boolean))] as string[];
     const unknown = faces.filter((f) => !f.person_name).length;
     const faceParts: string[] = [];
-    if (named.length > 0) faceParts.push(`recognized ${named.join(", ")}`);
-    if (unknown > 0) faceParts.push(`${unknown} unrecognized ${unknown === 1 ? "face" : "faces"}`);
+    if (named.length > 0) faceParts.push(t("evidence.recognized", { names: named.join(", ") }));
+    if (unknown > 0) faceParts.push(t(unknown === 1 ? "evidence.unrecognized_one" : "evidence.unrecognized_other", { count: unknown }));
     if (faceParts.length > 0) {
       const joined = faceParts.join(" and ");
       parts.push(joined.charAt(0).toUpperCase() + joined.slice(1) + ".");
@@ -63,11 +65,11 @@ export function summarizePayload(payload: Payload): string {
   }
 
   const audio = payload.audio_event as { label?: string } | undefined;
-  if (audio?.label) parts.push(`Heard: ${audio.label.replace(/_/g, " ")}.`);
+  if (audio?.label) parts.push(t("evidence.heard", { label: audio.label.replace(/_/g, " ") }));
 
   if (parts.length === 0) {
     const motion = payload.motion_score as number | undefined;
-    if (motion != null) return `Motion detected (score ${Math.round(motion * 100)}%).`;
+    if (motion != null) return t("evidence.motion", { score: Math.round(motion * 100) });
     return "";
   }
   return parts.join(" ");
@@ -86,13 +88,13 @@ export function EventEvidence({
   cameraId?: string | null;
   firedAt?: string | null;
 }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [imgFailed, setImgFailed] = useState(false);
   const [imgLightbox, setImgLightbox] = useState(false);
   const [resolvedRecordingId, setResolvedRecordingId] = useState<string | null>(null);
   const [clipPending, setClipPending] = useState(false);
 
-  const summary = useMemo(() => summarizePayload(payload), [payload]);
+  const summary = useMemo(() => summarizePayload(payload, user?.locale), [payload, user?.locale]);
   const observationId = (payload.observation_id as string) || null;
   const recordingId = eventRecordingId || (payload.recording_id as string) || resolvedRecordingId;
   const resolvedCameraId = cameraId || (payload.camera_id as string) || null;
@@ -162,7 +164,7 @@ export function EventEvidence({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={thumbUrl}
-          alt="What the camera saw when this alert fired"
+          alt={translate(user?.locale, "evidence.snapshot_alt")}
           onError={() => setImgFailed(true)}
           onClick={(e) => {
             e.stopPropagation();
@@ -180,7 +182,7 @@ export function EventEvidence({
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={thumbUrl} alt="Alert snapshot, full size" className="max-h-[90vh] max-w-[95vw] rounded-md" />
+          <img src={thumbUrl} alt={translate(user?.locale, "evidence.snapshot_full_alt")} className="max-h-[90vh] max-w-[95vw] rounded-md" />
         </div>
       )}
 
@@ -193,17 +195,17 @@ export function EventEvidence({
             onClick={(e) => e.stopPropagation()}
             className="px-2 py-1 text-[11px] rounded-md bg-foreground text-background font-medium hover:opacity-90"
           >
-            ▶ Watch clip
+            ▶ {translate(user?.locale, "evidence.watch_clip")}
           </a>
         )}
         {!clipUrl && clipPending && (
           <span className="text-[11px] text-muted-foreground">
-            Clip is still being saved. It should appear here shortly.
+            {translate(user?.locale, "evidence.saving_clip")}
           </span>
         )}
         {!clipUrl && !clipPending && observationId && (
           <span className="text-[11px] text-muted-foreground">
-            No recording covered this moment.
+            {translate(user?.locale, "evidence.no_recording")}
           </span>
         )}
       </div>
@@ -211,7 +213,7 @@ export function EventEvidence({
       {isAdmin && (
         <details onClick={(e) => e.stopPropagation()}>
           <summary className="text-[10px] text-muted-foreground cursor-pointer select-none hover:text-foreground">
-            Developer details
+            {translate(user?.locale, "evidence.developer_details")}
           </summary>
           <pre className="mt-1 text-[10px] font-mono bg-muted/50 rounded p-2 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
             {JSON.stringify(payload, null, 2)}
