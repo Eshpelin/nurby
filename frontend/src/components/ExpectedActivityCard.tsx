@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 type Person = { id: string; display_name: string; nickname?: string | null };
 type Camera = { id: string; name: string };
@@ -19,10 +20,11 @@ type Expectation = {
   last_status: string | null;
 };
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
 export function ExpectedActivityCard() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [people, setPeople] = useState<Person[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [items, setItems] = useState<Expectation[]>([]);
@@ -46,13 +48,13 @@ export function ExpectedActivityCard() {
         authFetch("/api/persons"),
         authFetch("/api/cameras"),
       ]);
-      if (!expectations.ok) throw new Error(`Expected activity unavailable (${expectations.status})`);
+      if (!expectations.ok) throw new Error(`${t("settings.expected_activity_unavailable")} (${expectations.status})`);
       setItems(await expectations.json());
       if (peopleResponse.ok) setPeople(await peopleResponse.json());
       if (camerasResponse.ok) setCameras(await camerasResponse.json());
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Expected activity unavailable");
+      setError(err instanceof Error ? err.message : t("settings.expected_activity_unavailable"));
     } finally {
       setLoading(false);
     }
@@ -85,7 +87,7 @@ export function ExpectedActivityCard() {
 
   const save = async () => {
     if (!name.trim() || !personId || weekdays.length === 0) {
-      setError("Choose a person, name this expectation, and select at least one day.");
+      setError(t("settings.expected_activity_validation"));
       return;
     }
     setSaving(true);
@@ -109,12 +111,12 @@ export function ExpectedActivityCard() {
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        throw new Error(typeof body?.detail === "string" ? body.detail : `Could not save expectation (${response.status})`);
+        throw new Error(typeof body?.detail === "string" ? body.detail : `${t("settings.expected_activity_save_failed")} (${response.status})`);
       }
       resetForm();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save expectation");
+      setError(err instanceof Error ? err.message : t("settings.expected_activity_save_failed"));
     } finally {
       setSaving(false);
     }
@@ -123,45 +125,45 @@ export function ExpectedActivityCard() {
   const remove = async (id: string) => {
     const response = await authFetch(`/api/expected-activity/${id}`, { method: "DELETE" });
     if (response.ok) setItems((current) => current.filter((item) => item.id !== id));
-    else setError(`Could not remove expectation (${response.status})`);
+    else setError(`${t("settings.expected_activity_remove_failed")} (${response.status})`);
   };
 
   const personLabel = (id: string | null, fallback: string | null) => {
     const person = people.find((candidate) => candidate.id === id);
-    return person ? person.nickname || person.display_name : fallback || "Unknown person";
+    return person ? person.nickname || person.display_name : fallback || t("settings.expected_activity_unknown_person");
   };
 
   return (
     <section id="expected-activity" className="rounded-lg border border-border bg-card px-4 py-3.5 scroll-mt-24">
       <div className="mb-3">
-        <div className="text-sm font-medium">Expected activity</div>
+        <div className="text-sm font-medium">{t("settings.expected_activity_title")}</div>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Choose a person by identity, not by typed name. These reminders never grant access or change alert rules.
+          {t("settings.expected_activity_help")}
         </p>
       </div>
       {error && <p role="alert" className="mb-3 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-xs text-red-300">{error}</p>}
       <div className="grid gap-2 sm:grid-cols-2">
-        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Expectation name, e.g. Simon arrives" className="rounded border border-border bg-background px-2.5 py-2 text-sm" />
-        <select aria-label="Expected person" value={personId} onChange={(event) => setPersonId(event.target.value)} className="rounded border border-border bg-background px-2.5 py-2 text-sm">
-          <option value="">Choose a person…</option>
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("settings.expected_activity_name_placeholder")} className="rounded border border-border bg-background px-2.5 py-2 text-sm" />
+        <select aria-label={t("settings.expected_activity_person_label")} value={personId} onChange={(event) => setPersonId(event.target.value)} className="rounded border border-border bg-background px-2.5 py-2 text-sm">
+          <option value="">{t("settings.expected_activity_choose_person")}</option>
           {people.map((person) => <option key={person.id} value={person.id}>{person.nickname || person.display_name}</option>)}
         </select>
-        <label className="text-xs text-muted-foreground">From <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} className="ml-1 rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground" /></label>
-        <label className="text-xs text-muted-foreground">Until <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} className="ml-1 rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground" /></label>
+        <label className="text-xs text-muted-foreground">{t("settings.expected_activity_from")} <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} className="ml-1 rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground" /></label>
+        <label className="text-xs text-muted-foreground">{t("settings.expected_activity_until")} <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} className="ml-1 rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground" /></label>
       </div>
       <div className="mt-2">
-        <div className="mb-1 text-[11px] text-muted-foreground">Days</div>
+        <div className="mb-1 text-[11px] text-muted-foreground">{t("settings.expected_activity_days")}</div>
         <div className="flex flex-wrap gap-1.5">
-          {DAYS.map((day, index) => {
+          {DAY_KEYS.map((dayKey, index) => {
             const selected = weekdays.includes(index);
-            return <button key={day} type="button" onClick={() => setWeekdays((current) => selected ? current.filter((value) => value !== index) : [...current, index].sort())} className={`rounded border px-2 py-1 text-xs ${selected ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground"}`}>{day}</button>;
+            return <button key={dayKey} type="button" onClick={() => setWeekdays((current) => selected ? current.filter((value) => value !== index) : [...current, index].sort())} className={`rounded border px-2 py-1 text-xs ${selected ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground"}`}>{t(`settings.expected_activity_day_${dayKey}`)}</button>;
           })}
         </div>
       </div>
       <div className="mt-2 flex flex-wrap items-end gap-3">
-        <label className="text-xs text-muted-foreground">Grace minutes <input type="number" min="0" max="1440" value={graceMinutes} onChange={(event) => setGraceMinutes(event.target.value)} className="ml-1 w-20 rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground" /></label>
+        <label className="text-xs text-muted-foreground">{t("settings.expected_activity_grace_minutes")} <input type="number" min="0" max="1440" value={graceMinutes} onChange={(event) => setGraceMinutes(event.target.value)} className="ml-1 w-20 rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground" /></label>
         <div className="min-w-52 flex-1">
-          <div className="mb-1 text-[11px] text-muted-foreground">Cameras (empty means any camera)</div>
+          <div className="mb-1 text-[11px] text-muted-foreground">{t("settings.expected_activity_cameras_help")}</div>
           <div className="flex flex-wrap gap-1.5">
             {cameras.map((camera) => {
               const selected = cameraIds.includes(camera.id);
@@ -169,16 +171,16 @@ export function ExpectedActivityCard() {
             })}
           </div>
         </div>
-        <button type="button" disabled={saving || loading} onClick={() => void save()} className="rounded border border-accent px-3 py-1.5 text-xs text-accent hover:bg-accent/10 disabled:opacity-50">{saving ? "Saving…" : editingId ? "Save changes" : "Add expectation"}</button>
-        {editingId && <button type="button" disabled={saving} onClick={resetForm} className="rounded border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50">Cancel</button>}
+        <button type="button" disabled={saving || loading} onClick={() => void save()} className="rounded border border-accent px-3 py-1.5 text-xs text-accent hover:bg-accent/10 disabled:opacity-50">{saving ? t("settings.expected_activity_saving") : editingId ? t("settings.expected_activity_save_changes") : t("settings.expected_activity_add")}</button>
+        {editingId && <button type="button" disabled={saving} onClick={resetForm} className="rounded border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50">{t("settings.expected_activity_cancel")}</button>}
       </div>
-      {loading ? <p className="mt-3 text-xs text-muted-foreground">Loading expectations…</p> : items.length > 0 && (
+      {loading ? <p className="mt-3 text-xs text-muted-foreground">{t("settings.expected_activity_loading")}</p> : items.length > 0 && (
         <div className="mt-4 space-y-2 border-t border-border pt-3">
           {items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 rounded border border-border/70 px-2.5 py-2 text-xs">
-            <div className="min-w-0"><div className="truncate font-medium">{item.name}</div><div className="text-[11px] text-muted-foreground">{personLabel(item.subject_person_id, item.subject_key)} · {item.start_time}–{item.end_time} · {item.enabled ? "enabled" : "paused"}</div></div>
+            <div className="min-w-0"><div className="truncate font-medium">{item.name}</div><div className="text-[11px] text-muted-foreground">{personLabel(item.subject_person_id, item.subject_key)} · {item.start_time}–{item.end_time} · {item.enabled ? t("settings.expected_activity_enabled") : t("settings.expected_activity_paused")}</div></div>
             <div className="flex shrink-0 items-center gap-2">
-              <button type="button" onClick={() => edit(item)} className="text-[11px] text-muted-foreground hover:text-foreground">Edit</button>
-              <button type="button" onClick={() => void remove(item.id)} className="text-[11px] text-muted-foreground hover:text-red-300">Remove</button>
+              <button type="button" onClick={() => edit(item)} className="text-[11px] text-muted-foreground hover:text-foreground">{t("settings.expected_activity_edit")}</button>
+              <button type="button" onClick={() => void remove(item.id)} className="text-[11px] text-muted-foreground hover:text-red-300">{t("settings.expected_activity_remove")}</button>
             </div>
           </div>)}
         </div>
