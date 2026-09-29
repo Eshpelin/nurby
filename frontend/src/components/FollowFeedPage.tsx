@@ -134,7 +134,10 @@ const RANGES = [
  */
 export function FollowFeedPage({ kind, id }: Props) {
   const { authFetch, token, user } = useAuth();
-  const t = (key: string) => translate(user?.locale, key);
+  const t = useCallback(
+    (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values),
+    [user?.locale],
+  );
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -160,11 +163,11 @@ export function FollowFeedPage({ kind, id }: Props) {
       const data: Bundle = await res.json();
       setBundle(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      setError(e instanceof Error ? e.message : t("common.network_error"));
     } finally {
       setLoading(false);
     }
-  }, [authFetch, kind, id, rangeS, cameraFilter]);
+  }, [authFetch, cameraFilter, id, kind, rangeS, t]);
 
   useEffect(() => {
     refresh();
@@ -299,7 +302,7 @@ function FollowHeader({
   rangeS: number;
   setRangeS: (v: number) => void;
   heatPeak: number;
-  t: (key: string) => string;
+  t: (key: string, values?: Record<string, string | number>) => string;
 }) {
   const photoUrl =
     subject.kind === "person" && subject.photo_path && token
@@ -307,8 +310,8 @@ function FollowHeader({
       : null;
   const headlineSub =
     subject.kind === "person"
-      ? subject.relationship || "Person"
-      : subject.appearance_description || "Recurring stranger";
+      ? subject.relationship || t("follow.person")
+      : subject.appearance_description || t("follow.recurring_stranger", { id: String(subject.id).slice(0, 8) });
 
   const formatTs = (iso: string | null) =>
     iso ? formatDateTime(iso) : "—";
@@ -447,7 +450,7 @@ function FeedRow({ item, token, t }: { item: FeedItem; token: string | null; t: 
           <span>{item.camera_name || t("follow.camera")}</span>
           {item.refined_by_provider_name && (
             <span className="ml-auto text-sky-300">
-              ✨ refined
+              ✨ {t("follow.refined")}
             </span>
           )}
         </div>
@@ -515,7 +518,7 @@ function FeedRow({ item, token, t }: { item: FeedItem; token: string | null; t: 
           <span className="text-muted-foreground">{item.camera_name || t("follow.camera")}</span>
           <span className="text-muted-foreground">·</span>
           <span className="text-muted-foreground font-mono">
-            {item.transcript_count} msg · {time}
+            {item.transcript_count} {t("follow.messages")} · {time}
           </span>
         </div>
         {item.summary_text ? (
@@ -560,7 +563,7 @@ function FeedRow({ item, token, t }: { item: FeedItem; token: string | null; t: 
           {t("follow.recording")}
         </span>
         <span className="text-muted-foreground">·</span>
-        <span className="text-muted-foreground">{item.camera_name || "Camera"}</span>
+        <span className="text-muted-foreground">{item.camera_name || t("follow.camera")}</span>
         <span className="text-muted-foreground">·</span>
         <span className="text-muted-foreground font-mono">
           {item.duration_seconds != null

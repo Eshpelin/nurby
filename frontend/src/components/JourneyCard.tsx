@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
 import { ReinterpretButton } from "@/components/ReinterpretButton";
 import { formatWith } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 interface Segment {
   camera_id: string;
@@ -54,7 +55,8 @@ interface Props {
  * surface a VLM-generated narrative on top.
  */
 export function JourneyCard({ journey }: Props) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [live, setLive] = useState({
     last_seen_at: journey.last_seen_at,
     cameras_seen_count: journey.cameras_seen_count,
@@ -106,7 +108,7 @@ export function JourneyCard({ journey }: Props) {
   const subjectLabel =
     journey.subject_kind === "person"
       ? journey.subject_key
-      : `Recurring stranger ${journey.subject_key.slice(0, 8)}`;
+      : t("follow.recurring_stranger", { id: journey.subject_key.slice(0, 8) });
 
   const tone = live.finalized
     ? "border-emerald-700/40 bg-emerald-950/15 hover:border-emerald-600/60"
@@ -120,7 +122,7 @@ export function JourneyCard({ journey }: Props) {
         <div className="flex items-center gap-2 text-[11px] mb-1.5">
           <PathIcon className={`w-3.5 h-3.5 ${accentDot}`} />
           <span className={`font-medium uppercase tracking-wider ${accent}`}>
-            {live.finalized ? "Journey closed" : "Journey · live"}
+            {live.finalized ? t("journey.closed") : t("journey.live")}
           </span>
           {!live.finalized && (
             <span className="relative flex h-1.5 w-1.5">
@@ -132,13 +134,13 @@ export function JourneyCard({ journey }: Props) {
           <span className="text-foreground font-medium">{subjectLabel}</span>
           <span className="text-muted-foreground">·</span>
           <span className="text-muted-foreground font-mono">
-            {live.cameras_seen_count} cameras · {durationLabel}
+            {t("journey.cameras_duration", { count: live.cameras_seen_count, duration: durationLabel })}
           </span>
           <div className="ml-auto flex items-center gap-2">
             {live.finalized && (
               <ReinterpretButton
                 endpoint={`/api/journeys/${journey.id}/reinterpret`}
-                label="Reinterpret"
+                label={t("journey.reinterpret")}
                 variant="compact"
               />
             )}
@@ -147,9 +149,9 @@ export function JourneyCard({ journey }: Props) {
                 href={`/follow/person/${encodeURIComponent(journey.subject_key)}`}
                 onClick={(e) => e.stopPropagation()}
                 className="text-[10px] text-accent hover:underline"
-                title="Follow this person across all time"
+                title={t("journey.follow_title")}
               >
-                follow ↗
+                {t("journey.follow")}
               </Link>
             )}
           </div>
@@ -169,11 +171,9 @@ export function JourneyCard({ journey }: Props) {
               key={`${s.camera_id}-${i}`}
               className="flex items-stretch gap-1.5 flex-shrink-0"
             >
-              <SegmentChip segment={s} token={token} accent={accent} />
+                <SegmentChip segment={s} token={token} accent={accent} t={t} />
               {i < journey.segments.length - 1 && (
-                <TransitionArrow
-                  transition={journey.transitions[i] || null}
-                />
+                <TransitionArrow transition={journey.transitions[i] || null} t={t} />
               )}
             </div>
           ))}
@@ -181,7 +181,7 @@ export function JourneyCard({ journey }: Props) {
 
         {live.finalized && live.summary_text === null && (
           <p className="text-[10px] text-muted-foreground/70 mt-1">
-            (single-camera journey, no narrative)
+            {t("journey.no_narrative")}
           </p>
         )}
       </div>
@@ -193,14 +193,16 @@ function SegmentChip({
   segment,
   token,
   accent,
+  t,
 }: {
   segment: Segment;
   token: string | null;
   accent: string;
+  t: (key: string, values?: Record<string, string | number>) => string;
 }) {
   const thumb = segment.peak_observation_id;
-  const t = new Date(segment.started_at);
-  const tStr = formatWith(t, { hour: "2-digit", minute: "2-digit" });
+  const time = new Date(segment.started_at);
+  const tStr = formatWith(time, { hour: "2-digit", minute: "2-digit" });
   return (
     <div className="flex flex-col items-center gap-1 min-w-[6.5rem]">
       <div className="relative w-24 h-14 bg-black/50 rounded overflow-hidden border border-border/50">
@@ -212,13 +214,13 @@ function SegmentChip({
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-[9px] text-muted-foreground font-mono">
-            no thumb
+            {t("journey.no_thumb")}
           </div>
         )}
       </div>
       <div className="text-center">
         <div className={`text-[10px] font-medium ${accent} truncate max-w-[7rem]`}>
-          {segment.camera_name || "Camera"}
+          {segment.camera_name || t("journey.camera")}
         </div>
         <div className="text-[9px] font-mono text-muted-foreground">
           {tStr} · {segment.occurrence_count}×
@@ -228,7 +230,7 @@ function SegmentChip({
   );
 }
 
-function TransitionArrow({ transition }: { transition: Transition | null }) {
+function TransitionArrow({ transition, t }: { transition: Transition | null; t: (key: string, values?: Record<string, string | number>) => string }) {
   if (!transition) {
     return (
       <div className="flex items-center text-muted-foreground/50">
@@ -244,7 +246,7 @@ function TransitionArrow({ transition }: { transition: Transition | null }) {
       className={`flex flex-col items-center justify-center px-1 ${
         warn ? "text-amber-300" : "text-muted-foreground"
       }`}
-      title={`Off-camera ${gapStr}`}
+      title={t("journey.off_camera", { duration: gapStr })}
     >
       <ArrowIcon className="w-4 h-4" />
       <span className="text-[9px] font-mono">{gapStr}</span>
