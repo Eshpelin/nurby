@@ -6,29 +6,33 @@
 import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, inputClass } from "./primitives";
 import { timezoneOptions } from "@/lib/timezones";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface TimezoneSectionProps {
+  locale: Locale;
   cameraTimezone: string;
   setCameraTimezone: Dispatch<SetStateAction<string>>;
 }
 
 export function TimezoneSection({
+  locale,
   cameraTimezone,
   setCameraTimezone,
 }: TimezoneSectionProps) {
+  const t = (key: string) => translate(locale, key);
   return (
         <Section
-          title="Timezone"
+          title={t("camera.timezone.title")}
           advanced
-          description="Used to render timestamps in this camera's local time. Anchors per-camera scheduling too."
+          description={t("camera.timezone.description")}
         >
-          <FieldRow label="Timezone">
+          <FieldRow label={t("camera.timezone.label")}>
             <select
               value={cameraTimezone}
               onChange={(e) => setCameraTimezone(e.target.value)}
               className={inputClass}
             >
-              <option value="">(use system default)</option>
+              <option value="">{t("camera.timezone.system_default")}</option>
               {timezoneOptions().map((tz) => (
                 <option key={tz} value={tz}>
                   {tz}
@@ -36,9 +40,7 @@ export function TimezoneSection({
               ))}
             </select>
             <p className="text-[11px] text-muted-foreground mt-1">
-              Pick the timezone where this camera is physically located.
-              Leave blank to follow the household-wide system timezone
-              from Settings.
+              {t("camera.timezone.help")}
             </p>
           </FieldRow>
         </Section>

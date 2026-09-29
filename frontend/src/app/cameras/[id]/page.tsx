@@ -1013,7 +1013,7 @@ export default function CameraConfigPage() {
         </Section>
 
         {/* ── Timezone ── */}
-        <TimezoneSection cameraTimezone={cameraTimezone} setCameraTimezone={setCameraTimezone} />
+        <TimezoneSection locale={locale} cameraTimezone={cameraTimezone} setCameraTimezone={setCameraTimezone} />
 
         {/* ── Retention ── */}
         <RetentionSection
