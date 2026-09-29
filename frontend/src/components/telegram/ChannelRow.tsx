@@ -55,10 +55,10 @@ export function ChannelRow({
         setWebhookInfo(await res.json());
       } else {
         const body = await res.json().catch(() => null);
-        setWebhookError(extractApiError(body, "Could not fetch webhook info"));
+        setWebhookError(extractApiError(body, t("telegram.webhook_info_failed")));
       }
     } catch {
-      setWebhookError("Network error fetching webhook info");
+      setWebhookError(t("telegram.webhook_info_network_error"));
     }
   }, [authFetch, channel.id]);
 
@@ -78,13 +78,13 @@ export function ChannelRow({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setWebhookError(extractApiError(body, `Switch failed (${res.status}).`));
+        setWebhookError(extractApiError(body, t("telegram.switch_failed", { status: res.status })));
       } else {
         onChange();
         await fetchWebhookInfo();
       }
     } catch {
-      setWebhookError("Network error.");
+      setWebhookError(t("telegram.network_error"));
     } finally {
       setWebhookBusy(false);
     }
@@ -98,10 +98,10 @@ export function ChannelRow({
     let drop = false;
     if (pending > 0) {
       drop = await confirm({
-        title: `Discard ${pending} queued Telegram update${pending === 1 ? "" : "s"}?`,
-        body: "Discard them and switch to long-poll, or keep them (Cancel) and they replay on the next poll.",
-        confirmLabel: "Discard and switch",
-        cancelLabel: "Keep and switch",
+        title: t(pending === 1 ? "telegram.discard_one" : "telegram.discard_other", { count: pending }),
+        body: t("telegram.discard_help"),
+        confirmLabel: t("telegram.discard_switch"),
+        cancelLabel: t("telegram.keep_switch"),
       });
     }
     await switchDelivery("long_poll", drop);
@@ -248,7 +248,7 @@ export function ChannelRow({
             className={`flex items-center gap-1 text-[11px] text-muted-foreground select-none ${
               channel.owned_by_me ? "cursor-pointer" : "cursor-not-allowed opacity-50"
             }`}
-            title={channel.owned_by_me ? "" : "Owner-only setting"}
+              title={channel.owned_by_me ? "" : t("telegram.owner_only")}
           >
             <input
               type="checkbox"
@@ -263,7 +263,7 @@ export function ChannelRow({
             className={`flex items-center gap-1 text-[11px] text-muted-foreground select-none ${
               channel.owned_by_me ? "cursor-pointer" : "cursor-not-allowed opacity-50"
             }`}
-            title={channel.owned_by_me ? "" : "Owner-only setting"}
+            title={channel.owned_by_me ? "" : t("telegram.owner_only")}
           >
             <input
               type="checkbox"
