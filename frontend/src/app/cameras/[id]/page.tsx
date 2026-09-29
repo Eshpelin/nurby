@@ -937,6 +937,7 @@ export default function CameraConfigPage() {
         </section>
 
         <RelationshipPrivacySection
+          locale={locale}
           inferenceEnabled={relationshipInferenceEnabled}
           notificationsEnabled={relationshipNotificationsEnabled}
           setInferenceEnabled={setRelationshipInferenceEnabled}
