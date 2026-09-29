@@ -6,8 +6,10 @@
 import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, Toggle } from "./primitives";
 import { formatInterval } from "./format";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface AudioConversationsSectionProps {
+  locale: Locale;
   conversationGapSeconds: number;
   conversationMinMessages: number;
   conversationSummaryEnabled: boolean;
@@ -17,6 +19,7 @@ interface AudioConversationsSectionProps {
 }
 
 export function AudioConversationsSection({
+  locale,
   conversationGapSeconds,
   conversationMinMessages,
   conversationSummaryEnabled,
@@ -24,12 +27,13 @@ export function AudioConversationsSection({
   setConversationMinMessages,
   setConversationSummaryEnabled,
 }: AudioConversationsSectionProps) {
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   return (
         <Section
-          title="Audio Conversations"
-          description="Group consecutive transcripts into a single rolling card and summarize the conversation when it goes quiet."
+          title={t("camera.audio_conversations.title")}
+          description={t("camera.audio_conversations.description")}
         >
-          <FieldRow label="Conversation Gap" hint="Maximum silence between transcripts that still counts as the same conversation. Beyond this, a new conversation opens.">
+          <FieldRow label={t("camera.audio_conversations.gap")} hint={t("camera.audio_conversations.gap_hint")}>
             <div className="flex items-center gap-3">
               <input
                 type="range"
@@ -46,16 +50,16 @@ export function AudioConversationsSection({
             </div>
           </FieldRow>
 
-          <FieldRow label="Generate Summary" hint="When the conversation closes, send the full transcript to the summary VLM and replace the live caption with a one-line recap.">
+          <FieldRow label={t("camera.audio_conversations.summary")} hint={t("camera.audio_conversations.summary_hint")}>
             <Toggle
               checked={conversationSummaryEnabled}
               onChange={setConversationSummaryEnabled}
-              label={conversationSummaryEnabled ? "Enabled" : "Disabled"}
+              label={conversationSummaryEnabled ? t("common.enabled") : t("common.disabled")}
             />
           </FieldRow>
 
           {conversationSummaryEnabled && (
-            <FieldRow label="Minimum Messages" hint="Skip the summary call for short conversations (one-liners) to save tokens.">
+            <FieldRow label={t("camera.audio_conversations.minimum_messages")} hint={t("camera.audio_conversations.minimum_messages_hint")}>
               <div className="flex items-center gap-3">
                 <input
                   type="range"
@@ -67,7 +71,7 @@ export function AudioConversationsSection({
                   className="flex-1 accent-accent"
                 />
                 <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                  {conversationMinMessages} msg
+                  {t("camera.audio_conversations.message_count", { count: conversationMinMessages })}
                 </span>
               </div>
             </FieldRow>

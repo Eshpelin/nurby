@@ -889,6 +889,7 @@ export default function CameraConfigPage() {
         {/* ── Audio Conversations ── */}
         {(camera.audio_capture_enabled || camera.audio_transcribe_enabled) && (
           <AudioConversationsSection
+            locale={locale}
             conversationGapSeconds={conversationGapSeconds}
             conversationMinMessages={conversationMinMessages}
             conversationSummaryEnabled={conversationSummaryEnabled}
