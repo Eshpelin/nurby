@@ -383,7 +383,7 @@ function LinkRow({
               primary
             </span>
           )}
-          {revoked && <span className="ml-2 text-xs text-red-400">revoked</span>}
+          {revoked && <span className="ml-2 text-xs text-red-400">{t("guardian_admin.revoked")}</span>}
         </div>
         {!revoked && (
           <button
