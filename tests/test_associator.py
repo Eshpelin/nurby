@@ -188,6 +188,19 @@ def test_confirmed_association_is_immune_to_automatic_decay():
     assert not should_archive_association(edge, _at(1, 8) + timedelta(days=400), stale_days=45)
 
 
+def test_archived_claim_reenters_as_candidate_even_with_historical_days():
+    edge = _edge(status="archived", distinct_days=10, user_confirmed=False)
+
+    assert fold(
+        edge,
+        _at(2, 9),
+        "UTC",
+        min_days=3,
+        evidence_day_keys={"2026-01-01", "2026-01-02", "2026-01-03"},
+    )
+    assert edge.status == "candidate"
+
+
 def test_new_evidence_reenters_archived_claim_as_candidate():
     edge = _edge(status="archived", last_seen_at=_at(1, 8), archived_at=_at(1, 8) + timedelta(days=49))
     assert fold(edge, _at(1, 8) + timedelta(days=59), "UTC", min_days=3)

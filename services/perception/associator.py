@@ -135,6 +135,12 @@ def next_status(
         # New evidence may bring a deferred suggestion back for review, but
         # it must not silently promote it to an established fact.
         return "candidate"
+    if current == "archived":
+        # Archived learned claims retain their historical counters, but fresh
+        # evidence must re-enter review. Otherwise an old distinct-day count
+        # can silently promote the claim back to established on the first
+        # post-archive sighting.
+        return "candidate"
     if user_confirmed:
         return "established"
     if distinct_days >= min_days:
