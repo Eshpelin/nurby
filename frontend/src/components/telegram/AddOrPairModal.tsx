@@ -219,7 +219,7 @@ export function AddOrPairModal({
                   >
                     @BotFather
                   </a>{" "}
-                  {t("telegram.botfather_start")} <span className="font-medium">Start</span>.
+                  {t("telegram.botfather_start")} <span className="font-medium">{t("telegram.start_button")}</span>.
                 </li>
                 <li>
                   {t("telegram.botfather_newbot")} <span className="font-mono text-foreground">/newbot</span>. {t("telegram.botfather_name")} <span className="text-foreground">Home Alerts</span> {t("telegram.botfather_username")} <span className="font-mono text-foreground">bot</span>.
@@ -363,8 +363,8 @@ export function AddOrPairModal({
                     Add{" "}
                     <span className="font-mono text-foreground">@{pairChannel.bot_username || "your bot"}</span>{" "}
                     as a member. In a group, Add member. In a{" "}
-                    <span className="text-foreground">channel</span>, add it as an{" "}
-                    <span className="text-foreground font-medium">Administrator</span> with the
+                    <span className="text-foreground">{t("telegram.channel")}</span>, {t("telegram.add_it_as")} {" "}
+                    <span className="text-foreground font-medium">{t("telegram.administrator")}</span> {t("telegram.with_the")}
                     &ldquo;Post messages&rdquo; permission (channels only accept posts from admins).
                   </li>
                   <li>

@@ -134,7 +134,7 @@ export function ChannelRow({
       setTestResult(data);
       if (res.ok || res.status === 200) onChange();
     } catch {
-      setTestResult({ ok: false, error: "Network error" });
+      setTestResult({ ok: false, error: t("telegram.network_error") });
     } finally {
       setTesting(false);
     }
@@ -596,24 +596,22 @@ export function ChannelRow({
           }`}
         >
           {testResult.ok
-            ? `Sent ✓ (message id ${testResult.message_id ?? "?"})`
-            : `Failed. ${testResult.error || "Telegram rejected the send."}`}
+            ? t("telegram.sent", { id: testResult.message_id ?? "?" })
+            : t("telegram.failed", { error: testResult.error || t("telegram.rejected") })}
         </div>
       )}
 
       {showDelete && (
         <div className="mt-3 border-t border-border pt-3">
           <div className="text-xs text-foreground/90 mb-2">
-            This will stop alerts to{" "}
-            <span className="font-medium">{channel.chat_title || channel.label}</span>. Existing
-            rules using this channel will silently no-op until you point them at another channel.
+            {t("telegram.delete_help", { name: channel.chat_title || channel.label })}
           </div>
           <div className="text-[11px] text-muted-foreground mb-3">
             {ruleCount === null
-              ? "Checking rule usage."
+              ? t("telegram.checking_usage")
               : ruleCount === 0
-              ? "No rules reference this channel."
-              : `${ruleCount} rule${ruleCount === 1 ? "" : "s"} currently reference this channel.`}
+              ? t("telegram.no_rules")
+              : t(ruleCount === 1 ? "telegram.rules_one" : "telegram.rules_other", { count: ruleCount })}
           </div>
           <div className="flex gap-2">
             <button
@@ -622,14 +620,14 @@ export function ChannelRow({
               onClick={confirmDelete}
               className="px-3 py-1.5 text-xs rounded border border-red-500/40 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
             >
-              {deleting ? "Deleting." : "Delete channel"}
+              {deleting ? t("telegram.deleting") : t("telegram.delete_channel")}
             </button>
             <button
               type="button"
               onClick={() => setShowDelete(false)}
               className="px-3 py-1.5 text-xs rounded border border-border hover:bg-muted"
             >
-              Cancel
+              {t("telegram.cancel")}
             </button>
           </div>
         </div>
