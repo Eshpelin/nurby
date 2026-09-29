@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 import { formatWith } from "@/lib/time";
 
 // Inline SVG. The frontend does not bundle lucide-react.
@@ -44,13 +45,13 @@ const PersonIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-function speakerSourceLabel(source: string | null | undefined): string | null {
+function speakerSourceLabel(source: string | null | undefined, t: (key: string) => string): string | null {
   switch (source) {
-    case "video": return "Video attributed";
-    case "voice": return "Voiceprint hypothesis";
-    case "fused": return "Video + voice";
-    case "manual": return "Set manually";
-    case "ambiguous": return "Ambiguous speaker";
+    case "video": return t("transcript.video_attributed");
+    case "voice": return t("transcript.voiceprint_hypothesis");
+    case "fused": return t("transcript.video_voice");
+    case "manual": return t("transcript.set_manually");
+    case "ambiguous": return t("transcript.ambiguous_speaker");
     default: return null;
   }
 }
@@ -62,10 +63,12 @@ function speakerSourceLabel(source: string | null | undefined): string | null {
  */
 export function TranscriptCard(props: TranscriptCardProps) {
   const { startedAt, text, audioCaptureId, provider, language, speakerName, speakerSource } = props;
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const translateText = (key: string) => translate(locale, key);
   const [showPlayer, setShowPlayer] = useState(false);
   const t = new Date(startedAt);
-  const sourceLabel = speakerSourceLabel(speakerSource);
+  const sourceLabel = speakerSourceLabel(speakerSource, translateText);
 
   const audioUrl = audioCaptureId && token
     ? `/api/audio/${audioCaptureId}?token=${encodeURIComponent(token)}`
@@ -85,19 +88,19 @@ export function TranscriptCard(props: TranscriptCardProps) {
           <span
             className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-300"
             title={speakerSource === "manual"
-              ? "Speaker set by a household member"
+              ? translateText("transcript.manual_tooltip")
               : speakerSource === "voice"
-              ? "Speaker matched by an opt-in voiceprint hypothesis"
+              ? translateText("transcript.voice_tooltip")
               : speakerSource === "fused"
-              ? "Speaker matched from video and voice evidence"
-              : "Attributed from who was on camera"}
+              ? translateText("transcript.fused_tooltip")
+              : translateText("transcript.video_tooltip")}
           >
             <PersonIcon className="w-3 h-3" />
             {speakerName}
           </span>
         ) : null}
         {sourceLabel && (!speakerName || speakerSource === "ambiguous") ? (
-          <span className="ml-auto rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300" title="Speaker attribution is evidence, not proof of identity">
+          <span className="ml-auto rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300" title={translateText("transcript.evidence_tooltip")}>
             {sourceLabel}
           </span>
         ) : null}
@@ -120,7 +123,7 @@ export function TranscriptCard(props: TranscriptCardProps) {
               className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"
             >
               <PlayIcon className="w-3 h-3" />
-              Play audio
+              {translateText("transcript.play_audio")}
             </button>
           )}
         </div>
