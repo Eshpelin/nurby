@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { extractApiError } from "@/lib/api-error";
+import { translate } from "@/lib/i18n";
 
 // Structured alert feedback (#195). Rating an alert is independent of
 // acknowledging it: ack means "seen/handled", this says whether the
@@ -21,21 +22,22 @@ interface FeedbackRow {
   reason: Reason | null;
 }
 
-const RATINGS: { value: Rating; label: string; title: string }[] = [
-  { value: "useful", label: "👍 Useful", title: "This alert was worth getting" },
-  { value: "correct_but_not_useful", label: "🤷 Correct, not useful", title: "Accurate, but I don't want alerts like this" },
-  { value: "incorrect", label: "👎 Incorrect", title: "Wrong detection or wrong person" },
+const RATINGS: { value: Rating; labelKey: string; titleKey: string }[] = [
+  { value: "useful", labelKey: "feedback.useful", titleKey: "feedback.useful_title" },
+  { value: "correct_but_not_useful", labelKey: "feedback.not_useful", titleKey: "feedback.not_useful_title" },
+  { value: "incorrect", labelKey: "feedback.incorrect", titleKey: "feedback.incorrect_title" },
 ];
 
-const REASONS: { value: Reason; label: string }[] = [
-  { value: "wrong_object", label: "Wrong object" },
-  { value: "wrong_person", label: "Wrong person" },
-  { value: "duplicate", label: "Duplicate" },
-  { value: "timing", label: "Wrong timing" },
+const REASONS: { value: Reason; labelKey: string }[] = [
+  { value: "wrong_object", labelKey: "feedback.wrong_object" },
+  { value: "wrong_person", labelKey: "feedback.wrong_person" },
+  { value: "duplicate", labelKey: "feedback.duplicate" },
+  { value: "timing", labelKey: "feedback.timing" },
 ];
 
 export function EventFeedbackPanel({ eventId }: { eventId: string }) {
   const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [rows, setRows] = useState<FeedbackRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,12 +68,12 @@ export function EventFeedbackPanel({ eventId }: { eventId: string }) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setError(extractApiError(body, `Could not save (${res.status}).`));
+        setError(extractApiError(body, t("feedback.save_failed_status", { status: res.status })));
         return;
       }
       await refresh();
     } catch {
-      setError("Could not save.");
+      setError(t("feedback.save_failed"));
     } finally {
       setSaving(false);
     }
@@ -87,7 +89,7 @@ export function EventFeedbackPanel({ eventId }: { eventId: string }) {
             key={r.value}
             type="button"
             disabled={saving}
-            title={r.title}
+            title={t(r.titleKey)}
             onClick={() => put(r.value)}
             className={`px-2 py-1 text-[11px] rounded-md border transition-colors ${
               mine?.rating === r.value
@@ -95,13 +97,13 @@ export function EventFeedbackPanel({ eventId }: { eventId: string }) {
                 : "border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
             }`}
           >
-            {r.label}
+            {t(r.labelKey)}
           </button>
         ))}
         {rows.length > 0 && (
           <span className="text-[11px] text-muted-foreground ml-1">
-            {rows.length} review{rows.length === 1 ? "" : "s"}
-            {mine ? " · yours saved" : ""}
+            {t(rows.length === 1 ? "feedback.review_one" : "feedback.review_other", { count: rows.length })}
+            {mine ? ` · ${t("feedback.yours_saved")}` : ""}
           </span>
         )}
         {mine && (
@@ -119,13 +121,13 @@ export function EventFeedbackPanel({ eventId }: { eventId: string }) {
             }}
             className="text-[11px] text-muted-foreground hover:text-danger transition-colors"
           >
-            Withdraw
+            {t("feedback.withdraw")}
           </button>
         )}
       </div>
       {showReasons && (
         <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-          <span className="text-[11px] text-muted-foreground">What was wrong? (optional)</span>
+          <span className="text-[11px] text-muted-foreground">{t("feedback.what_wrong")}</span>
           {REASONS.map((r) => (
             <button
               key={r.value}
@@ -134,7 +136,7 @@ export function EventFeedbackPanel({ eventId }: { eventId: string }) {
               onClick={() => put("incorrect", r.value)}
               className="px-2 py-0.5 text-[11px] rounded border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors"
             >
-              {r.label}
+              {t(r.labelKey)}
             </button>
           ))}
         </div>
