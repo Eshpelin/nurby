@@ -132,6 +132,31 @@ def test_vehicle_scope_follows_visible_later_observation(monkeypatch):
     assert _run(_vehicle_in_scope(vehicle, user, DB())) is True
 
 
+def test_vehicle_list_visibility_uses_any_allowed_observation():
+    from services.api.routes.vehicles import _visible_vehicle_ids
+
+    visible_camera = uuid.uuid4()
+    vehicle_id = uuid.uuid4()
+    observation = MagicMock(
+        camera_id=visible_camera,
+        vehicle_detections={"vehicles": [{"vehicle_id": str(vehicle_id)}]},
+    )
+
+    class Result:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [observation]
+
+    class DB:
+        async def execute(self, _stmt):
+            return Result()
+
+    visible = _run(_visible_vehicle_ids(DB(), {visible_camera}))
+    assert visible == {str(vehicle_id)}
+
+
 # ── identify_vehicles ────────────────────────────────────────────────
 
 def _exec_none():

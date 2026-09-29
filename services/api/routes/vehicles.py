@@ -142,6 +142,33 @@ def _vehicle_ids_in(obs: Observation) -> set[str]:
     return out
 
 
+async def _visible_vehicle_ids(db: AsyncSession, allowed) -> set[str] | None:
+    """Return vehicle identities backed by at least one visible observation.
+
+    ``Vehicle.first_camera_id`` is only an ingestion hint. A vehicle can be
+    first seen on a restricted camera and later appear on one the caller may
+    access, so using that column as the sole list filter hides valid identities
+    from restricted users. Returning ``None`` keeps the unrestricted path
+    cheap while the scoped path follows the same evidence-based rule used by
+    ``_vehicle_in_scope``.
+    """
+    if allowed is ALL:
+        return None
+    rows = (
+        await db.execute(
+            apply_camera_filter(
+                select(Observation).where(Observation.vehicle_detections.is_not(None)),
+                allowed,
+                Observation.camera_id,
+            )
+        )
+    ).scalars().all()
+    visible: set[str] = set()
+    for observation in rows:
+        visible.update(_vehicle_ids_in(observation))
+    return visible
+
+
 async def _vehicle_in_scope(
     vehicle: Vehicle, user: User, db: AsyncSession, allowed=None,
 ) -> bool:
@@ -169,10 +196,11 @@ async def list_vehicles(
 ):
     """All known vehicles, most recently seen first."""
     allowed = await allowed_camera_ids(current_user, db)
+    visible_vehicle_ids = await _visible_vehicle_ids(db, allowed)
     stmt = select(Vehicle)
-    if allowed is not ALL:
-        stmt = stmt.where(Vehicle.first_camera_id.in_(allowed))
     rows = (await db.execute(stmt.order_by(Vehicle.last_seen_at.desc()))).scalars().all()
+    if visible_vehicle_ids is not None:
+        rows = [row for row in rows if str(row.id) in visible_vehicle_ids]
     return rows
 
 
@@ -187,10 +215,11 @@ async def vehicles_activity_summary(
     mirroring the People activity summary.
     """
     allowed = await allowed_camera_ids(_current_user, db)
+    visible_vehicle_ids = await _visible_vehicle_ids(db, allowed)
     vehicle_stmt = select(Vehicle)
-    if allowed is not ALL:
-        vehicle_stmt = vehicle_stmt.where(Vehicle.first_camera_id.in_(allowed))
     vehicles = (await db.execute(vehicle_stmt)).scalars().all()
+    if visible_vehicle_ids is not None:
+        vehicles = [vehicle for vehicle in vehicles if str(vehicle.id) in visible_vehicle_ids]
     if not vehicles:
         return []
 
