@@ -763,6 +763,7 @@ export default function CameraConfigPage() {
         {/* ── Authentication ── */}
         {supportsAuth && (
           <AuthSection
+            locale={locale}
             authToken={authToken}
             password={password}
             setAuthToken={setAuthToken}

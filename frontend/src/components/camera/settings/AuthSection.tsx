@@ -5,8 +5,10 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, inputClass } from "./primitives";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface AuthSectionProps {
+  locale: Locale;
   authToken: string;
   password: string;
   setAuthToken: Dispatch<SetStateAction<string>>;
@@ -16,6 +18,7 @@ interface AuthSectionProps {
 }
 
 export function AuthSection({
+  locale,
   authToken,
   password,
   setAuthToken,
@@ -23,13 +26,14 @@ export function AuthSection({
   setUsername,
   username,
 }: AuthSectionProps) {
+  const t = (key: string) => translate(locale, key);
   return (
           <Section
-            title="Authentication"
+            title={t("camera.auth.title")}
           advanced
-            description="Credentials for accessing the camera feed"
+            description={t("camera.auth.description")}
           >
-            <FieldRow label="Username">
+            <FieldRow label={t("camera.auth.username")}>
               {/* autoComplete off + a non-login field name so the browser
                   does not autofill the account email over the camera's own
                   username. Autofill here silently corrupts the RTSP creds and
@@ -45,7 +49,7 @@ export function AuthSection({
               />
             </FieldRow>
 
-            <FieldRow label="Password" hint="Leave blank to keep current">
+            <FieldRow label={t("camera.auth.password")} hint={t("camera.auth.password_hint")}>
               {/* new-password stops the browser autofilling a saved login
                   password over the camera credential. */}
               <input
@@ -61,16 +65,16 @@ export function AuthSection({
 
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <span className="flex-1 h-px bg-border" />
-              or use token
+              {t("camera.auth.or_token")}
               <span className="flex-1 h-px bg-border" />
             </div>
 
-            <FieldRow label="Bearer Token" hint="For API-based cameras">
+            <FieldRow label={t("camera.auth.bearer_token")} hint={t("camera.auth.bearer_hint")}>
               <input
                 type="password"
                 value={authToken}
                 onChange={(e) => setAuthToken(e.target.value)}
-                placeholder="Token or API key"
+                placeholder={t("camera.auth.token_placeholder")}
                 className={`${inputClass} font-mono text-xs`}
               />
             </FieldRow>
