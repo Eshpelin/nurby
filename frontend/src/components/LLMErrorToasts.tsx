@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useWSSubscribe } from "@/lib/ws";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 interface ErrorToast {
   id: number;
@@ -22,6 +24,8 @@ const MAX_VISIBLE = 4;
  * dedup window so a 429 storm doesn't create 50 toasts.
  */
 export function LLMErrorToasts() {
+  const { user } = useAuth();
+  const tr = (key: string) => translate(user?.locale, key);
   const [toasts, setToasts] = useState<ErrorToast[]>([]);
   const [seq, setSeq] = useState(0);
 
@@ -97,10 +101,10 @@ export function LLMErrorToasts() {
             </svg>
             <div className="min-w-0 flex-1">
               <div className="font-medium text-danger">
-                {t.providerName} · {t.op === "vlm" ? "VLM call" : "LLM call"}
+                {t.providerName} · {t.op === "vlm" ? tr("llm.vlm_call") : tr("llm.llm_call")}
                 {t.status === 429 && (
                   <span className="ml-1 text-[10px] uppercase tracking-wider text-warning">
-                    rate limited
+                    {tr("llm.rate_limited")}
                   </span>
                 )}
               </div>
@@ -109,9 +113,7 @@ export function LLMErrorToasts() {
               </div>
               {t.status === 429 && (
                 <div className="text-[11px] text-muted-foreground/80 mt-1">
-                  Provider throttled. Calls will retry with backoff. Check
-                  the provider&apos;s rate limit or set a tighter token cap in
-                  Settings.
+                  {tr("llm.provider_throttled")}
                 </div>
               )}
             </div>

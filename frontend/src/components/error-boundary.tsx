@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { getDisplayLocale } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 interface Props {
   children: React.ReactNode;
@@ -29,6 +31,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
+      const locale = getDisplayLocale();
+      const t = (key: string) => translate(locale, key);
 
       return (
         <div className="min-h-[60vh] flex items-center justify-center p-6">
@@ -40,22 +44,22 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 <line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
             </div>
-            <h3 className="text-sm font-semibold mb-1.5">Something went wrong</h3>
+            <h3 className="text-sm font-semibold mb-1.5">{t("error_boundary.title")}</h3>
             <p className="text-xs text-muted-foreground mb-4 break-words leading-relaxed">
-              {this.state.error?.message || "An unexpected error occurred while rendering this view."}
+              {this.state.error?.message || t("error_boundary.unexpected")}
             </p>
             <div className="flex items-center justify-center gap-2">
               <button
                 onClick={() => this.setState({ hasError: false, error: null })}
                 className="px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90 transition-opacity"
               >
-                Try again
+                {t("error_boundary.try_again")}
               </button>
               <button
                 onClick={() => { if (typeof window !== "undefined") window.location.reload(); }}
                 className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               >
-                Reload page
+                {t("error_boundary.reload")}
               </button>
             </div>
           </div>

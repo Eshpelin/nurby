@@ -153,7 +153,7 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
                       {` · ${formatDateTime(evidence.observed_at)}`}
                       {typeof evidence.score === "number" && (
                         <span className="ml-2 text-foreground/80" title={t("association.source_score")}>
-                          Source score: {Math.round(evidence.score * 100)}%
+                          {t("association.source_score_value", { score: Math.round(evidence.score * 100) })}
                         </span>
                       )}
                       {evidence.explanation ? ` — ${evidence.explanation}` : ""}
@@ -169,7 +169,7 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
                           {evidence.observation_ids.slice(0, 3).map((observationId) => {
                             const thumbnail = `/api/observations/${observationId}/thumbnail?token=${encodeURIComponent(token)}`;
                             return (
-                              <a key={observationId} href={thumbnail} target="_blank" rel="noreferrer" title="Open evidence frame">
+                              <a key={observationId} href={thumbnail} target="_blank" rel="noreferrer" title={t("association.open_evidence_frame")}>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={thumbnail} alt={t("association.open_evidence_frame")} className="h-12 w-16 rounded border border-border object-cover" />
                               </a>
