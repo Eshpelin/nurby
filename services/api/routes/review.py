@@ -80,6 +80,23 @@ def _association_visible(association: EntityAssociation, allowed) -> bool:
     return bool(allowed_ids.intersection(str(camera_id) for camera_id in (association.camera_histogram or {})))
 
 
+def _supporting_evidence_count(association: EntityAssociation) -> int:
+    """Read support counts from both current and pre-lifecycle rows.
+
+    Before the supporting/contradictory split existed, ``evidence_count`` was
+    the only counter. New columns default to zero on those legacy rows, so a
+    raw read would make an established association appear unsupported. A
+    non-zero contradictory count is authoritative; otherwise legacy support
+    falls back to the original total.
+    """
+    supporting = int(getattr(association, "supporting_evidence_count", 0) or 0)
+    contradictory = int(getattr(association, "contradictory_evidence_count", 0) or 0)
+    evidence_count = int(getattr(association, "evidence_count", 0) or 0)
+    if supporting == 0 and contradictory == 0 and evidence_count > 0:
+        return evidence_count
+    return supporting
+
+
 def _scoped_evidence(row: AssociationEvidence, allowed_ids: set[str] | None) -> dict | None:
     """Project one evidence episode without leaking restricted camera sources.
 
@@ -577,7 +594,7 @@ async def list_review_items(
                         "id": association.subject_key,
                     } if association_kind == "identity_suggestion" else None,
                     "evidence_count": association.evidence_count,
-                    "supporting_evidence_count": getattr(association, "supporting_evidence_count", association.evidence_count),
+                    "supporting_evidence_count": _supporting_evidence_count(association),
                     "contradictory_evidence_count": getattr(association, "contradictory_evidence_count", 0),
                     "confidence_score": association.confidence_score,
                     "decision_explanation": association.decision_explanation,
@@ -587,7 +604,7 @@ async def list_review_items(
                     "last_seen_at": association.last_seen_at,
                     "camera_histogram": association.camera_histogram or {},
                     "evidence_policy": evidence_policy(
-                        getattr(association, "supporting_evidence_count", association.evidence_count),
+                        _supporting_evidence_count(association),
                         getattr(association, "contradictory_evidence_count", 0),
                         status=association.status,
                         source=association.source,
@@ -719,13 +736,13 @@ async def list_entity_associations(
             "source": row.source,
             "user_confirmed": row.user_confirmed,
             "evidence_count": row.evidence_count,
-            "supporting_evidence_count": getattr(row, "supporting_evidence_count", row.evidence_count),
+            "supporting_evidence_count": _supporting_evidence_count(row),
             "contradictory_evidence_count": getattr(row, "contradictory_evidence_count", 0),
             "confidence_score": row.confidence_score,
             "decision_explanation": row.decision_explanation,
             "provenance": row.provenance,
             "evidence_policy": evidence_policy(
-                getattr(row, "supporting_evidence_count", row.evidence_count),
+                _supporting_evidence_count(row),
                 getattr(row, "contradictory_evidence_count", 0),
                 status=row.status,
                 source=row.source,
@@ -1189,13 +1206,13 @@ async def get_relationship_suggestion(
         "status": association.status,
         "user_confirmed": association.user_confirmed,
         "evidence_count": association.evidence_count,
-        "supporting_evidence_count": getattr(association, "supporting_evidence_count", association.evidence_count),
+        "supporting_evidence_count": _supporting_evidence_count(association),
         "contradictory_evidence_count": getattr(association, "contradictory_evidence_count", 0),
         "confidence_score": association.confidence_score,
         "decision_explanation": association.decision_explanation,
         "provenance": association.provenance,
         "evidence_policy": evidence_policy(
-            getattr(association, "supporting_evidence_count", association.evidence_count),
+            _supporting_evidence_count(association),
             getattr(association, "contradictory_evidence_count", 0),
             status=association.status,
             source=association.source,

@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from services.api.routes.review import _scoped_evidence
 from services.api.routes.review import _association_visible
+from services.api.routes.review import _supporting_evidence_count
 from services.api.routes.review import _reconcile_observation_sources
 from shared.camera_access import ALL
 
@@ -66,6 +67,24 @@ def test_association_visibility_is_camera_scoped_before_queue_pagination():
     assert _association_visible(row, {"camera-a"}) is True
     assert _association_visible(row, {"camera-c"}) is False
     assert _association_visible(row, ALL) is True
+
+
+def test_legacy_association_support_falls_back_to_evidence_count():
+    row = SimpleNamespace(
+        evidence_count=4,
+        supporting_evidence_count=0,
+        contradictory_evidence_count=0,
+    )
+    assert _supporting_evidence_count(row) == 4
+
+
+def test_split_counters_remain_authoritative_when_contradictions_exist():
+    row = SimpleNamespace(
+        evidence_count=4,
+        supporting_evidence_count=0,
+        contradictory_evidence_count=2,
+    )
+    assert _supporting_evidence_count(row) == 0
 
 
 def test_deleted_observation_sources_are_removed_from_review_evidence():
