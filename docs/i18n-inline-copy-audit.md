@@ -16,7 +16,8 @@ UI copy.
 - camera settings: General, Feed, YOLO-World prompts, Audio Conversations,
   Incident Tracking, Relationship Privacy, Timezone, Retention, Storage,
   Authentication, AI Analysis, Detection, Activity Digest/recaps, Danger Zone,
-  package tracking, ONVIF/PTZ detection, PTZ controls, and privacy zones.
+  VLM Refiner, Summarization, package tracking, ONVIF/PTZ detection, PTZ
+  controls, and privacy zones.
 
 ## Remaining user-facing surfaces
 
@@ -28,8 +29,8 @@ should move to the shared English/Spanish catalog in follow-up slices:
 - `frontend/src/app/people/page.tsx`: people, unknown-cluster, merge, and
   deletion dialogs.
 - `frontend/src/app/cameras/[id]/page.tsx` and its remaining camera settings
-  panels: refiners, summarization, zones, and any page-level status or save
-  feedback still containing product copy.
+  panels: zones and any page-level status or save feedback still containing
+  product copy.
 - `frontend/src/components/rules/TriggerSection.tsx` and related editors:
   rule labels, hints, option labels, and zone instructions.
 - `frontend/src/app/recordings/page.tsx` and `frontend/src/app/events/page.tsx`:
