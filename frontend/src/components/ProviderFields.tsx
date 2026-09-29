@@ -1,5 +1,8 @@
 "use client";
 
+import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
+
 // Shared provider form fields. used by both the Settings → AI Providers
 // modal and the onboarding wizard so the two never drift. Controlled. the
 // parent owns the state and submit; this just renders the common rows
@@ -40,6 +43,9 @@ export function ProviderFields({
   editing?: boolean;
   modelPlaceholder?: string;
 }) {
+  const { user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = (key: string) => translate(locale, key);
   const local = isLocalProvider(values.kind, values.baseUrl);
   const modelHint =
     modelPlaceholder ??
@@ -54,42 +60,42 @@ export function ProviderFields({
   return (
     <>
       <div>
-        <label className={LABEL}>Display name</label>
+        <label className={LABEL}>{t("provider_fields.display_name")}</label>
         <input
           type="text"
           value={values.name}
           onChange={(e) => onChange("name", e.target.value)}
           className={ROW}
-          placeholder="My OpenAI"
+          placeholder={t("provider_fields.name_placeholder")}
         />
       </div>
 
       <div>
-        <label className={LABEL}>Base URL</label>
+        <label className={LABEL}>{t("provider_fields.base_url")}</label>
         <input
           type="url"
           value={values.baseUrl}
           onChange={(e) => onChange("baseUrl", e.target.value)}
           className={MONO}
-          placeholder="https://api.openai.com"
+          placeholder={t("provider_fields.base_url_placeholder")}
         />
       </div>
 
       {!local && (
         <div>
-          <label className={LABEL}>API key</label>
+        <label className={LABEL}>{t("provider_fields.api_key")}</label>
           <input
             type="password"
             value={values.apiKey}
             onChange={(e) => onChange("apiKey", e.target.value)}
             className={MONO}
-            placeholder={editing ? "Leave blank to keep existing key" : "sk-..."}
+            placeholder={editing ? t("provider_fields.api_key_keep") : t("provider_fields.api_key_placeholder")}
           />
         </div>
       )}
 
       <div>
-        <label className={LABEL}>Default model</label>
+        <label className={LABEL}>{t("provider_fields.default_model")}</label>
         <input
           type="text"
           value={values.model}
