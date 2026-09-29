@@ -5,6 +5,8 @@
 // look; the "custom" kind renders user HTML/JS in a locked-down iframe.
 
 import { useEffect, useMemo, useRef } from "react";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import {
   asText,
   resolveOrLiteral,
@@ -14,11 +16,13 @@ import {
 } from "./types";
 
 export function WidgetView({ widget, data }: { widget: Widget; data: unknown }) {
+  const { user } = useAuth();
+  const tr = (key: string) => translate(user?.locale, key);
   if (widget.render_kind === "custom") {
     return <CustomWidget html={widget.custom_html || ""} data={data} />;
   }
+  if (!widget.template) return <Centered>{tr("widget.no_template")}</Centered>;
   const t = widget.template;
-  if (!t) return <Centered>No template configured</Centered>;
   const b = t.bindings || {};
   switch (t.type as WidgetTemplateType) {
     case "stat": return <StatView data={data} b={b} />;
@@ -26,7 +30,7 @@ export function WidgetView({ widget, data }: { widget: Widget; data: unknown }) 
     case "list": return <ListView data={data} b={b} />;
     case "badge": return <BadgeView data={data} b={b} />;
     case "text": return <TextView data={data} b={b} />;
-    default: return <Centered>Unknown template</Centered>;
+    default: return <Centered>{tr("widget.unknown_template")}</Centered>;
   }
 }
 
@@ -73,9 +77,11 @@ function GaugeView({ data, b }: { data: unknown; b: Bindings }) {
 }
 
 function ListView({ data, b }: { data: unknown; b: Bindings }) {
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const arr = resolvePath(data, b.items);
   const rows = Array.isArray(arr) ? arr : [];
-  if (rows.length === 0) return <Centered>No items</Centered>;
+  if (rows.length === 0) return <Centered>{t("widget.no_items")}</Centered>;
   return (
     <div className="w-full h-full overflow-y-auto scrollbar-thin px-3 py-2 space-y-1">
       {rows.slice(0, 100).map((item, i) => {
@@ -109,10 +115,12 @@ function BadgeView({ data, b }: { data: unknown; b: Bindings }) {
 }
 
 function TextView({ data, b }: { data: unknown; b: Bindings }) {
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const text = resolveOrLiteral(data, b.text);
   return (
     <div className="w-full h-full overflow-y-auto scrollbar-thin px-4 py-3 text-sm text-foreground whitespace-pre-wrap break-words">
-      {asText(text) || <span className="text-muted-foreground">No text</span>}
+      {asText(text) || <span className="text-muted-foreground">{t("widget.no_text")}</span>}
     </div>
   );
 }

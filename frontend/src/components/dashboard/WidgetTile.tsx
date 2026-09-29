@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { timeAgo } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 import { WidgetView } from "@/components/widgets/WidgetView";
 import type { Widget, WidgetData } from "@/components/widgets/types";
 
@@ -20,7 +21,8 @@ export function WidgetTile({
   onEdit: (w: Widget) => void;
   onDelete: (w: Widget) => void;
 }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [result, setResult] = useState<WidgetData | null>(null);
   const [loading, setLoading] = useState(true);
   const mounted = useRef(true);
@@ -61,12 +63,12 @@ export function WidgetTile({
         <span className="text-xs font-medium text-foreground truncate flex-1">{widget.name}</span>
         <button onClick={() => onEdit(widget)}
           className="opacity-0 group-hover/widget:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-          title="Edit widget" aria-label="Edit widget">
+          title={t("widget.edit_action")} aria-label={t("widget.edit_action")}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
         <button onClick={() => onDelete(widget)}
           className="opacity-0 group-hover/widget:opacity-100 transition-opacity text-muted-foreground hover:text-rose-400"
-          title="Delete widget" aria-label="Delete widget">
+          title={t("widget.delete_action")} aria-label={t("widget.delete_action")}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
         </button>
       </div>
@@ -74,7 +76,7 @@ export function WidgetTile({
       {/* Body */}
       <div className="flex-1 min-h-0 relative">
         {!widget.enabled ? (
-          <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">Disabled</div>
+          <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">{t("widget.disabled")}</div>
         ) : loading ? (
           <div className="w-full h-full flex items-center justify-center">
             <svg className="animate-spin h-4 w-4 text-muted-foreground" viewBox="0 0 24 24" fill="none">
@@ -84,7 +86,7 @@ export function WidgetTile({
           </div>
         ) : failed ? (
           <div className="w-full h-full flex flex-col items-center justify-center gap-1 px-3 text-center">
-            <span className="text-xs text-rose-300">Couldn&apos;t load</span>
+            <span className="text-xs text-rose-300">{t("widget.could_not_load")}</span>
             <span className="text-[10px] text-muted-foreground break-words line-clamp-3">{result?.error}</span>
           </div>
         ) : (
@@ -95,7 +97,7 @@ export function WidgetTile({
       {/* Footer: last updated */}
       {widget.enabled && result?.fetched_at && !failed && (
         <div className="px-2.5 py-1 border-t border-border/40 text-[10px] text-muted-foreground flex-shrink-0">
-          updated {timeAgo(result.fetched_at)}
+          {t("widget.updated_at")} {timeAgo(result.fetched_at)}
         </div>
       )}
     </div>
