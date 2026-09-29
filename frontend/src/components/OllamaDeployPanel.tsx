@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { extractApiError } from "@/lib/api-error";
+import { translate, type Locale } from "@/lib/i18n";
 
 interface VisionModel {
   name: string;
@@ -34,7 +35,9 @@ export interface OllamaDeployPanelProps {
 // one for the detected RAM. Falls back to a clear message + the URL
 // field when no Ollama is reachable.
 export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const locale = (user?.locale as Locale) || "en";
+  const t = useCallback((key: string, values?: Record<string, string | number>) => translate(locale, key, values), [locale]);
   const [status, setStatus] = useState<OllamaStatus | null>(null);
   const [statusError, setStatusError] = useState("");
   const [model, setModel] = useState("");
@@ -52,12 +55,12 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
         setModel(s.recommended_model || s.available_models[0]?.name || "");
       })
       .catch(() => {
-        if (!cancelled) setStatusError("Could not reach the Ollama status endpoint.");
+        if (!cancelled) setStatusError(t("ollama.status_unavailable"));
       });
     return () => {
       cancelled = true;
     };
-  }, [authFetch]);
+  }, [authFetch, t]);
 
   // Vision models that are already pulled on the detected Ollama.
   const installedVision = useMemo(() => {
@@ -93,7 +96,7 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      throw new Error(extractApiError(j, `Failed to add provider (${res.status})`));
+      throw new Error(extractApiError(j, t("ollama.provider_failed", { status: res.status })));
     }
   }
 
@@ -101,12 +104,12 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
     if (!status?.reachable_url || !reuseModel) return;
     setBusy(true);
     setError("");
-    setMsg("Connecting to your existing Ollama.");
+    setMsg(t("ollama.connecting"));
     try {
       await createProviderAt(status.reachable_url, reuseModel);
       onProvisioned();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
+      setError(e instanceof Error ? e.message : t("ollama.failed"));
       setMsg("");
     } finally {
       setBusy(false);
@@ -127,7 +130,7 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
     if (!model) return;
     setBusy(true);
     setError("");
-    setMsg("Starting the deploy.");
+    setMsg(t("ollama.starting_deploy"));
     try {
       const res = await authFetch("/api/ollama/deploy", {
         method: "POST",
@@ -142,7 +145,7 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
       }
       if (res.ok && data.stage === "pulling") {
         setPulling(true);
-        setMsg(data.message || `Downloading ${model}.`);
+        setMsg(data.message || t("ollama.downloading", { model }));
         pollRef.current = setInterval(async () => {
           try {
             const sr = await authFetch("/api/ollama/deploy/status");
@@ -150,8 +153,8 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
             if (s.stage === "pulling" || s.stage === "registering") {
               setMsg(
                 s.progress != null
-                  ? `${s.message || `Downloading ${model}`} (${Math.round(s.progress)}%)`
-                  : s.message || `Downloading ${model}.`,
+                  ? `${s.message || t("ollama.downloading", { model })} (${Math.round(s.progress)}%)`
+                  : s.message || t("ollama.downloading", { model }),
               );
             } else {
               if (pollRef.current) clearInterval(pollRef.current);
@@ -161,7 +164,7 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
               if (s.stage === "done") {
                 onProvisioned();
               } else {
-                setError(s.message || "Deploy did not finish.");
+                setError(s.message || t("ollama.deploy_incomplete"));
                 setMsg("");
               }
             }
@@ -171,11 +174,11 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
         }, 2000);
         return;
       }
-      setError(data.message || (res.ok ? "Deploy failed" : `Deploy failed (${res.status})`));
+      setError(data.message || (res.ok ? t("ollama.deploy_failed") : t("ollama.deploy_failed_status", { status: res.status })));
       setMsg("");
       setBusy(false);
     } catch {
-      setError("Network error during deploy");
+      setError(t("ollama.network_error"));
       setMsg("");
       setBusy(false);
     }
@@ -192,20 +195,19 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
   if (statusError) {
     return (
       <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-300/90">
-        {statusError} You can still point to an Ollama running elsewhere using the
-        Base URL field below.
+        {statusError} {t("ollama.remote_url_hint")}
       </div>
     );
   }
   if (!status) {
-    return <div className="text-[11px] text-muted-foreground">Checking for a local AI.</div>;
+    return <div className="text-[11px] text-muted-foreground">{t("ollama.checking")}</div>;
   }
 
   // Case A. an Ollama is reachable. Reuse it.
   const detectedBlock = status.running && status.reachable_url && (
     <div className="rounded-md border border-emerald-500/25 bg-emerald-500/[0.05] px-3 py-3 space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-xs font-medium text-emerald-200">Existing Ollama detected</div>
+        <div className="text-xs font-medium text-emerald-200">{t("ollama.existing_detected")}</div>
         <div className="text-[10px] text-muted-foreground font-mono">{status.reachable_url}</div>
       </div>
       {installedVision.length > 0 ? (
@@ -229,12 +231,12 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
             disabled={busy || !reuseModel}
             className="w-full px-3 py-1.5 text-xs rounded-md bg-emerald-500/90 text-black font-medium hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? "Connecting." : `Use ${reuseModel}`}
+            {busy ? t("ollama.connecting_short") : t("ollama.use_model", { model: reuseModel })}
           </button>
         </>
       ) : (
         <p className="text-[11px] text-muted-foreground">
-          Connected, but no vision model is installed yet. Pull one below.
+          {t("ollama.no_model_installed")}
         </p>
       )}
     </div>
@@ -245,7 +247,7 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
     <div className="rounded-md border border-border bg-background/40 px-3 py-3 space-y-2">
       <div className="flex items-center justify-between">
         <div className="text-xs font-medium">
-          {status.running ? "Pull another model" : "Deploy a local model"}
+          {status.running ? t("ollama.pull_another") : t("ollama.deploy_local")}
         </div>
         {status.system_ram_gb != null && (
           <div className="text-[10px] text-muted-foreground">{status.system_ram_gb} GB RAM</div>
@@ -260,7 +262,7 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
         {status.available_models.map((m) => (
           <option key={m.name} value={m.name}>
             {m.label} . ~{m.ram_gb} GB . {m.quality}
-            {m.name === status.recommended_model ? " (recommended)" : ""}
+            {m.name === status.recommended_model ? ` (${t("ollama.recommended")})` : ""}
           </option>
         ))}
       </select>
@@ -270,7 +272,7 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
         disabled={busy || !model}
         className="w-full px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
       >
-        {busy ? "Working." : `Deploy ${model}`}
+        {busy ? t("ollama.working") : t("ollama.deploy_model", { model })}
       </button>
       {pulling && (
         <button
@@ -278,7 +280,7 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
           onClick={cancelDeploy}
           className="w-full px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted"
         >
-          Cancel download
+          {t("ollama.cancel_download")}
         </button>
       )}
     </div>
@@ -287,14 +289,13 @@ export function OllamaDeployPanel({ onProvisioned }: OllamaDeployPanelProps) {
   // Case C. nothing reachable and no local binary.
   const noneBlock = !status.running && !status.installed && (
     <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-[11px] text-amber-300/90 leading-relaxed space-y-1">
-      <div className="font-medium text-amber-200">No Ollama detected.</div>
+      <div className="font-medium text-amber-200">{t("ollama.none_detected")}</div>
       <div>
-        Install Ollama (
+        {t("ollama.install_hint")} (
         <a href="https://ollama.com/download" target="_blank" rel="noreferrer" className="underline">
           ollama.com/download
         </a>
-        ) on the machine or host that runs Nurby. If it runs in Docker, start Ollama on the
-        host and point the Base URL below at{" "}
+        ) {t("ollama.docker_hint")} {" "}
         <span className="font-mono">http://host.docker.internal:11434</span>.
       </div>
     </div>
