@@ -259,7 +259,7 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-accent" />
             <h2 className="text-sm font-semibold uppercase tracking-wider">
-              Set up Nurby
+              {t("onboarding.setup_title")}
             </h2>
             {(step === "camera" || step === "provider" || step === "done") && (
               <span className="text-xs text-muted-foreground">
@@ -276,7 +276,7 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
             }}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
-            Skip for now
+            {t("onboarding.skip")}
           </button>
         </div>
 
@@ -321,6 +321,7 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
               error={providerError}
               testMsg={providerTestMsg}
               cloudMode={cloudMode}
+              t={t}
               setCloudMode={(b) => {
                 setCloudMode(b);
                 // Default the cloud picker to OpenAI, not Ollama, since the
@@ -351,14 +352,14 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
               step === "done" ? "invisible" : ""
             }`}
           >
-            Back
+            {t("onboarding.back")}
           </button>
           {step === "provider" && !cloudMode && (
             <button
               onClick={() => setStep("done")}
               className="px-4 py-1.5 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground"
             >
-              Skip for now
+              {t("onboarding.skip")}
             </button>
           )}
           {step === "provider" && cloudMode && (
@@ -388,10 +389,10 @@ export function OnboardingWizard({ onClose, onComplete }: Props) {
               className="px-4 py-1.5 text-xs rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90 disabled:opacity-50"
             >
               {providerSubmitting
-                ? "Adding."
+                ? t("onboarding.adding_provider")
                 : providerForceAdvance
-                ? "Continue anyway"
-                : "Add & test"}
+                ? t("onboarding.continue_anyway")
+                : t("onboarding.add_test")}
             </button>
           )}
           {step === "done" && (
@@ -959,6 +960,7 @@ function MagicTaskRow({
 }
 
 function ProviderStep({
+  t,
   presets,
   presetIdx,
   setPresetIdx,
@@ -976,6 +978,7 @@ function ProviderStep({
   cloudMode,
   setCloudMode,
 }: {
+  t: (key: string, values?: Record<string, string | number>) => string;
   presets: typeof PROVIDER_PRESETS;
   presetIdx: number;
   setPresetIdx: (i: number) => void;
@@ -1000,12 +1003,10 @@ function ProviderStep({
     <div className="space-y-4">
       <div>
         <h3 className="text-base font-semibold mb-1">
-          Add a vision model <span className="text-muted-foreground font-normal">(optional)</span>
+          {t("onboarding.provider_title")} <span className="text-muted-foreground font-normal">({t("onboarding.optional")})</span>
         </h3>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Detection, faces, people and rules already work without this. A
-          vision model adds plain-language scene captions and lets you Ask
-          Nurby questions. Skip it now and add one anytime from Settings.
+          {t("onboarding.provider_body")}
         </p>
       </div>
       {/* Lead with local AI. The panel auto-detects a reachable Ollama
@@ -1013,11 +1014,11 @@ function ProviderStep({
           pulls a RAM-appropriate one with progress. No key, fully local. */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium">Set up local AI</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">recommended</span>
+          <span className="text-xs font-medium">{t("onboarding.local_ai_title")}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">{t("onboarding.local_ai_recommended")}</span>
         </div>
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Runs on your own hardware via Ollama. Free, private, no API key.
+          {t("onboarding.local_ai_body")}
         </p>
         <OllamaDeployPanel onProvisioned={onProvisioned} />
       </div>
@@ -1029,7 +1030,7 @@ function ProviderStep({
           onClick={() => setCloudMode(!cloudMode)}
           className="text-xs text-muted-foreground hover:text-foreground underline mt-3"
         >
-          {cloudMode ? "Hide cloud providers" : "Or connect a cloud provider (OpenAI, Claude, Gemini)"}
+          {cloudMode ? t("onboarding.hide_cloud") : t("onboarding.connect_cloud")}
         </button>
       </div>
 
@@ -1057,7 +1058,7 @@ function ProviderStep({
               );
             })}
           </div>
-          <FieldRow label="Display name">
+          <FieldRow label={t("onboarding.display_name")}>
             <input
               type="text"
               value={providerName}
@@ -1065,7 +1066,7 @@ function ProviderStep({
               className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
             />
           </FieldRow>
-          <FieldRow label="Base URL" hint="Auto-filled from preset">
+          <FieldRow label={t("onboarding.base_url")} hint={t("onboarding.base_url_hint")}>
             <input
               type="text"
               value={providerBaseUrl}
@@ -1074,7 +1075,7 @@ function ProviderStep({
               className="w-full px-3 py-2 rounded-md border border-border text-sm font-mono bg-muted/30 opacity-70"
             />
           </FieldRow>
-          <FieldRow label="Model" hint="The model name the provider uses by default. Override here if you want a different one.">
+          <FieldRow label={t("onboarding.model")} hint={t("onboarding.model_hint")}>
             <input
               type="text"
               value={providerModel}
@@ -1084,7 +1085,7 @@ function ProviderStep({
             />
           </FieldRow>
           {preset.keyRequired && (
-            <FieldRow label="API key" hint="Stored encrypted on the server. Never sent to other providers.">
+            <FieldRow label={t("onboarding.api_key")} hint={t("onboarding.api_key_hint")}>
               <input
                 type="password"
                 value={providerApiKey}
@@ -1095,10 +1096,7 @@ function ProviderStep({
             </FieldRow>
           )}
           <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-300/90 leading-relaxed">
-            Cloud providers bill per call. Nurby caps Ask-Nurby spend with a
-            per-user daily budget (default $5/day, adjustable in Settings), and
-            the perception pipeline only calls the model on real motion, so
-            idle cameras cost nothing.
+            {t("onboarding.cloud_budget")}
           </div>
         </div>
       )}
