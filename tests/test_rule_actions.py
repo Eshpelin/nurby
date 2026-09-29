@@ -207,3 +207,54 @@ def test_local_fallback_only_applies_to_hosted_cost_budget():
     assert actions_mod._local_fallback_allowed("openai", cost_block)
     assert not actions_mod._local_fallback_allowed("openai", token_block)
     assert not actions_mod._local_fallback_allowed("ollama", cost_block)
+
+
+@pytest.mark.asyncio
+async def test_blocked_hosted_rule_uses_local_provider(monkeypatch):
+    from services.events import actions as actions_mod
+    from services.perception.usage import PerceptionBudgetDecision
+
+    class Provider:
+        def __init__(self, kind):
+            self.kind = kind
+            self.default_model = f"{kind}-model"
+            self.api_key = "key"
+            self.base_url = "http://provider"
+
+    hosted = Provider("openai")
+    local = Provider("ollama")
+    calls = []
+
+    async def provider_for(kind):
+        return local if kind == "ollama" else hosted
+
+    async def fake_call(kind, provider, *args, **kwargs):
+        calls.append((kind, provider.kind))
+        return "local answer"
+
+    async def no_op(*args, **kwargs):
+        return None
+
+    async def blocked(*args, **kwargs):
+        return PerceptionBudgetDecision(False, "blocked", "Next VLM call would exceed cost budget 10c", 11, 1)
+
+    monkeypatch.setattr(actions_mod, "_get_provider_by_kind", provider_for)
+    monkeypatch.setattr(actions_mod, "_call_vlm", fake_call)
+    monkeypatch.setattr(actions_mod, "check_perception_budget", blocked)
+    monkeypatch.setattr(actions_mod, "record_vlm_usage", no_op)
+    monkeypatch.setattr(actions_mod, "_update_event_status", no_op)
+
+    class Rule:
+        id = __import__("uuid").uuid4()
+        name = "budget fallback"
+
+    observation = {"camera_id": str(__import__("uuid").uuid4()), "vars": {}}
+    await actions_mod.execute_action(
+        {"type": "vlm_call", "provider": "openai", "prompt": "answer", "output": "answer"},
+        observation,
+        Rule(),
+        Rule.id,
+    )
+
+    assert calls == [("ollama", "ollama")]
+    assert observation["vars"]["answer"] == "local answer"
