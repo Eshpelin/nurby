@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate, type Locale } from "@/lib/i18n";
 import type { PTZPreset } from "./types";
 
 function HoldButton({
@@ -31,8 +32,9 @@ function HoldButton({
 }
 
 
-export function PTZControlPanel({ cameraId }: { cameraId: string }) {
+export function PTZControlPanel({ cameraId, locale }: { cameraId: string; locale: Locale }) {
   const { authFetch } = useAuth();
+  const t = (key: string) => translate(locale, key);
   const [presets, setPresets] = useState<PTZPreset[]>([]);
   const [speed, setSpeed] = useState(0.5);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -139,7 +141,7 @@ export function PTZControlPanel({ cameraId }: { cameraId: string }) {
         <HoldButton onHold={() => startHold(0, 0, -1)} onRelease={stopHold} className={btnClass}>
           −
         </HoldButton>
-        <span className="text-xs text-muted-foreground">Zoom</span>
+        <span className="text-xs text-muted-foreground">{t("camera.ptz.zoom")}</span>
         <HoldButton onHold={() => startHold(0, 0, 1)} onRelease={stopHold} className={btnClass}>
           +
         </HoldButton>
@@ -147,7 +149,7 @@ export function PTZControlPanel({ cameraId }: { cameraId: string }) {
 
       {/* Speed */}
       <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground">Speed</span>
+        <span className="text-xs text-muted-foreground">{t("camera.ptz.speed")}</span>
         <input
           type="range"
           min={0.1}
@@ -165,7 +167,7 @@ export function PTZControlPanel({ cameraId }: { cameraId: string }) {
       {/* Presets */}
       {presets.length > 0 && (
         <div>
-          <div className="text-xs text-muted-foreground mb-2">Presets</div>
+          <div className="text-xs text-muted-foreground mb-2">{t("camera.ptz.presets")}</div>
           <div className="flex flex-wrap gap-1">
             {presets.map((p) => (
               <button
@@ -183,4 +185,3 @@ export function PTZControlPanel({ cameraId }: { cameraId: string }) {
     </div>
   );
 }
-

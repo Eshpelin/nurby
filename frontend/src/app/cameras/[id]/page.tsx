@@ -1040,11 +1040,11 @@ export default function CameraConfigPage() {
 
         {/* ── PTZ Control ── */}
         {streamType === "rtsp" && camera?.ptz_supported === true && (
-          <Section
-            title="PTZ Control"
-            description="Pan, tilt, and zoom controls for ONVIF-compatible cameras"
-          >
-            <PTZControlPanel cameraId={cameraId} />
+            <Section
+            title={t("camera.ptz.title")}
+            description={t("camera.ptz.description")}
+            >
+            <PTZControlPanel cameraId={cameraId} locale={locale} />
           </Section>
         )}
 
