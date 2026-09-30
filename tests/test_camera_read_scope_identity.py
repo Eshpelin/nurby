@@ -184,7 +184,9 @@ def test_no_access_user_sees_no_identity_rows(http):
     # An empty allowlist forces every scoped scan to a false predicate, so
     # nothing is returned. The exact rendering of an empty ``IN ()`` varies by
     # SQLAlchemy version, so we assert the positive allowlist is never present.
-    assert client.get("/persons/activity/summary").status_code == 200
+    summary = client.get("/persons/activity/summary")
+    assert summary.status_code == 200
+    assert summary.json() == []
     assert client.get("/journeys").json() == []
     scoped = [s for s in db.statements if "from observations" in s or "from incidents" in s]
     assert scoped, db.statements

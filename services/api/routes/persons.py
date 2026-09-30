@@ -433,6 +433,7 @@ async def person_activity_summary(_current_user: User = Depends(get_current_user
     """
     from datetime import timezone as tz
 
+    allowed = await allowed_camera_ids(_current_user, db)
     result = await db.execute(select(Person).order_by(Person.created_at))
     persons = result.scalars().all()
 
@@ -445,7 +446,6 @@ async def person_activity_summary(_current_user: User = Depends(get_current_user
 
     # Fetch observations with person detections from last 7 days for efficiency
     from datetime import timedelta
-    allowed = await allowed_camera_ids(_current_user, db)
     cutoff_7d = datetime.now(tz.utc) - timedelta(days=7)
     obs_result = await db.execute(
         apply_camera_filter(
@@ -457,6 +457,19 @@ async def person_activity_summary(_current_user: User = Depends(get_current_user
         ).order_by(Observation.started_at.desc())
     )
     observations = obs_result.scalars().all()
+
+    # Person rows are household-global. Do not return names, relationships,
+    # or photos for identities that have no evidence in the caller's camera
+    # scope. The observation-derived set is also the source for all counts
+    # below, so hidden-camera identities cannot appear as zero-count rows.
+    visible_person_ids = {
+        str(face.get("person_id"))
+        for obs in observations
+        for face in (obs.person_detections or {}).get("faces", []) or []
+        if face.get("person_id")
+    }
+    if allowed is not ALL:
+        persons = [p for p in persons if str(p.id) in visible_person_ids]
 
     now = datetime.now(tz.utc)
     cutoff_1h = now - timedelta(hours=1)
@@ -665,6 +678,18 @@ async def cluster_activity_summary(
     )
     observations = obs_result.scalars().all()
 
+    # Restrict cluster metadata to clusters with current, permitted-camera
+    # evidence. Persisted sighting_count and first-camera fields are global
+    # and cannot safely drive a scoped response.
+    visible_cluster_ids = {
+        str(face.get("cluster_id"))
+        for obs in observations
+        for face in (obs.person_detections or {}).get("faces", []) or []
+        if face.get("cluster_id") and not face.get("person_id")
+    }
+    if allowed is not ALL:
+        clusters = [c for c in clusters if str(c.id) in visible_cluster_ids]
+
     now = datetime.now(tz.utc)
     cutoff_1h = now - timedelta(hours=1)
     cutoff_24h = now - timedelta(hours=24)
@@ -712,8 +737,12 @@ async def cluster_activity_summary(
             auto_label_number=c.auto_label_number,
             appearance_description=c.appearance_description,
             appearance_description_status=c.appearance_description_status or "pending",
-            sample_thumbnail_path=c.sample_thumbnail_path,
-            sighting_count=c.sighting_count,
+            sample_thumbnail_path=(
+                c.sample_thumbnail_path
+                if allowed is ALL or cid in visible_cluster_ids
+                else None
+            ),
+            sighting_count=len(raw) if allowed is not ALL else c.sighting_count,
             sightings_1h=sum(1 for t, _ in sessions if t >= cutoff_1h),
             sightings_24h=sum(1 for t, _ in sessions if t >= cutoff_24h),
             last_seen_at=last_seen.isoformat() if last_seen else None,
@@ -881,7 +910,14 @@ async def _auto_star_top_persons(
         reverse=True,
     )
     ranked_ids = {str(p.id) for p in ranked_seen}
-    remainder = [p for p in all_persons if str(p.id) not in ranked_ids]
+    # For scoped users, never fill the remainder with identities that have no
+    # visible evidence. The unrestricted admin path preserves the existing
+    # "never empty" behavior.
+    remainder = (
+        [p for p in all_persons if str(p.id) not in ranked_ids]
+        if allowed is ALL
+        else []
+    )
     ordered = (ranked_seen + remainder)[:limit]
 
     for p in ordered:
