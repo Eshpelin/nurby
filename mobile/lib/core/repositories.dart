@@ -824,6 +824,14 @@ class ReviewRepository {
     );
     return (j as Map).cast<String, dynamic>();
   }
+
+  Future<Map<String, dynamic>> detail(String id, {String? cameraId}) async {
+    final j = await _api.getJson(
+      '/api/review/relationship-suggestions/$id',
+      query: {if (cameraId != null) 'camera_id': cameraId},
+    );
+    return (j as Map).cast<String, dynamic>();
+  }
 }
 
 class SystemRepository {
