@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { useWebSocket } from "@/lib/ws";
 import { useToast, useConfirm } from "@/lib/feedback";
 import {
@@ -25,7 +26,8 @@ import type { HouseholdMode } from "@/lib/household-mode";
 const LAST_FIRED_CACHE_MS = 30_000;
 
 export default function RulesPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const { subscribe } = useWebSocket();
   const toast = useToast();
   const confirm = useConfirm();
@@ -220,9 +222,9 @@ export default function RulesPage() {
     <div className="px-6 py-6">
       <div className="flex items-baseline justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Rules</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("rules.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {ruleCount} rule{ruleCount !== 1 ? "s" : ""} configured
+            {t(ruleCount === 1 ? "rules.count_one" : "rules.count_other", { count: ruleCount })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -234,14 +236,14 @@ export default function RulesPage() {
               onClick={() => setShowTemplates((v) => !v)}
               className="px-3 py-1.5 text-sm rounded-md border border-border hover:border-accent font-medium"
             >
-              Templates
+              {t("rules.templates")}
             </button>
           )}
           <button
             onClick={openCreate}
             className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90"
           >
-            + Create rule
+            {t("rules.create")}
           </button>
         </div>
       </div>
