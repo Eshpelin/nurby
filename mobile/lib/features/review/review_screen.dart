@@ -245,6 +245,10 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                     child: const Text('Confirm'),
                   ),
                   TextButton(
+                    onPressed: () => _decide(item, 'defer'),
+                    child: const Text('Not now'),
+                  ),
+                  TextButton(
                     onPressed: () => _decide(item, 'ambiguous'),
                     child: const Text('Needs more evidence'),
                   ),
