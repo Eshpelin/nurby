@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -188,6 +188,35 @@ def test_get_journey_own_camera_scopes_incident_hydrate():
     compiled = _compiled(inc_stmts[-1]).replace("-", "")
     assert CAM_A.hex in compiled
     assert CAM_B.hex not in compiled
+
+
+def test_get_mixed_journey_redacts_hidden_segments_and_narrative():
+    mine = _journey(
+        CAM_A,
+        CAM_B,
+        summary_text="Ann moved from Front Door to the hidden garage.",
+        transitions=[{
+            "from_camera_id": str(CAM_A),
+            "to_camera_id": str(CAM_B),
+            "from_camera_name": "Front Door",
+            "to_camera_name": "Hidden garage",
+            "gap_seconds": 4,
+        }],
+    )
+    mine.segments = [
+        {"camera_id": str(CAM_A), "started_at": T0.isoformat(), "last_seen_at": T0.isoformat(), "occurrence_count": 2},
+        {"camera_id": str(CAM_B), "started_at": (T0 + timedelta(seconds=4)).isoformat(), "last_seen_at": (T0 + timedelta(seconds=5)).isoformat(), "occurrence_count": 3},
+    ]
+    db = StubDB(grants=[CAM_A], get_map={"Journey": mine}, incidents=[_incident(CAM_A)])
+
+    payload = _run(journeys_routes.get_journey(journey_id=mine.id, user=_selected_user(CAM_A), db=db))
+
+    assert [segment["camera_id"] for segment in payload["segments"]] == [str(CAM_A)]
+    assert payload["transitions"] == []
+    assert payload["cameras_seen_count"] == 1
+    assert payload["incidents_count"] == 2
+    assert payload["summary_text"] is None
+    assert str(CAM_B) not in str(payload)
 
 
 def test_reinterpret_journey_on_foreign_camera_is_404():

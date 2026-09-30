@@ -63,20 +63,67 @@ def _journey_in_scope(journey: Journey, allowed: AllowedCameras) -> bool:
     return bool(_seg_cam_ids(journey) & allowed)
 
 
-def _serialize(j: Journey) -> dict[str, Any]:
+def _serialize(j: Journey, allowed: AllowedCameras = ALL) -> dict[str, Any]:
+    """Serialize a journey without exposing hidden-camera path details.
+
+    A journey is visible when it touches at least one permitted camera, but
+    its JSON segments can span cameras the caller cannot see. Restricted
+    callers receive only permitted segments/transitions, visible counts and
+    timestamps, and no narrative that may mention a hidden camera.
+    """
+    all_segments = [segment for segment in (j.segments or []) if isinstance(segment, dict)]
+    if allowed is ALL:
+        segments = all_segments
+    else:
+        allowed_ids = {str(camera_id) for camera_id in allowed}
+        segments = [
+            segment for segment in all_segments
+            if str(segment.get("camera_id")) in allowed_ids
+        ]
+    visible_camera_ids = {str(segment.get("camera_id")) for segment in segments if segment.get("camera_id")}
+    if allowed is ALL:
+        transitions = list(j.transitions or [])
+        summary_text = j.summary_text
+    else:
+        transitions = [
+            transition for transition in (j.transitions or [])
+            if isinstance(transition, dict)
+            and str(transition.get("from_camera_id")) in visible_camera_ids
+            and str(transition.get("to_camera_id")) in visible_camera_ids
+        ]
+        # The existing summary can name cameras from the complete journey.
+        summary_text = j.summary_text if len(segments) == len(all_segments) else None
+
+    started_at = j.started_at
+    last_seen_at = j.last_seen_at
+    ended_at = j.ended_at
+    if allowed is not ALL and segments:
+        try:
+            started_at = datetime.fromisoformat(str(segments[0]["started_at"]))
+        except (KeyError, TypeError, ValueError):
+            pass
+        try:
+            last_seen_at = datetime.fromisoformat(str(segments[-1]["last_seen_at"]))
+        except (KeyError, TypeError, ValueError):
+            pass
+        if ended_at is not None and last_seen_at < ended_at:
+            ended_at = last_seen_at
+    visible_incidents = sum(
+        max(1, int(segment.get("occurrence_count") or 1)) for segment in segments
+    )
     return {
         "id": str(j.id),
         "subject_kind": j.subject_kind,
         "subject_key": j.subject_key,
-        "started_at": j.started_at.isoformat(),
-        "last_seen_at": j.last_seen_at.isoformat(),
-        "ended_at": j.ended_at.isoformat() if j.ended_at else None,
+        "started_at": started_at.isoformat(),
+        "last_seen_at": last_seen_at.isoformat(),
+        "ended_at": ended_at.isoformat() if ended_at else None,
         "finalized": j.finalized,
-        "segments": j.segments or [],
-        "transitions": j.transitions or [],
-        "cameras_seen_count": j.cameras_seen_count,
-        "incidents_count": j.incidents_count,
-        "summary_text": j.summary_text,
+        "segments": segments,
+        "transitions": transitions,
+        "cameras_seen_count": len(visible_camera_ids) if allowed is not ALL else j.cameras_seen_count,
+        "incidents_count": visible_incidents if allowed is not ALL else j.incidents_count,
+        "summary_text": summary_text,
         "summary_provider_name": j.summary_provider_name,
         "created_at": j.created_at.isoformat(),
     }
@@ -113,7 +160,7 @@ async def list_journeys(
     allowed = await allowed_camera_ids(user, db)
     if allowed is ALL:
         rows = (await db.execute(q.offset(offset).limit(limit))).scalars().all()
-        return [_serialize(r) for r in rows]
+        return [_serialize(r, allowed) for r in rows]
     rows = (await db.execute(q)).scalars().all()
     visible = [r for r in rows if _journey_in_scope(r, allowed)]
     return [_serialize(r) for r in visible[offset : offset + limit]]
@@ -131,7 +178,7 @@ async def get_journey(
     # probing and match the single-resource convention (issue #201).
     if row is None or not _journey_in_scope(row, allowed):
         raise HTTPException(status_code=404, detail="journey not found")
-    payload = _serialize(row)
+    payload = _serialize(row, allowed)
     # Hydrate linked incidents for the detail view so the UI can show
     # per-camera occurrence counts + thumbnails without a second
     # round-trip. Restrict to in-scope cameras so a mixed-camera journey
