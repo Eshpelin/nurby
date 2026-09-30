@@ -17,6 +17,8 @@ import {
 import { DescribeRuleBox } from "./DescribeRuleBox";
 import { StyledSelect } from "./StyledSelect";
 import type { Camera, Person, Rule, TelegramChannelOption } from "./types";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export interface TemplateGalleryProps {
   cameras: Camera[];
@@ -38,6 +40,8 @@ function TemplateCard({
   onUse: (rule: Rule) => void;
 }) {
   const [picked, setPicked] = useState<Partial<Record<TemplateParamName, string>>>({});
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
 
   // Templates that take a real-world action (drive a relay, speak over a
   // camera, write to another system) are created paused for review (#192).
@@ -65,14 +69,14 @@ function TemplateCard({
           // Real-world action. Created disabled so the user reviews the
           // evidence and enables it before it can fire.
           <div className="mt-2 inline-flex items-center gap-1 rounded border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.5 text-[10px] leading-snug text-sky-600 dark:text-sky-300">
-            ⏸️ Starts paused for review
+            ⏸️ {t("rules.templates.starts_paused")}
           </div>
         )}
         {template.needsGeometry && (
           // Loitering / tripwire rules cannot save without a drawn zone, so
           // say it here instead of letting the save fail.
           <div className="mt-2 inline-flex items-center gap-1 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            ✏️ You draw the zone next
+            ✏️ {t("rules.templates.draw_zone_next")}
           </div>
         )}
       </div>
@@ -94,7 +98,7 @@ function TemplateCard({
         onClick={() => onUse(template.build(ctx, picked))}
         className="mt-auto self-start px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90"
       >
-        Use template
+        {t("rules.templates.use")}
       </button>
     </div>
   );
@@ -108,6 +112,8 @@ export function TemplateGallery({
   onCreateBlank,
   compact = false,
 }: TemplateGalleryProps) {
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const ctx: TemplateContext = { cameras, persons, telegramChannels };
   const categories = Object.keys(CATEGORY_LABELS) as (keyof typeof CATEGORY_LABELS)[];
 
@@ -115,9 +121,9 @@ export function TemplateGallery({
     <div className={compact ? "" : "py-6"}>
       {!compact && (
         <div className="text-center mb-6">
-          <h2 className="text-lg font-semibold">Start from a template</h2>
+          <h2 className="text-lg font-semibold">{t("rules.templates.title")}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Pick a recipe to prefill the rule builder. Tweak anything before you save.
+            {t("rules.templates.help")}
           </p>
         </div>
       )}
@@ -149,7 +155,7 @@ export function TemplateGallery({
             onClick={onCreateBlank}
             className="text-xs text-muted-foreground hover:text-foreground underline"
           >
-            Or start from scratch
+            {t("rules.templates.start_blank")}
           </button>
         </div>
       )}
