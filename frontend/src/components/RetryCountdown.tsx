@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 // Shows why an offline camera is offline and a live countdown to the next
 // reconnect attempt, fed by status_reason + next_retry_at from the API.
@@ -16,6 +18,8 @@ export function RetryCountdown({
   reason?: string | null;
   className?: string;
 }) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [now, setNow] = useState(() => Date.now() / 1000);
   useEffect(() => {
     if (!nextRetryAt) return;
@@ -37,7 +41,7 @@ export function RetryCountdown({
       {reason ? <span className="text-danger">{reason}</span> : null}
       {mmss != null ? (
         <span className="ml-1 text-muted-foreground">
-          {remaining && remaining > 0 ? `retrying in ${mmss}` : "retrying now"}
+          {remaining && remaining > 0 ? t("camera.retrying_in", { time: mmss }) : t("camera.retrying_now")}
         </span>
       ) : null}
     </span>
