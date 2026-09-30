@@ -115,6 +115,18 @@ def _apply_voiceprint_hypothesis(
     return ("fused" if was_video else "matched"), old_value
 
 
+def _voiceprint_reprocess_skip_reason(
+    transcript: Transcript,
+    person_id: uuid.UUID,
+) -> str | None:
+    """Keep stronger identity evidence out of matcher input entirely."""
+    if transcript.speaker_source == "manual":
+        return "skipped_manual"
+    if transcript.speaker_person_id is not None and transcript.speaker_person_id != person_id:
+        return "conflict"
+    return None
+
+
 def _clip_response(
     transcript: Transcript,
     capture: AudioCapture | None,
@@ -346,6 +358,13 @@ async def reprocess_voiceprint_attributions(
     now = datetime.now(timezone.utc)
     for transcript, capture in rows:
         processed += 1
+        skip_reason = _voiceprint_reprocess_skip_reason(transcript, person_id)
+        if skip_reason == "skipped_manual":
+            skipped_manual += 1
+            continue
+        if skip_reason == "conflict":
+            conflicts += 1
+            continue
         match = await match_voiceprint(db, capture, person_id=person_id)
         if match is None:
             continue

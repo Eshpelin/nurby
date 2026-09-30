@@ -11,6 +11,7 @@ from services.api.routes.voiceprints import (
     _clear_voice_derived_attribution,
     _eligible_clip,
     _apply_voiceprint_hypothesis,
+    _voiceprint_reprocess_skip_reason,
     _voiceprint_audit_record,
 )
 
@@ -161,3 +162,17 @@ def test_reprocess_preserves_manual_and_conflicting_identity_evidence():
     assert conflict_outcome == "conflict"
     assert conflict.speaker_person_id == other_id
     assert conflict.speaker_source == "video"
+
+
+def test_reprocess_skips_stronger_evidence_before_voiceprint_matching():
+    person_id, other_id = uuid4(), uuid4()
+
+    assert _voiceprint_reprocess_skip_reason(
+        _transcript(speaker_person_id=other_id, speaker_source="manual"), person_id
+    ) == "skipped_manual"
+    assert _voiceprint_reprocess_skip_reason(
+        _transcript(speaker_person_id=other_id, speaker_source="video"), person_id
+    ) == "conflict"
+    assert _voiceprint_reprocess_skip_reason(
+        _transcript(speaker_person_id=None, speaker_source=None), person_id
+    ) is None
