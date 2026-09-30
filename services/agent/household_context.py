@@ -113,7 +113,8 @@ def summarize_camera_activity(rows: list[tuple]) -> dict:
     Hours are UTC hour-of-day, which is a stable bucket regardless of how the
     household labels its clock. Pure, for tests."""
     out: dict = {}
-    for camera_id, started_at, objects, persons in rows:
+    for row in rows:
+        camera_id, started_at, objects, persons = row[:4]
         entry = out.setdefault(
             camera_id, {"samples": 0, "_labels": {}, "_hours": {}, "_faces": {}}
         )
@@ -279,6 +280,7 @@ async def build_household_context(db, allowed_camera_ids) -> str | None:
             Observation.started_at,
             Observation.object_detections,
             Observation.person_detections,
+            Observation.vehicle_detections,
         )
         .where(Observation.camera_id.in_(allowed))
         .where(Observation.started_at >= since)
@@ -300,14 +302,31 @@ async def build_household_context(db, allowed_camera_ids) -> str | None:
     # Where each named person usually turns up, from the same sample.
     camera_names = {c.id: c.name for c in cam_rows}
     per_person: dict[str, dict[str, int]] = {}
-    for camera_id, _, _, persons in obs_rows:
+    visible_person_names: set[str] = set()
+    visible_person_ids: set[str] = set()
+    visible_vehicle_ids: set[str] = set()
+    visible_vehicle_plates: set[str] = set()
+    for row in obs_rows:
+        camera_id, _, _, persons = row[:4]
+        vehicles = row[4] if len(row) > 4 else None
         for face in (persons or {}).get("faces", []) or []:
             name = (face or {}).get("person_name")
             if name:
+                visible_person_names.add(str(name))
                 seen = per_person.setdefault(name, {})
                 cam_name = camera_names.get(camera_id)
                 if cam_name:
                     seen[cam_name] = seen.get(cam_name, 0) + 1
+            person_id = (face or {}).get("person_id")
+            if person_id:
+                visible_person_ids.add(str(person_id))
+        for vehicle in (vehicles or {}).get("vehicles", []) or []:
+            vehicle_id = (vehicle or {}).get("vehicle_id")
+            if vehicle_id:
+                visible_vehicle_ids.add(str(vehicle_id))
+            plate = (vehicle or {}).get("plate_text")
+            if plate:
+                visible_vehicle_plates.add(str(plate).strip().casefold())
 
     person_rows = (await db.execute(
         select(Person).order_by(Person.is_starred.desc(), Person.display_name)
@@ -320,6 +339,7 @@ async def build_household_context(db, allowed_camera_ids) -> str | None:
             "usual_cameras": _top(per_person.get(p.display_name, {}), 2),
         }
         for p in person_rows
+        if str(p.id) in visible_person_ids or p.display_name in visible_person_names
     ]
 
     vehicle_rows = (await db.execute(
@@ -327,6 +347,11 @@ async def build_household_context(db, allowed_camera_ids) -> str | None:
     )).scalars().all()
     vehicles = [
         {"name": v.display_name, "plate": v.license_plate} for v in vehicle_rows
+        if str(v.id) in visible_vehicle_ids
+        or (
+            v.license_plate
+            and str(v.license_plate).strip().casefold() in visible_vehicle_plates
+        )
     ]
 
     # Established habits. Learned only: a declared authorization is policy

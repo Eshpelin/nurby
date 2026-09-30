@@ -167,7 +167,10 @@ class _FakeDB:
     async def execute(self, stmt):
         text = str(stmt).lower()
         if "from observations" in text:
-            rows = self.observations
+            # SQL rows include vehicle_detections; older fixtures intentionally
+            # omit it to keep the pure activity tests compact.
+            rows = [tuple(row) + (None,) if len(row) == 4 else row
+                    for row in self.observations]
         elif "from cameras" in text:
             rows = [(c,) for c in self.cameras]
         elif "from persons" in text:
@@ -235,6 +238,40 @@ async def test_person_usual_cameras_come_from_the_same_sample():
     db = _FakeDB([cam], rows, [person], [])
     text = await hc.build_household_context(db, {cam.id})
     assert "- Mom, parent, usually on Kitchen." in text
+
+
+@pytest.mark.asyncio
+async def test_context_does_not_list_identities_without_visible_camera_evidence():
+    hc.clear_cache()
+    cam = _camera_row("Kitchen")
+    visible_person = SimpleNamespace(
+        id=uuid.uuid4(), display_name="Mom", nickname=None,
+        relationship="parent", is_starred=True,
+    )
+    hidden_person = SimpleNamespace(
+        id=uuid.uuid4(), display_name="Hidden Person", nickname=None,
+        relationship="visitor", is_starred=False,
+    )
+    visible_vehicle = SimpleNamespace(
+        id=uuid.uuid4(), display_name="Blue Car", license_plate="ABC123",
+    )
+    hidden_vehicle = SimpleNamespace(
+        id=uuid.uuid4(), display_name="Hidden Car", license_plate="XYZ999",
+    )
+    row = _obs(cam.id, 8, ["person"], ["Mom"])
+    row = row + ({"vehicles": [{"vehicle_id": str(visible_vehicle.id),
+                                  "plate_text": "ABC123"}]},)
+    db = _FakeDB(
+        [cam], [row] * 30,
+        [visible_person, hidden_person], [visible_vehicle, hidden_vehicle],
+    )
+
+    text = await hc.build_household_context(db, {cam.id})
+
+    assert "Mom" in text
+    assert "Blue Car" in text
+    assert "Hidden Person" not in text
+    assert "Hidden Car" not in text
 
 
 @pytest.mark.asyncio
