@@ -138,7 +138,7 @@ export default function PipelinePage() {
   return (
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Pipeline</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("pipeline.title")}</h1>
         {data && (
           <span
             className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${HEALTH_TONE[data.health]}`}
