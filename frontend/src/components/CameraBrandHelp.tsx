@@ -7,6 +7,8 @@
 
 import { useEffect, useState } from "react";
 import { CAMERA_BRANDS, findBrand, type RtspSupport } from "@/lib/camera-brands";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 interface Props {
   // Called when the user clicks "Use this URL" on a template.
@@ -21,17 +23,21 @@ interface Props {
   onSwitchToScan?: () => void;
 }
 
-const SUPPORT_BADGE: Record<RtspSupport, { label: string; cls: string }> = {
-  yes: { label: "RTSP supported", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
-  limited: { label: "Limited / extra setup", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
-  no: { label: "Cloud-locked", cls: "bg-rose-500/15 text-rose-400 border-rose-500/30" },
-};
-
 export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, forceOpenSignal = 0, onSwitchToScan }: Props) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [open, setOpen] = useState(defaultOpen);
   const [brandId, setBrandId] = useState<string>("");
   const [filter, setFilter] = useState("");
   const brand = brandId ? findBrand(brandId) : undefined;
+  const supportBadge = (support: RtspSupport) => ({
+    label: t(`camera_brand.support_${support}`),
+    cls: support === "yes"
+      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+      : support === "limited"
+        ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+        : "bg-rose-500/15 text-rose-400 border-rose-500/30",
+  });
   const filteredBrands = filter.trim()
     ? CAMERA_BRANDS.filter((b) => b.name.toLowerCase().includes(filter.trim().toLowerCase()))
     : CAMERA_BRANDS;
@@ -48,8 +54,8 @@ export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, fo
         className="w-full flex items-center justify-between px-3 py-2 text-left"
         aria-expanded={open}
       >
-        <span className="text-xs font-medium flex items-center gap-1.5">
-          <span>🎥</span> Don&apos;t know your camera&apos;s URL? Pick your brand
+          <span className="text-xs font-medium flex items-center gap-1.5">
+          <span>🎥</span> {t("camera_brand.pick_brand")}
         </span>
         <svg
           width="12"
@@ -71,7 +77,7 @@ export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, fo
             type="text"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter brands..."
+            placeholder={t("camera_brand.filter")}
             className="w-full px-2 py-1.5 text-[11px] rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
           />
 
@@ -92,24 +98,23 @@ export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, fo
               </button>
             ))}
             {filteredBrands.length === 0 && (
-              <p className="text-[11px] text-muted-foreground">No brands match &quot;{filter}&quot;.</p>
+              <p className="text-[11px] text-muted-foreground">{t("camera_brand.no_match", { filter })}</p>
             )}
           </div>
 
           {!brand && (
             <p className="text-[11px] text-muted-foreground">
-              Choose your camera maker for step-by-step instructions. Not
-              listed, or don&apos;t know which brand you have?{" "}
+              {t("camera_brand.choose_help")}{" "}
               {onSwitchToScan ? (
                 <button
                   type="button"
                   onClick={onSwitchToScan}
                   className="text-accent hover:underline"
                 >
-                  Scan your network instead
+                  {t("camera_brand.scan_instead")}
                 </button>
               ) : (
-                <>Try the Scan Network tab.</>
+                <>{t("camera_brand.try_scan_tab")}</>
               )}
             </p>
           )}
@@ -119,9 +124,9 @@ export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, fo
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold">{brand.name}</span>
                 <span
-                  className={`text-[9px] px-1.5 py-px rounded border ${SUPPORT_BADGE[brand.support].cls}`}
+                  className={`text-[9px] px-1.5 py-px rounded border ${supportBadge(brand.support).cls}`}
                 >
-                  {SUPPORT_BADGE[brand.support].label}
+                  {supportBadge(brand.support).label}
                 </span>
                 {brand.port && (
                   <span className="text-[10px] text-muted-foreground font-mono">
