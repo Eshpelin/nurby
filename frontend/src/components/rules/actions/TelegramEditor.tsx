@@ -13,6 +13,8 @@ import {
 } from "../types";
 import { StyledSelect } from "../StyledSelect";
 import { VarInserter, type VarSpec } from "./VarInserter";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export interface TelegramEditorProps {
   draft: TelegramDraft;
@@ -30,6 +32,9 @@ export function TelegramEditor({
   telegramChannelsLoading,
 }: TelegramEditorProps) {
   const d = draft;
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) =>
+    translate(user?.locale, key, values);
   const set = (patch: Partial<TelegramDraft>) => onChange({ ...d, ...patch });
   const setButtons = (fn: (prev: TelegramButton[]) => TelegramButton[]) =>
     set({ buttons: fn(d.buttons) });
@@ -37,14 +42,14 @@ export function TelegramEditor({
     (c) => c.enabled && c.pairing_status === "paired",
   );
   if (telegramChannelsLoading) {
-    return <div className="text-xs text-muted-foreground">Loading Telegram channels.</div>;
+    return <div className="text-xs text-muted-foreground">{t("rules.telegram.loading")}</div>;
   }
   if (paired.length === 0) {
     return (
       <div className="text-xs text-muted-foreground bg-muted/40 border border-border rounded px-3 py-2">
-        No Telegram channels yet. Add one in{" "}
+        {t("rules.telegram.none")} {t("rules.telegram.add_in")} {" "}
         <a href="/settings" className="underline text-accent">
-          Settings → Notifications →
+          {t("rules.telegram.settings_notifications")}
         </a>
       </div>
     );
@@ -52,12 +57,12 @@ export function TelegramEditor({
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-xs text-muted-foreground block mb-1">Telegram channel</label>
+        <label className="text-xs text-muted-foreground block mb-1">{t("rules.telegram.channel")}</label>
         <StyledSelect
           value={d.channelId}
           onChange={(v) => set({ channelId: v })}
           options={[
-            { value: "", label: "Pick a channel..." },
+            { value: "", label: t("rules.telegram.pick_channel") },
             ...paired
               .slice()
               .sort((a, b) => a.label.localeCompare(b.label))
@@ -73,16 +78,16 @@ export function TelegramEditor({
         />
       </div>
       <div>
-        <label className="text-xs text-muted-foreground block mb-1">Message template</label>
+        <label className="text-xs text-muted-foreground block mb-1">{t("rules.telegram.message")}</label>
         <textarea
           value={d.template}
           onChange={(e) => set({ template: e.target.value })}
           rows={4}
           className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm resize-y"
-          placeholder="<b>{rule_name}</b> on {camera_name}"
+          placeholder={t("rules.telegram.message_placeholder")}
         />
         <div className="text-[10px] text-muted-foreground mt-1">
-          HTML formatting is supported (e.g. &lt;b&gt;bold&lt;/b&gt;). Variables. Click to insert.
+          {t("rules.telegram.formatting_help")}
         </div>
         <div className="flex flex-wrap gap-1 mt-1 items-center">
           {TELEGRAM_TEMPLATE_VARS.map((v) => (
@@ -110,7 +115,7 @@ export function TelegramEditor({
             onChange={(e) => set({ silent: e.target.checked })}
             className="accent-green-500"
           />
-          <span className="text-xs">Silent (no sound)</span>
+          <span className="text-xs">{t("rules.telegram.silent")}</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -120,15 +125,14 @@ export function TelegramEditor({
             className="accent-green-500"
           />
           <span className="text-xs">
-            Include snapshot
-            <span className="text-muted-foreground ml-1">(photo attachment)</span>
+            {t("rules.telegram.snapshot")} <span className="text-muted-foreground ml-1">{t("rules.telegram.photo_attachment")}</span>
           </span>
         </label>
       </div>
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-xs text-muted-foreground">
-            Inline buttons ({d.buttons.length}/4)
+            {t("rules.telegram.inline_buttons", { count: d.buttons.length })}/4
           </label>
           <div className="flex gap-1">
             <button
@@ -136,7 +140,7 @@ export function TelegramEditor({
               onClick={() => set({ buttons: TELEGRAM_DEFAULT_BUTTONS })}
               className="text-[10px] px-2 py-0.5 rounded border border-border hover:bg-muted text-muted-foreground"
             >
-              Reset to defaults
+              {t("rules.telegram.reset")}
             </button>
             <button
               type="button"
@@ -146,13 +150,13 @@ export function TelegramEditor({
               }
               className="text-[10px] px-2 py-0.5 rounded border border-border hover:bg-muted text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              + Add button
+              {t("rules.telegram.add_button")}
             </button>
           </div>
         </div>
         {d.buttons.length === 0 ? (
           <div className="text-[11px] text-muted-foreground bg-muted/40 rounded px-2 py-1.5">
-            No buttons. Recipients see a plain message.
+            {t("rules.telegram.no_buttons")}
           </div>
         ) : (
           <div className="space-y-1.5">
@@ -170,7 +174,7 @@ export function TelegramEditor({
                       prev.map((b, idx) => (idx === i ? { ...b, label: v } : b)),
                     );
                   }}
-                  placeholder="Label"
+                  placeholder={t("rules.telegram.button_label")}
                   className="flex-1 min-w-[120px] px-2 py-1 rounded bg-background border border-border text-xs"
                 />
                 <StyledSelect
@@ -226,7 +230,7 @@ export function TelegramEditor({
                         prev.map((b, idx) => (idx === i ? { ...b, url: v } : b)),
                       );
                     }}
-                    placeholder="https://... or {event_url}"
+                    placeholder={t("rules.telegram.url_placeholder")}
                     className={`flex-1 min-w-[160px] px-2 py-1 rounded bg-background border text-xs ${
                       btn.url && !isValidHttpUrlOrTemplate(btn.url)
                         ? "border-red-500"
@@ -238,7 +242,7 @@ export function TelegramEditor({
                   type="button"
                   onClick={() => setButtons((prev) => prev.filter((_, idx) => idx !== i))}
                   className="text-[10px] px-2 py-1 rounded border border-border hover:bg-red-500/10 hover:border-red-500/40 text-muted-foreground"
-                  title="Remove button"
+                  title={t("rules.telegram.remove_button")}
                 >
                   ✕
                 </button>
