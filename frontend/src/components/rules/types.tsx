@@ -4,6 +4,7 @@
 
 import type React from "react";
 import { humanizeTemplate } from "@/lib/rule-preview";
+import { translate, type Locale } from "@/lib/i18n";
 
 export const WEBRTC_URL =
   process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889";
@@ -1223,6 +1224,7 @@ export function collectRefsFromValue(value: unknown): string[] {
 // offending card, or null if the chain is clean.
 export function validateActionChainRefs(
   drafts: ActionDraft[],
+  locale: Locale | string = "en",
 ): { index: number; message: string } | null {
   const known = new Set<string>();
   for (let i = 0; i < drafts.length; i++) {
@@ -1236,7 +1238,7 @@ export function validateActionChainRefs(
       if (!known.has(name)) {
         return {
           index: i,
-          message: `vars.${name} referenced before declaration`,
+          message: translate(locale, "rules.validation.vars_before_declaration", { name }),
         };
       }
     }
@@ -1253,14 +1255,14 @@ export function validateActionChainRefs(
 // Validate a single action draft. Returns the first problem as a short
 // message, or null when the card is valid. Used to surface errors
 // inline on each card instead of one string at the bottom of the form.
-export function validateActionDraft(d: ActionDraft): string | null {
+export function validateActionDraft(d: ActionDraft, locale: Locale | string = "en"): string | null {
   if (d.type === "webhook" || d.type === "api_call") {
-    if (!d.url.trim()) return "URL is required";
+    if (!d.url.trim()) return translate(locale, "rules.validation.url_required");
     if (d.useCustomPayload && d.payloadTemplate.trim()) {
       try {
         JSON.parse(d.payloadTemplate);
       } catch {
-        return "Payload template is not valid JSON";
+        return translate(locale, "rules.validation.payload_json");
       }
     }
     return null;
@@ -1270,54 +1272,54 @@ export function validateActionDraft(d: ActionDraft): string | null {
       try {
         JSON.parse(d.payloadTemplate);
       } catch {
-        return "Payload template is not valid JSON";
+        return translate(locale, "rules.validation.payload_json");
       }
     }
     return null;
   }
   if (d.type === "email") {
-    if (!d.to.trim()) return "Recipient email is required";
+    if (!d.to.trim()) return translate(locale, "rules.validation.recipient_email_required");
     return null;
   }
   if (d.type === "telegram") {
-    if (!d.channelId) return "Pick a Telegram channel";
-    if (!d.template.trim()) return "Message template cannot be empty";
-    if (d.buttons.length > 4) return "Telegram supports at most 4 inline buttons";
+    if (!d.channelId) return translate(locale, "rules.validation.telegram_channel_required");
+    if (!d.template.trim()) return translate(locale, "rules.validation.message_template_required");
+    if (d.buttons.length > 4) return translate(locale, "rules.validation.telegram_button_limit");
     for (let j = 0; j < d.buttons.length; j++) {
       const b = d.buttons[j];
-      if (!b.label.trim()) return `Button ${j + 1}: label is required`;
+      if (!b.label.trim()) return translate(locale, "rules.validation.button_label_required", { index: j + 1 });
       if (b.action === "open" && (!b.url || !isValidHttpUrlOrTemplate(b.url))) {
-        return `Button ${j + 1}: URL must start with http(s) or use a template variable`;
+        return translate(locale, "rules.validation.button_url_invalid", { index: j + 1 });
       }
       if (
         (b.action === "mute_event" || b.action === "snooze_rule") &&
         b.duration_seconds !== undefined &&
         (b.duration_seconds < 60 || b.duration_seconds > 24 * 3600)
       ) {
-        return `Button ${j + 1}: duration must be between 60s and 24h`;
+        return translate(locale, "rules.validation.button_duration_range", { index: j + 1 });
       }
     }
     return null;
   }
   if (d.type === "locate") {
-    if (!d.prompt.trim()) return "Describe what to locate";
+    if (!d.prompt.trim()) return translate(locale, "rules.validation.locate_prompt_required");
     return null;
   }
   if (d.type === "speak") {
-    if (!d.text.trim()) return "Write what the camera should say";
+    if (!d.text.trim()) return translate(locale, "rules.validation.speak_text_required");
     if (d.volume.trim()) {
       const v = Number(d.volume);
-      if (!Number.isFinite(v) || v < 1 || v > 100) return "Volume must be 1-100";
+      if (!Number.isFinite(v) || v < 1 || v > 100) return translate(locale, "rules.validation.volume_range");
     }
     return null;
   }
   if (d.type === "device") {
-    if (!d.device_id) return "Pick a device";
+    if (!d.device_id) return translate(locale, "rules.validation.device_required");
     if (d.extrasJson.trim()) {
       try {
         JSON.parse(d.extrasJson);
       } catch {
-        return "Extras is not valid JSON";
+        return translate(locale, "rules.validation.extras_json");
       }
     }
     return null;

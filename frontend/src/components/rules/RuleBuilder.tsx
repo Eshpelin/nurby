@@ -462,7 +462,7 @@ export function RuleBuilder({
       // because on_complete/on_timeout may reference {{vars.trigger.*}} /
       // {{vars.steps.*}}, which the server validates.
       for (const d of [...s.formActions, ...s.formSequenceTimeoutActions]) {
-        const e = validateActionDraft(d);
+        const e = validateActionDraft(d, locale);
         if (e) {
           setError(`Action: ${e}`);
           return;
@@ -477,10 +477,10 @@ export function RuleBuilder({
 
       const errs: Record<number, string> = {};
       s.formActions.forEach((d, i) => {
-        const e = validateActionDraft(d);
+        const e = validateActionDraft(d, locale);
         if (e) errs[i] = e;
       });
-      const chainErr = validateActionChainRefs(s.formActions);
+      const chainErr = validateActionChainRefs(s.formActions, locale);
       if (chainErr && !errs[chainErr.index]) errs[chainErr.index] = chainErr.message;
       if (Object.keys(errs).length > 0) {
         setCardErrors(errs);
