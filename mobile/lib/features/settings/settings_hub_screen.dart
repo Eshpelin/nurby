@@ -21,6 +21,7 @@ class SettingsHubScreen extends ConsumerWidget {
 
     final sections = <(String, List<_Item>)>[
       ('Alerts', [
+        _Item('Review Center', 'Incidents, alerts, and identity suggestions', Icons.fact_check_outlined, '/settings/review'),
         _Item('Alert rules', 'What should I be told about', Icons.rule_outlined, '/settings/rules'),
         _Item('Notifications', 'What has been sent to this phone', Icons.notifications_none, '/settings/notifications'),
         _Item('Scheduled questions', 'Questions answered on a clock', Icons.schedule_send_outlined, '/settings/reports'),

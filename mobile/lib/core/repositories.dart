@@ -787,6 +787,45 @@ class NotificationRepository {
   }
 }
 
+/// Unified Review Center feed (#256). The server remains authoritative for
+/// camera scope and decision eligibility; the mobile client only renders the
+/// returned projections and sends explicit association decisions.
+class ReviewRepository {
+  ReviewRepository(this._api);
+  final ApiClient _api;
+
+  Future<List<Map<String, dynamic>>> list({
+    String kind = 'all',
+    bool unreadOnly = false,
+    bool includeArchived = false,
+    String? cameraId,
+  }) async {
+    final j = await _api.getJson('/api/review', query: {
+      if (kind != 'all') 'kind': kind,
+      if (unreadOnly) 'unread_only': true,
+      if (includeArchived) 'include_archived': true,
+      if (cameraId != null) 'camera_id': cameraId,
+      'limit': 100,
+    });
+    final items = j is Map ? j['items'] : j;
+    return (items is List ? items : const <dynamic>[])
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> decideAssociation(
+    String id,
+    String decision,
+  ) async {
+    final j = await _api.postJson(
+      '/api/review/relationship-suggestions/$id/decision',
+      body: {'decision': decision},
+    );
+    return (j as Map).cast<String, dynamic>();
+  }
+}
+
 class SystemRepository {
   SystemRepository(this._api);
   final ApiClient _api;

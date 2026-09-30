@@ -253,6 +253,9 @@ final notificationRepoProvider = Provider(
     outbox: ref.watch(outboxProvider),
   ),
 );
+final reviewRepoProvider = Provider<ReviewRepository>(
+  (ref) => ReviewRepository(ref.watch(apiClientProvider)),
+);
 final transcriptRepoProvider = Provider<TranscriptRepository>(
   (ref) => TranscriptRepository(ref.watch(apiClientProvider)),
 );

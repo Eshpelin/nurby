@@ -22,6 +22,7 @@ import 'features/guardian/guardian_screen.dart';
 import 'features/guardian/guardian_shell.dart';
 import 'features/home/home_screen.dart';
 import 'features/notifications/notifications_screen.dart';
+import 'features/review/review_screen.dart';
 import 'features/people/people_screen.dart';
 import 'features/follow/follow_screen.dart';
 import 'features/reports/reports_screen.dart';
@@ -208,6 +209,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
               path: 'notifications',
               builder: (_, __) => const NotificationsScreen()),
+          GoRoute(path: 'review', builder: (_, __) => const ReviewScreen()),
           GoRoute(path: 'shares', builder: (_, __) => const SharesScreen()),
           GoRoute(
             path: 'guardian',
