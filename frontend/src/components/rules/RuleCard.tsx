@@ -8,6 +8,8 @@ import {
   ruleActiveIn,
   type HouseholdMode,
 } from "@/lib/household-mode";
+import { translate } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 
 export interface RuleHealth {
   last_fired_at: string | null;
@@ -39,17 +41,17 @@ export interface RuleCardProps {
   onDelete: () => void;
 }
 
-function formatRelative(iso: string): string {
+function formatRelative(iso: string, t: (key: string, values?: Record<string, string | number>) => string): string {
   const then = new Date(iso).getTime();
   const now = Date.now();
   const diffMs = now - then;
-  if (diffMs < 60_000) return "just now";
+  if (diffMs < 60_000) return t("rules.card.just_now");
   const mins = Math.round(diffMs / 60_000);
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60) return t("rules.card.minutes_ago", { count: mins });
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return t("rules.card.hours_ago", { count: hrs });
   const days = Math.round(hrs / 24);
-  return `${days}d ago`;
+  return t("rules.card.days_ago", { count: days });
 }
 
 export function RuleCard({
@@ -65,6 +67,8 @@ export function RuleCard({
   onDuplicate,
   onDelete,
 }: RuleCardProps) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Color the badge red-ish if Never AND rule older than 24h. Likely
@@ -102,10 +106,10 @@ export function RuleCard({
   const work =
     health && fires > 0
       ? [
-          { label: "acted", count: health.acted_7d ?? 0, title: "Fires whose action chain ran to success" },
-          { label: "logged", count: fires, title: "Events recorded for this rule" },
-          { label: "clips saved", count: health.clips_7d ?? 0, title: "Fires that resolved to a stored recording" },
-          { label: "searchable", count: health.indexed_7d ?? 0, title: "Fires backed by an indexed observation, reachable from Ask" },
+          { label: t("rules.card.acted"), count: health.acted_7d ?? 0, title: t("rules.card.acted_help") },
+          { label: t("rules.card.logged"), count: fires, title: t("rules.card.logged_help") },
+          { label: t("rules.card.clips_saved"), count: health.clips_7d ?? 0, title: t("rules.card.clips_saved_help") },
+          { label: t("rules.card.searchable"), count: health.indexed_7d ?? 0, title: t("rules.card.searchable_help") },
         ]
       : null;
 
@@ -139,30 +143,30 @@ export function RuleCard({
             <div className="font-medium flex items-center gap-2">
               <span>{rule.name}</span>
               {rule.is_system && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded border border-sky-700 bg-sky-900/20 text-sky-300" title="Created by Nurby to watch camera health. You can pause it, but not edit or delete it.">
-                  System
+                <span className="text-[10px] px-1.5 py-0.5 rounded border border-sky-700 bg-sky-900/20 text-sky-300" title={t("rules.card.system_help")}>
+                  {t("rules.card.system")}
                 </span>
               )}
               {rule.is_system && (
                 <span
                   className="text-[10px] px-1.5 py-0.5 rounded border border-sky-800 bg-sky-900/30 text-sky-300"
-                  title="Created by Nurby to watch camera health. You can pause it below; it can't be renamed or deleted."
+                  title={t("rules.card.system_help")}
                 >
-                  System
+                  {t("rules.card.system")}
                 </span>
               )}
               <span
                 className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${badgeClass}`}
-                title={lastFiredAt ? `Last fired ${lastFiredAt}` : "No events recorded for this rule"}
+                title={lastFiredAt ? t("rules.card.last_fired", { time: lastFiredAt }) : t("rules.card.no_events")}
               >
-                {neverFired ? "Never fired" : `Fired ${formatRelative(lastFiredAt!)}`}
+                {neverFired ? t("rules.card.never_fired") : t("rules.card.fired", { time: formatRelative(lastFiredAt!, t) })}
               </span>
               {actionFailing && (
                 <span
                   className="text-[10px] px-1.5 py-0.5 rounded border border-red-800 bg-red-900/30 text-red-400"
-                  title={health?.last_action_error || "The last action execution failed"}
+                  title={health?.last_action_error || t("rules.card.action_failed_help")}
                 >
-                  Action failing
+                  {t("rules.card.action_failing")}
                 </span>
               )}
               {staleRefs && (
@@ -170,20 +174,20 @@ export function RuleCard({
                   className="text-[10px] px-1.5 py-0.5 rounded border border-amber-700 bg-amber-900/30 text-amber-400"
                   title={staleRefs.join("\n")}
                 >
-                  Broken reference
+                  {t("rules.card.broken_reference")}
                 </span>
               )}
               {quiet14d && !actionFailing && !staleRefs && (
                 <span
                   className="text-[10px] px-1.5 py-0.5 rounded border border-amber-700 bg-amber-900/30 text-amber-400"
-                  title="Enabled, but nothing has matched in over 14 days. Check the trigger and camera scope."
+                  title={t("rules.card.no_matches_help")}
                 >
-                  No matches in 14d
+                  {t("rules.card.no_matches")}
                 </span>
               )}
               {!rule.enabled && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">
-                  Disabled
+                  {t("rules.card.disabled")}
                 </span>
               )}
               {rule.enabled && modeGate && (
@@ -195,7 +199,7 @@ export function RuleCard({
                   }`}
                   title={
                     silencedByMode
-                      ? `${modeGate}. The house is not in that mode right now, so this rule is quiet.`
+                      ? t("rules.card.mode_quiet", { mode: modeGate })
                       : modeGate
                   }
                 >
@@ -212,9 +216,9 @@ export function RuleCard({
           {rule.is_system ? (
             <span
               className="text-[11px] text-muted-foreground pr-1"
-              title="Created by Nurby to watch camera health. Use the toggle to pause or resume it."
+              title={t("rules.card.managed_help")}
             >
-              Managed by Nurby
+              {t("rules.card.managed")}
             </span>
           ) : (
             <>
@@ -225,7 +229,7 @@ export function RuleCard({
                 }}
                 className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
               >
-                Edit
+                {t("rules.card.edit")}
               </button>
               <button
                 onClick={(e) => {
@@ -233,7 +237,7 @@ export function RuleCard({
                   setMenuOpen((v) => !v);
                 }}
                 className="px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
-                title="More actions"
+                title={t("rules.card.more_actions")}
               >
                 ⋯
               </button>
@@ -250,7 +254,7 @@ export function RuleCard({
                     }}
                     className="block w-full text-left px-3 py-1.5 text-xs hover:bg-muted"
                   >
-                    Duplicate
+                    {t("rules.card.duplicate")}
                   </button>
                   <button
                     onClick={() => {
@@ -259,7 +263,7 @@ export function RuleCard({
                     }}
                     className="block w-full text-left px-3 py-1.5 text-xs hover:bg-muted"
                   >
-                    {rule.enabled ? "Disable" : "Enable"}
+                    {rule.enabled ? t("rules.card.disable") : t("rules.card.enable")}
                   </button>
                   <button
                     onClick={() => {
@@ -269,7 +273,7 @@ export function RuleCard({
                     }}
                     className="block w-full text-left px-3 py-1.5 text-xs hover:bg-red-900/30 text-red-400"
                   >
-                    Delete
+                    {t("rules.card.delete")}
                   </button>
                 </div>
               )}
@@ -282,7 +286,7 @@ export function RuleCard({
       </div>
       {work && (
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
-          <span className="text-muted-foreground/60">Last 7 days:</span>
+          <span className="text-muted-foreground/60">{t("rules.card.last_7_days")}:</span>
           {work.map((w, i) => (
             <span key={w.label} className="flex items-center gap-2">
               {i > 0 && <span className="text-muted-foreground/30">·</span>}
