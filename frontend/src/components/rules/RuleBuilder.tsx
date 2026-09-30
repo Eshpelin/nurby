@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
 import {
   composeSummary,
@@ -32,7 +32,7 @@ import { TriggerSection } from "./TriggerSection";
 import { ConditionsSection } from "./ConditionsSection";
 import { ActionsSection } from "./ActionsSection";
 import TestPanel from "./TestPanel";
-import type { Locale } from "@/lib/i18n";
+import { translate, type Locale } from "@/lib/i18n";
 
 export interface RuleBuilderProps {
   editRule: Rule | null;
@@ -48,11 +48,11 @@ export interface RuleBuilderProps {
   onCancel: () => void;
 }
 
-const COOLDOWN_PRESETS: { value: string; label: string }[] = [
-  { value: "0", label: "Every event" },
-  { value: "300", label: "Once / 5 min" },
-  { value: "3600", label: "Once / hour" },
-  { value: "86400", label: "Once / day" },
+const COOLDOWN_PRESETS: { value: string; key: string }[] = [
+  { value: "0", key: "rules.builder.cooldown_every" },
+  { value: "300", key: "rules.builder.cooldown_5m" },
+  { value: "3600", key: "rules.builder.cooldown_hour" },
+  { value: "86400", key: "rules.builder.cooldown_day" },
 ];
 
 const CHATTY_TRIGGERS = new Set(["motion", "object_detected", "audio_event"]);
@@ -106,6 +106,10 @@ export function RuleBuilder({
 }: RuleBuilderProps) {
   const { authFetch, user } = useAuth();
   const locale = (user?.locale as Locale) || "en";
+  const t = useCallback(
+    (key: string, values?: Record<string, string | number>) => translate(locale, key, values),
+    [locale],
+  );
   const [state, dispatch] = useReducer(ruleFormReducer, INITIAL_RULE_FORM_STATE);
   const [modelClasses, setModelClasses] = useState<string[]>([]);
   const [modelClassesLoading, setModelClassesLoading] = useState(false);
@@ -263,12 +267,12 @@ export function RuleBuilder({
   const conditionsSummary = useMemo(() => {
     const parts: string[] = [];
     const cams = resolveCameraNames(state.formCondCameras, cameras);
-    parts.push(cams ? `On ${cams}` : "On any camera");
+    parts.push(cams ? `${t("rules.builder.on_camera")} ${cams}` : t("rules.builder.any_camera"));
     if (scheduleSummary) parts.push(scheduleSummary);
-    if (state.formCondConfidence !== "any") parts.push(`${state.formCondConfidence} confidence`);
-    if (state.formCondModes.length > 0) parts.push(`only while ${state.formCondModes.join(" or ")}`);
+    if (state.formCondConfidence !== "any") parts.push(`${state.formCondConfidence} ${t("rules.builder.confidence")}`);
+    if (state.formCondModes.length > 0) parts.push(`${t("rules.builder.only_while")} ${state.formCondModes.join(" or ")}`);
     return parts.join(", ");
-  }, [state.formCondCameras, state.formCondConfidence, state.formCondModes, scheduleSummary, cameras]);
+  }, [state.formCondCameras, state.formCondConfidence, state.formCondModes, scheduleSummary, cameras, t]);
 
   const formSummary = useMemo(() => {
     const actionDicts = state.formActions.map(draftToDict);
@@ -432,7 +436,7 @@ export function RuleBuilder({
   const handleSubmit = async () => {
     const s = state;
     if (!s.formName.trim()) {
-      setError("Name is required");
+      setError(t("rules.builder.name_required"));
       return;
     }
 
@@ -440,7 +444,7 @@ export function RuleBuilder({
     // long as the on_timeout (absence) chain has actions.
     if (s.formSequenceEnabled) {
       if (s.formSequenceSteps.length === 0) {
-        setError("Add at least one sequence step");
+        setError(t("rules.builder.sequence_step_required"));
         return;
       }
       for (let i = 0; i < s.formSequenceSteps.length; i++) {
@@ -451,7 +455,7 @@ export function RuleBuilder({
         }
       }
       if (s.formActions.length === 0 && s.formSequenceTimeoutActions.length === 0) {
-        setError("Add an action for completion or for timeout");
+        setError(t("rules.builder.sequence_action_required"));
         return;
       }
       // Per-card validation for both chains. Chain-ref checks are skipped here
@@ -467,7 +471,7 @@ export function RuleBuilder({
       setCardErrors({});
     } else {
       if (s.formActions.length === 0) {
-        setError("At least one action is required");
+        setError(t("rules.builder.action_required"));
         return;
       }
 
@@ -508,12 +512,12 @@ export function RuleBuilder({
             body: JSON.stringify(body),
           });
       if (!res.ok) {
-        setError("Failed to save rule");
+        setError(t("rules.builder.save_failed"));
         return;
       }
       onSaved();
     } catch {
-      setError("Network error");
+      setError(t("rules.builder.network_error"));
     } finally {
       dispatch({ type: "setSubmitting", value: false });
     }
@@ -540,7 +544,7 @@ export function RuleBuilder({
       dispatch({ type: "setField", field, value: next });
     };
 
-  const saveLabel = state.submitting ? "Saving." : editRule ? "Save changes" : "Create rule";
+  const saveLabel = state.submitting ? t("rules.builder.saving") : editRule ? t("rules.builder.save_changes") : t("rules.builder.create");
 
   return (
     <div className="px-6 py-6 max-w-6xl mx-auto">
@@ -551,10 +555,10 @@ export function RuleBuilder({
             onClick={onCancel}
             className="text-xs text-muted-foreground hover:text-foreground mb-1"
           >
-            ← Back to rules
+            ← {t("rules.builder.back")}
           </button>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {editRule ? "Edit rule" : "Create rule"}
+            {editRule ? t("rules.builder.edit_title") : t("rules.builder.create_title")}
           </h1>
         </div>
       </div>
@@ -563,13 +567,13 @@ export function RuleBuilder({
         {/* Left. Definition */}
         <div className="lg:col-span-3 space-y-4">
           <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Rule name</label>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">{t("rules.builder.name")}</label>
             <input
               type="text"
               value={state.formName}
               onChange={(e) => dispatch({ type: "setField", field: "formName", value: e.target.value })}
               className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
-              placeholder="e.g. Person at front door"
+              placeholder={t("rules.builder.name_placeholder")}
               autoFocus
             />
           </div>
@@ -581,14 +585,14 @@ export function RuleBuilder({
               onChange={(e) => dispatch({ type: "setField", field: "formEnabled", value: e.target.checked })}
               className="accent-green-500"
             />
-            <span className="text-sm">Enabled</span>
+            <span className="text-sm">{t("rules.builder.enabled")}</span>
           </label>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Tier</span>
+            <span className="text-xs text-muted-foreground">{t("rules.builder.tier")}</span>
             {([
-              { v: "alert", l: "Alert", hint: "Front page + notifications. The push-worthy tier." },
-              { v: "detection", l: "Detection", hint: "Recorded and reviewable, but stays behind the Detections tab." },
+              { v: "alert", l: t("rules.builder.alert"), hint: t("rules.builder.alert_hint") },
+              { v: "detection", l: t("rules.builder.detection"), hint: t("rules.builder.detection_hint") },
             ] as const).map((t) => (
               <button
                 key={t.v}
@@ -609,7 +613,7 @@ export function RuleBuilder({
           </div>
 
           <CollapsibleSection
-            title="Trigger"
+            title={t("rules.builder.trigger")}
             summary={describeTrigger(triggerPattern)}
             defaultOpen={!editRule}
           >
@@ -713,7 +717,7 @@ export function RuleBuilder({
             />
           </CollapsibleSection>
 
-          <CollapsibleSection title="Conditions" summary={conditionsSummary} defaultOpen={!editRule}>
+          <CollapsibleSection title={t("rules.builder.conditions")} summary={conditionsSummary} defaultOpen={!editRule}>
             <ConditionsSection
               cameras={cameras}
               systemTz={systemTz}
@@ -737,7 +741,7 @@ export function RuleBuilder({
 
           {state.formSequenceEnabled && (
             <div className="text-[11px] text-muted-foreground -mb-2 px-1">
-              These actions run when the sequence completes (on complete).
+              {t("rules.builder.sequence_complete")}
             </div>
           )}
           <ActionsSection
@@ -773,7 +777,7 @@ export function RuleBuilder({
           />
 
           <div className="border border-border rounded-md p-3">
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Wait between alerts</label>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">{t("rules.builder.cooldown")}</label>
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-1">
               {COOLDOWN_PRESETS.map((opt) => {
                 const selected = !cooldownCustom && parseInt(opt.value) === cooldownNum;
@@ -789,7 +793,7 @@ export function RuleBuilder({
                       selected ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-muted"
                     }`}
                   >
-                    {opt.label}
+                    {t(opt.key)}
                   </button>
                 );
               })}
@@ -800,7 +804,7 @@ export function RuleBuilder({
                   cooldownCustom ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-muted"
                 }`}
               >
-                Custom
+                {t("rules.builder.cooldown_custom")}
               </button>
             </div>
             {showCustomInput && (
@@ -812,12 +816,12 @@ export function RuleBuilder({
                   onChange={(e) => dispatch({ type: "setField", field: "formCooldown", value: e.target.value })}
                   className="w-32 px-2 py-1.5 rounded-md bg-background border border-border text-sm"
                 />
-                <span className="text-[11px] text-muted-foreground">seconds</span>
+                <span className="text-[11px] text-muted-foreground">{t("rules.builder.seconds")}</span>
               </div>
             )}
             {showChattyWarning && (
               <div className="mt-1 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
-                This rule will fire on every keyframe. Consider raising the cooldown.
+                {t("rules.builder.chatty_warning")}
               </div>
             )}
             <label className="mt-3 flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
@@ -830,10 +834,7 @@ export function RuleBuilder({
                 }
               />
               <span>
-                <span className="text-foreground">Fire once per visit</span> — alert once
-                while a subject stays on camera, not every frame. A person who lingers on
-                the porch triggers one alert; a new arrival triggers a fresh one. Works
-                alongside the cooldown above.
+                <span className="text-foreground">{t("rules.builder.fire_once_title")}</span> — {t("rules.builder.fire_once_description")}
               </span>
             </label>
           </div>
@@ -843,7 +844,7 @@ export function RuleBuilder({
         <div className="lg:col-span-2">
           <div className="lg:sticky lg:top-6 space-y-4">
             <div>
-              <div className="text-xs font-medium text-muted-foreground mb-1">In plain language</div>
+              <div className="text-xs font-medium text-muted-foreground mb-1">{t("rules.builder.summary")}</div>
               <SummaryCard text={formSummary} className="p-3" />
             </div>
 
@@ -856,7 +857,7 @@ export function RuleBuilder({
                 onClick={onCancel}
                 className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors"
               >
-                Cancel
+                {t("rules.builder.cancel")}
               </button>
               <button
                 onClick={handleSubmit}
