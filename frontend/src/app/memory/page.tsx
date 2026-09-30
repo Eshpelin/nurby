@@ -12,6 +12,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { useToast, useConfirm } from "@/lib/feedback";
 import { EmptyState } from "@/components/EmptyState";
 import { timeAgo } from "@/lib/time";
@@ -109,14 +110,15 @@ function filterParams(filter: FilterKey): string {
 
 export default function MemoryPage() {
   return (
-    <Suspense fallback={<div className="max-w-3xl mx-auto px-4 py-6"><p className="text-sm text-muted-foreground">Loading…</p></div>}>
+    <Suspense fallback={<div className="max-w-3xl mx-auto px-4 py-6"><p className="text-sm text-muted-foreground">{translate("en", "memory.loading")}</p></div>}>
       <MemoryPageInner />
     </Suspense>
   );
 }
 
 function MemoryPageInner() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const toast = useToast();
   const confirm = useConfirm();
   const searchParams = useSearchParams();
@@ -258,10 +260,9 @@ function MemoryPageInner() {
     <div className="max-w-3xl mx-auto px-4 py-6">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold">Memory</h1>
+          <h1 className="text-lg font-semibold">{t("memory.title")}</h1>
           <p className="text-sm text-muted-foreground">
-            What Nurby knows about your household — written by you, and what it
-            has learned. Everything here is editable; nothing learned is hidden.
+            {t("memory.subtitle")}
           </p>
         </div>
         <button
@@ -269,7 +270,7 @@ function MemoryPageInner() {
           onClick={() => setFormOpen((v) => !v)}
           className="shrink-0 text-sm px-3 py-2 rounded border border-sky-500/50 bg-sky-500/15 text-sky-200 hover:bg-sky-500/25"
         >
-          {formOpen ? "Close" : "Add a note"}
+          {formOpen ? t("memory.close") : t("memory.add_note")}
         </button>
       </div>
 
@@ -289,7 +290,7 @@ function MemoryPageInner() {
                 : "border-border text-muted-foreground hover:text-foreground"
             }`}
           >
-            {f.label}
+            {t(`memory.filter_${f.key}`)}
             {f.key === "review" && facts?.some((x) => x.status === "candidate") ? " •" : ""}
           </button>
         ))}
@@ -299,20 +300,20 @@ function MemoryPageInner() {
             onClick={() => setEntityFilter(null)}
             className="text-xs px-2.5 py-1 rounded-full border border-sky-500/50 bg-sky-500/15 text-sky-200"
           >
-            {entityFilter.kind === "household" ? "Household" : entityFilter.label ?? entityFilter.kind} ✕
+            {entityFilter.kind === "household" ? t("memory.household") : entityFilter.label ?? entityFilter.kind} ✕
           </button>
         )}
       </div>
 
       {facts === null ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">{t("memory.loading")}</p>
       ) : facts.length === 0 ? (
         <EmptyState
-          title="Nothing here yet"
+          title={t("memory.empty_title")}
           body={
             filter === "review"
-              ? "Nurby proposes facts here when it notices recurring patterns; accept or reject each one."
-              : "Tell Nurby something about your household — from here, or just ask it in chat to remember something."
+              ? t("memory.empty_review")
+              : t("memory.empty_default")
           }
         />
       ) : (
