@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 // Inline SVG glyphs. The frontend does not bundle lucide-react.
 const ArrowLeft = ({ className }: { className?: string }) => (
@@ -26,6 +26,7 @@ const ShieldCheck = ({ className }: { className?: string }) => (
 );
 
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/time";
 
 interface AudioConfig {
@@ -58,9 +59,9 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function CameraAudioPage() {
   const params = useParams();
-  const router = useRouter();
   const cameraId = params?.id as string;
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
 
   const [config, setConfig] = useState<AudioConfig | null>(null);
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
@@ -103,13 +104,13 @@ export default function CameraAudioPage() {
         const txList = await txResp.json();
         if (!cancelled) setTranscripts(Array.isArray(txList) ? txList : []);
       } catch (e: unknown) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+        if (!cancelled) setError(e instanceof Error ? e.message : translate(user?.locale, "camera_audio.load_failed"));
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [cameraId, token, showFiltered]);
+  }, [cameraId, token, showFiltered, user?.locale]);
 
   const runSummary = async () => {
     if (summarizing) return;
@@ -125,9 +126,9 @@ export default function CameraAudioPage() {
         body: JSON.stringify({ camera_id: cameraId, window_minutes: 30 }),
       });
       if (!resp.ok) throw new Error(await resp.text());
-      setSummarizeMsg("Summary generated. Check the dashboard timeline.");
+      setSummarizeMsg(t("camera_audio.summary_generated"));
     } catch (e: unknown) {
-      setSummarizeMsg(e instanceof Error ? e.message : "Summarize failed");
+      setSummarizeMsg(e instanceof Error ? e.message : t("camera_audio.summary_failed"));
     } finally {
       setSummarizing(false);
     }
@@ -150,7 +151,7 @@ export default function CameraAudioPage() {
       const next = await resp.json();
       setConfig({ ...config, ...next });
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Save failed");
+      setError(e instanceof Error ? e.message : t("camera_audio.save_failed"));
     } finally {
       setSaving(false);
     }
@@ -159,7 +160,7 @@ export default function CameraAudioPage() {
   if (!config) {
     return (
       <div className="min-h-screen bg-black text-zinc-200 p-8">
-        <div className="text-zinc-400">Loading audio settings.</div>
+        <div className="text-zinc-400">{t("camera_audio.loading")}</div>
       </div>
     );
   }
@@ -176,15 +177,12 @@ export default function CameraAudioPage() {
           </Link>
           <h1 className="text-2xl font-semibold flex items-center gap-2">
             <Mic className="w-5 h-5 text-emerald-400" />
-            Audio &amp; transcripts
+            {t("camera_audio.title")}
           </h1>
         </div>
 
         <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
-          Audio detections such as baby cry, glass break, and smoke or CO alarms are best-effort AI signals.
-          They can miss or misfire depending on mic placement and levels, and nothing here is certified or
-          monitored around the clock. Nurby is not a substitute for certified smoke and CO detectors or a
-          monitored alarm service.
+          {t("camera_audio.warning")}
         </div>
 
         {error ? (
@@ -196,63 +194,63 @@ export default function CameraAudioPage() {
         <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-5 mb-6">
           <h2 className="text-sm font-medium text-zinc-300 mb-4 flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            Privacy switches
+            {t("camera_audio.privacy")}
           </h2>
           <div className="grid gap-3">
             <ToggleRow
-              label="Capture audio"
-              hint="Pulls the audio track from this camera. Required before any transcription."
+              label={t("camera_audio.capture")}
+              hint={t("camera_audio.capture_hint")}
               value={config.audio_capture_enabled}
               onChange={(v) => update({ audio_capture_enabled: v })}
               disabled={saving}
             />
             <ToggleRow
-              label="Transcribe speech"
-              hint="Runs on-device STT against captured audio."
+              label={t("camera_audio.transcribe")}
+              hint={t("camera_audio.transcribe_hint")}
               value={config.audio_transcribe_enabled}
               onChange={(v) => update({ audio_transcribe_enabled: v })}
               disabled={saving || !config.audio_capture_enabled}
             />
             <ToggleRow
-              label="Store raw audio"
-              hint="Keeps Opus-encoded clips on disk for playback. Off = transcripts only."
+              label={t("camera_audio.store_raw")}
+              hint={t("camera_audio.store_raw_hint")}
               value={config.audio_store_raw}
               onChange={(v) => update({ audio_store_raw: v })}
               disabled={saving || !config.audio_capture_enabled}
             />
             <SelectRow
-              label="Transcript storage"
+              label={t("camera_audio.transcript_storage")}
               value={config.transcript_store}
               options={[
-                { v: "full", l: "Full text" },
-                { v: "redacted", l: "Redacted" },
-                { v: "summary_only", l: "Summary only" },
-                { v: "off", l: "Off (live only)" },
+                { v: "full", l: t("camera_audio.full_text") },
+                { v: "redacted", l: t("camera_audio.redacted") },
+                { v: "summary_only", l: t("camera_audio.summary_only") },
+                { v: "off", l: t("camera_audio.off_live") },
               ]}
               onChange={(v) => update({ transcript_store: v })}
               disabled={saving}
             />
             <SelectRow
-              label="Spoken language"
+              label={t("camera_audio.spoken_language")}
               value={config.audio_language}
               options={[
-                { v: "auto", l: "Auto-detect" },
-                { v: "en", l: "English" },
-                { v: "es", l: "Spanish" },
-                { v: "fr", l: "French" },
-                { v: "de", l: "German" },
-                { v: "it", l: "Italian" },
-                { v: "pt", l: "Portuguese" },
-                { v: "nl", l: "Dutch" },
-                { v: "pl", l: "Polish" },
-                { v: "ru", l: "Russian" },
-                { v: "tr", l: "Turkish" },
-                { v: "ar", l: "Arabic" },
-                { v: "hi", l: "Hindi" },
-                { v: "bn", l: "Bengali" },
-                { v: "ja", l: "Japanese" },
-                { v: "ko", l: "Korean" },
-                { v: "zh", l: "Chinese" },
+                { v: "auto", l: t("camera_audio.auto_detect") },
+                { v: "en", l: t("language.english") },
+                { v: "es", l: t("language.spanish") },
+                { v: "fr", l: t("language.french") },
+                { v: "de", l: t("language.german") },
+                { v: "it", l: t("language.italian") },
+                { v: "pt", l: t("language.portuguese") },
+                { v: "nl", l: t("language.dutch") },
+                { v: "pl", l: t("language.polish") },
+                { v: "ru", l: t("language.russian") },
+                { v: "tr", l: t("language.turkish") },
+                { v: "ar", l: t("language.arabic") },
+                { v: "hi", l: t("language.hindi") },
+                { v: "bn", l: t("language.bengali") },
+                { v: "ja", l: t("language.japanese") },
+                { v: "ko", l: t("language.korean") },
+                { v: "zh", l: t("language.chinese") },
               ]}
               onChange={(v) => update({ audio_language: v })}
               disabled={saving}
@@ -261,22 +259,22 @@ export default function CameraAudioPage() {
         </section>
 
         <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-5 mb-6">
-          <h2 className="text-sm font-medium text-zinc-300 mb-4">Retention</h2>
+          <h2 className="text-sm font-medium text-zinc-300 mb-4">{t("camera_audio.retention")}</h2>
           <div className="grid gap-3 grid-cols-2">
             <NumberRow
-              label="Audio retention (days)"
+              label={t("camera_audio.audio_retention")}
               value={config.audio_retention_days}
               onChange={(v) => update({ audio_retention_days: v })}
               disabled={saving}
             />
             <NumberRow
-              label="Transcript retention (days)"
+              label={t("camera_audio.transcript_retention")}
               value={config.transcript_retention_days}
               onChange={(v) => update({ transcript_retention_days: v })}
               disabled={saving}
             />
             <NumberRow
-              label="STT budget (min/hour)"
+              label={t("camera_audio.stt_budget")}
               value={config.stt_budget_minutes_per_hour}
               onChange={(v) => update({ stt_budget_minutes_per_hour: v })}
               disabled={saving}
@@ -286,28 +284,27 @@ export default function CameraAudioPage() {
 
         <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-5 mb-6">
           <h2 className="text-sm font-medium text-zinc-300 mb-1">
-            Transcription accuracy
+            {t("camera_audio.accuracy")}
           </h2>
           <p className="text-xs text-zinc-500 mb-4">
-            Defaults favor speed and run well on a CPU. Raise these for
-            cleaner text on noisy or quiet audio, at a higher compute cost.
+            {t("camera_audio.accuracy_hint")}
           </p>
           <div className="grid gap-3">
             <SelectRow
-              label="Decoding quality (beam size)"
+              label={t("camera_audio.beam_size")}
               value={String(config.audio_stt_beam_size)}
               options={[
-                { v: "1", l: "Fastest (greedy)" },
-                { v: "2", l: "Balanced (2)" },
-                { v: "3", l: "Better (3)" },
-                { v: "5", l: "Most accurate (5)" },
+                { v: "1", l: t("camera_audio.fastest") },
+                { v: "2", l: t("camera_audio.balanced") },
+                { v: "3", l: t("camera_audio.better") },
+                { v: "5", l: t("camera_audio.most_accurate") },
               ]}
               onChange={(v) => update({ audio_stt_beam_size: Number(v) })}
               disabled={saving}
             />
             <ToggleRow
-              label="Carry context across segments"
-              hint="More coherent long speech, but a transcription error can carry into the next segment."
+              label={t("camera_audio.carry_context")}
+              hint={t("camera_audio.carry_context_hint")}
               value={config.audio_stt_condition_on_previous_text}
               onChange={(v) =>
                 update({ audio_stt_condition_on_previous_text: v })
@@ -315,7 +312,7 @@ export default function CameraAudioPage() {
               disabled={saving}
             />
             <NumberRow
-              label="Silence threshold (0 to 1)"
+              label={t("camera_audio.silence_threshold")}
               value={config.audio_stt_no_speech_threshold}
               min={0}
               max={1}
@@ -328,7 +325,7 @@ export default function CameraAudioPage() {
 
         <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-5 mb-6">
           <h2 className="text-sm font-medium text-zinc-300 mb-3">
-            Manual actions
+            {t("camera_audio.manual_actions")}
           </h2>
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -337,7 +334,7 @@ export default function CameraAudioPage() {
               disabled={summarizing}
               className="px-3 py-1.5 text-xs rounded-md bg-emerald-600/20 text-emerald-300 border border-emerald-600/40 hover:bg-emerald-600/30 disabled:opacity-50"
             >
-              {summarizing ? "Generating." : "Summarize last 30 min"}
+              {summarizing ? t("camera_audio.generating") : t("camera_audio.summarize")}
             </button>
             <label className="flex items-center gap-2 text-xs text-zinc-400">
               <input
@@ -346,7 +343,7 @@ export default function CameraAudioPage() {
                 onChange={(e) => setShowFiltered(e.target.checked)}
                 className="accent-emerald-500"
               />
-              Show filtered (hallucination) transcripts
+              {t("camera_audio.show_filtered")}
             </label>
             {summarizeMsg && (
               <span className="text-xs text-zinc-400">{summarizeMsg}</span>
@@ -356,40 +353,39 @@ export default function CameraAudioPage() {
 
         <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-5">
           <h2 className="text-sm font-medium text-zinc-300 mb-4">
-            Recent transcripts ({transcripts.length})
+            {t("camera_audio.recent_transcripts", { count: transcripts.length })}
           </h2>
           {transcripts.length === 0 ? (
             <div className="text-sm text-zinc-500">
-              Nothing yet. Enable capture and transcription, then speak near the
-              camera.
+              {t("camera_audio.no_transcripts")}
             </div>
           ) : (
             <div className="grid gap-2">
-              {transcripts.map((t) => (
+              {transcripts.map((tx) => (
                 <div
-                  key={t.id}
+                  key={tx.id}
                   className={`rounded border p-3 ${
-                    t.filtered
+                    tx.filtered
                       ? "border-amber-700/40 bg-amber-950/10"
                       : "border-zinc-800 bg-zinc-900"
                   }`}
                 >
                   <div className="text-xs text-zinc-500 mb-1 flex items-center gap-2">
-                    <span>{formatDateTime(t.started_at)}</span>
+                    <span>{formatDateTime(tx.started_at)}</span>
                     <span>·</span>
-                    <span>{t.provider}</span>
-                    {t.filtered && (
+                    <span>{tx.provider}</span>
+                    {tx.filtered && (
                       <span className="ml-auto text-[10px] uppercase tracking-wider text-amber-400">
-                        filtered
+                        {t("camera_audio.filtered")}
                       </span>
                     )}
                   </div>
                   <div
                     className={`text-sm italic ${
-                      t.filtered ? "text-zinc-400" : "text-zinc-100"
+                      tx.filtered ? "text-zinc-400" : "text-zinc-100"
                     }`}
                   >
-                    {t.text}
+                    {tx.text}
                   </div>
                 </div>
               ))}
