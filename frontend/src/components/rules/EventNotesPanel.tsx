@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { formatDateTime } from "@/lib/time";
 import { extractApiError } from "@/lib/api-error";
+import { translate } from "@/lib/i18n";
 
 // Phase 4. Inline notes panel rendered under each expanded event.
 // Lets the household leave free-text annotations. Telegram-sourced
@@ -20,7 +21,8 @@ interface EventNote {
 }
 
 export function EventNotesPanel({ eventId }: { eventId: string }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [notes, setNotes] = useState<EventNote[]>([]);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState("");
@@ -56,13 +58,13 @@ export function EventNotesPanel({ eventId }: { eventId: string }) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setError(extractApiError(body, `Could not save (${res.status}).`));
+        setError(extractApiError(body, t("rules.notes.save_failed_status", { status: res.status })));
         return;
       }
       setDraft("");
       await refresh();
     } catch {
-      setError("Network error saving note.");
+      setError(t("rules.notes.network_error"));
     } finally {
       setSubmitting(false);
     }
@@ -81,12 +83,12 @@ export function EventNotesPanel({ eventId }: { eventId: string }) {
 
   return (
     <div className="mt-3 pt-3 border-t border-border">
-      <div className="text-[10px] text-muted-foreground mb-1">Notes</div>
+      <div className="text-[10px] text-muted-foreground mb-1">{t("rules.notes.title")}</div>
       {loading && notes.length === 0 && (
-        <div className="text-[11px] text-muted-foreground">Loading.</div>
+        <div className="text-[11px] text-muted-foreground">{t("rules.notes.loading")}</div>
       )}
       {!loading && notes.length === 0 && (
-        <div className="text-[11px] text-muted-foreground">No notes yet.</div>
+        <div className="text-[11px] text-muted-foreground">{t("rules.notes.empty")}</div>
       )}
       {notes.length > 0 && (
         <ul className="space-y-1.5">
@@ -100,14 +102,14 @@ export function EventNotesPanel({ eventId }: { eventId: string }) {
                     ? "border-border text-muted-foreground bg-muted/40"
                     : "border-border text-muted-foreground bg-muted/40"
                 }`}
-                title={`Source. ${n.source}`}
+                title={`${t("rules.notes.source")}. ${n.source}`}
               >
                 {n.source}
               </span>
               <div className="flex-1">
                 <div className="whitespace-pre-wrap text-foreground/90">{n.text}</div>
                 <div className="text-[10px] text-muted-foreground mt-0.5">
-                  {n.author_display_name || "Unknown"} ·{" "}
+                  {n.author_display_name || t("rules.notes.unknown_author")} ·{" "}
                   {formatDateTime(n.created_at)}
                 </div>
               </div>
@@ -115,7 +117,7 @@ export function EventNotesPanel({ eventId }: { eventId: string }) {
                 type="button"
                 onClick={() => remove(n.id)}
                 className="text-[10px] text-muted-foreground hover:text-red-400"
-                title="Delete note"
+                title={t("rules.notes.delete")}
               >
                 ×
               </button>
@@ -127,7 +129,7 @@ export function EventNotesPanel({ eventId }: { eventId: string }) {
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="+ Add note"
+          placeholder={t("rules.notes.add_placeholder")}
           rows={2}
           className="flex-1 px-2 py-1.5 rounded-md bg-background border border-border text-[11px] resize-y"
         />
@@ -137,7 +139,7 @@ export function EventNotesPanel({ eventId }: { eventId: string }) {
           disabled={submitting || !draft.trim()}
           className="px-2 py-1 text-[11px] rounded border border-border hover:bg-muted disabled:opacity-50"
         >
-          {submitting ? "Saving." : "Save"}
+          {submitting ? t("rules.notes.saving") : t("rules.notes.save")}
         </button>
       </div>
       {error && (
