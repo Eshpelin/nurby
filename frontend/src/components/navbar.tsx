@@ -12,6 +12,7 @@ import { SystemStatusPill } from "./dashboard/SystemStatus";
 import { NotificationItem, NotificationsDropdown } from "./notifications";
 import { SecureAccountModal } from "./SecureAccountModal";
 import { MegaNav, MegaNavMobile } from "./MegaNav";
+import { translate } from "@/lib/i18n";
 
 function getInitials(name: string | null | undefined): string {
   if (!name) return "N";
@@ -28,6 +29,7 @@ export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, authFetch, token } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const role = user?.role ?? "viewer";
   const isGuardian = role === "guardian";
 
@@ -239,13 +241,13 @@ export function Navbar() {
             <button
               onClick={() => setSecureOpen(true)}
               className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition-colors animate-pulse whitespace-nowrap"
-              title="No password is set yet. Anyone who reaches this page is an admin. Secure it now."
+              title={t("account.secure_required")}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              <span className="hidden sm:inline">Secure account</span>
-              <span className="sm:hidden">Secure</span>
+              <span className="hidden sm:inline">{t("account.secure_account")}</span>
+              <span className="sm:hidden">{t("account.secure_short")}</span>
             </button>
           )}
 
