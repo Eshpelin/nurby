@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/lib/feedback";
 import { timeAgo } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 import type { HouseholdMode, HouseholdModeState } from "@/lib/household-mode";
 
 export function HouseholdModeControl({
@@ -22,7 +23,8 @@ export function HouseholdModeControl({
   compact?: boolean;
   inline?: boolean;
 }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const toast = useToast();
   const [state, setState] = useState<HouseholdModeState | null>(null);
   const [saving, setSaving] = useState<HouseholdMode | null>(null);
@@ -56,7 +58,7 @@ export function HouseholdModeControl({
       setState(await r.json());
     } catch {
       setState(previous);
-      toast.error("Could not change the mode. Check the connection to the server.");
+      toast.error(t("household_mode.change_failed"));
     } finally {
       setSaving(null);
     }
@@ -65,6 +67,8 @@ export function HouseholdModeControl({
   if (!state) return null;
 
   const active = state.modes.find((m) => m.key === state.mode);
+  const modeLabel = (key: HouseholdMode) => t(`household_mode.${key}`);
+  const modeHint = (key: HouseholdMode) => t(`household_mode.${key}_hint`);
 
   // Inline variant for the slim dashboard context row: just the segmented
   // buttons and the paused-rule signal, no card, label or hint paragraph.
@@ -72,7 +76,7 @@ export function HouseholdModeControl({
   if (inline) {
     return (
       <div className="flex items-center gap-2">
-        <div className="flex gap-1" role="group" aria-label="Household mode">
+        <div className="flex gap-1" role="group" aria-label={t("household_mode.label")}>
           {state.modes.map((m) => {
             const on = m.key === state.mode;
             return (
@@ -82,14 +86,14 @@ export function HouseholdModeControl({
                 onClick={() => choose(m.key)}
                 disabled={saving != null}
                 aria-pressed={on}
-                title={m.hint}
+                title={modeHint(m.key)}
                 className={`px-2.5 py-1 text-xs rounded-md border transition-colors disabled:opacity-60 ${
                   on
                     ? "border-green-500/60 bg-green-500/15 text-green-300 font-medium"
                     : "border-border text-muted-foreground hover:bg-muted"
                 }`}
               >
-                {m.label}
+                {modeLabel(m.key)}
               </button>
             );
           })}
@@ -98,9 +102,9 @@ export function HouseholdModeControl({
           <Link
             href="/rules"
             className="text-[11px] text-sky-300 hover:underline whitespace-nowrap"
-            title={`Paused while ${active?.label}`}
+            title={t("household_mode.paused_while", { mode: active ? modeLabel(active.key) : "" })}
           >
-            {state.silenced_rule_count} paused
+            {t(state.silenced_rule_count === 1 ? "household_mode.paused_one" : "household_mode.paused_other", { count: state.silenced_rule_count })}
           </Link>
         )}
       </div>
@@ -110,15 +114,15 @@ export function HouseholdModeControl({
   return (
     <div className={compact ? "" : "rounded-lg border border-border bg-card/50 p-3"}>
       <div className="flex items-center justify-between gap-3 mb-2">
-        <span className="text-xs font-medium text-muted-foreground">Household</span>
+        <span className="text-xs font-medium text-muted-foreground">{t("household_mode.household")}</span>
         {state.since && (
           <span className="text-[10px] text-muted-foreground">
-            since {timeAgo(state.since)}
+            {t("household_mode.since", { time: timeAgo(state.since) })}
           </span>
         )}
       </div>
 
-      <div className="flex gap-1.5" role="group" aria-label="Household mode">
+      <div className="flex gap-1.5" role="group" aria-label={t("household_mode.label")}>
         {state.modes.map((m) => {
           const on = m.key === state.mode;
           return (
@@ -128,21 +132,21 @@ export function HouseholdModeControl({
               onClick={() => choose(m.key)}
               disabled={saving != null}
               aria-pressed={on}
-              title={m.hint}
+              title={modeHint(m.key)}
               className={`flex-1 px-2.5 py-1.5 text-xs rounded-md border transition-colors disabled:opacity-60 ${
                 on
                   ? "border-green-500/60 bg-green-500/15 text-green-300 font-medium"
                   : "border-border text-muted-foreground hover:bg-muted"
               }`}
             >
-              {m.label}
+              {modeLabel(m.key)}
             </button>
           );
         })}
       </div>
 
       <p className="text-[11px] text-muted-foreground mt-2">
-        {active?.hint}
+        {active && modeHint(active.key)}
       </p>
 
       {state.silenced_rule_count > 0 && (
@@ -150,8 +154,10 @@ export function HouseholdModeControl({
           href="/rules"
           className="text-[11px] text-sky-300 hover:underline mt-1 inline-block"
         >
-          {state.silenced_rule_count} rule
-          {state.silenced_rule_count === 1 ? " is" : "s are"} paused while {active?.label}
+          {t(state.silenced_rule_count === 1 ? "household_mode.rule_paused_one" : "household_mode.rule_paused_other", {
+            count: state.silenced_rule_count,
+            mode: active ? modeLabel(active.key) : "",
+          })}
         </Link>
       )}
     </div>
