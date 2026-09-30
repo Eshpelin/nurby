@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Camera } from "./types";
 import { WhepPlayer } from "@/components/WhepPlayer";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export function GeometryEditor({
   camera,
@@ -15,6 +17,9 @@ export function GeometryEditor({
   points: number[][];
   onChange: (pts: number[][]) => void;
 }) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) =>
+    translate(user?.locale, key, values);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 640, h: 360 });
@@ -94,7 +99,7 @@ export function GeometryEditor({
           <WhepPlayer cameraId={camera.id} />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
-            {camera.status === "offline" ? "Camera offline" : "No preview"}
+            {camera.status === "offline" ? t("rules.geometry.camera_offline") : t("rules.geometry.no_preview")}
           </div>
         )}
         <canvas
@@ -109,18 +114,18 @@ export function GeometryEditor({
         <span>
           {mode === "line"
             ? points.length < 2
-              ? `Click two points to place a tripwire. (${points.length}/2)`
-              : "Tripwire placed. Click again to redraw."
+              ? t("rules.geometry.tripwire_prompt", { count: points.length })
+              : t("rules.geometry.tripwire_placed")
             : points.length < 3
-              ? `Click to add polygon points. (${points.length}/≥3)`
-              : `${points.length} points. Add more or clear to redraw.`}
+              ? t("rules.geometry.polygon_prompt", { count: points.length })
+              : t("rules.geometry.polygon_points", { count: points.length })}
         </span>
         {points.length > 0 && (
           <button
             type="button"
             onClick={() => onChange([])}
             className="px-2 py-0.5 rounded border border-border hover:bg-muted transition-colors"
-          >Clear</button>
+          >{t("rules.geometry.clear")}</button>
         )}
       </div>
     </div>
