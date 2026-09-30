@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export type LocationKind = "local" | "ftp" | "s3";
 
@@ -82,7 +83,8 @@ export function AddLocationForm({
   onCreated,
   onCancel,
 }: AddLocationFormProps) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [kind, setKind] = useState<LocationKind>(kinds[0]);
   const [name, setName] = useState("");
   const [root, setRoot] = useState("");
@@ -126,7 +128,7 @@ export function AddLocationForm({
         };
 
   const check = async () => {
-    setMsg("Checking.");
+    setMsg(t("storage_add.checking"));
     setMsgOk(false);
     setBusy(true);
     try {
@@ -143,10 +145,10 @@ export function AddLocationForm({
               body: JSON.stringify({ kind, config: remoteConfig(), root: root.trim() || "/" }),
             });
       const d = await res.json();
-      setMsg(d.detail || (d.ok ? "Ready." : "Not usable."));
+      setMsg(d.detail || (d.ok ? t("storage_add.ready") : t("storage_add.not_usable")));
       setMsgOk(Boolean(d.ok));
     } catch {
-      setMsg("Check failed.");
+      setMsg(t("storage_add.check_failed"));
     } finally {
       setBusy(false);
     }
@@ -166,7 +168,7 @@ export function AddLocationForm({
         onCreated(await res.json());
       } else {
         const d = await res.json().catch(() => null);
-        setMsg(d?.detail || "Could not create the location.");
+        setMsg(d?.detail || t("storage_add.create_failed"));
         setMsgOk(false);
       }
     } finally {
@@ -187,7 +189,7 @@ export function AddLocationForm({
     <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
       {kinds.length > 1 && (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] text-muted-foreground">Kind</span>
+          <span className="text-[11px] text-muted-foreground">{t("storage_add.kind")}</span>
           {kinds.map((k) => (
             <button
               key={k}
@@ -201,7 +203,7 @@ export function AddLocationForm({
                 kind === k ? "border-accent text-accent" : "border-border text-muted-foreground"
               }`}
             >
-              {KIND_LABELS[k]}
+              {t(`storage_add.kind_${k}`)}
             </button>
           ))}
         </div>
@@ -209,8 +211,8 @@ export function AddLocationForm({
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder={kind === "s3" ? "Name (e.g. Cloud archive)" : "Name (e.g. Basement NAS)"}
-        aria-label="Location name"
+        placeholder={kind === "s3" ? t("storage_add.s3_name_placeholder") : t("storage_add.name_placeholder")}
+        aria-label={t("storage_add.name")}
         className={`w-44 ${inputCls}`}
       />
 
@@ -218,8 +220,8 @@ export function AddLocationForm({
         <input
           value={root}
           onChange={(e) => dirty(setRoot)(e.target.value)}
-          placeholder="/mnt/recordings-b or D:\Nurby\recordings"
-          aria-label="Folder path"
+          placeholder={t("storage_add.folder_placeholder")}
+          aria-label={t("storage_add.folder_path")}
           className={`w-full font-mono ${inputCls}`}
         />
       )}
@@ -230,47 +232,47 @@ export function AddLocationForm({
             <input
               value={host}
               onChange={(e) => dirty(setHost)(e.target.value)}
-              placeholder="ftp.example.com"
-              aria-label="FTP host"
+              placeholder={t("storage_add.ftp_host_placeholder")}
+              aria-label={t("storage_add.ftp_host")}
               className={`min-w-0 flex-1 font-mono ${inputCls}`}
             />
             <input
               value={port}
               onChange={(e) => dirty(setPort)(e.target.value.replace(/[^0-9]/g, ""))}
               className={`w-16 font-mono ${inputCls}`}
-              title="Port"
-              aria-label="FTP port"
+              title={t("storage_add.port")}
+              aria-label={t("storage_add.ftp_port")}
             />
           </div>
           <div className="flex flex-wrap gap-2">
             <input
               value={username}
               onChange={(e) => dirty(setUsername)(e.target.value)}
-              placeholder="Username (or anonymous)"
+              placeholder={t("storage_add.username_placeholder")}
               className={`min-w-0 flex-1 font-mono ${inputCls}`}
             />
             <input
               type="password"
               value={password}
               onChange={(e) => dirty(setPassword)(e.target.value)}
-              placeholder="Password (optional)"
+              placeholder={t("storage_add.password_optional")}
               className={`min-w-0 flex-1 font-mono ${inputCls}`}
             />
           </div>
           <input
             value={root}
             onChange={(e) => dirty(setRoot)(e.target.value)}
-            placeholder="/nurby  (remote folder, created if missing)"
+            placeholder={t("storage_add.remote_folder_placeholder")}
             className={`w-full font-mono ${inputCls}`}
           />
           <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
             <label className="flex items-center gap-1.5">
               <input type="checkbox" checked={tls} onChange={(e) => dirty(setTls)(e.target.checked)} />
-              FTPS (TLS)
+              {t("storage_add.ftps_tls")}
             </label>
             <label className="flex items-center gap-1.5">
               <input type="checkbox" checked={passive} onChange={(e) => dirty(setPassive)(e.target.checked)} />
-              Passive mode
+              {t("storage_add.passive_mode")}
             </label>
           </div>
         </div>
@@ -280,7 +282,7 @@ export function AddLocationForm({
         <div className="space-y-2">
           <select
             value={provider}
-            aria-label="S3 provider"
+            aria-label={t("storage_add.s3_provider")}
             onChange={(e) => {
               const p = PROVIDERS.find((x) => x.value === e.target.value)!;
               setProvider(p.value);
@@ -299,15 +301,15 @@ export function AddLocationForm({
             <input
               value={bucket}
               onChange={(e) => dirty(setBucket)(e.target.value)}
-              placeholder="Bucket name"
-              aria-label="Bucket name"
+              placeholder={t("storage_add.bucket_name")}
+              aria-label={t("storage_add.bucket_name")}
               className={`min-w-0 flex-1 font-mono ${inputCls}`}
             />
             <input
               value={region}
               onChange={(e) => dirty(setRegion)(e.target.value)}
-              placeholder="Region"
-              aria-label="Region"
+              placeholder={t("storage_add.region")}
+              aria-label={t("storage_add.region")}
               className={`w-32 font-mono ${inputCls}`}
             />
           </div>
@@ -316,7 +318,7 @@ export function AddLocationForm({
               value={endpoint}
               onChange={(e) => dirty(setEndpoint)(e.target.value)}
               placeholder={PROVIDERS.find((p) => p.value === provider)?.example || "https://"}
-              aria-label="Endpoint URL"
+              aria-label={t("storage_add.endpoint_url")}
               className={`w-full font-mono ${inputCls}`}
             />
           )}
@@ -324,8 +326,8 @@ export function AddLocationForm({
             <input
               value={accessKey}
               onChange={(e) => dirty(setAccessKey)(e.target.value)}
-              placeholder="Access key ID"
-              aria-label="Access key ID"
+              placeholder={t("storage_add.access_key_id")}
+              aria-label={t("storage_add.access_key_id")}
               autoComplete="off"
               className={`min-w-0 flex-1 font-mono ${inputCls}`}
             />
@@ -333,8 +335,8 @@ export function AddLocationForm({
               type="password"
               value={secretKey}
               onChange={(e) => dirty(setSecretKey)(e.target.value)}
-              placeholder="Secret access key"
-              aria-label="Secret access key"
+              placeholder={t("storage_add.secret_access_key")}
+              aria-label={t("storage_add.secret_access_key")}
               autoComplete="new-password"
               className={`min-w-0 flex-1 font-mono ${inputCls}`}
             />
@@ -342,15 +344,15 @@ export function AddLocationForm({
           <input
             value={root}
             onChange={(e) => dirty(setRoot)(e.target.value)}
-            placeholder="Folder in the bucket (optional, e.g. nurby)"
-            aria-label="Folder in the bucket"
+            placeholder={t("storage_add.bucket_folder_placeholder")}
+            aria-label={t("storage_add.bucket_folder")}
             className={`w-full font-mono ${inputCls}`}
           />
           {provider === "aws" && (
             <div className="space-y-1">
               <select
                 value={storageClass}
-                aria-label="Storage class"
+                aria-label={t("storage_add.storage_class")}
                 onChange={(e) => setStorageClass(e.target.value)}
                 className={`w-full ${inputCls}`}
               >
@@ -366,8 +368,7 @@ export function AddLocationForm({
             </div>
           )}
           <p className="text-[10px] text-muted-foreground">
-            The key needs permission to put, get and delete objects in this bucket. Keys are
-            stored encrypted and never shown again.
+            {t("storage_add.key_help")}
           </p>
         </div>
       )}
@@ -379,7 +380,7 @@ export function AddLocationForm({
           onClick={check}
           className="px-2.5 py-1 text-[11px] rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
         >
-          {busy ? "Checking." : kind === "local" ? "Check" : "Test connection"}
+          {busy ? t("storage_add.checking") : kind === "local" ? t("storage_add.check") : t("storage_add.test_connection")}
         </button>
         <button
           type="button"
@@ -387,14 +388,14 @@ export function AddLocationForm({
           onClick={add}
           className="px-2.5 py-1 text-[11px] rounded-md bg-accent text-black font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
         >
-          Add location
+          {t("storage_add.add_location")}
         </button>
         <button
           type="button"
           onClick={onCancel}
           className="text-[11px] text-muted-foreground hover:text-foreground"
         >
-          Cancel
+          {t("common.cancel")}
         </button>
       </div>
       {msg ? (
@@ -404,7 +405,7 @@ export function AddLocationForm({
       ) : (
         filled && (
           <p className="text-[11px] text-muted-foreground">
-            {kind === "local" ? "Check" : "Test the connection"} before adding the location.
+            {kind === "local" ? t("storage_add.check") : t("storage_add.test_connection")} {t("storage_add.before_add")}
           </p>
         )
       )}
