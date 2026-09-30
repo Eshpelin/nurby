@@ -2,6 +2,8 @@
 
 import { VLM_PROVIDERS, VLM_SCHEMA_PRESETS, type VlmCallDraft } from "../types";
 import { StyledSelect } from "../StyledSelect";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export interface VlmCallEditorProps {
   draft: VlmCallDraft;
@@ -9,13 +11,15 @@ export interface VlmCallEditorProps {
 }
 
 export function VlmCallEditor({ draft, onChange }: VlmCallEditorProps) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const d = draft;
   const set = (patch: Partial<VlmCallDraft>) => onChange({ ...d, ...patch });
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-muted-foreground block mb-1">AI model</label>
+          <label className="text-xs text-muted-foreground block mb-1">{t("rules.vlm.ai_model")}</label>
           <StyledSelect
             value={d.provider}
             options={VLM_PROVIDERS}
@@ -23,7 +27,7 @@ export function VlmCallEditor({ draft, onChange }: VlmCallEditorProps) {
           />
         </div>
         <div>
-          <label className="text-xs text-muted-foreground block mb-1">Model</label>
+          <label className="text-xs text-muted-foreground block mb-1">{t("rules.vlm.model")}</label>
           <input
             type="text"
             value={d.model}
@@ -34,7 +38,7 @@ export function VlmCallEditor({ draft, onChange }: VlmCallEditorProps) {
         </div>
       </div>
       <div>
-        <label className="text-xs text-muted-foreground block mb-1">System prompt</label>
+        <label className="text-xs text-muted-foreground block mb-1">{t("rules.vlm.system_prompt")}</label>
         <textarea
           value={d.system}
           onChange={(e) => set({ system: e.target.value })}
@@ -44,7 +48,7 @@ export function VlmCallEditor({ draft, onChange }: VlmCallEditorProps) {
         />
       </div>
       <div>
-        <label className="text-xs text-muted-foreground block mb-1">User prompt</label>
+        <label className="text-xs text-muted-foreground block mb-1">{t("rules.vlm.user_prompt")}</label>
         <textarea
           value={d.prompt}
           onChange={(e) => set({ prompt: e.target.value })}
@@ -69,7 +73,7 @@ export function VlmCallEditor({ draft, onChange }: VlmCallEditorProps) {
           onChange={(e) => set({ attachImage: e.target.checked })}
           className="accent-green-500"
         />
-        <span className="text-xs">Attach snapshot image</span>
+        <span className="text-xs">{t("rules.vlm.attach_image")}</span>
       </label>
       <div>
         <label className="flex items-center gap-2 cursor-pointer mb-1">
@@ -79,16 +83,16 @@ export function VlmCallEditor({ draft, onChange }: VlmCallEditorProps) {
             onChange={(e) => set({ useSchema: e.target.checked })}
             className="accent-green-500"
           />
-          <span className="text-xs">Structured JSON output</span>
+          <span className="text-xs">{t("rules.vlm.structured_output")}</span>
         </label>
         {d.useSchema && (
           <div className="space-y-2">
             <div className="flex flex-wrap gap-1">
               {[
-                { key: "threat", label: "Threat level" },
-                { key: "notify", label: "Notify yes/no" },
-                { key: "intent", label: "Intent classifier" },
-                { key: "entities", label: "Entity counts" },
+                { key: "threat", label: t("rules.vlm.threat_level") },
+                { key: "notify", label: t("rules.vlm.notify_yes_no") },
+                { key: "intent", label: t("rules.vlm.intent_classifier") },
+                { key: "entities", label: t("rules.vlm.entity_counts") },
               ].map((p) => (
                 <button
                   key={p.key}
@@ -111,7 +115,7 @@ export function VlmCallEditor({ draft, onChange }: VlmCallEditorProps) {
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <label className="text-xs text-muted-foreground block mb-1">Output variable</label>
+          <label className="text-xs text-muted-foreground block mb-1">{t("rules.vlm.output_variable")}</label>
           <input
             type="text"
             value={d.output}
@@ -121,7 +125,7 @@ export function VlmCallEditor({ draft, onChange }: VlmCallEditorProps) {
           />
         </div>
         <div>
-          <label className="text-xs text-muted-foreground block mb-1">Max retries</label>
+          <label className="text-xs text-muted-foreground block mb-1">{t("rules.vlm.max_retries")}</label>
           <input
             type="number"
             min={0}
@@ -132,7 +136,7 @@ export function VlmCallEditor({ draft, onChange }: VlmCallEditorProps) {
           />
         </div>
         <div>
-          <label className="text-xs text-muted-foreground block mb-1">Timeout (ms)</label>
+          <label className="text-xs text-muted-foreground block mb-1">{t("rules.vlm.timeout")}</label>
           <input
             type="number"
             min={1000}
@@ -144,19 +148,19 @@ export function VlmCallEditor({ draft, onChange }: VlmCallEditorProps) {
         </div>
       </div>
       <div>
-        <label className="text-xs text-muted-foreground block mb-1">On error</label>
+        <label className="text-xs text-muted-foreground block mb-1">{t("rules.vlm.on_error")}</label>
         <StyledSelect
           value={d.onError}
           options={[
-            { value: "continue", label: "Continue chain" },
-            { value: "stop", label: "Stop chain" },
-            { value: "fallback", label: "Use fallback value" },
+            { value: "continue", label: t("rules.vlm.continue_chain") },
+            { value: "stop", label: t("rules.vlm.stop_chain") },
+            { value: "fallback", label: t("rules.vlm.fallback_value") },
           ]}
           onChange={(v) => set({ onError: v })}
         />
       </div>
       <div className="text-[10px] text-muted-foreground bg-muted/50 rounded px-2 py-1.5">
-        Reference the result in later actions with {"{{"}vars.{d.output || "result"}.field{"}}"}.
+        {t("rules.vlm.reference_result", { variable: d.output || "result" })}
       </div>
     </div>
   );
