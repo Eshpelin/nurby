@@ -14,7 +14,7 @@ from typing import Iterable, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, false, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.perception.associator import evidence_policy
@@ -78,6 +78,19 @@ def _association_visible(association: EntityAssociation, allowed) -> bool:
         return True
     allowed_ids = {str(camera_id) for camera_id in allowed}
     return bool(allowed_ids.intersection(str(camera_id) for camera_id in (association.camera_histogram or {})))
+
+
+def _apply_association_camera_scope(query, allowed):
+    """Apply association ACL before the review queue's candidate limit."""
+    if allowed is ALL:
+        return query
+    allowed_ids = [str(camera_id) for camera_id in (allowed or ())]
+    if not allowed_ids:
+        return query.where(false())
+    return query.where(or_(*[
+        EntityAssociation.camera_histogram.op("?")(camera_id)
+        for camera_id in allowed_ids
+    ]))
 
 
 def _scoped_camera_histogram(association: EntityAssociation, allowed) -> dict[str, int]:
@@ -646,29 +659,21 @@ async def list_review_items(
         association_statuses = ["candidate", "ambiguous", "deferred"]
         if include_archived:
             association_statuses.append("archived")
+        association_query = select(EntityAssociation).where(
+            or_(
+                EntityAssociation.status.in_(association_statuses),
+                # Repeated evidence may promote a learned edge to established
+                # before review; confirmed household assertions remain facts.
+                and_(
+                    EntityAssociation.status == "established",
+                    EntityAssociation.user_confirmed.is_(False),
+                ),
+            )
+        )
+        association_query = _apply_association_camera_scope(association_query, allowed)
         association_rows = (
             await db.execute(
-                select(EntityAssociation)
-                .where(
-                    or_(
-                        EntityAssociation.status.in_(association_statuses),
-                        # Repeated evidence may promote a learned edge to
-                        # established before a person reviews it. It still
-                        # belongs in the queue while the promotion is only
-                        # machine-derived; confirmed household assertions
-                        # remain profile facts rather than pending work.
-                        and_(
-                            EntityAssociation.status == "established",
-                            EntityAssociation.user_confirmed.is_(False),
-                        ),
-                    )
-                )
-                .order_by(EntityAssociation.last_seen_at.desc())
-                # Camera visibility is enforced below from the association's
-                # evidence histogram. Fetch the bounded review window before
-                # applying the ACL so hidden-camera rows cannot consume the
-                # visible queue's entire page.
-                .limit(1000)
+                association_query.order_by(EntityAssociation.last_seen_at.desc()).limit(1000)
             )
         ).scalars().all()
         for association in association_rows:

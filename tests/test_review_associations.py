@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from services.api.routes.review import _scoped_evidence
 from services.api.routes.review import _association_visible
+from services.api.routes.review import _apply_association_camera_scope
 from services.api.routes.review import _scoped_camera_histogram
 from services.api.routes.review import _camera_privacy_policy, _evidence_availability, _restrict_sensitive_evidence, _supporting_evidence_count
 from services.api.routes.review import _scoped_observation_source_query
@@ -35,6 +36,8 @@ def test_sensitive_review_evidence_is_redacted_without_hiding_the_episode():
 from services.api.routes.review import _reconcile_observation_sources
 from services.api.routes.review import _visible_cluster_camera_id
 from shared.camera_access import ALL
+from shared.models import EntityAssociation
+from sqlalchemy import select
 
 
 def test_camera_privacy_policy_exposes_only_review_relevant_controls():
@@ -136,6 +139,15 @@ def test_association_visibility_is_camera_scoped_before_queue_pagination():
     assert _association_visible(row, {"camera-a"}) is True
     assert _association_visible(row, {"camera-c"}) is False
     assert _association_visible(row, ALL) is True
+
+
+def test_association_queue_scope_is_applied_before_limit():
+    query = _apply_association_camera_scope(select(EntityAssociation), {"camera-a"})
+    sql = str(query.limit(1000).compile(
+        dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+    )).lower()
+    assert "camera_histogram ?" in sql
+    assert sql.index("camera_histogram ?") < sql.index(" limit ")
 
 
 def test_association_histogram_does_not_leak_restricted_cameras():

@@ -156,6 +156,19 @@ def test_review_queue_rejects_foreign_camera_before_source_queries(http):
                    "from entity_associations" in s for s in db.statements)
 
 
+def test_review_queue_scopes_associations_before_candidate_limit(http):
+    client, db = http
+    response = client.get("/review", params={"kind": "relationship_suggestion"})
+    assert response.status_code == 200, response.text
+    association_sql = [
+        statement for statement in db.statements if "from entity_associations" in statement
+    ]
+    assert association_sql
+    sql = association_sql[-1]
+    assert "camera_histogram ?" in sql
+    assert sql.index("camera_histogram ?") < sql.index(" limit ")
+
+
 @pytest.mark.parametrize("path", ["summaries", "transcripts", "conversations", "audio", "conversations/{id}/clip"])
 def test_foreign_detail_and_media_are_hidden(http, path):
     client, db = http
