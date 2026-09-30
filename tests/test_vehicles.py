@@ -301,13 +301,29 @@ def _fake_vehicle(**kw):
 
 
 def _tool_ctx(vehicles):
-    res = MagicMock()
-    scal = MagicMock()
-    scal.all.return_value = vehicles
-    res.scalars.return_value = scal
+    vehicle_ids = [str(vehicle.id) for vehicle in vehicles]
+    camera_id = uuid.uuid4()
+
+    def result_for(stmt):
+        res = MagicMock()
+        statement = str(stmt).lower()
+        if "from cameras" in statement:
+            res.all.return_value = [(camera_id,)]
+        elif "vehicle_detections" in statement:
+            res.all.return_value = [(
+                {"vehicles": [{"vehicle_id": vehicle_id} for vehicle_id in vehicle_ids]},
+            )]
+        else:
+            scal = MagicMock()
+            scal.all.return_value = vehicles
+            res.scalars.return_value = scal
+        return res
+
     db = AsyncMock()
-    db.execute = AsyncMock(return_value=res)
-    return {"db": db, "user": MagicMock()}
+    db.execute = AsyncMock(side_effect=result_for)
+    user = MagicMock()
+    user.role = "admin"
+    return {"db": db, "user": user}
 
 
 def test_get_vehicles_returns_all():

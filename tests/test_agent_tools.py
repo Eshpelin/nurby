@@ -1085,6 +1085,17 @@ async def test_get_household_snapshot_shows_nickname(monkeypatch):
             if "persons.photo_path" in s:
                 return [(person,)]
             return [("Salma Bekom", "Mommy")]
+        if "from journeys" in s:
+            return [(
+                    SimpleNamespace(
+                        id=uuid.uuid4(),
+                        subject_key="Salma Bekom",
+                        subject_kind="person",
+                        started_at=datetime.now(timezone.utc),
+                        segments=[{"camera_id": str(cam.id)}],
+                    last_seen_at=datetime.now(timezone.utc),
+                ),
+            )]
         return []  # no journeys, no observations
 
     db = FakeDB(responder)

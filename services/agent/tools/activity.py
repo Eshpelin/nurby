@@ -74,11 +74,16 @@ async def summarize_activity(ctx: dict, hours: int = 24) -> dict:
             j_rows = await _person_journeys(
                 db, p.display_name, since=cutoff, order_desc=False
             )
+            j_rows = [
+                j for j in j_rows
+                if any(_seg_camera_id(seg) in allowed for seg in (j.segments or []))
+            ]
             if not j_rows:
                 continue
             # Coalesce camera names visible to this user.
             cams_seen: list[str] = []
             seg_count = 0
+            visible_times: list[datetime] = []
             for j in j_rows:
                 for seg in j.segments or []:
                     cid = _seg_camera_id(seg)
@@ -89,17 +94,26 @@ async def summarize_activity(ctx: dict, hours: int = 24) -> dict:
                         cams_seen.append(name)
                     if cid in allowed:
                         seg_count += int(seg.get("occurrence_count") or 0)
+                        for key in ("started_at", "last_seen_at"):
+                            raw = seg.get(key)
+                            if raw:
+                                try:
+                                    visible_times.append(
+                                        datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                                    )
+                                except (TypeError, ValueError):
+                                    pass
             persons_block.append(
                 {
                     "person_id": str(p.id),
                     "display_name": display_name_for(p),
                     "sighting_count": len(j_rows),
                     "observation_count": seg_count,
-                    "first_seen_at": j_rows[0].started_at.isoformat()
-                    if j_rows[0].started_at
+                    "first_seen_at": min(visible_times).isoformat()
+                    if visible_times
                     else None,
-                    "last_seen_at": j_rows[-1].last_seen_at.isoformat()
-                    if j_rows[-1].last_seen_at
+                    "last_seen_at": max(visible_times).isoformat()
+                    if visible_times
                     else None,
                     "cameras": cams_seen,
                 }

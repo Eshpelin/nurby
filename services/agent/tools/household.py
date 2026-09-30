@@ -155,6 +155,12 @@ async def get_household_snapshot(ctx: dict) -> dict:
     persons: list[dict] = []
     for p in person_rows:
         js = await _person_journeys(db, p.display_name, order_desc=True, limit=1)
+        js = [
+            j for j in js
+            if any(_seg_camera_id(seg) in allowed for seg in (j.segments or []))
+        ]
+        if not js:
+            continue
         j = js[0] if js else None
         persons.append(
             {
@@ -185,7 +191,9 @@ async def get_household_snapshot(ctx: dict) -> dict:
         # Only surface if it touches an accessible camera.
         segs = j.segments or []
         visible = [s for s in segs if _seg_camera_id(s) in allowed] if segs else []
-        if not visible and segs:
+        # A journey without camera provenance cannot be shown in a scoped
+        # agent response. Missing provenance is not permission.
+        if not visible:
             continue
         active_journeys.append(
             {

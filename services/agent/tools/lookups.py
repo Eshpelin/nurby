@@ -22,6 +22,7 @@ from shared.models import (
     Camera,
     DailyDigest,
     Incident,
+    Observation,
     Rule,
     RuleEvaluation,
     Vehicle,
@@ -65,6 +66,27 @@ async def get_vehicles(
     plate-keyed identity. cheap, one indexed pass over the vehicles table."""
     db = ctx["db"]
     since = datetime.now(timezone.utc) - timedelta(hours=max(1, hours))
+    allowed = await _common.accessible_camera_ids(ctx["user"], db)
+    if not allowed:
+        return {"vehicles": [], "count": 0}
+
+    # Vehicle rows are household-global. Establish visibility from the
+    # camera-scoped observation evidence before loading their metadata.
+    observation_rows = (await db.execute(
+        select(Observation.vehicle_detections)
+        .where(Observation.camera_id.in_(allowed))
+        .where(Observation.started_at >= since)
+        .where(Observation.vehicle_detections.is_not(None))
+    )).all()
+    visible_vehicle_ids = {
+        str(vehicle.get("vehicle_id"))
+        for (detections,) in observation_rows
+        for vehicle in (detections or {}).get("vehicles", []) or []
+        if isinstance(vehicle, dict) and vehicle.get("vehicle_id")
+    }
+    if not visible_vehicle_ids:
+        return {"vehicles": [], "count": 0}
+
     stmt = select(Vehicle).where(Vehicle.last_seen_at >= since).order_by(Vehicle.last_seen_at.desc())
     rows = (await db.execute(stmt)).scalars().all()
 
@@ -72,6 +94,8 @@ async def get_vehicles(
     q = (query or "").strip().lower()
     out: list[dict] = []
     for v in rows:
+        if str(v.id) not in visible_vehicle_ids:
+            continue
         if pl and pl not in (v.license_plate or "").upper():
             continue
         if q:
