@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 interface Subscription {
   id: string;
@@ -20,7 +21,8 @@ interface Subscription {
 // receive every fired event. Listed and managed here so the capability
 // is discoverable from the Rules page.
 export function WebhookSubscriptions() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [open, setOpen] = useState(false);
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +51,7 @@ export function WebhookSubscriptions() {
 
   const create = async () => {
     if (!name.trim() || !url.trim()) {
-      setError("Name and URL are required");
+      setError(t("rules.webhooks.name_url_required"));
       return;
     }
     setSaving(true);
@@ -61,11 +63,11 @@ export function WebhookSubscriptions() {
         body: JSON.stringify({ name: name.trim(), url: url.trim(), secret: secret.trim() || null }),
       });
       if (res.status === 403) {
-        setError("Admin access required to add a subscription");
+        setError(t("rules.webhooks.admin_required"));
         return;
       }
       if (!res.ok) {
-        setError("Failed to create subscription");
+        setError(t("rules.webhooks.create_failed"));
         return;
       }
       setName("");
@@ -74,7 +76,7 @@ export function WebhookSubscriptions() {
       setShowForm(false);
       load();
     } catch {
-      setError("Network error");
+      setError(t("rules.webhooks.network_error"));
     } finally {
       setSaving(false);
     }
@@ -110,9 +112,9 @@ export function WebhookSubscriptions() {
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 rounded-lg"
       >
         <div className="text-left">
-          <div className="text-sm font-medium">Webhook subscribers</div>
+          <div className="text-sm font-medium">{t("rules.webhooks.title")}</div>
           <div className="text-[11px] text-muted-foreground">
-            Standing endpoints that receive every fired event. Signed and retried.
+            {t("rules.webhooks.description")}
           </div>
         </div>
         <span className="text-muted-foreground text-xs">{open ? "▾" : "▸"}</span>
@@ -121,10 +123,7 @@ export function WebhookSubscriptions() {
       {open && (
         <div className="px-4 pb-4 space-y-3">
           <div className="rounded-md border border-border bg-background/40 px-3 py-2.5 text-[11px] text-muted-foreground leading-relaxed">
-            <span className="font-medium text-foreground">Works with n8n, Zapier, Make, and Home Assistant.</span>{" "}
-            Paste a webhook URL from one of those tools below. Nurby will POST every
-            matching alert to it as JSON, including a link to the footage clip, so you can
-            forward alerts to chat, sheets, or smart-home actions without writing code.
+            {t("rules.webhooks.integration_help")}{" "}
             {" "}
             <a
               href="https://github.com/Eshpelin/nurby/blob/main/docs/integrations/n8n.md"
@@ -132,15 +131,15 @@ export function WebhookSubscriptions() {
               rel="noreferrer"
               className="text-accent hover:underline"
             >
-              n8n guide
+              {t("rules.webhooks.guide")}
             </a>
             .
           </div>
 
-          {loading && <div className="text-[11px] text-muted-foreground">Loading.</div>}
+          {loading && <div className="text-[11px] text-muted-foreground">{t("rules.webhooks.loading")}</div>}
 
           {!loading && subs.length === 0 && (
-            <div className="text-[11px] text-muted-foreground">No subscribers yet.</div>
+            <div className="text-[11px] text-muted-foreground">{t("rules.webhooks.empty")}</div>
           )}
 
           {subs.map((s) => (
@@ -153,13 +152,13 @@ export function WebhookSubscriptions() {
                   <span className="text-xs font-medium truncate">{s.name}</span>
                   {s.has_secret && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">
-                      signed
+                      {t("rules.webhooks.signed")}
                     </span>
                   )}
                 </div>
                 <div className="text-[10px] text-muted-foreground font-mono truncate">{s.url}</div>
                 {s.last_status && (
-                  <div className="text-[10px] text-muted-foreground">last. {s.last_status}</div>
+                  <div className="text-[10px] text-muted-foreground">{t("rules.webhooks.last_status", { status: s.last_status })}</div>
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -172,14 +171,14 @@ export function WebhookSubscriptions() {
                       : "border-border text-muted-foreground hover:bg-muted"
                   }`}
                 >
-                  {s.active ? "Active" : "Paused"}
+                  {s.active ? t("rules.webhooks.active") : t("rules.webhooks.paused")}
                 </button>
                 <button
                   type="button"
                   onClick={() => remove(s)}
                   className="text-[10px] px-2 py-1 rounded border border-red-800 text-red-400 hover:bg-red-900/30"
                 >
-                  Delete
+                  {t("rules.webhooks.delete")}
                 </button>
               </div>
             </div>
@@ -191,21 +190,21 @@ export function WebhookSubscriptions() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Name (e.g. home-hub)"
+                placeholder={t("rules.webhooks.name_placeholder")}
                 className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
               />
               <input
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://your-host/nurby-events"
+                placeholder={t("rules.webhooks.url_placeholder")}
                 className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono"
               />
               <input
                 type="password"
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
-                placeholder="Signing secret (optional, HMAC-SHA256)"
+                placeholder={t("rules.webhooks.secret_placeholder")}
                 className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono"
               />
               {error && <div className="text-[11px] text-red-400">{error}</div>}
@@ -218,7 +217,7 @@ export function WebhookSubscriptions() {
                   }}
                   className="px-2 py-1 text-xs rounded border border-border hover:bg-muted"
                 >
-                  Cancel
+                  {t("rules.webhooks.cancel")}
                 </button>
                 <button
                   type="button"
@@ -226,7 +225,7 @@ export function WebhookSubscriptions() {
                   disabled={saving}
                   className="px-3 py-1 text-xs rounded bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50"
                 >
-                  {saving ? "Adding." : "Add subscriber"}
+                  {saving ? t("rules.webhooks.adding") : t("rules.webhooks.add")}
                 </button>
               </div>
             </div>
@@ -236,7 +235,7 @@ export function WebhookSubscriptions() {
               onClick={() => setShowForm(true)}
               className="px-2 py-1 text-xs rounded border border-dashed border-border hover:bg-muted text-muted-foreground"
             >
-              + Add subscriber
+              + {t("rules.webhooks.add")}
             </button>
           )}
         </div>
