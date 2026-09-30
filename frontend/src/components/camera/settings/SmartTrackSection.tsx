@@ -155,7 +155,7 @@ export function SmartTrackSection({
                   </label>
                 </FieldRow>
 
-                <FieldRow label="Deadzone" hint="Tolerance around frame center where no move is issued. Higher = less twitchy, lower = tighter centering.">
+                <FieldRow label={t("camera_settings.smart_track.deadzone")} hint={t("camera_settings.smart_track.deadzone_hint")}>
                   <div className="flex items-center gap-3">
                     <input
                       type="range"
@@ -172,7 +172,7 @@ export function SmartTrackSection({
                   </div>
                 </FieldRow>
 
-                <FieldRow label="Max speed" hint="Cap on ONVIF pan/tilt velocity. 1.0 is the camera's hardware max. Lower values produce smoother but slower follow.">
+                <FieldRow label={t("camera_settings.smart_track.max_speed")} hint={t("camera_settings.smart_track.max_speed_hint")}>
                   <div className="flex items-center gap-3">
                     <input
                       type="range"
@@ -189,7 +189,7 @@ export function SmartTrackSection({
                   </div>
                 </FieldRow>
 
-                <FieldRow label="Gain" hint="Proportional gain on the bbox error. Higher = snappier, lower = smoother. 1.5 is a good default for most ONVIF cams.">
+                <FieldRow label={t("camera_settings.smart_track.gain")} hint={t("camera_settings.smart_track.gain_hint")}>
                   <div className="flex items-center gap-3">
                     <input
                       type="range"
@@ -206,7 +206,7 @@ export function SmartTrackSection({
                   </div>
                 </FieldRow>
 
-                <FieldRow label="Min confidence" hint="Detections below this confidence are ignored as follow targets.">
+                <FieldRow label={t("camera_settings.smart_track.min_confidence")} hint={t("camera_settings.smart_track.min_confidence_hint")}>
                   <div className="flex items-center gap-3">
                     <input
                       type="range"
@@ -223,7 +223,7 @@ export function SmartTrackSection({
                   </div>
                 </FieldRow>
 
-                <FieldRow label="Move budget" hint="Hard cap on ContinuousMove commands per minute. Protects against mechanical wear on the gimbal motor.">
+                <FieldRow label={t("camera_settings.smart_track.move_budget")} hint={t("camera_settings.smart_track.move_budget_hint")}>
                   <div className="flex items-center gap-3">
                     <input
                       type="range"
@@ -235,17 +235,17 @@ export function SmartTrackSection({
                       className="flex-1 accent-accent"
                     />
                     <span className="font-mono text-xs text-muted-foreground w-20 text-right">
-                      {smartTrackMoveBudget}/min
+                      {smartTrackMoveBudget}{t("camera_settings.smart_track.per_minute")}
                     </span>
                   </div>
                 </FieldRow>
 
-                <FieldRow label="ONVIF profile token" hint="Most cameras use Profile_1. Change only if your camera uses a different media profile.">
+                <FieldRow label={t("camera_settings.smart_track.profile_token")} hint={t("camera_settings.smart_track.profile_token_hint")}>
                   <input
                     type="text"
                     value={ptzProfileToken}
                     onChange={(e) => setPtzProfileToken(e.target.value)}
-                    placeholder="Profile_1"
+                    placeholder={t("camera_settings.smart_track.profile_placeholder")}
                     className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono"
                   />
                 </FieldRow>
