@@ -130,7 +130,7 @@ export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, fo
                 </span>
                 {brand.port && (
                   <span className="text-[10px] text-muted-foreground font-mono">
-                    port {brand.port}
+                    {t("camera_brand.port", { port: brand.port })}
                   </span>
                 )}
               </div>
@@ -151,31 +151,30 @@ export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, fo
               {brand.templates.length > 0 && (
                 <div className="space-y-1.5">
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Stream URL{brand.templates.length > 1 ? "s" : ""}
+                    {t("camera_brand.stream_url")}{brand.templates.length > 1 ? "s" : ""}
                   </div>
-                  {brand.templates.map((t) => (
+                  {brand.templates.map((template) => (
                     <div
-                      key={t.label}
+                      key={template.label}
                       className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="text-[10px] text-muted-foreground">{t.label}</div>
-                        <div className="text-[11px] font-mono truncate">{t.url}</div>
+                        <div className="text-[10px] text-muted-foreground">{template.label}</div>
+                        <div className="text-[11px] font-mono truncate">{template.url}</div>
                       </div>
                       <button
                         type="button"
-                        onClick={() => onUseTemplate(t.url)}
+                        onClick={() => onUseTemplate(template.url)}
                         className="shrink-0 px-2 py-1 text-[10px] rounded bg-foreground text-background font-medium hover:opacity-90"
                       >
-                        Use this URL
+                        {t("camera_brand.use_url")}
                       </button>
                     </div>
                   ))}
                   <p className="text-[10px] text-muted-foreground">
-                    Replace <span className="font-mono">&lt;ip&gt;</span> with your
-                    camera&apos;s IP. You can leave{" "}
+                    {t("camera_brand.url_help_prefix")} <span className="font-mono">&lt;ip&gt;</span> {t("camera_brand.url_help_middle")} {" "}
                     <span className="font-mono">&lt;user&gt;:&lt;pass&gt;@</span> in the
-                    URL, or remove it and use the Credentials section below.
+                    {t("camera_brand.url_help_suffix")}
                   </p>
                 </div>
               )}
