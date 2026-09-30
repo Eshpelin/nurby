@@ -58,6 +58,9 @@ class NurbyApp extends ConsumerWidget {
     });
 
     final router = ref.watch(_routerProvider);
+    ref.read(pushManagerProvider).onReviewOpen = () {
+      router.push('/settings/review');
+    };
     return MaterialApp.router(
       title: 'Nurby',
       debugShowCheckedModeBanner: false,

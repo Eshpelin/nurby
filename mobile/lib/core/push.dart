@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
@@ -242,6 +243,10 @@ class PushManager {
   PushManager(this._notifications);
 
   final NotificationService _notifications;
+
+  /// Installed by the app shell so tapping any alert lands in the unified
+  /// Review Center instead of stopping at read/open telemetry.
+  VoidCallback? onReviewOpen;
   StreamSubscription<String>? _tokenSub;
   StreamSubscription<RemoteMessage>? _messageSub;
   StreamSubscription<RemoteMessage>? _openedMessageSub;
@@ -327,15 +332,15 @@ class PushManager {
         );
       });
       _notifications.setResponseHandler(
-        (payload) => _recordEventOpened(api, payload),
+        (payload) => _handleNotificationOpen(api, payload),
       );
       _openedMessageSub ??= FirebaseMessaging.onMessageOpenedApp.listen(
-        (msg) => _recordEventOpened(api, msg.data['event_id']?.toString()),
+        (msg) => _handleNotificationOpen(api, msg.data['event_id']?.toString()),
       );
       final initialMessage =
           await FirebaseMessaging.instance.getInitialMessage();
       if (initialMessage != null) {
-        await _recordEventOpened(
+        await _handleNotificationOpen(
           api,
           initialMessage.data['event_id']?.toString(),
         );
@@ -345,13 +350,15 @@ class PushManager {
     }
   }
 
-  Future<void> _recordEventOpened(ApiClient api, String? eventId) async {
-    if (eventId == null || eventId.isEmpty) return;
-    try {
-      await api.postJson('/api/events/$eventId/opened');
-    } catch (e) {
-      log('push open telemetry failed: $e', name: _logName);
+  Future<void> _handleNotificationOpen(ApiClient api, String? eventId) async {
+    if (eventId != null && eventId.isNotEmpty) {
+      try {
+        await api.postJson('/api/events/$eventId/opened');
+      } catch (e) {
+        log('push open telemetry failed: $e', name: _logName);
+      }
     }
+    onReviewOpen?.call();
   }
 
   Future<void> _registerDevice(
