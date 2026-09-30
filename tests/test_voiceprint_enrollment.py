@@ -8,6 +8,7 @@ from services.api.routes.voiceprints import (
     MIN_VIDEO_CONFIDENCE,
     VoiceprintSampleDecision,
     _clip_response,
+    _clear_voice_derived_attribution,
     _eligible_clip,
     _voiceprint_audit_record,
 )
@@ -34,6 +35,30 @@ def test_candidate_requires_strong_video_attribution_and_audio_duration():
     assert not _eligible_clip(_transcript(speaker_confidence=0.74))
     assert not _eligible_clip(_transcript(ended_at=_transcript().started_at + timedelta(seconds=1)))
     assert not _eligible_clip(_transcript(audio_capture_id=None))
+
+
+def test_voiceprint_revocation_clears_only_voice_derived_history():
+    transcript = _transcript(
+        speaker_source="fused",
+        speaker_confidence=0.91,
+    )
+    old_value = _clear_voice_derived_attribution(transcript)
+
+    assert old_value.endswith(":fused:0.91")
+    assert transcript.speaker_person_id is None
+    assert transcript.speaker_confidence is None
+    assert transcript.speaker_source == "ambiguous"
+
+
+@pytest.mark.parametrize("source", ["video", "manual", "ambiguous", None])
+def test_voiceprint_revocation_preserves_non_voice_history(source):
+    transcript = _transcript(speaker_source=source, speaker_confidence=0.88)
+    person_id = transcript.speaker_person_id
+
+    assert _clear_voice_derived_attribution(transcript) is None
+    assert transcript.speaker_person_id == person_id
+    assert transcript.speaker_confidence == 0.88
+    assert transcript.speaker_source == source
 
 
 def test_biometric_confirmation_requires_explicit_consent_payload():

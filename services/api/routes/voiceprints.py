@@ -29,6 +29,7 @@ from shared.paths import resolve_inside
 router = APIRouter()
 MIN_CLIP_SECONDS = 2.0
 MIN_VIDEO_CONFIDENCE = 0.75
+VOICE_DERIVED_SOURCES = frozenset({"voice", "fused"})
 
 
 def _voiceprint_audit_record(
@@ -65,6 +66,26 @@ def _eligible_clip(transcript: Transcript) -> bool:
         and float(transcript.speaker_confidence or 0.0) >= MIN_VIDEO_CONFIDENCE
         and (transcript.ended_at - transcript.started_at).total_seconds() >= MIN_CLIP_SECONDS
     )
+
+
+def _clear_voice_derived_attribution(transcript: Transcript) -> str | None:
+    """Clear a historical attribution produced by voice matching.
+
+    Visual and manually corrected attributions are independent evidence and
+    must survive voiceprint revocation. The returned value is retained in the
+    audit row so an administrator can understand what was removed.
+    """
+    if transcript.speaker_source not in VOICE_DERIVED_SOURCES:
+        return None
+    old_value = (
+        f"{transcript.speaker_person_id}:"
+        f"{transcript.speaker_source}:"
+        f"{transcript.speaker_confidence}"
+    )
+    transcript.speaker_person_id = None
+    transcript.speaker_confidence = None
+    transcript.speaker_source = "ambiguous"
+    return old_value
 
 
 def _clip_response(
@@ -263,10 +284,24 @@ async def decide_voiceprint_candidate(
 @router.delete("/persons/{person_id}/profile")
 async def revoke_voiceprint_profile(
     person_id: uuid.UUID,
+    historical_policy: Literal["preserve", "clear"] = Query(
+        default="preserve",
+        description=(
+            "Whether to retain historical speaker labels or clear labels "
+            "derived from voice matching. Manual and video labels are never cleared."
+        ),
+    ),
     current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete the derived profile and revoke every confirmed source clip."""
+    """Delete the profile, revoke source clips, and apply the explicit history policy.
+
+    ``preserve`` is the safe default: existing transcript labels remain as
+    historical records, but no future voice matching can use this profile.
+    ``clear`` removes only ``voice``/``fused`` labels for this person and
+    changes them to ``ambiguous``. Video and manual attributions are separate
+    evidence and remain intact.
+    """
     if await db.get(Person, person_id) is None:
         raise HTTPException(status_code=404, detail="Person not found")
     profile = await db.scalar(select(VoiceprintProfile).where(VoiceprintProfile.person_id == person_id))
@@ -276,6 +311,13 @@ async def revoke_voiceprint_profile(
         .where(VoiceprintSampleReview.person_id == person_id)
         .where(VoiceprintSampleReview.decision == "confirmed")
     )).all()
+    historical_rows = []
+    if historical_policy == "clear":
+        historical_rows = (await db.execute(
+            select(Transcript)
+            .where(Transcript.speaker_person_id == person_id)
+            .where(Transcript.speaker_source.in_(VOICE_DERIVED_SOURCES))
+        )).scalars().all()
     now = datetime.now(timezone.utc)
     for review, transcript in review_rows:
         old_value = f"{review.decision}:{'consented' if review.consent_given else 'not_consented'}"
@@ -290,6 +332,19 @@ async def revoke_voiceprint_profile(
             old_value=old_value,
             new_value="removed:not_consented",
         ))
+    historical_cleared = 0
+    for transcript in historical_rows:
+        old_value = _clear_voice_derived_attribution(transcript)
+        if old_value is None:
+            continue
+        historical_cleared += 1
+        db.add(_voiceprint_audit_record(
+            transcript,
+            current_user,
+            field="voiceprint_historical_attribution_cleared",
+            old_value=old_value,
+            new_value="None:ambiguous:None",
+        ))
     if profile is not None:
         await db.delete(profile)
     await db.commit()
@@ -297,5 +352,7 @@ async def revoke_voiceprint_profile(
         "person_id": str(person_id),
         "profile_deleted": profile is not None,
         "clips_revoked": len(review_rows),
+        "historical_policy": historical_policy,
+        "historical_attributions_cleared": historical_cleared,
         "training_ready": False,
     }
