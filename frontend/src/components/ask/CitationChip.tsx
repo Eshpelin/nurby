@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import type { Citation } from "./types";
 
 interface CitationChipProps {
@@ -13,12 +14,13 @@ interface CitationChipProps {
 }
 
 export default function CitationChip({ citation }: CitationChipProps) {
-  const { token, authFetch } = useAuth();
+  const { token, authFetch, user } = useAuth();
   const [open, setOpen] = useState(false);
   const [vlmDetail, setVlmDetail] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
 
   const label = citation.label ?? `${citation.kind}:${citation.id.slice(0, 6)}`;
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
 
   const onClick = async () => {
     setOpen(true);
@@ -37,7 +39,7 @@ export default function CitationChip({ citation }: CitationChipProps) {
       <button
         type="button"
         onClick={onClick}
-        aria-label={`Open citation ${label}`}
+        aria-label={t("ask.citation_open", { label })}
         className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded border border-accent/40 text-accent bg-accent/10 hover:bg-accent/20 font-mono"
       >
         {citation.kind === "vlm_call" ? "vlm" : citation.kind.slice(0, 3)}·{citation.id.slice(0, 6)}
@@ -54,9 +56,9 @@ export default function CitationChip({ citation }: CitationChipProps) {
           >
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold">
-                Citation · {citation.kind} · <span className="font-mono text-xs">{citation.id}</span>
+                {t("ask.citation_title")} · {citation.kind} · <span className="font-mono text-xs">{citation.id}</span>
               </div>
-              <button onClick={() => setOpen(false)} aria-label="Close citation" className="text-muted-foreground hover:text-foreground">
+              <button onClick={() => setOpen(false)} aria-label={t("ask.citation_close")} className="text-muted-foreground hover:text-foreground">
                 ✕
               </button>
             </div>
@@ -65,7 +67,7 @@ export default function CitationChip({ citation }: CitationChipProps) {
               <div className="space-y-2">
                 <img
                   src={`/api/observations/${citation.id}/thumbnail${token ? `?token=${token}` : ""}`}
-                  alt="observation thumbnail"
+                  alt={t("ask.citation_observation_alt")}
                   className="w-full rounded border border-border bg-background"
                 />
               </div>
@@ -73,22 +75,22 @@ export default function CitationChip({ citation }: CitationChipProps) {
 
             {citation.kind === "vlm_call" && (
               <div className="space-y-3">
-                {loading && <div className="text-xs text-muted-foreground">Loading audit details.</div>}
+                {loading && <div className="text-xs text-muted-foreground">{t("ask.citation_loading_audit")}</div>}
                 {vlmDetail ? (
                   <>
                     <div>
-                      <div className="text-[10px] uppercase text-muted-foreground">Question asked</div>
+                      <div className="text-[10px] uppercase text-muted-foreground">{t("ask.citation_question")}</div>
                       <div className="text-sm">{(vlmDetail.question as string) ?? "—"}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase text-muted-foreground">Structured answer</div>
+                      <div className="text-[10px] uppercase text-muted-foreground">{t("ask.citation_structured_answer")}</div>
                       <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-x-auto">
                         {JSON.stringify(vlmDetail.response ?? null, null, 2)}
                       </pre>
                     </div>
                     {Array.isArray(vlmDetail.frame_urls) && (vlmDetail.frame_urls as string[]).length > 0 && (
                       <div>
-                        <div className="text-[10px] uppercase text-muted-foreground mb-1">Redacted frames the model saw</div>
+                        <div className="text-[10px] uppercase text-muted-foreground mb-1">{t("ask.citation_redacted_frames")}</div>
                         <div className="grid grid-cols-2 gap-2">
                           {(vlmDetail.frame_urls as string[]).map((u, i) => (
                             <img
@@ -105,7 +107,7 @@ export default function CitationChip({ citation }: CitationChipProps) {
                 ) : (
                   !loading && (
                     <div className="text-xs text-muted-foreground">
-                      Audit detail unavailable. The agent backend may not yet expose /api/agent/vlm_calls/&#123;id&#125;.
+                      {t("ask.citation_unavailable")}
                     </div>
                   )
                 )}
@@ -114,7 +116,7 @@ export default function CitationChip({ citation }: CitationChipProps) {
 
             {citation.kind !== "observation" && citation.kind !== "vlm_call" && (
               <div className="text-xs text-muted-foreground">
-                Citation kind <span className="font-mono">{citation.kind}</span> opens in its own surface (not wired yet).
+                {t("ask.citation_kind_unwired", { kind: citation.kind })}
               </div>
             )}
           </div>
