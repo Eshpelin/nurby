@@ -5,6 +5,8 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { Section, FieldRow, KeywordChipInput } from "./primitives";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 interface SmartTrackSectionProps {
   ptzProfileToken: string;
@@ -65,13 +67,15 @@ export function SmartTrackSection({
   smartTrackTargets,
   smartTrackZoom,
 }: SmartTrackSectionProps) {
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   return (
           <Section
-            title="Smart Track"
+            title={t("camera_settings.smart_track.title")}
           advanced
-            description="Auto-follow detections with the camera's PTZ motor. Requires ONVIF pan/tilt support. The camera will keep the target near frame center and return to the home preset after the target leaves for a few seconds."
+            description={t("camera_settings.smart_track.description")}
           >
-            <FieldRow label="Enabled" hint="Master switch. Off means manual PTZ only.">
+            <FieldRow label={t("camera_settings.smart_track.enabled")} hint={t("camera_settings.smart_track.enabled_hint")}>
               <label className="inline-flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -79,50 +83,50 @@ export function SmartTrackSection({
                   onChange={(e) => setSmartTrackEnabled(e.target.checked)}
                   className="accent-accent"
                 />
-                <span className="text-sm">{smartTrackEnabled ? "Following" : "Off"}</span>
+                <span className="text-sm">{smartTrackEnabled ? t("camera_settings.smart_track.following") : t("camera_settings.smart_track.off")}</span>
               </label>
             </FieldRow>
 
             {smartTrackEnabled && (
               <>
-                <FieldRow label="Follow these labels" hint="Detections matching any of these labels are eligible targets. Empty means follow anything not in the ignore list.">
+                <FieldRow label={t("camera_settings.smart_track.targets")} hint={t("camera_settings.smart_track.targets_hint")}>
                   <KeywordChipInput
                     values={smartTrackTargets}
                     onChange={setSmartTrackTargets}
-                    placeholder="person, cat, ..."
+                    placeholder={t("camera_settings.smart_track.targets_placeholder")}
                   />
                 </FieldRow>
 
-                <FieldRow label="Never follow" hint="Hard deny. The camera will not chase these. Useful if you have a resident dog.">
+                <FieldRow label={t("camera_settings.smart_track.ignore")} hint={t("camera_settings.smart_track.ignore_hint")}>
                   <KeywordChipInput
                     values={smartTrackIgnore}
                     onChange={setSmartTrackIgnore}
-                    placeholder="dog, ..."
+                    placeholder={t("camera_settings.smart_track.ignore_placeholder")}
                   />
                 </FieldRow>
 
-                <FieldRow label="Priority order" hint="When multiple targets are visible, the camera picks the first label in this list. Falls back to bbox area then confidence.">
+                <FieldRow label={t("camera_settings.smart_track.priority")} hint={t("camera_settings.smart_track.priority_hint")}>
                   <KeywordChipInput
                     values={smartTrackPriority}
                     onChange={setSmartTrackPriority}
-                    placeholder="person, cat, ..."
+                    placeholder={t("camera_settings.smart_track.targets_placeholder")}
                   />
                 </FieldRow>
 
-                <FieldRow label="Home preset" hint="ONVIF preset to return to when no target has been seen for the lost window. Set presets on the camera itself, then pick one here.">
+                <FieldRow label={t("camera_settings.smart_track.home")} hint={t("camera_settings.smart_track.home_hint")}>
                   <select
                     value={smartTrackHomePreset}
                     onChange={(e) => setSmartTrackHomePreset(e.target.value)}
                     className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
                   >
-                    <option value="">No home (just stop)</option>
+                    <option value="">{t("camera_settings.smart_track.no_home")}</option>
                     {smartTrackPresets.map((p) => (
                       <option key={p.token} value={p.token}>{p.name} ({p.token})</option>
                     ))}
                   </select>
                 </FieldRow>
 
-                <FieldRow label="Lost window" hint="Seconds without a target before returning home.">
+                <FieldRow label={t("camera_settings.smart_track.lost_window")} hint={t("camera_settings.smart_track.lost_window_hint")}>
                   <div className="flex items-center gap-3">
                     <input
                       type="range"
@@ -139,7 +143,7 @@ export function SmartTrackSection({
                   </div>
                 </FieldRow>
 
-                <FieldRow label="Auto-zoom" hint="When target is small, zoom in. When target fills the frame, zoom out. Off by default since over-zoom can lose the target on fast motion.">
+                <FieldRow label={t("camera_settings.smart_track.auto_zoom")} hint={t("camera_settings.smart_track.auto_zoom_hint")}>
                   <label className="inline-flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -147,7 +151,7 @@ export function SmartTrackSection({
                       onChange={(e) => setSmartTrackZoom(e.target.checked)}
                       className="accent-accent"
                     />
-                    <span className="text-sm">{smartTrackZoom ? "Auto zoom on" : "Fixed zoom"}</span>
+                    <span className="text-sm">{smartTrackZoom ? t("camera_settings.smart_track.zoom_on") : t("camera_settings.smart_track.zoom_fixed")}</span>
                   </label>
                 </FieldRow>
 
