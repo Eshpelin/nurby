@@ -210,7 +210,7 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                       parts.push(t("rules.preview.days", { names: days.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ") }));
                     }
                     if (cond.time_after || cond.time_before) {
-                      parts.push(t("rules.preview.hours", { from: cond.time_after || "00:00", to: cond.time_before || "23:59" }));
+                      parts.push(t("rules.preview.hours", { from: String(cond.time_after || "00:00"), to: String(cond.time_before || "23:59") }));
                     }
                     if (cond.min_confidence) {
                       const mc = cond.min_confidence as number;
