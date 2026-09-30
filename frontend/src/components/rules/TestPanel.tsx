@@ -15,13 +15,14 @@ import type {
   RuleTestResponse,
 } from "./types";
 import { timeAgo as timeAgoBase } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 const REPLAY_HOURS_OPTIONS = [
-  { value: 1, label: "1h" },
-  { value: 6, label: "6h" },
-  { value: 24, label: "24h" },
-  { value: 72, label: "3d" },
-  { value: 168, label: "7d" },
+  { value: 1, key: "rules.test.hours_1" },
+  { value: 6, key: "rules.test.hours_6" },
+  { value: 24, key: "rules.test.hours_24" },
+  { value: 72, key: "rules.test.days_3" },
+  { value: 168, key: "rules.test.days_7" },
 ];
 
 // Trigger types whose match data is not persisted on the observation row.
@@ -58,7 +59,8 @@ export default function TestPanel({
   cameras,
   className,
 }: TestPanelProps) {
-  const { authFetch, token } = useAuth();
+  const { authFetch, token, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
 
   const [testing, setTesting] = useState(false);
   const [replaying, setReplaying] = useState(false);
@@ -125,22 +127,22 @@ export default function TestPanel({
         if (res.status === 422) {
           const data = await res.json().catch(() => null);
           const detail = data?.detail;
-          let first = "Validation failed.";
+          let first = t("rules.test.validation_failed");
           if (Array.isArray(detail) && detail.length > 0) {
             first = detail[0]?.msg || first;
           } else if (typeof detail === "string") {
             first = detail;
           }
-          setTestError(`${first} Save validation failed. Fix the issue then try again.`);
+          setTestError(`${first} ${t("rules.test.save_validation_failed")}`);
           setTestResult(null);
           return;
         }
         if (res.status >= 500) {
-          setTestError("Test temporarily unavailable.");
+          setTestError(t("rules.test.unavailable"));
           setTestResult(null);
           return;
         }
-        setTestError(`Request failed (${res.status}).`);
+        setTestError(t("rules.test.request_failed", { status: res.status }));
         setTestResult(null);
         return;
       }
@@ -150,7 +152,7 @@ export default function TestPanel({
       setShowObs(false);
     } catch (e) {
       if ((e as { name?: string })?.name === "AbortError") return;
-      setTestError("Network error.");
+      setTestError(t("rules.test.network_error"));
       setTestResult(null);
     } finally {
       if (testAbortRef.current === ctl) {
@@ -176,9 +178,9 @@ export default function TestPanel({
       );
       if (!res.ok) {
         if (res.status >= 500) {
-          setReplayError("Replay temporarily unavailable.");
+          setReplayError(t("rules.test.replay_unavailable"));
         } else {
-          setReplayError(`Request failed (${res.status}).`);
+          setReplayError(t("rules.test.request_failed", { status: res.status }));
         }
         setReplayResult(null);
         return;
@@ -187,9 +189,9 @@ export default function TestPanel({
       setReplayResult(data);
     } catch (e) {
       if ((e as { name?: string })?.name === "AbortError") {
-        setReplayError("Replay timed out. Try a shorter window.");
+        setReplayError(t("rules.test.replay_timeout"));
       } else {
-        setReplayError("Network error.");
+        setReplayError(t("rules.test.network_error"));
       }
       setReplayResult(null);
     } finally {
@@ -209,10 +211,10 @@ export default function TestPanel({
     try {
       const res = await authFetch(`/api/rules/${existingRuleId}/test-alert`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || `Test alert failed (${res.status})`);
+      if (!res.ok) throw new Error(data?.detail || t("rules.test.alert_failed", { status: res.status }));
       setAlertResult(data as RuleTestAlertResponse);
     } catch (e) {
-      setTestError(e instanceof Error ? e.message : "Test alert failed.");
+      setTestError(e instanceof Error ? e.message : t("rules.test.alert_failed_generic"));
     } finally {
       setAlertTesting(false);
     }
@@ -239,9 +241,9 @@ export default function TestPanel({
     <div className={`bg-card border border-border rounded-lg p-4 space-y-3 ${className || ""}`}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <div className="text-sm font-semibold text-foreground">Dry-run & replay</div>
+          <div className="text-sm font-semibold text-foreground">{t("rules.test.title")}</div>
           <div className="text-[11px] text-muted-foreground">
-            Test the draft against a synthetic event, or replay against the last N hours of real observations.
+            {t("rules.test.description")}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -250,9 +252,9 @@ export default function TestPanel({
             onClick={runTest}
             disabled={!triggerTypeSet || testing}
             className="px-3 py-1.5 text-sm rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90 disabled:opacity-50"
-            title={triggerTypeSet ? "Dry-run this rule against a synthetic observation" : "Pick a trigger type first"}
+            title={triggerTypeSet ? t("rules.test.dry_run_title") : t("rules.test.pick_trigger")}
           >
-            {testing ? "Testing." : formChangedSinceTest && testResult ? "Re-test now" : "Test rule"}
+            {testing ? t("rules.test.testing") : formChangedSinceTest && testResult ? t("rules.test.retest") : t("rules.test.test_rule")}
           </button>
           {existingRuleId && (
             <button
@@ -260,9 +262,9 @@ export default function TestPanel({
               onClick={runAlertTest}
               disabled={alertTesting}
               className="px-3 py-1.5 text-sm rounded-md border border-accent/50 text-accent hover:bg-accent/10 disabled:opacity-50"
-              title="Send a synthetic alert through this saved rule's configured delivery channels"
+              title={t("rules.test.send_alert_title")}
             >
-              {alertTesting ? "Sending." : "Send test alert"}
+              {alertTesting ? t("rules.test.sending") : t("rules.test.send_alert")}
             </button>
           )}
           <div className="flex items-center gap-1">
@@ -271,10 +273,10 @@ export default function TestPanel({
               onChange={(e) => setReplayHours(parseInt(e.target.value, 10))}
               disabled={!existingRuleId || replaying}
               className="px-2 py-1.5 text-xs rounded-md bg-background border border-border focus:outline-none focus:border-accent disabled:opacity-50"
-              title="Replay window"
+              title={t("rules.test.replay_window")}
             >
               {REPLAY_HOURS_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o.value} value={o.value}>{t(o.key)}</option>
               ))}
             </select>
             <button
@@ -282,9 +284,9 @@ export default function TestPanel({
               onClick={() => runReplay(replayHours)}
               disabled={!existingRuleId || replaying}
               className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted disabled:opacity-50"
-              title={existingRuleId ? "Replay against persisted observations" : "Save the rule first to enable replay"}
+              title={existingRuleId ? t("rules.test.replay_title") : t("rules.test.save_first_replay")}
             >
-              {replaying ? "Replaying." : "Replay"}
+              {replaying ? t("rules.test.replaying") : t("rules.test.replay")}
             </button>
           </div>
         </div>
@@ -292,7 +294,7 @@ export default function TestPanel({
 
       {!triggerTypeSet && (
         <div className="text-[11px] text-muted-foreground">
-          Pick a trigger type to enable Test.
+          {t("rules.test.pick_trigger_enable")}
         </div>
       )}
 
@@ -333,30 +335,30 @@ export default function TestPanel({
                   : "bg-red-500/20 text-red-400 border border-red-500/40"
               }`}
             >
-              {testResult.matched ? "Would fire" : "Would NOT fire"}
+              {testResult.matched ? t("rules.test.would_fire") : t("rules.test.would_not_fire")}
             </span>
             <span
               className={`px-1.5 py-0.5 text-[10px] rounded border ${
                 matchedTrigger ? "border-green-500/40 text-green-400" : "border-zinc-500/40 text-zinc-400"
               }`}
             >
-              trigger {matchedTrigger ? "ok" : "no"}
+              {t("rules.test.trigger")} {matchedTrigger ? t("rules.test.ok") : t("rules.test.no")}
             </span>
             <span
               className={`px-1.5 py-0.5 text-[10px] rounded border ${
                 testResult.matched_conditions ? "border-green-500/40 text-green-400" : "border-zinc-500/40 text-zinc-400"
               }`}
             >
-              conditions {testResult.matched_conditions ? "ok" : "no"}
+              {t("rules.test.conditions")} {testResult.matched_conditions ? t("rules.test.ok") : t("rules.test.no")}
             </span>
             {testResult.schedule_blocked && (
               <span className="px-1.5 py-0.5 text-[10px] rounded border border-amber-500/40 text-amber-400">
-                schedule blocked
+                {t("rules.test.schedule_blocked")}
               </span>
             )}
             {formChangedSinceTest && (
               <span className="px-1.5 py-0.5 text-[10px] rounded border border-blue-500/40 text-blue-300 ml-auto">
-                form changed since test
+                {t("rules.test.form_changed")}
               </span>
             )}
           </div>
@@ -379,7 +381,7 @@ export default function TestPanel({
               onClick={() => setShowObs((s) => !s)}
               className="text-[11px] text-blue-400 hover:underline"
             >
-              {showObs ? "Hide" : "Open"} synthesized observation (we tested against this synthetic observation{showObs ? "" : ", open to inspect"})
+              {showObs ? t("rules.test.hide") : t("rules.test.open")} {t("rules.test.synthesized_observation")} ({t("rules.test.synthetic_note")}{showObs ? "" : `, ${t("rules.test.open_to_inspect")}`})
             </button>
             {showObs && (
               <pre className="mt-2 text-[11px] font-mono bg-background border border-border rounded p-2 overflow-x-auto max-h-64">
@@ -391,16 +393,16 @@ export default function TestPanel({
           {testResult.would_fire.length > 0 && (
             <div className="space-y-2">
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                Would have fired ({testResult.would_fire.length})
+                {t("rules.test.would_have_fired", { count: testResult.would_fire.length })}
               </div>
               {testResult.would_fire.map((a) => (
-                <ActionPreview key={a.index} action={a} />
+                <ActionPreview key={a.index} action={a} t={t} />
               ))}
             </div>
           )}
           {testResult.matched && testResult.would_fire.length === 0 && (
             <div className="text-[11px] text-muted-foreground italic">
-              Matched, but no actions are configured on this rule yet.
+              {t("rules.test.matched_no_actions")}
             </div>
           )}
         </div>
@@ -416,18 +418,18 @@ export default function TestPanel({
         <div className="rounded-md border border-border bg-background/50 p-3 space-y-3">
           <div className="text-sm">
             <span className="font-semibold">
-              Matched {replayResult.matched} of {replayResult.scanned} observations
+              {t("rules.test.matched_of", { matched: replayResult.matched, scanned: replayResult.scanned })}
             </span>{" "}
             <span className="text-muted-foreground">
-              over the last {replayResult.hours}h.
+              {t("rules.test.over_last_hours", { hours: replayResult.hours })}
             </span>
           </div>
 
           {(replayResult.first_matched_at || replayResult.last_matched_at) && (
             <div className="text-[11px] text-muted-foreground">
-              First match {timeAgo(replayResult.first_matched_at)}
+              {t("rules.test.first_match")} {timeAgo(replayResult.first_matched_at)}
               {replayResult.last_matched_at && replayResult.last_matched_at !== replayResult.first_matched_at
-                ? `, last match ${timeAgo(replayResult.last_matched_at)}`
+                ? `, ${t("rules.test.last_match")} ${timeAgo(replayResult.last_matched_at)}`
                 : ""}
               .
             </div>
@@ -435,22 +437,22 @@ export default function TestPanel({
 
           {replayResult.scanned === 0 && (
             <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded p-2">
-              No observations to replay against yet. Wait for cameras to capture some frames.
+              {t("rules.test.no_observations")}
             </div>
           )}
 
           {replayResult.scanned > 0 && replayResult.matched === 0 && (
             <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded p-2">
               {isNonReplayable
-                ? `This trigger type cannot be replayed. Its match data (audio, clap, speech) is not persisted on the observations table, so a historical scan can never re-detect it. Use a live Test instead.`
-                : `Trigger never matched in this window. Nothing in the last scan satisfied the trigger and conditions. Widen the window or loosen the rule.`}
+                ? t("rules.test.non_replayable")
+                : t("rules.test.never_matched")}
             </div>
           )}
 
           {replayResult.samples.length > 0 && (
             <div className="space-y-2">
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                Sample matches ({replayResult.samples.length})
+                {t("rules.test.sample_matches", { count: replayResult.samples.length })}
               </div>
               {replayResult.samples.map((s) => (
                 <div key={s.observation_id} className="flex gap-3 items-start border border-border/60 rounded p-2 bg-background">
@@ -462,7 +464,7 @@ export default function TestPanel({
                     />
                   ) : (
                     <div className="w-20 h-14 rounded bg-muted flex-shrink-0 flex items-center justify-center text-[10px] text-muted-foreground">
-                      no thumb
+                        {t("rules.test.no_thumbnail")}
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
@@ -486,7 +488,13 @@ export default function TestPanel({
   );
 }
 
-function ActionPreview({ action }: { action: RuleTestActionPreview }) {
+function ActionPreview({
+  action,
+  t,
+}: {
+  action: RuleTestActionPreview;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
   const ra = action.rendered_action || {};
   const type = action.action_type;
   return (
@@ -514,7 +522,7 @@ function ActionPreview({ action }: { action: RuleTestActionPreview }) {
 
       {(type === "webhook" || type === "api_call") && ra.payload_template !== undefined && (
         <div>
-          <div className="text-[10px] uppercase text-muted-foreground mb-1">payload</div>
+          <div className="text-[10px] uppercase text-muted-foreground mb-1">{t("rules.test.payload")}</div>
           <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-x-auto max-h-48">
             {JSON.stringify(ra.payload_template, null, 2)}
           </pre>
@@ -523,7 +531,7 @@ function ActionPreview({ action }: { action: RuleTestActionPreview }) {
 
       <details>
         <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">
-          rendered action json
+          {t("rules.test.rendered_action_json")}
         </summary>
         <pre className="mt-1 text-[11px] font-mono bg-background border border-border rounded p-2 overflow-x-auto max-h-48">
           {JSON.stringify(ra, null, 2)}
