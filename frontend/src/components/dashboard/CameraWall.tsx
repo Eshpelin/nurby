@@ -8,6 +8,8 @@
 // owns only layout/interaction and never duplicates the feed plumbing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 // A tile in the wall, camera or widget. The parent supplies the rendered
 // node so the wall owns only layout/interaction, not the feed/data plumbing.
@@ -51,6 +53,8 @@ export function CameraWall({
   // fullscreened subtree renders). Collapse the timeline first for cameras-only.
   fullscreenRef?: React.RefObject<HTMLElement | null>;
 }) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [cols, setCols] = useState<number>(() => loadJSON(COLS_KEY, 3));
@@ -157,7 +161,7 @@ export function CameraWall({
       {/* Wall toolbar */}
       <div className="flex items-center justify-between gap-2 mb-2 flex-shrink-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Wall</span>
+          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("cameras.wall")}</span>
         </div>
         <div className="flex items-center gap-2">
           {toolbarExtra}
@@ -171,20 +175,20 @@ export function CameraWall({
                 className={`px-2 py-0.5 text-[11px] rounded transition-colors ${
                   cols === c ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
-                title={`${c} columns`}
+                title={t("cameras.wall_columns", { count: c })}
               >{c}</button>
             ))}
           </div>
           <button onClick={resetLayout}
             className="hidden sm:block text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/50 transition-colors"
-            title="Reset wall layout">Reset</button>
+            title={t("cameras.wall_reset_layout")}>{t("cameras.wall_reset")}</button>
           <button onClick={toggleFullscreen}
             className="text-[11px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-            title="Toggle fullscreen">{isFs ? "Exit fullscreen" : "Fullscreen"}</button>
+            title={t("cameras.wall_toggle_fullscreen")}>{isFs ? t("cameras.wall_exit_fullscreen") : t("cameras.wall_fullscreen")}</button>
           {onExit && (
             <button onClick={onExit}
               className="text-[11px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted/50 transition-colors"
-              title="Back to the timeline dashboard">Exit wall</button>
+              title={t("cameras.wall_back_dashboard")}>{t("cameras.wall_exit")}</button>
           )}
         </div>
       </div>
@@ -211,6 +215,7 @@ export function CameraWall({
             onReorderDrop={() => { if (dragId.current) reorder(dragId.current, it.id); dragId.current = null; }}
             onResize={(w, h) => setSpan(it.id, w, h)}
             onSolo={() => setSolo(it.id)}
+            t={t}
           >
             {it.render()}
           </WallCell>
@@ -224,7 +229,7 @@ export function CameraWall({
             <span className="text-sm font-medium text-white">{soloItem.name}</span>
             <button onClick={() => setSolo(null)}
               className="text-xs px-2 py-1 rounded border border-white/20 text-white/80 hover:bg-white/10">
-              Close (Esc)
+              {t("cameras.wall_close_esc")}
             </button>
           </div>
           <div className="flex-1 min-h-0">{soloItem.render()}</div>
@@ -242,6 +247,7 @@ function WallCell({
   onReorderDrop,
   onResize,
   onSolo,
+  t,
   children,
 }: {
   span: Span;
@@ -251,6 +257,7 @@ function WallCell({
   onReorderDrop: () => void;
   onResize: (w: number, h: number) => void;
   onSolo: () => void;
+  t: (key: string, values?: Record<string, string | number>) => string;
   children: React.ReactNode;
 }) {
   const feedRef = useRef<HTMLDivElement | null>(null);
@@ -315,7 +322,7 @@ function WallCell({
         draggable
         onDragStart={onReorderDragStart}
         className="absolute top-0 left-0 right-0 h-5 z-20 cursor-move opacity-0 group-hover/cell:opacity-100 transition-opacity bg-gradient-to-b from-black/60 to-transparent flex items-center justify-center"
-        title="Drag to move"
+        title={t("cameras.wall_drag_move")}
       >
         <span className="text-white/50 text-[10px] tracking-widest select-none">⠿</span>
       </div>
@@ -348,8 +355,8 @@ function WallCell({
         <button
           onClick={() => setZoom({ scale: 1, x: 0, y: 0 })}
           className="absolute bottom-1.5 left-1.5 z-20 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-white/80 border border-white/10 hover:bg-black/90"
-          title="Reset zoom"
-        >{zoom.scale.toFixed(1)}× · reset</button>
+          title={t("cameras.wall_reset_zoom")}
+        >{zoom.scale.toFixed(1)}× · {t("cameras.wall_reset")}</button>
       )}
 
       {/* Resize grip (bottom-right corner). */}
@@ -359,7 +366,7 @@ function WallCell({
           resize.current = { sx: e.clientX, sy: e.clientY, w: span.w, h: span.h };
         }}
         className="absolute bottom-0 right-0 z-20 w-4 h-4 cursor-nwse-resize opacity-0 group-hover/cell:opacity-100 transition-opacity"
-        title="Drag to resize"
+        title={t("cameras.wall_drag_resize")}
       >
         <svg viewBox="0 0 10 10" className="w-full h-full text-white/60">
           <path d="M9 1L1 9M9 5L5 9" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" />
