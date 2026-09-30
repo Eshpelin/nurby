@@ -6,12 +6,14 @@
 
 import { useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { useMentions } from "@/components/mentions/useMentions";
 import { MentionDropdown } from "@/components/mentions/MentionDropdown";
 import type { Rule } from "./types";
 
 export function DescribeRuleBox({ onGenerated }: { onGenerated: (rule: Rule) => void }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export function DescribeRuleBox({ onGenerated }: { onGenerated: (rule: Rule) => 
         setError(
           typeof detail === "string"
             ? detail
-            : detail?.message || "Could not generate a rule from that description.",
+            : detail?.message || t("rules.describe.generate_failed"),
         );
         return;
       }
@@ -51,7 +53,7 @@ export function DescribeRuleBox({ onGenerated }: { onGenerated: (rule: Rule) => 
       };
       onGenerated(rule);
     } catch {
-      setError("Could not reach the server.");
+      setError(t("rules.describe.server_unreachable"));
     } finally {
       setBusy(false);
     }
@@ -61,7 +63,7 @@ export function DescribeRuleBox({ onGenerated }: { onGenerated: (rule: Rule) => 
     <div className="rounded-lg border border-accent/40 bg-gradient-to-br from-accent/10 to-transparent p-4 space-y-2">
       <div className="flex items-center gap-2">
         <span className="text-base leading-none">✨</span>
-        <span className="text-sm font-semibold">Describe your alert</span>
+        <span className="text-sm font-semibold">{t("rules.describe.title")}</span>
       </div>
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -89,7 +91,7 @@ export function DescribeRuleBox({ onGenerated }: { onGenerated: (rule: Rule) => 
                 generate();
               }
             }}
-            placeholder='e.g. "when @Arman reaches the porch, fire @FrontPorchAlarm"'
+            placeholder={t("rules.describe.placeholder")}
             className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm focus:outline-none focus:border-accent"
             disabled={busy}
           />
@@ -100,11 +102,11 @@ export function DescribeRuleBox({ onGenerated }: { onGenerated: (rule: Rule) => 
           disabled={busy || !prompt.trim()}
           className="px-3 py-2 text-xs rounded-md bg-accent text-accent-foreground font-medium hover:opacity-90 disabled:opacity-50 flex-shrink-0"
         >
-          {busy ? "Thinking." : "Build it"}
+          {busy ? t("rules.describe.thinking") : t("rules.describe.build")}
         </button>
       </div>
       <p className="text-[11px] text-muted-foreground">
-        The AI drafts the rule; you review and tweak it in the builder before saving.
+        {t("rules.describe.help")}
       </p>
       {error && <p className="text-xs text-red-400">{error}</p>}
       {warnings.map((w, i) => (
