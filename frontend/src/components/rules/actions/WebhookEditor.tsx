@@ -9,6 +9,8 @@ import {
 } from "../types";
 import { VarInserter, type VarSpec } from "./VarInserter";
 import { DevicePresetPicker } from "./DevicePresetPicker";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export interface WebhookEditorProps {
   draft: WebhookDraft;
@@ -18,6 +20,8 @@ export interface WebhookEditorProps {
 
 export function WebhookEditor({ draft, onChange, availableVars }: WebhookEditorProps) {
   const d = draft;
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const set = (patch: Partial<WebhookDraft>) => onChange({ ...d, ...patch });
   return (
     <div className="space-y-3">
@@ -26,7 +30,7 @@ export function WebhookEditor({ draft, onChange, availableVars }: WebhookEditorP
       )}
       {d.type === "api_call" && (
         <div>
-          <label className="text-xs text-muted-foreground block mb-1">HTTP Method</label>
+          <label className="text-xs text-muted-foreground block mb-1">{t("rules.webhook.method")}</label>
           <div className="flex gap-1">
             {HTTP_METHODS.map((m) => (
               <button
@@ -50,10 +54,10 @@ export function WebhookEditor({ draft, onChange, availableVars }: WebhookEditorP
         value={d.url}
         onChange={(e) => set({ url: e.target.value })}
         className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
-        placeholder="https://api.example.com/endpoint"
+        placeholder={t("rules.webhook.url_placeholder")}
       />
       <div>
-        <label className="text-xs text-muted-foreground block mb-1.5">Authentication</label>
+        <label className="text-xs text-muted-foreground block mb-1.5">{t("rules.webhook.authentication")}</label>
         <div className="flex gap-1 mb-2">
           {AUTH_TYPES.map((at) => (
             <button
@@ -76,7 +80,7 @@ export function WebhookEditor({ draft, onChange, availableVars }: WebhookEditorP
             value={d.authToken}
             onChange={(e) => set({ authToken: e.target.value })}
             className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
-            placeholder="Bearer token"
+            placeholder={t("rules.webhook.bearer_placeholder")}
           />
         )}
         {d.authType === "api_key" && (
@@ -86,14 +90,14 @@ export function WebhookEditor({ draft, onChange, availableVars }: WebhookEditorP
               value={d.authHeader}
               onChange={(e) => set({ authHeader: e.target.value })}
               className="w-1/3 px-3 py-2 rounded-md bg-background border border-border text-sm"
-              placeholder="Header name"
+              placeholder={t("rules.webhook.header_placeholder")}
             />
             <input
               type="password"
               value={d.authKey}
               onChange={(e) => set({ authKey: e.target.value })}
               className="flex-1 px-3 py-2 rounded-md bg-background border border-border text-sm"
-              placeholder="API key value"
+              placeholder={t("rules.webhook.api_key_placeholder")}
             />
           </div>
         )}
@@ -104,35 +108,32 @@ export function WebhookEditor({ draft, onChange, availableVars }: WebhookEditorP
               value={d.authUser}
               onChange={(e) => set({ authUser: e.target.value })}
               className="flex-1 px-3 py-2 rounded-md bg-background border border-border text-sm"
-              placeholder="Username"
+              placeholder={t("rules.webhook.username_placeholder")}
             />
             <input
               type="password"
               value={d.authPass}
               onChange={(e) => set({ authPass: e.target.value })}
               className="flex-1 px-3 py-2 rounded-md bg-background border border-border text-sm"
-              placeholder="Password"
+              placeholder={t("rules.webhook.password_placeholder")}
             />
           </div>
         )}
       </div>
       <div>
         <label className="text-xs text-muted-foreground block mb-1.5">
-          Sign body (HMAC-SHA256)
+          {t("rules.webhook.sign_body")}
         </label>
         <input
           type="password"
           value={d.secret}
           onChange={(e) => set({ secret: e.target.value })}
           className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono"
-          placeholder="Shared secret (optional)"
+          placeholder={t("rules.webhook.secret_placeholder")}
         />
         <p className="text-[10px] text-muted-foreground mt-1">
-          When set, Nurby signs the exact request body and sends
-          {" "}
-          <span className="font-mono">X-Nurby-Signature</span>. Your receiver
-          recomputes the HMAC to verify the alert came from Nurby. Required for
-          the physical device presets on an untrusted network.
+          {t("rules.webhook.signature_help")}{" "}
+          <span className="font-mono">X-Nurby-Signature</span>. {t("rules.webhook.signature_suffix")}
         </p>
       </div>
       <div>
@@ -151,7 +152,7 @@ export function WebhookEditor({ draft, onChange, availableVars }: WebhookEditorP
             }}
             className="accent-green-500"
           />
-          <span className="text-xs">Custom payload template</span>
+          <span className="text-xs">{t("rules.webhook.custom_payload")}</span>
         </label>
         {d.useCustomPayload && (
           <div className="space-y-2">
@@ -163,7 +164,7 @@ export function WebhookEditor({ draft, onChange, availableVars }: WebhookEditorP
                 try {
                   if (v.trim()) JSON.parse(v);
                 } catch {
-                  err = "Invalid JSON";
+                  err = t("rules.webhook.invalid_json");
                 }
                 set({ payloadTemplate: v, payloadError: err });
               }}
@@ -176,7 +177,7 @@ export function WebhookEditor({ draft, onChange, availableVars }: WebhookEditorP
               <div className="text-[10px] text-red-400">{d.payloadError}</div>
             )}
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="text-[10px] text-muted-foreground">Vars.</div>
+              <div className="text-[10px] text-muted-foreground">{t("rules.webhook.variables")}</div>
               {TEMPLATE_VARIABLES.map((v) => (
                 <button
                   key={v.key}
