@@ -17,14 +17,25 @@ To add a language, extend the `Locale` union, add its catalog entries and
 copy in the catalog when a surface is migrated; do not translate camera IDs,
 rule keys, API values, or security decisions.
 
-The first proof currently covers the Settings language selector. The shell,
-onboarding, alert/event pages, reports, camera settings, and mobile app still
-contain inline English and are intentionally listed as follow-up migration
-work rather than being represented as translated today.
+The first proof currently covers the Settings language selector. The migrated
+web surfaces now include shell/navigation, onboarding, alert/event pages,
+reports, camera activity/package evidence, camera voice settings, camera setup
+helpers, Smart Track settings, Settings tuning/digest copy, AI usage reporting,
+rule editors and execution logs, widget setup, and identity review surfaces.
 
-The current migrated surfaces also include camera activity/package evidence,
-camera voice settings, Settings tuning/digest copy, AI usage reporting, and
-the identity review surfaces. The catalog test checks missing keys,
+The remaining migration inventory is intentionally explicit:
+
+- rule trigger metadata and action-validation messages in
+  `frontend/src/components/rules/types.tsx` still need a catalog boundary;
+- brand-specific camera instructions and template names in
+  `frontend/src/lib/camera-brands.ts` are source data and need a data-level
+  locale strategy rather than ad-hoc component translation;
+- the mobile app has a separate catalog architecture and is tracked separately;
+- protocol/configuration values such as `GET`, `POST`, environment variable
+  names, HTML/JSON examples, camera/rule identifiers, and the `Nurby` brand are
+  intentionally not translated.
+
+The catalog test checks missing keys,
 interpolation mismatches, and locale-only extra keys (`locale:key`), so a
 contributor pack cannot silently drift from the English source catalog.
 
