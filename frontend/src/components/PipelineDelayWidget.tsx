@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useWSSubscribe } from "@/lib/ws";
+import { translate } from "@/lib/i18n";
 
 interface Summary {
   health: "clear" | "catching_up" | "backlogged" | "degraded";
@@ -39,7 +40,8 @@ function fmtDuration(seconds: number): string {
 }
 
 export function PipelineDelayWidget() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [data, setData] = useState<Summary | null>(null);
   const inFlight = useRef(false);
 
@@ -102,22 +104,20 @@ export function PipelineDelayWidget() {
       <span className="flex-1">
         {degraded ? (
           <>
-            <span className="font-medium">Perception needs attention.</span> A
-            camera has stalled or failed while {data.total_queued} frame
-            {data.total_queued === 1 ? "" : "s"} wait.
+            {t("pipeline_widget.degraded", { count: data.total_queued, frames: t(data.total_queued === 1 ? "pipeline_widget.frame" : "pipeline_widget.frames") })}
           </>
         ) : (
           <>
-            <span className="font-medium">AI perception is catching up.</span>{" "}
-            {data.total_queued} frame{data.total_queued === 1 ? "" : "s"} queued
+            <span className="font-medium">{t("pipeline_widget.catching_up")}</span>{" "}
+            {t("pipeline_widget.queued", { count: data.total_queued, frames: t(data.total_queued === 1 ? "pipeline_widget.frame" : "pipeline_widget.frames") })}
             {data.fleet_eta_seconds > 0 && (
-              <> · ~{fmtDuration(data.fleet_eta_seconds)} to clear</>
+              <> · {t("pipeline_widget.to_clear", { duration: fmtDuration(data.fleet_eta_seconds) })}</>
             )}
-            {data.sec_per_frame > 0 && <> · {data.sec_per_frame}s/frame</>}
+            {data.sec_per_frame > 0 && <> · {t("pipeline_widget.per_frame", { seconds: data.sec_per_frame })}</>}
           </>
         )}
       </span>
-      <span className="text-xs opacity-70 flex-shrink-0">View →</span>
+      <span className="text-xs opacity-70 flex-shrink-0">{t("pipeline_widget.view")}</span>
     </Link>
   );
 }
