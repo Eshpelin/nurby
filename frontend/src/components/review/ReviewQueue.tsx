@@ -28,6 +28,22 @@ type RelationshipDetail = {
   distinct_days: number;
   evidence_availability?: "available" | "partial" | "expired" | "none" | "restricted";
   sensitive_evidence_restricted?: boolean;
+  privacy?: {
+    sensitive_evidence_restricted: boolean;
+    retention_is_source_of_truth: boolean;
+    camera_policies: {
+      camera_id: string;
+      camera_name: string;
+      recording: { retention_mode: string; retention_days: number; retention_gb: number };
+      audio: {
+        capture_enabled: boolean;
+        raw_audio_stored: boolean;
+        raw_audio_retention_days: number;
+        transcript_store: string;
+        transcript_retention_days: number;
+      };
+    }[];
+  };
   supporting_evidence_count?: number;
   contradictory_evidence_count?: number;
   confidence_score?: number | null;
@@ -434,6 +450,22 @@ export function ReviewQueue({ onOpenEvent, focusId, cameraId }: ReviewQueueProps
                               ? t("review.evidence_restricted")
                               : t("review.evidence_partial")}
                           </p>
+                        )}
+                        {relationshipDetails[item.id].privacy && (
+                          <div className="rounded border border-border/60 bg-background/40 px-2 py-1.5 text-[10px] text-muted-foreground">
+                            <div className="mb-1 uppercase tracking-wide">{t("review.privacy_summary")}</div>
+                            {relationshipDetails[item.id].privacy!.sensitive_evidence_restricted && (
+                              <p className="mb-1 text-amber-200">{t("review.sensitive_evidence_restricted")}</p>
+                            )}
+                            {relationshipDetails[item.id].privacy!.camera_policies.map((policy) => (
+                              <div key={policy.camera_id} className="space-y-0.5">
+                                <div className="text-foreground">{policy.camera_name}</div>
+                                <div>{t("review.recording_retention", { days: policy.recording.retention_days })}</div>
+                                <div>{t("review.audio_retention", { days: policy.audio.raw_audio_retention_days, stored: policy.audio.raw_audio_stored ? t("review.stored") : t("review.not_stored") })}</div>
+                                <div>{t("review.transcript_retention", { days: policy.audio.transcript_retention_days, mode: policy.audio.transcript_store })}</div>
+                              </div>
+                            ))}
+                          </div>
                         )}
                         <p className="text-[10px] text-muted-foreground">
                           {t("review.independent_visits", { count: relationshipDetails[item.id].distinct_days })} · {t("review.source_episodes_below")}
