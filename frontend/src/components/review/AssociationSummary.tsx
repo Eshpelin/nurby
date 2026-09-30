@@ -27,6 +27,20 @@ type Association = {
 };
 
 type EvidenceDetail = {
+  privacy?: {
+    sensitive_evidence_restricted: boolean;
+    camera_policies: {
+      camera_id: string;
+      camera_name: string;
+      recording: { retention_days: number };
+      audio: {
+        raw_audio_stored: boolean;
+        raw_audio_retention_days: number;
+        transcript_store: string;
+        transcript_retention_days: number;
+      };
+    }[];
+  };
   evidence: {
     id: string;
     observed_at: string;
@@ -145,6 +159,22 @@ export function AssociationSummary({ objectKind, objectKey, subjectKind, subject
               </div>
               {expanded === item.id && details[item.id] && (
                 <div className="mt-2 space-y-1 border-t border-border/60 pt-2">
+                  {details[item.id].privacy && (
+                    <div className="mb-2 rounded border border-border/60 bg-background/40 px-2 py-1.5 text-[10px] text-muted-foreground">
+                      <div className="mb-1 uppercase tracking-wide">{t("review.privacy_summary")}</div>
+                      {details[item.id].privacy!.sensitive_evidence_restricted && (
+                        <p className="mb-1 text-amber-200">{t("review.sensitive_evidence_restricted")}</p>
+                      )}
+                      {details[item.id].privacy!.camera_policies.map((policy) => (
+                        <div key={policy.camera_id} className="space-y-0.5">
+                          <div className="text-foreground">{policy.camera_name}</div>
+                          <div>{t("review.recording_retention", { days: policy.recording.retention_days })}</div>
+                          <div>{t("review.audio_retention", { days: policy.audio.raw_audio_retention_days, stored: policy.audio.raw_audio_stored ? t("review.stored") : t("review.not_stored") })}</div>
+                          <div>{t("review.transcript_retention", { days: policy.audio.transcript_retention_days, mode: policy.audio.transcript_store })}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {details[item.id].evidence.slice(0, 5).map((evidence) => (
                     <div key={evidence.id} className="text-[10px] text-muted-foreground">
                       <span className={evidence.role === "contradictory" ? "text-amber-300" : "text-emerald-300"}>
