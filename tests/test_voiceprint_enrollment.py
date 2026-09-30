@@ -10,6 +10,7 @@ from services.api.routes.voiceprints import (
     _clip_response,
     _clear_voice_derived_attribution,
     _eligible_clip,
+    _apply_voiceprint_hypothesis,
     _voiceprint_audit_record,
 )
 
@@ -121,3 +122,42 @@ def test_voiceprint_audit_record_contains_only_lifecycle_metadata():
     assert audit.old_value == "confirmed:consented"
     assert audit.new_value == "removed:not_consented"
     assert not hasattr(audit, "embedding")
+
+
+def test_reprocess_fuses_existing_visual_attribution():
+    person_id = uuid4()
+    transcript = _transcript(speaker_person_id=person_id, speaker_source="video", speaker_confidence=0.91)
+
+    outcome, old_value = _apply_voiceprint_hypothesis(transcript, person_id, 0.88)
+
+    assert outcome == "fused"
+    assert old_value.endswith(":video:0.91")
+    assert transcript.speaker_source == "fused"
+    assert transcript.speaker_confidence == 0.91
+
+
+def test_reprocess_adds_voice_hypothesis_when_no_person_is_known():
+    person_id = uuid4()
+    transcript = _transcript(speaker_person_id=None, speaker_source=None, speaker_confidence=None)
+
+    outcome, _ = _apply_voiceprint_hypothesis(transcript, person_id, 0.93)
+
+    assert outcome == "matched"
+    assert transcript.speaker_person_id == person_id
+    assert transcript.speaker_source == "voice"
+    assert transcript.speaker_confidence == 0.93
+
+
+def test_reprocess_preserves_manual_and_conflicting_identity_evidence():
+    person_id, other_id = uuid4(), uuid4()
+    manual = _transcript(speaker_person_id=other_id, speaker_source="manual", speaker_confidence=0.99)
+    conflict = _transcript(speaker_person_id=other_id, speaker_source="video", speaker_confidence=0.9)
+
+    manual_outcome, _ = _apply_voiceprint_hypothesis(manual, person_id, 0.95)
+    conflict_outcome, _ = _apply_voiceprint_hypothesis(conflict, person_id, 0.95)
+
+    assert manual_outcome == "skipped_manual"
+    assert manual.speaker_person_id == other_id
+    assert conflict_outcome == "conflict"
+    assert conflict.speaker_person_id == other_id
+    assert conflict.speaker_source == "video"

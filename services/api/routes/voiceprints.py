@@ -88,6 +88,33 @@ def _clear_voice_derived_attribution(transcript: Transcript) -> str | None:
     return old_value
 
 
+def _apply_voiceprint_hypothesis(
+    transcript: Transcript,
+    person_id: uuid.UUID,
+    score: float,
+) -> tuple[str, str | None]:
+    """Apply one positive match while preserving stronger/conflicting evidence.
+
+    Returns ``(outcome, old_value)`` where outcome is ``matched``, ``fused``,
+    ``conflict``, or ``skipped_manual``. The helper is intentionally pure
+    apart from the supplied transcript mutation so the safety policy stays
+    independently testable from the route/database orchestration.
+    """
+    if transcript.speaker_source == "manual":
+        return "skipped_manual", None
+    if transcript.speaker_person_id is not None and transcript.speaker_person_id != person_id:
+        return "conflict", None
+    old_value = f"{transcript.speaker_person_id}:{transcript.speaker_source}:{transcript.speaker_confidence}"
+    was_video = transcript.speaker_source == "video" and transcript.speaker_person_id == person_id
+    transcript.speaker_person_id = person_id
+    transcript.speaker_confidence = (
+        max(float(transcript.speaker_confidence or 0.0), float(score))
+        if was_video else float(score)
+    )
+    transcript.speaker_source = "fused" if was_video else "voice"
+    return ("fused" if was_video else "matched"), old_value
+
+
 def _clip_response(
     transcript: Transcript,
     capture: AudioCapture | None,
@@ -319,23 +346,19 @@ async def reprocess_voiceprint_attributions(
     now = datetime.now(timezone.utc)
     for transcript, capture in rows:
         processed += 1
-        if transcript.speaker_source == "manual":
-            skipped_manual += 1
-            continue
         match = await match_voiceprint(db, capture, person_id=person_id)
         if match is None:
             continue
         _, score = match
-        if transcript.speaker_person_id is not None and transcript.speaker_person_id != person_id:
+        outcome, old_value = _apply_voiceprint_hypothesis(transcript, person_id, score)
+        if outcome == "skipped_manual":
+            skipped_manual += 1
+            continue
+        if outcome == "conflict":
             conflicts += 1
             continue
-        old_value = f"{transcript.speaker_person_id}:{transcript.speaker_source}:{transcript.speaker_confidence}"
-        was_video = transcript.speaker_source == "video" and transcript.speaker_person_id == person_id
-        transcript.speaker_person_id = person_id
-        transcript.speaker_confidence = max(float(transcript.speaker_confidence or 0.0), float(score)) if was_video else float(score)
-        transcript.speaker_source = "fused" if was_video else "voice"
         matched += 1
-        fused += int(was_video)
+        fused += int(outcome == "fused")
         db.add(_voiceprint_audit_record(
             transcript,
             current_user,
