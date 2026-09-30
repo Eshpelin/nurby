@@ -6,6 +6,8 @@
 // (the rule's main action chain) vs on timeout (the absence alert).
 
 import { ActionsSection } from "./ActionsSection";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import {
   defaultSeqStep,
   describeSeqStep,
@@ -53,6 +55,8 @@ export function SequenceSection(props: SequenceSectionProps) {
     maxActive, setMaxActive, steps, setSteps, timeoutActions, setTimeoutActions,
     telegramChannels, telegramChannelsLoading, devices, persons, providers, cameras,
   } = props;
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
 
   // Named areas drawn on any camera (Settings → Zones), for zone/loiter steps.
   const areaNames = [
@@ -74,8 +78,8 @@ export function SequenceSection(props: SequenceSectionProps) {
   const correlateHint = SEQ_CORRELATE_OPTIONS.find((o) => o.value === correlateBy)?.hint || "";
   const summary =
     steps.length > 0
-      ? "Then " + steps.map(describeSeqStep).join(", then ") + "."
-      : "Add at least one step.";
+      ? t("sequence.summary_then", { steps: steps.map(describeSeqStep).join(`, ${t("sequence.then_separator")} `) })
+      : t("sequence.add_step_required");
 
   return (
     <div className="border border-border rounded-md">
@@ -87,10 +91,9 @@ export function SequenceSection(props: SequenceSectionProps) {
           onChange={(e) => setEnabled(e.target.checked)}
         />
         <span className="min-w-0">
-          <span className="text-xs font-medium text-foreground">Make this a multi-step sequence</span>
+          <span className="text-xs font-medium text-foreground">{t("sequence.enable")}</span>
           <span className="block text-[11px] text-muted-foreground mt-0.5">
-            The trigger above starts a timeline. Add the steps that must follow, each within a time
-            window. Fire on completion, or fire when a step is missed (the absence alert).
+            {t("sequence.enable_help")}
           </span>
         </span>
       </label>
@@ -100,7 +103,7 @@ export function SequenceSection(props: SequenceSectionProps) {
           {/* Correlation */}
           <div>
             <label className="text-xs font-medium text-muted-foreground block mb-1">
-              Track the same…
+              {t("sequence.track_same")}
             </label>
             <select
               value={correlateBy}
@@ -118,26 +121,26 @@ export function SequenceSection(props: SequenceSectionProps) {
 
           {/* Steps */}
           <div>
-            <div className="text-xs font-medium text-muted-foreground mb-1">Then… (in order)</div>
+            <div className="text-xs font-medium text-muted-foreground mb-1">{t("sequence.then_order")}</div>
             <div className="space-y-2">
               {steps.map((s, i) => (
                 <div key={i} className="border border-border rounded-md p-2 space-y-2 bg-muted/20">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-muted-foreground shrink-0 w-10">Step {i + 1}</span>
+                    <span className="text-[11px] text-muted-foreground shrink-0 w-10">{t("sequence.step", { number: i + 1 })}</span>
                     <select
                       value={s.kind}
                       onChange={(e) => patchStep(i, { kind: e.target.value as SeqCheckKind })}
                       className={SELECT_CLS}
                     >
-                      <option value="object">Object detected</option>
-                      <option value="locate">FindAnything (locate)</option>
-                      <option value="verify">Verify (ask the AI)</option>
-                      <option value="motion">Motion</option>
-                      <option value="face">Face detected</option>
-                      <option value="known_face">Known face</option>
-                      <option value="audio">Audio event</option>
-                      <option value="zone">In a named area</option>
-                      <option value="loiter">Loiters in an area</option>
+                      <option value="object">{t("sequence.kind_object")}</option>
+                      <option value="locate">{t("sequence.kind_locate")}</option>
+                      <option value="verify">{t("sequence.kind_verify")}</option>
+                      <option value="motion">{t("sequence.kind_motion")}</option>
+                      <option value="face">{t("sequence.kind_face")}</option>
+                      <option value="known_face">{t("sequence.kind_known_face")}</option>
+                      <option value="audio">{t("sequence.kind_audio")}</option>
+                      <option value="zone">{t("sequence.kind_zone")}</option>
+                      <option value="loiter">{t("sequence.kind_loiter")}</option>
                     </select>
                     <button
                       type="button"
@@ -145,7 +148,7 @@ export function SequenceSection(props: SequenceSectionProps) {
                       disabled={steps.length <= 1}
                       className="ml-auto text-[11px] text-muted-foreground hover:text-red-400 disabled:opacity-30"
                     >
-                      Remove
+                      {t("sequence.remove")}
                     </button>
                   </div>
 
@@ -156,14 +159,14 @@ export function SequenceSection(props: SequenceSectionProps) {
                       onChange={(e) => patchStep(i, { label: e.target.value })}
                       placeholder={
                         s.kind === "locate"
-                          ? 'e.g. "a key in the key box"'
-                          : s.kind === "verify"
-                            ? 'e.g. "is the garage door open?"'
+                          ? t("sequence.placeholder_locate")
+                            : s.kind === "verify"
+                            ? t("sequence.placeholder_verify")
                             : s.kind === "audio"
-                              ? "e.g. baby_cry, glass_break, dog_bark"
+                              ? t("sequence.placeholder_audio")
                               : s.kind === "zone"
-                                ? "any object (optional, e.g. person)"
-                                : "e.g. package"
+                                ? t("sequence.placeholder_zone")
+                                : t("sequence.placeholder_object")
                       }
                       className={`${INPUT_CLS} w-full`}
                     />
@@ -173,7 +176,7 @@ export function SequenceSection(props: SequenceSectionProps) {
                     <div className="flex items-center gap-2 flex-wrap">
                       {areaNames.length === 0 ? (
                         <span className="text-[11px] text-amber-400/90">
-                          No named areas yet — draw one in a camera&apos;s settings (Zones).
+                          {t("sequence.no_areas")}
                         </span>
                       ) : (
                         <select
@@ -181,7 +184,7 @@ export function SequenceSection(props: SequenceSectionProps) {
                           onChange={(e) => patchStep(i, { zoneName: e.target.value })}
                           className={SELECT_CLS}
                         >
-                          <option value="">Pick an area…</option>
+                          <option value="">{t("sequence.pick_area")}</option>
                           {areaNames.map((name) => (
                             <option key={name} value={name}>{name}</option>
                           ))}
@@ -189,7 +192,7 @@ export function SequenceSection(props: SequenceSectionProps) {
                       )}
                       {s.kind === "loiter" && (
                         <>
-                          <span className="text-[11px] text-muted-foreground">for</span>
+                          <span className="text-[11px] text-muted-foreground">{t("sequence.for")}</span>
                           <input
                             type="number"
                             min={1}
@@ -197,7 +200,7 @@ export function SequenceSection(props: SequenceSectionProps) {
                             onChange={(e) => patchStep(i, { dwellSeconds: e.target.value })}
                             className={`${INPUT_CLS} w-20`}
                           />
-                          <span className="text-[11px] text-muted-foreground">seconds</span>
+                          <span className="text-[11px] text-muted-foreground">{t("sequence.seconds")}</span>
                         </>
                       )}
                     </div>
@@ -209,7 +212,7 @@ export function SequenceSection(props: SequenceSectionProps) {
                       onChange={(e) => patchStep(i, { personId: e.target.value })}
                       className={`${SELECT_CLS} w-full`}
                     >
-                      <option value="">Anyone known</option>
+                      <option value="">{t("sequence.anyone_known")}</option>
                       {persons.map((p) => (
                         <option key={p.id} value={p.id}>{p.display_name}</option>
                       ))}
@@ -218,7 +221,7 @@ export function SequenceSection(props: SequenceSectionProps) {
 
                   {s.kind === "verify" && (
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] text-muted-foreground">min confidence</span>
+                      <span className="text-[11px] text-muted-foreground">{t("sequence.min_confidence")}</span>
                       <input
                         type="number"
                         min={0}
@@ -226,16 +229,16 @@ export function SequenceSection(props: SequenceSectionProps) {
                         step={0.05}
                         value={s.minConfidence}
                         onChange={(e) => patchStep(i, { minConfidence: e.target.value })}
-                        title="The AI must answer yes with at least this confidence (0-1) for the step to pass."
+                        title={t("sequence.confidence_help")}
                         className={`${INPUT_CLS} w-20`}
                       />
                       <select
                         value={s.providerId}
                         onChange={(e) => patchStep(i, { providerId: e.target.value })}
-                        title="Which AI model answers. Default = the camera's VLM."
+                        title={t("sequence.model_help")}
                         className={SELECT_CLS}
                       >
-                        <option value="">Default model</option>
+                        <option value="">{t("sequence.default_model")}</option>
                         {providers.map((p) => (
                           <option key={p.id} value={p.id}>{p.name} ({p.kind})</option>
                         ))}
@@ -244,7 +247,7 @@ export function SequenceSection(props: SequenceSectionProps) {
                   )}
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] text-muted-foreground">within</span>
+                    <span className="text-[11px] text-muted-foreground">{t("sequence.within")}</span>
                     <input
                       type="number"
                       min={1}
@@ -252,16 +255,16 @@ export function SequenceSection(props: SequenceSectionProps) {
                       onChange={(e) => patchStep(i, { withinSeconds: e.target.value })}
                       className={`${INPUT_CLS} w-20`}
                     />
-                    <span className="text-[11px] text-muted-foreground">seconds · confirm</span>
+                    <span className="text-[11px] text-muted-foreground">{t("sequence.seconds_confirm")}</span>
                     <input
                       type="number"
                       min={1}
                       value={s.confirmFrames}
                       onChange={(e) => patchStep(i, { confirmFrames: e.target.value })}
-                      title="Require this many agreeing frames within the window before the step counts. >1 cuts noise."
+                      title={t("sequence.frames_help")}
                       className={`${INPUT_CLS} w-16`}
                     />
-                    <span className="text-[11px] text-muted-foreground">frame(s)</span>
+                    <span className="text-[11px] text-muted-foreground">{t("sequence.frames")}</span>
                   </div>
 
                   <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer">
@@ -271,18 +274,18 @@ export function SequenceSection(props: SequenceSectionProps) {
                       checked={s.negate}
                       onChange={(e) => patchStep(i, { negate: e.target.checked })}
                     />
-                    Match when this is ABSENT — order two steps for a transition (not there → there)
+                    {t("sequence.negate")}
                   </label>
 
                   {s.kind === "locate" && (
                     <div className="space-y-2 border-t border-border pt-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] text-muted-foreground">only run when present:</span>
+                        <span className="text-[11px] text-muted-foreground">{t("sequence.only_when_present")}</span>
                         <input
                           type="text"
                           value={s.preGateLabel}
                           onChange={(e) => patchStep(i, { preGateLabel: e.target.value })}
-                          placeholder="e.g. person (optional)"
+                          placeholder={t("sequence.pregate_placeholder")}
                           className={`${INPUT_CLS} flex-1 min-w-[8rem]`}
                         />
                       </div>
@@ -293,11 +296,10 @@ export function SequenceSection(props: SequenceSectionProps) {
                           checked={s.requireCorroboration}
                           onChange={(e) => patchStep(i, { requireCorroboration: e.target.checked })}
                         />
-                        Require a YOLO detection in the same spot — leave off for things YOLO can&apos;t see (a chicken, a key)
+                        {t("sequence.corroboration")}
                       </label>
                       <div className="text-[11px] text-amber-400/90">
-                        FindAnything runs a GPU vision model. The pre-gate above keeps it cheap by
-                        grounding only when worthwhile.
+                        {t("sequence.findanything_help")}
                       </div>
                     </div>
                   )}
@@ -309,7 +311,7 @@ export function SequenceSection(props: SequenceSectionProps) {
               onClick={addStep}
               className="mt-2 text-xs px-2 py-1 rounded border border-border hover:bg-muted transition-colors"
             >
-              + Add step
+              {t("sequence.add_step")}
             </button>
           </div>
 
@@ -317,20 +319,20 @@ export function SequenceSection(props: SequenceSectionProps) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1">
-                If it re-triggers
+                {t("sequence.retrigger")}
               </label>
               <select
                 value={onRefire}
                 onChange={(e) => setOnRefire(e.target.value as "ignore" | "restart")}
                 className={`${SELECT_CLS} w-full`}
               >
-                <option value="ignore">Ignore (keep the timeline going)</option>
-                <option value="restart">Restart from step 1</option>
+                <option value="ignore">{t("sequence.ignore_retrigger")}</option>
+                <option value="restart">{t("sequence.restart_retrigger")}</option>
               </select>
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1">
-                Max concurrent
+                {t("sequence.max_concurrent")}
               </label>
               <input
                 type="number"
@@ -344,11 +346,11 @@ export function SequenceSection(props: SequenceSectionProps) {
 
           {/* on_timeout chain */}
           <div className="border-t border-border pt-3">
-            <div className="text-xs font-medium text-foreground mb-1">If a step is missed in time</div>
+            <div className="text-xs font-medium text-foreground mb-1">{t("sequence.timeout_title")}</div>
             <div className="text-[11px] text-muted-foreground mb-2">
-              The absence alert. Runs when the timeline doesn&apos;t complete. Reference the start with{" "}
+              {t("sequence.timeout_help")} {" "}
               <code className="text-foreground">{"{{vars.trigger.camera_name}}"}</code>. Leave empty to
-              just record the timeout.
+              {t("sequence.timeout_empty")}
             </div>
             <ActionsSection
               telegramChannels={telegramChannels}
@@ -363,9 +365,9 @@ export function SequenceSection(props: SequenceSectionProps) {
           </div>
 
           <div className="text-[11px] text-muted-foreground bg-muted/30 rounded px-2 py-1.5">
-            {summary} On completion, the actions below run. {timeoutActions.length > 0
-              ? "If a step is missed, the absence actions above run."
-              : "If a step is missed, nothing fires (add absence actions above to alert)."}
+            {summary} {t("sequence.completion_prefix")} {timeoutActions.length > 0
+              ? t("sequence.timeout_actions_run")
+              : t("sequence.timeout_nothing")}
           </div>
         </div>
       )}
