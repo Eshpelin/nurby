@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { translate } from "@/lib/i18n";
 
-type SpendRow = { name: string; cost_cents: number; calls: number; tokens_in: number; tokens_out: number };
+type SpendRow = { id?: string; name: string; cost_cents: number; calls: number; tokens_in: number; tokens_out: number };
 type UsageReport = {
   days: number;
   estimated: boolean;
@@ -117,8 +117,8 @@ export function CostUsageCard() {
             <div>
               <div className="text-xs font-medium mb-1">{t("cost.by_camera_workload")}</div>
               <div className="space-y-1">
-                {report.by_camera.slice(0, 5).map((row) => (
-                  <div key={row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} {t("cost.calls_lower")}</span></div>
+                {report.by_camera.map((row) => (
+                  <div key={row.id ?? row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} {t("cost.calls_lower")}</span></div>
                 ))}
               </div>
             </div>
@@ -127,8 +127,8 @@ export function CostUsageCard() {
             <div>
               <div className="text-xs font-medium mb-1">{t("cost.by_workload")}</div>
               <div className="space-y-1">
-                {report.by_workload.slice(0, 6).map((row) => (
-                  <div key={row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} {t("cost.calls_lower")}</span></div>
+                {report.by_workload.map((row) => (
+                  <div key={row.id ?? row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} {t("cost.calls_lower")}</span></div>
                 ))}
               </div>
             </div>
@@ -137,8 +137,8 @@ export function CostUsageCard() {
             <div>
               <div className="text-xs font-medium mb-1">{t("cost.by_provider")}</div>
               <div className="space-y-1">
-                {report.by_provider.slice(0, 6).map((row) => (
-                  <div key={row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} {t("cost.calls_lower")}</span></div>
+                {report.by_provider.map((row) => (
+                  <div key={row.id ?? row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} {t("cost.calls_lower")}</span></div>
                 ))}
               </div>
             </div>
@@ -147,8 +147,8 @@ export function CostUsageCard() {
             <div>
               <div className="text-xs font-medium mb-1">{t("cost.by_rule")}</div>
               <div className="space-y-1">
-                {report.by_rule.slice(0, 6).map((row) => (
-                  <div key={row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} {t("cost.calls_lower")}</span></div>
+                {report.by_rule.map((row) => (
+                  <div key={row.id ?? row.name} className="flex justify-between text-xs text-muted-foreground"><span>{row.name}</span><span>{dollars(row.cost_cents)} · {row.calls} {t("cost.calls_lower")}</span></div>
                 ))}
               </div>
             </div>

@@ -498,8 +498,9 @@ async def usage_report(
             estimated=bool(usage.estimated),
         )
         rule_name = rule.name if rule is not None else "Deleted rule"
+        rule_key = str(usage.rule_id) if usage.rule_id is not None else "unassigned"
         add(
-            by_rule.setdefault(rule_name, {"name": rule_name}),
+            by_rule.setdefault(rule_key, {"id": rule_key, "name": rule_name}),
             cost=int(usage.cost_cents or 0),
             tokens_in=int(usage.tokens_in or 0),
             tokens_out=int(usage.tokens_out or 0),
