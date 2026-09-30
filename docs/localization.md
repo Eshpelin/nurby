@@ -25,8 +25,6 @@ rule editors and execution logs, widget setup, and identity review surfaces.
 
 The remaining migration inventory is intentionally explicit:
 
-- rule trigger metadata and action-validation messages in
-  `frontend/src/components/rules/types.tsx` still need a catalog boundary;
 - brand-specific camera instructions and template names in
   `frontend/src/lib/camera-brands.ts` are source data and need a data-level
   locale strategy rather than ad-hoc component translation;
