@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.events.actions import _call_vlm, _get_provider_by_kind
+from services.perception.usage import record_vlm_usage
 from shared.camera_access import ALL, AllowedCameras, apply_camera_filter
 from shared.config import settings
 from shared.models import Camera, Observation, Person
@@ -297,8 +298,27 @@ async def _run_vlm_status(
             settings.recap_timeout_seconds,
         )
     except Exception:
+        await record_vlm_usage(
+            provider,
+            workload="person_recap",
+            system_prompt=DEFAULT_SYSTEM,
+        user_prompt=prompt,
+        output_text=None,
+        camera_id=None,
+        model=model,
+            succeeded=False,
+        )
         logger.exception("Recap VLM call failed for %s", person.id)
         return _fallback_status(person, sightings)
+    await record_vlm_usage(
+        provider,
+        workload="person_recap",
+        system_prompt=DEFAULT_SYSTEM,
+        user_prompt=prompt,
+        output_text=raw,
+        camera_id=None,
+        model=model,
+    )
     cleaned = (raw or "").strip()
     if not cleaned:
         return _fallback_status(person, sightings)
