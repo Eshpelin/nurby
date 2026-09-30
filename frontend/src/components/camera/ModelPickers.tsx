@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DETECTION_MODEL_CATALOG } from "./detection-models";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export function DetectionModelSelect({
   value,
@@ -10,6 +12,8 @@ export function DetectionModelSelect({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [open, setOpen] = useState(false);
   const [customMode, setCustomMode] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -40,8 +44,8 @@ export function DetectionModelSelect({
           type="button"
           onClick={() => { setCustomMode(false); onChange("yolov8n.pt"); }}
           className="text-[10px] text-muted-foreground hover:text-foreground px-1.5"
-          title="Pick from catalog instead"
-        >Catalog</button>
+          title={t("camera.model_picker.catalog_title")}
+        >{t("camera.model_picker.catalog")}</button>
       </div>
     );
   }
@@ -54,7 +58,7 @@ export function DetectionModelSelect({
         className="w-full flex items-center justify-between gap-2 px-2 py-1 rounded border border-border bg-card text-xs hover:border-muted-foreground/40 focus:outline-none focus:border-accent transition-colors"
       >
         <span className="min-w-0 text-left">
-          <span className="block truncate font-medium">{match?.label || "Pick a model"}</span>
+          <span className="block truncate font-medium">{match?.label || t("camera.model_picker.pick")}</span>
           <span className="block truncate text-[10px] text-muted-foreground font-mono">{match?.value || value}</span>
         </span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-muted-foreground flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>
@@ -107,7 +111,7 @@ export function DetectionModelSelect({
               type="button"
               onClick={() => { setOpen(false); setCustomMode(true); onChange(""); }}
               className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-            >Enter custom model filename.</button>
+            >{t("camera.model_picker.custom")}</button>
           </div>
         </div>
       )}
@@ -132,6 +136,8 @@ export function LabelPicker({
   activeModels?: string[];
   onAddModel?: (model: string) => void;
 }) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const remaining = available.filter((l) => !selected.includes(l));
@@ -143,7 +149,7 @@ export function LabelPicker({
     <div>
       {activeModels && activeModels.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
-          <span className="text-[10px] text-muted-foreground self-center">Labels sourced from.</span>
+          <span className="text-[10px] text-muted-foreground self-center">{t("rules.model_picker.labels_from")}</span>
           {activeModels.map((m) => (
             <span key={m} className="px-1.5 py-0.5 text-[10px] font-mono rounded border border-border bg-muted/30 text-muted-foreground">
               {m}
@@ -155,7 +161,7 @@ export function LabelPicker({
       {needsModel && onAddModel && (
         <div className="mb-2 rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 p-2.5">
           <p className="text-[11px] text-amber-300 mb-1.5">
-            Pick a detection model first. Labels come from whichever model you choose.
+            {t("camera.model_picker.choose_model")}
           </p>
           <DetectionModelSelect
             value="yolov8n.pt"
@@ -185,7 +191,7 @@ export function LabelPicker({
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={placeholder || "Search labels."}
+        placeholder={placeholder || t("camera.model_picker.search")}
         className="w-full px-2 py-1.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:border-accent"
         onKeyDown={(e) => {
           if (e.key === "Enter" && q) {
@@ -199,16 +205,16 @@ export function LabelPicker({
       />
       <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-border bg-background/40 p-1.5">
         {loading ? (
-          <p className="text-[11px] text-muted-foreground px-1 py-2">Loading labels from model.</p>
+          <p className="text-[11px] text-muted-foreground px-1 py-2">{t("rules.model_picker.loading")}</p>
         ) : available.length === 0 ? (
           <p className="text-[11px] text-muted-foreground px-1 py-2">
             {needsModel
-              ? "Pick a model above to see its labels."
-              : "Model loaded no classes. First-run download may still be in progress, or the model is open-vocabulary. Type a label and press Enter."}
+              ? t("camera.model_picker.pick_above")
+              : t("camera.model_picker.no_classes")}
           </p>
         ) : filtered.length === 0 ? (
           <p className="text-[11px] text-muted-foreground px-1 py-2">
-            {q ? "No matches. Press Enter to add as custom." : "All labels added."}
+            {q ? t("camera.model_picker.no_matches") : t("camera.model_picker.all_added")}
           </p>
         ) : (
           <div className="flex flex-wrap gap-1">
@@ -222,14 +228,14 @@ export function LabelPicker({
             ))}
             {filtered.length > 80 && (
               <span className="text-[10px] text-muted-foreground self-center px-1">
-                +{filtered.length - 80} more. Keep typing to narrow.
+                {t("camera.model_picker.more", { count: filtered.length - 80 })}
               </span>
             )}
           </div>
         )}
       </div>
       <p className="text-[10px] text-muted-foreground mt-1">
-        {available.length > 0 ? `${available.length} labels from selected model${available.length === 1 ? "" : "s"}.` : ""}
+        {available.length > 0 ? t(available.length === 1 ? "camera.model_picker.count_one" : "camera.model_picker.count_other", { count: available.length }) : ""}
       </p>
     </div>
   );
