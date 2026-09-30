@@ -14,6 +14,7 @@ import { ActionCard } from "./actions/ActionCard";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import {
   DndContext,
   PointerSensor,
@@ -48,7 +49,8 @@ export function ActionsSection(props: ActionsSectionProps) {
   const { telegramChannels, telegramChannelsLoading, devices, providers, cameras, formActions, setFormActions, cardErrors } =
     props;
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [pairedPhones, setPairedPhones] = useState(0);
 
   useEffect(() => {
@@ -127,31 +129,31 @@ export function ActionsSection(props: ActionsSectionProps) {
   ).length;
   const hasTelegramAction = formActions.some((action) => action.type === "telegram");
   const destinations = [
-    "In-app bell",
-    ...(pairedPhones > 0 ? [`${pairedPhones} paired phone${pairedPhones === 1 ? "" : "s"}`] : []),
-    ...(hasTelegramAction && pairedTelegram > 0 ? [`${pairedTelegram} Telegram channel${pairedTelegram === 1 ? "" : "s"}`] : []),
+    t("rules.actions.in_app_bell"),
+    ...(pairedPhones > 0 ? [t(pairedPhones === 1 ? "rules.actions.paired_phone_one" : "rules.actions.paired_phone_other", { count: pairedPhones })] : []),
+    ...(hasTelegramAction && pairedTelegram > 0 ? [t(pairedTelegram === 1 ? "rules.actions.telegram_channel_one" : "rules.actions.telegram_channel_other", { count: pairedTelegram })] : []),
   ];
 
   return (
     <fieldset className="border border-border rounded-md p-3 space-y-2">
       <legend className="text-xs font-medium text-muted-foreground px-1">
-        Action chain ({formActions.length})
+        {t("rules.actions.chain", { count: formActions.length })}
       </legend>
       <p className="text-[11px] text-muted-foreground px-1 -mt-1 mb-1">
-        Actions run top to bottom. Drag the handle to reorder.
+        {t("rules.actions.reorder_help")}
       </p>
       <div className={`rounded-md border px-3 py-2 text-xs ${destinations.length === 1 ? "border-yellow-500/35 bg-yellow-500/5" : "border-border bg-muted/20"}`}>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-muted-foreground">This alert reaches: <span className="text-foreground">{destinations.join(", ")}</span></span>
+          <span className="text-muted-foreground">{t("rules.actions.alert_reaches")} <span className="text-foreground">{destinations.join(", ")}</span></span>
           {destinations.length === 1 && (
             <span className="shrink-0 flex items-center gap-2">
-              <Link href="/settings#mobile-pairing" className="text-accent hover:underline">Add a phone</Link>
+              <Link href="/settings#mobile-pairing" className="text-accent hover:underline">{t("rules.actions.add_phone")}</Link>
               <span className="text-border" aria-hidden>·</span>
-              <Link href="/settings#telegram-alerts" className="text-accent hover:underline">Set up Telegram</Link>
+              <Link href="/settings#telegram-alerts" className="text-accent hover:underline">{t("rules.actions.setup_telegram")}</Link>
             </span>
           )}
         </div>
-        {destinations.length === 1 && <p className="mt-1 text-[11px] text-muted-foreground">In-app alerts work while Nurby is open. Add a phone or Telegram channel to receive alerts when you are away.</p>}
+        {destinations.length === 1 && <p className="mt-1 text-[11px] text-muted-foreground">{t("rules.actions.in_app_help")}</p>}
       </div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
@@ -198,7 +200,7 @@ export function ActionsSection(props: ActionsSectionProps) {
         </button>
         {formActions.length >= MAX_ACTIONS_PER_RULE && (
           <span className="text-[10px] text-muted-foreground">
-            Limit of {MAX_ACTIONS_PER_RULE} actions reached.
+            {t("rules.actions.limit_reached", { count: MAX_ACTIONS_PER_RULE })}
           </span>
         )}
       </div>
