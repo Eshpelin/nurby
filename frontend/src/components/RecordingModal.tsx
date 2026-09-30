@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { formatDateTime } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 type AnnOpts = { boxes: boolean; captions: boolean; strip: boolean };
 const ANN_KEY = "nurby-rec-annotate";
-const ANN_TOGGLES: { key: keyof AnnOpts; label: string; title: string }[] = [
-  { key: "strip", label: "Timeline strip", title: "Colour-coded pet / human / vehicle bar along the bottom" },
-  { key: "boxes", label: "Detection boxes", title: "Bounding boxes for confident detections" },
-  { key: "captions", label: "Captions", title: "Burn the AI description onto the video" },
+const ANN_TOGGLES: { key: keyof AnnOpts; labelKey: string; titleKey: string }[] = [
+  { key: "strip", labelKey: "recording.annotate_strip", titleKey: "recording.annotate_strip_help" },
+  { key: "boxes", labelKey: "recording.annotate_boxes", titleKey: "recording.annotate_boxes_help" },
+  { key: "captions", labelKey: "recording.annotate_captions", titleKey: "recording.annotate_captions_help" },
 ];
 
 function loadAnn(): AnnOpts {
@@ -62,7 +63,8 @@ function fmtSize(b: number | null | undefined): string {
 }
 
 export function RecordingModal({ recording, cameraName, onClose, seekTo }: Props) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const tq = token ? `?token=${token}` : "";
   // Offset into the file for the requested wall-clock moment. Clamped to the
   // clip, and only applied once metadata is loaded (currentTime is ignored
@@ -123,7 +125,7 @@ export function RecordingModal({ recording, cameraName, onClose, seekTo }: Props
         <div className="flex items-start justify-between gap-4 px-4 py-3 border-b border-border">
           <div className="min-w-0">
             <div className="text-sm font-medium truncate">
-              {cameraName || "Recording"}
+              {cameraName || t("recording.title")}
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">
               {fmtDateTime(recording.started_at)}
@@ -143,7 +145,7 @@ export function RecordingModal({ recording, cameraName, onClose, seekTo }: Props
           </div>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("recording.close")}
             className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -171,27 +173,27 @@ export function RecordingModal({ recording, cameraName, onClose, seekTo }: Props
           />
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[11px] text-muted-foreground">Annotate:</span>
-              {ANN_TOGGLES.map((t) => (
+              <span className="text-[11px] text-muted-foreground">{t("recording.annotate")}</span>
+              {ANN_TOGGLES.map((toggle) => (
                 <button
-                  key={t.key}
+                  key={toggle.key}
                   type="button"
-                  title={t.title}
-                  onClick={() => setAnn((a) => ({ ...a, [t.key]: !a[t.key] }))}
+                  title={t(toggle.titleKey)}
+                  onClick={() => setAnn((a) => ({ ...a, [toggle.key]: !a[toggle.key] }))}
                   className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
-                    ann[t.key]
+                    ann[toggle.key]
                       ? "border-accent bg-accent/10 text-accent"
                       : "border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {t.label}
+                  {t(toggle.labelKey)}
                 </button>
               ))}
             </div>
             <a
               href={dlHref}
               download
-              title={anyAnn ? "Rendered on the server, may take a moment" : undefined}
+              title={anyAnn ? t("recording.rendered_title") : undefined}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 transition-opacity"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -199,12 +201,12 @@ export function RecordingModal({ recording, cameraName, onClose, seekTo }: Props
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              {anyAnn ? "Download + annotations" : "Download"}
+              {anyAnn ? t("recording.download_annotated") : t("recording.download")}
             </a>
           </div>
           {anyAnn && (
             <p className="text-[11px] text-muted-foreground text-right -mt-1">
-              Annotated copies are rendered on the server and may take a moment. The original stays untouched.
+              {t("recording.annotation_notice")}
             </p>
           )}
         </div>
