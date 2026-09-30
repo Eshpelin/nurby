@@ -2,6 +2,8 @@
 
 import { type DeviceDraft, type DeviceOption } from "../types";
 import { StyledSelect } from "../StyledSelect";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export interface DeviceEditorProps {
   draft: DeviceDraft;
@@ -11,6 +13,8 @@ export interface DeviceEditorProps {
 
 export function DeviceEditor({ draft, devices, onChange }: DeviceEditorProps) {
   const d = draft;
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
 
   const setExtras = (text: string) => {
     let error = "";
@@ -18,10 +22,10 @@ export function DeviceEditor({ draft, devices, onChange }: DeviceEditorProps) {
       try {
         const parsed = JSON.parse(text);
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          error = "Extras must be a JSON object";
+          error = t("rules.device.extras_object_error");
         }
       } catch {
-        error = "Extras is not valid JSON";
+        error = t("rules.device.extras_json_error");
       }
     }
     onChange({ extrasJson: text, extrasError: error });
@@ -30,27 +34,26 @@ export function DeviceEditor({ draft, devices, onChange }: DeviceEditorProps) {
   return (
     <div className="space-y-3">
       <div className="text-[11px] text-muted-foreground bg-muted/50 rounded px-2 py-1.5">
-        Fire a device registered in Settings → Devices. Nurby signs and
-        delivers the request server-side using the stored endpoint and secret.
+        {t("rules.device.help")}
       </div>
       <div>
-        <label className="text-xs text-muted-foreground block mb-1">Device</label>
+        <label className="text-xs text-muted-foreground block mb-1">{t("rules.device.device")}</label>
         {devices.length === 0 ? (
           <div className="text-[11px] text-muted-foreground border border-dashed border-border rounded-md px-3 py-2">
-            No devices registered yet. Add one under Settings → Devices.
+            {t("rules.device.none")}
           </div>
         ) : (
           <StyledSelect
             value={d.device_id}
             options={devices.map((dev) => ({ value: dev.id, label: dev.name }))}
             onChange={(v) => onChange({ device_id: v })}
-            placeholder="Pick a device."
+            placeholder={t("rules.device.pick")}
           />
         )}
       </div>
       <div>
         <label className="text-xs text-muted-foreground block mb-1">
-          Extra payload fields (optional JSON)
+          {t("rules.device.extras")}
         </label>
         <textarea
           value={d.extrasJson}
