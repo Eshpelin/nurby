@@ -2,6 +2,8 @@
 
 import { type ProviderOption, type VerifyDraft } from "../types";
 import { StyledSelect } from "../StyledSelect";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export interface VerifyEditorProps {
   draft: VerifyDraft;
@@ -10,29 +12,30 @@ export interface VerifyEditorProps {
 }
 
 export function VerifyEditor({ draft, onChange, providers }: VerifyEditorProps) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const d = draft;
   const set = (patch: Partial<VerifyDraft>) => onChange({ ...d, ...patch });
   return (
     <div className="space-y-3">
       <div className="text-[11px] text-muted-foreground bg-muted/50 rounded px-2 py-1.5">
-        Before the rest of this rule&apos;s actions run, ask an AI to confirm the
-        trigger is real. If it can&apos;t confirm, the rule stops.
+        {t("rules.verify.help")}
       </div>
       <div>
         <label className="text-xs text-muted-foreground block mb-1">
-          Confirmation question
+          {t("rules.verify.question")}
         </label>
         <textarea
           value={d.question}
           onChange={(e) => set({ question: e.target.value })}
           rows={3}
           className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm resize-y"
-          placeholder="Is there actually a person at the door, not a shadow or reflection?"
+          placeholder={t("rules.verify.question_placeholder")}
         />
       </div>
       <div>
         <label className="text-xs text-muted-foreground block mb-1">
-          Minimum confidence. {d.minConfidence.toFixed(2)}
+          {t("rules.verify.minimum_confidence", { value: d.minConfidence.toFixed(2) })}
         </label>
         <input
           type="range"
@@ -44,37 +47,36 @@ export function VerifyEditor({ draft, onChange, providers }: VerifyEditorProps) 
           className="w-full accent-green-500"
         />
         <div className="text-[10px] text-muted-foreground">
-          The AI must answer yes with at least this confidence to pass.
+          {t("rules.verify.confidence_help")}
         </div>
       </div>
       <div>
         <label className="text-xs text-muted-foreground block mb-1">
-          If the AI cannot confirm
+          {t("rules.verify.on_fail")}
         </label>
         <StyledSelect
           value={d.onFail}
           options={[
-            { value: "stop", label: "Stop the rule" },
-            { value: "continue", label: "Continue anyway" },
+            { value: "stop", label: t("rules.verify.stop") },
+            { value: "continue", label: t("rules.verify.continue") },
           ]}
           onChange={(v) => set({ onFail: v as VerifyDraft["onFail"] })}
         />
       </div>
       <div>
         <label className="text-xs text-muted-foreground block mb-1">
-          AI provider (optional)
+          {t("rules.verify.provider")}
         </label>
         <StyledSelect
           value={d.providerId || ""}
           options={[
-            { value: "", label: "Default (the camera's VLM)" },
+            { value: "", label: t("rules.verify.default_provider") },
             ...providers.map((p) => ({ value: p.id, label: `${p.name} (${p.kind})` })),
           ]}
           onChange={(v) => set({ providerId: v })}
         />
         <div className="text-[10px] text-muted-foreground">
-          Which model answers this check. Leave default unless you want a
-          specific one (e.g. a sharper cloud model for a critical confirmation).
+          {t("rules.verify.provider_help")}
         </div>
       </div>
     </div>
