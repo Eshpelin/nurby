@@ -14,6 +14,7 @@ import { SummaryCard } from "./SummaryCard";
 import { EventNotesPanel } from "./EventNotesPanel";
 import { EventEvidence } from "@/components/EventEvidence";
 import { formatDateTime, formatWith } from "@/lib/time";
+import { translate } from "@/lib/i18n";
 
 export interface RuleEventsPanelProps {
   selectedRule: Rule | null;
@@ -30,6 +31,7 @@ interface RuleEvaluation {
 
 export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps) {
   const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [ruleEvents, setRuleEvents] = useState<EventEntry[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
@@ -150,7 +152,7 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
         <div className="flex items-center gap-2 mb-4">
           <span className="w-1.5 h-1.5 rounded-full bg-accent pulse-dot" />
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Preview
+            {t("rules.preview.title")}
           </span>
         </div>
         {selectedRule ? (
@@ -163,34 +165,34 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                 disabled={replayBusy}
                 className="px-2.5 py-1 text-[11px] rounded-md border border-border hover:bg-muted disabled:opacity-50"
               >
-                {replayBusy ? "Replaying." : "Replay last 24h"}
+                {replayBusy ? t("rules.preview.replaying") : t("rules.preview.replay_24h")}
               </button>
               {replayMsg && (
                 <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">{replayMsg}</p>
               )}
             </div>
             <div>
-              <span className="text-muted-foreground text-xs">Name</span>
+              <span className="text-muted-foreground text-xs">{t("rules.preview.name")}</span>
               <div className="font-medium">{selectedRule.name}</div>
             </div>
             <div>
-              <span className="text-muted-foreground text-xs">Status</span>
+              <span className="text-muted-foreground text-xs">{t("rules.preview.status")}</span>
               <div className="flex items-center gap-2">
                 <span
                   className={`w-2 h-2 rounded-full ${
                     selectedRule.enabled ? "bg-green-500" : "bg-yellow-500"
                   }`}
                 />
-                {selectedRule.enabled ? "Active" : "Disabled"}
+                {selectedRule.enabled ? t("rules.preview.active") : t("rules.preview.disabled")}
               </div>
             </div>
             <div>
-              <span className="text-muted-foreground text-xs">Trigger</span>
+              <span className="text-muted-foreground text-xs">{t("rules.preview.trigger")}</span>
               <div>{describeTrigger(selectedRule.trigger_pattern)}</div>
             </div>
             {selectedRule.conditions && Object.keys(selectedRule.conditions).length > 0 && (
               <div>
-                <span className="text-muted-foreground text-xs">Conditions</span>
+                <span className="text-muted-foreground text-xs">{t("rules.preview.conditions")}</span>
                 <div className="text-xs mt-1 space-y-1">
                   {(() => {
                     const cond = selectedRule.conditions!;
@@ -201,19 +203,19 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                         const cam = cameras.find((c) => c.id === cid);
                         return cam ? cam.name : cid.slice(0, 8);
                       });
-                      parts.push(`Cameras. ${names.join(", ")}`);
+                      parts.push(t("rules.preview.cameras", { names: names.join(", ") }));
                     }
                     const days = cond.days as string[] | undefined;
                     if (days && days.length > 0 && days.length < 7) {
-                      parts.push(`Days. ${days.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")}`);
+                      parts.push(t("rules.preview.days", { names: days.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ") }));
                     }
                     if (cond.time_after || cond.time_before) {
-                      parts.push(`Hours. ${cond.time_after || "00:00"} to ${cond.time_before || "23:59"}`);
+                      parts.push(t("rules.preview.hours", { from: cond.time_after || "00:00", to: cond.time_before || "23:59" }));
                     }
                     if (cond.min_confidence) {
                       const mc = cond.min_confidence as number;
-                      const label = mc >= 0.8 ? "Very high" : mc >= 0.6 ? "High" : mc >= 0.4 ? "Medium" : "Low";
-                      parts.push(`Confidence. ${label} (${Math.round(mc * 100)}%+)`);
+                      const label = mc >= 0.8 ? t("rules.preview.very_high") : mc >= 0.6 ? t("rules.preview.high") : mc >= 0.4 ? t("rules.preview.medium") : t("rules.preview.low");
+                      parts.push(t("rules.preview.confidence", { label, percent: Math.round(mc * 100) }));
                     }
                     return parts.map((p, i) => <div key={i}>{p}</div>);
                   })()}
@@ -221,44 +223,44 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
               </div>
             )}
             <div>
-              <span className="text-muted-foreground text-xs">Actions</span>
+              <span className="text-muted-foreground text-xs">{t("rules.preview.actions")}</span>
               <div>{describeActions(selectedRule.actions)}</div>
             </div>
             <div>
-              <span className="text-muted-foreground text-xs">Cooldown</span>
-              <div>{selectedRule.cooldown_seconds}s between fires</div>
+              <span className="text-muted-foreground text-xs">{t("rules.preview.cooldown")}</span>
+              <div>{t("rules.preview.cooldown_value", { seconds: selectedRule.cooldown_seconds })}</div>
             </div>
             {(() => {
               const snoozed = !!snoozedUntil && new Date(snoozedUntil) > new Date();
               return (
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-muted-foreground text-xs">Notifications</span>
+                    <span className="text-muted-foreground text-xs">{t("rules.preview.notifications")}</span>
                     <div className="text-xs">
                       {snoozed
-                        ? `Snoozed until ${formatWith(new Date(snoozedUntil!), { hour: "2-digit", minute: "2-digit" })}`
-                        : "Active"}
+                        ? t("rules.preview.snoozed_until", { time: formatWith(new Date(snoozedUntil!), { hour: "2-digit", minute: "2-digit" }) })
+                        : t("rules.preview.active")}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => toggleSnooze(selectedRule.id, snoozed)}
                     className="px-2 py-1 text-[11px] rounded-md border border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground transition-colors"
-                    title={snoozed ? "Resume notifications now" : "Pause notifications for 1 hour"}
+                    title={snoozed ? t("rules.preview.resume_notifications") : t("rules.preview.pause_notifications")}
                   >
-                    {snoozed ? "Unsnooze" : "Snooze 1h"}
+                    {snoozed ? t("rules.preview.unsnooze") : t("rules.preview.snooze_1h")}
                   </button>
                 </div>
               );
             })()}
             <div>
-              <span className="text-muted-foreground text-xs">Created</span>
+              <span className="text-muted-foreground text-xs">{t("rules.preview.created")}</span>
               <div>{formatDateTime(selectedRule.created_at)}</div>
             </div>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Select a rule to see its configuration preview.
+            {t("rules.preview.select_rule")}
           </p>
         )}
       </div>
@@ -268,13 +270,13 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
           <div className="flex items-center gap-2 mb-4">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Execution Log
+              {t("rules.preview.execution_log")}
             </span>
           </div>
           {eventsLoading && ruleEvents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Loading events.</p>
+            <p className="text-sm text-muted-foreground">{t("rules.preview.loading_events")}</p>
           ) : ruleEvents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No events fired yet for this rule.</p>
+            <p className="text-sm text-muted-foreground">{t("rules.preview.no_events")}</p>
           ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
               {ruleEvents.map((ev) => (
