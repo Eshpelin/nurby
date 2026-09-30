@@ -34,6 +34,8 @@ import { LocateEditor } from "./LocateEditor";
 import { DeviceEditor } from "./DeviceEditor";
 import { SpeakEditor } from "./SpeakEditor";
 import { type VarSpec } from "./VarInserter";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export interface ActionCardProps {
   sortableId: string;
@@ -74,8 +76,9 @@ export function ActionCard({
   isCollapsed,
   onToggleCollapsed,
 }: ActionCardProps) {
-  const typeLabel =
-    ACTION_TYPES.find((a) => a.value === draft.type)?.label || draft.type;
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
+  const typeLabel = t(`rules.action_type.${draft.type}`) || ACTION_TYPES.find((a) => a.value === draft.type)?.label || draft.type;
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: sortableId });
@@ -111,8 +114,8 @@ export function ActionCard({
             {...attributes}
             {...listeners}
             className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground px-0.5 touch-none"
-            title="Drag to reorder"
-            aria-label="Drag to reorder"
+            title={t("rules.action.drag_to_reorder")}
+            aria-label={t("rules.action.drag_to_reorder")}
           >
             ⠿
           </button>
@@ -125,16 +128,16 @@ export function ActionCard({
           {canStopChain && (
             <span
               className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-300"
-              title="If this gate fails, the remaining actions are skipped"
+              title={t("rules.action.may_stop_help")}
             >
-              may stop chain
+              {t("rules.action.may_stop")}
             </span>
           )}
           <button
             type="button"
             onClick={onToggleCollapsed}
             className="text-[10px] px-1.5 py-0.5 rounded border border-border hover:bg-muted text-muted-foreground"
-            title={isCollapsed ? "Expand" : "Collapse"}
+            title={isCollapsed ? t("rules.action.expand") : t("rules.action.collapse")}
           >
             {isCollapsed ? "▸" : "▾"}
           </button>
@@ -145,7 +148,7 @@ export function ActionCard({
             disabled={index === 0}
             onClick={() => onMove(-1)}
             className="text-[10px] px-1.5 py-0.5 rounded border border-border hover:bg-muted text-muted-foreground disabled:opacity-30"
-            title="Move up"
+            title={t("rules.action.move_up")}
           >
             ↑
           </button>
@@ -154,7 +157,7 @@ export function ActionCard({
             disabled={index === totalCount - 1}
             onClick={() => onMove(1)}
             className="text-[10px] px-1.5 py-0.5 rounded border border-border hover:bg-muted text-muted-foreground disabled:opacity-30"
-            title="Move down"
+            title={t("rules.action.move_down")}
           >
             ↓
           </button>
@@ -162,7 +165,7 @@ export function ActionCard({
             type="button"
             onClick={onRemove}
             className="text-[10px] px-1.5 py-0.5 rounded border border-red-800 text-red-400 hover:bg-red-900/30"
-            title="Delete action"
+            title={t("rules.action.delete")}
           >
             ✕
           </button>
