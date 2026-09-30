@@ -31,7 +31,10 @@ interface RuleEvaluation {
 
 export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps) {
   const { authFetch, user } = useAuth();
-  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
+  const t = useCallback(
+    (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values),
+    [user?.locale],
+  );
   const [ruleEvents, setRuleEvents] = useState<EventEntry[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
@@ -113,18 +116,18 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
       if (res.ok) {
         setReplayMsg(
           j.matched > 0
-            ? `Would have fired ${j.matched} time${j.matched === 1 ? "" : "s"} in the last 24h (${j.scanned} observations scanned).`
-            : `No matches in the last 24h (${j.scanned} observations scanned). Check the trigger and camera scope.`,
+            ? t("rules.events.replay_would_fire", { matched: j.matched, scanned: j.scanned })
+            : t("rules.events.replay_no_matches", { scanned: j.scanned }),
         );
       } else {
-        setReplayMsg(j.detail || "Replay failed.");
+        setReplayMsg(j.detail || t("rules.events.replay_failed"));
       }
     } catch {
-      setReplayMsg("Replay failed.");
+      setReplayMsg(t("rules.events.replay_failed"));
     } finally {
       setReplayBusy(false);
     }
-  }, [authFetch]);
+  }, [authFetch, t]);
 
   useEffect(() => {
     setSnoozedUntil(selectedRule?.snoozed_until ?? null);
@@ -306,17 +309,17 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                           className="px-1.5 py-0.5 text-[10px] rounded bg-green-500/15 text-green-400 border border-green-500/30"
                           title={
                             ev.acked_via
-                              ? `Acknowledged via ${ev.acked_via}`
-                              : "Acknowledged"
+                              ? t("rules.events.ack_via", { via: ev.acked_via })
+                              : t("rules.events.acknowledged")
                           }
                         >
                           {ev.acked_via === "telegram"
-                            ? "✓ Acked (Telegram)"
+                            ? t("rules.events.acked_telegram")
                             : ev.acked_via === "web"
-                            ? "✓ Acked (web)"
+                            ? t("rules.events.acked_web")
                             : ev.acked_via === "api"
-                            ? "✓ Acked (API)"
-                            : "✓ Acked"}
+                            ? t("rules.events.acked_api")
+                            : t("rules.events.acked")}
                         </span>
                       )}
                     </div>
@@ -340,23 +343,23 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                             type="button"
                             onClick={() => ackEvent(ev.id)}
                             className="px-2 py-1 text-[11px] rounded-md bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors"
-                            title="Mark this alert as reviewed"
+                            title={t("rules.events.ack_title")}
                           >
-                            ✓ Acknowledge
+                            ✓ {t("rules.events.acknowledge")}
                           </button>
                         )}
                         {ev.muted_until && new Date(ev.muted_until) > new Date() ? (
                           <span className="px-2 py-1 text-[11px] rounded-md bg-muted text-muted-foreground">
-                            🔕 Muted until {formatWith(new Date(ev.muted_until), { hour: "2-digit", minute: "2-digit" })}
+                            🔕 {t("rules.events.muted_until", { time: formatWith(new Date(ev.muted_until), { hour: "2-digit", minute: "2-digit" }) })}
                           </span>
                         ) : (
                           <button
                             type="button"
                             onClick={() => muteEvent(ev.id)}
                             className="px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors"
-                            title="Silence re-sends of this alert for 10 minutes"
+                            title={t("rules.events.mute_title")}
                           >
-                            🔕 Mute 10m
+                            🔕 {t("rules.events.mute_10m")}
                           </button>
                         )}
                       </div>
@@ -369,11 +372,11 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                           firedAt={ev.fired_at}
                         />
                       ) : (
-                        <p className="text-[11px] text-muted-foreground">No payload recorded.</p>
+                        <p className="text-[11px] text-muted-foreground">{t("rules.events.no_payload")}</p>
                       )}
                       {ev.action_error && (
                         <div className="mt-2">
-                          <div className="text-[10px] text-muted-foreground mb-1">Error</div>
+                          <div className="text-[10px] text-muted-foreground mb-1">{t("rules.events.error")}</div>
                           <div className="text-[11px] text-red-400 break-words">{ev.action_error}</div>
                         </div>
                       )}
@@ -392,12 +395,12 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
           <div className="flex items-center gap-2 mb-3">
             <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Evaluation evidence
+              {t("rules.events.evaluation_evidence")}
             </span>
           </div>
           {evaluations.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No decisive evaluations recorded yet.
+              {t("rules.events.no_evaluations")}
             </p>
           ) : (
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
@@ -405,7 +408,7 @@ export function RuleEventsPanel({ selectedRule, cameras }: RuleEventsPanelProps)
                 <div key={evaluation.id} className="rounded-md border border-border bg-background p-2.5 text-xs">
                   <div className="flex items-center justify-between gap-2">
                     <span className={evaluation.outcome === "fired" ? "text-green-400" : "text-amber-300"}>
-                      {evaluation.outcome === "fired" ? "Fired" : "Suppressed"} · {evaluation.reason_code.replaceAll("_", " ")}
+                      {evaluation.outcome === "fired" ? t("rules.events.fired") : t("rules.events.suppressed")} · {evaluation.reason_code.replaceAll("_", " ")}
                     </span>
                     <span className="text-[10px] text-muted-foreground">{formatDateTime(evaluation.evaluated_at)}</span>
                   </div>
