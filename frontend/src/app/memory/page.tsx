@@ -198,9 +198,9 @@ function MemoryPageInner() {
   async function decide(f: Fact, decision: "accept" | "reject") {
     if (decision === "reject") {
       const ok = await confirm({
-        title: "Reject this proposal?",
-        body: "Nurby will never propose it again — rejection is permanent.",
-        confirmLabel: "Reject",
+        title: t("memory.reject_title"),
+        body: t("memory.reject_body"),
+        confirmLabel: t("memory.reject"),
         danger: true,
       });
       if (!ok) return;
@@ -210,13 +210,12 @@ function MemoryPageInner() {
 
   async function toggleSuppression(f: Fact) {
     if (!f.suppresses_alerts) {
-      const what = f.entity_label ?? "the household";
+      const what = f.entity_label ?? t("memory.household");
       const ok = await confirm({
-        title: "Mute alerts in this window?",
+        title: t("memory.mute_title"),
         body:
-          `While this note's schedule (${f.schedule?.summary}) holds, alerts about ${what} ` +
-          "will be silenced instead of sent. You can undo this any time from the note.",
-        confirmLabel: "Mute alerts",
+          t("memory.mute_body", { schedule: f.schedule?.summary ?? "", subject: what }),
+        confirmLabel: t("memory.mute_alerts"),
       });
       if (!ok) return;
     }
@@ -225,10 +224,10 @@ function MemoryPageInner() {
 
   async function remove(f: Fact) {
     const ok = await confirm({
-      title: "Delete this note?",
-      body: "This removes it for good — archive is the reversible option.",
+      title: t("memory.delete_title"),
+      body: t("memory.delete_body"),
       danger: true,
-      confirmLabel: "Delete",
+      confirmLabel: t("memory.delete"),
     });
     if (!ok) return;
     await act(f, "", undefined, "DELETE");
@@ -361,7 +360,8 @@ function FactCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(f.text);
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
 
   async function saveEdit() {
     const text = editText.trim();
@@ -376,7 +376,7 @@ function FactCard({
 
   const entityBadge = f.entity_kind ? (
     <span className={`px-1.5 py-0.5 rounded border ${ENTITY_BADGES[f.entity_kind] ?? "border-border"}`}>
-      {f.entity_kind === "household" ? "household" : f.entity_label ?? f.entity_kind}
+      {f.entity_kind === "household" ? t("memory.household") : f.entity_label ?? f.entity_kind}
     </span>
   ) : null;
 
@@ -398,8 +398,8 @@ function FactCard({
             onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); }}
             className="flex-1 text-sm bg-black/20 border border-border rounded px-2 py-1"
           />
-          <button type="button" onClick={saveEdit} className="text-xs px-2 py-1 rounded border border-sky-500/50 text-sky-200">Save</button>
-          <button type="button" onClick={() => { setEditing(false); setEditText(f.text); }} className="text-xs px-2 py-1 rounded border border-border text-muted-foreground">Cancel</button>
+          <button type="button" onClick={saveEdit} className="text-xs px-2 py-1 rounded border border-sky-500/50 text-sky-200">{t("memory.save")}</button>
+          <button type="button" onClick={() => { setEditing(false); setEditText(f.text); }} className="text-xs px-2 py-1 rounded border border-border text-muted-foreground">{t("memory.cancel")}</button>
         </div>
       ) : (
         <>
@@ -410,16 +410,16 @@ function FactCard({
                 ? "border-emerald-500/40 text-emerald-300"
                 : "border-slate-500/40 text-slate-300"
             }`}>
-              {f.source === "user" ? "you wrote" : "Nurby learned"}
+              {f.source === "user" ? t("memory.you_wrote") : t("memory.nurby_learned")}
             </span>
             {f.status === "candidate" && (
-              <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-300">needs review</span>
+              <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-300">{t("memory.needs_review")}</span>
             )}
             {f.status === "archived" && (
-              <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-300">archived</span>
+              <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-300">{t("memory.archived")}</span>
             )}
             {f.status === "rejected" && (
-              <span className="px-1.5 py-0.5 rounded border border-rose-500/40 text-rose-300">rejected</span>
+              <span className="px-1.5 py-0.5 rounded border border-rose-500/40 text-rose-300">{t("memory.rejected")}</span>
             )}
             {entityBadge}
             {f.schedule && (
@@ -429,36 +429,36 @@ function FactCard({
             )}
             {f.suppression_armed && (
               <span className="px-1.5 py-0.5 rounded border border-violet-500/40 text-violet-300">
-                muting alerts{f.suppression_hit_count > 0 ? ` · ${f.suppression_hit_count} muted` : ""}
+                {t("memory.muting_alerts")}{f.suppression_hit_count > 0 ? ` · ${f.suppression_hit_count} ${t("memory.muted")}` : ""}
               </span>
             )}
             {f.evidence_count > 0 && (
               <button type="button" onClick={onEvidence} className="text-muted-foreground hover:text-foreground underline decoration-dotted">
-                {f.evidence_count} evidence
+                {f.evidence_count} {t("memory.evidence")}
               </button>
             )}
             {f.last_confirmed_at && (
-              <span className="text-muted-foreground">confirmed {timeAgo(f.last_confirmed_at)}</span>
+              <span className="text-muted-foreground">{t("memory.confirmed", { when: timeAgo(f.last_confirmed_at) })}</span>
             )}
             {f.rejection_reason && (
-              <span className="text-muted-foreground">reason: {f.rejection_reason}</span>
+              <span className="text-muted-foreground">{t("memory.reason", { reason: f.rejection_reason })}</span>
             )}
           </div>
           <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
             {f.status === "candidate" && (
               <>
-                <button type="button" onClick={() => onDecide(f, "accept")} className="px-2 py-0.5 rounded border border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10">Accept</button>
-                <button type="button" onClick={() => onDecide(f, "reject")} className="px-2 py-0.5 rounded border border-rose-500/50 text-rose-300 hover:bg-rose-500/10">Reject</button>
+                <button type="button" onClick={() => onDecide(f, "accept")} className="px-2 py-0.5 rounded border border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10">{t("memory.accept")}</button>
+                <button type="button" onClick={() => onDecide(f, "reject")} className="px-2 py-0.5 rounded border border-rose-500/50 text-rose-300 hover:bg-rose-500/10">{t("memory.reject")}</button>
               </>
             )}
             {f.status !== "candidate" && f.status !== "rejected" && (
               <>
-                <button type="button" onClick={() => setEditing(true)} className="text-muted-foreground hover:text-foreground">edit</button>
-                <button type="button" onClick={() => onPin(f)} className="text-muted-foreground hover:text-foreground">{f.pinned ? "unpin" : "pin"}</button>
+                <button type="button" onClick={() => setEditing(true)} className="text-muted-foreground hover:text-foreground">{t("memory.edit")}</button>
+                <button type="button" onClick={() => onPin(f)} className="text-muted-foreground hover:text-foreground">{f.pinned ? t("memory.unpin") : t("memory.pin")}</button>
                 {f.status === "archived" ? (
-                  <button type="button" onClick={() => onEnabled(f)} className="text-muted-foreground hover:text-foreground">restore</button>
+                  <button type="button" onClick={() => onEnabled(f)} className="text-muted-foreground hover:text-foreground">{t("memory.restore")}</button>
                 ) : (
-                  <button type="button" onClick={() => onEnabled(f)} className="text-muted-foreground hover:text-foreground">archive</button>
+                  <button type="button" onClick={() => onEnabled(f)} className="text-muted-foreground hover:text-foreground">{t("memory.archive")}</button>
                 )}
                 {f.schedule && (
                   <button type="button" onClick={() => onSuppress(f)} className={
@@ -466,31 +466,31 @@ function FactCard({
                       ? "text-violet-300 hover:text-violet-200"
                       : "text-muted-foreground hover:text-foreground"
                   }>
-                    {f.suppresses_alerts ? "stop muting alerts" : "mute alerts in this window"}
+                    {f.suppresses_alerts ? t("memory.stop_muting") : t("memory.mute_window")}
                   </button>
                 )}
               </>
             )}
-            <button type="button" onClick={() => onDelete(f)} className="ml-auto text-rose-300/80 hover:text-rose-300">delete</button>
+            <button type="button" onClick={() => onDelete(f)} className="ml-auto text-rose-300/80 hover:text-rose-300">{t("memory.delete")}</button>
           </div>
           {expanded && (
             <div className="mt-2 border-t border-border/50 pt-2 text-xs text-muted-foreground space-y-1">
               {evidence === undefined ? (
-                <p>Loading evidence…</p>
+                <p>{t("memory.loading_evidence")}</p>
               ) : evidence.length === 0 ? (
-                <p>No stored evidence — {f.source === "user" ? "this note is the household speaking." : "the evidence rows are gone."}</p>
+                <p>{t("memory.no_evidence", { detail: f.source === "user" ? t("memory.user_note") : t("memory.evidence_gone") })}</p>
               ) : (
                 evidence.map((e) => (
                   <div key={e.id} className="flex gap-2 flex-wrap">
                     {e.kind === "association" ? (
                       <span>
-                        Pattern: <span className="text-foreground">{e.relation} {e.object_label}</span>
-                        {" · "}{e.distinct_days} separate days
+                        {t("memory.pattern")}: <span className="text-foreground">{e.relation} {e.object_label}</span>
+                        {" · "}{e.distinct_days} {t("memory.separate_days")}
                         {e.usual_hours?.length ? ` · around ${e.usual_hours.map((h) => `${h}:00`).join(", ")}` : ""}
                         {e.last_seen_at ? ` · last seen ${timeAgo(e.last_seen_at)}` : ""}
                       </span>
                     ) : e.missing || e.unavailable ? (
-                      <span>Reference no longer available ({e.kind})</span>
+                      <span>{t("memory.reference_unavailable", { kind: e.kind })}</span>
                     ) : (
                       <span>
                         {e.started_at ? `${timeAgo(e.started_at)} — ` : ""}{e.vlm_description ?? "observation"}
@@ -516,6 +516,8 @@ function NoteForm({
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;
   toast: { success: (m: string) => void; error: (m: string) => void };
 }) {
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values);
   const [text, setText] = useState("");
   const [attachKind, setAttachKind] = useState("household");
   const [attachKey, setAttachKey] = useState("");
@@ -549,13 +551,13 @@ function NoteForm({
     const trimmed = text.trim();
     if (!trimmed || busy) return;
     if (scheduled && days.length === 0) {
-      toast.error("Pick at least one weekday for the schedule.");
+      toast.error(t("memory.pick_weekday"));
       return;
     }
     const body: Record<string, unknown> = { text: trimmed };
     if (attachKind !== "household") {
       if (!attachKey) {
-        toast.error("Pick which one this note is about.");
+        toast.error(t("memory.pick_entity"));
         return;
       }
       body.entity_kind = attachKind;
@@ -565,7 +567,7 @@ function NoteForm({
       const startMin = Number(start.split(":")[0]) * 60 + Number(start.split(":")[1]);
       const endMin = Number(end.split(":")[0]) * 60 + Number(end.split(":")[1]);
       if (endMin <= startMin) {
-        toast.error("The window must end after it starts, within one day.");
+        toast.error(t("memory.invalid_window"));
         return;
       }
       body.schedule = { days, start_minute: startMin, end_minute: endMin };
@@ -578,10 +580,10 @@ function NoteForm({
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        toast.success("Noted.");
+        toast.success(t("memory.noted"));
         await onDone();
       } else {
-        toast.error(extractApiError(await res.json().catch(() => null), "Could not add that note."));
+        toast.error(extractApiError(await res.json().catch(() => null), t("memory.add_error")));
       }
     } finally {
       setBusy(false);
@@ -593,12 +595,12 @@ function NoteForm({
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="e.g. The cleaner comes Thursdays and has a key. The side gate is always left open."
+        placeholder={t("memory.note_placeholder")}
         rows={2}
         className="w-full text-sm bg-black/20 border border-border rounded px-3 py-2 outline-none focus:border-foreground/40"
       />
       <div className="flex gap-2 flex-wrap items-center text-xs">
-        <span className="text-muted-foreground">Attach to</span>
+        <span className="text-muted-foreground">{t("memory.attach_to")}</span>
         {(["household", "person", "vehicle", "camera"] as const).map((kind) => (
           <button
             key={kind}
@@ -610,24 +612,24 @@ function NoteForm({
                 : "border-border text-muted-foreground"
             }`}
           >
-            {kind}
+            {kind === "household" ? t("memory.household") : t(`memory.entity_${kind}`)}
           </button>
         ))}
         {attachKind === "person" && (
           <select value={attachKey} onChange={(e) => setAttachKey(e.target.value)} className="text-xs bg-black/20 border border-border rounded px-2 py-1">
-            <option value="">Pick a person…</option>
+            <option value="">{t("memory.pick_person")}</option>
             {persons.map((p) => <option key={p.id} value={p.id}>{p.display_name ?? p.name}</option>)}
           </select>
         )}
         {attachKind === "vehicle" && (
           <select value={attachKey} onChange={(e) => setAttachKey(e.target.value)} className="text-xs bg-black/20 border border-border rounded px-2 py-1">
-            <option value="">Pick a vehicle…</option>
+            <option value="">{t("memory.pick_vehicle")}</option>
             {vehicles.map((v) => <option key={v.id} value={v.id}>{v.display_name ?? v.name}</option>)}
           </select>
         )}
         {attachKind === "camera" && (
           <select value={attachKey} onChange={(e) => setAttachKey(e.target.value)} className="text-xs bg-black/20 border border-border rounded px-2 py-1">
-            <option value="">Pick a camera…</option>
+            <option value="">{t("memory.pick_camera")}</option>
             {cameras.map((c) => <option key={c.id} value={c.id}>{c.display_name ?? c.name}</option>)}
           </select>
         )}
@@ -635,7 +637,7 @@ function NoteForm({
       <div className="flex gap-2 flex-wrap items-center text-xs">
         <label className="flex items-center gap-1.5 text-muted-foreground">
           <input type="checkbox" checked={scheduled} onChange={(e) => setScheduled(e.target.checked)} />
-          Recurring schedule
+          {t("memory.recurring_schedule")}
         </label>
         {scheduled && (
           <>
@@ -651,20 +653,19 @@ function NoteForm({
                       : "border-border text-muted-foreground"
                   }`}
                 >
-                  {name}
+                  {t(`memory.weekday_${i}`)}
                 </button>
               ))}
             </span>
             <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="bg-black/20 border border-border rounded px-2 py-1" />
-            <span className="text-muted-foreground">to</span>
+            <span className="text-muted-foreground">{t("memory.to")}</span>
             <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="bg-black/20 border border-border rounded px-2 py-1" />
           </>
         )}
       </div>
       {scheduled && (
         <p className="text-[11px] text-muted-foreground">
-          After saving you can have matching alerts muted during this window — the
-          note&apos;s page shows the switch, and it stays reversible.
+          {t("memory.schedule_help")}
         </p>
       )}
       <div className="flex justify-end">
@@ -674,7 +675,7 @@ function NoteForm({
           disabled={busy || !text.trim()}
           className="text-sm px-3 py-1.5 rounded border border-sky-500/50 bg-sky-500/15 text-sky-200 hover:bg-sky-500/25 disabled:opacity-50"
         >
-          Save note
+          {t("memory.save_note")}
         </button>
       </div>
     </div>
