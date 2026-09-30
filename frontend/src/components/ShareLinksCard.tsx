@@ -2,11 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { formatWith } from "@/lib/time";
-import {
-  ShareRow,
-  SHARE_KIND_LABEL,
-} from "@/app/settings/settings-helpers";
+import { ShareRow } from "@/app/settings/settings-helpers";
 
 const STATUS_STYLE: Record<ShareRow["status"], string> = {
   active: "text-green-500",
@@ -29,7 +27,8 @@ function fmt(ts: string | null): string {
  * with per-row revoke. The raw link is never re-shown (only its hash is
  * stored server-side); this is purely an audit/kill-switch surface. */
 export function ShareLinksCard() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = useCallback((key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values), [user?.locale]);
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<ShareRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,9 +41,9 @@ export function ShareLinksCard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setRows(await res.json());
     } catch {
-      setError("Could not load share links.");
+      setError(t("share_links.load_failed"));
     }
-  }, [authFetch]);
+  }, [authFetch, t]);
 
   useEffect(() => {
     if (open && rows === null) void load();
@@ -59,7 +58,7 @@ export function ShareLinksCard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await load();
     } catch {
-      setError("Could not revoke the link.");
+      setError(t("share_links.revoke_failed"));
     } finally {
       setBusyId(null);
     }
@@ -80,13 +79,13 @@ export function ShareLinksCard() {
             }`}
           />
           <div>
-            <div className="text-sm font-medium">Share links</div>
+            <div className="text-sm font-medium">{t("share_links.title")}</div>
             <div className="text-xs text-muted-foreground mt-0.5">
               {rows === null
-                ? "Anonymous links you created for recordings, frames and events"
+                ? t("share_links.subtitle")
                 : activeCount
-                  ? `${activeCount} active link${activeCount === 1 ? "" : "s"}`
-                  : "No active links"}
+                  ? t("share_links.active_count", { count: activeCount })
+                  : t("share_links.no_active")}
             </div>
           </div>
         </div>
@@ -100,8 +99,7 @@ export function ShareLinksCard() {
           {error && <div className="text-xs text-red-500">{error}</div>}
           {rows !== null && rows.length === 0 && (
             <div className="text-xs text-muted-foreground">
-              Nothing shared yet. Use the Share button on a recording or
-              event to create an anonymous link.
+              {t("share_links.empty")}
             </div>
           )}
           {rows?.map((r) => (
@@ -112,16 +110,16 @@ export function ShareLinksCard() {
               <div className="min-w-0">
                 <div className="truncate">
                   <span className="text-muted-foreground">
-                    {SHARE_KIND_LABEL[r.kind]}
+                    {t(`share_links.kind_${r.kind}`)}
                   </span>{" "}
-                  {r.label || "Untitled"}
+                  {r.label || t("share_links.untitled")}
                 </div>
                 <div className="text-xs text-muted-foreground font-mono mt-0.5">
-                  <span className={STATUS_STYLE[r.status]}>{r.status}</span>
+                  <span className={STATUS_STYLE[r.status]}>{t(`share_links.status_${r.status}`)}</span>
                   {" · "}
                   {r.view_count}
-                  {r.max_views ? `/${r.max_views}` : ""} views
-                  {" · expires "}
+                  {r.max_views ? `/${r.max_views}` : ""} {t("share_links.views")}
+                  {" · "}{t("share_links.expires")}{" "}
                   {fmt(r.expires_at)}
                 </div>
               </div>
@@ -131,7 +129,7 @@ export function ShareLinksCard() {
                   disabled={busyId === r.id}
                   className="px-2.5 py-1 rounded-md border border-border text-xs hover:bg-muted transition-colors disabled:opacity-50 flex-shrink-0"
                 >
-                  {busyId === r.id ? "Revoking…" : "Revoke"}
+                  {busyId === r.id ? t("share_links.revoking") : t("share_links.revoke")}
                 </button>
               )}
             </div>
