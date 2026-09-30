@@ -166,7 +166,7 @@ export function WidgetBuilder({
           <div className="space-y-3">
             <div>
               <label className="text-xs text-muted-foreground block mb-1">{t("widget.name")}</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Living room temperature" className={input} />
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("widget.name_placeholder")} className={input} />
             </div>
 
             <div>
@@ -176,7 +176,7 @@ export function WidgetBuilder({
                   className="px-2 py-1.5 rounded-md bg-background border border-border text-sm">
                   <option>GET</option><option>POST</option>
                 </select>
-                <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://homeassistant.local/api/states/sensor.temp" className={input} />
+                <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t("widget.url_placeholder")} className={input} />
               </div>
               <p className="text-[11px] text-muted-foreground mt-1">{t("widget.data_url_help")}</p>
             </div>
@@ -197,7 +197,7 @@ export function WidgetBuilder({
             {(authKind === "header" || authKind === "query") && (
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">{authKind === "header" ? t("widget.header_name") : t("widget.query_name")}</label>
-                <input value={authName} onChange={(e) => setAuthName(e.target.value)} placeholder={authKind === "header" ? "X-API-Key" : "api_key"} className={input} />
+                <input value={authName} onChange={(e) => setAuthName(e.target.value)} placeholder={authKind === "header" ? t("widget.header_placeholder") : t("widget.query_placeholder")} className={input} />
               </div>
             )}
             {authKind !== "none" && (
