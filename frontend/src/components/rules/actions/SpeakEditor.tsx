@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 import { type SpeakDraft } from "../types";
 import { VarInserter, type VarSpec } from "./VarInserter";
@@ -21,6 +23,9 @@ export function SpeakEditor({
   cameras,
 }: SpeakEditorProps) {
   const d = draft;
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) =>
+    translate(user?.locale, key, values);
   const set = (patch: Partial<SpeakDraft>) => onChange({ ...d, ...patch });
 
   const [previewing, setPreviewing] = useState(false);
@@ -32,7 +37,7 @@ export function SpeakEditor({
   // and says so when it refuses.
   const preview = async () => {
     if (!d.camera_id) {
-      setPreviewResult("Pick a camera to hear this on.");
+      setPreviewResult(t("rules.speak.pick_camera"));
       return;
     }
     setPreviewing(true);
@@ -50,11 +55,11 @@ export function SpeakEditor({
       const body = await resp.json();
       setPreviewResult(
         body.spoken
-          ? `Played through ${body.transport}.`
-          : `Not played: ${body.reason ?? "unknown"}`,
+          ? t("rules.speak.played", { transport: body.transport })
+          : t("rules.speak.not_played", { reason: body.reason ?? t("rules.speak.unknown") }),
       );
     } catch {
-      setPreviewResult("Could not reach the camera.");
+      setPreviewResult(t("rules.speak.camera_unreachable"));
     } finally {
       setPreviewing(false);
     }
@@ -67,7 +72,7 @@ export function SpeakEditor({
         onChange={(e) => set({ text: e.target.value })}
         rows={2}
         className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
-        placeholder="This area is monitored. Please step back."
+        placeholder={t("rules.speak.text_placeholder")}
       />
 
       <div className="grid grid-cols-2 gap-2">
@@ -76,7 +81,7 @@ export function SpeakEditor({
           onChange={(e) => set({ camera_id: e.target.value })}
           className="px-3 py-2 rounded-md bg-background border border-border text-sm"
         >
-          <option value="">Camera that triggered the rule</option>
+          <option value="">{t("rules.speak.camera_select")}</option>
           {cameras.map((camera) => (
             <option key={camera.id} value={camera.id}>
               {camera.name}
@@ -90,7 +95,7 @@ export function SpeakEditor({
           value={d.volume}
           onChange={(e) => set({ volume: e.target.value })}
           className="px-3 py-2 rounded-md bg-background border border-border text-sm"
-          placeholder="Volume (camera default)"
+          placeholder={t("rules.speak.volume_placeholder")}
         />
       </div>
 
@@ -99,7 +104,7 @@ export function SpeakEditor({
         value={d.voice}
         onChange={(e) => set({ voice: e.target.value })}
         className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
-        placeholder="Voice (camera default)"
+        placeholder={t("rules.speak.voice_placeholder")}
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -112,9 +117,9 @@ export function SpeakEditor({
           onClick={preview}
           disabled={previewing}
           className="px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground disabled:opacity-50"
-          title="Speaks a test phrase on the selected camera, through the real path"
+          title={t("rules.speak.preview_title")}
         >
-          {previewing ? "Speaking." : "Hear it"}
+          {previewing ? t("rules.speak.speaking") : t("rules.speak.hear_it")}
         </button>
         {previewResult && (
           <span className="text-xs text-muted-foreground">{previewResult}</span>
@@ -122,8 +127,7 @@ export function SpeakEditor({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Subject to the camera&apos;s quiet hours, cooldown and daily limit. Every
-        attempt is recorded, including the ones that are held back.
+        {t("rules.speak.limits_help")}
       </p>
     </>
   );
