@@ -2,6 +2,8 @@
 
 import type { Camera } from "./types";
 import { HOUSEHOLD_MODES, MODE_LABELS, type HouseholdMode } from "@/lib/household-mode";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export interface ConditionsSectionProps {
   cameras: Camera[];
@@ -46,16 +48,19 @@ export function ConditionsSection(props: ConditionsSectionProps) {
     formCondModes,
     setFormCondModes,
   } = props;
+  const { user } = useAuth();
+  const t = (key: string, values?: Record<string, string | number>) =>
+    translate(user?.locale, key, values);
 
   return (
     <fieldset className="border border-border rounded-md p-3 space-y-2">
       <legend className="text-xs font-medium text-muted-foreground px-1">
-        Conditions (optional)
+        {t("rules.conditions.title")}
       </legend>
       <div>
-        <label className="text-xs text-muted-foreground block mb-1">Cameras</label>
+        <label className="text-xs text-muted-foreground block mb-1">{t("rules.conditions.cameras")}</label>
         {cameras.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No cameras added yet</p>
+          <p className="text-xs text-muted-foreground">{t("rules.conditions.no_cameras")}</p>
         ) : (
           <div className="space-y-1.5 max-h-36 overflow-y-auto rounded-md border border-border bg-background p-2">
             <label className="flex items-center gap-2 cursor-pointer text-sm">
@@ -65,7 +70,7 @@ export function ConditionsSection(props: ConditionsSectionProps) {
                 onChange={() => setFormCondCameras([])}
                 className="accent-green-500"
               />
-              <span className="text-muted-foreground">All cameras</span>
+              <span className="text-muted-foreground">{t("rules.conditions.all_cameras")}</span>
             </label>
             {cameras.map((cam) => (
               <label key={cam.id} className="flex items-center gap-2 cursor-pointer text-sm">
@@ -91,7 +96,7 @@ export function ConditionsSection(props: ConditionsSectionProps) {
         )}
       </div>
       <div>
-        <label className="text-xs text-muted-foreground block mb-1.5">Schedule</label>
+        <label className="text-xs text-muted-foreground block mb-1.5">{t("rules.conditions.schedule")}</label>
         <div className="flex gap-1 mb-2">
           <button
             type="button"
@@ -102,7 +107,7 @@ export function ConditionsSection(props: ConditionsSectionProps) {
                 : "border-border hover:bg-muted"
             }`}
           >
-            Always on
+            {t("rules.conditions.always_on")}
           </button>
           <button
             type="button"
@@ -113,14 +118,14 @@ export function ConditionsSection(props: ConditionsSectionProps) {
                 : "border-border hover:bg-muted"
             }`}
           >
-            Custom schedule
+            {t("rules.conditions.custom_schedule")}
           </button>
         </div>
 
         {formScheduleMode === "custom" && (
           <div className="space-y-2 pl-1">
             <div>
-              <label className="text-[10px] text-muted-foreground block mb-1">Active on</label>
+              <label className="text-[10px] text-muted-foreground block mb-1">{t("rules.conditions.active_on")}</label>
               <div className="flex gap-1">
                 {[
                   { value: "mon", label: "M" },
@@ -161,29 +166,29 @@ export function ConditionsSection(props: ConditionsSectionProps) {
                   }}
                   className="px-2 h-8 text-[10px] rounded border border-border hover:bg-muted text-muted-foreground ml-1"
                 >
-                  {formCondDays.length === 7 ? "None" : "All"}
+                  {formCondDays.length === 7 ? t("rules.conditions.none") : t("rules.conditions.all")}
                 </button>
               </div>
               {formCondDays.length === 0 && (
-                <span className="text-[10px] text-muted-foreground">No days selected = every day</span>
+                <span className="text-[10px] text-muted-foreground">{t("rules.conditions.no_days")}</span>
               )}
               {systemTz && (
                 <div
                   className="mt-1 text-[10px] text-muted-foreground"
-                  title="Change in Settings → System."
+                  title={t("rules.conditions.change_timezone")}
                 >
-                  Schedule evaluated in {systemTz}.
+                  {t("rules.conditions.schedule_timezone", { timezone: systemTz })}
                 </div>
               )}
               {systemTzIsFallback && (
                 <div className="mt-1 text-[10px] text-amber-400">
-                  No system timezone set. Falling back to your browser&apos;s. Set one in Settings → System.
+                  {t("rules.conditions.browser_timezone_fallback")}
                 </div>
               )}
             </div>
 
             <div>
-              <label className="text-[10px] text-muted-foreground block mb-1">Active between</label>
+              <label className="text-[10px] text-muted-foreground block mb-1">{t("rules.conditions.active_between")}</label>
               <div className="flex items-center gap-2">
                 <input
                   type="time"
@@ -191,7 +196,7 @@ export function ConditionsSection(props: ConditionsSectionProps) {
                   onChange={(e) => setFormCondTimeAfter(e.target.value)}
                   className="flex-1 px-2 py-1.5 rounded-md bg-background border border-border text-sm"
                 />
-                <span className="text-xs text-muted-foreground">to</span>
+                <span className="text-xs text-muted-foreground">{t("rules.conditions.to")}</span>
                 <input
                   type="time"
                   value={formCondTimeBefore}
@@ -200,11 +205,11 @@ export function ConditionsSection(props: ConditionsSectionProps) {
                 />
               </div>
               {!formCondTimeAfter && !formCondTimeBefore && (
-                <span className="text-[10px] text-muted-foreground">No times set = all day</span>
+                <span className="text-[10px] text-muted-foreground">{t("rules.conditions.no_times")}</span>
               )}
               {formCondTimeAfter && formCondTimeBefore && formCondTimeAfter > formCondTimeBefore && (
                 <div className="mt-1 text-[10px] text-sky-300 bg-sky-500/10 border border-sky-500/30 rounded px-2 py-1">
-                  Overnight window. Rule fires from {formCondTimeAfter} to midnight, then midnight to {formCondTimeBefore}.
+                  {t("rules.conditions.overnight", { after: formCondTimeAfter, before: formCondTimeBefore })}
                 </div>
               )}
             </div>
@@ -226,7 +231,7 @@ export function ConditionsSection(props: ConditionsSectionProps) {
                   }}
                   className="px-2 py-1 text-[10px] rounded border border-border hover:bg-muted text-muted-foreground transition-colors"
                 >
-                  {preset.label}
+                  {t(`rules.conditions.preset_${preset.label.toLowerCase()}`)}
                 </button>
               ))}
             </div>
@@ -236,7 +241,7 @@ export function ConditionsSection(props: ConditionsSectionProps) {
 
       <div>
         <label className="text-xs text-muted-foreground block mb-1.5">
-          Household mode
+          {t("rules.conditions.household_mode")}
         </label>
         <div className="flex flex-wrap gap-1.5">
           <button
@@ -248,7 +253,7 @@ export function ConditionsSection(props: ConditionsSectionProps) {
                 : "border-border text-muted-foreground hover:bg-muted"
             }`}
           >
-            Any mode
+            {t("rules.conditions.any_mode")}
           </button>
           {HOUSEHOLD_MODES.map((m) => {
             const on = formCondModes.includes(m);
@@ -272,22 +277,22 @@ export function ConditionsSection(props: ConditionsSectionProps) {
         </div>
         <span className="text-[10px] text-muted-foreground">
           {formCondModes.length === 0
-            ? "Fires whatever the house is set to."
-            : `Quiet unless the house is set to ${formCondModes.map((m) => MODE_LABELS[m as HouseholdMode] ?? m).join(" or ")}. Change the mode from Home.`}
+            ? t("rules.conditions.any_mode_help")
+            : t("rules.conditions.mode_help", { modes: formCondModes.map((m) => MODE_LABELS[m as HouseholdMode] ?? m).join(" or ") })}
         </span>
       </div>
 
       <div>
         <label className="text-xs text-muted-foreground block mb-1.5">
-          Detection confidence
+          {t("rules.conditions.confidence")}
         </label>
         <div className="grid grid-cols-5 gap-1">
           {[
-            { value: "any", label: "Any", desc: "All detections" },
-            { value: "low", label: "Low+", desc: "20%+" },
-            { value: "medium", label: "Medium+", desc: "40%+" },
-            { value: "high", label: "High+", desc: "60%+" },
-            { value: "very_high", label: "Very high", desc: "80%+" },
+            { value: "any", label: t("rules.conditions.any"), desc: t("rules.conditions.all_detections") },
+            { value: "low", label: t("rules.conditions.low"), desc: "20%+" },
+            { value: "medium", label: t("rules.conditions.medium"), desc: "40%+" },
+            { value: "high", label: t("rules.conditions.high"), desc: "60%+" },
+            { value: "very_high", label: t("rules.conditions.very_high"), desc: "80%+" },
           ].map((c) => (
             <button
               key={c.value}
@@ -304,7 +309,7 @@ export function ConditionsSection(props: ConditionsSectionProps) {
           ))}
         </div>
         <span className="text-[10px] text-muted-foreground">
-          Higher confidence = fewer false positives but may miss some detections
+          {t("rules.conditions.confidence_help")}
         </span>
       </div>
     </fieldset>
