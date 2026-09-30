@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 type PairStart = {
   code: string;
@@ -40,7 +41,8 @@ function uniqueServerUrls(primary: string, fallback: string): string[] {
  * short-lived single-use code from /api/auth/pair/start and renders it
  * with the server URL. Scanning it logs the phone in as this user. */
 export function PairMobileCard() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = useCallback((key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values), [user?.locale]);
   const [open, setOpen] = useState(false);
   const [pair, setPair] = useState<PairStart | null>(null);
   const [serverUrl, setServerUrl] = useState("");
@@ -60,11 +62,11 @@ export function PairMobileCard() {
       setSecondsLeft(data.expires_in);
       setServerUrl((prev) => prev || guessServerUrl(data.server_url));
     } catch {
-      setError("Could not create a pairing code.");
+      setError(t("mobile_pairing.create_failed"));
     } finally {
       setLoading(false);
     }
-  }, [authFetch]);
+  }, [authFetch, t]);
 
   // Countdown while a code is showing.
   useEffect(() => {
@@ -104,9 +106,9 @@ export function PairMobileCard() {
         <div className="flex items-center gap-3">
           <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-blue-500" />
           <div>
-            <div className="text-sm font-medium">Mobile app</div>
+            <div className="text-sm font-medium">{t("mobile_pairing.title")}</div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              Pair a phone by scanning a QR code
+              {t("mobile_pairing.subtitle")}
             </div>
           </div>
         </div>
@@ -129,14 +131,13 @@ export function PairMobileCard() {
                   <QRCodeSVG value={payload} size={208} marginSize={0} />
                 </div>
                 <p className="text-xs text-muted-foreground text-center max-w-xs">
-                  Open the Nurby app and tap &ldquo;Scan QR code&rdquo;. The code
-                  signs the phone in as you and expires in {secondsLeft}s.
+                  {t("mobile_pairing.instructions", { seconds: secondsLeft })}
                 </p>
               </>
             )}
 
             {expired && (
-              <p className="text-sm text-muted-foreground">Code expired.</p>
+              <p className="text-sm text-muted-foreground">{t("mobile_pairing.expired")}</p>
             )}
 
             {(expired || error) && (
@@ -145,13 +146,13 @@ export function PairMobileCard() {
                 disabled={loading}
                 className="px-3 py-1.5 rounded-md border border-border text-sm hover:bg-muted transition-colors disabled:opacity-50"
               >
-                {loading ? "Generating." : "New code"}
+                {loading ? t("mobile_pairing.generating") : t("mobile_pairing.new_code")}
               </button>
             )}
 
             <div className="w-full max-w-xs">
               <label className="block text-xs text-muted-foreground mb-1">
-                Server address the phone should use
+                {t("mobile_pairing.server_address")}
               </label>
               <input
                 value={serverUrl}
