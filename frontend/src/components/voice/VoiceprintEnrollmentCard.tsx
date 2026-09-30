@@ -46,6 +46,7 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
   const [trainingModel, setTrainingModel] = useState<string | null>(null);
   const [trainingQuality, setTrainingQuality] = useState<string>("unavailable");
   const [matchingEnabled, setMatchingEnabled] = useState(false);
+  const [reprocessing, setReprocessing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,6 +117,27 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
     }
   };
 
+  const reprocess = async () => {
+    setReprocessing(true);
+    setError(null);
+    try {
+      const response = await authFetch(`/api/voiceprints/persons/${personId}/reprocess`, { method: "POST" });
+      const body = await response.json().catch(() => ({})) as { processed?: number; matched?: number; fused?: number; conflicts?: number; detail?: string };
+      if (!response.ok) throw new Error(body.detail || t("voiceprint.reprocess_failed"));
+      setTrainingMessage(t("voiceprint.reprocess_summary", {
+        processed: body.processed ?? 0,
+        matched: body.matched ?? 0,
+        fused: body.fused ?? 0,
+        conflicts: body.conflicts ?? 0,
+      }));
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("voiceprint.reprocess_failed"));
+    } finally {
+      setReprocessing(false);
+    }
+  };
+
   const candidates = clips.filter((clip) => clip.review_status === "candidate");
   const confirmed = clips.filter((clip) => clip.review_status === "confirmed");
   const rejected = clips.filter((clip) => clip.review_status === "rejected");
@@ -143,9 +165,16 @@ export function VoiceprintEnrollmentCard({ personId }: VoiceprintEnrollmentCardP
         <span> · {t("voiceprint.quality_status", { status: t(`voiceprint.quality_${trainingQuality}`) })}</span>
       </div>
       {trainingStatus === "ready" && (
-        <button type="button" onClick={() => void revoke()} disabled={busy} className="mt-2 text-[10px] text-red-300 hover:text-red-200 disabled:opacity-50">
-          {busy ? t("voiceprint.revoking") : t("voiceprint.revoke")}
-        </button>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {matchingEnabled && (
+            <button type="button" onClick={() => void reprocess()} disabled={busy || reprocessing} className="text-[10px] text-accent hover:text-foreground disabled:opacity-50">
+              {reprocessing ? t("voiceprint.reprocessing") : t("voiceprint.reprocess")}
+            </button>
+          )}
+          <button type="button" onClick={() => void revoke()} disabled={busy || reprocessing} className="text-[10px] text-red-300 hover:text-red-200 disabled:opacity-50">
+            {busy ? t("voiceprint.revoking") : t("voiceprint.revoke")}
+          </button>
+        </div>
       )}
       {loading ? <p className="py-3 text-xs text-muted-foreground">{t("voiceprint.finding")}</p> : error ? <p className="py-3 text-xs text-red-400">{error}</p> : (
         <>

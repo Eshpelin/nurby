@@ -86,7 +86,12 @@ def select_voiceprint_match(
     return best
 
 
-async def match_voiceprint(db: AsyncSession, capture: AudioCapture) -> tuple[UUID, float] | None:
+async def match_voiceprint(
+    db: AsyncSession,
+    capture: AudioCapture,
+    *,
+    person_id: UUID | None = None,
+) -> tuple[UUID, float] | None:
     """Return a conservative hypothesis for one retained capture."""
     # Enrollment consent is person-specific; inference also requires the
     # administrator's explicit deployment-level opt-in. This keeps a newly
@@ -101,7 +106,7 @@ async def match_voiceprint(db: AsyncSession, capture: AudioCapture) -> tuple[UUI
     except Exception:
         logger.warning("voiceprint matching failed capture=%s", capture.id, exc_info=True)
         return None
-    rows = (await db.execute(
+    profile_query = (
         select(VoiceprintProfile.person_id, VoiceprintProfile.embedding)
         .join(Person, Person.id == VoiceprintProfile.person_id)
         .join(Camera, Camera.id == capture.camera_id)
@@ -120,8 +125,11 @@ async def match_voiceprint(db: AsyncSession, capture: AudioCapture) -> tuple[UUI
                 Person.facility_id == Camera.facility_id,
             )
         )
-    )).all()
-    return select_voiceprint_match([(person_id, embedding) for person_id, embedding in rows], vector)
+    )
+    if person_id is not None:
+        profile_query = profile_query.where(VoiceprintProfile.person_id == person_id)
+    rows = (await db.execute(profile_query)).all()
+    return select_voiceprint_match([(profile_person_id, embedding) for profile_person_id, embedding in rows], vector)
 
 
 async def train_voiceprint(db: AsyncSession, person_id: UUID) -> VoiceprintProfile:

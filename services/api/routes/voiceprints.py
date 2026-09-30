@@ -14,10 +14,10 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import and_, select
+from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.perception.audio.voiceprint import train_voiceprint
+from services.perception.audio.voiceprint import match_voiceprint, train_voiceprint
 from shared.app_settings import get_setting
 from shared.auth import require_admin
 from shared.camera_access import ALL, allowed_camera_ids
@@ -278,6 +278,81 @@ async def decide_voiceprint_candidate(
             if profile.status == "ready"
             else profile.last_error or "No retained confirmed audio clips are available yet."
         ),
+    }
+
+
+@router.post("/persons/{person_id}/reprocess")
+async def reprocess_voiceprint_attributions(
+    person_id: uuid.UUID,
+    limit: int = Query(default=200, ge=1, le=1000),
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply a ready person's voiceprint to a bounded historical window.
+
+    Reprocessing is explicit, bounded, camera-scoped, and never overwrites a
+    manual attribution. A voice match that conflicts with an existing visual
+    person remains untouched and is reported for review rather than silently
+    changing identity history.
+    """
+    if await db.get(Person, person_id) is None:
+        raise HTTPException(status_code=404, detail="Person not found")
+    if not bool(await get_setting("voiceprint_matching_enabled", False)):
+        raise HTTPException(status_code=409, detail="Voiceprint matching is disabled by the administrator")
+    profile = await db.scalar(select(VoiceprintProfile).where(VoiceprintProfile.person_id == person_id))
+    if profile is None or profile.status != "ready" or not profile.consent_confirmed:
+        raise HTTPException(status_code=409, detail="A ready, consented voiceprint profile is required")
+
+    allowed = await allowed_camera_ids(current_user, db)
+    query = (
+        select(Transcript, AudioCapture)
+        .join(AudioCapture, AudioCapture.id == Transcript.audio_capture_id)
+        .where(Transcript.filtered.is_(False))
+        .order_by(desc(Transcript.started_at))
+        .limit(limit)
+    )
+    if allowed is not ALL:
+        query = query.where(Transcript.camera_id.in_(allowed))
+    rows = (await db.execute(query)).all()
+
+    processed = matched = fused = conflicts = skipped_manual = 0
+    now = datetime.now(timezone.utc)
+    for transcript, capture in rows:
+        processed += 1
+        if transcript.speaker_source == "manual":
+            skipped_manual += 1
+            continue
+        match = await match_voiceprint(db, capture, person_id=person_id)
+        if match is None:
+            continue
+        _, score = match
+        if transcript.speaker_person_id is not None and transcript.speaker_person_id != person_id:
+            conflicts += 1
+            continue
+        old_value = f"{transcript.speaker_person_id}:{transcript.speaker_source}:{transcript.speaker_confidence}"
+        was_video = transcript.speaker_source == "video" and transcript.speaker_person_id == person_id
+        transcript.speaker_person_id = person_id
+        transcript.speaker_confidence = max(float(transcript.speaker_confidence or 0.0), float(score)) if was_video else float(score)
+        transcript.speaker_source = "fused" if was_video else "voice"
+        matched += 1
+        fused += int(was_video)
+        db.add(_voiceprint_audit_record(
+            transcript,
+            current_user,
+            field="voiceprint_reprocess",
+            old_value=old_value,
+            new_value=f"{person_id}:{transcript.speaker_source}:{transcript.speaker_confidence}",
+        ))
+    await db.commit()
+    return {
+        "person_id": str(person_id),
+        "limit": limit,
+        "processed": processed,
+        "matched": matched,
+        "fused": fused,
+        "conflicts": conflicts,
+        "skipped_manual": skipped_manual,
+        "message": "Historical voice attribution was applied as a hypothesis; conflicts remain unchanged for review.",
     }
 
 
