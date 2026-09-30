@@ -32,6 +32,9 @@ accessibility labels:
 - dashboard, people, cameras, recordings, events, and camera settings;
 - rule editors and trigger controls, including association, audio, speech,
   plate, parking, and geometry rules;
+- rule preview/execution cards, action-chain summaries, action cards,
+  notification and AI-verification editors, camera retry status, and the
+  provisional-account security prompt;
 - pipeline, Ask Nurby, agent responses, onboarding, account/security, and
   error-boundary surfaces;
 - activity, follow/journey, recap, live voice, incidents, and identity-review
@@ -46,6 +49,12 @@ copy and any newly discovered literal labels. Model-generated answers,
 camera/person/vehicle names, transcripts, provider names, server-provided
 rule text, URLs, protocol labels, and other evidence/data values remain
 intentional exceptions described below.
+
+The later rule/action and account-security slices are covered by commits
+`c2c63a4`, `ba44f18`, `10d7da9`, `5372b2a`, `b5e39b1`, `3a3a315`, and
+`d7e5214`. Run `npm run i18n:check` from `frontend/` to validate missing keys,
+placeholder parity, and orphan contributor keys without running the entire
+frontend suite.
 
 ## Intentionally not catalog-driven
 

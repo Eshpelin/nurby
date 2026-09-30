@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest"
+    "test": "vitest",
+    "i18n:check": "vitest run src/lib/__tests__/i18n.test.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
