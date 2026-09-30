@@ -698,14 +698,14 @@ export default function SettingsPage() {
           <div className="rounded-lg border border-yellow-500/35 bg-yellow-500/5 p-4" id="account-security">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-sm font-medium text-yellow-200">Secure this Nurby install</h2>
+                <h2 className="text-sm font-medium text-yellow-200">{t("settings.secure_install")}</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Your installing browser is already trusted. If you need to continue from another device, enter this one-time setup code there.
+                  {t("settings.setup_code_help")}
                 </p>
               </div>
               <code className="shrink-0 rounded border border-yellow-500/30 bg-background px-3 py-2 font-mono text-sm tracking-[0.2em] text-yellow-100">{setupCode}</code>
             </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">After using it once, claim the account with a real email and password. The code cannot be reused.</p>
+            <p className="mt-2 text-[11px] text-muted-foreground">{t("settings.setup_code_reuse")}</p>
           </div>
         )}
 
