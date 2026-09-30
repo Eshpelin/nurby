@@ -1561,9 +1561,9 @@ export default function SettingsPage() {
             </div>
 
             <div className="mt-4 flex justify-end">
-              <button onClick={() => setShowBlurModal(false)}
+                <button onClick={() => setShowBlurModal(false)}
                 className="px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90">
-                Done
+                {t("settings.done")}
               </button>
             </div>
           </div>
@@ -1576,13 +1576,13 @@ export default function SettingsPage() {
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowProviderModal(false)} />
           <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold mb-4">
-              {editProvider ? "Edit provider" : "Add AI provider"}
+              {editProvider ? t("settings.edit_provider") : t("settings.add_ai_provider")}
             </h2>
 
             {/* Presets (only in create mode) */}
             {!editProvider && showPresets && (
               <div className="mb-4">
-                <div className="text-xs font-medium text-muted-foreground mb-2">Quick setup</div>
+                <div className="text-xs font-medium text-muted-foreground mb-2">{t("settings.quick_setup")}</div>
                 <div className="grid grid-cols-2 gap-1.5 mb-3">
                   {ALL_PROVIDERS.map((preset) => (
                     <button key={preset.name}
@@ -1597,7 +1597,7 @@ export default function SettingsPage() {
                       <div className="flex items-center justify-between mb-0.5">
                         <span className="font-medium text-xs group-hover:text-accent transition-colors">{preset.name}</span>
                         {!preset.needsKey && (
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-800/40">local</span>
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-800/40">{t("settings.local")}</span>
                         )}
                       </div>
                       <div className="text-[10px] text-muted-foreground leading-snug">{preset.description}</div>
@@ -1607,7 +1607,7 @@ export default function SettingsPage() {
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
                   <div className="relative flex justify-center">
-                    <span className="bg-card px-2 text-[10px] text-muted-foreground">or configure manually</span>
+                    <span className="bg-card px-2 text-[10px] text-muted-foreground">{t("settings.configure_manually")}</span>
                   </div>
                 </div>
               </div>
@@ -1616,7 +1616,7 @@ export default function SettingsPage() {
             <div className="space-y-3">
               {/* Kind */}
               <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Model type</label>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">{t("settings.model_type")}</label>
                 <div className="grid grid-cols-4 gap-1">
                   {PROVIDER_KINDS.map((pk) => (
                     <button key={pk.value} onClick={() => handleKindChange(pk.value)}
@@ -1631,7 +1631,7 @@ export default function SettingsPage() {
 
               {formKind === "openai" && (
                 <div className="text-[10px] text-muted-foreground bg-muted/50 rounded px-2 py-1.5">
-                  OpenAI-compatible API. Works with OpenAI, Together, Groq, Fireworks, Mistral, DeepSeek, LMStudio, vLLM, and others.
+                  {t("settings.openai_compatible")}
                 </div>
               )}
 
@@ -1651,7 +1651,7 @@ export default function SettingsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">
-                    Max input tokens
+                    {t("settings.max_input_tokens")}
                   </label>
                   <input
                     type="number"
@@ -1660,15 +1660,15 @@ export default function SettingsPage() {
                     value={formMaxInputTokens}
                     onChange={(e) => setFormMaxInputTokens(e.target.value)}
                     className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:border-accent"
-                    placeholder="unlimited"
+                    placeholder={t("settings.unlimited")}
                   />
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    Cap on the prompt size we send. Empty means use the model default.
+                    {t("settings.max_input_help")}
                   </p>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">
-                    Max output tokens
+                    {t("settings.max_output_tokens")}
                   </label>
                   <input
                     type="number"
@@ -1677,10 +1677,10 @@ export default function SettingsPage() {
                     value={formMaxOutputTokens}
                     onChange={(e) => setFormMaxOutputTokens(e.target.value)}
                     className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:border-accent"
-                    placeholder="unlimited"
+                    placeholder={t("settings.unlimited")}
                   />
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    Hard ceiling on the response. Per-camera caps further tighten this.
+                    {t("settings.max_output_help")}
                   </p>
                 </div>
               </div>
@@ -1688,7 +1688,7 @@ export default function SettingsPage() {
               {/* Active */}
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={formActive} onChange={(e) => setFormActive(e.target.checked)} className="accent-green-500" />
-                <span className="text-sm">Active (used for VLM calls)</span>
+                <span className="text-sm">{t("settings.active_provider")}</span>
               </label>
 
               {formError && <div className="text-xs text-red-400">{formError}</div>}
@@ -1696,10 +1696,10 @@ export default function SettingsPage() {
 
             <div className="flex justify-end gap-2 mt-5">
               <button onClick={() => setShowProviderModal(false)}
-                className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">Cancel</button>
+                className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors">{t("settings.cancel")}</button>
               <button onClick={handleSubmit} disabled={submitting}
                 className="px-3 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-50">
-                {submitting ? "Saving." : editProvider ? "Save" : "Add provider"}
+                {submitting ? t("settings.saving") : editProvider ? t("settings.save") : t("settings.add_provider")}
               </button>
             </div>
           </div>
