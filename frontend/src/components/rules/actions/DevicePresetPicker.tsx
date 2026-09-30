@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import type { WebhookDraft } from "../types";
+import { translate } from "@/lib/i18n";
 
 // Shape served by GET /api/devices.
 interface DevicePreset {
@@ -31,7 +32,11 @@ export interface DevicePresetPickerProps {
 }
 
 export function DevicePresetPicker({ onApply }: DevicePresetPickerProps) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const t = useCallback(
+    (key: string, values?: Record<string, string | number>) => translate(user?.locale, key, values),
+    [user?.locale],
+  );
   const [open, setOpen] = useState(false);
   const [presets, setPresets] = useState<DevicePreset[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -43,8 +48,8 @@ export function DevicePresetPicker({ onApply }: DevicePresetPickerProps) {
     authFetch("/api/devices")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((data: DevicePreset[]) => setPresets(data))
-      .catch(() => setLoadError("Could not load device presets."));
-  }, [open, presets, authFetch]);
+      .catch(() => setLoadError(t("rules.device_preset.load_failed")));
+  }, [open, presets, authFetch, t]);
 
   const selected = presets?.find((p) => p.id === selectedId) || null;
 
@@ -71,7 +76,7 @@ export function DevicePresetPicker({ onApply }: DevicePresetPickerProps) {
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between px-3 py-2 text-xs text-muted-foreground hover:bg-muted/50 rounded-md"
       >
-        <span>📟 Start from a physical device preset</span>
+        <span>📟 {t("rules.device_preset.start")}</span>
         <span>{open ? "▾" : "▸"}</span>
       </button>
 
@@ -79,7 +84,7 @@ export function DevicePresetPicker({ onApply }: DevicePresetPickerProps) {
         <div className="px-3 pb-3 pt-1 space-y-3">
           {loadError && <div className="text-[11px] text-red-400">{loadError}</div>}
           {!presets && !loadError && (
-            <div className="text-[11px] text-muted-foreground">Loading devices.</div>
+            <div className="text-[11px] text-muted-foreground">{t("rules.device_preset.loading")}</div>
           )}
 
           {presets && (
@@ -106,7 +111,7 @@ export function DevicePresetPicker({ onApply }: DevicePresetPickerProps) {
             <div className="space-y-2 rounded-md border border-border bg-background/50 p-2.5">
               <div className="text-[11px] text-muted-foreground">{selected.summary}</div>
               <div className="text-[10px] text-muted-foreground">
-                <span className="font-medium text-zinc-300">Wiring.</span> {selected.wiring}
+                <span className="font-medium text-zinc-300">{t("rules.device_preset.wiring")}</span> {selected.wiring}
               </div>
               <ol className="text-[10px] text-muted-foreground list-decimal pl-4 space-y-0.5">
                 {selected.steps.map((s, i) => (
@@ -119,12 +124,12 @@ export function DevicePresetPicker({ onApply }: DevicePresetPickerProps) {
                 rel="noreferrer"
                 className="inline-block text-[10px] text-accent hover:underline"
               >
-                View receiver script ({selected.receiver.split("/").pop()})
+                {t("rules.device_preset.view_receiver", { file: selected.receiver.split("/").pop() || "" })}
               </a>
               <div className="flex items-end gap-2 pt-1">
                 <div className="flex-1">
                   <label className="text-[10px] text-muted-foreground block mb-1">
-                    Device IP on your network
+                    {t("rules.device_preset.ip_label")}
                   </label>
                   <input
                     type="text"
@@ -139,13 +144,12 @@ export function DevicePresetPicker({ onApply }: DevicePresetPickerProps) {
                   onClick={apply}
                   className="px-3 py-1.5 text-xs rounded-md bg-foreground text-background font-medium hover:opacity-90"
                 >
-                  Use this device
+                  {t("rules.device_preset.use")}
                 </button>
               </div>
               {selected.supports_hmac && (
                 <p className="text-[10px] text-muted-foreground">
-                  Set a signing secret below and the same value on the device so it only
-                  reacts to signed Nurby alerts.
+                  {t("rules.device_preset.hmac_help")}
                 </p>
               )}
             </div>

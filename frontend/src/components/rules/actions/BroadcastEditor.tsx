@@ -6,6 +6,8 @@ import {
   type BroadcastDraft,
 } from "../types";
 import { VarInserter, type VarSpec } from "./VarInserter";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 export interface BroadcastEditorProps {
   draft: BroadcastDraft;
@@ -15,6 +17,8 @@ export interface BroadcastEditorProps {
 
 export function BroadcastEditor({ draft, onChange, availableVars }: BroadcastEditorProps) {
   const d = draft;
+  const { user } = useAuth();
+  const t = (key: string) => translate(user?.locale, key);
   const set = (patch: Partial<BroadcastDraft>) => onChange({ ...d, ...patch });
   return (
     <div>
@@ -33,7 +37,7 @@ export function BroadcastEditor({ draft, onChange, availableVars }: BroadcastEdi
           }}
           className="accent-green-500"
         />
-        <span className="text-xs">Custom broadcast payload</span>
+        <span className="text-xs">{t("rules.broadcast.custom_payload")}</span>
       </label>
       {d.useCustomPayload && (
         <div className="space-y-2">
@@ -45,7 +49,7 @@ export function BroadcastEditor({ draft, onChange, availableVars }: BroadcastEdi
               try {
                 if (v.trim()) JSON.parse(v);
               } catch {
-                err = "Invalid JSON";
+                err = t("rules.broadcast.invalid_json");
               }
               set({ payloadTemplate: v, payloadError: err });
             }}
