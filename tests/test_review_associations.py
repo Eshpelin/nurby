@@ -4,7 +4,7 @@ from uuid import uuid4
 from services.api.routes.review import _scoped_evidence
 from services.api.routes.review import _association_visible
 from services.api.routes.review import _scoped_camera_histogram
-from services.api.routes.review import _evidence_availability, _restrict_sensitive_evidence, _supporting_evidence_count
+from services.api.routes.review import _camera_privacy_policy, _evidence_availability, _restrict_sensitive_evidence, _supporting_evidence_count
 from services.api.routes.review import _scoped_observation_source_query
 from sqlalchemy.dialects import postgresql
 
@@ -35,6 +35,46 @@ def test_sensitive_review_evidence_is_redacted_without_hiding_the_episode():
 from services.api.routes.review import _reconcile_observation_sources
 from services.api.routes.review import _visible_cluster_camera_id
 from shared.camera_access import ALL
+
+
+def test_camera_privacy_policy_exposes_only_review_relevant_controls():
+    camera = SimpleNamespace(
+        id=uuid4(),
+        name="Front door",
+        retention_mode="time",
+        retention_days=30,
+        retention_gb=50.0,
+        audio_capture_enabled=True,
+        audio_store_raw=False,
+        audio_retention_days=7,
+        transcript_store="redacted",
+        transcript_retention_days=30,
+        relationship_inference_enabled=True,
+        vehicle_relationship_inference_enabled=False,
+        cooccurrence_inference_enabled=True,
+        name_mention_inference_enabled=False,
+    )
+
+    policy = _camera_privacy_policy(camera)
+
+    assert policy == {
+        "camera_id": str(camera.id),
+        "camera_name": "Front door",
+        "recording": {"retention_mode": "time", "retention_days": 30, "retention_gb": 50.0},
+        "audio": {
+            "capture_enabled": True,
+            "raw_audio_stored": False,
+            "raw_audio_retention_days": 7,
+            "transcript_store": "redacted",
+            "transcript_retention_days": 30,
+        },
+        "identity_inference": {
+            "relationship_enabled": True,
+            "vehicle_enabled": False,
+            "cooccurrence_enabled": True,
+            "name_mention_enabled": False,
+        },
+    }
 
 
 def _evidence(*, cameras, observations=None):

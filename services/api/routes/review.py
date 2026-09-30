@@ -223,6 +223,37 @@ def _evidence_availability(evidence: list[dict]) -> str:
     return "available"
 
 
+def _camera_privacy_policy(camera: Camera) -> dict:
+    """Project the privacy/retention controls relevant to review evidence.
+
+    Reviewers need to know why an audio, transcript, plate, or frame source is
+    present, redacted, or gone.  Return policy metadata, never raw media or
+    credentials, and keep it scoped to cameras already visible to the caller.
+    """
+    return {
+        "camera_id": str(camera.id),
+        "camera_name": camera.name,
+        "recording": {
+            "retention_mode": camera.retention_mode,
+            "retention_days": camera.retention_days,
+            "retention_gb": camera.retention_gb,
+        },
+        "audio": {
+            "capture_enabled": camera.audio_capture_enabled,
+            "raw_audio_stored": camera.audio_store_raw,
+            "raw_audio_retention_days": camera.audio_retention_days,
+            "transcript_store": camera.transcript_store,
+            "transcript_retention_days": camera.transcript_retention_days,
+        },
+        "identity_inference": {
+            "relationship_enabled": camera.relationship_inference_enabled,
+            "vehicle_enabled": camera.vehicle_relationship_inference_enabled,
+            "cooccurrence_enabled": camera.cooccurrence_inference_enabled,
+            "name_mention_enabled": camera.name_mention_inference_enabled,
+        },
+    }
+
+
 def _restrict_sensitive_evidence(scoped: dict) -> dict:
     """Remove transcript/audio/plate payloads for non-admin reviewers.
 
@@ -1284,6 +1315,28 @@ async def get_relationship_suggestion(
 
     evidence_availability = _evidence_availability(evidence)
 
+    # Explain the privacy and retention boundary alongside the evidence. The
+    # query is deliberately limited to cameras that survived the ACL and the
+    # optional camera filter, so policy metadata cannot reveal a hidden
+    # camera's existence or settings.
+    visible_camera_ids = association_cameras if allowed_ids is None else association_cameras.intersection(allowed_ids)
+    camera_policies: list[dict] = []
+    if visible_camera_ids:
+        policy_camera_ids = []
+        for camera_id in visible_camera_ids:
+            try:
+                policy_camera_ids.append(uuid.UUID(camera_id))
+            except (TypeError, ValueError):
+                continue
+        camera_rows = (
+            await db.execute(
+                select(Camera).where(
+                    Camera.id.in_(policy_camera_ids)
+                )
+            )
+        ).scalars().all()
+        camera_policies = [_camera_privacy_policy(camera) for camera in camera_rows]
+
     review_events = (
         await db.execute(
             select(AssociationReviewEvent)
@@ -1321,6 +1374,11 @@ async def get_relationship_suggestion(
         "archived_at": association.archived_at,
         "evidence_availability": evidence_availability,
         "sensitive_evidence_restricted": not sensitive_allowed,
+        "privacy": {
+            "camera_policies": camera_policies,
+            "sensitive_evidence_restricted": not sensitive_allowed,
+            "retention_is_source_of_truth": True,
+        },
         "review_events": [
             {
                 "id": str(event.id),
