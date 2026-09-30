@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 
 function StatusDot({ status }: { status: string }) {
   const color =
@@ -31,13 +33,15 @@ function Section({
    */
   advanced?: boolean;
 }) {
+  const { user } = useAuth();
+  const advancedLabel = translate(user?.locale, "camera_settings.advanced");
   if (advanced) {
     return (
       <details className="group rounded-lg border border-border bg-card">
         <summary className="cursor-pointer list-none px-5 py-4 flex items-center justify-between gap-3">
           <span>
             <span className="text-sm font-semibold">{title}</span>
-            <span className="ml-2 text-[10px] uppercase tracking-wider text-muted-foreground">Advanced</span>
+            <span className="ml-2 text-[10px] uppercase tracking-wider text-muted-foreground">{advancedLabel}</span>
             {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
           </span>
           <span className="text-muted-foreground transition-transform group-open:rotate-180" aria-hidden>⌄</span>
