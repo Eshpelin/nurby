@@ -56,6 +56,31 @@ The later rule/action and account-security slices are covered by commits
 placeholder parity, and orphan contributor keys without running the entire
 frontend suite.
 
+## Mobile catalog (2026-10-19)
+
+The mobile app shipped its own catalog (`mobile/lib/core/i18n.dart`, commit
+`dcac446`) with the same contract as the web: flat typed keys, `{named}`
+interpolation, English fallback chain, and a drift test
+(`mobile/test/i18n_test.dart`). The language choice persists on device and
+syncs to the account via `PATCH /api/auth/me/locale`. Camera brand data moved
+to a data-level `LocalizedText` strategy with full Spanish coverage and a
+coverage contract (`validateCameraBrands`, commit `da87978`).
+
+Catalog-driven mobile surfaces: bottom navigation and offline banner,
+notification-permission prompt, push-notification copy, server address,
+login, setup, QR pairing, settings hub, settings screen chrome (title and
+confirm dialogs), the Settings language picker, home (headers, camera strip,
+needs-attention list, empty state), and the activity filter chips.
+
+Still literal in the mobile app (sequenced next, largest surfaces first):
+embedded activity lists (timeline, events, incidents, journeys,
+conversations, recordings, recaps), camera list/detail, people and follow,
+Ask, search, rules editor, review, shares, notifications, guardian, voice,
+vehicles, reports/admin, and the settings detail sections (system, providers,
+storage, notification channels, household, webhooks, access, API keys,
+server). Technical values — server URLs, RTSP templates, menu paths, model
+names, ports — remain intentionally literal per the exceptions below.
+
 ## Intentionally not catalog-driven
 
 - Camera names, person names, vehicle plates, provider names, transcripts,
