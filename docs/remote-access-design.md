@@ -19,8 +19,8 @@ resource.
   WebRTC media still needs an ICE/TURN topology for low-latency remote playback.
 - `public_base_url` is a string setting used to print URLs (share links,
   Telegram webhook). Nothing verifies it is actually reachable.
-- The doctor checks db/redis/mediamtx/smtp/disk/cameras/providers, but has no
-  concept of network reachability.
+- The doctor checks db/redis/mediamtx/smtp/disk/cameras/providers, plus the
+  remote-access reachability check (2026-09-30). No STUN/DNS/probe yet.
 - Mobile stores a single `server_base_url`; new pairing QRs carry both the
   browser/LAN endpoint and configured public endpoint, and the app tries them
   in order. Older one-URL pairing payloads remain supported. Manual server
@@ -29,6 +29,41 @@ resource.
 - Share links (`/share/<token>`) are already well-scoped for anonymous access:
   hashed tokens, forced expiry, view caps, revocation, single resource, no
   live access. They are ready for public exposure; the network is not.
+
+## Shipped since (2026-10-19, #183)
+
+- **Bundled Caddy ingress**: `docker-compose.yml` gains an opt-in `remote`
+  profile with a `caddy` service (`deploy/caddy/Caddyfile`). Set
+  `NURBY_PUBLIC_SITE=<domain>` and it terminates automatic Let's Encrypt TLS
+  for `/api/*`, `/whep/*`, `/hls/*` and the web app on one port; HSTS on;
+  HTTP→HTTPS redirect. `NURBY_INGRESS_BIND` defaults to loopback, and with
+  no site configured Caddy only listens on an unpublished internal port, so
+  a half-configured ingress exposes nothing (fail closed). LAN keeps its
+  existing `:4748` path untouched.
+- **Connectivity brain** (`services/api/remote_connectivity.py`): STUN
+  public-IP discovery (server list overridable via `NURBY_STUN_SERVERS`),
+  DNS resolution cross-check, verified-TLS handshake check, HTTP health
+  reachability, and source-IP classification using IANA special-purpose
+  registry semantics.
+- **Wizard backend** (`services/api/routes/remote_access.py`):
+  `GET/PUT/DELETE /api/system/remote-access(/domain)` for the state machine,
+  and the phone-assisted probe (`POST /api/system/remote-access/probe` → QR
+  URL → public echo endpoint). The probe verifies only when the request
+  provably arrives from a public (non-LAN, non-CGNAT) source address over
+  HTTPS; wifi hits read as "waiting". Rate-limited, nothing logged beyond
+  the verification fact. The wizard stores `public_base_url` as
+  `https://` only — remote mode can never advertise plain HTTP.
+- **Wizard UI**: Settings → Remote access (`RemoteAccessCard`) drives the
+  state machine, renders the check list (public IP, DNS match with
+  A-record instructions, TLS, health, ingress detection), and shows the
+  probe QR. Localized (en/es) like the rest of Settings.
+
+Still outstanding for Phase 1: UPnP mapping attempt + per-router forwarding
+help, DDNS updater, the exposure-hardening set (auth rate-limit buckets,
+login lockout), and TURN/ICE so remote WHEP media works — until then remote
+live view rides the HLS fallback through the ingress. Everything above needs
+a real domain + port-forward + cellular-probe validation pass (tracked in
+#326).
 
 ## Design principles
 

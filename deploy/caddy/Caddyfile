@@ -1,0 +1,49 @@
+# Nurby single ingress (#183): one listener carrying the API, WHEP
+# signaling, HLS, and the web app. The site address comes from the
+# NURBY_PUBLIC_SITE environment variable:
+#
+#   camera.example.com  -> real domain: Caddy obtains and renews the
+#                          Let's Encrypt certificate automatically and
+#                          redirects HTTP->HTTPS (this is remote mode)
+#   :8443 (the default) -> unpublished internal listener; nothing is
+#                          exposed (fail closed; the compose "remote"
+#                          profile is what starts Caddy at all)
+#
+# Routing: web/mobile clients talk to the camera-scoped API proxies
+# (/api/cameras/{id}/whep, /hls) so /api/* covers the authenticated
+# path; /whep/* and /hls/* remain for direct fan-out through the
+# ingress. Websockets (the /api/ws feed) upgrade through reverse_proxy
+# automatically.
+
+{$NURBY_PUBLIC_SITE:::8443} {
+	encode zstd gzip
+
+	route {
+		@api path /api/*
+		handle @api {
+			reverse_proxy api:8000
+		}
+
+		@whep path /whep/*
+		handle @whep {
+			uri strip_prefix /whep
+			reverse_proxy mediamtx:8889
+		}
+
+		@hls path /hls/*
+		handle @hls {
+			uri strip_prefix /hls
+			reverse_proxy mediamtx:8888
+		}
+
+		handle {
+			reverse_proxy frontend:3000
+		}
+	}
+
+	header {
+		# Remote mode is HTTPS-only; harmless (ignored) over plain HTTP.
+		Strict-Transport-Security "max-age=15552000"
+		-Server
+	}
+}

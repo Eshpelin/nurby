@@ -42,6 +42,7 @@ from services.api.routes import (
     providers,
     push,
     recordings,
+    remote_access,
     reports,
     review,
     rules,
@@ -320,6 +321,7 @@ app.include_router(invites.router, prefix="/api/invites", tags=["invites"])
 app.include_router(guardian.router, prefix="/api/guardian", tags=["guardian"])
 app.include_router(system.router, prefix="/api", tags=["system"])
 app.include_router(doctor.router, prefix="/api", tags=["doctor"])
+app.include_router(remote_access.router, prefix="/api", tags=["remote-access"])
 app.include_router(coverage.router, prefix="/api", tags=["coverage"])
 app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
 app.include_router(voice.router, prefix="/api/voice", tags=["voice"])

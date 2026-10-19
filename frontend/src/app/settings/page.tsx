@@ -10,6 +10,7 @@ import MqttSection from "@/components/MqttSection";
 import { VoiceSettingsCard } from "@/components/voice/VoiceSettingsCard";
 import { SoftwareUpdateCard } from "@/components/SoftwareUpdateCard";
 import { PairMobileCard } from "@/components/PairMobileCard";
+import { RemoteAccessCard } from "@/components/RemoteAccessCard";
 import { ShareLinksCard } from "@/components/ShareLinksCard";
 import { SystemDoctorPanel } from "@/components/SystemDoctorPanel";
 import { BackupCard } from "@/components/BackupCard";
@@ -709,7 +710,8 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Mobile app pairing card */}
+        {/* Remote access wizard (#183) + mobile app pairing card */}
+        <RemoteAccessCard />
         <PairMobileCard />
 
         {/* Anonymous share links audit/revoke */}

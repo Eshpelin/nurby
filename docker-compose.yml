@@ -322,6 +322,32 @@ services:
       redis:
         condition: service_healthy
 
+  # Single HTTPS ingress for remote access (#183). Opt-in via the
+  # "remote" profile: LAN installs never start it. Set
+  # NURBY_PUBLIC_SITE=your.domain in .env and point that domain's A
+  # record here (forwarding 80+443, or set NURBY_INGRESS_BIND); Caddy
+  # obtains and renews the certificate automatically and routes /api,
+  # /whep, /hls and the web app through the one port. Without a site
+  # configured it listens on an unpublished internal port only, so a
+  # half-configured ingress exposes nothing (fail closed).
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: ["remote"]
+    ports:
+      - "${NURBY_INGRESS_BIND:-127.0.0.1}:80:80"
+      - "${NURBY_INGRESS_BIND:-127.0.0.1}:443:443"
+      - "${NURBY_INGRESS_BIND:-127.0.0.1}:443:443/udp"
+    environment:
+      NURBY_PUBLIC_SITE: ${NURBY_PUBLIC_SITE:-:8443}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - frontend
+
   frontend:
     image: ghcr.io/${NURBY_REGISTRY_OWNER:-eshpelin}/nurby-frontend:${NURBY_VERSION:-latest}
     build:
@@ -352,6 +378,8 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  caddy_data:
+  caddy_config:
   recordings:
   thumbnails:
   audio:
