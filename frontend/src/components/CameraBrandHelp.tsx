@@ -6,7 +6,14 @@
 // template into the stream-URL field so the user only swaps <ip>.
 
 import { useEffect, useState } from "react";
-import { CAMERA_BRANDS, findBrand, type RtspSupport } from "@/lib/camera-brands";
+import {
+  CAMERA_BRANDS,
+  brandNotes,
+  brandSteps,
+  findBrand,
+  templateLabel,
+  type RtspSupport,
+} from "@/lib/camera-brands";
 import { useAuth } from "@/lib/auth";
 import { translate } from "@/lib/i18n";
 
@@ -137,7 +144,7 @@ export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, fo
 
               {/* Steps */}
               <ol className="space-y-1.5">
-                {brand.steps.map((s, i) => (
+                {brandSteps(brand, user?.locale).map((s, i) => (
                   <li key={i} className="flex gap-2 text-[11px] text-muted-foreground leading-snug">
                     <span className="shrink-0 w-4 h-4 rounded-full bg-accent/15 text-accent text-[9px] flex items-center justify-center font-medium">
                       {i + 1}
@@ -155,11 +162,11 @@ export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, fo
                   </div>
                   {brand.templates.map((template) => (
                     <div
-                      key={template.label}
+                      key={template.url}
                       className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="text-[10px] text-muted-foreground">{template.label}</div>
+                        <div className="text-[10px] text-muted-foreground">{templateLabel(template, user?.locale)}</div>
                         <div className="text-[11px] font-mono truncate">{template.url}</div>
                       </div>
                       <button
@@ -180,7 +187,7 @@ export default function CameraBrandHelp({ onUseTemplate, defaultOpen = false, fo
               )}
 
               {/* Notes */}
-              {brand.notes?.map((n, i) => (
+              {brandNotes(brand, user?.locale).map((n, i) => (
                 <div
                   key={i}
                   className="text-[10px] text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded px-2 py-1.5 leading-snug"
