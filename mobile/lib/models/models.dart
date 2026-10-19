@@ -10,6 +10,7 @@ class User {
     required this.email,
     required this.displayName,
     required this.role,
+    this.locale,
   });
 
   factory User.fromJson(Map<String, dynamic> j) => User(
@@ -17,12 +18,16 @@ class User {
         email: j['email'] as String? ?? '',
         displayName: j['display_name'] as String? ?? '',
         role: j['role'] as String? ?? 'viewer',
+        locale: j['locale'] as String?,
       );
 
   final String id;
   final String email;
   final String displayName;
   final String role;
+
+  /// The account's presentation language (see /api/auth/me/locale).
+  final String? locale;
 
   bool get isAdmin => role == 'admin';
 }

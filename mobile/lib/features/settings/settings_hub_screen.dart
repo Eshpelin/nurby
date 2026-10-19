@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/i18n.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 
@@ -20,29 +21,41 @@ class SettingsHubScreen extends ConsumerWidget {
     final isAdmin = user?.isAdmin ?? false;
 
     final sections = <(String, List<_Item>)>[
-      ('Alerts', [
-        _Item('Review Center', 'Incidents, alerts, and identity suggestions', Icons.fact_check_outlined, '/settings/review'),
-        _Item('Alert rules', 'What should I be told about', Icons.rule_outlined, '/settings/rules'),
-        _Item('Notifications', 'What has been sent to this phone', Icons.notifications_none, '/settings/notifications'),
-        _Item('Scheduled questions', 'Questions answered on a clock', Icons.schedule_send_outlined, '/settings/reports'),
-      ]),
-      ('Sharing', [
-        _Item('Guardians', 'Who can watch someone in this household', Icons.shield_outlined, '/settings/guardian/admin'),
-        _Item('Share links', 'Links you have sent out', Icons.link, '/settings/shares'),
-      ]),
-      ('Household and AI', [
-        _Item('Household, AI models, privacy', 'Blur, detection defaults, recaps, models', Icons.home_outlined, '/settings/general'),
-      ]),
+      (
+        t(context, 'settings_hub.section_alerts'),
+        [
+          _Item(t(context, 'settings_hub.review_center'), t(context, 'settings_hub.review_center_hint'), Icons.fact_check_outlined, '/settings/review'),
+          _Item(t(context, 'settings_hub.alert_rules'), t(context, 'settings_hub.alert_rules_hint'), Icons.rule_outlined, '/settings/rules'),
+          _Item(t(context, 'settings_hub.notifications'), t(context, 'settings_hub.notifications_hint'), Icons.notifications_none, '/settings/notifications'),
+          _Item(t(context, 'settings_hub.scheduled_questions'), t(context, 'settings_hub.scheduled_questions_hint'), Icons.schedule_send_outlined, '/settings/reports'),
+        ],
+      ),
+      (
+        t(context, 'settings_hub.section_sharing'),
+        [
+          _Item(t(context, 'settings_hub.guardians'), t(context, 'settings_hub.guardians_hint'), Icons.shield_outlined, '/settings/guardian/admin'),
+          _Item(t(context, 'settings_hub.share_links'), t(context, 'settings_hub.share_links_hint'), Icons.link, '/settings/shares'),
+        ],
+      ),
+      (
+        t(context, 'settings_hub.section_household_ai'),
+        [
+          _Item(t(context, 'settings_hub.household_ai'), t(context, 'settings_hub.household_ai_hint'), Icons.home_outlined, '/settings/general'),
+        ],
+      ),
       if (isAdmin)
-        ('Admin', [
-          _Item('Who sees which cameras', 'Per-person camera access', Icons.admin_panel_settings_outlined, '/settings/access'),
-          _Item('AI backlog', 'Where the pipeline is', Icons.speed_outlined, '/settings/pipeline'),
-          _Item("Everyone's questions", 'Every Ask run in the household', Icons.question_answer_outlined, '/settings/ask-admin'),
-        ]),
+        (
+          t(context, 'settings_hub.section_admin'),
+          [
+            _Item(t(context, 'settings_hub.who_sees_cameras'), t(context, 'settings_hub.who_sees_cameras_hint'), Icons.admin_panel_settings_outlined, '/settings/access'),
+            _Item(t(context, 'settings_hub.ai_backlog'), t(context, 'settings_hub.ai_backlog_hint'), Icons.speed_outlined, '/settings/pipeline'),
+            _Item(t(context, 'settings_hub.everyones_questions'), t(context, 'settings_hub.everyones_questions_hint'), Icons.question_answer_outlined, '/settings/ask-admin'),
+          ],
+        ),
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(t(context, 'settings.title'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
@@ -86,7 +99,7 @@ class SettingsHubScreen extends ConsumerWidget {
           Card(
             child: ListTile(
               leading: const Icon(Icons.logout, color: NurbyColors.mutedForeground),
-              title: const Text('Sign out'),
+              title: Text(t(context, 'settings_hub.sign_out')),
               onTap: () => ref.read(authProvider.notifier).logout(),
             ),
           ),

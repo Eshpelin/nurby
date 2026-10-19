@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api_client.dart';
+import '../../core/i18n.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
@@ -32,10 +33,10 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home'),
+        title: Text(t(context, 'nav.home')),
         actions: [
           IconButton(
-            tooltip: 'Settings',
+            tooltip: t(context, 'nav.settings'),
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => context.push('/settings'),
           ),
@@ -65,8 +66,9 @@ class HomeScreen extends ConsumerWidget {
             if (cameras.isNotEmpty) ...[
               _header(
                 context,
-                '$online of ${cameras.length} cameras online',
-                'See all',
+                t(context, 'home.cameras_online',
+                    {'online': online, 'total': cameras.length}),
+                t(context, 'home.see_all'),
                 () => context.go('/cameras'),
               ),
               SizedBox(
@@ -91,8 +93,8 @@ class HomeScreen extends ConsumerWidget {
             // the moment someone is looking at what they were told.
             _header(
               context,
-              'Needs attention',
-              'All alerts',
+              t(context, 'home.needs_attention'),
+              t(context, 'home.all_alerts'),
               () => context.go('/activity?kind=alerts'),
             ),
             unreviewed.when(
@@ -103,9 +105,10 @@ class HomeScreen extends ConsumerWidget {
                 child: Text(apiErrorMessage(e), style: _sub),
               ),
               data: (events) => events.isEmpty
-                  ? const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
-                      child: Text('Nothing waiting for you.', style: _sub),
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                      child:
+                          Text(t(context, 'home.nothing_waiting'), style: _sub),
                     )
                   : Column(
                       children: [
@@ -130,7 +133,7 @@ class HomeScreen extends ConsumerWidget {
               child: TextButton.icon(
                 onPressed: () => context.push('/settings/rules'),
                 icon: const Icon(Icons.tune, size: 16),
-                label: const Text('What should I be told about?'),
+                label: Text(t(context, 'home.what_should_i_be_told')),
               ),
             ),
 

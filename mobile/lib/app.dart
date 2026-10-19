@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/i18n.dart';
 import 'core/providers.dart';
 import 'core/theme.dart';
 import 'features/admin/admin_screens.dart';
@@ -61,9 +63,33 @@ class NurbyApp extends ConsumerWidget {
     ref.read(pushManagerProvider).onReviewOpen = () {
       router.push('/settings/review');
     };
+    // A fresh login may carry an account-level locale the device has not
+    // overridden; adopt it before the first frame of the session.
+    ref.listen(authProvider, (prev, next) {
+      if (prev?.phase != AuthPhase.loggedIn &&
+          next.phase == AuthPhase.loggedIn) {
+        ref.read(appLocaleProvider.notifier).adoptAccountLocale(
+              next.user?.locale,
+            );
+      }
+    });
+    final locale = effectiveLocale(ref.watch(appLocaleProvider));
     return MaterialApp.router(
       title: 'Nurby',
       debugShowCheckedModeBanner: false,
+      locale: Locale(locale.code),
+      supportedLocales: [
+        for (final appLocale in AppLocale.values) Locale(appLocale.code),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      builder: (context, child) => NurbyI18n(
+        locale: locale,
+        child: child ?? const SizedBox.shrink(),
+      ),
       theme: buildNurbyTheme(),
       routerConfig: router,
     );

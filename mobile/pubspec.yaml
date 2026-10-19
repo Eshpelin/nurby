@@ -30,6 +30,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -41,7 +43,10 @@ dependencies:
   web_socket_channel: ^3.0.3
   video_player: ^2.10.1
   cached_network_image: ^3.4.1
-  intl: ^0.20.2
+  # Pinned to 0.19: flutter_localizations from the Flutter SDK pins intl
+  # 0.19.0, and framework chrome (text-selection menus, tooltips) should
+  # follow the app locale too.
+  intl: ^0.19.0
   shared_preferences: ^2.5.3
   flutter_webrtc: ^1.5.2
   flutter_local_notifications: ^19.5.0

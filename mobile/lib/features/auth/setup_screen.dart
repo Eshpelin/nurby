@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
+import '../../core/i18n.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 
@@ -61,37 +62,38 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                   const Icon(Icons.videocam_outlined,
                       size: 56, color: NurbyColors.accent),
                   const SizedBox(height: 16),
-                  Text('Create admin account',
+                  Text(t(context, 'setup.title'),
                       textAlign: TextAlign.center,
                       style: Theme.of(context)
                           .textTheme
                           .headlineSmall
                           ?.copyWith(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  const Text(
-                    'This Nurby server has no users yet. Create the first admin.',
+                  Text(
+                    t(context, 'setup.subtitle'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: NurbyColors.mutedForeground),
+                    style: const TextStyle(color: NurbyColors.mutedForeground),
                   ),
                   const SizedBox(height: 28),
                   TextField(
                     controller: _name,
-                    decoration:
-                        const InputDecoration(labelText: 'Display name'),
+                    decoration: InputDecoration(
+                        labelText: t(context, 'setup.display_name')),
                   ),
                   const SizedBox(height: 14),
                   TextField(
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
                     autocorrect: false,
-                    decoration: const InputDecoration(labelText: 'Email'),
+                    decoration:
+                        InputDecoration(labelText: t(context, 'login.email')),
                   ),
                   const SizedBox(height: 14),
                   TextField(
                     controller: _password,
                     obscureText: _obscure,
                     decoration: InputDecoration(
-                      labelText: 'Password',
+                      labelText: t(context, 'login.password'),
                       suffixIcon: IconButton(
                         icon: Icon(
                             _obscure ? Icons.visibility : Icons.visibility_off,
@@ -114,14 +116,15 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Create account'),
+                        : Text(t(context, 'setup.create_account')),
                   ),
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: () =>
                         ref.read(authProvider.notifier).changeServer(),
-                    child: const Text('Change server',
-                        style: TextStyle(color: NurbyColors.mutedForeground)),
+                    child: Text(t(context, 'login.change_server'),
+                        style:
+                            const TextStyle(color: NurbyColors.mutedForeground)),
                   ),
                 ],
               ),

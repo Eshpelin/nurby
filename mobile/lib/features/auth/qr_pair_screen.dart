@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../core/i18n.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 
@@ -51,7 +52,7 @@ class _QrPairScreenState extends ConsumerState<QrPairScreen> {
       if (urls.isEmpty) throw const FormatException('missing server URL');
       code = payload['code'] as String;
     } catch (_) {
-      setState(() => _error = 'Not a Nurby pairing code');
+      setState(() => _error = t(context, 'qr.invalid'));
       return;
     }
 
@@ -68,9 +69,7 @@ class _QrPairScreenState extends ConsumerState<QrPairScreen> {
       if (mounted) {
         setState(() {
           _claiming = false;
-          _error =
-              'Pairing failed. The code may have expired; '
-              'generate a new one and try again.';
+          _error = t(context, 'qr.failed');
         });
       }
     }
@@ -79,7 +78,7 @@ class _QrPairScreenState extends ConsumerState<QrPairScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Scan QR code')),
+      appBar: AppBar(title: Text(t(context, 'qr.title'))),
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -104,11 +103,10 @@ class _QrPairScreenState extends ConsumerState<QrPairScreen> {
                 if (_claiming)
                   const CircularProgressIndicator()
                 else
-                  const Text(
-                    'In the web app, open Settings and tap '
-                    '"Mobile app" to show a pairing code.',
+                  Text(
+                    t(context, 'qr.hint'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.white),
                   ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),

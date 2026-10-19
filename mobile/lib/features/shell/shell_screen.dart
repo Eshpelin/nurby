@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/i18n.dart';
 import '../../core/providers.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
@@ -32,15 +33,15 @@ class OfflineBanner extends StatelessWidget {
         left: 12,
         right: 12,
       ),
-      child: const Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.cloud_off, size: 14, color: Colors.black),
-          SizedBox(width: 6),
+          const Icon(Icons.cloud_off, size: 14, color: Colors.black),
+          const SizedBox(width: 6),
           Text(
-            'Offline — showing cached data',
-            style: TextStyle(
+            t(context, 'common.offline_banner'),
+            style: const TextStyle(
               color: Colors.black,
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
@@ -72,18 +73,16 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     final enable = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Enable notifications?'),
-        content: const Text(
-            'Nurby can alert you when rules fire, even while the app is in '
-            'the background.'),
+        title: Text(t(context, 'shell.enable_notifications_title')),
+        content: Text(t(context, 'shell.enable_notifications_body')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Not now'),
+            child: Text(t(context, 'shell.not_now')),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Enable'),
+            child: Text(t(context, 'shell.enable')),
           ),
         ],
       ),
@@ -137,27 +136,27 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
               label: Text('$unreviewed'),
               child: const Icon(Icons.home),
             ),
-            label: 'Home',
+            label: t(context, 'nav.home'),
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.videocam_outlined),
-            selectedIcon: Icon(Icons.videocam),
-            label: 'Cameras',
+          NavigationDestination(
+            icon: const Icon(Icons.videocam_outlined),
+            selectedIcon: const Icon(Icons.videocam),
+            label: t(context, 'nav.cameras'),
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.view_timeline_outlined),
-            selectedIcon: Icon(Icons.view_timeline),
-            label: 'Activity',
+          NavigationDestination(
+            icon: const Icon(Icons.view_timeline_outlined),
+            selectedIcon: const Icon(Icons.view_timeline),
+            label: t(context, 'nav.activity'),
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome),
-            label: 'Ask',
+          NavigationDestination(
+            icon: const Icon(Icons.auto_awesome_outlined),
+            selectedIcon: const Icon(Icons.auto_awesome),
+            label: t(context, 'nav.ask'),
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people),
-            label: 'People',
+          NavigationDestination(
+            icon: const Icon(Icons.people_outline),
+            selectedIcon: const Icon(Icons.people),
+            label: t(context, 'nav.people'),
           ),
         ],
       ),

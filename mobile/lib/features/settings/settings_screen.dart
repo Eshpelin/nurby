@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api_client.dart';
+import '../../core/i18n.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
@@ -95,7 +96,7 @@ Future<void> _mutate(
 }
 
 Future<bool> _confirm(BuildContext context, String title, String message,
-    {String action = 'Delete'}) async {
+    {String? action}) async {
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -105,11 +106,11 @@ Future<bool> _confirm(BuildContext context, String title, String message,
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel')),
+            child: Text(t(ctx, 'common.cancel'))),
         TextButton(
           onPressed: () => Navigator.pop(ctx, true),
-          child:
-              Text(action, style: const TextStyle(color: NurbyColors.danger)),
+          child: Text(action ?? t(ctx, 'common.delete'),
+              style: const TextStyle(color: NurbyColors.danger)),
         ),
       ],
     ),
@@ -299,10 +300,11 @@ class SettingsScreen extends ConsumerWidget {
     final isAdmin = user?.isAdmin ?? false;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(t(context, 'settings.title'))),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          const _LanguageSection(),
           const _SystemSection(),
           const _ProvidersSection(),
           const _StorageSection(),
@@ -321,6 +323,86 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+// ---------------------------------------------------------------- LANGUAGE
+
+/// Sentinel returned by the language dialog when the user picks
+/// "System default" (as opposed to dismissing the dialog, which is null).
+const _systemLocaleChoice = 'system';
+
+/// Personal presentation language (#265). The choice persists on the
+/// device and is mirrored to the account so the web UI follows; it never
+/// affects permissions, scope, or rule semantics.
+class _LanguageSection extends ConsumerWidget {
+  const _LanguageSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final setting = ref.watch(appLocaleProvider);
+    return Card(
+      child: ListTile(
+        leading:
+            const Icon(Icons.language, color: NurbyColors.mutedForeground),
+        title: Text(t(context, 'settings.language')),
+        subtitle: Text(setting?.label ?? t(context, 'settings.language_system'),
+            style:
+                const TextStyle(fontSize: 12, color: NurbyColors.mutedForeground)),
+        onTap: () => _pickLocale(context, ref, setting),
+      ),
+    );
+  }
+
+  Future<void> _pickLocale(
+      BuildContext context, WidgetRef ref, AppLocale? setting) async {
+    final picked = await showDialog<Object>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(t(dialogContext, 'settings.language')),
+        children: [
+          for (final locale in AppLocale.values)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, locale),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 28,
+                    child: setting == locale
+                        ? const Icon(Icons.check, size: 18)
+                        : null,
+                  ),
+                  Text(locale.label),
+                ],
+              ),
+            ),
+          SimpleDialogOption(
+            onPressed: () =>
+                Navigator.pop(dialogContext, _systemLocaleChoice),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 28,
+                  child: setting == null
+                      ? const Icon(Icons.check, size: 18)
+                      : null,
+                ),
+                Text(t(dialogContext, 'settings.language_system')),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    if (picked == null || !context.mounted) return; // dismissed
+    await ref
+        .read(appLocaleProvider.notifier)
+        .setLocale(picked is AppLocale ? picked : null);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t(context, 'settings.language_saved'))),
+      );
+    }
   }
 }
 

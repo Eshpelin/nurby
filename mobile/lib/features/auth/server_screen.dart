@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/i18n.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 
@@ -34,7 +35,7 @@ class _ServerScreenState extends ConsumerState<ServerScreen> {
     try {
       await ref.read(authProvider.notifier).setServer(url);
     } catch (e) {
-      setState(() => _error = 'Could not save server address');
+      if (mounted) setState(() => _error = t(context, 'server.error_save'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -63,18 +64,20 @@ class _ServerScreenState extends ConsumerState<ServerScreen> {
                           .headlineMedium
                           ?.copyWith(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Connect to your self-hosted Nurby server',
+                  Text(
+                    t(context, 'server.subtitle'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: NurbyColors.mutedForeground),
+                    style: const TextStyle(color: NurbyColors.mutedForeground),
                   ),
                   const SizedBox(height: 32),
                   TextField(
                     controller: _controller,
                     keyboardType: TextInputType.url,
                     autocorrect: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Server address',
+                    // Technical example, not product copy (intentional
+                    // exception in docs/i18n-inline-copy-audit.md).
+                    decoration: InputDecoration(
+                      labelText: t(context, 'server.address'),
                       hintText: 'http://192.168.1.50:8000',
                     ),
                     onSubmitted: (_) => _connect(),
@@ -92,19 +95,19 @@ class _ServerScreenState extends ConsumerState<ServerScreen> {
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Connect'),
+                        : Text(t(context, 'server.connect')),
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: () => context.push('/pair'),
                     icon: const Icon(Icons.qr_code_scanner, size: 20),
-                    label: const Text('Scan QR code'),
+                    label: Text(t(context, 'server.scan_qr')),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Find the code in the web app under Settings.',
+                  Text(
+                    t(context, 'server.find_code'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                         color: NurbyColors.mutedForeground, fontSize: 12),
                   ),
                 ],

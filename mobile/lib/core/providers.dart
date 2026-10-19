@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
+import 'i18n.dart';
 import 'outbox.dart';
 import 'push.dart';
 import 'repositories.dart';
@@ -17,6 +18,61 @@ import '../models/household_mode.dart';
 /// Overridden in main() after SharedPreferences loads.
 final sharedPrefsProvider = Provider<SharedPreferences>(
   (ref) => throw UnimplementedError(),
+);
+
+/// SharedPreferences key for the chosen locale. Null stored state means
+/// "follow the device language".
+const appLocalePrefKey = 'app.locale';
+
+/// The user's locale choice: an explicit [AppLocale], or null to follow
+/// the device language. Persisted on device and synced to the account
+/// (PATCH /api/auth/me/locale) so the web UI follows along.
+class AppLocaleController extends Notifier<AppLocale?> {
+  @override
+  AppLocale? build() {
+    // Widget tests pump screens without the main() overrides, so prefs
+    // may be unavailable; following the device language is the safe default.
+    try {
+      final code = ref.read(sharedPrefsProvider).getString(appLocalePrefKey);
+      return AppLocale.fromLanguageCode(code);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> setLocale(AppLocale? locale) async {
+    state = locale;
+    try {
+      final prefs = ref.read(sharedPrefsProvider);
+      if (locale == null) {
+        await prefs.remove(appLocalePrefKey);
+      } else {
+        await prefs.setString(appLocalePrefKey, locale.code);
+      }
+    } catch (_) {}
+    // Mirror to the account when signed in. Best effort: a device-level
+    // choice must never break because the server is unreachable.
+    if (locale != null && ref.read(authProvider).phase == AuthPhase.loggedIn) {
+      try {
+        await ref
+            .read(apiClientProvider)
+            .patchJson('/api/auth/me/locale', body: {'locale': locale.code});
+      } catch (_) {}
+    }
+  }
+
+  /// Adopt the signed-in account's locale when the user has not made an
+  /// explicit choice on this device. Only non-English accounts are adopted
+  /// so an account still on its default does not override an es device.
+  void adoptAccountLocale(String? code) {
+    if (state != null) return;
+    final locale = AppLocale.fromLanguageCode(code);
+    if (locale != null && locale != AppLocale.en) state = locale;
+  }
+}
+
+final appLocaleProvider = NotifierProvider<AppLocaleController, AppLocale?>(
+  AppLocaleController.new,
 );
 
 final serverConfigProvider = Provider<ServerConfig>(
@@ -402,14 +458,23 @@ final wsNotificationBridgeProvider = Provider<void>((ref) {
     }
     if (ref.read(appLifecycleProvider) == AppLifecycleState.resumed) return;
     final service = ref.read(notificationServiceProvider);
+    final locale = effectiveLocale(ref.read(appLocaleProvider));
     if (type == 'notification') {
-      service.show('Nurby', msg['message']?.toString() ?? 'New notification');
+      service.show(
+          'Nurby',
+          msg['message']?.toString() ??
+              translateLocale(locale, 'push.new_notification'));
     } else {
       final rule = msg['rule_name']?.toString();
       final camera = msg['camera_name']?.toString();
       service.show(
-        (rule == null || rule.isEmpty) ? 'Nurby alert' : rule,
-        (camera == null || camera.isEmpty) ? 'A rule fired' : 'Camera: $camera',
+        (rule == null || rule.isEmpty)
+            ? translateLocale(locale, 'push.alert_title')
+            : rule,
+        (camera == null || camera.isEmpty)
+            ? translateLocale(locale, 'push.rule_fired')
+            : translateLocale(locale, 'push.camera_prefix',
+                {'camera': camera}),
       );
     }
   });

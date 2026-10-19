@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/i18n.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 
@@ -60,7 +61,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const Icon(Icons.videocam_outlined,
                       size: 56, color: NurbyColors.accent),
                   const SizedBox(height: 16),
-                  Text('Sign in',
+                  Text(t(context, 'login.title'),
                       textAlign: TextAlign.center,
                       style: Theme.of(context)
                           .textTheme
@@ -76,14 +77,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
                     autocorrect: false,
-                    decoration: const InputDecoration(labelText: 'Email'),
+                    decoration:
+                        InputDecoration(labelText: t(context, 'login.email')),
                   ),
                   const SizedBox(height: 14),
                   TextField(
                     controller: _password,
                     obscureText: _obscure,
                     decoration: InputDecoration(
-                      labelText: 'Password',
+                      labelText: t(context, 'login.password'),
                       suffixIcon: IconButton(
                         icon: Icon(
                             _obscure ? Icons.visibility : Icons.visibility_off,
@@ -106,20 +108,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Sign in'),
+                        : Text(t(context, 'login.sign_in')),
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: () => context.push('/pair'),
                     icon: const Icon(Icons.qr_code_scanner, size: 20),
-                    label: const Text('Scan QR code'),
+                    label: Text(t(context, 'login.scan_qr')),
                   ),
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: () =>
                         ref.read(authProvider.notifier).changeServer(),
-                    child: const Text('Change server',
-                        style: TextStyle(color: NurbyColors.mutedForeground)),
+                    child: Text(t(context, 'login.change_server'),
+                        style:
+                            const TextStyle(color: NurbyColors.mutedForeground)),
                   ),
                 ],
               ),
