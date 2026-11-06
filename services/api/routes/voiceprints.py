@@ -355,7 +355,6 @@ async def reprocess_voiceprint_attributions(
     rows = (await db.execute(query)).all()
 
     processed = matched = fused = conflicts = skipped_manual = 0
-    now = datetime.now(timezone.utc)
     for transcript, capture in rows:
         processed += 1
         skip_reason = _voiceprint_reprocess_skip_reason(transcript, person_id)

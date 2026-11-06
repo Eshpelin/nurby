@@ -341,8 +341,6 @@ def test_enrichment_local_fallback_requires_cost_only_block():
 
 async def _async_false():
     return False
-    assert appends[0]["description"] is None
-    assert appends[0]["attributes"]["verify"]["repair"] == "failed"
 
 
 @pytest.mark.asyncio

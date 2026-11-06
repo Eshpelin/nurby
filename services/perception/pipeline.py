@@ -1361,7 +1361,13 @@ class PerceptionPipeline:
                         apply_package_observation,
                     )
 
-                    if getattr(camera, "package_tracking_enabled", True):
+                    # Fetch the camera row for its per-camera policy knobs.
+                    # This referenced a ``camera`` name that was never in
+                    # scope, so since the ingress ship every call raised
+                    # NameError and the except below silently disabled
+                    # package tracking entirely.
+                    camera = await db.get(Camera, camera_id)
+                    if camera is None or getattr(camera, "package_tracking_enabled", True):
                         await apply_package_observation(
                             db,
                             camera_id=camera_id,
@@ -1369,7 +1375,7 @@ class PerceptionPipeline:
                             observed_at=timestamp,
                             object_detections=object_detections,
                             person_detections=person_detections,
-                            pickup_policy=getattr(camera, "package_pickup_policy", "recognized_person"),
+                            pickup_policy=getattr(camera, "package_pickup_policy", "recognized_person") if camera else "recognized_person",
                         )
                 except Exception:
                     logger.exception("package lifecycle update failed obs=%s", obs.id)

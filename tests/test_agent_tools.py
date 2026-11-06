@@ -26,7 +26,6 @@ from services.agent.tools import (
     all_tools_for_provider,
     analyze_clip,
     analyze_frame,
-    get_associations,
     get_camera_layout,
     get_events,
     get_household_snapshot,
