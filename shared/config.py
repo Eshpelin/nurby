@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     backup_include_recordings: bool = False
     jwt_secret: str = _DEFAULT_JWT_SECRET
     jwt_expiry_hours: int = 24
+    # Brute-force gates on /auth/login and /auth/bootstrap/adopt (#328).
+    # Sliding windows, in-process (the API is a single uvicorn worker).
+    # Per-email lockout is tight; the per-source ceiling is deliberately
+    # looser so clients sharing a reverse proxy don't lock each other out.
+    login_rate_limit_attempts: int = 5
+    login_rate_limit_window_s: int = 900
+    login_rate_limit_ip_attempts: int = 30
     # Explicitly insecure compatibility escape hatch for headless installs.
     allow_open_admin: bool = False
     cors_origins: str = ""  # comma-separated additional origins

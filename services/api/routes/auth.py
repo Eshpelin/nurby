@@ -42,6 +42,7 @@ from shared.onboarding_metrics import (
     PreferenceRow,
     compute_metrics,
 )
+from shared.rate_limit import SlidingWindowLimiter
 from shared.rule_starters import starter_rule
 from shared.schemas import (
     AccountClaim,
@@ -58,6 +59,37 @@ from shared.schemas import (
 
 router = APIRouter()
 logger = logging.getLogger("nurby.api.auth")
+
+# Brute-force gates (#328). In-process windows: the API is one uvicorn
+# worker, so this memory is authoritative. Each attempt touches two
+# buckets — the account under attack (tight) and the source address
+# (loose ceiling against credential-stuffing sweeps). Behind the Caddy
+# ingress uvicorn only sees the proxy's address, so the first
+# X-Forwarded-For hop is preferred; it is set by Caddy and spoofable
+# only when the API is exposed directly (loopback by default).
+_email_limiter = SlidingWindowLimiter(
+    settings.login_rate_limit_attempts, settings.login_rate_limit_window_s
+)
+_ip_limiter = SlidingWindowLimiter(
+    settings.login_rate_limit_ip_attempts, settings.login_rate_limit_window_s
+)
+
+
+def _client_addr(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _reject_if_rate_limited(*waits: float) -> None:
+    wait = max(waits, default=0.0)
+    if wait > 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts. Try again later.",
+            headers={"Retry-After": str(int(wait) + 1)},
+        )
 
 
 def _hash_setup_value(value: str) -> str:
@@ -216,6 +248,14 @@ async def adopt_provisional_owner(
     db: AsyncSession = Depends(get_db),
 ):
     """Use the one-time setup code to move an unclaimed install to a new browser."""
+    # The setup code grants owner takeover; guessing it must not be
+    # free. Same source-address ceiling as login (shared limiter,
+    # distinct key so bursts don't double-count). request is None only
+    # in direct unit-test invocation.
+    ip_key = None
+    if request is not None:
+        ip_key = f"adopt-ip:{_client_addr(request)}"
+        _reject_if_rate_limited(_ip_limiter.retry_after_s(ip_key))
     await db.execute(text("SELECT pg_advisory_xact_lock(481566)"))
     users = (await db.execute(select(User))).scalars().all()
     owners = [u for u in users if u.is_provisional]
@@ -224,6 +264,8 @@ async def adopt_provisional_owner(
     owner = min(owners, key=lambda u: u.created_at)
     expected = getattr(owner, "setup_code_hash", None)
     if not expected or not secrets.compare_digest(_hash_setup_value(body.code.strip().upper()), expected):
+        if ip_key is not None:
+            _ip_limiter.record_failure(ip_key)
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Invalid or already-used setup code")
 
     # Consume the code and bind the newly adopted browser to a fresh secret.
@@ -354,11 +396,18 @@ async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(body: UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
     """Authenticate with email and password, returns a JWT."""
+    email_key = f"email:{body.email.strip().lower()}"
+    ip_key = f"ip:{_client_addr(request)}"
+    _reject_if_rate_limited(
+        _email_limiter.retry_after_s(email_key), _ip_limiter.retry_after_s(ip_key)
+    )
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(body.password, user.password_hash):
+        _email_limiter.record_failure(email_key)
+        _ip_limiter.record_failure(ip_key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -376,6 +425,9 @@ async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
     await db.refresh(user)
 
     token = create_access_token(user.id)
+    # A correct password clears the account's failure bucket; the source
+    # bucket ages out on its own.
+    _email_limiter.record_success(email_key)
     return TokenResponse(access_token=token, user=UserResponse.model_validate(user))
 
 
