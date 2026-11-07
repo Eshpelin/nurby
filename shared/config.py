@@ -139,13 +139,17 @@ settings = Settings()
 
 # Warn loudly if JWT secret is the insecure default
 if settings.jwt_secret == _DEFAULT_JWT_SECRET:
-    _generated = secrets.token_urlsafe(32)
+    # Generate a per-session secret so tokens at least work, but never
+    # print it: a session secret sitting in the logs defeats its own
+    # purpose. Point the operator at minting a persistent one instead.
+    settings.jwt_secret = secrets.token_urlsafe(32)
     _logger.warning(
-        "JWT_SECRET is the insecure default. Generating a random secret for this session. "
-        "Set JWT_SECRET in your .env file for persistent tokens. Generated secret (add to .env). JWT_SECRET=%s",
-        _generated,
+        "JWT_SECRET is the insecure default. A random per-session secret was generated "
+        "(value withheld — a secret in the logs defeats its purpose); tokens will not "
+        "survive a restart. Generate a persistent one, e.g. "
+        "`python -c \"import secrets; print(secrets.token_urlsafe(48))\"`, and set "
+        "JWT_SECRET in your .env file."
     )
-    settings.jwt_secret = _generated
 
 # Warn if SMTP is partially configured
 if settings.smtp_host and not settings.smtp_user:
