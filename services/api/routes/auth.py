@@ -234,7 +234,13 @@ async def bootstrap(
     await db.refresh(user)
 
     token = create_access_token(user.id)
-    logger.warning("Nurby provisional setup code: %s", setup_code)
+    # Keep an operator-visible marker that provisioning happened, but the
+    # code itself never goes to the logs: it is returned in this response
+    # and retrievable by the authenticated owner via GET /auth/setup-code.
+    logger.warning(
+        "Provisional owner created; one-time setup code issued (value withheld — "
+        "retrieve it via GET /auth/setup-code)."
+    )
     if response is not None:
         _set_install_cookie(response, install_secret)
     return TokenResponse(access_token=token, user=UserResponse.model_validate(user), setup_code=setup_code)
