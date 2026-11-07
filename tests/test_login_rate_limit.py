@@ -9,6 +9,7 @@ public internet, so this is the brute-force gate.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
@@ -42,11 +43,14 @@ def _login_db(user: User | None):
 
 def _user(password: str = "correct-horse") -> User:
     return User(
+        id=uuid.uuid4(),
         email="user@example.com",
         display_name="User",
         password_hash=hash_password(password),
         role="admin",
+        camera_access_mode="all",
         is_active=True,
+        is_provisional=False,
         created_at=datetime.now(timezone.utc),
     )
 
@@ -110,8 +114,10 @@ def test_rate_limit_is_per_email_not_global():
     # A different account from the same source is only counted against
     # the (much looser) source bucket.
     other = User(
+        id=uuid.uuid4(),
         email="other@example.com", display_name="O",
-        password_hash=hash_password("pw2"), role="viewer", is_active=True,
+        password_hash=hash_password("pw2"), role="viewer",
+        camera_access_mode="all", is_active=True, is_provisional=False,
         created_at=datetime.now(timezone.utc),
     )
     db2 = _login_db(other)

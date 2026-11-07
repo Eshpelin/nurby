@@ -7,7 +7,7 @@ wind, occlusion, and detector flapping testable without a live camera.
 """
 
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from enum import StrEnum
 from uuid import UUID
 
