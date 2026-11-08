@@ -13,6 +13,7 @@ import logging
 import subprocess
 import sys
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 from starlette.requests import Request
@@ -36,10 +37,13 @@ def _fresh_install_db():
     db.add = MagicMock()
 
     async def _refresh(obj, **_kw):
-        # The real session assigns the PK on flush; the stub must too, or
-        # UserResponse validation fails exactly like a real unflushed row.
+        # The real session assigns the PK and server defaults (created_at)
+        # on flush; the stub must too, or UserResponse validation fails
+        # exactly like a real unflushed row.
         if getattr(obj, "id", None) is None:
             obj.id = uuid.uuid4()
+        if getattr(obj, "created_at", None) is None:
+            obj.created_at = datetime.now(timezone.utc)
 
     db.refresh = AsyncMock(side_effect=_refresh)
     return db
