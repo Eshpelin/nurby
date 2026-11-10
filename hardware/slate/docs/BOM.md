@@ -1,4 +1,9 @@
-# Bill of materials, v0.1
+# Bill of materials
+
+> This table is the v0.1 single-row Slate. v0.2 adds two more cells, a second
+> camera, mmWave radar, a light sensor, two flash LEDs, six magnets and, for
+> the pan-tilt joint, two standard servos. The current list with prices is
+> `slateData.ts` in the landing page repo, about $179 for the core.
 
 Rough single-unit street prices in USD. Generic parts, buy from any supplier.
 The website reads the same list from `slateData.ts` in the landing page repo.
