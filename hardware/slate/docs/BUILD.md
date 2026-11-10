@@ -15,7 +15,9 @@ Untested. This is the intended build. Expect to adjust.
 
 Files in `print/` are already oriented. Print two `dock_cap`.
 
-Light colours run cooler, so print the body in white or grey. Print
+The reference look is matte black. Use black ASA and turn on fuzzy skin in the
+slicer for the textured finish. Black runs hotter in direct sun, so if the
+camera faces south with no shade, print the body in white or grey instead. Print
 `visor_glass` in translucent smoke PETG so the light bars shine through it, or
 cut it from 1.5 mm smoked acrylic using the STEP outline.
 

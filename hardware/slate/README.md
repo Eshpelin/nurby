@@ -19,7 +19,7 @@ build log says otherwise.
 | Charging | USB-C, or solar through the top bay |
 | Lights | Two 8-LED RGBW bars: red and blue strobe, or white flood |
 | Audio | I2S microphone, 3 W I2S amplifier, 28 mm side-firing speaker |
-| Look | White body, 13 mm corners, one black visor island, no screws on the face |
+| Look | Matte black textured body, 13 mm corners, gloss visor island, no screws on the face |
 | Modules | Two Dock-50 bays (top and bottom). Modules stack |
 | Core cost | About $137 in single-unit parts |
 
