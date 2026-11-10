@@ -15,12 +15,13 @@ Untested. This is the intended build. Expect to adjust.
 
 Files in `print/` are already oriented. Print two `dock_cap`.
 
-Light colours run cooler. Print the lens hood and front plate in black to cut
-glare around the lens.
+Light colours run cooler, so print the body in white or grey. Print
+`visor_glass` in translucent smoke PETG so the light bars shine through it, or
+cut it from 1.5 mm smoked acrylic using the STEP outline.
 
 ## Heat-set inserts (M3)
 
-- 4 in the front corners of the back shell
+- 4 in the corner bosses of the front plate
 - 4 in the back, from the outside (VESA 75)
 - 2 in each dock pad, from the outside
 - 2 in the front plate bosses, for the camera carrier
@@ -90,8 +91,12 @@ before soldering.
    flush with the outer face. Epoxy the board edges.
 5. Camera board on the back of the carrier, lens through the hole. Carrier
    onto the front plate bosses.
-6. Light bars, PIR, mic and speaker into their pockets. A dab of silicone each.
-7. Close the front plate with four M3 x 8. Glue the lens hood.
+6. Light bars, PIR and mic onto the front plate. A dab of silicone each. The
+   speaker slides between the guide ribs and the right side wall, cone facing
+   the grille.
+7. Close the front plate with four M3 x 10 from the back, through the corner
+   tunnels. No screws show on the face. Bond the visor with thin double sided
+   tape.
 8. Wall plate on the back with four M3 x 12, heads on the wall side. Hang on
    two wall screws and slide down.
 

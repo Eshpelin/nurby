@@ -25,7 +25,8 @@ import cadquery as cq
 # Parameters. Change these, re-run, re-print.
 # --------------------------------------------------------------------------
 W, H, D = 164.0, 112.0, 42.0  # core body outer size
-R = 6.0                        # corner radius
+R = 13.0                       # corner radius
+EDGE = 1.5                     # chamfer on the front and back outer edges
 WALL = 2.4                     # shell wall (6 perimeters at 0.4 nozzle)
 FP_T = 3.0                     # front plate thickness
 SHELL_D = D - FP_T             # depth of the back shell
@@ -56,20 +57,21 @@ PI_STANDOFF = 7.0
 # Front plate layout
 LENS_Y = 12.0
 LENS_HOLE = 17.0
-LED_X = 44.0                   # centre of each 8 LED stick (51.1 x 10.2)
-SPK = (54.0, 35.6, 28.0)       # x, y, diameter
-PIR = (28.0, 40.0, 10.3)
-MIC = (-28.0, 40.0)
-IR_LED = ((-20.0, 30.0), (20.0, 30.0))
+LED_X = 48.0                   # centre of each 8 LED stick (51.1 x 10.2)
+SPK = (25.0, 20.5, 28.0)       # y, z, diameter. Fires through the right side wall
+PIR = (-34.0, 25.5, 10.3)
+MIC = (34.0, 25.5)
+IR_LED = ((-17.0, LENS_Y), (17.0, LENS_Y))
+VISOR = (146.0, 38.0, 1.6)     # black visor island: width, height, thickness
 CAM_BOSS_DY = 19.0             # camera carrier screws above and below the lens
 
 # Solar visor. Default pocket fits the common 6 V 2 W panel (136 x 110 x 3).
 PANEL_W, PANEL_D, PANEL_T = 136.0, 110.0, 3.0
 VISOR_TILT = 20.0              # degrees, front edge down
-VISOR_NECK = 45.0              # height of the tray's back edge above the dock
+VISOR_NECK = 28.0              # height of the tray's back edge above the dock
 
 # Battery module (two more 32700 cells, standing upright)
-BM_W, BM_H = 144.0, 78.0
+BM_W, BM_H = 138.0, 78.0
 # Blank developer module
 DM_W, DM_H = 66.0, 40.0
 LID_T = 2.4
@@ -164,7 +166,7 @@ def to_bottom(s):
 # --------------------------------------------------------------------------
 # Core body
 # --------------------------------------------------------------------------
-def corner_points(inset=7.0):
+def corner_points(inset=9.0):
     return [(sx * (W / 2 - inset), sy * (H / 2 - inset)) for sx in (-1, 1) for sy in (-1, 1)]
 
 
@@ -178,13 +180,19 @@ def pi_points():
 
 
 def back_shell():
-    outer = rbox(W, H, SHELL_D, R)
+    outer = rbox(W, H, SHELL_D, R).faces("<Z").chamfer(EDGE)
     inner = rbox(W - 2 * WALL, H - 2 * WALL, SHELL_D, R - WALL).translate((0, 0, WALL))
     s = outer.cut(inner)
 
     adds = []
-    # Front plate screw bosses
-    adds += [cyl_z(x, y, 9.0, WALL - 0.1, SHELL_D) for x, y in corner_points()]
+    # Screw tunnels. The front plate is pulled on from the back, so no
+    # fastener shows on the face.
+    boss_top = SHELL_D - 7.2
+    adds += [cyl_z(x, y, 10.0, 0.5, boss_top) for x, y in corner_points()]
+    # Speaker guide ribs against the right wall
+    sy, sz, sd = SPK
+    for y0 in (sy - sd / 2 - 3, sy + sd / 2 - 3):
+        adds.append(box(W / 2 - WALL - 7.6, W / 2 - WALL - 6.0, y0, y0 + 6, WALL - 0.1, WALL + 33))
     # VESA 75 mount bosses (inserts go in from the outside back)
     adds += [cyl_z(x, y, 9.0, 0.1, WALL + 6.0) for x, y in vesa_points()]
     # Pi Zero standoffs
@@ -193,22 +201,31 @@ def back_shell():
     for x in (-58.0, -22.0, 22.0, 58.0):
         adds.append(box(x - 1.5, x + 1.5, CELL_Y - 18, CELL_Y + 18, WALL - 0.1, WALL + 11))
     # Peg grid slab for the small breakout boards (right of the lens)
-    adds.append(box(14, 74, 2, 46, WALL - 0.1, WALL + 1.6))
+    adds.append(box(14, 68, 2, 46, WALL - 0.1, WALL + 1.6))
     # Dock pads, top and bottom, carried back to the rear wall
     adds.append(to_top(dock_female_pad(back=D / 2 - 0.1)))
     adds.append(to_bottom(dock_female_pad(back=D / 2 - 0.1)))
     s = s.union(union(adds))
-    s = s.intersect(rbox(W, H, SHELL_D, R))
+    s = s.intersect(outer)
 
     cuts = []
     # Cell seats
     cell_z = WALL + 0.4 + CELL_D / 2
     cuts.append(cyl_x(CELL_Y, cell_z, CELL_D + 0.8, -78, 78))
-    cuts += [cyl_z(x, y, INSERT_D, SHELL_D - 7, SHELL_D + 1) for x, y in corner_points()]
+    for x, y in corner_points():
+        cuts.append(cyl_z(x, y, M3_CLEAR, -1, SHELL_D))
+        cuts.append(cyl_z(x, y, 6.5, -1, boss_top - 5.0))
+    # Speaker grille in the right side wall
+    for i in range(-4, 5):
+        for j in range(-4, 5):
+            gy = i * 3.2 + (1.6 if j % 2 else 0)
+            gz = j * 2.8
+            if math.hypot(gy, gz) <= sd / 2 - 2.5:
+                cuts.append(cyl_x(sy + gy, sz + gz, 1.8, W / 2 - WALL - 1, W / 2 + 1))
     cuts += [cyl_z(x, y, INSERT_D, -1, 6.5) for x, y in vesa_points()]
     cuts += [cyl_z(x, y, 2.2, WALL + 1, WALL + PI_STANDOFF + 1) for x, y in pi_points()]
     # Peg grid: 2 mm pilot holes on a 6 mm pitch for M2 self tapping screws
-    for i in range(10):
+    for i in range(9):
         for j in range(8):
             gx, gy = 17 + 6 * i, 5 + 6 * j
             if math.hypot(gx - VESA / 2, gy - VESA / 2) < 7.5:
@@ -229,15 +246,16 @@ def back_shell():
 
 def front_plate():
     z0 = SHELL_D
-    p = rbox(W, H, FP_T, R).translate((0, 0, z0))
+    p = rbox(W, H, FP_T, R).faces(">Z").chamfer(EDGE).translate((0, 0, z0))
 
     # Locating ring that drops inside the shell
     rw, rh = W - 2 * WALL - 2 * CLR, H - 2 * WALL - 2 * CLR
-    ring = rbox(rw, rh, 1.6, R - WALL).cut(rbox(rw - 3.2, rh - 3.2, 1.6, R - WALL - 1.0))
+    ring = rbox(rw, rh, 1.6, R - WALL).cut(rbox(rw - 3.2, rh - 3.2, 1.6, R - WALL - 1.6))
     ring = ring.translate((0, 0, z0 - 1.6))
-    ring = ring.cut(union([cyl_z(x, y, 10.0, z0 - 3, z0 + 1) for x, y in corner_points()]))
 
     adds = [ring]
+    # Corner bosses that take the screws coming through from the back
+    adds += [cyl_z(x, y, 8.0, z0 - 7, z0 + 0.1) for x, y in corner_points()]
     # Camera carrier bosses
     for dy in (-CAM_BOSS_DY, CAM_BOSS_DY):
         adds.append(cyl_z(0, LENS_Y + dy, 8.0, z0 - 7, z0 + 0.1))
@@ -247,34 +265,31 @@ def front_plate():
         frame = box(cx - 27.8, cx + 27.8, LENS_Y - 7.3, LENS_Y + 7.3, z0 - 3, z0 + 0.1)
         frame = frame.cut(box(cx - 25.9, cx + 25.9, LENS_Y - 5.4, LENS_Y + 5.4, z0 - 4, z0))
         adds.append(frame)
-    # Speaker and mic retaining rings
-    sx_, sy_, sd = SPK
-    adds.append(cyl_z(sx_, sy_, sd + 4, z0 - 3, z0 + 0.1).cut(cyl_z(sx_, sy_, sd + 0.4, z0 - 4, z0)))
-    adds.append(cyl_z(MIC[0], MIC[1], 17.0, z0 - 2, z0 + 0.1).cut(cyl_z(MIC[0], MIC[1], 14.4, z0 - 3, z0)))
     p = p.union(union(adds))
 
-    cuts = []
-    cuts.append(cyl_z(0, LENS_Y, LENS_HOLE, z0 - 1, D + 1))
-    cuts.append(cyl_z(0, LENS_Y, 24.4, D - 1.0, D + 1))  # seat for the lens hood
+    cuts = [cyl_z(0, LENS_Y, LENS_HOLE, z0 - 1, D + 1)]
+    cuts += [cyl_z(x, y, INSERT_D, z0 - 8, z0 - 1.0) for x, y in corner_points()]
     for dy in (-CAM_BOSS_DY, CAM_BOSS_DY):
-        cuts.append(cyl_z(0, LENS_Y + dy, INSERT_D, z0 - 8, z0 - 1.5))
+        cuts.append(cyl_z(0, LENS_Y + dy, INSERT_D, z0 - 8, z0 - 1.0))
     for sx in (-1, 1):
         cx = sx * LED_X
         cuts.append(box(cx - 24, cx + 24, LENS_Y - 3, LENS_Y + 3, z0 - 1, D + 1))
-    # Speaker grille
-    for i in range(-4, 5):
-        for j in range(-4, 5):
-            gx = i * 3.2 + (1.6 if j % 2 else 0)
-            gy = j * 2.8
-            if math.hypot(gx, gy) <= sd / 2 - 3.0:
-                cuts.append(cyl_z(sx_ + gx, sy_ + gy, 1.8, z0 - 1, D + 1))
     cuts.append(cyl_z(PIR[0], PIR[1], PIR[2], z0 - 1, D + 1))
     cuts.append(cyl_z(MIC[0], MIC[1], 1.5, z0 - 1, D + 1))
     cuts += [cyl_z(x, y, 5.2, z0 - 1, D + 1) for x, y in IR_LED]
-    for x, y in corner_points():
-        cuts.append(cyl_z(x, y, M3_CLEAR, z0 - 4, D + 1))
-        cuts.append(cyl_z(x, y, 6.5, D - 1.5, D + 1))
     return p.cut(union(cuts))
+
+
+def visor_glass():
+    """Black island that covers the lens, light bars and sensors. Print it in
+    translucent smoke PETG, or cut it from 1.5 mm smoked acrylic. Bonded to
+    the face with thin double sided tape."""
+    vw, vh, vt = VISOR
+    v = rbox(vw, vh, vt, vh / 2 - 0.05).faces(">Z").chamfer(0.6).translate((0, LENS_Y, D))
+    cuts = [cyl_z(0, LENS_Y, 15.0, D - 1, D + vt + 1)]
+    cuts.append(cyl_z(PIR[0], PIR[1], PIR[2], D - 1, D + vt + 1))
+    cuts.append(cyl_z(MIC[0], MIC[1], 1.5, D - 1, D + vt + 1))
+    return v.cut(union(cuts))
 
 
 def camera_carrier():
@@ -282,18 +297,13 @@ def camera_carrier():
     hole pattern is the Raspberry Pi camera one (21 x 12.5, M2). Edit the
     points below for other boards."""
     zf = SHELL_D - 7.0  # front face of the carrier sits on the plate bosses
-    c = box(-15, 15, LENS_Y - 23, LENS_Y + 23, zf - 2, zf)
+    c = box(-13.5, 13.5, LENS_Y - 23, LENS_Y + 23, zf - 2, zf)
     posts = [(-10.5, 0.0), (10.5, 0.0), (-10.5, 12.5), (10.5, 12.5)]
     c = c.union(union([cyl_z(x, LENS_Y + y, 4.5, zf - 3.5, zf - 1.9) for x, y in posts]))
     cuts = [cyl_z(0, LENS_Y, 15.0, zf - 3, zf + 1)]
     cuts += [cyl_z(0, LENS_Y + dy, M3_CLEAR, zf - 3, zf + 1) for dy in (-CAM_BOSS_DY, CAM_BOSS_DY)]
     cuts += [cyl_z(x, LENS_Y + y, 1.8, zf - 4, zf + 1) for x, y in posts]
     return c.cut(union(cuts))
-
-
-def lens_hood():
-    h = cyl_z(0, LENS_Y, 24.0, D - 1.0, D + 6.0)
-    return h.cut(cyl_z(0, LENS_Y, LENS_HOLE + 0.5, D - 2, D + 7))
 
 
 def wall_plate():
@@ -335,11 +345,11 @@ def solar_visor():
     def place(s):
         return s.rotate((0, 0, 0), (1, 0, 0), VISOR_TILT).translate((0, back_y, lift))
 
-    tray = box(-tw / 2, tw / 2, -td, 0, 0, tt).edges("|Z").fillet(4.0)
+    tray = box(-tw / 2, tw / 2, -td, 0, 0, tt).edges("|Z").fillet(10.0)
     pocket = box(-PANEL_W / 2 - 0.3, PANEL_W / 2 + 0.3, -td + 2.7, -2.7, tt - PANEL_T - 0.2, tt + 1)
     tray = place(tray.cut(pocket))
 
-    neck = box(-20, 20, -PAD_HALF_DEPTH, PAD_HALF_DEPTH, foot_t - 0.1, lift + 20)
+    neck = box(-20, 20, -PAD_HALF_DEPTH, PAD_HALF_DEPTH, foot_t - 0.1, lift + 20).edges("|Z").fillet(6.0)
     neck = neck.intersect(place(box(-300, 300, -400, 200, -400, 1.2)))
 
     v = foot.union(neck).union(tray).union(dock_male_pegs())
@@ -384,7 +394,7 @@ def battery_module():
     cell_x = BM_W / 2 - WALL - CELL_D / 2 - 0.6
     for sx in (-1, 1):
         for z in (20.0, 55.0):
-            x0, x1 = sorted((sx * 36.0, sx * (BM_W / 2 - WALL + 0.1)))
+            x0, x1 = sorted((sx * 35.0, sx * (BM_W / 2 - WALL + 0.1)))
             rib = box(x0, x1, -D / 2 + LID_T + 2, D / 2 - WALL + 0.1, z, z + 3)
             rib = rib.cut(cyl_z(sx * cell_x, 0, CELL_D + 0.8, z - 1, z + 4))
             rib = rib.cut(box(sx * cell_x - CELL_D / 2 - 0.4, sx * cell_x + CELL_D / 2 + 0.4, -D / 2, 0, z - 1, z + 4))
@@ -425,7 +435,7 @@ def build():
         "core_back_shell": (back_shell(), 0, same),
         "core_front_plate": (front_plate(), 180, same),
         "camera_carrier": (camera_carrier(), 180, same),
-        "lens_hood": (lens_hood(), 0, same),
+        "visor_glass": (visor_glass(), 0, same),
         "wall_plate": (wall_plate(), 0, same),
         "dock_cap": (dock_cap(), 180, module),
         "module_solar_visor": (solar_visor(), 180 - VISOR_TILT, module),
@@ -444,7 +454,7 @@ def viz():
     pi = box(cx - 32.5, cx + 32.5, cy - 15, cy + 15, WALL + PI_STANDOFF, WALL + PI_STANDOFF + 1.6)
     zf = SHELL_D - 9.0
     cam = box(-12.5, 12.5, LENS_Y - 9.5, LENS_Y + 14.5, zf - 3.2, zf - 1.6)
-    lens = cyl_z(0, LENS_Y, 14.0, zf - 1.6, D + 1.0)
+    lens = cyl_z(0, LENS_Y, 14.0, zf - 1.6, D + VISOR[2] + 0.3)
     tt, td = 5.0, PANEL_D + 6.0
     panel = box(-PANEL_W / 2, PANEL_W / 2, -td + 3, -3, tt - PANEL_T, tt + 0.2)
     panel = panel.rotate((0, 0, 0), (1, 0, 0), VISOR_TILT).translate((0, D / 2, 8.0 + VISOR_NECK))
