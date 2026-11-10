@@ -1,6 +1,25 @@
-# Build guide, v0.1
+# Build guide, v0.2
 
 Untested. This is the intended build. Expect to adjust.
+
+> v0.2 changed the bodies. The wiring, pin tables and firmware below still
+> apply. Part names and mechanical steps were updated; where a step mentions
+> the mainboard, wire the equivalent off-the-shelf board until rev A exists
+> as a real PCB.
+
+## What changed mechanically in v0.2
+
+- Cells live on `slate_battery_sled` (Slate) or `barrel_sled` (Barrel). Wire
+  the pack on the sled, then slide it in.
+- Glue three 20 x 3 mm magnets into the back shell and three into
+  `mag_plate`, opposite poles facing. Check polarity before the glue sets.
+- A tracker tag drops into the ring under the Pi before the Pi is fitted.
+- The radar board sits in its pocket behind the face. It needs no window.
+- Fit `slate_gasket` (TPU) between shell and front plate.
+- Lens ports take `lens_bezel_m12` or `lens_bezel_cs`.
+- Orbit: fit the pan servo in `orbit_base`, the tilt servo in
+  `orbit_turret`, horns into the turret hub and the cradle arm. Leave a
+  loop of USB-C cable between base and cradle for travel.
 
 ## Print
 
@@ -13,7 +32,7 @@ Untested. This is the intended build. Expect to adjust.
 | Supports | None for the core. The solar visor needs support under its dock foot |
 | Bed | 180 x 180 mm is enough |
 
-Files in `print/` are already oriented. Print two `dock_cap`.
+Files in `print/` are already oriented. Print two `dock_cap` and two lens bezels. Print `slate_gasket` in TPU.
 
 The reference look is matte black. Use black ASA and turn on fuzzy skin in the
 slicer for the textured finish. Black runs hotter in direct sun, so if the

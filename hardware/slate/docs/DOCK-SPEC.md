@@ -1,4 +1,4 @@
-# Dock-50 module standard, v0.1
+# Dock-50 module standard, v0.2
 
 A bay is a USB-C receptacle with a known footprint around it. A module is
 anything with a USB-C plug that matches the footprint. The core has two bays,
@@ -70,3 +70,16 @@ detection is firmware work and needs no hardware change.
 | Floodlight | VBUS sink, I2C dimming |
 | LTE modem | USB |
 | mmWave presence sensor | I2C on SBU, works while the Pi sleeps |
+
+## Added in v0.2
+
+- **Side points.** Each side of the Slate has two M3 inserts at the same
+  +/-27 mm pitch as the dock screws. `handle` and `bracket_l` fit any side
+  and either dock.
+- **Dock foot.** `dock_foot` is a stand-alone bay you can screw to a wall,
+  ceiling or bench. Anything with a male dock stands on it.
+- **Barrel.** The Barrel has a male dock on its belly and a bay on top. Both
+  run across the body, so a joint under it pitches the lens up and down.
+- **Orbit.** Male dock below, bay on the cradle. Cradle face is 126.5 mm
+  above the host face at zero tilt. The pan-tilt connector on the mainboard
+  (J13) carries two servo signals and 5 V.

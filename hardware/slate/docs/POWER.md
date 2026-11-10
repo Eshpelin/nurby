@@ -8,7 +8,7 @@ bench numbers as soon as one exists.
 
 | Item | Value |
 |---|---|
-| Core pack | 2 x 32700 LiFePO4, 3.2 V x 12 Ah = 38.4 Wh |
+| One cell row | 2 x 32700 LiFePO4, 3.2 V x 12 Ah = 38.4 Wh. The v0.2 Slate ships with two rows (76.8 Wh), so double the single-row runtimes below |
 | Usable fraction | 85% (boost efficiency, cut-off margin) = 32.6 Wh |
 | Pi recording 1080p with Wi-Fi | 2.0 W |
 | ESP32-C6 holding a Wi-Fi link in light sleep | 20 mW |

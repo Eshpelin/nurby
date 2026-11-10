@@ -1,86 +1,64 @@
-# Nurby Slate
+# Nurby open camera
 
-An open source security camera you print and build yourself. Flat slab body,
-LiFePO4 battery, solar visor, USB-C module bays, and plain RTSP so it works
-with Frigate, any NVR or DVR, Home Assistant, and Nurby.
+An open source security camera you print and build yourself. Two bodies share
+one mainboard, one battery format and one module standard:
 
-**Status: v0.1 reference design.** The CAD builds clean solids and the parts
-are checked against each other in software. Nobody has printed, wired or
-powered one yet. Treat every fit and every power number as unproven until a
-build log says otherwise.
+- **Slate**: flat wall body, 164 x 146 x 42 mm, snaps onto a magnetic plate.
+- **Barrel**: cylindrical body, 76 mm diameter x 172 mm, for people who want a
+  camera that looks like a camera.
+
+**Status: v0.2 reference design.** Every part builds as a valid solid and the
+parts are checked against each other in software. Nothing has been printed,
+wired or powered. Treat every fit, force and power number as unproven.
+
+## What v0.2 has
 
 | | |
 |---|---|
-| Body | 164 x 112 x 42 mm, wall mounted, VESA 75 pattern on the back |
-| Compute | Raspberry Pi Zero 2 W (any Zero-footprint board fits) |
-| Always-on controller | ESP32-C6: Wi-Fi control, PIR wake, lights, power switching |
-| Sensor | Sony STARVIS IMX462 with switchable IR-cut, two 850 nm LEDs |
-| Battery | 2 x 32700 LiFePO4, 1S2P, 38 Wh. Each battery module adds 38 Wh |
-| Charging | USB-C, or solar through the top bay |
-| Lights | Two 8-LED RGBW bars: red and blue strobe, or white flood |
-| Audio | I2S microphone, 3 W I2S amplifier, 28 mm side-firing speaker |
-| Look | Matte black textured body, 13 mm corners, gloss visor island, no screws on the face |
-| Modules | Two Dock-50 bays (top and bottom). Modules stack |
-| Core cost | About $137 in single-unit parts |
+| Battery | 32700 LiFePO4 on a removable sled. Slate takes rows of two cells: 1, 2 or 3 rows (38, 77, 115 Wh) by changing `CELL_ROWS`. Barrel takes pairs along its length (`B_PAIRS`) |
+| Mount | Magnetic wall plate: three 20 x 3 mm magnet pairs hold it, two pegs carry the weight. The plate also takes VESA 75 |
+| Tracker bay | Pocket for an AirTag-class tag under the compute board |
+| Sensing | PIR, 24 GHz mmWave presence radar (LD2410C pocket behind the face), ambient light sensor window |
+| Cameras | Two lens ports on the Slate: wide main sensor plus a close-up or barcode camera. Barrel has a main lens and a small second lens |
+| Lenses | 30 mm ports closed by swappable bezels: M12, or CS-mount with a hood |
+| Lights | Two RGBW bars (red and blue strobe, white flood), two 3 W flash LEDs, two 850 nm IR LEDs. Barrel uses a 16-LED ring |
+| Sealing | TPU face gasket, capped docks, membrane vent. IP65 is the target, not a tested rating |
+| Mounting points | Two M3 inserts on each side at the Dock-50 screw pitch, so the handle and angle bracket fit any side or either dock |
+| Pan-tilt | Orbit: a two-axis joint with a dock below and a dock on its cradle. Under the Barrel it aims the camera. Under a solar panel it tracks the sun. Use two for both |
+| Mainboard | Rev A placement, 68 x 42 mm, used in both bodies |
 
 ## What is here
 
 ```
-cad/slate.py     Parametric source (CadQuery). Edit a number, regenerate everything.
-print/*.stl      Print files, already in print orientation.
-step/*.step      Editable solids in assembly position.
-web/*.stl        Low-poly meshes for the website viewer.
-docs/BUILD.md    Print settings, wiring, pin tables, assembly, firmware bring-up.
-docs/BOM.md      Parts list.
-docs/POWER.md    Power budget and what "7 days" really takes.
-docs/DOCK-SPEC.md  The Dock-50 module standard.
+cad/slate.py        Single parametric source (CadQuery). 28 printed parts.
+print/*.stl         Print files, already oriented.
+step/*.step         Editable solids.
+web/                Viewer meshes, mainboard.json, dims.json.
+docs/               BUILD, BOM, POWER, DOCK-SPEC.
 ```
-
-Regenerate after editing:
 
 ```bash
 pip install cadquery
 python cad/slate.py
 ```
 
-## Design decisions
+## Honest limits
 
-**Flat slab, not a bullet or dome.** A 42 mm deep plaque draws less attention,
-mounts with two screws, and gives two long flat edges for module bays.
-
-**Two brains.** A Pi cannot sleep. So an ESP32-C6 stays awake on milliwatts and
-switches the Pi's 5 V rail. That one load switch is what makes week-long
-battery life possible, and it is the main thing v0.1 hardware has to get right.
-Firmware tuning comes later.
-
-**Starlight first, IR second.** The IMX462 keeps colour in very low light and
-is unusually sensitive in near infrared. The white LEDs in the light bars give
-colour video on an event. The IR-cut filter and 850 nm LEDs cover covert,
-no-light recording.
-
-**LiFePO4, single cell voltage.** Cells in parallel need no balancing. The
-chemistry tolerates heat, lasts thousands of cycles, and fails gently.
-
-**USB-C as the module connector.** It is the one connector everyone already
-owns. Any USB-C charger or power bank is a valid power module with no adapter.
-
-**Off-the-shelf boards in v0.1.** No custom PCB yet, so anyone can build it
-with a soldering iron. A single carrier board that replaces the loose
-breakouts is the obvious next step.
-
-## Known limits
-
-- Always-on 24/7 streaming drains the 38 Wh core in under a day. See
+- **Mainboard rev A is a placement drawing.** There is no schematic, netlist
+  or Gerber set yet. The build guide still wires off-the-shelf boards.
+- **Orbit is a first mechanical pass.** Both axes are direct-drive standard
+  servos. The cable to the cradle is a service loop, not a slip ring. Servo
+  torque against a 600 g Barrel has not been checked.
+- **Pan-tilt is for the Barrel and for solar.** The Slate is a fixed body.
+- **Magnet hold is unmeasured.** Do not hang it above people until it is.
+- **CS-mount** has a bezel but no carrier pattern yet. Set the post pattern in
+  `slate_camera_carrier` for your board.
+- **Industrial use** (counting, inspection, traffic) is a hardware allowance:
+  sealing, second camera, flash, brackets. No vision software ships with this.
+- Always-on streaming drains a 77 Wh Slate in about 32 hours. See
   [docs/POWER.md](docs/POWER.md).
-- In event-wake mode the Pi cold boots, so the first seconds of an event are
-  lost and an NVR sees the stream come and go. Fast boot is firmware work.
-- Not weather sealed. Under an eave it should be fine. No IP rating is claimed.
-- Dock role detection (source or sink) is set by hand in v0.1.
-- Camera board hole spacing varies by vendor. The carrier defaults to the
-  Raspberry Pi camera pattern.
 
 ## License
 
-Not set yet. Proposed: CERN-OHL-S v2 for hardware and CAD, to match the
-project's AGPL software license. Until a license file lands here, the repo
-license applies.
+Not set yet. Proposed: CERN-OHL-S v2 for hardware and CAD. Until a license
+file lands here, the repo license applies.
