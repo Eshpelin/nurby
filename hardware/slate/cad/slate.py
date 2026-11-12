@@ -686,6 +686,194 @@ def barrel_hood():
 
 
 # --------------------------------------------------------------------------
+# Pod: rounded extruded body with a flush solar top and a gloss face.
+# Frame as the Barrel: Z is the lens axis, Y up, rear at Z = 0.
+# --------------------------------------------------------------------------
+PW, PH, PL, PR = 92.0, 58.0, 134.0, 14.0
+P_TOP = 4.8                    # top wall, thick enough to seat the panel
+P_PANEL = (61.0, 107.0, 2.2)   # 6 V 1 W class panel: across, along, depth
+P_DOCK_Z = PL / 2
+P_CELL_Y = -8.1
+P_DECK_Y = 10.6
+P_FACE = dict(lens=(-23.0, -8.0), lens2=(9.0, -8.0), port=24.0, pir=(33.0, -8.0), bar_y=14.5,
+              ir=((33.0, 8.0), (33.0, -21.5)), mic=(-7.0, -22.0), als=(-7.0, 2.0),
+              bosses=((-7.0, -8.0), (22.0, -23.0)))
+
+
+def to_pod(s):
+    return rx(s, -90).translate((0, -PH / 2 - 1.5, P_DOCK_Z))
+
+
+def pod_body():
+    L = PL - FP_T
+    o = rbox(PW, PH, L, PR).faces("<Z").edges().fillet(9.0)
+    i = rrect(-PW / 2 + WALL, PW / 2 - WALL, -PH / 2 + WALL, PH / 2 - P_TOP, 0, L - WALL, PR - WALL)
+    i = i.faces("<Z").edges().fillet(9.0 - WALL).translate((0, 0, WALL))
+    s = o.cut(i)
+    pad = soft(box(-33, 33, -PH / 2 - 1.5, -PH / 2 + 0.2, P_DOCK_Z - 12, P_DOCK_Z + 12), "|Y", 5.0)
+    adds = [pad] + [cyl_z(sx, 0, 9.0, WALL - 0.1, WALL + 6.0) for sx in SCREW_X]
+    s = s.union(union(adds)).union(to_pod(dock_male_pegs()))
+    pw, pl, pd = P_PANEL
+    cuts = [to_pod(dock_male_cut(6.0))]
+    cuts.append(box(-pw / 2 - 0.3, pw / 2 + 0.3, PH / 2 - pd, PH / 2 + 1, 12.0, 12.0 + pl + 0.6))
+    cuts.append(cyl_y(0, 22.0, 6.0, PH / 2 - P_TOP - 1, PH / 2))                 # panel leads
+    cuts += [cyl_z(sx, 0, INSERT_D, -1, 7.0) for sx in SCREW_X]                  # rear mount points
+    sw, sh = USBC_SLOT
+    cuts.append(box(-sw / 2, sw / 2, -16 - sh / 2, -16 + sh / 2, -1, WALL + 1))  # charge port
+    cuts.append(cyl_z(0, 15.0, 6.2, -1, WALL + 1))                               # battery switch
+    cuts += [cyl_y(sx * 25.0, L - 2.6, M3_CLEAR, -PH / 2 - 1, -PH / 2 + WALL + 1) for sx in (-1, 1)]
+    return s.cut(union(cuts))
+
+
+def pod_front():
+    L = PL - FP_T
+    p = rbox(PW, PH, FP_T, PR).faces(">Z").chamfer(EDGE).translate((0, 0, L))
+    x0, x1, y0, y1 = -PW / 2 + WALL + CLR, PW / 2 - WALL - CLR, -PH / 2 + WALL + CLR, PH / 2 - P_TOP - CLR
+    ring = rrect(x0, x1, y0, y1, L - 5, L, PR - WALL).cut(rrect(x0 + 1.8, x1 - 1.8, y0 + 1.8, y1 - 1.8, L - 6, L + 1, PR - WALL - 1.8))
+    by = P_FACE["bar_y"]
+    frame = box(-27.8, 27.8, by - 7.3, by + 7.3, L - 3, L + 0.1).cut(box(-25.9, 25.9, by - 5.4, by + 5.4, L - 4, L))
+    adds = [ring, frame] + [cyl_z(x, y, 7.0, L - 7, L + 0.1) for x, y in P_FACE["bosses"]]
+    p = p.union(union(adds))
+    cuts = [cyl_z(*P_FACE["lens"], P_FACE["port"], L - 1, PL + 1), cyl_z(*P_FACE["lens2"], P_FACE["port"], L - 1, PL + 1)]
+    cuts.append(box(-24, 24, by - 3, by + 3, L - 1, PL + 1))
+    cuts.append(cyl_z(*P_FACE["pir"], 10.3, L - 1, PL + 1))
+    cuts += [cyl_z(x, y, 5.2, L - 1, PL + 1) for x, y in P_FACE["ir"]]
+    cuts.append(cyl_z(*P_FACE["mic"], 1.5, L - 1, PL + 1))
+    cuts.append(cyl_z(*P_FACE["als"], 3.0, L - 1, PL + 1))
+    cuts += [cyl_z(x, y, INSERT_D - 0.8, L - 8, L - 1.0) for x, y in P_FACE["bosses"]]
+    cuts += [cyl_y(sx * 25.0, L - 2.6, 2.6, y0 - 1, y0 + 3) for sx in (-1, 1)]
+    return p.cut(union(cuts))
+
+
+def pod_visor():
+    t = VIS["t"]
+    v = rrect(-PW / 2 + 4, PW / 2 - 4, -PH / 2 + 4, PH / 2 - 4, 0, t, PR - 4).faces(">Z").chamfer(0.6).translate((0, 0, PL))
+    cuts = [cyl_z(*P_FACE["lens"], P_FACE["port"], PL - 1, PL + t + 1), cyl_z(*P_FACE["lens2"], P_FACE["port"], PL - 1, PL + t + 1)]
+    cuts.append(cyl_z(*P_FACE["pir"], 10.3, PL - 1, PL + t + 1))
+    cuts.append(cyl_z(*P_FACE["mic"], 1.5, PL - 1, PL + t + 1))
+    cuts.append(cyl_z(*P_FACE["als"], 3.0, PL - 1, PL + t + 1))
+    return v.cut(union(cuts))
+
+
+def pod_bezel(kind="m12", which="lens"):
+    x, y = P_FACE[which]
+    d = P_FACE["port"]
+    z0, z1 = PL - FP_T, PL + VIS["t"]
+    b = cyl_z(x, y, d - 0.3, z0, z1).union(cyl_z(x, y, d + 3.0, z1, z1 + 1.2))
+    if kind == "cs":
+        b = b.union(cyl_z(x, y, d + 3.0, z1, z1 + 14.0))
+        return b.cut(cyl_z(x, y, d - 3.0, z0 - 1, z1 + 15))
+    return b.cut(cyl_z(x, y, 15.0, z0 - 1, z1 + 2))
+
+
+def pod_carrier():
+    zf = PL - FP_T - 7.0
+    c = rrect(-37, 27, -27 + 4, 6, zf - 2, zf, 4)
+    posts = [(P_FACE[k][0] + px, P_FACE[k][1] + py) for k in ("lens", "lens2") for px in (-10.5, 10.5) for py in (0.0, 12.5)]
+    c = c.union(union([cyl_z(x, y, 4.5, zf - 3.5, zf - 1.9) for x, y in posts]))
+    cuts = [cyl_z(*P_FACE[k], 17.0, zf - 3, zf + 1) for k in ("lens", "lens2")]
+    cuts += [cyl_z(x, y, M3_CLEAR, zf - 3, zf + 1) for x, y in P_FACE["bosses"]]
+    cuts += [cyl_z(x, y, 1.8, zf - 4, zf + 1) for x, y in posts]
+    return c.cut(union(cuts))
+
+
+def pod_sled():
+    """Two cells below, a deck for the boards above. Slides in from the front."""
+    y_lo = -PH / 2 + WALL + 0.2
+    parts = [box(-41, 41, y_lo, y_lo + 2.0, 5, 80), box(-41, 41, P_DECK_Y - 1.6, P_DECK_Y, 5, 80)]
+    parts += [box(-41, 41, y_lo, P_DECK_Y, z, z + 1.6) for z in (5.0, 78.4)]
+    parts += [box(x, x + 1.6, y_lo, P_DECK_Y, 5, 80) for x in (-41.0, 39.4)]
+    s = union(parts)
+    pts = [(-37.5 + x, 9.5 + z) for x in (0.0, 35.0) for z in (0.0, 61.0)] + [(9.5 + x, 12.5 + z) for x in (0.0, 23.0) for z in (0.0, 58.0)]
+    s = s.union(union([cyl_y(x, z, 5.0, P_DECK_Y - 0.1, P_DECK_Y + 3.0) for x, z in pts]))
+    cuts = [cyl_z(sx * 16.4, P_CELL_Y, 11.0, 0, 90) for sx in (-1, 1)]
+    cuts += [cyl_y(x, z, 2.2, P_DECK_Y - 1, P_DECK_Y + 4.0) for x, z in pts]
+    cuts += [box(sx * 42 - 3, sx * 42 + 3, y_lo + 6, P_DECK_Y - 6, 14, 71) for sx in (-1, 1)]   # side windows
+    cuts.append(box(-10, 10, P_DECK_Y - 3, P_DECK_Y + 1, 30, 55))                                # pack leads
+    return s.cut(union(cuts))
+
+
+def mount_ball():
+    """Wall base with a ball. The camera's socket clamps onto it at any angle."""
+    b = cyl_z(0, 0, 62.0, 0, 5.0).faces(">Z").chamfer(1.5)
+    b = b.union(cyl_z(0, 0, 14.0, 4.9, 34.0)).union(cq.Workplane("XY").sphere(13.0).translate((0, 0, 42.0)))
+    cuts = []
+    for k in range(3):
+        a = math.radians(90 + 120 * k)
+        cuts.append(cyl_z(22 * math.cos(a), 22 * math.sin(a), 4.5, -1, 6))
+        cuts.append(cyl_z(22 * math.cos(a), 22 * math.sin(a), 8.5, 3.0, 6))
+    return b.cut(union(cuts))
+
+
+def mount_socket():
+    """Bolts to the two rear points of the Pod. Split cup with a pinch screw."""
+    s = rrect(-34, 34, -10, 10, 0, 5.0, 5).union(cyl_z(0, 0, 36.0, 4.9, 29.0)).union(box(-8, 8, -24, -12, 8, 26))
+    cuts = [cq.Workplane("XY").sphere(13.2).translate((0, 0, 17.5)), cyl_z(0, 0, 19.0, 17.5, 30)]
+    cuts.append(box(-1.0, 1.0, -26, -5, 4.9, 30))
+    cuts.append(cyl_x(-18.5, 17.0, M3_CLEAR, -9, 9))
+    cuts += [cyl_z(sx, 0, M3_CLEAR, -1, 6) for sx in SCREW_X]
+    return s.cut(union(cuts))
+
+
+# --------------------------------------------------------------------------
+# Hub: desk enclosure for the processing unit. Sized by HUB for a small
+# square desktop computer (127 x 127 x 50 by default), with a touchscreen
+# on a sloped top. Change the numbers for another machine or panel.
+# --------------------------------------------------------------------------
+HUB = dict(dev_w=127.0, dev_d=127.0, dev_h=50.0, clr=1.5, wall=3.0, r=26.0, lift=7.0)
+SCREEN = dict(w=121.0, h=76.0, view_w=110.0, view_h=66.0, tilt=32.0)   # 5 inch HDMI touch panel
+HUB_W = HUB["dev_w"] + 2 * (HUB["clr"] + HUB["wall"])
+HUB_D = HUB["dev_d"] + 2 * (HUB["clr"] + HUB["wall"])
+HUB_H = HUB["wall"] + HUB["lift"] + HUB["dev_h"] + 2.0
+
+
+def hub_body():
+    w, lift = HUB["wall"], HUB["lift"]
+    o = rbox(HUB_W, HUB_D, HUB_H, HUB["r"]).faces("<Z").chamfer(1.5)
+    s = o.cut(rbox(HUB_W - 2 * w, HUB_D - 2 * w, HUB_H, HUB["r"] - w).translate((0, 0, w)))
+    pads = [(-45, -45), (45, -45), (45, 45), (-45, 8)]
+    s = s.union(union([cyl_z(x, y, 16.0, w - 0.1, w + lift) for x, y in pads]))
+    z_dev = w + lift
+    cuts = [box(-54, 54, HUB_D / 2 - w - 1, HUB_D / 2 + 1, z_dev + 5, HUB_H + 1)]          # rear ports
+    cuts.append(rrect(-36, 36, -HUB_D / 2 - 1, -HUB_D / 2 + w + 1, z_dev + 6, z_dev + 24, 0))  # front ports
+    cuts.append(box(-HUB_W / 2 - 1, -HUB_W / 2 + 36, HUB_D / 2 - 36, HUB_D / 2 + 1, -1, z_dev))  # power button reach
+    for sx in (-1, 1):
+        for i in range(-3, 4):
+            x0, x1 = sorted((sx * (HUB_W / 2 - w - 1), sx * (HUB_W / 2 + 1)))
+            cuts.append(box(x0, x1, i * 12 - 2.5, i * 12 + 2.5, w + 1.5, z_dev + 12))
+    for i in range(-3, 4):
+        cuts.append(rrect(i * 13 - 3, i * 13 + 3, -30, 30, -1, w + 1, 2.9))
+    return s.cut(union(cuts))
+
+
+def hub_top():
+    """Lid with a sloped console for the touchscreen. The panel glass sits in
+    a rebate, its cable drops through to the computer below."""
+    w, th = HUB["wall"], math.radians(SCREEN["tilt"])
+    outline = rbox(HUB_W, HUB_D, 200, HUB["r"])
+    plate = rbox(HUB_W, HUB_D, 3.0, HUB["r"])
+    lip = rbox(HUB_W - 2 * w - 0.4, HUB_D - 2 * w - 0.4, 3.0, HUB["r"] - w).cut(
+        rbox(HUB_W - 2 * w - 4, HUB_D - 2 * w - 4, 3.0, HUB["r"] - w - 1.8)).translate((0, 0, -3.0))
+    slope = SCREEN["h"] + 16.0
+    y0 = -HUB_D / 2 + 4.0
+    y1, zt = y0 + slope * math.cos(th), 3.0 + slope * math.sin(th)
+    wedge = cq.Workplane("YZ").polyline([(y0, 2.9), (y1, 2.9), (y1, zt)]).close().extrude(HUB_W / 2 - 1.5, both=True)
+    wedge = wedge.intersect(outline)
+    inner = cq.Workplane("YZ").polyline([(y0 + 7, 2.0), (y1 - 3, 2.0), (y1 - 3, zt - 6.5)]).close().extrude(HUB_W / 2 - 4.5, both=True)
+    t = plate.union(lip).union(wedge)
+
+    def on_slope(s):
+        return s.rotate((0, 0, 0), (1, 0, 0), SCREEN["tilt"]).translate((0, y0, 3.0))
+
+    cuts = [inner, box(-HUB_W / 2 + 8, HUB_W / 2 - 8, y0 + 9, y1 - 5, -4, 3.5)]
+    cuts.append(on_slope(box(-SCREEN["w"] / 2 - 0.3, SCREEN["w"] / 2 + 0.3, 8.0, 8.6 + SCREEN["h"], -1.6, 2)))
+    cuts.append(on_slope(box(-SCREEN["view_w"] / 2, SCREEN["view_w"] / 2, 13.0, 13.0 + SCREEN["view_h"], -8, 2)))
+    for i in range(-3, 4):
+        cuts.append(rrect(i * 14 - 3, i * 14 + 3, y1 + 6, HUB_D / 2 - 12, -1, 4, 2.9))
+    return t.cut(union(cuts))
+
+
+# --------------------------------------------------------------------------
 # Mainboard rev A. One board for both bodies. Placement in board
 # coordinates, origin bottom left, mm. The website draws this list.
 # --------------------------------------------------------------------------
@@ -942,6 +1130,17 @@ def build():
         "barrel_carrier": (barrel_carrier(), 180, 0),
         "barrel_sled": (barrel_sled(), -90, 0),
         "barrel_hood": (barrel_hood(), 0, 0),
+        "pod_body": (pod_body(), 180, 0),
+        "pod_front": (pod_front(), 180, 0),
+        "pod_visor": (pod_visor(), 0, 0),
+        "pod_carrier": (pod_carrier(), 180, 0),
+        "pod_sled": (pod_sled(), -90, 0),
+        "pod_bezel_m12": (pod_bezel("m12"), 180, 0),
+        "pod_bezel_cs": (pod_bezel("cs"), 180, 0),
+        "mount_ball": (mount_ball(), 0, 0),
+        "mount_socket": (mount_socket(), 0, 0),
+        "hub_body": (hub_body(), 0, 0),
+        "hub_top": (hub_top(), 0, 0),
     }
 
 
@@ -983,9 +1182,45 @@ def main():
                        B(8.5, 11.0, -SERVO["off"] - 27.25, -SERVO["off"] + 27.25, zt - 10.1, zt + 10.1)])
     tilt.put("metal", C((18.0, 0, zt), (1, 0, 0), 6.0, 6.0))
     mb = board_mainboard()
+    pod_in, pod_face = Bag(), Bag()
+    for sx in (-1, 1):
+        for key, v in cell((sx * 16.4, P_CELL_Y, 7.0), (0, 0, 1)).items():
+            pod_in.put(key, v)
+
+    def lay(dx, dy, dz):
+        def fn(sh):
+            sh = sh.rotate(V(0, 0, 0), V(1, 0, 0), -90).rotate(V(0, 0, 0), V(0, 1, 0), -90)
+            return sh.translate(V(dx, dy, dz))
+        return fn
+
+    pod_in.merge(board_mainboard(), lay(-41, P_DECK_Y + 3.0, 6.0))
+    pod_in.merge(board_pi(), lay(6, P_DECK_Y + 3.0, 8.0))
+    pod_in.put("wire_red", wire([(-12, 6, 76), (-12, P_DECK_Y + 2, 70), (-38, P_DECK_Y + 12, 66)], 1.8))
+    pod_in.put("wire_black", wire([(12, 6, 76), (12, P_DECK_Y + 2, 72), (-35, P_DECK_Y + 12, 68)], 1.8))
+    pod_in.put("speaker", [C((0, -PH / 2 + WALL + 0.4, 104), (0, 1, 0), 28.0, 1.2), C((0, -PH / 2 + WALL + 1.6, 104), (0, 1, 0), 22.0, 2.0)])
+    pod_in.put("metal", C((0, -PH / 2 + WALL + 3.6, 104), (0, 1, 0), 13.0, 2.4))
+    Lp = PL - FP_T
+    for k in ("lens", "lens2"):
+        pod_face.merge(board_camera(P_FACE[k][0], P_FACE[k][1], Lp - 9.0 - 3.2))
+    by = P_FACE["bar_y"]
+    pod_face.put("pcb_white", B(-25.5, 25.5, by - 5.1, by + 5.1, Lp - 2.8, Lp - 1.6))
+    pod_face.put("leds", [B(-24.9 + i * 6.4, -19.9 + i * 6.4, by - 2.5, by + 2.5, Lp - 1.6, Lp) for i in range(8)])
+    pod_face.put("dome", C((P_FACE["pir"][0], P_FACE["pir"][1], Lp - 6), (0, 0, 1), 10.0, 11.0))
+    pw, pl, pd = P_PANEL
+    cq.exporters.export(box(-pw / 2, pw / 2, PH / 2 - pd, PH / 2 + 0.15, 12.3, 12.3 + pl), str(out / "web" / "web_pod_panel.stl"))
+    cq.exporters.export(pod_bezel("m12", "lens").union(pod_bezel("m12", "lens2")), str(out / "web" / "web_pod_bezels.stl"),
+                        tolerance=0.08, angularTolerance=0.35)
+    hub = Bag()
+    zd = HUB["wall"] + HUB["lift"]
+    hub.put("alu", rbox(HUB["dev_w"], HUB["dev_d"], HUB["dev_h"], 24.0).translate((0, 0, zd)).val())
+    th = SCREEN["tilt"]
+    glass = box(-SCREEN["w"] / 2, SCREEN["w"] / 2, 8.3, 8.3 + SCREEN["h"], -1.5, 0.05).rotate((0, 0, 0), (1, 0, 0), th)
+    hub.put("glass", glass.translate((0, -HUB_D / 2 + 4.0, HUB_H + 3.0)).val())
+    ui = box(-SCREEN["view_w"] / 2, SCREEN["view_w"] / 2, 13.0, 13.0 + SCREEN["view_h"], 0.05, 0.12).rotate((0, 0, 0), (1, 0, 0), th)
+    hub.put("ui", ui.translate((0, -HUB_D / 2 + 4.0, HUB_H + 3.0)).val())
     for prefix, bag in (("viz_slate_back_", back), ("viz_slate_front_", front), ("viz_barrel_in_", inner),
                         ("viz_barrel_face_", face), ("viz_orbit_pan_", servo), ("viz_orbit_tilt_", tilt),
-                        ("viz_mainboard_", mb)):
+                        ("viz_mainboard_", mb), ("viz_pod_in_", pod_in), ("viz_pod_face_", pod_face), ("viz_hub_", hub)):
         for key, shapes in bag.items():
             comp = cq.Compound.makeCompound(shapes)
             cq.exporters.export(comp, str(out / "web" / f"{prefix}{key}.stl"), tolerance=0.1, angularTolerance=0.4)
@@ -1001,6 +1236,8 @@ def main():
                   "flash": FLASH_PTS, "als": ALS, "visorT": VIS["t"]},
         "barrel": {"r": BR, "l": BL, "dockZ": B_DOCK_Z, "padY": B_PAD_Y, "ringR": B_FACE["ring_r"]},
         "orbit": {"zt": ORBIT_ZT, "top": ORBIT_TOP, "h": OB_H},
+        "pod": {"w": PW, "h": PH, "l": PL, "dockZ": P_DOCK_Z, "padY": PH / 2 + 1.5, "barY": P_FACE["bar_y"], "lens": P_FACE["lens"], "lens2": P_FACE["lens2"]},
+        "hub": {"w": HUB_W, "d": HUB_D, "h": HUB_H},
         "modules": {"batteryH": BM_H, "devH": DM_H},
     }
     (out / "web" / "dims.json").write_text(json.dumps(dims, indent=1))

@@ -1,13 +1,18 @@
 # Nurby open camera
 
-An open source security camera you print and build yourself. Two bodies share
-one mainboard, one battery format and one module standard:
+An open source security camera you print and build yourself. Three bodies and
+a desk hub share one circuit, one battery format and one module standard:
+
+- **Pod**: rounded extruded body, 92 x 58 x 134 mm, solar panel flush in the
+  top, gloss face, ball-joint wall mount. The default.
+- **Hub**: enclosure for the processing unit. Holds a 127 x 127 x 50 mm small
+  desktop computer under a sloped 5 inch touchscreen. Sizes are parameters.
 
 - **Slate**: flat wall body, 164 x 146 x 42 mm, snaps onto a magnetic plate.
 - **Barrel**: cylindrical body, 76 mm diameter x 172 mm, for people who want a
   camera that looks like a camera.
 
-**Status: v0.2 reference design.** Every part builds as a valid solid and the
+**Status: v0.3 reference design.** Every part builds as a valid solid and the
 parts are checked against each other in software. Nothing has been printed,
 wired or powered. Treat every fit, force and power number as unproven.
 
@@ -27,10 +32,19 @@ wired or powered. Treat every fit, force and power number as unproven.
 | Pan-tilt | Orbit: a two-axis joint with a dock below and a dock on its cradle. Under the Barrel it aims the camera. Under a solar panel it tracks the sun. Use two for both |
 | Mainboard | Rev A placement, 68 x 42 mm, used in both bodies |
 
+## Electronics
+
+[electronics/](electronics/) is a KiCad 8 project for the carrier circuit: four
+schematic sheets, 90 parts, 78 nets. It passes KiCad's electrical rules check
+with no errors or warnings, and KiCad's exported netlist matches the source.
+It has not been built. There is no PCB layout yet. Read
+[electronics/README.md](electronics/README.md) before wiring anything.
+
 ## What is here
 
 ```
-cad/slate.py        Single parametric source (CadQuery). 28 printed parts.
+cad/slate.py        Single parametric source (CadQuery). 39 printed parts.
+electronics/        KiCad schematics, netlist, parts list, ERC report.
 print/*.stl         Print files, already oriented.
 step/*.step         Editable solids.
 web/                Viewer meshes, mainboard.json, dims.json.
@@ -44,8 +58,12 @@ python cad/slate.py
 
 ## Honest limits
 
-- **Mainboard rev A is a placement drawing.** There is no schematic, netlist
-  or Gerber set yet. The build guide still wires off-the-shelf boards.
+- **The circuit is a schematic, not a board.** Rev A wires off-the-shelf
+  breakouts on a carrier. No PCB layout or Gerbers exist.
+- **The Pod carries a 1 W panel and one pair of cells (38 Wh).** That covers
+  event-wake use, not continuous streaming.
+- **The Hub is sized from published dimensions,** not from a machine on the
+  bench. Port and power button cut-outs follow the 2024 Mac mini layout.
 - **Orbit is a first mechanical pass.** Both axes are direct-drive standard
   servos. The cable to the cradle is a service loop, not a slip ring. Servo
   torque against a 600 g Barrel has not been checked.
