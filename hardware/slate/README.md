@@ -3,8 +3,9 @@
 An open source security camera you print and build yourself. Three bodies and
 a desk hub share one circuit, one battery format and one module standard:
 
-- **Pod**: rounded extruded body, 92 x 58 x 134 mm, solar panel flush in the
-  top, gloss face, ball-joint wall mount. The default.
+- **Pod**: 86 x 56 x 142 mm. A flat solar deck over a deep round belly, a
+  brow over a glass face set back inside a thin rim, and a slim neck mount
+  with a knurled collar. The default.
 - **Hub**: enclosure for the processing unit. Holds a 127 x 127 x 50 mm small
   desktop computer under a sloped 5 inch touchscreen. Sizes are parameters.
 - **Slate**: flat wall body, 164 x 146 x 42 mm, snaps onto a magnetic plate.
