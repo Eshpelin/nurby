@@ -7,7 +7,6 @@ a desk hub share one circuit, one battery format and one module standard:
   top, gloss face, ball-joint wall mount. The default.
 - **Hub**: enclosure for the processing unit. Holds a 127 x 127 x 50 mm small
   desktop computer under a sloped 5 inch touchscreen. Sizes are parameters.
-
 - **Slate**: flat wall body, 164 x 146 x 42 mm, snaps onto a magnetic plate.
 - **Barrel**: cylindrical body, 76 mm diameter x 172 mm, for people who want a
   camera that looks like a camera.
@@ -16,7 +15,7 @@ a desk hub share one circuit, one battery format and one module standard:
 parts are checked against each other in software. Nothing has been printed,
 wired or powered. Treat every fit, force and power number as unproven.
 
-## What v0.2 has
+## What the design has
 
 | | |
 |---|---|
@@ -26,11 +25,11 @@ wired or powered. Treat every fit, force and power number as unproven.
 | Sensing | PIR, 24 GHz mmWave presence radar (LD2410C pocket behind the face), ambient light sensor window |
 | Cameras | Two lens ports on the Slate: wide main sensor plus a close-up or barcode camera. Barrel has a main lens and a small second lens |
 | Lenses | 30 mm ports closed by swappable bezels: M12, or CS-mount with a hood |
-| Lights | Two RGBW bars (red and blue strobe, white flood), two 3 W flash LEDs, two 850 nm IR LEDs. Barrel uses a 16-LED ring |
+| Lights | Two RGBW bars (red and blue strobe, white flood), two 1 W flash LEDs, two 850 nm IR LEDs. Barrel uses a 16-LED ring |
 | Sealing | TPU face gasket, capped docks, membrane vent. IP65 is the target, not a tested rating |
 | Mounting points | Two M3 inserts on each side at the Dock-50 screw pitch, so the handle and angle bracket fit any side or either dock |
 | Pan-tilt | Orbit: a two-axis joint with a dock below and a dock on its cradle. Under the Barrel it aims the camera. Under a solar panel it tracks the sun. Use two for both |
-| Mainboard | Rev A placement, 68 x 42 mm, used in both bodies |
+| Circuit | Carrier rev A schematic in KiCad, shared by every body |
 
 ## Electronics
 
@@ -67,7 +66,7 @@ python cad/slate.py
 - **Orbit is a first mechanical pass.** Both axes are direct-drive standard
   servos. The cable to the cradle is a service loop, not a slip ring. Servo
   torque against a 600 g Barrel has not been checked.
-- **Pan-tilt is for the Barrel and for solar.** The Slate is a fixed body.
+- **Pan-tilt is for the Pod, the Barrel and solar.** The Slate is a fixed body.
 - **Magnet hold is unmeasured.** Do not hang it above people until it is.
 - **CS-mount** has a bezel but no carrier pattern yet. Set the post pattern in
   `slate_camera_carrier` for your board.
