@@ -212,7 +212,26 @@ class Provider(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     base_url: Mapped[str] = mapped_column(String(1024), nullable=False)
-    api_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Cloud LLM API keys, Fernet-sealed at rest (shared/camera_secrets,
+    # keyed off jwt_secret) exactly like camera credentials and Telegram
+    # bot tokens. The public attribute stays ``api_key``: assignments seal
+    # on write and every reader unseals transparently, so call sites are
+    # unchanged. Plain property (not a hybrid) because nothing queries on
+    # it in SQL. Hazard: re-assigning an already-unsealed round-trip is
+    # fine, but never assign a value that is itself a gAAAA token.
+    api_key_enc: Mapped[str | None] = mapped_column("api_key_enc", String(2048), nullable=True)
+
+    @property
+    def api_key(self) -> str | None:
+        from shared.camera_secrets import unseal
+
+        return unseal(self.api_key_enc)
+
+    @api_key.setter
+    def api_key(self, value: str | None) -> None:
+        from shared.camera_secrets import seal
+
+        self.api_key_enc = seal(value)
     default_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Token caps. NULL = no cap, defer to the provider's model default.
