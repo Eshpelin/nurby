@@ -1,0 +1,260 @@
+{
+ "name": "Slate mainboard",
+ "rev": "A",
+ "width": 68.0,
+ "height": 42.0,
+ "holes": [
+  [
+   3.5,
+   3.5
+  ],
+  [
+   3.5,
+   38.5
+  ],
+  [
+   64.5,
+   3.5
+  ],
+  [
+   64.5,
+   38.5
+  ]
+ ],
+ "parts": [
+  {
+   "ref": "U1",
+   "label": "ESP32-C6 controller",
+   "x": 2.0,
+   "y": 23.0,
+   "w": 13.2,
+   "h": 16.6,
+   "kind": "module"
+  },
+  {
+   "ref": "U2",
+   "label": "LiFePO4 charger, MPPT",
+   "x": 19.0,
+   "y": 28.0,
+   "w": 5.0,
+   "h": 5.0,
+   "kind": "ic"
+  },
+  {
+   "ref": "L1",
+   "label": "Charger inductor",
+   "x": 25.0,
+   "y": 28.0,
+   "w": 6.0,
+   "h": 6.0,
+   "kind": "inductor"
+  },
+  {
+   "ref": "U3",
+   "label": "5 V boost",
+   "x": 33.0,
+   "y": 28.0,
+   "w": 5.0,
+   "h": 5.0,
+   "kind": "ic"
+  },
+  {
+   "ref": "L2",
+   "label": "Boost inductor",
+   "x": 39.0,
+   "y": 28.0,
+   "w": 6.0,
+   "h": 6.0,
+   "kind": "inductor"
+  },
+  {
+   "ref": "U4",
+   "label": "Fuel gauge",
+   "x": 47.5,
+   "y": 33.0,
+   "w": 3.0,
+   "h": 3.0,
+   "kind": "ic"
+  },
+  {
+   "ref": "U5",
+   "label": "USB 2.0 hub",
+   "x": 47.0,
+   "y": 25.0,
+   "w": 4.0,
+   "h": 4.0,
+   "kind": "ic"
+  },
+  {
+   "ref": "U6",
+   "label": "Class D audio amp",
+   "x": 54.0,
+   "y": 33.0,
+   "w": 3.0,
+   "h": 3.0,
+   "kind": "ic"
+  },
+  {
+   "ref": "Q1",
+   "label": "Compute rail switch",
+   "x": 20.0,
+   "y": 20.0,
+   "w": 3.0,
+   "h": 3.0,
+   "kind": "ic"
+  },
+  {
+   "ref": "Q2",
+   "label": "Top dock switch",
+   "x": 26.0,
+   "y": 20.0,
+   "w": 3.0,
+   "h": 3.0,
+   "kind": "ic"
+  },
+  {
+   "ref": "Q3",
+   "label": "Bottom dock switch",
+   "x": 32.0,
+   "y": 20.0,
+   "w": 3.0,
+   "h": 3.0,
+   "kind": "ic"
+  },
+  {
+   "ref": "Q4",
+   "label": "Light driver",
+   "x": 38.0,
+   "y": 20.0,
+   "w": 3.0,
+   "h": 3.0,
+   "kind": "ic"
+  },
+  {
+   "ref": "J1",
+   "label": "Top dock",
+   "x": 19.0,
+   "y": 36.5,
+   "w": 8.0,
+   "h": 4.0,
+   "kind": "conn"
+  },
+  {
+   "ref": "J2",
+   "label": "Bottom dock",
+   "x": 29.0,
+   "y": 36.5,
+   "w": 8.0,
+   "h": 4.0,
+   "kind": "conn"
+  },
+  {
+   "ref": "J3",
+   "label": "USB-C charge in",
+   "x": 39.0,
+   "y": 36.5,
+   "w": 8.0,
+   "h": 4.0,
+   "kind": "conn"
+  },
+  {
+   "ref": "J4",
+   "label": "Battery",
+   "x": 57.0,
+   "y": 1.5,
+   "w": 9.0,
+   "h": 6.0,
+   "kind": "power"
+  },
+  {
+   "ref": "J5",
+   "label": "Compute, 40 pin",
+   "x": 3.0,
+   "y": 1.5,
+   "w": 50.8,
+   "h": 5.1,
+   "kind": "header"
+  },
+  {
+   "ref": "J6",
+   "label": "Face board flex",
+   "x": 2.0,
+   "y": 12.0,
+   "w": 11.0,
+   "h": 3.5,
+   "kind": "conn"
+  },
+  {
+   "ref": "J7",
+   "label": "Speaker",
+   "x": 60.0,
+   "y": 26.0,
+   "w": 6.0,
+   "h": 4.5,
+   "kind": "conn"
+  },
+  {
+   "ref": "J8",
+   "label": "mmWave radar",
+   "x": 46.0,
+   "y": 12.0,
+   "w": 8.0,
+   "h": 3.5,
+   "kind": "conn"
+  },
+  {
+   "ref": "J9",
+   "label": "Light bars",
+   "x": 36.0,
+   "y": 12.0,
+   "w": 6.0,
+   "h": 3.5,
+   "kind": "conn"
+  },
+  {
+   "ref": "J10",
+   "label": "Flash LEDs",
+   "x": 27.0,
+   "y": 12.0,
+   "w": 6.0,
+   "h": 3.5,
+   "kind": "conn"
+  },
+  {
+   "ref": "J11",
+   "label": "IR LEDs",
+   "x": 18.0,
+   "y": 12.0,
+   "w": 6.0,
+   "h": 3.5,
+   "kind": "conn"
+  },
+  {
+   "ref": "F1",
+   "label": "Fuse",
+   "x": 58.0,
+   "y": 10.0,
+   "w": 7.0,
+   "h": 3.0,
+   "kind": "passive"
+  },
+  {
+   "ref": "J12",
+   "label": "Battery switch",
+   "x": 60.0,
+   "y": 16.0,
+   "w": 6.0,
+   "h": 4.5,
+   "kind": "conn"
+  },
+  {
+   "ref": "J13",
+   "label": "Pan-tilt",
+   "x": 57.0,
+   "y": 36.5,
+   "w": 8.0,
+   "h": 4.0,
+   "kind": "conn"
+  }
+ ]
+}
